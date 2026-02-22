@@ -1,0 +1,112 @@
+{
+  "sport": "basketball",
+  "player_name": "farza",
+  "session_date": null,
+  "video_duration_seconds": 33,
+  "shots": [
+    {
+      "event_index": 1,
+      "timestamp_of_shot": "0:05.5",
+      "timestamp_of_outcome": "0:07.5",
+      "result": "missed",
+      "shot_type": "Jump shot (around free-throw line)",
+      "form_score": 4,
+      "form_breakdown": {
+        "stance_and_base": "needs_work",
+        "shot_pocket": "poor",
+        "elbow_alignment": "poor",
+        "release_point": "needs_work",
+        "follow_through": "poor",
+        "body_alignment": "needs_work"
+      },
+      "feedback": "You're pushing that ball, not shooting it; get your elbow under, extend fully, and follow through.",
+      "total_shots_made_so_far": 0,
+      "total_shots_missed_so_far": 1,
+      "total_three_pointers_made_so_far": 0,
+      "total_layups_made_so_far": 0,
+      "total_free_throws_made_so_far": 0
+    },
+    {
+      "event_index": 2,
+      "timestamp_of_shot": "0:11.0",
+      "timestamp_of_outcome": "0:13.0",
+      "result": "made",
+      "shot_type": "Three-pointer",
+      "form_score": 6,
+      "form_breakdown": {
+        "stance_and_base": "good",
+        "shot_pocket": "good",
+        "elbow_alignment": "good",
+        "release_point": "good",
+        "follow_through": "needs_work",
+        "body_alignment": "needs_work",
+        "jump_mechanics": "needs_work"
+      },
+      "feedback": "It went in, but watch that slight fade — keep your shoulders square to the hoop through the whole motion.",
+      "total_shots_made_so_far": 1,
+      "total_shots_missed_so_far": 1,
+      "total_three_pointers_made_so_far": 1,
+      "total_layups_made_so_far": 0,
+      "total_free_throws_made_so_far": 0
+    },
+    {
+      "event_index": 3,
+      "timestamp_of_shot": "0:19.5",
+      "timestamp_of_outcome": "0:21.5",
+      "result": "made",
+      "shot_type": "Layup",
+      "form_score": 7,
+      "form_breakdown": {
+        "stance_and_base": "good",
+        "body_alignment": "good",
+        "jump_mechanics": "good",
+        "off_hand": "needs_work",
+        "follow_through": "needs_work"
+      },
+      "feedback": "Drive that knee on the layup, protect the ball higher with your off-hand, and finish decisively.",
+      "total_shots_made_so_far": 2,
+      "total_shots_missed_so_far": 1,
+      "total_three_pointers_made_so_far": 1,
+      "total_layups_made_so_far": 1,
+      "total_free_throws_made_so_far": 0
+    },
+    {
+      "event_index": 4,
+      "timestamp_of_shot": "0:26.5",
+      "timestamp_of_outcome": "0:28.5",
+      "result": "made",
+      "shot_type": "Jump shot (free-throw line)",
+      "form_score": 7,
+      "form_breakdown": {
+        "stance_and_base": "good",
+        "shot_pocket": "needs_work",
+        "elbow_alignment": "good",
+        "release_point": "good",
+        "follow_through": "good",
+        "body_alignment": "good"
+      },
+      "feedback": "Better balance, but that shot pocket and release point must be identical every single time for real consistency.",
+      "total_shots_made_so_far": 3,
+      "total_shots_missed_so_far": 1,
+      "total_three_pointers_made_so_far": 1,
+      "total_layups_made_so_far": 1,
+      "total_free_throws_made_so_far": 0
+    }
+  ],
+  "session_summary": {
+    "total_events": 4,
+    "success_rate_percent": 75.0,
+    "average_form_score": 6.0,
+    "top_issues": [
+      "Inconsistent shot pocket position",
+      "Follow-through breaking down under fatigue",
+      "Body fading on jump shots"
+    ],
+    "strengths": [
+      "Strong finishing at the rim on layups",
+      "Good elbow alignment on catch-and-shoot"
+    ],
+    "priority_drill": "Form shooting drill: 50 reps from the elbow, one-hand only. Focus on consistent shot pocket, full arm extension, and holding the goose-neck follow-through for 2 seconds after each release.",
+    "overall_rating": "Intermediate"
+  }
+}

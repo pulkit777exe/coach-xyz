@@ -1,0 +1,116 @@
+{
+  "sport": "cricket",
+  "player_name": "Player",
+  "session_date": null,
+  "video_duration_seconds": 35,
+  "shots": [
+    {
+      "event_index": 1,
+      "timestamp_of_shot": "0:05.0",
+      "timestamp_of_outcome": "0:06.0",
+      "result": "dot_ball",
+      "shot_type": "Defensive push",
+      "form_score": 5,
+      "form_breakdown": {
+        "stance": "good",
+        "grip": "good",
+        "head_position": "poor",
+        "front_foot_movement": "needs_work",
+        "weight_transfer": "needs_work"
+      },
+      "feedback": "Head is falling over to the off side; keep it still and upright over the ball to play straighter.",
+      "total_runs_so_far": 0,
+      "total_fours_so_far": 0,
+      "total_sixes_so_far": 0,
+      "total_wickets_so_far": 0,
+      "total_dot_balls_so_far": 1,
+      "balls_faced_so_far": 1
+    },
+    {
+      "event_index": 2,
+      "timestamp_of_shot": "0:12.5",
+      "timestamp_of_outcome": "0:13.5",
+      "result": "four",
+      "shot_type": "Cover drive",
+      "form_score": 8,
+      "form_breakdown": {
+        "stance": "good",
+        "grip": "good",
+        "backlift": "good",
+        "head_position": "good",
+        "front_foot_movement": "good",
+        "weight_transfer": "needs_work",
+        "follow_through": "good"
+      },
+      "feedback": "Beautiful drive, but transfer your weight fully onto the front foot — you're hanging back slightly.",
+      "total_runs_so_far": 4,
+      "total_fours_so_far": 1,
+      "total_sixes_so_far": 0,
+      "total_wickets_so_far": 0,
+      "total_dot_balls_so_far": 1,
+      "balls_faced_so_far": 2
+    },
+    {
+      "event_index": 3,
+      "timestamp_of_shot": "0:20.0",
+      "timestamp_of_outcome": "0:21.0",
+      "result": "wicket",
+      "shot_type": "Pull shot",
+      "form_score": 3,
+      "form_breakdown": {
+        "head_position": "needs_work",
+        "bottom_hand": "poor",
+        "wrist_roll": "poor",
+        "weight_transfer": "needs_work",
+        "follow_through": "poor"
+      },
+      "feedback": "You top-edged because your bottom hand dominated; let the top hand guide and roll your wrists over at contact.",
+      "total_runs_so_far": 4,
+      "total_fours_so_far": 1,
+      "total_sixes_so_far": 0,
+      "total_wickets_so_far": 1,
+      "total_dot_balls_so_far": 1,
+      "balls_faced_so_far": 3
+    },
+    {
+      "event_index": 4,
+      "timestamp_of_shot": "0:28.5",
+      "timestamp_of_outcome": "0:29.5",
+      "result": "six",
+      "shot_type": "Slog sweep",
+      "form_score": 7,
+      "form_breakdown": {
+        "stance": "good",
+        "grip": "good",
+        "head_position": "good",
+        "front_foot_movement": "needs_work",
+        "weight_transfer": "good",
+        "bottom_hand": "good",
+        "wrist_roll": "good"
+      },
+      "feedback": "Maximum! Get down lower into that sweep — bending the front knee more gives you better control and power.",
+      "total_runs_so_far": 10,
+      "total_fours_so_far": 1,
+      "total_sixes_so_far": 1,
+      "total_wickets_so_far": 1,
+      "total_dot_balls_so_far": 1,
+      "balls_faced_so_far": 4
+    }
+  ],
+  "session_summary": {
+    "total_events": 4,
+    "success_rate_percent": 50.0,
+    "average_form_score": 5.8,
+    "top_issues": [
+      "Bottom hand dominance on pull shots",
+      "Weight transfer incomplete",
+      "Head position instability"
+    ],
+    "strengths": [
+      "Clean cover driving technique",
+      "Strong wrist work on sweeps"
+    ],
+    "priority_drill": "Top-hand dominant drill: Play 20 pull shots with only the top hand on the bat, focusing on wrist roll and controlled contact.",
+    "overall_rating": "Intermediate"
+  }
+}

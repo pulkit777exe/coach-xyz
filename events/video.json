@@ -1,0 +1,63 @@
+{
+  "sport": "basketball",
+  "player_name": "Player",
+  "session_date": null,
+  "video_duration_seconds": 44,
+  "shots": [
+    {
+      "event_index": 1,
+      "timestamp_of_shot": "0:24.2",
+      "timestamp_of_outcome": "0:24.5",
+      "result": "made",
+      "shot_type": "dunk",
+      "form_score": 9,
+      "form_breakdown": {
+        "stance_base": "good",
+        "release_point": "good",
+        "body_alignment": "good",
+        "eyes": "good",
+        "jump_mechanics": "good"
+      },
+      "feedback": "Excellent drive and explosive vertical jump for the dunk. Maintain that power and control on every finish.",
+      "total_shots_made_so_far": 1,
+      "total_shots_missed_so_far": 0,
+      "total_three_pointers_made_so_far": 0,
+      "total_layups_made_so_far": 0,
+      "total_free_throws_made_so_far": 0
+    },
+    {
+      "event_index": 2,
+      "timestamp_of_shot": "0:41.8",
+      "timestamp_of_outcome": "0:42.0",
+      "result": "made",
+      "shot_type": "layup",
+      "form_score": 9,
+      "form_breakdown": {
+        "stance_base": "good",
+        "release_point": "good",
+        "body_alignment": "good",
+        "eyes": "good",
+        "jump_mechanics": "good"
+      },
+      "feedback": "Another strong drive and finish at the rim. Your ability to attack the basket with power is a major asset.",
+      "total_shots_made_so_far": 2,
+      "total_shots_missed_so_far": 0,
+      "total_three_pointers_made_so_far": 0,
+      "total_layups_made_so_far": 1,
+      "total_free_throws_made_so_far": 0
+    }
+  ],
+  "session_summary": {
+    "total_events": 2,
+    "success_rate_percent": 100.0,
+    "average_form_score": 9.0,
+    "top_issues": [],
+    "strengths": [
+      "Explosive drives to the basket",
+      "Strong and controlled finishes at the rim",
+      "Powerful vertical jump"
+    ],
+    "priority_drill": "Continue working on attacking the basket from various angles to maintain versatility.",
+    "overall_rating": "Elite"
+  }
+}

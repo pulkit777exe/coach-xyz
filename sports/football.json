@@ -1,0 +1,42 @@
+{
+  "sport": "football",
+  "display_name": "Football",
+  "events": {
+    "positive": ["goal"],
+    "negative": ["missed", "saved", "blocked", "offside"]
+  },
+  "stats": [
+    { "key": "total_goals_so_far", "label": "Goals", "event_type": "goal" },
+    {
+      "key": "total_shots_on_target_so_far",
+      "label": "On Target",
+      "event_type": "saved"
+    },
+    {
+      "key": "total_shots_missed_so_far",
+      "label": "Missed",
+      "event_type": "missed"
+    },
+    { "key": "total_headers_so_far", "label": "Headers", "event_type": null }
+  ],
+  "form_criteria": [
+    "approach_angle",
+    "plant_foot_position",
+    "hip_rotation",
+    "striking_surface",
+    "ankle_lock",
+    "head_position",
+    "follow_through",
+    "body_lean",
+    "arms"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 220, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}

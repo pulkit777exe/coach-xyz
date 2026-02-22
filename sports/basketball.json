@@ -1,0 +1,56 @@
+{
+  "sport": "basketball",
+  "display_name": "Basketball",
+  "events": {
+    "positive": ["made"],
+    "negative": ["missed"]
+  },
+  "stats": [
+    {
+      "key": "total_shots_made_so_far",
+      "label": "Shots Made",
+      "event_type": "made"
+    },
+    {
+      "key": "total_shots_missed_so_far",
+      "label": "Shots Missed",
+      "event_type": "missed"
+    },
+    {
+      "key": "total_three_pointers_made_so_far",
+      "label": "Three Pointers",
+      "event_type": "made"
+    },
+    {
+      "key": "total_layups_made_so_far",
+      "label": "Layups",
+      "event_type": "made"
+    },
+    {
+      "key": "total_free_throws_made_so_far",
+      "label": "Free Throws",
+      "event_type": "made"
+    }
+  ],
+  "form_criteria": [
+    "stance_and_base",
+    "shot_pocket",
+    "elbow_alignment",
+    "wrist_and_finger_position",
+    "release_point",
+    "follow_through",
+    "body_alignment",
+    "eyes",
+    "off_hand",
+    "jump_mechanics"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 255, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}

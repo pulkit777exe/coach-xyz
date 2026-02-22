@@ -1,0 +1,44 @@
+{
+  "sport": "cricket",
+  "display_name": "Cricket",
+  "events": {
+    "positive": ["four", "six", "boundary", "single", "two", "three"],
+    "negative": ["wicket", "dot_ball"]
+  },
+  "stats": [
+    { "key": "total_runs_so_far", "label": "Runs", "event_type": null },
+    { "key": "total_fours_so_far", "label": "Fours", "event_type": "four" },
+    { "key": "total_sixes_so_far", "label": "Sixes", "event_type": "six" },
+    {
+      "key": "total_wickets_so_far",
+      "label": "Wickets",
+      "event_type": "wicket"
+    },
+    {
+      "key": "total_dot_balls_so_far",
+      "label": "Dot Balls",
+      "event_type": "dot_ball"
+    },
+    { "key": "balls_faced_so_far", "label": "Balls", "event_type": null }
+  ],
+  "form_criteria": [
+    "stance",
+    "grip",
+    "backlift",
+    "head_position",
+    "front_foot_movement",
+    "weight_transfer",
+    "bottom_hand",
+    "follow_through",
+    "wrist_roll"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 200, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}
