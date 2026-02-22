@@ -22,8 +22,6 @@ class Player(NamedTuple):
     position:    str            # "top-left", "center", etc.
 
 
-# ── Colour palette ────────────────────────────────────────────────────────────
-
 _PALETTE = [
     ((0,  220, 255), "#00dcff"),   # cyan
     ((60, 120, 255), "#3c78ff"),   # blue
