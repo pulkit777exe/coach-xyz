@@ -73,9 +73,11 @@ def _clean_analysis(result: dict) -> None:
 
 
 def analyze_video(
-    video_path: str,
-    model_name: str = 'gemini-2.5-flash',
-    strict: bool = False,
+    video_path:   str,
+    model_name:   str  = 'gemini-2.5-flash',
+    strict:       bool = False,
+    player_focus: dict | None = None,
+    chunk_info:   dict | None = None,
 ) -> dict:
     """
     Upload *video_path* to Gemini, analyze it with the coaching prompt,
@@ -83,17 +85,15 @@ def analyze_video(
 
     Parameters
     ----------
-    video_path : str
-        Path to the video file (.mp4, .mov, etc.).
-    model_name : str
-        Gemini model identifier.
-    strict : bool
-        If True, raise on validation warnings; otherwise just print them.
+    video_path   : path to the video file.
+    model_name   : Gemini model identifier.
+    strict       : raise on validation warnings if True.
+    player_focus : dict with 'id' and 'position' — focus on one player.
+    chunk_info   : dict with chunk metadata for long-video segmented analysis.
 
     Returns
     -------
-    dict
-        The complete analysis JSON.
+    dict — the complete analysis JSON.
     """
     _ensure_genai()
 
@@ -119,7 +119,10 @@ def analyze_video(
         )
 
     # ── 3. Generate analysis ──────────────────────────────────────────────
-    prompt = get_system_prompt()
+    prompt = get_system_prompt(
+        player_focus = player_focus,
+        chunk_info   = chunk_info,
+    )
     print(f'[Gemini] Analyzing with model: {model_name}')
 
     model    = genai.GenerativeModel(model_name)

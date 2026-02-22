@@ -6,9 +6,72 @@ detect events, evaluate biomechanics, and return structured JSON.
 """
 
 
-def get_system_prompt() -> str:
-    """Return the full system prompt for sports video analysis."""
-    return _SYSTEM_PROMPT
+def get_system_prompt(
+    player_focus: dict | None = None,
+    chunk_info:   dict | None = None,
+) -> str:
+    """
+    Return the system prompt for sports video analysis.
+
+    Parameters
+    ----------
+    player_focus : dict | None
+        If set, restrict analysis to one player.
+        Expected keys: 'id' (int), 'position' (str), 'color_hex' (str).
+    chunk_info : dict | None
+        If set, inform Gemini that this is a segment of a longer video.
+        Expected keys: 'index' (int), 'total_chunks' (int),
+                       'start_seconds' (float), 'end_seconds' (float).
+    """
+    parts = [_SYSTEM_PROMPT]
+
+    if player_focus:
+        parts.append(_player_focus_section(player_focus))
+
+    if chunk_info:
+        parts.append(_chunk_context_section(chunk_info))
+
+    return "\n".join(parts)
+
+
+def _player_focus_section(pf: dict) -> str:
+    pid  = pf.get('id', '?')
+    pos  = pf.get('position', 'the frame')
+    return f"""
+---
+
+## ⚠️  PLAYER FOCUS — CRITICAL
+
+There are multiple players visible in this video.
+You MUST analyze ONLY **Player {pid}**, who is located in the **{pos}**.
+
+- Completely ignore all other players.
+- Every shot, stat, and feedback entry must refer solely to Player {pid}.
+- If Player {pid} does not take a shot or perform an event, do NOT log events from other players.
+"""
+
+
+def _chunk_context_section(ci: dict) -> str:
+    idx    = ci.get('index', 0) + 1
+    total  = ci.get('total_chunks', 1)
+    start  = ci.get('start_seconds', 0)
+    end    = ci.get('end_seconds', 0)
+
+    def fmt(s: float) -> str:
+        m = int(s // 60); sec = s % 60
+        return f"{m}:{sec:05.2f}"
+
+    return f"""
+---
+
+## VIDEO CHUNK CONTEXT
+
+This video clip is **chunk {idx} of {total}** from a longer session.
+- This clip covers **{fmt(start)} → {fmt(end)}** of the full video.
+- All timestamps you produce are relative to THE START OF THIS CLIP (i.e., 0:00 means {fmt(start)} in the full session).
+- Cumulative stats should only count events seen IN THIS CLIP — they will be merged later.
+- Do NOT refer to events outside this clip.
+"""
 
 
 _SYSTEM_PROMPT = """\
@@ -201,4 +264,6 @@ Return ONLY valid JSON. No preamble, no explanation, no markdown fences. The JSO
 6. **Do not hallucinate events** — only log events you can clearly see in the video
 7. **If you cannot determine a value** — use null rather than guessing
 8. **form_breakdown — omit inapplicable criteria entirely** — only include criteria that actually apply to the shot type. For example, a dunk has no "shot pocket", "elbow alignment", or "wrist & finger position" — do NOT include those keys at all. An empty or near-empty breakdown is fine. Never write N/A as a value.
+9. **Follow player focus instructions precisely** — if a PLAYER FOCUS section is present above, analyse ONLY that player.
+10. **Follow chunk context instructions** — if a VIDEO CHUNK CONTEXT section is present, all timestamps are relative to this clip's start.
 """
