@@ -43,7 +43,7 @@ const ProgressSection = ({ progress, onBack }: ProgressSectionProps) => {
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
                 <div 
-                  className="bg-gradient-to-r from-indigo-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-indigo-500 to-cyan-500 h-2 rounded-full transition-all duration-500"
                   style={{ width: `${progress.percent}%` }}
                 />
               </div>

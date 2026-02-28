@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+mediapipe
+google-generativeai
+opencv-python
+python-multipart
+python-dotenv

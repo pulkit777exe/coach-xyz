@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050507;
+  --foreground: #f2f2f2;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-outfit), "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+* {
+  border-color: rgb(39 39 42);
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-outfit), "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+  background-image:
+    radial-gradient(circle at 15% -10%, rgba(56, 189, 248, 0.14), transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(147, 51, 234, 0.12), transparent 35%),
+    linear-gradient(to bottom, #06070a 0%, #030304 100%);
+}
+
+.font-display {
+  font-family: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: rgba(217, 249, 157, 0.25);
+  color: #f4f4f5;
+}
