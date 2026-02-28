@@ -22,3 +22,6 @@ Thumbs.db
 
 # Output videos
 final.mp4
+*.mp4
+*.mov
+context

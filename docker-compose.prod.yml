@@ -1,0 +1,106 @@
+name: coachai-prod
+
+services:
+  engine:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile
+    image: coachai/engine:prod
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      PYTHONUNBUFFERED: "1"
+    expose:
+      - "8001"
+    volumes:
+      - engine_tmp:/app/tmp
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health',timeout=3).status==200 else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    cpus: "2.0"
+    mem_limit: 4g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    init: true
+    restart: unless-stopped
+    networks:
+      - coachai_net
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: coachai/server:prod
+    environment:
+      ENGINE_URL: http://engine:8001
+      PORT: 8000
+      NODE_ENV: production
+    depends_on:
+      engine:
+        condition: service_healthy
+    ports:
+      - "${PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    cpus: "1.0"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    init: true
+    restart: unless-stopped
+    networks:
+      - coachai_net
+
+volumes:
+  engine_tmp:
+    driver: local
+
+networks:
+  coachai_net:
+    driver: bridge

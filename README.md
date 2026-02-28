@@ -11,10 +11,15 @@
 
 ```
 gemini-bball/
-├── core/          Shared Python engine (Gemini, overlay renderer, validator)
-├── backend/       FastAPI REST API — used by Web App & Android
-├── web/           Web App (HTML/CSS/JS SPA, PWA-installable on Android)
-├── cli/           Command-line interface (local or API-backed)
+├── engine/        Python engine for video analysis
+│   ├── core/      Shared Python engine (Gemini, overlay renderer, validator)
+│   ├── cli/       Command-line interface (local or API-backed)
+│   ├── main.py    Main entry point
+│   └── requirements.txt
+├── backend/       FastAPI REST API (legacy)
+├── server/        Elysia/Bun backend (new, recommended)
+├── web/           Web App (HTML/CSS/JS SPA, legacy)
+├── web-next/      Next.js frontend with TypeScript and Tailwind
 ├── android/       React Native Android app
 ├── sports/        Per-sport config JSON (basketball, football, cricket)
 └── events/        Output event JSON files
@@ -24,18 +29,62 @@ gemini-bball/
 
 ## Quick Start
 
-### 1. Install Python dependencies
+### For Development (Recommended)
+
+#### 1. Install Python dependencies
 
 ```bash
+cd engine
 pip install -r requirements.txt
+cd ..
 pip install -r backend/requirements.txt
 ```
 
-### 2. Set your Gemini API key
+#### 2. Set your Gemini API key
 
 ```bash
 # .env (already in the project root)
 GEMINI_API_KEY=your_key_here
+```
+
+#### 3. Start Elysia Backend
+
+```bash
+cd server
+bun install
+cp .env.example .env
+# Add GEMINI_API_KEY and API_KEY
+bun run dev
+```
+
+Backend will be at: http://localhost:8000
+
+#### 4. Start Next.js Frontend
+
+```bash
+cd web-next
+bun install
+cp .env.local.example .env.local
+bun run dev
+```
+
+Frontend will be at: http://localhost:3000
+
+### For Production
+
+#### Build Frontend
+
+```bash
+cd web-next
+bun run build
+bun run start
+```
+
+#### Run Backend
+
+```bash
+cd server
+bun run start
 ```
 
 ---
@@ -62,10 +111,24 @@ python cli/main.py analyze video.mp4 --api-url http://localhost:8000
 
 ## Backend API
 
-Serves the Web App and Android app.
+### Elysia/Bun Backend (Recommended)
+
+Serves the Web App and Android app with modern, performant backend.
 
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+cd server
+# Install dependencies
+bun install
+
+# Set environment variables
+cp .env.example .env
+# Add GEMINI_API_KEY and API_KEY
+
+# Start development server
+bun run dev
+
+# Start production server
+bun run start
 ```
 
 | Endpoint             | Method | Description                    |
@@ -77,6 +140,12 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 | `/api/download/{id}` | GET    | Stream the rendered `.mp4`     |
 | `/api/events/{id}`   | GET    | Get the raw event JSON         |
 | `/api/jobs/{id}`     | DELETE | Clean up a job                 |
+
+### FastAPI Backend (Legacy)
+
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
 
 ### Example — cURL
 
@@ -95,6 +164,32 @@ curl -O http://localhost:8000/api/download/<job_id>
 ---
 
 ## Web App
+
+### Next.js 14+ Frontend (Recommended)
+
+Modern web interface with TypeScript and Tailwind CSS.
+
+```bash
+cd web-next
+# Install dependencies
+bun install
+
+# Set environment variables
+cp .env.local.example .env.local
+
+# Start development server
+bun run dev
+
+# Build for production
+bun run build
+
+# Start production server
+bun run start
+```
+
+Frontend will be available at: http://localhost:3000
+
+### Legacy HTML/CSS/JS SPA
 
 Open `web/index.html` directly in a browser **while the backend is running**.
 
