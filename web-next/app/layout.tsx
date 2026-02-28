@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CoachAI - AI Sports Video Analysis",
-  description: "Upload your sports video and get AI-powered coaching analysis",
+  title: "CoachXYZ | AI Sports Form Analysis",
+  description: "Upload training footage and get timestamped coaching feedback in under a minute.",
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-gray-950 text-gray-100 min-h-screen antialiased">
+    <html lang="en">
+      <body className="min-h-screen antialiased">
         {children}
       </body>
     </html>

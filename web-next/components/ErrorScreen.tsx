@@ -37,7 +37,7 @@ export default function ErrorScreen({ code, message, onRetry }: ErrorScreenProps
         </p>
 
         <Button
-          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          className="bg-indigo-600 hover:bg-indigo-700 text-black"
           size="lg"
           onClick={onRetry}
         >

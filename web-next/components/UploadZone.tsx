@@ -80,7 +80,7 @@ export default function UploadZone({ onFileSelected }: UploadZoneProps) {
         </p>
         
         <Button
-          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          className="bg-indigo-600 hover:bg-indigo-700 text-black"
           size="lg"
         >
           Choose Video File

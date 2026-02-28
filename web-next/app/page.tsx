@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import UploadZone from '@/components/UploadZone'
+import LandingPage from '@/components/LandingPage'
 import PlayerSelector from '@/components/PlayerSelector'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ResultsSummary from '@/components/ResultsSummary'
@@ -128,7 +128,7 @@ export default function Home() {
   // Render logic
   switch (appState) {
     case 'idle':
-      return <UploadZone onFileSelected={handleFileSelected} />
+      return <LandingPage onFileSelected={handleFileSelected} />
     case 'scanning':
       return (
         <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center">
@@ -145,6 +145,6 @@ export default function Home() {
     case 'error':
       return <ErrorScreen code={errorCode} message={errorMessage} onRetry={handleReset} />
     default:
-      return <UploadZone onFileSelected={handleFileSelected} />
+      return <LandingPage onFileSelected={handleFileSelected} />
   }
 }
