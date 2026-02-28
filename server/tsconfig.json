@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022"],
+    "types": ["bun-types"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/index.ts",
+    "src/routes/scan.ts",
+    "src/routes/analyze.ts",
+    "src/routes/status.ts",
+    "src/routes/download.ts",
+    "src/lib/engine.ts",
+    "src/lib/jobs.ts",
+    "src/lib/errors.ts",
+    "src/types/index.ts"
+  ],
+  "exclude": ["node_modules"]
+}
