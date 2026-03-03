@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 import cv2
-import mediapipe as mp
 import numpy as np
+
+from core.pose_backend import get_pose_connections
 
 
 def _score_color(form_score: int) -> tuple[int, int, int]:
@@ -24,23 +25,40 @@ def _sport_label(sport: str) -> str:
     return icon_map.get((sport or "").lower(), "🎯 Unknown Sport")
 
 
-def _to_landmark_list(landmarks: list[dict[str, float]]) -> Any | None:
-    try:
-        from mediapipe.framework.formats import landmark_pb2
-    except Exception:
-        return None
+def _draw_pose_landmarks(
+    frame: np.ndarray,
+    landmarks: list[dict[str, float]],
+    connections: list[tuple[int, int]],
+) -> None:
+    if not landmarks:
+        return
 
-    lm_list = landmark_pb2.NormalizedLandmarkList()
+    h, w = frame.shape[:2]
+    points: list[tuple[int, int] | None] = []
     for lm in landmarks:
-        lm_list.landmark.append(
-            landmark_pb2.NormalizedLandmark(
-                x=float(lm.get("x", 0.0)),
-                y=float(lm.get("y", 0.0)),
-                z=float(lm.get("z", 0.0)),
-                visibility=float(lm.get("visibility", 0.0)),
-            )
-        )
-    return lm_list
+        x = int(float(lm.get("x", 0.0)) * w)
+        y = int(float(lm.get("y", 0.0)) * h)
+        visibility = float(lm.get("visibility", 1.0))
+        if visibility < 0.2:
+            points.append(None)
+            continue
+        px = max(0, min(w - 1, x))
+        py = max(0, min(h - 1, y))
+        points.append((px, py))
+
+    for start, end in connections:
+        if start >= len(points) or end >= len(points):
+            continue
+        p1 = points[start]
+        p2 = points[end]
+        if p1 is None or p2 is None:
+            continue
+        cv2.line(frame, p1, p2, (0, 170, 255), 2, cv2.LINE_AA)
+
+    for point in points:
+        if point is None:
+            continue
+        cv2.circle(frame, point, 2, (0, 235, 120), -1, cv2.LINE_AA)
 
 
 def _draw_player_bbox(frame: np.ndarray, bbox: dict[str, int], alpha: float = 0.3) -> None:
@@ -223,14 +241,7 @@ def render_video(
         cap.release()
         raise RuntimeError("Failed to open output writer")
 
-    pose_root = getattr(mp, "solutions", None)
-    if pose_root is None:
-        cap.release()
-        writer.release()
-        raise RuntimeError("MediaPipe Pose drawing utilities unavailable")
-
-    drawing_utils = pose_root.drawing_utils
-    connections = pose_root.pose.POSE_CONNECTIONS
+    connections = get_pose_connections()
 
     track_by_frame: Dict[int, Dict[str, Any]] = {
         int(item["frame_index"]): item for item in active_player_landmarks_per_frame
@@ -246,15 +257,7 @@ def render_video(
 
         track = track_by_frame.get(frame_index)
         if track:
-            lm_list = _to_landmark_list(track["landmarks"])
-            if lm_list is not None:
-                drawing_utils.draw_landmarks(
-                    frame,
-                    lm_list,
-                    connections,
-                    landmark_drawing_spec=drawing_utils.DrawingSpec(color=(0, 235, 120), thickness=2, circle_radius=2),
-                    connection_drawing_spec=drawing_utils.DrawingSpec(color=(0, 170, 255), thickness=2, circle_radius=1),
-                )
+            _draw_pose_landmarks(frame, track["landmarks"], connections)
             _draw_player_bbox(frame, track["bbox"], alpha=0.3)
 
         timestamp = frame_index / max(1.0, use_fps)

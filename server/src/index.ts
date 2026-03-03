@@ -7,7 +7,17 @@ import analyzeRoute from "./routes/analyze"
 import statusRoute from "./routes/status"
 import downloadRoute from "./routes/download"
 
-const app = new Elysia()
+const maxFileSizeBytes = Number(process.env.MAX_FILE_SIZE ?? 500 * 1024 * 1024)
+const maxRequestBodySize = Number.isFinite(maxFileSizeBytes)
+  ? Math.max(maxFileSizeBytes + 10 * 1024 * 1024, 64 * 1024 * 1024)
+  : 600 * 1024 * 1024
+
+const app = new Elysia({
+  serve: {
+    // Required for large multipart uploads; keep higher than route-level file cap.
+    maxRequestBodySize,
+  },
+})
   .use(cors({ origin: "*" }))
   .use(
     swagger({
@@ -29,6 +39,10 @@ const app = new Elysia()
   .use(analyzeRoute)
   .use(statusRoute)
   .use(downloadRoute)
-  .listen(Number(process.env.PORT) || 8000)
+  .listen({
+    port: Number(process.env.PORT) || 8000,
+    maxRequestBodySize,
+  })
 
 console.log(`CoachAI Server running on :${app.server?.port}`)
+console.log(`CoachAI maxRequestBodySize: ${maxRequestBodySize} bytes`)

@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 
 import cv2
-import mediapipe as mp
 import numpy as np
 
 from core.errors import NoPlayersDetectedError, VideoDecodeError
+from core.pose_backend import StaticPoseDetector, pose_backend_available
 
 
 POSE_LANDMARKS_FOR_BOX = [11, 12, 23, 24, 27, 28]
@@ -75,18 +75,6 @@ def _bbox_from_landmarks(
     return x_min, y_min, x_max, y_max
 
 
-def _landmarks_to_dicts(result_landmarks: Any) -> list[dict[str, float]]:
-    return [
-        {
-            "x": float(lm.x),
-            "y": float(lm.y),
-            "z": float(lm.z),
-            "visibility": float(lm.visibility),
-        }
-        for lm in result_landmarks.landmark
-    ]
-
-
 def _transform_landmarks_to_global(
     landmarks: list[dict[str, float]],
     crop_x1: int,
@@ -111,7 +99,7 @@ def _transform_landmarks_to_global(
     return transformed
 
 
-def _detect_pose_candidates(frame: np.ndarray, pose: Any) -> list[PoseCandidate]:
+def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
     frame_h, frame_w = frame.shape[:2]
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -135,37 +123,36 @@ def _detect_pose_candidates(frame: np.ndarray, pose: Any) -> list[PoseCandidate]
         if crop.size == 0:
             continue
 
-        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
-        if not result.pose_landmarks:
+        detections = pose_detector.detect(crop)
+        if not detections:
             continue
 
-        local_landmarks = _landmarks_to_dicts(result.pose_landmarks)
-        avg_visibility = float(np.mean([lm["visibility"] for lm in local_landmarks]))
-        global_landmarks = _transform_landmarks_to_global(
-            local_landmarks,
-            crop_x1=x1,
-            crop_y1=y1,
-            crop_w=max(1, x2 - x1),
-            crop_h=max(1, y2 - y1),
-            frame_w=frame_w,
-            frame_h=frame_h,
-        )
+        for local_landmarks in detections:
+            avg_visibility = float(np.mean([lm["visibility"] for lm in local_landmarks]))
+            global_landmarks = _transform_landmarks_to_global(
+                local_landmarks,
+                crop_x1=x1,
+                crop_y1=y1,
+                crop_w=max(1, x2 - x1),
+                crop_h=max(1, y2 - y1),
+                frame_w=frame_w,
+                frame_h=frame_h,
+            )
 
-        bbox = _bbox_from_landmarks(global_landmarks, frame_w, frame_h, padding_ratio=0.15)
-        candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=avg_visibility)
+            bbox = _bbox_from_landmarks(global_landmarks, frame_w, frame_h, padding_ratio=0.15)
+            candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=avg_visibility)
 
-        duplicate = False
-        for existing in candidates:
-            if _iou(existing.bbox, candidate.bbox) > 0.6:
-                duplicate = True
-                if candidate.visibility > existing.visibility:
-                    existing.landmarks = candidate.landmarks
-                    existing.bbox = candidate.bbox
-                    existing.visibility = candidate.visibility
-                break
-        if not duplicate:
-            candidates.append(candidate)
+            duplicate = False
+            for existing in candidates:
+                if _iou(existing.bbox, candidate.bbox) > 0.6:
+                    duplicate = True
+                    if candidate.visibility > existing.visibility:
+                        existing.landmarks = candidate.landmarks
+                        existing.bbox = candidate.bbox
+                        existing.visibility = candidate.visibility
+                    break
+            if not duplicate:
+                candidates.append(candidate)
 
     return candidates
 
@@ -187,16 +174,11 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
     best_score = -1e9
     found_visible_pose = False
 
-    pose_module = getattr(mp, "solutions", None)
-    if pose_module is None:
+    if not pose_backend_available():
         cap.release()
-        raise VideoDecodeError("MediaPipe Pose API unavailable in installed mediapipe package")
+        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
 
-    with pose_module.pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        min_detection_confidence=0.5,
-    ) as pose:
+    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
         for ts in timestamps:
             if fps <= 0:
                 frame_index = int(ts * 30)
@@ -248,18 +230,13 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
     if frame is None or frame.size == 0:
         raise NoPlayersDetectedError("Frame is empty")
 
-    pose_module = getattr(mp, "solutions", None)
-    if pose_module is None:
-        raise VideoDecodeError("MediaPipe Pose API unavailable in installed mediapipe package")
+    if not pose_backend_available():
+        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
 
     players: list[dict] = []
     frame_h, frame_w = frame.shape[:2]
 
-    with pose_module.pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        min_detection_confidence=0.5,
-    ) as pose:
+    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
         candidates = _detect_pose_candidates(frame, pose)
 
     for candidate in candidates:

@@ -17,6 +17,7 @@ from core.analyzer import run_analysis
 from core.detector import detect_players
 from core.errors import JobNotFoundError, NoPlayersDetectedError, VideoDecodeError
 from core.jobs import create_job, get_job, start_cleanup_scheduler
+from core.pose_backend import pose_backend_available, pose_backend_name
 
 
 load_dotenv()
@@ -85,11 +86,24 @@ def _session_video_path(session_token: str) -> tuple[Optional[str], Optional[JSO
     return str(session["video_path"]), None
 
 
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse(status_code=200, content={"status": "healthy"})
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     start_cleanup_scheduler(interval_seconds=30 * 60)
     print("CoachAI Engine running on :8001")
+    backend = pose_backend_name()
+    if not pose_backend_available():
+        print(
+            "WARNING: mediapipe Pose backend unavailable. "
+            "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
+        )
+    else:
+        print(f"MediaPipe pose backend: {backend}")
 
 
 @app.post("/scan")
@@ -107,7 +121,13 @@ async def scan(video: UploadFile | None = None) -> JSONResponse:
             "NO_PLAYERS_DETECTED",
             "No players detected clearly in this video. Try better lighting or a less crowded frame.",
         )
-    except VideoDecodeError:
+    except VideoDecodeError as exc:
+        if "MediaPipe Pose backend unavailable" in exc.message:
+            return _error_response(
+                503,
+                "ENGINE_UNAVAILABLE",
+                "MediaPipe runtime is unavailable on the engine. Reinstall dependencies and restart the engine.",
+            )
         return _error_response(
             422,
             "VIDEO_DECODE_FAILED",

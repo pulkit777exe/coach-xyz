@@ -3,20 +3,26 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import cv2
-import google.generativeai as genai
-import mediapipe as mp
 import numpy as np
-from google.api_core.exceptions import ResourceExhausted
+
+try:
+    from google import genai
+    from google.genai import errors as genai_errors
+    from google.genai import types as genai_types
+except Exception:
+    genai = None
+    genai_errors = None
+    genai_types = None
 
 from core.detector import PoseCandidate, detect_players
 from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError
 from core.jobs import STAGES, register_job_input, update_job
+from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.renderer import render_video
 
 
@@ -98,18 +104,6 @@ def _extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, in
     return keyframes, fps, frame_count
 
 
-def _pose_landmarks_to_dicts(result_landmarks: Any) -> list[dict[str, float]]:
-    return [
-        {
-            "x": float(lm.x),
-            "y": float(lm.y),
-            "z": float(lm.z),
-            "visibility": float(lm.visibility),
-        }
-        for lm in result_landmarks.landmark
-    ]
-
-
 def _bbox_from_landmarks(
     landmarks: list[dict[str, float]],
     width: int,
@@ -141,7 +135,7 @@ def _candidate_centroid_x(candidate: PoseCandidate) -> float:
     return (x_min + x_max) / 2.0
 
 
-def _detect_pose_candidates(frame: np.ndarray, pose: Any) -> list[PoseCandidate]:
+def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
     frame_h, frame_w = frame.shape[:2]
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -165,34 +159,31 @@ def _detect_pose_candidates(frame: np.ndarray, pose: Any) -> list[PoseCandidate]
         if crop.size == 0:
             continue
 
-        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
-        if not result.pose_landmarks:
+        detections = pose_detector.detect(crop)
+        if not detections:
             continue
 
-        local_landmarks = _pose_landmarks_to_dicts(result.pose_landmarks)
-        transformed: list[dict[str, float]] = []
-        for lm in local_landmarks:
-            gx = (x1 + lm["x"] * max(1, x2 - x1)) / max(1, frame_w)
-            gy = (y1 + lm["y"] * max(1, y2 - y1)) / max(1, frame_h)
-            transformed.append(
-                {
-                    "x": float(np.clip(gx, 0.0, 1.0)),
-                    "y": float(np.clip(gy, 0.0, 1.0)),
-                    "z": lm["z"],
-                    "visibility": lm["visibility"],
-                }
-            )
+        for local_landmarks in detections:
+            transformed: list[dict[str, float]] = []
+            for lm in local_landmarks:
+                gx = (x1 + lm["x"] * max(1, x2 - x1)) / max(1, frame_w)
+                gy = (y1 + lm["y"] * max(1, y2 - y1)) / max(1, frame_h)
+                transformed.append(
+                    {
+                        "x": float(np.clip(gx, 0.0, 1.0)),
+                        "y": float(np.clip(gy, 0.0, 1.0)),
+                        "z": lm["z"],
+                        "visibility": lm["visibility"],
+                    }
+                )
 
-        visibility = float(np.mean([lm["visibility"] for lm in transformed]))
-        bbox = _bbox_from_landmarks(transformed, frame_w, frame_h)
-        candidates.append(PoseCandidate(landmarks=transformed, bbox=bbox, visibility=visibility))
+            visibility = float(np.mean([lm["visibility"] for lm in transformed]))
+            bbox = _bbox_from_landmarks(transformed, frame_w, frame_h)
+            candidates.append(PoseCandidate(landmarks=transformed, bbox=bbox, visibility=visibility))
 
     if not candidates:
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
-        if result.pose_landmarks:
-            landmarks = _pose_landmarks_to_dicts(result.pose_landmarks)
+        detections = pose_detector.detect(frame)
+        for landmarks in detections:
             visibility = float(np.mean([lm["visibility"] for lm in landmarks]))
             bbox = _bbox_from_landmarks(landmarks, frame_w, frame_h)
             candidates.append(PoseCandidate(landmarks=landmarks, bbox=bbox, visibility=visibility))
@@ -227,9 +218,8 @@ def _build_active_player_tracks(
     keyframes: list[dict[str, Any]],
     player_index: Optional[int],
 ) -> list[dict[str, Any]]:
-    pose_root = getattr(mp, "solutions", None)
-    if pose_root is None:
-        raise VideoDecodeError("MediaPipe Pose API unavailable in installed mediapipe package")
+    if not pose_backend_available():
+        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
 
     selected_centroid_x: Optional[float] = None
     if player_index is not None:
@@ -242,11 +232,7 @@ def _build_active_player_tracks(
 
     active_tracks: list[dict[str, Any]] = []
 
-    with pose_root.pose.Pose(
-        static_image_mode=True,
-        model_complexity=1,
-        min_detection_confidence=0.5,
-    ) as pose:
+    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
         for entry in keyframes:
             frame = entry["frame"]
             candidates = _detect_pose_candidates(frame, pose)
@@ -291,13 +277,14 @@ def _frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
 
 
 def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
+    if genai is None or genai_types is None:
+        raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise GeminiQuotaError("GEMINI_API_KEY is not configured")
 
-    genai.configure(api_key=api_key)
-
-    client = genai.GenerativeModel("gemini-2.5-flash")
+    client = genai.Client(api_key=api_key)
 
     system_instruction = """
   You are an expert sports biomechanics coach. Analyze the provided 
@@ -346,20 +333,33 @@ def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
         if not jpeg:
             continue
         parts.append(f"Frame timestamp: {item['timestamp']}")
-        parts.append({"mime_type": "image/jpeg", "data": jpeg})
+        parts.append(genai_types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"))
 
     try:
-        response = client.generate_content(
-            parts,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json"
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=parts,
+            config=genai_types.GenerateContentConfig(
+                response_mime_type="application/json",
             ),
         )
-    except ResourceExhausted as exc:
-        raise GeminiQuotaError("Gemini quota exceeded. Please retry later.") from exc
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", None)
+        message = str(exc)
+        is_quota = (
+            status_code == 429
+            or "RESOURCE_EXHAUSTED" in message
+            or "quota" in message.lower()
+        )
+        if is_quota:
+            raise GeminiQuotaError("Gemini quota exceeded. Please retry later.") from exc
+        if genai_errors is not None and isinstance(exc, getattr(genai_errors, "APIError", tuple())):
+            raise GeminiParseError(f"Gemini API error: {message}") from exc
+        raise GeminiParseError("Gemini request failed unexpectedly") from exc
 
     try:
-        return json.loads(response.text)
+        text = getattr(response, "text", None) or ""
+        return json.loads(text)
     except Exception as exc:
         raise GeminiParseError("Gemini returned malformed JSON") from exc
 

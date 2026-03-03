@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 mediapipe
-google-generativeai
+google-genai
 opencv-python
 python-multipart
 python-dotenv
