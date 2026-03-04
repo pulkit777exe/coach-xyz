@@ -6,10 +6,13 @@ import PlayerSelector from '@/components/PlayerSelector'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ResultsSummary from '@/components/ResultsSummary'
 import ErrorScreen from '@/components/ErrorScreen'
+import BetaGate from '@/components/BetaGate'
 import { scanVideo, startAnalysis, getJobStatus } from '@/lib/api'
+import { getBetaCode } from '@/lib/betaCode'
 import type { AppState, ScanResult, JobStatus } from '@/types'
 
 export default function Home() {
+  const [betaVerified, setBetaVerified] = useState(false)
   const [appState, setAppState] = useState<AppState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<number | null>(null)
@@ -54,6 +57,11 @@ export default function Home() {
   }
 
   useEffect(() => {
+    const code = getBetaCode()
+    if (code) setBetaVerified(true)
+  }, [])
+
+  useEffect(() => {
     return () => stopPolling()
   }, [])
 
@@ -91,6 +99,10 @@ export default function Home() {
         setAppState('selecting')
       }
     } catch (e: any) {
+      if (e.code === 'INVALID_BETA_CODE') {
+        setBetaVerified(false)
+        return
+      }
       setErrorCode(e.code ?? 'UNKNOWN')
       setErrorMessage(e.message ?? 'Something went wrong during scanning')
       setAppState('error')
@@ -123,6 +135,10 @@ export default function Home() {
     setJobStatus(null)
     setErrorMessage('')
     setErrorCode('')
+  }
+
+  if (!betaVerified) {
+    return <BetaGate onSuccess={() => setBetaVerified(true)} />
   }
 
   // Render logic

@@ -4,15 +4,15 @@ import os
 import threading
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from core import storage
 from core.analyzer import run_analysis
 from core.detector import detect_players
 from core.errors import JobNotFoundError, NoPlayersDetectedError, VideoDecodeError
@@ -21,9 +21,6 @@ from core.pose_backend import pose_backend_available, pose_backend_name
 
 
 load_dotenv()
-
-TMP_DIR = (Path(__file__).resolve().parent / "tmp").resolve()
-TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
@@ -52,19 +49,6 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-async def _save_upload(upload: UploadFile) -> str:
-    suffix = Path(upload.filename or "input.mp4").suffix.lower() or ".mp4"
-    path = TMP_DIR / f"{uuid.uuid4().hex}{suffix}"
-    with path.open("wb") as f:
-        while True:
-            chunk = await upload.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-    await upload.close()
-    return str(path)
-
-
 def _validate_video_upload(upload: UploadFile | StarletteUploadFile | None) -> Optional[JSONResponse]:
     if upload is None:
         return _error_response(400, "INVALID_REQUEST", "Missing video upload")
@@ -76,14 +60,18 @@ def _validate_video_upload(upload: UploadFile | StarletteUploadFile | None) -> O
     return None
 
 
-def _session_video_path(session_token: str) -> tuple[Optional[str], Optional[JSONResponse]]:
+def _session_video_key(session_token: str) -> tuple[Optional[str], Optional[JSONResponse]]:
     with sessions_lock:
         session = sessions.get(session_token)
 
     if not session:
         return None, _error_response(404, "SESSION_EXPIRED", "Session expired. Please upload your video again.")
 
-    return str(session["video_path"]), None
+    video_key = session.get("video_key")
+    if not video_key:
+        return None, _error_response(404, "SESSION_EXPIRED", "Session expired. Please upload your video again.")
+
+    return str(video_key), None
 
 
 @app.get("/health")
@@ -93,7 +81,6 @@ async def health() -> JSONResponse:
 
 @app.on_event("startup")
 def on_startup() -> None:
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
     start_cleanup_scheduler(interval_seconds=30 * 60)
     print("CoachAI Engine running on :8001")
     backend = pose_backend_name()
@@ -112,16 +99,24 @@ async def scan(video: UploadFile | None = None) -> JSONResponse:
     if validation_error:
         return validation_error
 
-    video_path = await _save_upload(video)
+    file_bytes = await video.read()
+    await video.close()
+
+    r2_key = f"uploads/{uuid.uuid4().hex}.mp4"
+    storage.upload_video(file_bytes, r2_key)
+
+    local_path = storage.download_video_to_tmp(r2_key)
     try:
-        players = detect_players(video_path)
+        players = detect_players(local_path)
     except NoPlayersDetectedError:
+        storage.delete_file(r2_key)
         return _error_response(
             422,
             "NO_PLAYERS_DETECTED",
             "No players detected clearly in this video. Try better lighting or a less crowded frame.",
         )
     except VideoDecodeError as exc:
+        storage.delete_file(r2_key)
         if "MediaPipe Pose backend unavailable" in exc.message:
             return _error_response(
                 503,
@@ -133,11 +128,16 @@ async def scan(video: UploadFile | None = None) -> JSONResponse:
             "VIDEO_DECODE_FAILED",
             "Could not read this video file. Try MP4, MOV, or AVI format.",
         )
+    finally:
+        try:
+            os.unlink(local_path)
+        except FileNotFoundError:
+            pass
 
     session_token = str(uuid.uuid4())
     with sessions_lock:
         sessions[session_token] = {
-            "video_path": video_path,
+            "video_key": r2_key,
             "players": players,
             "created_at": time.time(),
         }
@@ -168,7 +168,7 @@ async def analyze(request: Request) -> JSONResponse:
     session_token: Optional[str] = None
     player_index: Optional[int] = None
     model = "gemini-2.5-flash"
-    video_path: Optional[str] = None
+    video_key: Optional[str] = None
 
     if content_type.startswith("application/json"):
         try:
@@ -181,7 +181,7 @@ async def analyze(request: Request) -> JSONResponse:
         model = str(payload.get("model") or "gemini-2.5-flash")
 
         if session_token:
-            video_path, err = _session_video_path(session_token)
+            video_key, err = _session_video_key(session_token)
             if err:
                 return err
         else:
@@ -198,7 +198,7 @@ async def analyze(request: Request) -> JSONResponse:
         model = str(form.get("model") or "gemini-2.5-flash")
 
         if session_token:
-            video_path, err = _session_video_path(str(session_token))
+            video_key, err = _session_video_key(str(session_token))
             if err:
                 return err
         else:
@@ -210,22 +210,25 @@ async def analyze(request: Request) -> JSONResponse:
             if validation_error:
                 return validation_error
 
-            video_path = await _save_upload(maybe_video)
+            file_bytes = await maybe_video.read()
+            await maybe_video.close()
+            video_key = f"uploads/{uuid.uuid4().hex}.mp4"
+            storage.upload_video(file_bytes, video_key)
     else:
         return _error_response(415, "INVALID_REQUEST", "Unsupported content type")
 
     # model is accepted by contract for forward-compatibility; current pipeline uses gemini-2.5-flash.
     _ = model
 
-    if not video_path or not os.path.exists(video_path):
-        return _error_response(404, "VIDEO_NOT_FOUND", "Video file not found for analysis")
+    if not video_key:
+        return _error_response(404, "VIDEO_NOT_FOUND", "Video not found for analysis")
 
     job_id = str(uuid.uuid4())
     create_job(job_id)
 
     threading.Thread(
         target=run_analysis,
-        args=(job_id, video_path, player_index),
+        args=(job_id, video_key, player_index),
         daemon=True,
     ).start()
 
@@ -248,7 +251,7 @@ def status(job_id: str) -> JSONResponse:
             "progress": job.progress,
             "complete": job.complete,
             "summary": job.summary,
-            "video_ready": bool(job.video_path),
+            "video_ready": bool(job.video_key),
             "error": job.error,
         },
     )
@@ -261,14 +264,22 @@ def download(job_id: str):
     except JobNotFoundError:
         return _error_response(404, "JOB_NOT_FOUND", "Job not found")
 
-    if not job.complete or not job.video_path or not os.path.exists(job.video_path):
+    if not job.complete or not job.video_key:
         return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
 
-    return FileResponse(
-        job.video_path,
-        media_type="video/mp4",
-        filename=f"coachai_analysis_{job_id[:8]}.mp4",
-    )
+    if storage.is_local_backend():
+        local_video_path = storage.get_local_file_path(job.video_key)
+        if not local_video_path:
+            return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
+
+        return FileResponse(
+            path=local_video_path,
+            media_type="video/mp4",
+            filename="coachai_analysis.mp4",
+        )
+
+    url = storage.get_download_url(job.video_key)
+    return RedirectResponse(url=url, status_code=302)
 
 
 if __name__ == "__main__":

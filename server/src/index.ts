@@ -1,16 +1,20 @@
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { swagger } from "@elysiajs/swagger"
+import { betaAuth } from "./middleware/betaAuth"
 
 import scanRoute from "./routes/scan"
 import analyzeRoute from "./routes/analyze"
 import statusRoute from "./routes/status"
 import downloadRoute from "./routes/download"
+import { historyStoreEnabled, initializeHistoryStore } from "./lib/supabaseHistory"
 
 const maxFileSizeBytes = Number(process.env.MAX_FILE_SIZE ?? 500 * 1024 * 1024)
 const maxRequestBodySize = Number.isFinite(maxFileSizeBytes)
   ? Math.max(maxFileSizeBytes + 10 * 1024 * 1024, 64 * 1024 * 1024)
   : 600 * 1024 * 1024
+
+await initializeHistoryStore()
 
 const app = new Elysia({
   serve: {
@@ -19,6 +23,7 @@ const app = new Elysia({
   },
 })
   .use(cors({ origin: "*" }))
+  .use(betaAuth)
   .use(
     swagger({
       path: "/swagger",
@@ -35,6 +40,7 @@ const app = new Elysia({
     engine: process.env.ENGINE_URL,
     timestamp: new Date().toISOString(),
   }))
+  .get("/api/verify-code", () => ({ valid: true }))
   .use(scanRoute)
   .use(analyzeRoute)
   .use(statusRoute)
@@ -46,3 +52,6 @@ const app = new Elysia({
 
 console.log(`CoachAI Server running on :${app.server?.port}`)
 console.log(`CoachAI maxRequestBodySize: ${maxRequestBodySize} bytes`)
+console.log(
+  `CoachAI Supabase history store: ${historyStoreEnabled() ? "enabled" : "disabled"}`,
+)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import Any, Optional
@@ -24,10 +25,11 @@ from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlaye
 from core.jobs import STAGES, register_job_input, update_job
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.renderer import render_video
+from core import storage
 
 
 def _tmp_dir() -> Path:
-    return (Path(__file__).resolve().parent.parent / "tmp").resolve()
+    return Path(tempfile.gettempdir()).resolve()
 
 
 def _preprocess_video_ffmpeg(video_path: str) -> str:
@@ -364,19 +366,23 @@ def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
         raise GeminiParseError("Gemini returned malformed JSON") from exc
 
 
-def run_analysis(job_id: str, video_path: str, player_index: int | None) -> None:
-    preprocessed_path = video_path
+def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
+    local_path: str | None = None
+    preprocessed_path = ""
+    output_path: str | None = None
     cleanup_preprocessed = False
     try:
-        register_job_input(job_id, video_path)
+        local_path = storage.download_video_to_tmp(video_key)
+        preprocessed_path = local_path
+        register_job_input(job_id, local_path)
 
         update_job(job_id, stage=1, stage_name=STAGES[1], progress=10)
-        preprocessed_path = _preprocess_video_ffmpeg(video_path)
-        cleanup_preprocessed = preprocessed_path != video_path
+        preprocessed_path = _preprocess_video_ffmpeg(local_path)
+        cleanup_preprocessed = preprocessed_path != local_path
         keyframes, fps, _frame_count = _extract_keyframes(preprocessed_path)
 
         update_job(job_id, stage=2, stage_name=STAGES[2], progress=25)
-        active_tracks = _build_active_player_tracks(video_path, keyframes, player_index)
+        active_tracks = _build_active_player_tracks(local_path, keyframes, player_index)
 
         update_job(job_id, stage=3, stage_name=STAGES[3], progress=45)
         best_for_gemini = sorted(active_tracks, key=lambda t: t["visibility"], reverse=True)[:8]
@@ -393,12 +399,15 @@ def run_analysis(job_id: str, video_path: str, player_index: int | None) -> None
         output_path = str(_tmp_dir() / f"{job_id}_annotated.mp4")
         update_job(job_id, stage=5, stage_name=STAGES[5], progress=85)
         render_video(
-            video_path=video_path,
+            video_path=local_path,
             output_path=output_path,
             analysis_result=gemini_result,
             active_player_landmarks_per_frame=active_tracks,
             fps=fps,
         )
+
+        result_key = storage.upload_result_video(output_path, job_id)
+        output_path = None
 
         update_job(
             job_id,
@@ -406,7 +415,8 @@ def run_analysis(job_id: str, video_path: str, player_index: int | None) -> None
             stage_name=STAGES[5],
             progress=100,
             complete=True,
-            video_path=output_path,
+            video_key=result_key,
+            video_path=storage.get_local_file_path(result_key) if storage.is_local_backend() else None,
         )
     except EngineError as exc:
         update_job(job_id, error=exc.message, complete=True)
@@ -416,5 +426,15 @@ def run_analysis(job_id: str, video_path: str, player_index: int | None) -> None
         if cleanup_preprocessed:
             try:
                 Path(preprocessed_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+        if local_path and os.path.exists(local_path):
+            try:
+                os.unlink(local_path)
+            except Exception:
+                pass
+        if output_path and os.path.exists(output_path):
+            try:
+                os.unlink(output_path)
             except Exception:
                 pass

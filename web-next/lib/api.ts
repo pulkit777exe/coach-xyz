@@ -1,10 +1,27 @@
 import type { ScanResult, JobStatus } from '@/types'
+import { clearBetaCode, getBetaCode } from './betaCode'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
+
+function getHeaders(extra?: Record<string, string>): HeadersInit {
+  const code = getBetaCode()
+  return {
+    ...(code ? { 'x-beta-code': code } : {}),
+    ...extra,
+  }
+}
 
 // Helper function to handle API errors
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
+    if (response.status === 401) {
+      clearBetaCode()
+      throw {
+        code: 'INVALID_BETA_CODE',
+        message: 'Your beta access code is invalid. Please check your invite.',
+      }
+    }
+
     const errorData = await response.json().catch(() => ({
       error: 'API_ERROR',
       message: `HTTP ${response.status}: ${response.statusText}`
@@ -20,6 +37,7 @@ export async function scanVideo(file: File): Promise<ScanResult> {
 
   const response = await fetch(`${BASE}/api/scan-video`, {
     method: 'POST',
+    headers: getHeaders(),
     body: formData
   })
 
@@ -32,7 +50,7 @@ export async function startAnalysis(params: {
 }): Promise<{ job_id: string }> {
   const response = await fetch(`${BASE}/api/analyze-video`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       ...params,
       model: "gemini-2.5-flash"
@@ -43,7 +61,9 @@ export async function startAnalysis(params: {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const response = await fetch(`${BASE}/api/job-status/${jobId}`)
+  const response = await fetch(`${BASE}/api/job-status/${jobId}`, {
+    headers: getHeaders(),
+  })
   return handleResponse(response)
 }
 

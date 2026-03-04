@@ -5,3 +5,4 @@ google-genai
 opencv-python
 python-multipart
 python-dotenv
+boto3

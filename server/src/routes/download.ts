@@ -3,6 +3,7 @@ import { Elysia } from "elysia"
 import { getDownloadStream } from "../lib/engine"
 import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
+import { markAnalysisDownloaded } from "../lib/supabaseHistory"
 
 type EngineRouteError = {
   code?: string
@@ -19,6 +20,7 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
 
   try {
     const engineResponse = await getDownloadStream(job.engine_job_id)
+    await markAnalysisDownloaded(job.job_id)
     return new Response(engineResponse.body, {
       headers: {
         "Content-Type": "video/mp4",

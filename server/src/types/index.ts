@@ -15,6 +15,7 @@ export type AnalysisJob = {
   engine_job_id: string
   session_token: string | null
   player_index: number | null
+  model: string
   created_at: number
 }
 

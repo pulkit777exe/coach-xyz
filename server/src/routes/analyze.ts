@@ -2,7 +2,9 @@ import { Elysia } from "elysia"
 
 import { startAnalysis } from "../lib/engine"
 import { buildError } from "../lib/errors"
+import { readRequestMeta } from "../lib/requestMeta"
 import { createJob } from "../lib/jobs"
+import { persistAnalysisStart } from "../lib/supabaseHistory"
 
 type AnalyzeBody = {
   session_token: string | null
@@ -17,6 +19,7 @@ type EngineRouteError = {
 
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
   let body: AnalyzeBody
+  const requestMeta = readRequestMeta(request)
 
   try {
     body = (await request.json()) as AnalyzeBody
@@ -58,6 +61,16 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       engine_job_id: engineResponse.job_id,
       session_token: sessionToken,
       player_index: playerIndex,
+      model,
+    })
+
+    await persistAnalysisStart({
+      ...requestMeta,
+      serverJobId,
+      engineJobId: engineResponse.job_id,
+      sessionToken,
+      playerIndex,
+      model,
     })
 
     set.status = 200

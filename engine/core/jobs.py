@@ -32,6 +32,7 @@ class JobStatus:
     complete: bool
     error: str | None
     summary: dict | None
+    video_key: str | None
     video_path: str | None
     created_at: float
 
@@ -51,6 +52,7 @@ def create_job(job_id: str) -> JobStatus:
         complete=False,
         error=None,
         summary=None,
+        video_key=None,
         video_path=None,
         created_at=time.time(),
     )
