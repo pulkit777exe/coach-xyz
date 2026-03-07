@@ -1,0 +1,120 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Python Engine: Install Dependencies",
+      "type": "shell",
+      "command": "cd engine && pip install -r requirements.txt",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Python Engine: Run CLI Analysis",
+      "type": "shell",
+      "command": "cd engine && python cli/main.py analyze ${input:videoPath}",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Backend: Install Dependencies",
+      "type": "shell",
+      "command": "cd server && bun install",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Backend: Start Development Server",
+      "type": "shell",
+      "command": "cd server && bun run dev",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Backend: Start Production Server",
+      "type": "shell",
+      "command": "cd server && bun run start",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Backend: Type Check",
+      "type": "shell",
+      "command": "cd server && bun run type-check",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Frontend: Install Dependencies",
+      "type": "shell",
+      "command": "cd web-next && bun install",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Frontend: Start Development Server",
+      "type": "shell",
+      "command": "cd web-next && bun run dev",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Frontend: Build for Production",
+      "type": "shell",
+      "command": "cd web-next && bun run build",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Frontend: Start Production Server",
+      "type": "shell",
+      "command": "cd web-next && bun run start",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "isBackground": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "videoPath",
+      "type": "promptString",
+      "description": "Path to the video file to analyze",
+      "default": "video2.mp4"
+    }
+  ]
+}
