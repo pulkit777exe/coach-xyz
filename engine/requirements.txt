@@ -1,8 +1,9 @@
 fastapi
 uvicorn[standard]
-mediapipe
 google-genai
-opencv-python
+opencv-python-headless
 python-multipart
 python-dotenv
 boto3
+# Optional for higher-fidelity pose overlays (too heavy for Vercel Lambda bundle):
+# mediapipe

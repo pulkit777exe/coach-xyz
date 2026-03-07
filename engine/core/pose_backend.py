@@ -4,7 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import cv2
-import mediapipe as mp
+try:
+    import mediapipe as mp
+except Exception:
+    mp = None
 
 try:
     from mediapipe.tasks.python import BaseOptions
@@ -65,7 +68,7 @@ def _default_model_path() -> Path:
 
 
 def pose_backend_name() -> str:
-    pose_root = getattr(mp, "solutions", None)
+    pose_root = getattr(mp, "solutions", None) if mp is not None else None
     if pose_root is not None and hasattr(pose_root, "pose"):
         return "solutions"
 
@@ -85,7 +88,7 @@ def pose_backend_available() -> bool:
 
 
 def get_pose_connections() -> list[tuple[int, int]]:
-    pose_root = getattr(mp, "solutions", None)
+    pose_root = getattr(mp, "solutions", None) if mp is not None else None
     if pose_root is not None and hasattr(pose_root, "pose"):
         return list(pose_root.pose.POSE_CONNECTIONS)
     return list(_POSE_CONNECTIONS_FALLBACK)

@@ -21,6 +21,32 @@ class PoseCandidate:
     visibility: float
 
 
+def _detect_hog_people(frame: np.ndarray) -> list[tuple[tuple[int, int, int, int], float]]:
+    frame_h, frame_w = frame.shape[:2]
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+    boxes, weights = hog.detectMultiScale(
+        frame,
+        winStride=(8, 8),
+        padding=(8, 8),
+        scale=1.05,
+    )
+
+    out: list[tuple[tuple[int, int, int, int], float]] = []
+    for idx, (x, y, w, h) in enumerate(boxes):
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(frame_w - 1, int(x + w))
+        y2 = min(frame_h - 1, int(y + h))
+        if x2 <= x1 or y2 <= y1:
+            continue
+        weight = float(weights[idx]) if idx < len(weights) else 0.6
+        out.append(((x1, y1, x2, y2), weight))
+
+    return out
+
+
 def _iou(box_a: tuple[int, int, int, int], box_b: tuple[int, int, int, int]) -> float:
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
@@ -175,10 +201,6 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
     found_visible_pose = False
 
     if not pose_backend_available():
-        cap.release()
-        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
-
-    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
         for ts in timestamps:
             if fps <= 0:
                 frame_index = int(ts * 30)
@@ -189,25 +211,55 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
             if not ok:
                 continue
 
-            candidates = _detect_pose_candidates(frame, pose)
-            valid = [c for c in candidates if c.visibility > 0.5]
-            if not valid:
+            detections = _detect_hog_people(frame)
+            if not detections:
                 continue
 
             found_visible_pose = True
-            num_detected = len(valid)
-            avg_visibility = float(np.mean([c.visibility for c in valid]))
+            num_detected = len(detections)
+            avg_visibility = float(np.mean([weight for _, weight in detections]))
 
             overlap_penalty = 0.0
-            for i in range(len(valid)):
-                for j in range(i + 1, len(valid)):
-                    overlap_penalty += _iou(valid[i].bbox, valid[j].bbox)
+            for i in range(len(detections)):
+                for j in range(i + 1, len(detections)):
+                    overlap_penalty += _iou(detections[i][0], detections[j][0])
 
             score = (num_detected * avg_visibility) - overlap_penalty
             if score > best_score:
                 best_score = score
                 best_frame = frame.copy()
                 best_timestamp = float(ts)
+    else:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+            for ts in timestamps:
+                if fps <= 0:
+                    frame_index = int(ts * 30)
+                else:
+                    frame_index = int(ts * fps)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                ok, frame = cap.read()
+                if not ok:
+                    continue
+
+                candidates = _detect_pose_candidates(frame, pose)
+                valid = [c for c in candidates if c.visibility > 0.5]
+                if not valid:
+                    continue
+
+                found_visible_pose = True
+                num_detected = len(valid)
+                avg_visibility = float(np.mean([c.visibility for c in valid]))
+
+                overlap_penalty = 0.0
+                for i in range(len(valid)):
+                    for j in range(i + 1, len(valid)):
+                        overlap_penalty += _iou(valid[i].bbox, valid[j].bbox)
+
+                score = (num_detected * avg_visibility) - overlap_penalty
+                if score > best_score:
+                    best_score = score
+                    best_frame = frame.copy()
+                    best_timestamp = float(ts)
 
     cap.release()
 
@@ -230,34 +282,50 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
     if frame is None or frame.size == 0:
         raise NoPlayersDetectedError("Frame is empty")
 
-    if not pose_backend_available():
-        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
-
     players: list[dict] = []
-    frame_h, frame_w = frame.shape[:2]
 
-    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
-        candidates = _detect_pose_candidates(frame, pose)
+    if not pose_backend_available():
+        for bbox, weight in _detect_hog_people(frame):
+            x_min, y_min, x_max, y_max = bbox
+            crop = frame[y_min:y_max, x_min:x_max]
+            if crop.size == 0:
+                continue
+            players.append(
+                {
+                    "confidence": round(float(max(0.3, min(1.0, weight))), 2),
+                    "bbox": {
+                        "x_min": int(x_min),
+                        "y_min": int(y_min),
+                        "x_max": int(x_max),
+                        "y_max": int(y_max),
+                    },
+                    "crop_base64": _encode_png_base64(crop),
+                    "frame_timestamp": float(round(frame_timestamp, 2)),
+                }
+            )
+    else:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+            candidates = _detect_pose_candidates(frame, pose)
 
-    for candidate in candidates:
-        x_min, y_min, x_max, y_max = candidate.bbox
-        crop = frame[y_min:y_max, x_min:x_max]
-        if crop.size == 0:
-            continue
+        for candidate in candidates:
+            x_min, y_min, x_max, y_max = candidate.bbox
+            crop = frame[y_min:y_max, x_min:x_max]
+            if crop.size == 0:
+                continue
 
-        players.append(
-            {
-                "confidence": round(float(candidate.visibility), 2),
-                "bbox": {
-                    "x_min": int(x_min),
-                    "y_min": int(y_min),
-                    "x_max": int(x_max),
-                    "y_max": int(y_max),
-                },
-                "crop_base64": _encode_png_base64(crop),
-                "frame_timestamp": float(round(frame_timestamp, 2)),
-            }
-        )
+            players.append(
+                {
+                    "confidence": round(float(candidate.visibility), 2),
+                    "bbox": {
+                        "x_min": int(x_min),
+                        "y_min": int(y_min),
+                        "x_max": int(x_max),
+                        "y_max": int(y_max),
+                    },
+                    "crop_base64": _encode_png_base64(crop),
+                    "frame_timestamp": float(round(frame_timestamp, 2)),
+                }
+            )
 
     players = [p for p in players if p["confidence"] > 0.5]
     if not players:

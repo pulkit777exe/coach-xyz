@@ -137,6 +137,32 @@ def _candidate_centroid_x(candidate: PoseCandidate) -> float:
     return (x_min + x_max) / 2.0
 
 
+def _detect_hog_boxes(frame: np.ndarray) -> list[tuple[tuple[int, int, int, int], float]]:
+    frame_h, frame_w = frame.shape[:2]
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+    boxes, weights = hog.detectMultiScale(
+        frame,
+        winStride=(8, 8),
+        padding=(8, 8),
+        scale=1.05,
+    )
+
+    detections: list[tuple[tuple[int, int, int, int], float]] = []
+    for idx, (x, y, w, h) in enumerate(boxes):
+        x1 = max(0, int(x))
+        y1 = max(0, int(y))
+        x2 = min(frame_w - 1, int(x + w))
+        y2 = min(frame_h - 1, int(y + h))
+        if x2 <= x1 or y2 <= y1:
+            continue
+        confidence = float(weights[idx]) if idx < len(weights) else 0.6
+        detections.append(((x1, y1, x2, y2), confidence))
+
+    return detections
+
+
 def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
     frame_h, frame_w = frame.shape[:2]
     hog = cv2.HOGDescriptor()
@@ -220,9 +246,6 @@ def _build_active_player_tracks(
     keyframes: list[dict[str, Any]],
     player_index: Optional[int],
 ) -> list[dict[str, Any]]:
-    if not pose_backend_available():
-        raise VideoDecodeError("MediaPipe Pose backend unavailable in installed mediapipe package")
-
     selected_centroid_x: Optional[float] = None
     if player_index is not None:
         detected_players = detect_players(video_path)
@@ -234,25 +257,29 @@ def _build_active_player_tracks(
 
     active_tracks: list[dict[str, Any]] = []
 
-    with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+    if not pose_backend_available():
         for entry in keyframes:
             frame = entry["frame"]
-            candidates = _detect_pose_candidates(frame, pose)
-            if not candidates:
+            detections = _detect_hog_boxes(frame)
+            if not detections:
                 continue
 
             if selected_centroid_x is not None:
-                active = min(candidates, key=lambda c: abs(_candidate_centroid_x(c) - selected_centroid_x))
+                (x_min, y_min, x_max, y_max), visibility = min(
+                    detections,
+                    key=lambda item: abs((((item[0][0] + item[0][2]) / 2.0) - selected_centroid_x)),
+                )
             else:
-                active = max(candidates, key=lambda c: c.visibility)
-
-            x_min, y_min, x_max, y_max = active.bbox
+                (x_min, y_min, x_max, y_max), visibility = max(
+                    detections,
+                    key=lambda item: (item[0][2] - item[0][0]) * (item[0][3] - item[0][1]) * item[1],
+                )
             active_tracks.append(
                 {
                     "frame_index": int(entry["frame_index"]),
                     "timestamp": float(entry["timestamp"]),
-                    "landmarks": active.landmarks,
-                    "visibility": float(active.visibility),
+                    "landmarks": [],
+                    "visibility": float(max(0.3, min(1.0, visibility))),
                     "bbox": {
                         "x_min": int(x_min),
                         "y_min": int(y_min),
@@ -262,6 +289,35 @@ def _build_active_player_tracks(
                     "frame": frame,
                 }
             )
+    else:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+            for entry in keyframes:
+                frame = entry["frame"]
+                candidates = _detect_pose_candidates(frame, pose)
+                if not candidates:
+                    continue
+
+                if selected_centroid_x is not None:
+                    active = min(candidates, key=lambda c: abs(_candidate_centroid_x(c) - selected_centroid_x))
+                else:
+                    active = max(candidates, key=lambda c: c.visibility)
+
+                x_min, y_min, x_max, y_max = active.bbox
+                active_tracks.append(
+                    {
+                        "frame_index": int(entry["frame_index"]),
+                        "timestamp": float(entry["timestamp"]),
+                        "landmarks": active.landmarks,
+                        "visibility": float(active.visibility),
+                        "bbox": {
+                            "x_min": int(x_min),
+                            "y_min": int(y_min),
+                            "x_max": int(x_max),
+                            "y_max": int(y_max),
+                        },
+                        "frame": frame,
+                    }
+                )
 
     if not active_tracks:
         raise NoPlayersDetectedError(
