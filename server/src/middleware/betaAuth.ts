@@ -9,7 +9,8 @@ export const betaAuth = new Elysia({ name: "beta-auth" }).onRequest(
   ({ request, set }) => {
     // Skip health check — monitoring tools don't send codes
     const url = new URL(request.url)
-    if (url.pathname === "/health") return
+    if (url.pathname.startsWith("/health")) return
+    if (url.pathname.startsWith("/swagger")) return
 
     const code = (request.headers.get("x-beta-code") ?? "").trim().toLowerCase()
 

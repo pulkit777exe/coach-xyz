@@ -1,36 +1,63 @@
-import type { AnalysisJob } from "../types"
+import { redis } from "./redis"
 
-const JOB_TTL_MS = 2 * 60 * 60 * 1000
-const jobs = new Map<string, AnalysisJob>()
+const KEY = "coachai:srv:"
+const JOB_TTL = 7200
 
-const pruneExpiredJobs = () => {
-  const now = Date.now()
-
-  for (const [jobId, job] of jobs.entries()) {
-    if (now - job.created_at > JOB_TTL_MS) {
-      jobs.delete(jobId)
-    }
-  }
+interface ServerJob {
+  server_job_id: string
+  engine_job_id: string
+  session_token: string | null
+  player_index: number | null
+  model: string
+  created_at: number
 }
 
-export const createJob = (data: Omit<AnalysisJob, "created_at">): AnalysisJob => {
-  pruneExpiredJobs()
-
-  const job: AnalysisJob = {
-    ...data,
-    created_at: Date.now(),
-  }
-
-  jobs.set(job.job_id, job)
-  return job
+export async function saveJob(job: ServerJob): Promise<void> {
+  await redis.set(
+    `${KEY}${job.server_job_id}`,
+    JSON.stringify(job),
+    { ex: JOB_TTL },
+  )
 }
 
-export const getJob = (jobId: string): AnalysisJob | null => {
-  pruneExpiredJobs()
-  return jobs.get(jobId) ?? null
+export async function getJob(
+  serverJobId: string,
+): Promise<ServerJob | null> {
+  const raw = await redis.get(`${KEY}${serverJobId}`)
+  if (!raw) return null
+  return typeof raw === "string" ? JSON.parse(raw) : raw
 }
 
-export const deleteJob = (jobId: string): void => {
-  pruneExpiredJobs()
-  jobs.delete(jobId)
+// Read engine job status directly from Redis
+// Avoids an HTTP hop to the engine just to check progress
+export async function getEngineJobStatus(
+  engineJobId: string,
+): Promise<any> {
+  const raw = await redis.get(`coachai:job:${engineJobId}`)
+  if (!raw) return null
+  return typeof raw === "string" ? JSON.parse(raw) : raw
 }
+
+export async function markJobFailed(
+  engineJobId: string,
+  message: string,
+  code: string,
+  retryable: boolean,
+): Promise<void> {
+  const raw = await redis.get(`coachai:job:${engineJobId}`)
+  if (!raw) return
+  const job = typeof raw === "string" ? JSON.parse(raw) : raw
+  await redis.set(
+    `coachai:job:${engineJobId}`,
+    JSON.stringify({
+      ...job,
+      complete: true,
+      error: message,
+      error_code: code,
+      retryable,
+    }),
+    { ex: JOB_TTL },
+  )
+}
+
+export { redis }

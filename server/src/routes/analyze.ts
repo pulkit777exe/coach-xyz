@@ -1,9 +1,10 @@
 import { Elysia } from "elysia"
 
-import { startAnalysis } from "../lib/engine"
 import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
-import { createJob } from "../lib/jobs"
+import { saveJob, redis } from "../lib/jobs"
+import { analysisQueue, type AnalysisPayload } from "../lib/queue"
+import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 
 type AnalyzeBody = {
@@ -12,12 +13,23 @@ type AnalyzeBody = {
   model?: string
 }
 
-type EngineRouteError = {
-  code?: string
-  message?: string
-}
-
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
+  // ── Rate Limiting ──────────────────────────────────────────────────────
+  const ip = getIP(request)
+  const { allowed, remaining, reset } = await checkAnalysisLimit(ip)
+  if (!allowed) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000)
+    set.status = 429
+    return {
+      ...buildError(
+        "RATE_LIMITED",
+        "Analysis limit reached (5 per hour). Try again later.",
+        true,
+      ),
+      retry_after: retryAfter,
+    }
+  }
+
   let body: AnalyzeBody
   const requestMeta = readRequestMeta(request)
 
@@ -25,7 +37,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     body = (await request.json()) as AnalyzeBody
   } catch {
     set.status = 400
-    return buildError("INVALID_REQUEST", "Invalid JSON request body.")
+    return buildError("INVALID_REQUEST", "Invalid JSON request body.", false)
   }
 
   const sessionToken = body.session_token
@@ -37,7 +49,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     (typeof sessionToken !== "string" || sessionToken.trim().length === 0)
   ) {
     set.status = 400
-    return buildError("INVALID_SESSION_TOKEN", "session_token must be null or a non-empty string.")
+    return buildError("INVALID_SESSION_TOKEN", undefined, false)
   }
 
   if (
@@ -45,46 +57,75 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     (!Number.isInteger(playerIndex) || playerIndex < 1)
   ) {
     set.status = 400
-    return buildError("INVALID_PLAYER_INDEX", "player_index must be null or a positive integer.")
+    return buildError("INVALID_PLAYER_INDEX", undefined, false)
   }
 
   try {
-    const engineResponse = await startAnalysis({
+    const server_job_id = crypto.randomUUID()
+    const engine_job_id = crypto.randomUUID()
+
+    // 1. Save the server job mapping to Redis BEFORE enqueuing
+    await saveJob({
+      server_job_id,
+      engine_job_id,
       session_token: sessionToken,
       player_index: playerIndex,
       model,
+      created_at: Date.now(),
     })
 
-    const serverJobId = crypto.randomUUID()
-    createJob({
-      job_id: serverJobId,
-      engine_job_id: engineResponse.job_id,
-      session_token: sessionToken,
-      player_index: playerIndex,
-      model,
-    })
+    // 2. Pre-create the engine job in Redis with initial state
+    await redis.set(
+      `coachai:job:${engine_job_id}`,
+      JSON.stringify({
+        job_id: engine_job_id,
+        stage: 0,
+        stage_name: "Queued",
+        progress: 0,
+        complete: false,
+        error: null,
+        error_code: null,
+        retryable: true,
+        summary: null,
+        video_key: null,
+        video_path: null,
+        created_at: Date.now() / 1000,
+      }),
+      { ex: 7200 },
+    )
+
+    // 3. Enqueue — BullMQ handles the rest
+    await analysisQueue.add(
+      server_job_id,
+      {
+        server_job_id,
+        engine_job_id,
+        session_token: sessionToken,
+        player_index: playerIndex,
+      } satisfies AnalysisPayload,
+    )
 
     await persistAnalysisStart({
       ...requestMeta,
-      serverJobId,
-      engineJobId: engineResponse.job_id,
+      serverJobId: server_job_id,
+      engineJobId: engine_job_id,
       sessionToken,
       playerIndex,
       model,
     })
 
     set.status = 200
-    return { job_id: serverJobId }
+    return { job_id: server_job_id }
   } catch (error) {
-    const routeError = error as EngineRouteError
-    const code = routeError.code ?? "UNKNOWN"
-
-    if (code === "ENGINE_UNAVAILABLE") {
-      set.status = 503
-      return buildError(code, routeError.message)
-    }
-
+    console.error(
+      JSON.stringify({
+        type: "analyze_enqueue_error",
+        message: (error as Error)?.message,
+        stack: (error as Error)?.stack,
+        timestamp: new Date().toISOString(),
+      }),
+    )
     set.status = 500
-    return buildError(code, routeError.message)
+    return buildError("INTERNAL_ERROR", undefined, true)
   }
 })

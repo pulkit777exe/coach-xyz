@@ -28,6 +28,8 @@ export type JobStatus = {
   summary: AnalysisSummary | null
   video_ready: boolean
   error: string | null
+  error_code: string | null
+  retryable: boolean
 }
 
 export type AnalysisSummary = {
@@ -48,6 +50,8 @@ export type ShotEvent = {
 }
 
 export type ErrorResponse = {
-  error: string
+  code: string
   message: string
+  layer: string
+  retryable: boolean
 }

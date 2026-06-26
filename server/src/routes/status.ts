@@ -1,38 +1,34 @@
 import { Elysia } from "elysia"
 
-import { getJobStatus } from "../lib/engine"
 import { buildError } from "../lib/errors"
-import { getJob } from "../lib/jobs"
+import { getJob, getEngineJobStatus } from "../lib/jobs"
 import { persistAnalysisStatus } from "../lib/supabaseHistory"
 
-type EngineRouteError = {
-  code?: string
-  message?: string
-}
-
 export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }) => {
-  const job = getJob(params.jobId)
+  const serverJob = await getJob(params.jobId)
 
-  if (!job) {
+  if (!serverJob) {
     set.status = 404
-    return buildError("JOB_NOT_FOUND")
+    return buildError("JOB_NOT_FOUND", undefined, false)
   }
 
-  try {
-    const status = await getJobStatus(job.engine_job_id)
-    await persistAnalysisStatus({
-      serverJobId: job.job_id,
-      engineJobId: job.engine_job_id,
-      sessionToken: job.session_token,
-      playerIndex: job.player_index,
-      model: job.model,
-      status,
-    })
-    set.status = 200
-    return status
-  } catch (error) {
-    const routeError = error as EngineRouteError
-    set.status = 503
-    return buildError("ENGINE_UNAVAILABLE", routeError.message)
+  // Read engine job status directly from Redis — no HTTP hop to engine
+  const engineStatus = await getEngineJobStatus(serverJob.engine_job_id)
+
+  if (!engineStatus) {
+    set.status = 404
+    return buildError("JOB_NOT_FOUND", undefined, false)
   }
+
+  await persistAnalysisStatus({
+    serverJobId: serverJob.server_job_id,
+    engineJobId: serverJob.engine_job_id,
+    sessionToken: serverJob.session_token,
+    playerIndex: serverJob.player_index,
+    model: serverJob.model,
+    status: engineStatus,
+  })
+
+  set.status = 200
+  return engineStatus
 })

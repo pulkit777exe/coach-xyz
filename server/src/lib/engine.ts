@@ -28,9 +28,11 @@ const withTimeout = async (
 const throwNonOk = async (res: Response): Promise<never> => {
   const body = (await res.json().catch(() => ({}))) as Partial<ErrorResponse>
   throw {
-    code: body.error ?? "UNKNOWN",
-    message: body.message,
-  } satisfies EngineError
+    code: body.code ?? "UNKNOWN",
+    message: body.message ?? "Something went wrong.",
+    layer: body.layer ?? "engine",
+    retryable: body.retryable ?? true,
+  } satisfies ErrorResponse
 }
 
 const isConnectivityError = (error: unknown): boolean =>
