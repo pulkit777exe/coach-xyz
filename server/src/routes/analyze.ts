@@ -95,6 +95,10 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     )
 
     // 3. Enqueue — BullMQ handles the rest
+    if (!analysisQueue) {
+      set.status = 503
+      return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)
+    }
     await analysisQueue.add(
       server_job_id,
       {

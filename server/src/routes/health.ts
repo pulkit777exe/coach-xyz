@@ -41,8 +41,10 @@ export const healthRoute = new Elysia({ prefix: "/health" })
     let waiting = 0
     let failed = 0
     try {
-      waiting = await analysisQueue.getWaitingCount()
-      failed = await analysisQueue.getFailedCount()
+      if (analysisQueue) {
+        waiting = await analysisQueue.getWaitingCount()
+        failed = await analysisQueue.getFailedCount()
+      }
     } catch {}
 
     const status =
