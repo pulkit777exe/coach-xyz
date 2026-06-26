@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 from dataclasses import dataclass
 from typing import Any, List, Tuple
 
@@ -11,7 +12,12 @@ from core.errors import NoPlayersDetectedError, VideoDecodeError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 
 
-POSE_LANDMARKS_FOR_BOX = [11, 12, 23, 24, 27, 28]
+# All 33 MediaPipe pose landmarks — use the full body extent
+# Head (0-10), shoulders (11,12), elbows (13,14), wrists (15,16),
+# hips (23,24), knees (25,26), ankles (27,28), feet (29-32)
+# Filter by visibility > 0.4 to exclude undetected landmarks
+POSE_LANDMARKS_FOR_BOX = list(range(33))
+POSE_LANDMARK_MIN_VISIBILITY = 0.4
 
 
 @dataclass
@@ -72,15 +78,18 @@ def _bbox_from_landmarks(
     landmarks: list[dict[str, float]],
     frame_w: int,
     frame_h: int,
-    padding_ratio: float = 0.15,
+    padding_ratio: float = 0.35,
 ) -> tuple[int, int, int, int]:
-    points = [landmarks[idx] for idx in POSE_LANDMARKS_FOR_BOX if idx < len(landmarks)]
-    if not points:
-        xs = [lm["x"] for lm in landmarks]
-        ys = [lm["y"] for lm in landmarks]
-    else:
-        xs = [lm["x"] for lm in points]
-        ys = [lm["y"] for lm in points]
+    # Only use landmarks with sufficient visibility
+    visible = [
+        lm for lm in landmarks
+        if lm.get("visibility", 1.0) > POSE_LANDMARK_MIN_VISIBILITY
+    ]
+    if not visible:
+        visible = landmarks  # fallback: use all if none pass threshold
+
+    xs = [lm["x"] for lm in visible]
+    ys = [lm["y"] for lm in visible]
 
     x_min = int(min(xs) * frame_w)
     x_max = int(max(xs) * frame_w)
@@ -90,13 +99,15 @@ def _bbox_from_landmarks(
     width = max(1, x_max - x_min)
     height = max(1, y_max - y_min)
 
+    # Asymmetric padding: more on top for head clearance
     pad_x = int(width * padding_ratio)
-    pad_y = int(height * padding_ratio)
+    pad_top = int(height * (padding_ratio + 0.15))  # extra head room
+    pad_bot = int(height * padding_ratio)
 
     x_min = max(0, x_min - pad_x)
-    y_min = max(0, y_min - pad_y)
+    y_min = max(0, y_min - pad_top)
     x_max = min(frame_w - 1, x_max + pad_x)
-    y_max = min(frame_h - 1, y_max + pad_y)
+    y_max = min(frame_h - 1, y_max + pad_bot)
 
     return x_min, y_min, x_max, y_max
 
@@ -165,12 +176,12 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
                 frame_h=frame_h,
             )
 
-            bbox = _bbox_from_landmarks(global_landmarks, frame_w, frame_h, padding_ratio=0.15)
+            bbox = _bbox_from_landmarks(global_landmarks, frame_w, frame_h, padding_ratio=0.35)
             candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=avg_visibility)
 
             duplicate = False
             for existing in candidates:
-                if _iou(existing.bbox, candidate.bbox) > 0.6:
+                if _iou(existing.bbox, candidate.bbox) > 0.35:
                     duplicate = True
                     if candidate.visibility > existing.visibility:
                         existing.landmarks = candidate.landmarks
@@ -271,8 +282,53 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
     return best_frame, best_timestamp
 
 
-def _encode_png_base64(image: np.ndarray) -> str:
-    ok, buffer = cv2.imencode(".png", image)
+def _enhance_and_encode_crop(
+    crop: np.ndarray,
+    target_size: int = 320,
+) -> str:
+    """
+    Enhance a player crop for display quality:
+    1. Upscale to consistent size (320px on the longer side)
+    2. Apply CLAHE for contrast enhancement in dark/flat crops
+    3. Mild unsharp mask for sharpening motion-blurred frames
+    4. Encode as JPEG at quality 92 (smaller than PNG, looks better on screen)
+    """
+    if crop is None or crop.size == 0:
+        return ""
+
+    h, w = crop.shape[:2]
+    if h == 0 or w == 0:
+        return ""
+
+    # Step 1: Upscale to consistent display size
+    scale = target_size / max(h, w)
+    if scale > 1.0:
+        # Use INTER_CUBIC for upscaling — better quality than linear
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        crop = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+    elif scale < 1.0:
+        # Downscale with INTER_AREA — avoids aliasing
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        crop = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    # Step 2: CLAHE for contrast (helps dark/poorly lit crops)
+    lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+    l_channel = clahe.apply(l_channel)
+    lab = cv2.merge([l_channel, a_channel, b_channel])
+    crop = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # Step 3: Mild unsharp mask for motion blur
+    gaussian = cv2.GaussianBlur(crop, (0, 0), 1.5)
+    crop = cv2.addWeighted(crop, 1.4, gaussian, -0.4, 0)
+    crop = np.clip(crop, 0, 255).astype(np.uint8)
+
+    # Step 4: Encode as JPEG (better file size, good visual quality)
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 92]
+    ok, buffer = cv2.imencode(".jpg", crop, encode_params)
     if not ok:
         return ""
     return base64.b64encode(buffer.tobytes()).decode("utf-8")
@@ -299,7 +355,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
                         "x_max": int(x_max),
                         "y_max": int(y_max),
                     },
-                    "crop_base64": _encode_png_base64(crop),
+                    "crop_base64": _enhance_and_encode_crop(crop),
                     "frame_timestamp": float(round(frame_timestamp, 2)),
                 }
             )
@@ -309,6 +365,14 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
 
         for candidate in candidates:
             x_min, y_min, x_max, y_max = candidate.bbox
+            crop_w = x_max - x_min
+            crop_h = y_max - y_min
+
+            # Skip crops that are too small to be useful
+            # A real player should occupy at least 40x80 pixels
+            if crop_w < 40 or crop_h < 80:
+                continue
+
             crop = frame[y_min:y_max, x_min:x_max]
             if crop.size == 0:
                 continue
@@ -322,7 +386,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
                         "x_max": int(x_max),
                         "y_max": int(y_max),
                     },
-                    "crop_base64": _encode_png_base64(crop),
+                    "crop_base64": _enhance_and_encode_crop(crop),
                     "frame_timestamp": float(round(frame_timestamp, 2)),
                 }
             )
@@ -347,6 +411,8 @@ def detect_players(video_path: str) -> list[dict]:
     except (NoPlayersDetectedError, VideoDecodeError):
         raise
     except cv2.error as exc:
+        logging.error(f"OpenCV error in detect_players: {exc}")
         raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.") from exc
     except Exception as exc:
+        logging.error(f"Unexpected error in detect_players: {type(exc).__name__}: {exc}")
         raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.") from exc

@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import json
 import os
-import threading
 import time
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Any, Dict
+from dataclasses import asdict, dataclass, field
+from typing import Optional
 
-from core.errors import JobNotFoundError
+from upstash_redis import Redis
+
+from core.errors import EngineError, JobNotFoundError
 
 
-STAGES = {
+redis = Redis(
+    url=os.environ["UPSTASH_REDIS_REST_URL"],
+    token=os.environ["UPSTASH_REDIS_REST_TOKEN"],
+)
+
+JOB_TTL = 7200  # 2 hours
+KEY = "coachai:job:"
+
+STAGE_NAMES = {
     0: "Uploading",
     1: "Extracting Frames",
     2: "Detecting Players",
@@ -19,143 +28,78 @@ STAGES = {
     5: "Rendering Video",
 }
 
-MAX_JOB_AGE_SECONDS = 30 * 60
-TMP_DIR = (Path(__file__).resolve().parent.parent / "tmp").resolve()
+# Keep STAGES alias for backward compat in analyzer.py
+STAGES = STAGE_NAMES
 
 
 @dataclass
 class JobStatus:
     job_id: str
-    stage: int
-    stage_name: str
-    progress: int
-    complete: bool
-    error: str | None
-    summary: dict | None
-    video_key: str | None
-    video_path: str | None
-    created_at: float
+    stage: int = 0
+    stage_name: str = "Uploading"
+    progress: int = 0
+    complete: bool = False
+    error: Optional[str] = None
+    error_code: Optional[str] = None
+    retryable: bool = True
+    summary: Optional[dict] = None
+    video_key: Optional[str] = None
+    video_path: Optional[str] = None
+    created_at: float = field(default_factory=time.time)
 
+    def to_redis(self) -> str:
+        return json.dumps(asdict(self))
 
-_jobs: Dict[str, JobStatus] = {}
-_job_input_paths: Dict[str, str] = {}
-_jobs_lock = threading.Lock()
-_cleanup_timer: threading.Timer | None = None
+    @classmethod
+    def from_redis(cls, data: str) -> "JobStatus":
+        parsed = json.loads(data) if isinstance(data, str) else data
+        # Filter out any unexpected keys
+        valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        filtered = {k: v for k, v in parsed.items() if k in valid_fields}
+        return cls(**filtered)
 
 
 def create_job(job_id: str) -> JobStatus:
-    job = JobStatus(
-        job_id=job_id,
-        stage=0,
-        stage_name=STAGES[0],
-        progress=0,
-        complete=False,
-        error=None,
-        summary=None,
-        video_key=None,
-        video_path=None,
-        created_at=time.time(),
-    )
-    with _jobs_lock:
-        _jobs[job_id] = job
+    job = JobStatus(job_id=job_id)
+    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
     return job
 
 
-def register_job_input(job_id: str, video_path: str) -> None:
-    with _jobs_lock:
-        if job_id in _jobs:
-            _job_input_paths[job_id] = str(Path(video_path).resolve())
-
-
-def update_job(job_id: str, **kwargs: Any) -> None:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if job is None:
-            raise JobNotFoundError()
-        for key, value in kwargs.items():
-            if hasattr(job, key):
-                setattr(job, key, value)
+def update_job(job_id: str, **kwargs) -> None:
+    raw = redis.get(f"{KEY}{job_id}")
+    if not raw:
+        raise JobNotFoundError()
+    job = JobStatus.from_redis(raw)
+    for k, v in kwargs.items():
+        if hasattr(job, k):
+            setattr(job, k, v)
+    # Auto-set stage_name from stage number
+    if "stage" in kwargs:
+        job.stage_name = STAGE_NAMES.get(kwargs["stage"], job.stage_name)
+    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
 
 
 def get_job(job_id: str) -> JobStatus:
-    with _jobs_lock:
-        job = _jobs.get(job_id)
-        if job is None:
-            raise JobNotFoundError()
-        return JobStatus(**asdict(job))
+    raw = redis.get(f"{KEY}{job_id}")
+    if not raw:
+        raise JobNotFoundError()
+    return JobStatus.from_redis(raw)
 
 
-def _collect_protected_paths() -> set[str]:
-    protected = set()
-    for job_id, job in _jobs.items():
-        if not job.complete:
-            if job.video_path:
-                protected.add(str(Path(job.video_path).resolve()))
-            input_path = _job_input_paths.get(job_id)
-            if input_path:
-                protected.add(str(Path(input_path).resolve()))
-    return protected
+def fail_job(job_id: str, error: EngineError) -> None:
+    """Mark a job as failed with structured error info."""
+    try:
+        update_job(
+            job_id,
+            complete=True,
+            error=error.message,
+            error_code=error.code,
+            retryable=error.retryable,
+        )
+    except Exception:
+        pass  # best-effort — job may have already expired
 
 
-def cleanup_old_jobs() -> None:
-    now = time.time()
-    threshold = now - MAX_JOB_AGE_SECONDS
-
-    with _jobs_lock:
-        removable = [
-            job_id
-            for job_id, job in _jobs.items()
-            if job.complete and job.created_at < threshold
-        ]
-
-        for job_id in removable:
-            job = _jobs.pop(job_id)
-            _job_input_paths.pop(job_id, None)
-            for path in [job.video_path]:
-                if not path:
-                    continue
-                try:
-                    resolved = Path(path).resolve()
-                    if resolved.exists() and resolved.is_file() and TMP_DIR in resolved.parents:
-                        resolved.unlink(missing_ok=True)
-                except Exception:
-                    continue
-
-        protected_paths = _collect_protected_paths()
-
-    TMP_DIR.mkdir(parents=True, exist_ok=True)
-    for entry in TMP_DIR.glob("*"):
-        if not entry.is_file():
-            continue
-        try:
-            resolved = str(entry.resolve())
-            if resolved in protected_paths:
-                continue
-            if entry.stat().st_mtime < threshold:
-                entry.unlink(missing_ok=True)
-        except Exception:
-            continue
-
-
-def _schedule_next_cleanup(interval_seconds: int) -> None:
-    global _cleanup_timer
-
-    def _run() -> None:
-        try:
-            cleanup_old_jobs()
-        finally:
-            _schedule_next_cleanup(interval_seconds)
-
-    timer = threading.Timer(interval_seconds, _run)
-    timer.daemon = True
-    timer.start()
-    _cleanup_timer = timer
-
-
-def start_cleanup_scheduler(interval_seconds: int = 30 * 60) -> None:
-    global _cleanup_timer
-    cleanup_old_jobs()
-    with _jobs_lock:
-        if _cleanup_timer is not None:
-            return
-    _schedule_next_cleanup(interval_seconds)
+def register_job_input(job_id: str, video_path: str) -> None:
+    """No-op: kept for backward compat with analyzer.py calls."""
+    pass

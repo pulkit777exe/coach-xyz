@@ -106,6 +106,83 @@ def _extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, in
     return keyframes, fps, frame_count
 
 
+def _compute_motion_scores(keyframes: list[dict[str, Any]]) -> dict[int, float]:
+    """
+    Compute frame-differencing motion scores between consecutive keyframes.
+    Returns {frame_index: motion_score} where higher = more motion.
+    First frame gets a moderate score (no previous frame to compare).
+    """
+    if len(keyframes) <= 1:
+        return {kf["frame_index"]: 0.5 for kf in keyframes}
+
+    scores: dict[int, float] = {}
+    prev_gray = None
+
+    for i, kf in enumerate(keyframes):
+        frame = kf["frame"]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0)
+
+        if prev_gray is None:
+            scores[kf["frame_index"]] = 0.5
+        else:
+            diff = cv2.absdiff(prev_gray, gray)
+            _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            motion = float(cv2.countNonZero(thresh)) / float(thresh.shape[0] * thresh.shape[1])
+            scores[kf["frame_index"]] = min(1.0, motion * 5.0)
+
+        prev_gray = gray
+
+    return scores
+
+
+def _build_frame_metadata(track: dict[str, Any], fps: float) -> str:
+    """
+    Build a text metadata string for a frame to send alongside the image.
+    Includes bounding box position and key pose landmark angles.
+    """
+    parts = []
+
+    bbox = track.get("bbox")
+    if bbox:
+        x_min = bbox.get("x_min", 0)
+        x_max = bbox.get("x_max", 0)
+        y_min = bbox.get("y_min", 0)
+        y_max = bbox.get("y_max", 0)
+        cx = (x_min + x_max) / 2.0
+        parts.append(f"Player at x={x_min}-{x_max}, y={y_min}-{y_max} (center_x={cx:.0f})")
+
+    landmarks = track.get("landmarks")
+    if landmarks and len(landmarks) >= 25:
+        try:
+            def angle(a, b, c):
+                ba = np.array([a["x"] - b["x"], a["y"] - b["y"]])
+                bc = np.array([c["x"] - b["x"], c["y"] - b["y"]])
+                cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
+                return float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0))))
+
+            left_knee_angle = angle(landmarks[23], landmarks[25], landmarks[27])
+            right_knee_angle = angle(landmarks[24], landmarks[26], landmarks[28])
+            left_elbow_angle = angle(landmarks[11], landmarks[13], landmarks[15])
+            right_elbow_angle = angle(landmarks[12], landmarks[14], landmarks[16])
+
+            hip = ((landmarks[23]["x"] + landmarks[24]["x"]) / 2,
+                   (landmarks[23]["y"] + landmarks[24]["y"]) / 2)
+            shoulder = ((landmarks[11]["x"] + landmarks[12]["x"]) / 2,
+                        (landmarks[11]["y"] + landmarks[12]["y"]) / 2)
+            torso_lean = abs(hip[0] - shoulder[0]) * 100
+
+            parts.append(
+                f"Pose: L-knee={left_knee_angle:.0f}° R-knee={right_knee_angle:.0f}° "
+                f"L-elbow={left_elbow_angle:.0f}° R-elbow={right_elbow_angle:.0f}° "
+                f"torso_lean={torso_lean:.0f}%"
+            )
+        except (KeyError, IndexError, ZeroDivisionError):
+            pass
+
+    return ". ".join(parts) if parts else "No position data"
+
+
 def _bbox_from_landmarks(
     landmarks: list[dict[str, float]],
     width: int,
@@ -334,7 +411,14 @@ def _frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
     return bytes(buffer.tobytes())
 
 
-def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
+def _call_gemini(
+    frames_with_tracks: list[dict[str, Any]],
+    video_duration: float = 0.0,
+    video_fps: float = 30.0,
+    video_width: int = 0,
+    video_height: int = 0,
+    player_index: int | None = None,
+) -> dict:
     if genai is None or genai_types is None:
         raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
 
@@ -342,56 +426,37 @@ def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
     if not api_key:
         raise GeminiQuotaError("GEMINI_API_KEY is not configured")
 
+    from core.prompt import get_system_prompt
+
     client = genai.Client(api_key=api_key)
 
-    system_instruction = """
-  You are an expert sports biomechanics coach. Analyze the provided 
-  video frames of an athlete and return a JSON object only.
-  No markdown, no explanation, no code fences. Raw JSON only.
-  """.strip()
+    player_focus = None
+    if player_index is not None:
+        player_focus = {"id": player_index, "position": "center frame"}
 
-    user_prompt = """
-  Analyze the athlete's technique across these video frames.
+    system_prompt = get_system_prompt(player_focus=player_focus)
 
-  Return this exact JSON structure with no other text:
-  {
-    "sport": "<detected sport: basketball | football | cricket | unknown>",
-    "form_score": <integer 0-100>,
-    "overall_rating": "<Beginner | Intermediate | Advanced | Elite>",
-    "top_tips": [
-      "<specific actionable tip 1>",
-      "<specific actionable tip 2>",
-      "<specific actionable tip 3>"
-    ],
-    "summary": "<one sentence overall assessment>",
-    "strengths": ["<strength 1>", "<strength 2>"],
-    "shot_events": [
-      {
-        "timestamp": <float seconds>,
-        "event_type": "<e.g. jump_shot, drive, strike>",
-        "form_score": <integer 0-100>,
-        "feedback": "<one sentence specific feedback for this moment>"
-      }
-    ]
-  }
+    video_meta = (
+        f"## Video Context\n"
+        f"- Duration: {video_duration:.1f}s\n"
+        f"- FPS: {video_fps:.1f}\n"
+        f"- Resolution: {video_width}x{video_height}\n"
+        f"- Frames analyzed: {len(frames_with_tracks)}\n\n"
+        f"Analyze the athlete's technique across these video frames. "
+        f"Each frame includes position and pose data as text alongside the image.\n"
+    )
 
-  Rules:
-  - form_score 80-100 = excellent technique
-  - form_score 60-79 = good with minor issues
-  - form_score 40-59 = needs work
-  - form_score below 40 = significant issues
-  - top_tips must be specific and actionable, never generic
-  - shot_events should capture the key technical moments visible
-  """.strip()
-
-    parts: list[Any] = [f"{system_instruction}\n\n{user_prompt}"]
+    parts: list[Any] = [f"{system_prompt}\n\n{video_meta}"]
 
     for item in frames_with_tracks:
         jpeg = _frame_to_jpeg_bytes(item["frame"])
         if not jpeg:
             continue
-        parts.append(f"Frame timestamp: {item['timestamp']}")
+        metadata_str = _build_frame_metadata(item, video_fps)
+        parts.append(f"Frame at {item['timestamp']}s — {metadata_str}")
         parts.append(genai_types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"))
+
+    print(f"[Analyzer] Sending {len(frames_with_tracks)} frames to Gemini with detailed prompt")
 
     try:
         response = client.models.generate_content(
@@ -399,6 +464,7 @@ def _call_gemini(frames_with_tracks: list[dict[str, Any]]) -> dict:
             contents=parts,
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",
+                temperature=0.1,
             ),
         )
     except Exception as exc:
@@ -437,12 +503,38 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         cleanup_preprocessed = preprocessed_path != local_path
         keyframes, fps, _frame_count = _extract_keyframes(preprocessed_path)
 
+        cap = cv2.VideoCapture(local_path)
+        video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
+        cap.release()
+
         update_job(job_id, stage=2, stage_name=STAGES[2], progress=25)
         active_tracks = _build_active_player_tracks(local_path, keyframes, player_index)
 
+        motion_scores = _compute_motion_scores(keyframes)
+        for track in active_tracks:
+            fi = track["frame_index"]
+            motion = motion_scores.get(fi, 0.5)
+            visibility = track.get("visibility", 0.5)
+            track["motion_score"] = motion
+            track["composite_score"] = 0.4 * visibility + 0.6 * motion
+
         update_job(job_id, stage=3, stage_name=STAGES[3], progress=45)
-        best_for_gemini = sorted(active_tracks, key=lambda t: t["visibility"], reverse=True)[:8]
-        gemini_result = _call_gemini(best_for_gemini)
+        frame_budget = min(20, len(active_tracks))
+        best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
+        print(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
+        for i, t in enumerate(best_for_gemini[:5]):
+            print(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
+
+        gemini_result = _call_gemini(
+            best_for_gemini,
+            video_duration=video_duration,
+            video_fps=fps,
+            video_width=video_width,
+            video_height=video_height,
+            player_index=player_index,
+        )
 
         update_job(
             job_id,

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import logging
 import os
-import threading
 import time
+import traceback
+import threading
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -15,18 +21,21 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from core import storage
 from core.analyzer import run_analysis
 from core.detector import detect_players
-from core.errors import JobNotFoundError, NoPlayersDetectedError, VideoDecodeError
-from core.jobs import create_job, get_job, start_cleanup_scheduler
+from core.errors import (
+    EngineError,
+    JobNotFoundError,
+    NoPlayersDetectedError,
+    VideoDecodeError,
+)
+from core.jobs import create_job, get_job, fail_job, update_job
 from core.pose_backend import pose_backend_available, pose_backend_name
-
-
-load_dotenv()
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
 
+START_TIME = time.time()
 
-app = FastAPI(title="CoachAI Engine", version="0.1.0")
+app = FastAPI(title="CoachAI Engine", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,8 +45,56 @@ app.add_middleware(
 )
 
 
+# ── Global Exception Handlers ────────────────────────────────────────────────
+
+
+@app.exception_handler(EngineError)
+async def engine_error_handler(request: Request, exc: EngineError):
+    logging.error(f"{exc.code}: {exc.message}")
+    status = 422 if exc.retryable else 500
+    return JSONResponse(status_code=status, content=exc.to_dict())
+
+
+@app.exception_handler(Exception)
+async def generic_error_handler(request: Request, exc: Exception):
+    logging.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred.",
+            "layer": "engine",
+            "retryable": True,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "code": "INVALID_REQUEST",
+            "message": "Invalid request format.",
+            "layer": "engine",
+            "retryable": False,
+        },
+    )
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+
 def _error_response(status_code: int, error: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"error": error, "message": message})
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "code": error,
+            "message": message,
+            "layer": "engine",
+            "retryable": status_code < 500,
+        },
+    )
 
 
 def _safe_int(value: Any) -> Optional[int]:
@@ -49,39 +106,84 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-def _validate_video_upload(upload: UploadFile | StarletteUploadFile | None) -> Optional[JSONResponse]:
+def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None]) -> Optional[JSONResponse]:
     if upload is None:
         return _error_response(400, "INVALID_REQUEST", "Missing video upload")
 
     content_type = getattr(upload, "content_type", None) or ""
     if not content_type.startswith("video/"):
-        return _error_response(422, "VIDEO_DECODE_FAILED", "Could not read this video file. Try MP4, MOV, or AVI format.")
+        return _error_response(
+            422,
+            "VIDEO_DECODE_FAILED",
+            "Could not read this video file. Try MP4, MOV, or AVI format.",
+        )
 
     return None
 
 
-def _session_video_key(session_token: str) -> tuple[Optional[str], Optional[JSONResponse]]:
+def _session_video_path(session_token: str) -> tuple[Optional[str], Optional[JSONResponse]]:
     with sessions_lock:
         session = sessions.get(session_token)
 
     if not session:
-        return None, _error_response(404, "SESSION_EXPIRED", "Session expired. Please upload your video again.")
+        return None, _error_response(
+            404, "SESSION_EXPIRED", "Session expired. Please upload your video again."
+        )
 
     video_key = session.get("video_key")
     if not video_key:
-        return None, _error_response(404, "SESSION_EXPIRED", "Session expired. Please upload your video again.")
+        return None, _error_response(
+            404, "SESSION_EXPIRED", "Session expired. Please upload your video again."
+        )
 
     return str(video_key), None
 
 
+# ── Health Endpoints ─────────────────────────────────────────────────────────
+
+
 @app.get("/health")
-async def health() -> JSONResponse:
-    return JSONResponse(status_code=200, content={"status": "healthy"})
+def health():
+    """Shallow — always fast, always 200 if process is alive."""
+    return {"status": "ok", "uptime": round(time.time() - START_TIME, 1)}
+
+
+@app.get("/health/deep")
+def health_deep():
+    """Deep — check Redis + MediaPipe for real system status."""
+    from core.jobs import redis as jobs_redis
+
+    # Check Redis
+    redis_ok = False
+    redis_latency = 0
+    try:
+        t = time.time()
+        jobs_redis.ping()
+        redis_ok = True
+        redis_latency = round((time.time() - t) * 1000)
+    except Exception:
+        pass
+
+    # Check MediaPipe
+    mp_ok = pose_backend_available()
+
+    status = "healthy" if (redis_ok and mp_ok) else "degraded"
+
+    return {
+        "status": status,
+        "checks": {
+            "redis": {"ok": redis_ok, "latency_ms": redis_latency},
+            "mediapipe": {"ok": mp_ok},
+        },
+        "uptime": round(time.time() - START_TIME, 1),
+    }
+
+
+# ── Startup ──────────────────────────────────────────────────────────────────
 
 
 @app.on_event("startup")
 def on_startup() -> None:
-    start_cleanup_scheduler(interval_seconds=30 * 60)
     print("CoachAI Engine running on :8001")
     backend = pose_backend_name()
     if not pose_backend_available():
@@ -93,41 +195,40 @@ def on_startup() -> None:
         print(f"MediaPipe pose backend: {backend}")
 
 
+# ── Routes ───────────────────────────────────────────────────────────────────
+
+
 @app.post("/scan")
-async def scan(video: UploadFile | None = None) -> JSONResponse:
+async def scan(video: UploadFile) -> JSONResponse:
+    logging.error(f"[SCAN] Received upload: filename={video.filename}, content_type={video.content_type}, size={video.size}")
     validation_error = _validate_video_upload(video)
     if validation_error:
+        logging.error(f"[SCAN] Validation failed: {validation_error.body}")
         return validation_error
 
     file_bytes = await video.read()
     await video.close()
+    logging.error(f"[SCAN] Read {len(file_bytes)} bytes from upload")
 
     r2_key = f"uploads/{uuid.uuid4().hex}.mp4"
     storage.upload_video(file_bytes, r2_key)
 
     local_path = storage.download_video_to_tmp(r2_key)
+    logging.error(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
     try:
         players = detect_players(local_path)
     except NoPlayersDetectedError:
         storage.delete_file(r2_key)
-        return _error_response(
-            422,
-            "NO_PLAYERS_DETECTED",
-            "No players detected clearly in this video. Try better lighting or a less crowded frame.",
-        )
+        raise  # caught by global handler
     except VideoDecodeError as exc:
         storage.delete_file(r2_key)
         if "MediaPipe Pose backend unavailable" in exc.message:
             return _error_response(
                 503,
                 "ENGINE_UNAVAILABLE",
-                "MediaPipe runtime is unavailable on the engine. Reinstall dependencies and restart the engine.",
+                "MediaPipe runtime is unavailable on the engine.",
             )
-        return _error_response(
-            422,
-            "VIDEO_DECODE_FAILED",
-            "Could not read this video file. Try MP4, MOV, or AVI format.",
-        )
+        raise  # caught by global handler
     finally:
         try:
             os.unlink(local_path)
@@ -163,76 +264,59 @@ async def scan(video: UploadFile | None = None) -> JSONResponse:
 
 @app.post("/analyze")
 async def analyze(request: Request) -> JSONResponse:
+    """
+    Called by BullMQ worker (server), NOT by end users directly.
+    Runs analysis SYNCHRONOUSLY — BullMQ handles concurrency.
+    """
     content_type = (request.headers.get("content-type") or "").lower()
 
-    session_token: Optional[str] = None
-    player_index: Optional[int] = None
-    model = "gemini-2.5-flash"
-    video_key: Optional[str] = None
+    if not content_type.startswith("application/json"):
+        return _error_response(415, "INVALID_REQUEST", "JSON required")
 
-    if content_type.startswith("application/json"):
-        try:
-            payload = await request.json()
-        except Exception:
-            return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
 
-        session_token = payload.get("session_token")
-        player_index = _safe_int(payload.get("player_index"))
-        model = str(payload.get("model") or "gemini-2.5-flash")
+    engine_job_id = payload.get("engine_job_id")
+    session_token = payload.get("session_token")
+    player_index = _safe_int(payload.get("player_index"))
 
-        if session_token:
-            video_key, err = _session_video_key(session_token)
-            if err:
-                return err
-        else:
-            return _error_response(
-                400,
-                "INVALID_REQUEST",
-                "When session_token is null, send multipart/form-data with a video file.",
-            )
+    if not engine_job_id:
+        return _error_response(400, "MISSING_JOB_ID", "engine_job_id required")
 
-    elif content_type.startswith("multipart/form-data"):
-        form = await request.form()
-        session_token = form.get("session_token")
-        player_index = _safe_int(form.get("player_index"))
-        model = str(form.get("model") or "gemini-2.5-flash")
+    # Verify job exists in Redis
+    try:
+        get_job(engine_job_id)
+    except JobNotFoundError:
+        return _error_response(404, "JOB_NOT_FOUND", "Job not found")
 
-        if session_token:
-            video_key, err = _session_video_key(str(session_token))
-            if err:
-                return err
-        else:
-            maybe_video = form.get("video")
-            if not isinstance(maybe_video, StarletteUploadFile):
-                return _error_response(400, "INVALID_REQUEST", "Missing video upload")
+    # Get video key from session
+    if not session_token:
+        return _error_response(400, "INVALID_REQUEST", "session_token required")
 
-            validation_error = _validate_video_upload(maybe_video)
-            if validation_error:
-                return validation_error
+    video_key, err = _session_video_path(session_token)
+    if err:
+        fail_job(engine_job_id, JobNotFoundError())
+        return err
 
-            file_bytes = await maybe_video.read()
-            await maybe_video.close()
-            video_key = f"uploads/{uuid.uuid4().hex}.mp4"
-            storage.upload_video(file_bytes, video_key)
-    else:
-        return _error_response(415, "INVALID_REQUEST", "Unsupported content type")
-
-    # model is accepted by contract for forward-compatibility; current pipeline uses gemini-2.5-flash.
-    _ = model
-
-    if not video_key:
-        return _error_response(404, "VIDEO_NOT_FOUND", "Video not found for analysis")
-
-    job_id = str(uuid.uuid4())
-    create_job(job_id)
-
-    threading.Thread(
-        target=run_analysis,
-        args=(job_id, video_key, player_index),
-        daemon=True,
-    ).start()
-
-    return JSONResponse(status_code=200, content={"job_id": job_id})
+    # Run SYNCHRONOUSLY — BullMQ worker is waiting for this response
+    # Do NOT use threading.Thread
+    try:
+        run_analysis(engine_job_id, video_key, player_index)
+        return JSONResponse({"ok": True})
+    except EngineError as e:
+        fail_job(engine_job_id, e)
+        return JSONResponse(status_code=500, content=e.to_dict())
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        err = EngineError(
+            code="INTERNAL_ERROR",
+            message="Unexpected analysis error.",
+            retryable=True,
+        )
+        fail_job(engine_job_id, err)
+        return JSONResponse(status_code=500, content=err.to_dict())
 
 
 @app.get("/status/{job_id}")
@@ -253,6 +337,8 @@ def status(job_id: str) -> JSONResponse:
             "summary": job.summary,
             "video_ready": bool(job.video_key),
             "error": job.error,
+            "error_code": job.error_code,
+            "retryable": job.retryable,
         },
     )
 
