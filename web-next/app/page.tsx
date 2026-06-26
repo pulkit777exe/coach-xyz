@@ -7,9 +7,11 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ResultsSummary from '@/components/ResultsSummary'
 import ErrorScreen from '@/components/ErrorScreen'
 import BetaGate from '@/components/BetaGate'
-import { scanVideo, startAnalysis, getJobStatus } from '@/lib/api'
+import { scanVideo, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
 import { getBetaCode } from '@/lib/betaCode'
 import type { AppState, ScanResult, JobStatus } from '@/types'
+
+const BASE = process.env.NEXT_PUBLIC_API_URL
 
 export default function Home() {
   const [betaVerified, setBetaVerified] = useState(false)
@@ -18,11 +20,19 @@ export default function Home() {
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<number | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string>('')
-  const [errorCode, setErrorCode] = useState<string>('')
+  const [errorStatus, setErrorStatus] = useState<CoachAIError | null>(null)
 
   // Refs
   const pollInterval = useRef<NodeJS.Timeout | null>(null)
+  const pollStart = useRef<number>(Date.now())
+
+  // Keep-alive ping to prevent Render spin-down
+  useEffect(() => {
+    const ping = () => fetch(`${BASE}/health`).catch(() => {})
+    ping()
+    const t = setInterval(ping, 8 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [])
 
   // Helper functions
   const stopPolling = () => {
@@ -32,25 +42,45 @@ export default function Home() {
     }
   }
 
-  const startPolling = (jobId: string) => {
+  const startPolling = (pollJobId: string) => {
+    pollStart.current = Date.now()
+    const POLL_TIMEOUT = 10 * 60 * 1000 // 10 minutes
+
     pollInterval.current = setInterval(async () => {
+      // Timeout check
+      if (Date.now() - pollStart.current > POLL_TIMEOUT) {
+        stopPolling()
+        setErrorStatus({
+          code: "ANALYSIS_TIMEOUT",
+          message: "Analysis is taking longer than expected. The job may still complete — try refreshing the page in a few minutes.",
+          layer: "client",
+          retryable: false
+        })
+        setAppState('error')
+        return
+      }
+
       try {
-        const status = await getJobStatus(jobId)
+        const status = await getJobStatus(pollJobId)
         setJobStatus(status)
+        
         if (status.complete) {
           stopPolling()
           if (status.error) {
-            setErrorCode('ANALYSIS_FAILED')
-            setErrorMessage(status.error)
+            setErrorStatus({
+              code: status.error_code ?? 'ANALYSIS_FAILED',
+              message: status.error,
+              layer: 'engine',
+              retryable: status.retryable ?? true
+            })
             setAppState('error')
           } else {
             setAppState('done')
           }
         }
-      } catch {
+      } catch (err: any) {
         stopPolling()
-        setErrorCode('POLLING_FAILED')
-        setErrorMessage('Lost connection during analysis. Please try again.')
+        setErrorStatus(err as CoachAIError)
         setAppState('error')
       }
     }, 2000)
@@ -67,15 +97,23 @@ export default function Home() {
 
   const handleFileSelected = async (file: File) => {
     if (!file.type.startsWith('video/')) {
-      setErrorCode('INVALID_TYPE')
-      setErrorMessage('Please select a valid video file')
+      setErrorStatus({
+        code: 'INVALID_TYPE',
+        message: 'Please select a valid video file',
+        layer: 'client',
+        retryable: false
+      })
       setAppState('error')
       return
     }
 
     if (file.size > 500 * 1024 * 1024) {
-      setErrorCode('FILE_TOO_LARGE')
-      setErrorMessage('File size must be less than 500MB')
+      setErrorStatus({
+        code: 'FILE_TOO_LARGE',
+        message: 'File size must be less than 500MB',
+        layer: 'client',
+        retryable: false
+      })
       setAppState('error')
       return
     }
@@ -103,8 +141,7 @@ export default function Home() {
         setBetaVerified(false)
         return
       }
-      setErrorCode(e.code ?? 'UNKNOWN')
-      setErrorMessage(e.message ?? 'Something went wrong during scanning')
+      setErrorStatus(e as CoachAIError)
       setAppState('error')
     }
   }
@@ -120,8 +157,7 @@ export default function Home() {
       setJobId(job_id)
       startPolling(job_id)
     } catch (e: any) {
-      setErrorCode(e.code ?? 'UNKNOWN')
-      setErrorMessage(e.message ?? 'Could not start analysis')
+      setErrorStatus(e as CoachAIError)
       setAppState('error')
     }
   }
@@ -133,8 +169,7 @@ export default function Home() {
     setSelectedPlayerIndex(null)
     setJobId(null)
     setJobStatus(null)
-    setErrorMessage('')
-    setErrorCode('')
+    setErrorStatus(null)
   }
 
   if (!betaVerified) {
@@ -159,7 +194,7 @@ export default function Home() {
     case 'done':
       return <ResultsSummary status={jobStatus!} jobId={jobId!} onReset={handleReset} />
     case 'error':
-      return <ErrorScreen code={errorCode} message={errorMessage} onRetry={handleReset} />
+      return <ErrorScreen error={errorStatus!} onRetry={handleReset} />
     default:
       return <LandingPage onFileSelected={handleFileSelected} />
   }

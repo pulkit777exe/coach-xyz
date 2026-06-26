@@ -1,10 +1,17 @@
 'use client'
 
+import { useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getDownloadUrl } from '@/lib/api'
 import type { JobStatus } from '@/types'
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(useGSAP)
+}
 
 interface ResultsSummaryProps {
   status: JobStatus
@@ -19,129 +26,181 @@ const SPORT_EMOJI: Record<string, string> = {
   unknown: "🎯"
 }
 
-const capitalize = (str: string) => {
-  if (!str) return ''
-  return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
 export default function ResultsSummary({ status, jobId, onReset }: ResultsSummaryProps) {
   const summary = status.summary!
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useGSAP(() => {
+    gsap.from('.gsap-item', {
+      y: 30,
+      opacity: 0,
+      duration: 0.8,
+      stagger: 0.15,
+      ease: 'power3.out'
+    })
+  }, { scope: containerRef })
   
+  const formScoreColor = summary.form_score >= 8 ? 'text-teal-400 drop-shadow-[0_0_12px_rgba(45,212,191,0.5)]' :
+    summary.form_score >= 5 ? 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.5)]' : 'text-red-400 drop-shadow-[0_0_12px_rgba(248,113,113,0.5)]'
+
   return (
-    <div className="min-h-screen bg-gray-950 p-6 flex flex-col items-center">
+    <div ref={containerRef} className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-20">
+      <div className="pointer-events-none absolute -top-40 -right-40 h-96 w-96 rounded-full bg-[radial-gradient(circle,rgba(6,182,212,0.15),transparent_65%)]" />
+      <div className="pointer-events-none absolute bottom-0 left-0 h-96 w-96 rounded-full bg-[radial-gradient(circle,rgba(168,85,247,0.1),transparent_65%)]" />
+
       <div className="max-w-4xl w-full">
         {/* Summary Card */}
-        <Card className="mb-6 bg-gray-900 border-gray-800">
-          <CardHeader>
-            <CardTitle className="text-2xl text-white">
-              {SPORT_EMOJI[summary.sport] || SPORT_EMOJI.unknown}{' '}
-              {capitalize(summary.sport)} Analysis Complete
+        <Card className="gsap-item mb-8 bg-zinc-950/60 border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/5 blur-3xl rounded-full pointer-events-none" />
+          <CardHeader className="border-b border-white/5 pb-6 pt-8">
+            <CardTitle className="text-3xl text-white font-display flex items-center gap-3">
+              <span className="text-4xl">{SPORT_EMOJI[summary.sport] || SPORT_EMOJI.unknown}</span>
+              <span className="bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent capitalize">{summary.sport} Analysis Complete</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-8 pt-8">
             {/* Form Score */}
-            <div className="text-center">
-              <div className={`text-7xl font-bold ${
-                summary.form_score >= 80 ? 'text-green-500' :
-                summary.form_score >= 60 ? 'text-yellow-500' : 'text-red-500'
-              }`}>
-                {summary.form_score}
+            <div className="grid md:grid-cols-2 gap-8 items-center bg-zinc-900/40 rounded-2xl p-8 border border-white/5">
+              <div className="text-center md:text-left">
+                <p className="text-zinc-500 font-medium uppercase tracking-widest text-sm mb-2">Total Form Score</p>
+                <div className="flex items-baseline justify-center md:justify-start gap-2">
+                  <div className={`text-7xl font-bold font-display ${formScoreColor}`}>
+                    {summary.form_score}
+                  </div>
+                  <span className="text-xl text-zinc-500 font-medium font-display">/ 10</span>
+                </div>
+                <Badge variant="outline" className="mt-4 border-white/20 text-white bg-white/5 px-4 py-1.5 text-sm uppercase tracking-wide">
+                  {summary.overall_rating} Level
+                </Badge>
               </div>
-              <p className="text-gray-400 mt-2">
-                / 100 · {summary.overall_rating}
-              </p>
+              <div className="text-center md:text-left border-l-0 md:border-l border-white/10 md:pl-8">
+                <p className="text-zinc-500 font-medium uppercase tracking-widest text-sm mb-3">Overall Assessment</p>
+                <p className="text-zinc-200 text-lg leading-relaxed">{summary.summary}</p>
+              </div>
             </div>
 
-            {/* Summary */}
-            <div className="text-center">
-              <p className="text-gray-300 italic">{summary.summary}</p>
-            </div>
-
-            {/* Divider */}
-            <div className="h-px bg-gray-800" />
-
-            {/* Top Tips */}
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-3">
-                Top Coaching Tips
-              </h3>
-              <ol className="list-decimal list-inside space-y-2 text-gray-300">
-                {summary.top_tips.map((tip, index) => (
-                  <li key={index}>{tip}</li>
-                ))}
-              </ol>
-            </div>
-
-            {/* Strengths */}
-            {summary.strengths.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-3">
-                  Strengths
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Top Tips */}
+              <div className="bg-zinc-900/30 rounded-2xl p-6 border border-white/5">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Priority Focus
                 </h3>
-                <ul className="list-disc list-inside space-y-2 text-gray-300">
-                  {summary.strengths.map((strength, index) => (
-                    <li key={index}>{strength}</li>
+                <ol className="space-y-3">
+                  {summary.top_tips?.map((tip, index) => (
+                    <li key={index} className="flex gap-3 text-zinc-300">
+                      <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-zinc-400">{index + 1}</span>
+                      <span className="leading-relaxed">{tip}</span>
+                    </li>
                   ))}
-                </ul>
+                </ol>
+                {summary.priority_drill && (
+                  <div className="mt-6 p-4 rounded-xl border border-purple-500/20 bg-purple-500/10">
+                    <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">Recommended Drill</p>
+                    <p className="text-sm text-purple-200">{summary.priority_drill}</p>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Strengths */}
+              {summary.strengths && summary.strengths.length > 0 && (
+                <div className="bg-zinc-900/30 rounded-2xl p-6 border border-white/5 flex flex-col justify-start">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                     <svg className="w-5 h-5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Strengths
+                  </h3>
+                  <ul className="space-y-3">
+                    {summary.strengths.map((strength, index) => (
+                      <li key={index} className="flex gap-3 text-zinc-300 items-start">
+                        <span className="text-teal-500 mt-1 shrink-0">❖</span>
+                        <span className="leading-relaxed">{strength}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
-        {/* Download Button */}
-        <a
-          href={getDownloadUrl(jobId)}
-          download="coachai_analysis.mp4"
-          className="block w-full mb-6"
-        >
-          <Button className="w-full bg-green-600 hover:bg-green-700 text-white" size="lg">
-            ⬇️ Download Analyzed Video
+        {/* Action Buttons */}
+        <div className="gsap-item grid sm:grid-cols-2 gap-4 mb-8">
+          <a
+            href={getDownloadUrl(jobId)}
+            download="coachai_analysis.mp4"
+            className="flex-1 block group"
+          >
+            <Button className="w-full button-accent h-16 rounded-xl text-base font-bold shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-transform group-hover:scale-[1.02]">
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Download Annotated Video
+            </Button>
+          </a>
+          
+          <Button
+            variant="outline"
+            className="h-16 rounded-xl bg-zinc-900/60 border-white/10 text-white font-semibold hover:bg-zinc-800 hover:border-white/20 hover:text-white transition-all backdrop-blur"
+            onClick={onReset}
+          >
+            <svg className="w-5 h-5 mr-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Analyze Another Clip
           </Button>
-        </a>
-        <p className="text-center text-sm text-gray-400 mb-8">
-          Video includes pose overlays, form scores, and coaching tips
-        </p>
+        </div>
 
         {/* Shot Events */}
-        {summary.shot_events.length > 0 && (
-          <div className="mb-8">
-            <details className="border border-gray-800 rounded-lg bg-gray-900 p-4">
-              <summary className="cursor-pointer text-lg font-semibold text-white">
-                Shot Breakdown ({summary.shot_events.length} events)
-              </summary>
-              <div className="mt-4 space-y-4">
-                {summary.shot_events.map((event, index) => (
-                  <div key={index} className="border-b border-gray-800 pb-4 last:border-b-0 last:pb-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {event.event_type}
-                      </Badge>
-                      <span className="text-sm text-gray-400">
-                        @ {event.timestamp}s
-                      </span>
-                      <span className={`text-sm font-semibold ${
-                        event.form_score >= 80 ? 'text-green-500' :
-                        event.form_score >= 60 ? 'text-yellow-500' : 'text-red-500'
-                      }`}>
-                        {event.form_score}/100
-                      </span>
-                    </div>
-                    <p className="text-gray-300">{event.feedback}</p>
+        {summary.shot_events && summary.shot_events.length > 0 && (
+          <div className="gsap-item mb-12">
+            <details className="group border border-white/10 rounded-2xl bg-zinc-950/60 backdrop-blur-xl [&_summary::-webkit-details-marker]:hidden transition-all open:bg-zinc-900/80 shadow-xl" open>
+              <summary className="cursor-pointer p-6 flex flex-wrap items-center justify-between gap-4 select-none">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                   </div>
-                ))}
+                  <div>
+                    <h3 className="text-xl font-display font-bold text-white leading-none">
+                      Event Timeline
+                    </h3>
+                    <p className="text-zinc-500 font-medium text-sm mt-1">{summary.shot_events.length} events analyzed</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-zinc-500 group-open:hidden">Tap to view breakdown</span>
+                  <svg className="w-6 h-6 text-zinc-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </summary>
+              <div className="px-6 pb-6 pt-2 space-y-4 border-t border-white/5 mt-2">
+                {summary.shot_events.map((event, index) => {
+                   const colorClass = event.form_score >= 8 ? 'text-teal-400 bg-teal-500/10 border-teal-500/20' :
+                   event.form_score >= 5 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'
+                  
+                  return (
+                    <div key={index} className="flex gap-5 p-5 rounded-2xl border border-white/5 bg-zinc-900/40 hover:bg-zinc-800/60 transition-colors">
+                      <div className="shrink-0 flex flex-col items-center">
+                        <span className="text-sm font-mono font-bold text-zinc-400 bg-white/5 px-2 py-1 rounded">{event.timestamp?.toFixed(1) ?? '0.0'}s</span>
+                        {index !== summary.shot_events.length - 1 && (
+                          <div className="w-px h-full bg-white/10 my-3"></div>
+                        )}
+                      </div>
+                      <div className="flex-1 pb-1">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                          <Badge variant="secondary" className="bg-zinc-800 text-zinc-200 border border-white/10 capitalize hover:bg-zinc-700 px-3 py-1 text-xs tracking-wide">
+                            {event.event_type?.replace('_', ' ') || 'Action'}
+                          </Badge>
+                          <Badge variant="outline" className={`font-mono text-xs shadow-sm px-3 py-1 uppercase tracking-widest font-bold ${colorClass}`}>
+                            Score: {event.form_score}/10
+                          </Badge>
+                        </div>
+                        {event.key_observation && (
+                          <p className="text-sm font-bold text-zinc-200 mb-2 border-l-2 border-white/20 pl-3">{event.key_observation}</p>
+                        )}
+                        <p className="text-zinc-400 text-sm leading-relaxed pl-3">{event.feedback}</p>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </details>
           </div>
         )}
-
-        {/* Analyze Another Video Button */}
-        <Button
-          variant="outline"
-          className="w-full border-gray-700 text-white hover:bg-gray-800"
-          onClick={onReset}
-        >
-          Analyze Another Video
-        </Button>
       </div>
     </div>
   )

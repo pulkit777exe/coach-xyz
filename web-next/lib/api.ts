@@ -3,68 +3,98 @@ import { clearBetaCode, getBetaCode } from './betaCode'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
-function getHeaders(extra?: Record<string, string>): HeadersInit {
-  const code = getBetaCode()
-  return {
-    ...(code ? { 'x-beta-code': code } : {}),
-    ...extra,
-  }
+export interface CoachAIError {
+  code: string
+  message: string
+  layer: string
+  retryable: boolean
+  retry_after?: number
 }
 
-// Helper function to handle API errors
-const handleResponse = async (response: Response) => {
-  if (!response.ok) {
-    if (response.status === 401) {
-      clearBetaCode()
-      throw {
-        code: 'INVALID_BETA_CODE',
-        message: 'Your beta access code is invalid. Please check your invite.',
-      }
-    }
-
-    const errorData = await response.json().catch(() => ({
-      error: 'API_ERROR',
-      message: `HTTP ${response.status}: ${response.statusText}`
-    }))
-    throw { code: errorData.error, message: errorData.message }
+async function apiFetch<T>(
+  url: string,
+  options: RequestInit = {},
+  isFormData = false,
+): Promise<T> {
+  const code = getBetaCode()
+  const headers: Record<string, string> = {
+    ...(code ? { 'x-beta-code': code } : {}),
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+    ...(options.headers as Record<string, string> ?? {}),
   }
-  return response.json()
+
+  let res: Response
+  try {
+    res = await fetch(url, { ...options, headers })
+  } catch {
+    throw {
+      code: 'NETWORK_ERROR',
+      message: 'Cannot connect to server. Check your connection.',
+      layer: 'client',
+      retryable: true,
+    } as CoachAIError
+  }
+
+  if (res.status === 401) {
+    clearBetaCode()
+    throw {
+      code: 'INVALID_BETA_CODE',
+      message: 'Beta access expired. Please re-enter your code.',
+      layer: 'server',
+      retryable: false,
+    } as CoachAIError
+  }
+
+  if (res.status === 429) {
+    const body = await res.json().catch(() => ({}))
+    throw {
+      code: 'RATE_LIMITED',
+      message: body.message ?? 'Too many requests. Please wait.',
+      layer: 'server',
+      retryable: true,
+      retry_after: body.retry_after,
+    } as CoachAIError
+  }
+
+  if (!res.ok) {
+    let body: any = {}
+    try { body = await res.json() } catch {}
+    throw {
+      code: body?.code ?? 'REQUEST_FAILED',
+      message: body?.message ?? 'Something went wrong.',
+      layer: body?.layer ?? 'server',
+      retryable: body?.retryable ?? true,
+    } as CoachAIError
+  }
+
+  return res.json() as Promise<T>
 }
 
 export async function scanVideo(file: File): Promise<ScanResult> {
   const formData = new FormData()
   formData.append('video', file)
 
-  const response = await fetch(`${BASE}/api/scan-video`, {
+  return apiFetch<ScanResult>(`${BASE}/api/scan-video`, {
     method: 'POST',
-    headers: getHeaders(),
-    body: formData
-  })
-
-  return handleResponse(response)
+    body: formData,
+  }, true)
 }
 
 export async function startAnalysis(params: {
   session_token: string | null
   player_index: number | null
 }): Promise<{ job_id: string }> {
-  const response = await fetch(`${BASE}/api/analyze-video`, {
+  return apiFetch<{ job_id: string }>(`${BASE}/api/analyze-video`, {
     method: 'POST',
-    headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       ...params,
-      model: "gemini-2.5-flash"
-    })
+      model: 'gemini-2.5-flash',
+    }),
   })
-
-  return handleResponse(response)
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const response = await fetch(`${BASE}/api/job-status/${jobId}`, {
-    headers: getHeaders(),
-  })
-  return handleResponse(response)
+  return apiFetch<JobStatus>(`${BASE}/api/job-status/${jobId}`)
 }
 
 export function getDownloadUrl(jobId: string): string {

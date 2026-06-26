@@ -25,8 +25,10 @@ export type JobStatus = {
   progress: number
   complete: boolean
   summary: AnalysisSummary | null
-  video_ready: boolean
+  video_ready?: boolean
   error: string | null
+  error_code?: string | null
+  retryable?: boolean
 }
 
 export type AnalysisSummary = {
@@ -36,6 +38,7 @@ export type AnalysisSummary = {
   top_tips: string[]
   summary: string
   strengths: string[]
+  priority_drill?: string
   shot_events: ShotEvent[]
 }
 
@@ -43,5 +46,6 @@ export type ShotEvent = {
   timestamp: number
   event_type: string
   form_score: number
+  key_observation?: string
   feedback: string
 }
