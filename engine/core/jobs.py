@@ -10,11 +10,10 @@ from upstash_redis import Redis
 
 from core.errors import EngineError, JobNotFoundError
 
+_redis_url = os.environ.get("UPSTASH_REDIS_REST_URL")
+_redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
 
-redis = Redis(
-    url=os.environ["UPSTASH_REDIS_REST_URL"],
-    token=os.environ["UPSTASH_REDIS_REST_TOKEN"],
-)
+redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token else None
 
 JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
@@ -59,13 +58,24 @@ class JobStatus:
         return cls(**filtered)
 
 
+def _require_redis():
+    if redis is None:
+        raise EngineError(
+            code="REDIS_UNAVAILABLE",
+            message="Job storage is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
+            retryable=False,
+        )
+
+
 def create_job(job_id: str) -> JobStatus:
+    _require_redis()
     job = JobStatus(job_id=job_id)
     redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
     return job
 
 
 def update_job(job_id: str, **kwargs) -> None:
+    _require_redis()
     raw = redis.get(f"{KEY}{job_id}")
     if not raw:
         raise JobNotFoundError()
@@ -80,6 +90,7 @@ def update_job(job_id: str, **kwargs) -> None:
 
 
 def get_job(job_id: str) -> JobStatus:
+    _require_redis()
     raw = redis.get(f"{KEY}{job_id}")
     if not raw:
         raise JobNotFoundError()

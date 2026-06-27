@@ -156,13 +156,14 @@ def health_deep():
     # Check Redis
     redis_ok = False
     redis_latency = 0
-    try:
-        t = time.time()
-        jobs_redis.ping()
-        redis_ok = True
-        redis_latency = round((time.time() - t) * 1000)
-    except Exception:
-        pass
+    if jobs_redis is not None:
+        try:
+            t = time.time()
+            jobs_redis.ping()
+            redis_ok = True
+            redis_latency = round((time.time() - t) * 1000)
+        except Exception:
+            pass
 
     # Check MediaPipe
     mp_ok = pose_backend_available()
