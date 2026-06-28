@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 @dataclass
 class EngineError(Exception):
+    """Base error for all engine failures. Every error has a code, message, and retryable flag."""
     code: str
     message: str
     retryable: bool = True
@@ -21,56 +22,93 @@ class EngineError(Exception):
         }
 
 
+# ── Validation Errors ─────────────────────────────────────────────────────────
+
+class InvalidRequestError(EngineError):
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            code="INVALID_REQUEST",
+            message=detail or "Invalid request format.",
+            retryable=False,
+        )
+
+
 class NoPlayersDetectedError(EngineError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="NO_PLAYERS_DETECTED",
-            message="No players detected. Try better lighting or a less crowded frame.",
+            message=detail or "No players detected. Try better lighting or a less crowded frame.",
             retryable=True,
         )
 
+
+# ── Video Errors ──────────────────────────────────────────────────────────────
 
 class VideoDecodeError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="VIDEO_DECODE_FAILED",
-            message="Could not read this video. Please try MP4 or MOV format.",
+            message=detail or "Could not read this video. Please try MP4 or MOV format.",
             retryable=True,
         )
 
 
+# ── Gemini Errors ─────────────────────────────────────────────────────────────
+
 class GeminiQuotaError(EngineError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_QUOTA_EXCEEDED",
-            message="AI analysis quota reached. Please try again in a few minutes.",
+            message=detail or "AI analysis quota reached. Please try again in a few minutes.",
             retryable=True,
         )
 
 
 class GeminiTimeoutError(EngineError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_TIMEOUT",
-            message="AI analysis timed out. Try a shorter video clip.",
+            message=detail or "AI analysis timed out. Try a shorter video clip.",
             retryable=True,
         )
 
 
 class GeminiParseError(EngineError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_PARSE_FAILED",
-            message="AI returned an unexpected response. Please try again.",
+            message=detail or "AI returned an unexpected response. Please try again.",
             retryable=True,
         )
 
 
+# ── State Errors ──────────────────────────────────────────────────────────────
+
 class JobNotFoundError(EngineError):
-    def __init__(self) -> None:
+    def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="JOB_NOT_FOUND",
-            message="This analysis session has expired. Please upload again.",
+            message=detail or "This analysis session has expired. Please upload again.",
+            retryable=False,
+        )
+
+
+class InvalidStateTransition(EngineError):
+    def __init__(self, from_state: str, to_state: str) -> None:
+        super().__init__(
+            code="INVALID_STATE_TRANSITION",
+            message=f"Cannot transition from '{from_state}' to '{to_state}'. Please retry.",
+            retryable=False,
+        )
+
+
+# ── Infrastructure Errors ─────────────────────────────────────────────────────
+
+class RedisUnavailableError(EngineError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="REDIS_UNAVAILABLE",
+            message="Job storage is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
             retryable=False,
         )
 
@@ -81,4 +119,13 @@ class MediaPipeUnavailableError(EngineError):
             code="MEDIAPIPE_UNAVAILABLE",
             message="Player detection is unavailable. Please try again shortly.",
             retryable=False,
+        )
+
+
+class StorageError(EngineError):
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            code="STORAGE_ERROR",
+            message=detail or "Failed to save or retrieve video. Please try again.",
+            retryable=True,
         )

@@ -22,7 +22,7 @@ except Exception:
 
 from core.detector import PoseCandidate, detect_players
 from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError
-from core.jobs import STAGES, register_job_input, update_job
+from core.jobs import STAGES, register_job_input, update_job, transition_job, fail_job
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.renderer import render_video
 from core import storage
@@ -498,7 +498,8 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         preprocessed_path = local_path
         register_job_input(job_id, local_path)
 
-        update_job(job_id, stage=1, stage_name=STAGES[1], progress=10)
+        # State: scanning (extracting frames and detecting players)
+        transition_job(job_id, "scanning")
         preprocessed_path = _preprocess_video_ffmpeg(local_path)
         cleanup_preprocessed = preprocessed_path != local_path
         keyframes, fps, _frame_count = _extract_keyframes(preprocessed_path)
@@ -509,7 +510,6 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
         cap.release()
 
-        update_job(job_id, stage=2, stage_name=STAGES[2], progress=25)
         active_tracks = _build_active_player_tracks(local_path, keyframes, player_index)
 
         motion_scores = _compute_motion_scores(keyframes)
@@ -520,7 +520,8 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             track["motion_score"] = motion
             track["composite_score"] = 0.4 * visibility + 0.6 * motion
 
-        update_job(job_id, stage=3, stage_name=STAGES[3], progress=45)
+        # State: analyzing (calling Gemini)
+        transition_job(job_id, "analyzing")
         frame_budget = min(20, len(active_tracks))
         best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
         print(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
@@ -536,16 +537,12 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             player_index=player_index,
         )
 
-        update_job(
-            job_id,
-            stage=4,
-            stage_name=STAGES[4],
-            progress=70,
-            summary=gemini_result,
-        )
+        # Store analysis result
+        update_job(job_id, summary=gemini_result)
 
+        # State: rendering (annotating video)
+        transition_job(job_id, "rendering")
         output_path = str(_tmp_dir() / f"{job_id}_annotated.mp4")
-        update_job(job_id, stage=5, stage_name=STAGES[5], progress=85)
         render_video(
             video_path=local_path,
             output_path=output_path,
@@ -557,19 +554,21 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         result_key = storage.upload_result_video(output_path, job_id)
         output_path = None
 
-        update_job(
+        # State: completed
+        transition_job(
             job_id,
-            stage=5,
-            stage_name=STAGES[5],
-            progress=100,
-            complete=True,
+            "completed",
             video_key=result_key,
             video_path=storage.get_local_file_path(result_key) if storage.is_local_backend() else None,
         )
     except EngineError as exc:
-        update_job(job_id, error=exc.message, complete=True)
+        fail_job(job_id, exc)
     except Exception:
-        update_job(job_id, error="Unexpected analysis error", complete=True)
+        fail_job(job_id, EngineError(
+            code="INTERNAL_ERROR",
+            message="Unexpected analysis error.",
+            retryable=True,
+        ))
     finally:
         if cleanup_preprocessed:
             try:

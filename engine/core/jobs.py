@@ -8,7 +8,7 @@ from typing import Optional
 
 from upstash_redis import Redis
 
-from core.errors import EngineError, JobNotFoundError
+from core.errors import EngineError, JobNotFoundError, InvalidStateTransition, RedisUnavailableError
 
 _redis_url = os.environ.get("UPSTASH_REDIS_REST_URL")
 _redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
@@ -18,22 +18,40 @@ redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token
 JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
 
-STAGE_NAMES = {
-    0: "Uploading",
-    1: "Extracting Frames",
-    2: "Detecting Players",
-    3: "Analyzing Technique",
-    4: "Generating Feedback",
-    5: "Rendering Video",
+# ── Explicit Pipeline States ──────────────────────────────────────────────────
+# Each state maps to a stage number and progress percentage.
+# States flow: uploading → scanning → player_selection → analyzing → rendering → completed
+# On error: any state can transition to "failed"
+
+PIPELINE_STATES = {
+    "uploading": {"stage": 0, "progress": 0, "stage_name": "Uploading"},
+    "scanning": {"stage": 1, "progress": 15, "stage_name": "Detecting Players"},
+    "player_selection": {"stage": 2, "progress": 25, "stage_name": "Waiting for Selection"},
+    "analyzing": {"stage": 3, "progress": 45, "stage_name": "Analyzing Technique"},
+    "rendering": {"stage": 5, "progress": 80, "stage_name": "Rendering Video"},
+    "completed": {"stage": 6, "progress": 100, "stage_name": "Complete"},
+    "failed": {"stage": -1, "progress": 0, "stage_name": "Failed"},
+}
+
+# Valid state transitions: from_state → set of allowed next states
+VALID_TRANSITIONS = {
+    "uploading": {"scanning", "failed"},
+    "scanning": {"player_selection", "analyzing", "failed"},  # analyzing if single player
+    "player_selection": {"analyzing", "failed"},
+    "analyzing": {"rendering", "completed", "failed"},  # completed if no render needed
+    "rendering": {"completed", "failed"},
+    "completed": set(),  # terminal state
+    "failed": set(),  # terminal state (retry creates new job)
 }
 
 # Keep STAGES alias for backward compat in analyzer.py
-STAGES = STAGE_NAMES
+STAGES = {v["stage"]: v["stage_name"] for k, v in PIPELINE_STATES.items() if v["stage"] >= 0}
 
 
 @dataclass
 class JobStatus:
     job_id: str
+    state: str = "uploading"
     stage: int = 0
     stage_name: str = "Uploading"
     progress: int = 0
@@ -60,21 +78,67 @@ class JobStatus:
 
 def _require_redis():
     if redis is None:
-        raise EngineError(
-            code="REDIS_UNAVAILABLE",
-            message="Job storage is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.",
-            retryable=False,
-        )
+        raise RedisUnavailableError()
 
 
-def create_job(job_id: str) -> JobStatus:
+def create_job(job_id: str, initial_state: str = "uploading") -> JobStatus:
+    """Create a new job with an explicit initial state."""
     _require_redis()
-    job = JobStatus(job_id=job_id)
+    state_info = PIPELINE_STATES.get(initial_state, PIPELINE_STATES["uploading"])
+    job = JobStatus(
+        job_id=job_id,
+        state=initial_state,
+        stage=state_info["stage"],
+        stage_name=state_info["stage_name"],
+        progress=state_info["progress"],
+    )
     redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
     return job
 
 
+def transition_job(job_id: str, new_state: str, **kwargs) -> None:
+    """
+    Validate and apply a state transition.
+    Raises InvalidStateTransition if the transition is not allowed.
+    """
+    _require_redis()
+    raw = redis.get(f"{KEY}{job_id}")
+    if not raw:
+        raise JobNotFoundError()
+
+    job = JobStatus.from_redis(raw)
+
+    # Validate transition
+    allowed = VALID_TRANSITIONS.get(job.state, set())
+    if new_state not in allowed:
+        raise InvalidStateTransition(job.state, new_state)
+
+    # Apply state
+    state_info = PIPELINE_STATES[new_state]
+    job.state = new_state
+    job.stage = state_info["stage"]
+    job.stage_name = state_info["stage_name"]
+    job.progress = state_info["progress"]
+
+    # Apply any additional kwargs
+    for k, v in kwargs.items():
+        if hasattr(job, k):
+            setattr(job, k, v)
+
+    # Mark complete if reaching terminal state
+    if new_state == "completed":
+        job.complete = True
+    elif new_state == "failed":
+        job.complete = True
+
+    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+
+
 def update_job(job_id: str, **kwargs) -> None:
+    """
+    Update job fields directly without state transition validation.
+    Use transition_job() for state changes.
+    """
     _require_redis()
     raw = redis.get(f"{KEY}{job_id}")
     if not raw:
@@ -83,9 +147,9 @@ def update_job(job_id: str, **kwargs) -> None:
     for k, v in kwargs.items():
         if hasattr(job, k):
             setattr(job, k, v)
-    # Auto-set stage_name from stage number
+    # Auto-set stage_name from stage number if stage is being updated
     if "stage" in kwargs:
-        job.stage_name = STAGE_NAMES.get(kwargs["stage"], job.stage_name)
+        job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
     redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
 
 
@@ -100,13 +164,18 @@ def get_job(job_id: str) -> JobStatus:
 def fail_job(job_id: str, error: EngineError) -> None:
     """Mark a job as failed with structured error info."""
     try:
-        update_job(
-            job_id,
-            complete=True,
-            error=error.message,
-            error_code=error.code,
-            retryable=error.retryable,
-        )
+        raw = redis.get(f"{KEY}{job_id}")
+        if not raw:
+            return
+        job = JobStatus.from_redis(raw)
+        job.state = "failed"
+        job.stage = -1
+        job.stage_name = "Failed"
+        job.complete = True
+        job.error = error.message
+        job.error_code = error.code
+        job.retryable = error.retryable
+        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
     except Exception:
         pass  # best-effort — job may have already expired
 

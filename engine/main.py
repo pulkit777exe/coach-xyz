@@ -27,7 +27,7 @@ from core.errors import (
     NoPlayersDetectedError,
     VideoDecodeError,
 )
-from core.jobs import create_job, get_job, fail_job, update_job
+from core.jobs import create_job, get_job, fail_job, update_job, transition_job
 from core.pose_backend import pose_backend_available, pose_backend_name
 
 sessions: Dict[str, Dict[str, Any]] = {}
@@ -331,6 +331,7 @@ def status(job_id: str) -> JSONResponse:
         status_code=200,
         content={
             "job_id": job.job_id,
+            "state": job.state,
             "stage": job.stage,
             "stage_name": job.stage_name,
             "progress": job.progress,

@@ -8,23 +8,27 @@ import subprocess
 import cv2
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import errors as genai_errors
+    from google.genai import types as genai_types
 except ImportError:
     genai = None
+    genai_errors = None
+    genai_types = None
 
-from core.prompt    import get_system_prompt
+from core.prompt import get_system_prompt
 from core.validator import validate_analysis
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _MIME_TYPES = {
-    '.mp4':  'video/mp4',
-    '.mov':  'video/quicktime',
-    '.avi':  'video/x-msvideo',
-    '.mkv':  'video/x-matroska',
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.avi': 'video/x-msvideo',
+    '.mkv': 'video/x-matroska',
     '.webm': 'video/webm',
-    '.m4v':  'video/mp4',
+    '.m4v': 'video/mp4',
 }
 
 
@@ -43,7 +47,7 @@ def _maybe_prepare_analysis_proxy(video_path: str) -> tuple[str, str | None]:
         return video_path, None
 
     max_height = int(os.environ.get("COACHAI_ANALYSIS_MAX_HEIGHT", "720"))
-    max_fps    = float(os.environ.get("COACHAI_ANALYSIS_MAX_FPS", "24"))
+    max_fps = float(os.environ.get("COACHAI_ANALYSIS_MAX_FPS", "24"))
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -94,8 +98,8 @@ def _maybe_prepare_analysis_proxy(video_path: str) -> tuple[str, str | None]:
 def _ensure_genai():
     """Configure the SDK or exit with a helpful message."""
     if genai is None:
-        print('ERROR: google-generativeai package not installed.')
-        print('  Run:  pip install google-generativeai')
+        print('ERROR: google-genai package not installed.')
+        print('  Run:  pip install google-genai')
         sys.exit(1)
 
     api_key = os.environ.get('GEMINI_API_KEY')
@@ -104,7 +108,7 @@ def _ensure_genai():
         print('  Export it:  export GEMINI_API_KEY="your-key-here"')
         sys.exit(1)
 
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 def _clean_json_text(raw: str) -> str:
@@ -140,11 +144,11 @@ def _clean_analysis(result: dict) -> None:
 
 
 def analyze_video(
-    video_path:   str,
-    model_name:   str  = 'gemini-2.5-flash',
-    strict:       bool = False,
+    video_path: str,
+    model_name: str = 'gemini-2.5-flash',
+    strict: bool = False,
     player_focus: dict | None = None,
-    chunk_info:   dict | None = None,
+    chunk_info: dict | None = None,
 ) -> dict:
     """
     Upload *video_path* to Gemini, analyze it with the coaching prompt,
@@ -162,16 +166,16 @@ def analyze_video(
     -------
     dict — the complete analysis JSON.
     """
-    _ensure_genai()
+    client = _ensure_genai()
 
     proxy_path, cleanup_path = _maybe_prepare_analysis_proxy(video_path)
 
     # ── 1. Upload video ───────────────────────────────────────────────────
-    ext       = os.path.splitext(proxy_path)[1].lower()
+    ext = os.path.splitext(proxy_path)[1].lower()
     mime_type = _MIME_TYPES.get(ext, 'video/mp4')
 
     print(f'[Gemini] Uploading {proxy_path}  ({mime_type})')
-    video_file = genai.upload_file(path=proxy_path, mime_type=mime_type)
+    video_file = client.files.upload(file=proxy_path, config={'mime_type': mime_type})
     print(f'[Gemini] Upload complete — file: {video_file.name}')
 
     # ── 2. Wait for processing ────────────────────────────────────────────
@@ -179,7 +183,7 @@ def analyze_video(
     while video_file.state.name == 'PROCESSING':
         time.sleep(5)
         print('.', end='', flush=True)
-        video_file = genai.get_file(video_file.name)
+        video_file = client.files.get(name=video_file.name)
     print(' done.')
 
     if video_file.state.name == 'FAILED':
@@ -189,15 +193,15 @@ def analyze_video(
 
     # ── 3. Generate analysis ──────────────────────────────────────────────
     prompt = get_system_prompt(
-        player_focus = player_focus,
-        chunk_info   = chunk_info,
+        player_focus=player_focus,
+        chunk_info=chunk_info,
     )
     print(f'[Gemini] Analyzing with model: {model_name}')
 
-    model    = genai.GenerativeModel(model_name)
-    response = model.generate_content(
-        [video_file, prompt],
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model=model_name,
+        contents=[video_file, prompt],
+        config=genai_types.GenerateContentConfig(
             response_mime_type='application/json',
             temperature=0.1,
         ),
@@ -227,7 +231,7 @@ def analyze_video(
 
     # ── 6. Clean up remote file ───────────────────────────────────────────
     try:
-        genai.delete_file(video_file.name)
+        client.files.delete(name=video_file.name)
         print('[Gemini] Remote video file cleaned up.')
     except Exception:
         pass  # best-effort
