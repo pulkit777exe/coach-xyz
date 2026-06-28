@@ -23,7 +23,6 @@
     "src/lib/errors.ts",
     "src/lib/requestMeta.ts",
     "src/lib/supabaseHistory.ts",
-    "src/middleware/betaAuth.ts",
     "src/types/index.ts"
   ],
   "exclude": ["node_modules"]

@@ -16,6 +16,10 @@ const scanErrorStatus = (code: string): number => {
       return 422
     case "ENGINE_UNAVAILABLE":
       return 503
+    case "MEDIAPIPE_UNAVAILABLE":
+      return 503
+    case "INVALID_REQUEST":
+      return 400
     default:
       return 500
   }
@@ -35,6 +39,7 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     )
   }
 
+  // ── Validate Request ───────────────────────────────────────────────────
   const form = await request.formData()
   const value = form.get("video")
   const requestMeta = readRequestMeta(request)
@@ -54,6 +59,7 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     return buildError("FILE_TOO_LARGE", "File must be under 500MB.", false)
   }
 
+  // ── Call Engine ────────────────────────────────────────────────────────
   try {
     const result = await scanVideo(value)
 
@@ -72,11 +78,20 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     return result
   } catch (error) {
     const routeError = error as any
-    // If the engine returned a structured error, wrap it
+
+    // If the engine returned a structured error, pass it through
     if (routeError?.code && routeError?.message && routeError?.layer) {
       set.status = scanErrorStatus(routeError.code)
       return routeError
     }
+
+    // If it's a network/connectivity error
+    if (routeError?.code === "ENGINE_UNAVAILABLE") {
+      set.status = 503
+      return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
+    }
+
+    // Unknown error
     const code = routeError?.code ?? "UNKNOWN"
     set.status = scanErrorStatus(code)
     return buildError(code, routeError?.message)

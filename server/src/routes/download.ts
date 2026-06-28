@@ -10,7 +10,7 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
 
   if (!serverJob) {
     set.status = 404
-    return buildError("JOB_NOT_FOUND", undefined, false)
+    return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
   }
 
   try {
@@ -27,10 +27,15 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
 
     if (routeError?.code === "JOB_NOT_FOUND") {
       set.status = 404
-      return buildError("JOB_NOT_FOUND", undefined, false)
+      return buildError("JOB_NOT_FOUND", "Analysis not complete or video not available.", false)
+    }
+
+    if (routeError?.code === "ENGINE_UNAVAILABLE") {
+      set.status = 503
+      return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
     }
 
     set.status = 503
-    return buildError("ENGINE_UNAVAILABLE", routeError?.message)
+    return buildError("ENGINE_UNAVAILABLE", routeError?.message ?? "Failed to download video.", true)
   }
 })

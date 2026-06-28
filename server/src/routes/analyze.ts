@@ -30,6 +30,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     }
   }
 
+  // ── Validate Request ───────────────────────────────────────────────────
   let body: AnalyzeBody
   const requestMeta = readRequestMeta(request)
 
@@ -60,6 +61,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     return buildError("INVALID_PLAYER_INDEX", undefined, false)
   }
 
+  // ── Create Job and Enqueue ─────────────────────────────────────────────
   try {
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
@@ -79,8 +81,9 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       `coachai:job:${engine_job_id}`,
       JSON.stringify({
         job_id: engine_job_id,
+        state: "uploading",
         stage: 0,
-        stage_name: "Queued",
+        stage_name: "Uploading",
         progress: 0,
         complete: false,
         error: null,
@@ -130,6 +133,6 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       }),
     )
     set.status = 500
-    return buildError("INTERNAL_ERROR", undefined, true)
+    return buildError("INTERNAL_ERROR", "Failed to enqueue analysis job. Please try again.", true)
   }
 })

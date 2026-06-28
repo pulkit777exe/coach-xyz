@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { swagger } from "@elysiajs/swagger"
-import { betaAuth } from "./middleware/betaAuth"
+
 
 // Start BullMQ worker as a side effect on import
 import "./lib/queue"
@@ -28,7 +28,6 @@ const app = new Elysia({
   },
 })
   .use(cors({ origin: "*" }))
-  .use(betaAuth)
   .use(
     swagger({
       path: "/swagger",

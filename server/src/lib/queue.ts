@@ -57,8 +57,11 @@ const worker = redisAvailable
 
         if (!res.ok) {
           const body: any = await res.json().catch(() => ({}))
-          // Throwing causes BullMQ to retry
-          throw new Error(body.message ?? `Engine error ${res.status}`)
+          // Create an error with engine's code and message for proper propagation
+          const err = new Error(body.message ?? `Engine error ${res.status}`)
+          ;(err as any).code = body.code ?? "ENGINE_ERROR"
+          ;(err as any).retryable = body.retryable ?? true
+          throw err
         }
 
         return { ok: true }

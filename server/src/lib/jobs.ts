@@ -51,6 +51,7 @@ export async function markJobFailed(
     `coachai:job:${engineJobId}`,
     JSON.stringify({
       ...job,
+      state: "failed",
       complete: true,
       error: message,
       error_code: code,

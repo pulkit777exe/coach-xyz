@@ -9,15 +9,29 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
 
   if (!serverJob) {
     set.status = 404
-    return buildError("JOB_NOT_FOUND", undefined, false)
+    return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
   }
 
   // Read engine job status directly from Redis — no HTTP hop to engine
   const engineStatus = await getEngineJobStatus(serverJob.engine_job_id)
 
   if (!engineStatus) {
-    set.status = 404
-    return buildError("JOB_NOT_FOUND", undefined, false)
+    // Job exists in server mapping but not in engine Redis
+    // This can happen if the engine job expired or was never created
+    set.status = 200
+    return {
+      job_id: serverJob.server_job_id,
+      state: "failed",
+      stage: -1,
+      stage_name: "Failed",
+      progress: 0,
+      complete: true,
+      summary: null,
+      video_ready: false,
+      error: "Analysis job expired or was not found in the engine.",
+      error_code: "JOB_NOT_FOUND",
+      retryable: true,
+    }
   }
 
   await persistAnalysisStatus({
