@@ -1,154 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #09090b; /* zinc-950 */
-  --foreground: #fafafa;
-  --surface: rgba(24, 24, 27, 0.4); /* zinc-900/40 */
-  --surface-soft: rgba(39, 39, 42, 0.4); /* zinc-800/40 */
-  --stroke: rgba(63, 63, 70, 0.5); /* zinc-700/50 */
-  --ink-soft: #a1a1aa; /* zinc-400 */
-  
-  /* Crypto vibe accents */
-  --accent-teal: #14b8a6;
-  --accent-cyan: #06b6d4;
-  --accent-purple: #a855f7;
-  
-  --shadow-glow: 0 0 24px rgba(20, 184, 166, 0.2);
-  --shadow-card: 0 12px 28px rgba(0, 0, 0, 0.4);
-  
-  --font-body: "Inter", "Segoe UI", "Helvetica Neue", sans-serif;
-  --font-display-stack: "Space Grotesk", "Outfit", "Inter", sans-serif;
-}
+  --bg: #0d0d0d;
+  --fg: #f0ebe1;
+  --cream-40: rgba(240, 235, 225, 0.4);
+  --cream-20: rgba(240, 235, 225, 0.2);
+  --cream-10: rgba(240, 235, 225, 0.1);
+  --cream-05: rgba(240, 235, 225, 0.05);
+  --cream-03: rgba(240, 235, 225, 0.03);
+  --red: #c8003c;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-body);
-  --font-serif: var(--font-display-stack);
-  --font-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-mono: 'DM Mono', monospace;
+  --font-serif: 'Instrument Serif', serif;
 }
 
 * {
-  border-color: var(--stroke);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-html,
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  width: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-body);
-  /* Crypto grid and glow background */
-  background-image: 
-    radial-gradient(circle at 15% 0%, rgba(6, 182, 212, 0.15), transparent 35%),
-    radial-gradient(circle at 85% 15%, rgba(168, 85, 247, 0.12), transparent 30%),
-    linear-gradient(to bottom, #09090b 0%, #030303 100%);
-  background-attachment: fixed;
-}
-
-/* Subtle grid overlay */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  pointer-events: none;
-  z-index: -1;
-}
-
-.font-display {
-  font-family: var(--font-display-stack);
-  letter-spacing: -0.01em;
-}
-
-.paper-card {
-  background: var(--surface);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow-card);
-}
-
-.paper-card-soft {
-  background: var(--surface-soft);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--stroke);
-}
-
-.button-ink {
-  background: rgba(39, 39, 42, 0.8);
-  border: 1px solid var(--stroke);
-  color: #fff;
-}
-
-.button-ink:hover {
-  background: rgba(63, 63, 70, 0.8);
-  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
-}
-
-.button-accent {
-  background: linear-gradient(135deg, var(--accent-teal), var(--accent-cyan));
-  color: #000;
-  box-shadow: var(--shadow-glow);
-  border: none;
-}
-
-.button-accent:hover {
-  background: linear-gradient(135deg, #0f766e, #0891b2);
-  box-shadow: 0 0 30px rgba(20, 184, 166, 0.4);
-  color: #fff;
-}
-
-.pink-accent {
-  background: linear-gradient(to right, var(--accent-teal), var(--accent-cyan));
-  -webkit-background-clip: text;
-  color: transparent;
-}
-
-.stroke-accent {
-  border-color: var(--accent-teal);
-  box-shadow: inset 0 0 20px rgba(20, 184, 166, 0.1);
-}
-
-.floating-scribble {
-  animation: floaty 4s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(20, 184, 166, 0.5));
-}
-
-.floating-scribble-2 {
-  animation: floaty 5.5s ease-in-out infinite 1s;
-  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.5));
-}
-
-.landing-link {
-  color: var(--ink-soft);
-  transition: all 200ms ease;
-}
-
-.landing-link:hover {
-  color: #fff;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
-}
-
-.highlight-marker {
-  background: linear-gradient(90deg, rgba(20, 184, 166, 0.1), rgba(6, 182, 212, 0.1));
-  border-left: 2px solid var(--accent-teal);
-  padding: 0 0.25rem;
-}
-
-@keyframes floaty {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(2deg);
-  }
 }
 
 ::selection {
-  background: rgba(20, 184, 166, 0.3);
-  color: #fff;
+  background: rgba(200, 0, 60, 0.3);
+  color: var(--fg);
+}
+
+/* ── Film Grain ─────────────────────────────────────────────────────────────── */
+
+#grain-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.06;
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────────── */
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ── Utility ────────────────────────────────────────────────────────────────── */
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Marquee ────────────────────────────────────────────────────────────────── */
+
+@keyframes marqueeScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 40s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.marquee-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 2.5rem;
+  white-space: nowrap;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-40);
+}
+
+.marquee-record {
+  color: var(--red);
+}
+
+/* ── Horizontal Scroll Section ──────────────────────────────────────────────── */
+
+@keyframes dotPop {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
 }

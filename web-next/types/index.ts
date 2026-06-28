@@ -1,10 +1,6 @@
-export type AppState =
-  | "idle"
-  | "scanning"
-  | "selecting"
-  | "analyzing"
-  | "done"
-  | "error"
+// ── Shared API Types ──────────────────────────────────────────────────────────
+// These types mirror the server/src/types/index.ts (source of truth).
+// Frontend adds "idle" and "error" states for UI state management.
 
 export type Player = {
   player_index: number
@@ -18,8 +14,26 @@ export type ScanResult = {
   players: Player[]
 }
 
+// ── Pipeline States ──────────────────────────────────────────────────────────
+// Engine states: uploading → scanning → player_selection → analyzing → rendering → completed
+// Frontend adds: idle (before upload), error (terminal failure)
+
+export type PipelineState =
+  | "idle"
+  | "uploading"
+  | "scanning"
+  | "selecting"
+  | "analyzing"
+  | "rendering"
+  | "completed"
+  | "error"
+
+// ── Job Status ───────────────────────────────────────────────────────────────
+// Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
+
 export type JobStatus = {
   job_id: string
+  state: string
   stage: number
   stage_name: string
   progress: number
@@ -30,6 +44,8 @@ export type JobStatus = {
   error_code?: string | null
   retryable?: boolean
 }
+
+// ── Analysis Results ─────────────────────────────────────────────────────────
 
 export type AnalysisSummary = {
   sport: string

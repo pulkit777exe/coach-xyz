@@ -15,12 +15,10 @@ interface AnalysisProgressProps {
 
 const STAGES = [
   { name: "Queued",              icon: "⏳" },
-  { name: "Uploading",           icon: "📤" },
-  { name: "Extracting Frames",   icon: "🎞️" },
   { name: "Detecting Players",   icon: "🔍" },
   { name: "Analyzing Technique", icon: "🤖" },
-  { name: "Generating Feedback", icon: "💬" },
   { name: "Rendering Video",     icon: "🎬" },
+  { name: "Complete",            icon: "✅" },
 ]
 
 export default function AnalysisProgress({ status }: AnalysisProgressProps) {
@@ -36,9 +34,11 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     )
     if (idx >= 0) return idx
     if (stageName.toLowerCase().includes("queue")) return 0
-    if (stageName.toLowerCase().includes("waiting")) return 4
-    if (stageName.toLowerCase().includes("detecting events")) return 3
-    return Math.min((status?.stage ?? 0) + 1, STAGES.length - 1)
+    if (stageName.toLowerCase().includes("detect")) return 1
+    if (stageName.toLowerCase().includes("analy")) return 2
+    if (stageName.toLowerCase().includes("render")) return 3
+    if (stageName.toLowerCase().includes("complete")) return 4
+    return Math.min((status?.stage ?? 0), STAGES.length - 1)
   }, [stageName, status?.stage])
 
   const estimatedSeconds = () => {

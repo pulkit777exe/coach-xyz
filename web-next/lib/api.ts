@@ -3,13 +3,18 @@ import { clearBetaCode, getBetaCode } from './betaCode'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
+// ── Error Type ───────────────────────────────────────────────────────────────
+// All errors from the API follow this shape.
+
 export interface CoachAIError {
   code: string
   message: string
-  layer: string
+  layer: 'engine' | 'server' | 'client'
   retryable: boolean
   retry_after?: number
 }
+
+// ── API Client ───────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(
   url: string,
@@ -58,17 +63,35 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     let body: any = {}
-    try { body = await res.json() } catch {}
+    try {
+      body = await res.json()
+    } catch {
+      // Response wasn't JSON
+    }
+
+    // If the server returned a structured error, use it
+    if (body?.code && body?.message) {
+      throw {
+        code: body.code,
+        message: body.message,
+        layer: body.layer ?? 'server',
+        retryable: body.retryable ?? true,
+      } as CoachAIError
+    }
+
+    // Fallback for non-structured errors
     throw {
-      code: body?.code ?? 'REQUEST_FAILED',
-      message: body?.message ?? 'Something went wrong.',
-      layer: body?.layer ?? 'server',
-      retryable: body?.retryable ?? true,
+      code: 'REQUEST_FAILED',
+      message: `Request failed (${res.status})`,
+      layer: 'server',
+      retryable: res.status >= 500,
     } as CoachAIError
   }
 
   return res.json() as Promise<T>
 }
+
+// ── API Functions ────────────────────────────────────────────────────────────
 
 export async function scanVideo(file: File): Promise<ScanResult> {
   const formData = new FormData()

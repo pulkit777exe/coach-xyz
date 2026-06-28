@@ -3,7 +3,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "CoachXYZ | AI Sports Form Analysis",
-  description: "Upload training footage and get timestamped coaching feedback in under a minute.",
+  description:
+    "Upload training footage and get timestamped form scores, correction cues, and annotated video — in under 60 seconds.",
+  openGraph: {
+    title: "CoachXYZ",
+    description: "AI-powered sports video analysis for coaches.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -13,9 +19,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">
-        {children}
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body className="min-h-screen antialiased">{children}</body>
     </html>
   );
 }
