@@ -11,6 +11,7 @@ build/
 # Virtual environments
 venv/
 .venv/
+engine/coach0/
 
 # IDE
 .idea/
@@ -26,3 +27,6 @@ final.mp4
 context
 
 mediapipe
+
+# Duplicate configs (use /sports/ instead)
+engine/json/
