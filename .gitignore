@@ -1,5 +1,8 @@
 # Environment variables
 .env
+server/.env
+engine/.env
+web-next/.env
 
 # Python
 __pycache__/

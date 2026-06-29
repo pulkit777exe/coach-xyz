@@ -9,6 +9,10 @@ services:
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
       PYTHONUNBUFFERED: "1"
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      SERVER_URL: http://engine:8001
     expose:
       - "8001"
     volumes:
@@ -56,6 +60,12 @@ services:
       ENGINE_URL: http://engine:8001
       PORT: 8000
       NODE_ENV: production
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
+      UPSTASH_REDIS_IOREDIS_URL: ${UPSTASH_REDIS_IOREDIS_URL:?UPSTASH_REDIS_IOREDIS_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
+      BETA_CODES: ${BETA_CODES:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       engine:
         condition: service_healthy

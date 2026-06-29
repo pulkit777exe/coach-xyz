@@ -1,5 +1,6 @@
 # render.yaml — Deploy coach-xyz to Render (free tier)
 # Docs: https://render.com/docs/render.yaml
+# IMPORTANT: Replace <your-org> below with your actual GitHub org/username
 
 services:
   # ── Engine (Python/FastAPI — video processing + Gemini AI) ─────────────────
@@ -7,7 +8,7 @@ services:
     name: coachai-engine
     runtime: image
     image:
-      url: https://github.com/{your-org}/coach-xyz.git
+      url: https://github.com/<your-org>/coach-xyz.git  # REPLACE with your GitHub org
       tag: main
     rootDir: engine
     plan: free
@@ -19,13 +20,17 @@ services:
         value: local
       - key: LOCAL_STORAGE_DIR
         value: /tmp/storage
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
 
   # ── Server (Bun/Elysia — middleware + BullMQ worker) ──────────────────────
   - type: web
     name: coachai-server
     runtime: image
     image:
-      url: https://github.com/{your-org}/coach-xyz.git
+      url: https://github.com/<your-org>/coach-xyz.git  # REPLACE with your GitHub org
       tag: main
     rootDir: server
     plan: free
@@ -42,6 +47,10 @@ services:
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
       - key: UPSTASH_REDIS_IOREDIS_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: BETA_CODES
         sync: false
       - key: WORKER_CONCURRENCY
         value: "1"
