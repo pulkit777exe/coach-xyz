@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getDownloadUrl } from '@/lib/api';
 
 interface ResultsSectionProps {
   data: any;
@@ -207,7 +208,7 @@ const ResultsSection = ({ data, jobId, onAnalyzeAgain }: ResultsSectionProps) =>
 
               <div className="flex flex-col md:flex-row gap-4 justify-center">
                 <a
-                  href={`${process.env.NEXT_PUBLIC_API_BASE}/api/download/${jobId}`}
+                  href={jobId ? getDownloadUrl(jobId) : '#'}
                   download="analyzed.mp4"
                   className="px-8 py-4 bg-green-600 hover:bg-green-700 rounded-lg font-semibold text-lg transition-colors"
                 >

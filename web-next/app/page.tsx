@@ -52,7 +52,7 @@ export default function Home() {
   const startPolling = useCallback(
     (pollJobId: string) => {
       pollStart.current = Date.now()
-      const POLL_TIMEOUT = 10 * 60 * 1000
+      const POLL_TIMEOUT = 12 * 60 * 1000
 
       pollInterval.current = setInterval(async () => {
         if (Date.now() - pollStart.current > POLL_TIMEOUT) {

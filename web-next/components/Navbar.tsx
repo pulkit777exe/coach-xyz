@@ -8,7 +8,7 @@ const Navbar = () => {
   useEffect(() => {
     const checkApiStatus = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/health`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`, {
           signal: AbortSignal.timeout(4000)
         });
         setApiStatus(res.ok ? 'online' : 'offline');
@@ -18,7 +18,7 @@ const Navbar = () => {
     };
 
     checkApiStatus();
-    const interval = setInterval(checkApiStatus, 15000);
+    const interval = setInterval(checkApiStatus, 30000);
     return () => clearInterval(interval);
   }, []);
 
