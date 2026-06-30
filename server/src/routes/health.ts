@@ -23,7 +23,9 @@ export const healthRoute = new Elysia({ prefix: "/health" })
       ])
       redisOk = true
       redisLatency = Date.now() - t
-    } catch {}
+    } catch (err) {
+      console.warn(JSON.stringify({ type: "health_check_degraded", component: "redis", error: err instanceof Error ? err.message : "unknown" }))
+    }
 
     // Check engine
     let engineOk = false
@@ -35,7 +37,9 @@ export const healthRoute = new Elysia({ prefix: "/health" })
       })
       engineOk = res.ok
       engineLatency = Date.now() - t
-    } catch {}
+    } catch (err) {
+      console.warn(JSON.stringify({ type: "health_check_degraded", component: "engine", error: err instanceof Error ? err.message : "unknown" }))
+    }
 
     // Check queue depth
     let waiting = 0
@@ -45,7 +49,9 @@ export const healthRoute = new Elysia({ prefix: "/health" })
         waiting = await analysisQueue.getWaitingCount()
         failed = await analysisQueue.getFailedCount()
       }
-    } catch {}
+    } catch (err) {
+      console.warn(JSON.stringify({ type: "health_check_degraded", component: "queue", error: err instanceof Error ? err.message : "unknown" }))
+    }
 
     const status =
       !redisOk
