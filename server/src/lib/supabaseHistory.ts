@@ -339,3 +339,7 @@ export const markAnalysisDownloaded = async (serverJobId: string): Promise<void>
 }
 
 export const historyStoreEnabled = isEnabled
+
+export const shutdownHistoryStore = async (): Promise<void> => {
+  if (sql) await sql.close()
+}

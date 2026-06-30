@@ -1,6 +1,7 @@
 import { Queue, Worker, QueueEvents } from "bullmq"
 import IORedis from "ioredis"
 import { markJobFailed } from "./jobs"
+import { shutdownHistoryStore } from "./supabaseHistory"
 
 const ioredisUrl = process.env.UPSTASH_REDIS_IOREDIS_URL
 const redisAvailable = !!ioredisUrl
@@ -25,6 +26,27 @@ export const analysisQueue = redisAvailable
       },
     })
   : null
+
+// ── Keep-Alive Ping (Prevent Free Tier Spin-Down) ─────────────────────────
+// On Render free tier, services spin down after 15 min inactivity.
+// Ping our own health endpoint every 10 min to keep it alive.
+if (process.env.NODE_ENV === "production") {
+  const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes
+  const port = process.env.PORT || 8000
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/health`)
+      if (res.ok) {
+        console.log(JSON.stringify({ type: "keepalive", status: "ok" }))
+      }
+    } catch {
+      // Ignore errors - service might be starting up
+    }
+  }, KEEPALIVE_INTERVAL)
+
+  console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m" }))
+}
 
 export interface AnalysisPayload {
   server_job_id: string
@@ -68,10 +90,8 @@ const worker = redisAvailable
       },
       {
         connection: connection as any,
-        // CRITICAL: concurrency=2 means max 2 simultaneous engine calls
-        // On HuggingFace free tier (16GB RAM): safe for 2 MediaPipe instances
-        // Each MediaPipe instance ~300MB + Gemini calls ~100MB = ~800MB per job
-        concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
+        // Single concurrency for 512MB RAM free tier
+        concurrency: 1,
       },
     )
   : null
@@ -106,7 +126,7 @@ if (redisAvailable && analysisQueue) {
   async function recoverStuckJobs(): Promise<void> {
     try {
       const active = await analysisQueue!.getActive()
-      const STUCK_MS = 15 * 60 * 1000 // 15 minutes
+      const STUCK_MS = 13 * 60 * 1000 // 13 minutes (1 min buffer over worker 12 min timeout)
 
       for (const job of active) {
         const age = Date.now() - (job.processedOn ?? Date.now())
@@ -133,5 +153,33 @@ if (redisAvailable && analysisQueue) {
   setInterval(recoverStuckJobs, 10 * 60 * 1000)
   setTimeout(recoverStuckJobs, 30_000)
 }
+
+// ── Graceful Shutdown ──────────────────────────────────────────────────────
+// Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
+const SHUTDOWN_TIMEOUT_MS = 10_000
+
+const gracefulShutdown = async (signal: string) => {
+  console.log(JSON.stringify({ type: "shutdown_start", signal, timestamp: new Date().toISOString() }))
+
+  const forceExit = setTimeout(() => {
+    console.error(JSON.stringify({ type: "shutdown_timeout", signal }))
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS)
+  forceExit.unref()
+
+  try {
+    if (worker) await worker.close()
+    if (analysisQueue) await analysisQueue.close()
+    if (connection) await connection.quit()
+    await shutdownHistoryStore()
+    console.log(JSON.stringify({ type: "shutdown_complete", signal, timestamp: new Date().toISOString() }))
+  } catch (err) {
+    console.error(JSON.stringify({ type: "shutdown_error", error: err instanceof Error ? err.message : "unknown" }))
+  }
+  process.exit(0)
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
+process.on("SIGINT", () => gracefulShutdown("SIGINT"))
 
 export { worker }

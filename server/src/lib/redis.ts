@@ -37,7 +37,7 @@ function createRedisClient() {
         token: process.env.UPSTASH_REDIS_REST_TOKEN!,
       })
     } catch {
-      console.warn("[Redis] @upstash/redis not available, using noop client")
+      console.error(JSON.stringify({ type: "redis_fallback_noop", message: "@upstash/redis module not available, using noop client" }))
       return {
         async get() { return null },
         async set() {},

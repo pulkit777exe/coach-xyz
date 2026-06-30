@@ -117,9 +117,9 @@ export const getJobStatus = async (engineJobId: string): Promise<JobStatus> => {
 
 export const getDownloadStream = async (engineJobId: string): Promise<Response> => {
   try {
-    const res = await fetch(`${ENGINE_URL}/download/${engineJobId}`, {
+    const res = await withTimeout(`${ENGINE_URL}/download/${engineJobId}`, {
       method: "GET",
-    })
+    }, 60_000)
 
     if (!res.ok) {
       throw { code: "JOB_NOT_FOUND" } satisfies EngineError
