@@ -1,22 +1,43 @@
 from __future__ import annotations
 
+import glob
+import json
 import logging
 import os
+import tempfile
 import time
 import traceback
 import threading
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# Chunk size for streaming uploads (8MB)
+CHUNK_SIZE = 8 * 1024 * 1024
+
+# ── Validate Required Environment Variables ──────────────────────────────────
+_required_env_vars = ["GEMINI_API_KEY"]
+_missing_env_vars = [k for k in _required_env_vars if not os.environ.get(k)]
+if _missing_env_vars:
+    logging.error(f"Missing required environment variables: {', '.join(_missing_env_vars)}")
+    raise SystemExit(1)
+
 from fastapi import FastAPI, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
+
+try:
+    from fastapi.responses import ORJSONResponse
+    _default_response_class = ORJSONResponse
+except ImportError:
+    _default_response_class = JSONResponse
 
 from core import storage
 from core.analyzer import run_analysis
@@ -35,14 +56,64 @@ sessions_lock = threading.Lock()
 
 START_TIME = time.time()
 
-app = FastAPI(title="CoachAI Engine", version="0.2.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("CoachAI Engine running on :8001")
+    backend = pose_backend_name()
+    if not pose_backend_available():
+        print(
+            "WARNING: mediapipe Pose backend unavailable. "
+            "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
+        )
+    else:
+        print(f"MediaPipe pose backend: {backend}")
+    yield
+    # Shutdown
+    logging.info("CoachAI Engine shutting down")
+    storage_dir = os.environ.get("LOCAL_STORAGE_DIR", "./tmp/storage")
+    if os.path.exists(storage_dir):
+        now = time.time()
+        for f in glob.glob(os.path.join(storage_dir, "*")):
+            try:
+                if os.path.isfile(f) and now - os.path.getmtime(f) > 3600:
+                    os.unlink(f)
+                    logging.info(f"[SHUTDOWN] Cleaned up orphaned file: {f}")
+            except Exception:
+                pass
+
+
+app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan, default_response_class=_default_response_class)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.environ.get("SERVER_URL", "http://localhost:8000")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request Timing Middleware ────────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    response.headers["X-Response-Time"] = f"{duration_ms:.1f}ms"
+    if duration_ms > 1000:
+        logging.warning(
+            json.dumps({
+                "type": "slow_request",
+                "method": request.method,
+                "path": request.url.path,
+                "duration_ms": round(duration_ms, 1),
+            })
+        )
+    return response
 
 
 # ── Global Exception Handlers ────────────────────────────────────────────────
@@ -180,42 +251,52 @@ def health_deep():
     }
 
 
-# ── Startup ──────────────────────────────────────────────────────────────────
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    print("CoachAI Engine running on :8001")
-    backend = pose_backend_name()
-    if not pose_backend_available():
-        print(
-            "WARNING: mediapipe Pose backend unavailable. "
-            "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
-        )
-    else:
-        print(f"MediaPipe pose backend: {backend}")
-
-
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 
 @app.post("/scan")
 async def scan(video: UploadFile) -> JSONResponse:
-    logging.error(f"[SCAN] Received upload: filename={video.filename}, content_type={video.content_type}, size={video.size}")
+    logging.info(f"[SCAN] Received upload: filename={video.filename}, content_type={video.content_type}, size={video.size}")
     validation_error = _validate_video_upload(video)
     if validation_error:
-        logging.error(f"[SCAN] Validation failed: {validation_error.body}")
+        logging.info(f"[SCAN] Validation failed: {validation_error.body}")
         return validation_error
 
-    file_bytes = await video.read()
-    await video.close()
-    logging.error(f"[SCAN] Read {len(file_bytes)} bytes from upload")
-
+    # Stream upload to storage (memory-efficient for large files)
     r2_key = f"uploads/{uuid.uuid4().hex}.mp4"
-    storage.upload_video(file_bytes, r2_key)
+    logging.info(f"[SCAN] Streaming upload to storage: {r2_key}")
+
+    # For large files, stream directly to disk then upload
+    if video.size and video.size > 10 * 1024 * 1024:  # > 10MB
+        fd, temp_path = tempfile.mkstemp(suffix=".mp4")
+        os.close(fd)
+        try:
+            with open(temp_path, "wb") as f:
+                while True:
+                    chunk = await video.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            await video.close()
+            logging.info(f"[SCAN] Streamed {os.path.getsize(temp_path)} bytes to temp file")
+
+            # Upload from temp file
+            with open(temp_path, "rb") as f:
+                storage.upload_video_streaming(f, r2_key)
+        finally:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+    else:
+        # Small file: read all at once
+        file_bytes = await video.read()
+        await video.close()
+        logging.info(f"[SCAN] Read {len(file_bytes)} bytes from upload")
+        storage.upload_video(file_bytes, r2_key)
 
     local_path = storage.download_video_to_tmp(r2_key)
-    logging.error(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
+    logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
     try:
         players = detect_players(local_path)
     except NoPlayersDetectedError:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -176,8 +177,8 @@ def fail_job(job_id: str, error: EngineError) -> None:
         job.error_code = error.code
         job.retryable = error.retryable
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
-    except Exception:
-        pass  # best-effort — job may have already expired
+    except Exception as e:
+        logging.warning(f"Failed to mark job {job_id} as failed: {e}")
 
 
 def register_job_input(job_id: str, video_path: str) -> None:
