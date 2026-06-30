@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
@@ -20,6 +21,7 @@ except Exception:
     genai_errors = None
     genai_types = None
 
+from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
 from core.detector import PoseCandidate, detect_players
 from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError
 from core.jobs import STAGES, register_job_input, update_job, transition_job, fail_job
@@ -498,11 +500,26 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         preprocessed_path = local_path
         register_job_input(job_id, local_path)
 
+        # Check cache first
+        video_hash = compute_video_hash(local_path)
+        cached_result = get_cached_analysis(video_hash, player_index)
+        if cached_result is not None:
+            print(f"[Analyzer] Cache hit for video hash {video_hash}")
+            transition_job(job_id, "analyzing")
+            update_job(job_id, summary=cached_result)
+            transition_job(job_id, "completed")
+            return
+
         # State: scanning (extracting frames and detecting players)
         transition_job(job_id, "scanning")
         preprocessed_path = _preprocess_video_ffmpeg(local_path)
         cleanup_preprocessed = preprocessed_path != local_path
-        keyframes, fps, _frame_count = _extract_keyframes(preprocessed_path)
+
+        # Run keyframe extraction (CPU-bound)
+        loop = asyncio.new_event_loop()
+        keyframes, fps, _frame_count = loop.run_until_complete(
+            asyncio.to_thread(_extract_keyframes, preprocessed_path)
+        )
 
         cap = cv2.VideoCapture(local_path)
         video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -510,9 +527,16 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
         cap.release()
 
-        active_tracks = _build_active_player_tracks(local_path, keyframes, player_index)
+        # Run detection and motion scoring in parallel (both depend on keyframes)
+        active_tracks, motion_scores = loop.run_until_complete(
+            asyncio.gather(
+                asyncio.to_thread(_build_active_player_tracks, local_path, keyframes, player_index),
+                asyncio.to_thread(_compute_motion_scores, keyframes)
+            )
+        )
+        loop.close()
 
-        motion_scores = _compute_motion_scores(keyframes)
+        # Combine motion scores with tracks
         for track in active_tracks:
             fi = track["frame_index"]
             motion = motion_scores.get(fi, 0.5)
@@ -536,6 +560,9 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             video_height=video_height,
             player_index=player_index,
         )
+
+        # Cache the result
+        set_cached_analysis(video_hash, gemini_result, player_index)
 
         # Store analysis result
         update_job(job_id, summary=gemini_result)
