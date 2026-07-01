@@ -347,6 +347,14 @@ async def scan(video: UploadFile) -> JSONResponse:
             "created_at": time.time(),
         }
 
+    # Warm cache for this video (makes subsequent analyses faster)
+    try:
+        from core.cache import compute_video_hash, warm_cache_for_video
+        video_hash = compute_video_hash(local_path)
+        warm_cache_for_video(video_hash, local_path)
+    except Exception as e:
+        logging.warning(f"Cache warming failed: {e}")
+
     response_players = [
         {
             "player_index": p["player_index"],
