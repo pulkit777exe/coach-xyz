@@ -3,7 +3,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { saveJob, redis } from "../lib/jobs"
-import { analysisQueue, type AnalysisPayload } from "../lib/queue"
+import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
 import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 
@@ -11,6 +11,7 @@ type AnalyzeBody = {
   session_token: string | null
   player_index: number | null
   model?: string
+  priority?: keyof typeof JOB_PRIORITIES
 }
 
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
@@ -44,6 +45,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   const sessionToken = body.session_token
   const playerIndex = body.player_index
   const model = body.model ?? "gemini-2.5-flash"
+  const priority = body.priority ?? "free"
 
   if (
     sessionToken !== null &&
@@ -110,6 +112,9 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
         session_token: sessionToken,
         player_index: playerIndex,
       } satisfies AnalysisPayload,
+      {
+        priority: JOB_PRIORITIES[priority] ?? JOB_PRIORITIES.free,
+      },
     )
 
     await persistAnalysisStart({

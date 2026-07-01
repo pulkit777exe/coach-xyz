@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import glob
 import json
 import logging
@@ -399,6 +400,103 @@ async def analyze(request: Request) -> JSONResponse:
         )
         fail_job(engine_job_id, err)
         return JSONResponse(status_code=500, content=err.to_dict())
+
+
+@app.post("/analyze-async")
+async def analyze_async(request: Request) -> JSONResponse:
+    """
+    Start analysis and return job ID immediately.
+    Client can poll /status/{job_id} or use /analyze-progress/{job_id} for SSE.
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if not content_type.startswith("application/json"):
+        return _error_response(415, "INVALID_REQUEST", "JSON required")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    session_token = payload.get("session_token")
+    player_index = _safe_int(payload.get("player_index"))
+
+    if not session_token:
+        return _error_response(400, "INVALID_REQUEST", "session_token required")
+
+    # Get video key from session
+    video_key, err = _session_video_path(session_token)
+    if err:
+        return err
+
+    # Create job in Redis
+    from core.jobs import create_job
+    engine_job_id = create_job(session_token, video_key)
+
+    # Start analysis in background (don't await)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(
+        None,
+        lambda: run_analysis(engine_job_id, video_key, player_index)
+    )
+
+    return JSONResponse({
+        "job_id": engine_job_id,
+        "status": "processing",
+        "message": "Analysis started. Use GET /status/{job_id} or GET /analyze-progress/{job_id} for updates.",
+    })
+
+
+@app.get("/analyze-progress/{job_id}")
+async def analyze_progress(job_id: str):
+    """
+    SSE endpoint for live progress updates.
+    Client can listen for real-time stage updates.
+    """
+    from fastapi.responses import StreamingResponse
+
+    async def event_generator():
+        while True:
+            try:
+                from core.jobs import get_job
+                job = get_job(job_id)
+
+                # Send progress update
+                data = json.dumps({
+                    "job_id": job_id,
+                    "stage": job.stage if hasattr(job, "stage") else "unknown",
+                    "progress": job.progress if hasattr(job, "progress") else 0,
+                    "complete": job.stage == "completed" if hasattr(job, "stage") else False,
+                    "error": job.error if hasattr(job, "error") else None,
+                })
+                yield f"data: {data}\n\n"
+
+                # Check if done
+                if hasattr(job, "stage") and job.stage in ("completed", "failed"):
+                    break
+
+            except Exception as e:
+                # Job might not exist yet
+                data = json.dumps({
+                    "job_id": job_id,
+                    "stage": "queued",
+                    "progress": 0,
+                    "complete": False,
+                    "error": None,
+                })
+                yield f"data: {data}\n\n"
+
+            await asyncio.sleep(1)  # Update every second
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/status/{job_id}")

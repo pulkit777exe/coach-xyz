@@ -27,6 +27,16 @@ export const analysisQueue = redisAvailable
     })
   : null
 
+// Job priority configuration
+// Higher number = higher priority
+export const JOB_PRIORITIES = {
+  beta: 10,      // Beta users get highest priority
+  paid: 5,       // Paid users (future)
+  free: 0,       // Free users (default)
+} as const
+
+export type JobPriority = keyof typeof JOB_PRIORITIES
+
 // ── Keep-Alive Ping (Prevent Free Tier Spin-Down) ─────────────────────────
 // On Render free tier, services spin down after 15 min inactivity.
 // Ping our own health endpoint every 10 min to keep it alive.
