@@ -93,11 +93,11 @@ def _extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, in
         ok, frame = cap.read()
         if not ok or frame is None:
             continue
+        # Store only metadata, not raw frame (memory optimization)
         keyframes.append(
             {
                 "frame_index": frame_index,
                 "timestamp": float(round(ts, 2)),
-                "frame": frame,
             }
         )
 
@@ -108,7 +108,18 @@ def _extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, in
     return keyframes, fps, frame_count
 
 
-def _compute_motion_scores(keyframes: list[dict[str, Any]]) -> dict[int, float]:
+def _read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None:
+    """Read a single frame from video by frame index. Memory-efficient: loads only one frame."""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return None
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    ok, frame = cap.read()
+    cap.release()
+    return frame if ok else None
+
+
+def _compute_motion_scores(video_path: str, keyframes: list[dict[str, Any]]) -> dict[int, float]:
     """
     Compute frame-differencing motion scores between consecutive keyframes.
     Returns {frame_index: motion_score} where higher = more motion.
@@ -121,7 +132,9 @@ def _compute_motion_scores(keyframes: list[dict[str, Any]]) -> dict[int, float]:
     prev_gray = None
 
     for i, kf in enumerate(keyframes):
-        frame = kf["frame"]
+        frame = _read_frame_by_index(video_path, kf["frame_index"])
+        if frame is None:
+            continue
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
@@ -338,7 +351,9 @@ def _build_active_player_tracks(
 
     if not pose_backend_available():
         for entry in keyframes:
-            frame = entry["frame"]
+            frame = _read_frame_by_index(video_path, entry["frame_index"])
+            if frame is None:
+                continue
             detections = _detect_hog_boxes(frame)
             if not detections:
                 continue
@@ -365,13 +380,14 @@ def _build_active_player_tracks(
                         "x_max": int(x_max),
                         "y_max": int(y_max),
                     },
-                    "frame": frame,
                 }
             )
     else:
-        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=4) as pose:
             for entry in keyframes:
-                frame = entry["frame"]
+                frame = _read_frame_by_index(video_path, entry["frame_index"])
+                if frame is None:
+                    continue
                 candidates = _detect_pose_candidates(frame, pose)
                 if not candidates:
                     continue
@@ -394,7 +410,6 @@ def _build_active_player_tracks(
                             "x_max": int(x_max),
                             "y_max": int(y_max),
                         },
-                        "frame": frame,
                     }
                 )
 
@@ -420,6 +435,7 @@ def _call_gemini(
     video_width: int = 0,
     video_height: int = 0,
     player_index: int | None = None,
+    video_path: str | None = None,
 ) -> dict:
     if genai is None or genai_types is None:
         raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
@@ -451,7 +467,13 @@ def _call_gemini(
     parts: list[Any] = [f"{system_prompt}\n\n{video_meta}"]
 
     for item in frames_with_tracks:
-        jpeg = _frame_to_jpeg_bytes(item["frame"])
+        # Read frame from disk when needed (memory optimization)
+        frame = None
+        if video_path:
+            frame = _read_frame_by_index(video_path, item["frame_index"])
+        if frame is None:
+            continue
+        jpeg = _frame_to_jpeg_bytes(frame)
         if not jpeg:
             continue
         metadata_str = _build_frame_metadata(item, video_fps)
@@ -531,7 +553,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         active_tracks, motion_scores = loop.run_until_complete(
             asyncio.gather(
                 asyncio.to_thread(_build_active_player_tracks, local_path, keyframes, player_index),
-                asyncio.to_thread(_compute_motion_scores, keyframes)
+                asyncio.to_thread(_compute_motion_scores, local_path, keyframes)
             )
         )
         loop.close()
@@ -559,6 +581,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             video_width=video_width,
             video_height=video_height,
             player_index=player_index,
+            video_path=preprocessed_path,
         )
 
         # Cache the result

@@ -10,6 +10,7 @@ import time
 import traceback
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Union
 
@@ -19,6 +20,10 @@ load_dotenv()
 
 # Chunk size for streaming uploads (8MB)
 CHUNK_SIZE = 8 * 1024 * 1024
+
+# Session management constants (memory optimization)
+SESSION_TTL = 3600  # 1 hour TTL
+MAX_SESSIONS = 10  # Max concurrent sessions
 
 # ── Validate Required Environment Variables ──────────────────────────────────
 _required_env_vars = ["GEMINI_API_KEY"]
@@ -54,6 +59,9 @@ from core.pose_backend import pose_backend_available, pose_backend_name
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
+
+# Bounded executor for async analysis (memory optimization)
+_analysis_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
 
 START_TIME = time.time()
 
@@ -178,6 +186,22 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _evict_old_sessions() -> None:
+    """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit."""
+    now = time.time()
+    with sessions_lock:
+        # Remove expired sessions
+        expired = [sid for sid, s in sessions.items()
+                   if now - s.get("created_at", 0) > SESSION_TTL]
+        for sid in expired:
+            sessions.pop(sid, None)
+        
+        # Enforce max sessions limit (remove oldest first)
+        while len(sessions) > MAX_SESSIONS:
+            oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
+            sessions.pop(oldest_sid, None)
+
+
 def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None]) -> Optional[JSONResponse]:
     if upload is None:
         return _error_response(400, "INVALID_REQUEST", "Missing video upload")
@@ -267,34 +291,27 @@ async def scan(video: UploadFile) -> JSONResponse:
     r2_key = f"uploads/{uuid.uuid4().hex}.mp4"
     logging.info(f"[SCAN] Streaming upload to storage: {r2_key}")
 
-    # For large files, stream directly to disk then upload
-    if video.size and video.size > 10 * 1024 * 1024:  # > 10MB
-        fd, temp_path = tempfile.mkstemp(suffix=".mp4")
-        os.close(fd)
-        try:
-            with open(temp_path, "wb") as f:
-                while True:
-                    chunk = await video.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-            await video.close()
-            logging.info(f"[SCAN] Streamed {os.path.getsize(temp_path)} bytes to temp file")
-
-            # Upload from temp file
-            with open(temp_path, "rb") as f:
-                storage.upload_video_streaming(f, r2_key)
-        finally:
-            try:
-                os.unlink(temp_path)
-            except FileNotFoundError:
-                pass
-    else:
-        # Small file: read all at once
-        file_bytes = await video.read()
+    # Always stream to disk (memory optimization: remove 10MB threshold)
+    fd, temp_path = tempfile.mkstemp(suffix=".mp4")
+    os.close(fd)
+    try:
+        with open(temp_path, "wb") as f:
+            while True:
+                chunk = await video.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                f.write(chunk)
         await video.close()
-        logging.info(f"[SCAN] Read {len(file_bytes)} bytes from upload")
-        storage.upload_video(file_bytes, r2_key)
+        logging.info(f"[SCAN] Streamed {os.path.getsize(temp_path)} bytes to temp file")
+
+        # Upload from temp file
+        with open(temp_path, "rb") as f:
+            storage.upload_video_streaming(f, r2_key)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
 
     local_path = storage.download_video_to_tmp(r2_key)
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
@@ -319,6 +336,8 @@ async def scan(video: UploadFile) -> JSONResponse:
             pass
 
     session_token = str(uuid.uuid4())
+    # Evict old sessions before creating new one (memory optimization)
+    _evict_old_sessions()
     with sessions_lock:
         sessions[session_token] = {
             "video_key": r2_key,
@@ -433,10 +452,8 @@ async def analyze_async(request: Request) -> JSONResponse:
     from core.jobs import create_job
     engine_job_id = create_job(session_token, video_key)
 
-    # Start analysis in background (don't await)
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(
-        None,
+    # Start analysis in bounded executor (memory optimization)
+    _analysis_executor.submit(
         lambda: run_analysis(engine_job_id, video_key, player_index)
     )
 

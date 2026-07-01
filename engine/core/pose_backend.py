@@ -101,15 +101,16 @@ class StaticPoseDetector:
     - `mediapipe.tasks.vision.PoseLandmarker` (current)
     """
 
-    def __init__(self, min_detection_confidence: float = 0.5, num_poses: int = 6) -> None:
+    def __init__(self, min_detection_confidence: float = 0.5, num_poses: int = 4) -> None:
         self.mode = pose_backend_name()
         self._detector: Any = None
+        self._rgb_buffer: Any = None  # Reuse RGB buffer across calls
 
         if self.mode == "solutions":
             pose_root = mp.solutions
             self._detector = pose_root.pose.Pose(
                 static_image_mode=True,
-                model_complexity=1,
+                model_complexity=0,  # Reduced from 1 to 0 for memory optimization
                 min_detection_confidence=float(min_detection_confidence),
             )
             return
@@ -154,7 +155,13 @@ class StaticPoseDetector:
         if frame_bgr is None:
             return []
 
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        # Reuse RGB buffer across detection calls (memory optimization)
+        if self._rgb_buffer is None or self._rgb_buffer.shape != frame_bgr.shape:
+            self._rgb_buffer = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        else:
+            cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB, dst=self._rgb_buffer)
+        rgb = self._rgb_buffer
+
         if self.mode == "solutions":
             result = self._detector.process(rgb)
             pose_landmarks = getattr(result, "pose_landmarks", None)

@@ -72,9 +72,11 @@ def _draw_player_bbox(frame: np.ndarray, bbox: dict[str, int], alpha: float = 0.
     x2 = max(x1 + 1, min(frame.shape[1] - 1, x2))
     y2 = max(y1 + 1, min(frame.shape[0] - 1, y2))
 
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (x1, y1), (x2, y2), (40, 220, 80), -1)
-    cv2.addWeighted(overlay, alpha, frame, 1.0 - alpha, 0, frame)
+    # ROI-only overlay (memory optimization: avoid full-frame copy)
+    roi = frame[y1:y2, x1:x2]
+    overlay_roi = roi.copy()
+    cv2.rectangle(overlay_roi, (0, 0), (x2 - x1 - 1, y2 - y1 - 1), (40, 220, 80), -1)
+    cv2.addWeighted(overlay_roi, alpha, roi, 1.0 - alpha, 0, roi)
     cv2.rectangle(frame, (x1, y1), (x2, y2), (40, 220, 80), 2)
 
 
@@ -82,6 +84,7 @@ def _draw_hud(
     frame: np.ndarray,
     analysis_result: dict,
     timestamp: float,
+    _hud_overlay_cache: dict | None = None,
 ) -> None:
     sport = str(analysis_result.get("sport", "unknown"))
     form_score = int(analysis_result.get("form_score", 0) or 0)
@@ -99,9 +102,11 @@ def _draw_hud(
     panel_h = 170
     panel_w = max(360, min(panel_w, frame.shape[1] - 20))
 
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (10, 10), (10 + panel_w, 10 + panel_h), (18, 18, 18), -1)
-    cv2.addWeighted(overlay, 0.72, frame, 0.28, 0, frame)
+    # ROI-only overlay for HUD panel (memory optimization)
+    roi = frame[10:10 + panel_h, 10:10 + panel_w]
+    overlay_roi = roi.copy()
+    cv2.rectangle(overlay_roi, (0, 0), (panel_w - 1, panel_h - 1), (18, 18, 18), -1)
+    cv2.addWeighted(overlay_roi, 0.72, roi, 0.28, 0, roi)
 
     cv2.putText(
         frame,
@@ -264,7 +269,8 @@ def render_video(
         _draw_hud(frame, analysis_result, timestamp)
 
         writer.write(frame)
-        last_frame = frame.copy()
+        # Only keep the last frame for summary screen (memory optimization)
+        last_frame = frame
         frame_index += 1
 
     if last_frame is not None:
@@ -272,6 +278,8 @@ def render_video(
         summary_frame = _draw_summary_screen(last_frame.copy(), analysis_result)
         for _ in range(max(1, hold_frames)):
             writer.write(summary_frame)
+        del last_frame
+        del summary_frame
 
     writer.release()
     cap.release()
