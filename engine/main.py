@@ -46,8 +46,6 @@ except ImportError:
     _default_response_class = JSONResponse
 
 from core import storage
-from core.analyzer import run_analysis
-from core.detector import detect_players
 from core.errors import (
     EngineError,
     JobNotFoundError,
@@ -55,7 +53,6 @@ from core.errors import (
     VideoDecodeError,
 )
 from core.jobs import create_job, get_job, fail_job, update_job, transition_job
-from core.pose_backend import pose_backend_available, pose_backend_name
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
@@ -70,14 +67,18 @@ START_TIME = time.time()
 async def lifespan(app: FastAPI):
     # Startup
     print("CoachAI Engine running on :8001")
-    backend = pose_backend_name()
-    if not pose_backend_available():
-        print(
-            "WARNING: mediapipe Pose backend unavailable. "
-            "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
-        )
-    else:
-        print(f"MediaPipe pose backend: {backend}")
+    try:
+        from core.pose_backend import pose_backend_name, pose_backend_available
+        backend = pose_backend_name()
+        if not pose_backend_available():
+            print(
+                "WARNING: mediapipe Pose backend unavailable. "
+                "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
+            )
+        else:
+            print(f"MediaPipe pose backend: {backend}")
+    except Exception as e:
+        print(f"WARNING: Could not initialize MediaPipe: {e}")
     yield
     # Shutdown
     logging.info("CoachAI Engine shutting down")
@@ -316,6 +317,7 @@ async def scan(video: UploadFile) -> JSONResponse:
     local_path = storage.download_video_to_tmp(r2_key)
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
     try:
+        from core.detector import detect_players
         players = detect_players(local_path)
     except NoPlayersDetectedError:
         storage.delete_file(r2_key)
@@ -405,6 +407,7 @@ async def analyze(request: Request) -> JSONResponse:
     # Run SYNCHRONOUSLY — BullMQ worker is waiting for this response
     # Do NOT use threading.Thread
     try:
+        from core.analyzer import run_analysis
         run_analysis(engine_job_id, video_key, player_index)
         return JSONResponse({"ok": True})
     except EngineError as e:
@@ -453,9 +456,11 @@ async def analyze_async(request: Request) -> JSONResponse:
     engine_job_id = create_job(session_token, video_key)
 
     # Start analysis in bounded executor (memory optimization)
-    _analysis_executor.submit(
-        lambda: run_analysis(engine_job_id, video_key, player_index)
-    )
+    def _run_analysis():
+        from core.analyzer import run_analysis
+        run_analysis(engine_job_id, video_key, player_index)
+    
+    _analysis_executor.submit(_run_analysis)
 
     return JSONResponse({
         "job_id": engine_job_id,
