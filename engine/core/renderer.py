@@ -98,15 +98,24 @@ def _draw_hud(
         tip_index = int(timestamp // 3) % len(tips)
         tip_text = str(tips[tip_index])
 
-    panel_w = int(frame.shape[1] * 0.48)
+    frame_h, frame_w = frame.shape[:2]
+    panel_w = int(frame_w * 0.48)
     panel_h = 170
-    panel_w = max(360, min(panel_w, frame.shape[1] - 20))
+    panel_w = max(360, min(panel_w, frame_w - 20))
 
-    # ROI-only overlay for HUD panel (memory optimization)
+    # Pre-render static HUD overlay (cached per frame size)
+    cache_key = (frame_w, frame_h, panel_w, panel_h)
+    if _hud_overlay_cache is not None and cache_key in _hud_overlay_cache:
+        overlay_img = _hud_overlay_cache[cache_key]
+    else:
+        overlay_img = np.zeros((panel_h, panel_w, 3), dtype=np.uint8)
+        overlay_img[:] = (18, 18, 18)  # Dark background
+        if _hud_overlay_cache is not None:
+            _hud_overlay_cache[cache_key] = overlay_img
+
+    # Apply pre-rendered overlay to ROI
     roi = frame[10:10 + panel_h, 10:10 + panel_w]
-    overlay_roi = roi.copy()
-    cv2.rectangle(overlay_roi, (0, 0), (panel_w - 1, panel_h - 1), (18, 18, 18), -1)
-    cv2.addWeighted(overlay_roi, 0.72, roi, 0.28, 0, roi)
+    cv2.addWeighted(overlay_img, 0.72, roi, 0.28, 0, roi)
 
     cv2.putText(
         frame,
