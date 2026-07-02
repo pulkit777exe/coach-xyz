@@ -80,10 +80,43 @@ export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
   }
 }
 
+export async function checkBetaCodeLimit(betaCode: string): Promise<RateLimitResult> {
+  // Per-beta-code rate limit: 20 analyses per hour per code
+  // Prevents IP-hopping when a code is shared/leaked
+  try {
+    const key = `rl:beta:${betaCode}`
+    const now = Date.now()
+    const windowMs = 60 * 60 * 1000 // 1 hour
+    const limit = 20
+
+    const raw = await redis.get(key)
+    if (!raw || now > (raw as any).resetAt) {
+      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }), { ex: 3600 })
+      return { allowed: true, remaining: limit - 1, reset: now + windowMs }
+    }
+
+    const data = typeof raw === "string" ? JSON.parse(raw) : raw
+    data.count++
+    await redis.set(key, JSON.stringify(data), { ex: 3600 })
+
+    if (data.count > limit) {
+      return { allowed: false, remaining: 0, reset: data.resetAt }
+    }
+    return { allowed: true, remaining: limit - data.count, reset: data.resetAt }
+  } catch {
+    // Redis down: fail open
+    return memoryLimit(`beta:${betaCode}`, 20, 3600_000)
+  }
+}
+
 export function getIP(request: Request): string {
   return (
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     request.headers.get("x-real-ip") ??
     "anonymous"
   )
+}
+
+export function getBetaCode(request: Request): string | null {
+  return request.headers.get("x-beta-code")?.trim().toLowerCase() ?? null
 }

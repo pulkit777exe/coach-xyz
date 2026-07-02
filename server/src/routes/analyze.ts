@@ -4,7 +4,7 @@ import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { saveJob, redis } from "../lib/jobs"
 import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
-import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
+import { checkAnalysisLimit, checkBetaCodeLimit, getIP, getBetaCode } from "../lib/ratelimit"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 
 type AnalyzeBody = {
@@ -15,7 +15,7 @@ type AnalyzeBody = {
 }
 
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
-  // ── Rate Limiting ──────────────────────────────────────────────────────
+  // ── Rate Limiting (per-IP) ─────────────────────────────────────────────
   const ip = getIP(request)
   const { allowed, remaining, reset } = await checkAnalysisLimit(ip)
   if (!allowed) {
@@ -28,6 +28,24 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
         true,
       ),
       retry_after: retryAfter,
+    }
+  }
+
+  // ── Rate Limiting (per-beta-code) ─────────────────────────────────────
+  const betaCode = getBetaCode(request)
+  if (betaCode) {
+    const betaLimit = await checkBetaCodeLimit(betaCode)
+    if (!betaLimit.allowed) {
+      const retryAfter = Math.ceil((betaLimit.reset - Date.now()) / 1000)
+      set.status = 429
+      return {
+        ...buildError(
+          "RATE_LIMITED",
+          "Beta code usage limit reached (20 per hour). Try again later.",
+          true,
+        ),
+        retry_after: retryAfter,
+      }
     }
   }
 
