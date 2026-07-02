@@ -1,274 +1,525 @@
 # Coach-XYZ Architecture
 
-## Current Architecture Overview
+## 1. Overview
+
+Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to analyze athlete technique. Users upload sports videos (basketball, football, cricket), the system detects players, sends frames to Gemini for biomechanical analysis, and returns an annotated video with performance feedback. The system is designed for zero-cost deployment on free-tier infrastructure.
+
+---
+
+## 2. Tech Stack
+
+### Frontend (`web-next/`)
+| Technology | Version | Source |
+|------------|---------|--------|
+| Next.js | ^16.2.9 | `web-next/package.json:13` |
+| React | ^19.2.7 | `web-next/package.json:14` |
+| Tailwind CSS | ^4.3.1 | `web-next/package.json:20` |
+| GSAP | ^3.15.0 | `web-next/package.json:12` |
+| TypeScript | ^5.9.3 | `web-next/package.json:24` |
+
+### Server (`server/`)
+| Technology | Version | Source |
+|------------|---------|--------|
+| Bun | (runtime) | `server/Dockerfile:1` — `oven/bun:1` |
+| Elysia | ^1.4.29 | `server/package.json:17` |
+| BullMQ | ^5.79.2 | `server/package.json:16` |
+| ioredis | ^5.11.1 | `server/package.json:18` |
+| @upstash/redis | ^1.38.0 | `server/package.json:15` |
+| @upstash/ratelimit | ^2.0.8 | `server/package.json:14` |
+| TypeScript | ^5.9.3 | `server/package.json:22` |
+
+### Engine (`engine/`)
+| Technology | Version | Source |
+|------------|---------|--------|
+| Python | 3.11 | `engine/Dockerfile:1` |
+| FastAPI | 0.138.2 | `engine/requirements.txt:1` |
+| uvicorn | 0.49.0 | `engine/requirements.txt:2` |
+| google-genai | 2.10.0 | `engine/requirements.txt:3` |
+| opencv-python-headless | 4.13.0.92 | `engine/requirements.txt:4` |
+| mediapipe | 0.10.35 | `engine/requirements.txt:7` |
+| upstash-redis | 1.7.0 | `engine/requirements.txt:8` |
+| orjson | 3.11.9 | `engine/requirements.txt:9` |
+
+### Infrastructure
+| Component | Technology | Source |
+|-----------|------------|--------|
+| Queue | BullMQ + Redis | `server/src/lib/queue.ts:1` |
+| Job Storage | Upstash Redis (REST) | `engine/core/jobs.py:10-17` |
+| Server Redis | @upstash/redis (REST) or ioredis (TCP) | `server/src/lib/redis.ts:6-48` |
+| Database | Supabase PostgreSQL | `server/src/lib/supabaseHistory.ts:43-48` |
+| Video Storage | Local filesystem | `engine/core/storage.py:25-26` |
+| Deployment | Render (free tier) | `render.yaml` |
+| Frontend Hosting | Vercel | `web-next/vercel.json` |
+
+---
+
+## 3. High-Level Architecture / Codemap
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PRODUCTION ARCHITECTURE                           │
+│                           CONFIRMED ARCHITECTURE                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐             │
-│  │  Client  │───▶│  Server  │───▶│  Engine  │───▶│  Gemini  │             │
-│  │ (React)  │    │ (Elysia) │    │ (FastAPI)│    │   API    │             │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘             │
-│       │               │               │               │                    │
-│       │               ▼               ▼               │                    │
-│       │          ┌──────────┐    ┌──────────┐         │                    │
-│       │          │  Redis   │    │  Local   │         │                    │
-│       │          │ (Upstash)│    │ Storage  │         │                    │
-│       │          └──────────┘    └──────────┘         │                    │
-│       │               │               │               │                    │
-│       ▼               ▼               ▼               ▼                    │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         Analysis Pipeline                           │   │
-│  │  download → preprocess → extract → detect → gemini → render        │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
+│  │   Frontend   │───▶│    Server    │───▶│    Engine    │                  │
+│  │  (Next.js)   │    │  (Elysia +   │    │  (FastAPI +  │                  │
+│  │  Port 3000   │    │   BullMQ)    │    │  MediaPipe)  │                  │
+│  └──────────────┘    │  Port 8000   │    │  Port 8001   │                  │
+│                      └──────┬───────┘    └──────┬───────┘                  │
+│                             │                   │                           │
+│                             ▼                   ▼                           │
+│                      ┌──────────────┐    ┌──────────────┐                  │
+│                      │    Redis     │    │    Local     │                  │
+│                      │  (Upstash)   │    │   Storage    │                  │
+│                      └──────────────┘    │  /app/tmp/   │                  │
+│                             │            └──────────────┘                  │
+│                             ▼                   │                           │
+│                      ┌──────────────┐           │                           │
+│                      │   Supabase   │           │                           │
+│                      │  (Postgres)  │           │                           │
+│                      └──────────────┘           │                           │
+│                                                 ▼                           │
+│                                          ┌──────────────┐                  │
+│                                          │  Google      │                  │
+│                                          │  Gemini API  │                  │
+│                                          └──────────────┘                  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## Implemented Features
-
-### 1. Video Analysis Pipeline (`engine/core/analyzer.py`)
-
-The core analysis runs as a synchronous function `run_analysis()` with limited parallelism:
+### Directory Map
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ANALYSIS FLOW (Actual)                       │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Download video to temp file                                 │
-│  2. Check Redis cache → return if hit                           │
-│  3. Check deduplication → wait if in-progress                   │
-│  4. Preprocess video (FFmpeg: normalize + trim)                 │
-│  5. Extract keyframes (every 3s, up to 30 frames)              │
-│  6. [PARALLEL] Detect players + Compute motion scores           │
-│  7. Call Gemini API with best frames                            │
-│  8. Cache result in Redis                                       │
-│  9. Render annotated video                                      │
-│  10. Upload result and complete                                 │
-└─────────────────────────────────────────────────────────────────┘
+coach-xyz/
+├── web-next/                  # Frontend (Next.js + React)
+│   ├── app/page.tsx           # Main SPA entry point
+│   ├── components/            # UI components (LandingPage, PlayerSelector, etc.)
+│   ├── lib/api.ts             # API client (scanVideo, startAnalysis, getJobStatus)
+│   ├── lib/betaCode.ts        # Beta code localStorage management
+│   └── types/index.ts         # Shared type definitions
+│
+├── server/                    # Middleware server (Bun + Elysia)
+│   ├── src/index.ts           # Entry point, middleware, beta code validation
+│   ├── src/routes/
+│   │   ├── scan.ts            # POST /api/scan-video — upload + player detection
+│   │   ├── analyze.ts         # POST /api/analyze-video — enqueue analysis job
+│   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
+│   │   ├── download.ts        # GET /api/download/:jobId — stream result video
+│   │   └── health.ts          # GET /health, /health/deep
+│   ├── src/lib/
+│   │   ├── queue.ts           # BullMQ queue + worker + keep-alive + shutdown
+│   │   ├── redis.ts           # Redis client (Upstash REST or local ioredis)
+│   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
+│   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
+│   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
+│   │   ├── supabaseHistory.ts # PostgreSQL history persistence
+│   │   └── errors.ts          # Error types and builders
+│   └── src/types/index.ts     # Shared API types
+│
+├── engine/                    # Video analysis engine (Python + FastAPI)
+│   ├── main.py                # FastAPI app, routes, session management
+│   ├── core/
+│   │   ├── analyzer.py        # Main analysis pipeline (run_analysis)
+│   │   ├── detector.py        # Player detection (HOG + MediaPipe pose)
+│   │   ├── renderer.py        # Video annotation (HUD, landmarks, summary)
+│   │   ├── gemini.py          # Gemini API client
+│   │   ├── prompt.py          # System prompt for Gemini
+│   │   ├── validator.py       # Gemini output schema validation
+│   │   ├── analysis_validator.py # Gemini output validation with retry
+│   │   ├── jobs.py            # Engine-side job state machine (Redis)
+│   │   ├── cache.py           # Video hash + Redis caching
+│   │   ├── dedup.py           # Request deduplication
+│   │   ├── storage.py         # Local file storage
+│   │   ├── pose_backend.py    # MediaPipe pose detection abstraction
+│   │   ├── compress.py        # Video compression (FFmpeg)
+│   │   ├── quality.py         # Frame quality filtering
+│   │   ├── errors.py          # Error types hierarchy
+│   │   ├── pipeline.py        # Staged pipeline (DEAD CODE — not imported)
+│   │   ├── connection_pool.py # HTTP connection pooling (DEAD CODE — not imported)
+│   │   ├── player_tracker.py  # Player tracking
+│   │   ├── chunker.py         # Video chunking
+│   │   ├── overlay.py         # Video overlay
+│   │   └── utils.py           # Utilities
+│   └── requirements.txt       # Python dependencies
+│
+├── docker-compose.yml         # Local development (engine + server)
+├── docker-compose.prod.yml    # Production compose
+├── render.yaml                # Render deployment config
+└── sports/                    # Sport-specific configs (basketball.json, etc.)
 ```
-
-**Key implementation details:**
-- Frame caching: Decoded frames stored during extraction, reused for detection + motion scoring
-- Parallelism: `asyncio.gather()` runs detection and motion scoring concurrently via `asyncio.to_thread()`
-- Memory optimization: Frames stored as metadata only (frame_index, timestamp), raw numpy cached separately
-
-### 2. Redis Caching (`engine/core/cache.py`)
-
-```python
-# Cache key format
-CACHE_PREFIX = "coachai:analysis:"
-key = f"{CACHE_PREFIX}{video_hash}:p{player_index or 'all'}"
-
-# TTL: 24 hours
-CACHE_TTL = 3600 * 24
-```
-
-**Functions:**
-- `compute_video_hash(video_path)` - Fast hash using file size + first/last 1MB
-- `get_cached_analysis(video_hash, player_index)` - Check cache
-- `set_cached_analysis(video_hash, result, player_index)` - Store result
-- `warm_cache_for_video(video_hash, video_path)` - Pre-warm cache on upload
-- `increment_access_count(video_hash)` - Track popular videos
-- `get_popular_videos(limit)` - Get most accessed videos
-
-**Cache strategy:** Single cache key per video+player combination. No per-stage caching (pipeline.py exists but is not integrated).
-
-### 3. Request Deduplication (`engine/core/dedup.py`)
-
-```python
-# Global singleton
-deduplicator = RequestDeduplicator()
-
-# Usage in analyzer.py
-dedup_key = f"{video_hash}:{player_index}"
-if dedup_key in deduplicator.pending:
-    # Wait for existing analysis instead of creating duplicate
-    await deduplicator.get_or_create(dedup_key, lambda: asyncio.sleep(0))
-```
-
-**Behavior:**
-- 5-minute TTL for pending requests
-- Second request awaits first's future instead of creating duplicate job
-- Handles `CancelledError` and `TimeoutError` gracefully
-
-### 4. SSE Streaming (`engine/main.py`)
-
-```python
-# Endpoints
-POST /analyze-async          # Start analysis, return job_id immediately
-GET  /analyze-progress/{job_id}  # SSE stream for live updates
-GET  /status/{job_id}        # Polling endpoint
-```
-
-**Implementation:**
-- Background execution via `ThreadPoolExecutor(max_workers=2)`
-- SSE updates every 1 second
-- Proper headers: `Cache-Control: no-cache`, `X-Accel-Buffering: no`
-
-### 5. Video Compression (`engine/core/compress.py`)
-
-```python
-# Compression settings
-- Target: 720p, 24fps, H.264 CRF 28
-- Strips audio (not needed for analysis)
-- Hardware acceleration: NVENC if available (detected once, cached)
-```
-
-**Optimizations:**
-- NVENC detection cached at module level (avoids subprocess per call)
-- Falls back to libx264 if hardware unavailable
-- Skips compression if already small
-
-### 6. Frame Quality Gate (`engine/core/quality.py`)
-
-- Sharpness filtering (Laplacian variance)
-- Brightness filtering (mean intensity)
-- Rejects blurry/dark frames before Gemini analysis
-
-### 7. Output Validation (`engine/core/analysis_validator.py`)
-
-- Validates Gemini response structure
-- Retry logic for malformed responses
-- Ensures required fields exist (form_score, top_tips, etc.)
 
 ---
 
-## Dead Code (Exists But Not Integrated)
+## 4. Data Model
 
-### `engine/core/pipeline.py`
-- `AnalysisPipeline` class with per-stage Redis caching
-- **Status:** File exists, compiles, but never imported by `analyzer.py`
-- **Reason:** `run_analysis()` implements its own simpler caching
+### Redis Data Structures
 
-### `engine/core/connection_pool.py`
-- `ConnectionPool` class for HTTP connection reuse
-- **Status:** File exists, compiles, but never imported anywhere
-- **Reason:** Gemini client uses its own connection management
+**Engine Jobs** (`engine/core/jobs.py:20`)
+- Key: `coachai:job:{job_id}`
+- TTL: 7200 seconds (2 hours)
+- Shape: `JobStatus` dataclass (job_id, state, stage, stage_name, progress, complete, error, error_code, retryable, summary, video_key, video_path, created_at)
+- States: uploading → scanning → player_selection → analyzing → rendering → completed (or → failed)
+
+**Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
+- Key: `coachai:srv:{server_job_id}`
+- TTL: 7200 seconds (2 hours)
+- Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at }`
+
+**Rate Limits** (`server/src/lib/ratelimit.ts:31-38`)
+- Key: `rl:scan:{ip}` (TTL 60s) — 10 requests/minute
+- Key: `rl:analysis:{ip}` (TTL 3600s) — 5 requests/hour
+
+**Video Cache** (`engine/core/cache.py:26-27`)
+- Key: `coachai:analysis:{video_hash}:p{player_index|all}`
+- TTL: 86400 seconds (24 hours)
+- Shape: Full Gemini analysis JSON
+
+**Cache Metadata** (`engine/core/cache.py:87-93`)
+- Key: `coachai:analysis:{video_hash}:metadata`
+- Shape: `{ video_path, cached_at, access_count }`
+
+### Supabase Tables (CONFIRMED — `server/src/lib/supabaseHistory.ts:84-132`)
+
+**video_conversations**
+- Primary key: `session_token`
+- Fields: file_name, file_mime_type, file_size_bytes, player_count, players_json, scan_response_json, beta_code, client_ip, user_agent, source
+
+**analysis_history**
+- Primary key: `server_job_id`
+- Fields: engine_job_id, session_token, player_index, model, stage, stage_name, progress, complete, video_ready, summary_json, status_json, error_code, error_message, download_count
+
+### In-Memory State
+
+**Engine Sessions** (`engine/main.py:57-58`)
+- Stored in Python dict with threading lock
+- TTL: 3600 seconds (1 hour), max 10 sessions
+- Shape: `{ video_key, players, created_at }`
 
 ---
 
-## Performance Characteristics
+## 5. Request / Data Flow
 
-### Actual Flow Timing (Estimated)
+### Flow 1: Video Upload + Scan (CONFIRMED)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    ACTUAL TIMING (Estimated)                     │
-├─────────────────────────────────────────────────────────────────┤
-│  Download video:         5-30s    (depends on storage)          │
-│  Cache check:            <1s      (Redis GET)                   │
-│  Preprocess (FFmpeg):    5-15s    (normalize + trim)            │
-│  Extract keyframes:      2-5s     (up to 30 frames)            │
-│  Detect + Motion:        10-20s   (PARALLEL)                    │
-│  Gemini API call:        30-90s   (upload + analysis)           │
-│  Render video:           40-90s   (annotated output)            │
-│  ────────────────────────────────────────────────────────────   │
-│  Total (first time):     90-240s  (1.5-4 minutes)              │
-│  Total (cache hit):      1-3s                                    │
-└─────────────────────────────────────────────────────────────────┘
+1. Frontend POST /api/scan-video (FormData with video file)
+   → web-next/lib/api.ts:96-104
+   → server/src/routes/scan.ts:28
+
+2. Server validates (rate limit, file type, size < 500MB)
+   → server/src/routes/scan.ts:30-60
+
+3. Server forwards to Engine POST /scan
+   → server/src/lib/engine.ts:42-64 (60s timeout)
+
+4. Engine streams upload to local storage
+   → engine/main.py:291-315
+
+5. Engine runs player detection (HOG + MediaPipe)
+   → engine/main.py:320-321
+   → engine/core/detector.py
+
+6. Engine creates session (in-memory dict)
+   → engine/main.py:340-348
+
+7. Engine warms cache for video hash
+   → engine/main.py:351-356
+   → engine/core/cache.py:77-93
+
+8. Server persists to Supabase + returns session_token
+   → server/src/routes/scan.ts:66-78
 ```
 
-### Parallelism Achieved
+### Flow 2: Analysis (CONFIRMED)
 
-| Stage 1 | Stage 2 | Benefit |
-|---------|---------|---------|
-| Detect players | Motion scoring | ~50% faster scanning |
+```
+1. Frontend POST /api/analyze-video { session_token, player_index }
+   → web-next/lib/api.ts:106-117
+   → server/src/routes/analyze.ts:17
 
-**Not parallelized:**
-- Gemini upload + detection (sequential)
-- Rendering (after Gemini completes)
+2. Server creates server_job_id + engine_job_id
+   → server/src/routes/analyze.ts:68-69
 
----
+3. Server saves job mapping to Redis
+   → server/src/routes/analyze.ts:72-79
+   → server/src/lib/jobs.ts:15-21
 
-## Caching Strategy
+4. Server pre-creates engine job in Redis
+   → server/src/routes/analyze.ts:82-100
 
-| Key Format | TTL | What's Cached |
-|------------|-----|---------------|
-| `coachai:analysis:{hash}:p{player}` | 24h | Full analysis result |
-| `coachai:analysis:{hash}:metadata` | 24h | Video metadata |
-| `coachai:analysis:{hash}:metadata:count` | 24h | Access count |
+5. Server enqueues to BullMQ
+   → server/src/routes/analyze.ts:107-118
+   → server/src/lib/queue.ts:18-28
 
-**Cache Invalidation:**
-- TTL-based only (24h)
-- No LRU eviction implemented
-- No manual invalidation API
+6. BullMQ worker picks up job (concurrency: 1)
+   → server/src/lib/queue.ts:70-106
 
----
+7. Worker calls Engine POST /analyze (12 min timeout)
+   → server/src/lib/queue.ts:76-88
 
-## Infrastructure
+8. Engine runs analysis synchronously
+   → engine/main.py:415-432
+   → engine/core/analyzer.py:541-684
+   a. Download video from local storage
+   b. Check Redis cache → return if hit
+   c. Check deduplication → wait if in-progress
+   d. Preprocess video (FFmpeg normalize)
+   e. Extract keyframes (every 3s, max 30)
+   f. [PARALLEL] Detect players + Compute motion scores
+   g. Call Gemini API with best frames
+   h. Cache result in Redis
+   i. Render annotated video
+   j. Upload result to local storage
 
-### Free Tier Deployment
+9. Server polls status via Redis (direct read, no HTTP)
+   → server/src/routes/status.ts:16
+   → server/src/lib/jobs.ts:33-39
+```
 
-| Service | Platform | Limitations |
-|---------|----------|-------------|
-| Frontend | Vercel | Static export, serverless functions |
-| API Server | Render | 512MB RAM, spins down after 15min |
-| Engine | Render | 512MB RAM, spins down after 15min |
-| Redis | Upstash | Serverless, pay-per-request |
-| Database | Supabase | PostgreSQL, free tier |
+### Flow 3: Download Result (CONFIRMED)
 
-### Memory Optimization (512MB RAM)
+```
+1. Frontend GET /api/download/:jobId
+   → web-next/lib/api.ts:123-125
+   → server/src/routes/download.ts:8
 
-- Single uvicorn worker
-- Frame storage: metadata only (not raw numpy)
-- MediaPipe: `model_complexity=0`, `num_poses=4`
-- Session TTL: 1 hour, max 10 sessions
-- Bounded executor: `max_workers=2`
+2. Server looks up engine_job_id from Redis
+   → server/src/lib/jobs.ts:23-29
 
-### Cold Start Optimization
+3. Server streams from Engine GET /download/:jobId
+   → server/src/lib/engine.ts:118-136 (60s timeout)
 
-- Heavy imports lazy-loaded (cv2, mediapipe, tensorflow)
-- boto3 removed (not needed for local storage)
-- Keep-alive ping every 10 minutes
-
----
-
-## Implementation Status
-
-| Feature | Status | Location |
-|---------|--------|----------|
-| Video analysis pipeline | ✅ Implemented | `analyzer.py:run_analysis()` |
-| Redis caching | ✅ Implemented | `cache.py` + `analyzer.py:552-559` |
-| Request deduplication | ✅ Implemented | `dedup.py` + `analyzer.py:561-580` |
-| SSE streaming | ✅ Implemented | `main.py:435-529` |
-| Video compression | ✅ Implemented | `compress.py` |
-| Frame quality gate | ✅ Implemented | `quality.py` |
-| Output validation | ✅ Implemented | `analysis_validator.py` |
-| Per-stage pipeline caching | ❌ Dead code | `pipeline.py` (not imported) |
-| Connection pooling | ❌ Dead code | `connection_pool.py` (not imported) |
-| LRU cache eviction | ❌ Not implemented | — |
-| Manual cache invalidation | ❌ Not implemented | — |
+4. Engine serves file from local storage
+   → engine/main.py:557-579
+   → engine/core/storage.py:37-41, 74-83
+```
 
 ---
 
-## Known Issues
+## 6. Authentication & Authorization
 
-1. **Pipeline dead code:** `pipeline.py` and `connection_pool.py` exist but are never used
-2. **No per-stage caching:** Only final analysis result is cached, not intermediate stages
-3. **Sequential Gemini + detection:** Could be parallelized but isn't
-4. **No LRU eviction:** Cache grows unbounded until TTL expiry
-5. **Fabricated performance numbers:** Previous version claimed 60-120s; actual is 90-240s
+### Beta Code System (CONFIRMED)
+
+The system uses a simple beta code gate, not JWT or session-based auth:
+
+- **Validation:** `server/src/index.ts:26-37` — codes from `BETA_CODES` env var (comma-separated)
+- **Middleware:** `server/src/index.ts:82-92` — `onBeforeHandle` checks `x-beta-code` header
+- **Public endpoints:** `/health`, `/api/verify-code`, `/swagger` (exempt from check)
+- **Frontend:** `web-next/lib/betaCode.ts` — stores code in localStorage, sends as header
+- **Storage:** `server/src/lib/supabaseHistory.ts:93,119` — beta code logged to database
+
+### Session Tokens (CONFIRMED)
+
+- **Generation:** `engine/main.py:340` — UUID4 on scan
+- **Storage:** In-memory dict (`engine/main.py:57`) with threading lock
+- **TTL:** 1 hour (`engine/main.py:25`), max 10 sessions (`engine/main.py:26`)
+- **Validation:** `engine/main.py:221-236` — checks session exists and has video_key
+
+### CORS (CONFIRMED)
+
+- **Server:** `server/src/index.ts:52-55` — allows `FRONTEND_URL` origin
+- **Engine:** `engine/main.py:99-105` — allows `SERVER_URL` origin
 
 ---
 
-## Future Improvements
+## 7. External Dependencies & Integrations
 
-### Phase 1: Integration (1-2 days)
-- [ ] Integrate `pipeline.py` for per-stage caching
-- [ ] Integrate `connection_pool.py` for HTTP reuse
-- [ ] Parallelize Gemini upload + detection
+### Google Gemini API (CONFIRMED)
 
-### Phase 2: Optimization (3-5 days)
-- [ ] Add LRU eviction (max 10GB)
-- [ ] Implement manual cache invalidation
-- [ ] Add stage-level progress tracking
+- **Client:** `engine/core/gemini.py:11-17` — `google-genai` SDK
+- **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
+- **Model:** `gemini-2.5-flash` (`web-next/lib/api.ts:114`, `server/src/routes/analyze.ts:47`)
+- **Usage:** Video analysis with structured JSON output
+- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`)
 
-### Phase 3: Scale (1 week+)
-- [ ] Multi-worker support (requires external Redis)
-- [ ] Video chunking for large files
-- [ ] Edge computing for scan phase
+### Upstash Redis (CONFIRMED)
+
+- **Engine:** `engine/core/jobs.py:10-17` — REST client (`upstash-redis` Python)
+- **Server:** `server/src/lib/redis.ts:6-48` — REST (`@upstash/redis`) or TCP (`ioredis`)
+- **Queue:** `server/src/lib/queue.ts:6-16` — TCP connection (`ioredis`) for BullMQ
+- **Env vars:** `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_IOREDIS_URL`
+
+### Supabase PostgreSQL (CONFIRMED)
+
+- **Client:** `server/src/lib/supabaseHistory.ts:1,43-48` — Bun's `SQL` client
+- **Env var:** `DATABASE_URL`
+- **Tables:** `video_conversations`, `analysis_history` (auto-created on startup)
+- **Status:** Optional — graceful degradation if not configured (`supabaseHistory.ts:55-61`)
+
+### FFmpeg (CONFIRMED)
+
+- **Usage:** Video preprocessing (`engine/core/analyzer.py:42-72`), compression (`engine/core/compress.py:26-38`)
+- **Installed in:** `engine/Dockerfile:12` — `apt-get install ffmpeg`
+
+### MediaPipe (CONFIRMED)
+
+- **Usage:** Pose detection (`engine/core/pose_backend.py`), player detection (`engine/core/detector.py`)
+- **Two backends:** `mediapipe.tasks.python.vision.PoseLandmarker` (preferred) or `mp.solutions.pose` (fallback)
+- **Config:** `model_complexity=0`, `num_poses=4` (memory optimization)
+
+---
+
+## 8. Infrastructure & Deployment
+
+### Docker (CONFIRMED)
+
+**Engine** (`engine/Dockerfile`):
+- Base: `python:3.11-slim`
+- Exposes: 8001
+- Worker: Single uvicorn worker (`--workers 1`)
+- Health check: HTTP `/health` every 30s, 60s start period
+
+**Server** (`server/Dockerfile`):
+- Base: `oven/bun:1`
+- Exposes: 8000
+- Health check: HTTP `/health` every 30s, 15s start period
+
+**Compose** (`docker-compose.yml`):
+- Engine + Server with health check dependency
+- Shared volume: `engine_tmp` for video storage
+
+### Render Deployment (CONFIRMED — `render.yaml`)
+
+- Engine: Free tier web service, image deployment from GitHub
+- Server: Free tier web service, image deployment from GitHub
+- Env vars synced from Render dashboard (secrets)
+- `<your-org>` placeholder must be replaced with actual GitHub org
+
+### Vercel Deployment (CONFIRMED — `web-next/vercel.json`)
+
+- Framework: Next.js
+- Build: `next build`
+- Output: `.next`
+- Env: `NEXT_PUBLIC_API_URL` from server service
+
+### Keep-Alive (CONFIRMED)
+
+- **Server:** `server/src/lib/queue.ts:43-58` — pings `/health` every 10 minutes in production
+- **Frontend:** `web-next/app/page.tsx:37-42` — pings server `/health` every 8 minutes
+
+### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:167-193`)
+
+- SIGTERM/SIGINT handlers
+- Closes: worker → queue → Redis connection → Supabase SQL
+- 10 second timeout before force exit
+- Engine: cleans up orphaned files on shutdown (`engine/main.py:84-94`)
+
+---
+
+## 9. Key Architectural Decisions & Trade-offs
+
+### Local Storage Only (CONFIRMED)
+
+- `engine/core/storage.py:25-26` — `is_local_backend()` always returns `True`
+- No S3/R2 integration — files stored in `/app/tmp/storage/`
+- **Trade-off:** Simpler deployment, but no horizontal scaling without shared filesystem
+
+### Synchronous Engine Analysis (CONFIRMED)
+
+- `engine/main.py:415-419` — `run_analysis()` called synchronously in `/analyze`
+- BullMQ worker waits for response (`server/src/lib/queue.ts:76-88`)
+- **Trade-off:** Simpler error handling, but single job at a time per engine instance
+
+### In-Memory Sessions (CONFIRMED)
+
+- `engine/main.py:57-58` — Python dict with threading lock
+- **Trade-off:** Fast, but sessions lost on restart, no horizontal scaling
+
+### Two Redis Clients (CONFIRMED)
+
+- Server uses both `@upstash/redis` (REST, for general ops) and `ioredis` (TCP, for BullMQ)
+- `server/src/lib/redis.ts` handles local vs Upstash routing
+- **Trade-off:** BullMQ requires TCP connection; Upstash REST used elsewhere for serverless compatibility
+
+### Frame Caching (CONFIRMED)
+
+- `engine/core/analyzer.py:95` — decoded frames cached during extraction
+- Reused for detection + motion scoring (`analyzer.py:600-604`)
+- **Trade-off:** Higher memory usage, but avoids ~60 redundant VideoCapture open/seek/read cycles
+
+### Rate Limiting with Memory Fallback (CONFIRMED)
+
+- `server/src/lib/ratelimit.ts:50-53` — Redis-backed with in-memory fallback
+- **Trade-off:** Rate limits lost on restart when using memory fallback, but service stays available
+
+---
+
+## 10. Known Gaps, Tech Debt, and Contradictions
+
+### Dead Code
+
+1. **`engine/core/pipeline.py`** — `AnalysisPipeline` class exists but is never imported by `analyzer.py` or any other file. Provides per-stage Redis caching that is not used.
+
+2. **`engine/core/connection_pool.py`** — `ConnectionPool` class exists but is never imported. Gemini API calls use new connections each time. Also imports `httpx` which is not in `requirements.txt`.
+
+3. **`engine/core/compress.py`** — `compress_for_analysis()` function exists but is never called from the API pipeline.
+
+4. **`engine/core/quality.py`** — `filter_quality_frames()` and `assess_frame_quality()` exist but are never called from the API pipeline.
+
+5. **`engine/core/analysis_validator.py`** — `validate_gemini_output()` exists but is never called. Actual Gemini validation in `analyzer.py:536` only does `json.loads()`.
+
+6. **`engine/core/overlay.py`** — Drawing functions exist but are never imported. Appears to be an alternative to `renderer.py`.
+
+7. **`engine/core/utils.py`** — Only imported by `overlay.py` (dead code).
+
+### Partially Used Code
+
+8. **`engine/core/chunker.py`** — Used only by CLI tools (`engine/cli/`), not the API pipeline.
+
+9. **`engine/core/player_tracker.py`** — Used only by CLI tools (`engine/cli/frame_selector.py`), not the API pipeline.
+
+### Inconsistencies
+
+3. **`detector.py:32-33`** — Creates new `HOGDescriptor` per call, while `analyzer.py:16-17` caches it at module level. Both exist in the same codebase.
+
+4. **`register_job_input`** — `engine/core/jobs.py:184-186` is a no-op stub, called from `analyzer.py:549`.
+
+### Missing Features
+
+5. **No test suite** — No test files found anywhere in the codebase.
+
+6. **No CI/CD** — No GitHub Actions workflows, no `.github/` directory.
+
+7. **`render.yaml:11,33`** — `<your-org>` placeholder not replaced; deployment will fail.
+
+8. **`httpx` not in requirements** — `engine/core/connection_pool.py:3` imports `httpx` but it is not listed in `engine/requirements.txt`.
+
+### Technical Debt
+
+8. **Session memory leak potential** — `engine/main.py:57` dict grows unbounded if `_evict_old_sessions()` is not called frequently enough.
+
+9. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
+
+---
+
+## 11. How to Verify This Document
+
+| Claim | Verification |
+|-------|--------------|
+| Next.js ^16.2.9 | `web-next/package.json:13` |
+| Elysia ^1.4.29 | `server/package.json:17` |
+| FastAPI 0.138.2 | `engine/requirements.txt:1` |
+| google-genai 2.10.0 | `engine/requirements.txt:3` |
+| BullMQ concurrency: 1 | `server/src/lib/queue.ts:104` |
+| Worker timeout: 12 min | `server/src/lib/queue.ts:86` |
+| Stuck job recovery: 13 min | `server/src/lib/queue.ts:139` |
+| Session TTL: 1 hour | `engine/main.py:25` |
+| Cache TTL: 24 hours | `engine/core/cache.py:25` |
+| Rate limit: 5 analysis/hour | `server/src/lib/ratelimit.ts:60-61` |
+| Local storage only | `engine/core/storage.py:25-26` |
+| Pipeline states | `engine/core/jobs.py:27-35` |
+| Valid transitions | `engine/core/jobs.py:38-46` |
+| Dead code: pipeline.py | `grep -r "from core.pipeline" engine/` returns nothing |
+| Dead code: connection_pool.py | `grep -r "from core.connection_pool" engine/` returns nothing |
+| Dead code: compress.py | `grep -r "compress_for_analysis" engine/` only returns definition |
+| Dead code: quality.py | `grep -r "filter_quality_frames" engine/` only returns definition |
+| Dead code: analysis_validator.py | `grep -r "validate_gemini_output" engine/` only returns definition |
+| Dead code: overlay.py | `grep -r "from core.overlay" engine/` returns nothing |
+| Dead code: utils.py | `grep -r "from core.utils" engine/` only returns overlay.py import |
+| Beta code middleware | `server/src/index.ts:82-92` |
+| Keep-alive: 10 min | `server/src/lib/queue.ts:44` |
+| Frontend keep-alive: 8 min | `web-next/app/page.tsx:40` |
+
+---
+
+*Last verified: 2026-07-02, against commit 2c37df2*
