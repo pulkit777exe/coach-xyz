@@ -92,25 +92,27 @@ def _extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, in
         timestamps = timestamps[:30]
 
     keyframes: list[dict[str, Any]] = []
+    frame_cache: dict[int, np.ndarray] = {}  # Cache decoded frames
     for ts in timestamps:
         frame_index = int(round(ts * fps))
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ok, frame = cap.read()
         if not ok or frame is None:
             continue
-        # Store only metadata, not raw frame (memory optimization)
+        # Store metadata and cache decoded frame (avoid redundant decoding)
         keyframes.append(
             {
                 "frame_index": frame_index,
                 "timestamp": float(round(ts, 2)),
             }
         )
+        frame_cache[frame_index] = frame
 
     cap.release()
     if not keyframes:
         raise VideoDecodeError("Could not extract keyframes from video")
 
-    return keyframes, fps, frame_count
+    return keyframes, fps, frame_count, frame_cache
 
 
 def _read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None:
@@ -124,11 +126,16 @@ def _read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None
     return frame if ok else None
 
 
-def _compute_motion_scores(video_path: str, keyframes: list[dict[str, Any]]) -> dict[int, float]:
+def _compute_motion_scores(
+    video_path: str,
+    keyframes: list[dict[str, Any]],
+    frame_cache: dict[int, np.ndarray] | None = None,
+) -> dict[int, float]:
     """
     Compute frame-differencing motion scores between consecutive keyframes.
     Returns {frame_index: motion_score} where higher = more motion.
     First frame gets a moderate score (no previous frame to compare).
+    Uses frame_cache to avoid redundant decoding.
     """
     if len(keyframes) <= 1:
         return {kf["frame_index"]: 0.5 for kf in keyframes}
@@ -137,19 +144,24 @@ def _compute_motion_scores(video_path: str, keyframes: list[dict[str, Any]]) -> 
     prev_gray = None
 
     for i, kf in enumerate(keyframes):
-        frame = _read_frame_by_index(video_path, kf["frame_index"])
+        frame_idx = kf["frame_index"]
+        # Use cached frame if available, otherwise read from disk
+        if frame_cache and frame_idx in frame_cache:
+            frame = frame_cache[frame_idx]
+        else:
+            frame = _read_frame_by_index(video_path, frame_idx)
         if frame is None:
             continue
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
         if prev_gray is None:
-            scores[kf["frame_index"]] = 0.5
+            scores[frame_idx] = 0.5
         else:
             diff = cv2.absdiff(prev_gray, gray)
             _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
             motion = float(cv2.countNonZero(thresh)) / float(thresh.shape[0] * thresh.shape[1])
-            scores[kf["frame_index"]] = min(1.0, motion * 5.0)
+            scores[frame_idx] = min(1.0, motion * 5.0)
 
         prev_gray = gray
 
@@ -340,6 +352,7 @@ def _build_active_player_tracks(
     video_path: str,
     keyframes: list[dict[str, Any]],
     player_index: Optional[int],
+    frame_cache: dict[int, np.ndarray] | None = None,
 ) -> list[dict[str, Any]]:
     selected_centroid_x: Optional[float] = None
     if player_index is not None:
@@ -354,7 +367,12 @@ def _build_active_player_tracks(
 
     if not pose_backend_available():
         for entry in keyframes:
-            frame = _read_frame_by_index(video_path, entry["frame_index"])
+            frame_idx = entry["frame_index"]
+            # Use cached frame if available, otherwise read from disk
+            if frame_cache and frame_idx in frame_cache:
+                frame = frame_cache[frame_idx]
+            else:
+                frame = _read_frame_by_index(video_path, frame_idx)
             if frame is None:
                 continue
             detections = _detect_hog_boxes(frame)
@@ -373,7 +391,7 @@ def _build_active_player_tracks(
                 )
             active_tracks.append(
                 {
-                    "frame_index": int(entry["frame_index"]),
+                    "frame_index": int(frame_idx),
                     "timestamp": float(entry["timestamp"]),
                     "landmarks": [],
                     "visibility": float(max(0.3, min(1.0, visibility))),
@@ -388,7 +406,12 @@ def _build_active_player_tracks(
     else:
         with StaticPoseDetector(min_detection_confidence=0.5, num_poses=4) as pose:
             for entry in keyframes:
-                frame = _read_frame_by_index(video_path, entry["frame_index"])
+                frame_idx = entry["frame_index"]
+                # Use cached frame if available, otherwise read from disk
+                if frame_cache and frame_idx in frame_cache:
+                    frame = frame_cache[frame_idx]
+                else:
+                    frame = _read_frame_by_index(video_path, frame_idx)
                 if frame is None:
                     continue
                 candidates = _detect_pose_candidates(frame, pose)
@@ -403,7 +426,7 @@ def _build_active_player_tracks(
                 x_min, y_min, x_max, y_max = active.bbox
                 active_tracks.append(
                     {
-                        "frame_index": int(entry["frame_index"]),
+                        "frame_index": int(frame_idx),
                         "timestamp": float(entry["timestamp"]),
                         "landmarks": active.landmarks,
                         "visibility": float(active.visibility),
@@ -561,9 +584,9 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         preprocessed_path = _preprocess_video_ffmpeg(local_path)
         cleanup_preprocessed = preprocessed_path != local_path
 
-        # Run keyframe extraction (CPU-bound)
+        # Run keyframe extraction (CPU-bound) - returns frame cache
         loop = asyncio.new_event_loop()
-        keyframes, fps, _frame_count = loop.run_until_complete(
+        keyframes, fps, _frame_count, frame_cache = loop.run_until_complete(
             asyncio.to_thread(_extract_keyframes, preprocessed_path)
         )
 
@@ -573,11 +596,11 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
         cap.release()
 
-        # Run detection and motion scoring in parallel (both depend on keyframes)
+        # Run detection and motion scoring in parallel (both use frame cache)
         active_tracks, motion_scores = loop.run_until_complete(
             asyncio.gather(
-                asyncio.to_thread(_build_active_player_tracks, local_path, keyframes, player_index),
-                asyncio.to_thread(_compute_motion_scores, local_path, keyframes)
+                asyncio.to_thread(_build_active_player_tracks, local_path, keyframes, player_index, frame_cache),
+                asyncio.to_thread(_compute_motion_scores, local_path, keyframes, frame_cache)
             )
         )
         loop.close()
