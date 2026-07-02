@@ -22,8 +22,9 @@ load_dotenv()
 CHUNK_SIZE = 8 * 1024 * 1024
 
 # Session management constants (memory optimization)
-SESSION_TTL = 3600  # 1 hour TTL
+SESSION_TTL = 7200  # 2 hours (aligned with job TTL)
 MAX_SESSIONS = 10  # Max concurrent sessions
+SESSION_EVICTION_INTERVAL = 300  # Run eviction every 5 minutes
 
 # ── Validate Required Environment Variables ──────────────────────────────────
 _required_env_vars = ["GEMINI_API_KEY"]
@@ -80,8 +81,25 @@ async def lifespan(app: FastAPI):
             print(f"MediaPipe pose backend: {backend}")
     except Exception as e:
         print(f"WARNING: Could not initialize MediaPipe: {e}")
+
+    # Start background session eviction task
+    async def session_eviction_loop():
+        while True:
+            await asyncio.sleep(SESSION_EVICTION_INTERVAL)
+            _evict_old_sessions()
+
+    eviction_task = asyncio.create_task(session_eviction_loop())
+    print(f"Session eviction task started (interval: {SESSION_EVICTION_INTERVAL}s)")
+
     yield
+
     # Shutdown
+    eviction_task.cancel()
+    try:
+        await eviction_task
+    except asyncio.CancelledError:
+        pass
+
     logging.info("CoachAI Engine shutting down")
     storage_dir = os.environ.get("LOCAL_STORAGE_DIR", "./tmp/storage")
     if os.path.exists(storage_dir):
