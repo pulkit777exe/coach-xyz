@@ -60,6 +60,7 @@ const app = new Elysia({
     set.headers["X-XSS-Protection"] = "1; mode=block"
     set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     set.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    set.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
   })
   .use(
     swagger({

@@ -114,8 +114,8 @@ const worker = redisAvailable
       },
       {
         connection: connection as any,
-        // Single concurrency for 512MB RAM free tier
-        concurrency: 1,
+        // Single concurrency for 512MB RAM free tier (configurable via WORKER_CONCURRENCY)
+        concurrency: Number(process.env.WORKER_CONCURRENCY) || 1,
       },
     )
   : null

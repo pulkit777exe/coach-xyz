@@ -1,6 +1,6 @@
 import { redis } from "./redis"
 
-// Rate limiting with local Redis fallback
+// Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
 
 interface RateLimitResult {
@@ -29,19 +29,30 @@ function memoryLimit(key: string, limit: number, windowMs: number): RateLimitRes
 export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
   try {
     const key = `rl:scan:${ip}`
-    const now = Date.now()
-    const windowMs = 60 * 1000 // 1 minute
     const limit = 10
+    const windowSec = 60
 
+    // Try atomic increment first
+    if (redis.rateLimitIncrement) {
+      const result = await redis.rateLimitIncrement(key, limit, windowSec)
+      return {
+        allowed: result.allowed,
+        remaining: Math.max(0, limit - result.current),
+        reset: result.reset,
+      }
+    }
+
+    // Fallback to non-atomic (Upstash REST)
+    const now = Date.now()
     const raw = await redis.get(key)
     if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }), { ex: 60 })
-      return { allowed: true, remaining: limit - 1, reset: now + windowMs }
+      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
+      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
     }
 
     const data = typeof raw === "string" ? JSON.parse(raw) : raw
     data.count++
-    await redis.set(key, JSON.stringify(data), { ex: 60 })
+    await redis.set(key, JSON.stringify(data), { ex: windowSec })
 
     if (data.count > limit) {
       return { allowed: false, remaining: 0, reset: data.resetAt }
@@ -56,19 +67,30 @@ export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
 export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
   try {
     const key = `rl:analysis:${ip}`
-    const now = Date.now()
-    const windowMs = 60 * 60 * 1000 // 1 hour
     const limit = 5
+    const windowSec = 3600
 
+    // Try atomic increment first
+    if (redis.rateLimitIncrement) {
+      const result = await redis.rateLimitIncrement(key, limit, windowSec)
+      return {
+        allowed: result.allowed,
+        remaining: Math.max(0, limit - result.current),
+        reset: result.reset,
+      }
+    }
+
+    // Fallback to non-atomic (Upstash REST)
+    const now = Date.now()
     const raw = await redis.get(key)
     if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }), { ex: 3600 })
-      return { allowed: true, remaining: limit - 1, reset: now + windowMs }
+      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
+      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
     }
 
     const data = typeof raw === "string" ? JSON.parse(raw) : raw
     data.count++
-    await redis.set(key, JSON.stringify(data), { ex: 3600 })
+    await redis.set(key, JSON.stringify(data), { ex: windowSec })
 
     if (data.count > limit) {
       return { allowed: false, remaining: 0, reset: data.resetAt }
@@ -85,19 +107,30 @@ export async function checkBetaCodeLimit(betaCode: string): Promise<RateLimitRes
   // Prevents IP-hopping when a code is shared/leaked
   try {
     const key = `rl:beta:${betaCode}`
-    const now = Date.now()
-    const windowMs = 60 * 60 * 1000 // 1 hour
     const limit = 20
+    const windowSec = 3600
 
+    // Try atomic increment first
+    if (redis.rateLimitIncrement) {
+      const result = await redis.rateLimitIncrement(key, limit, windowSec)
+      return {
+        allowed: result.allowed,
+        remaining: Math.max(0, limit - result.current),
+        reset: result.reset,
+      }
+    }
+
+    // Fallback to non-atomic (Upstash REST)
+    const now = Date.now()
     const raw = await redis.get(key)
     if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowMs }), { ex: 3600 })
-      return { allowed: true, remaining: limit - 1, reset: now + windowMs }
+      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
+      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
     }
 
     const data = typeof raw === "string" ? JSON.parse(raw) : raw
     data.count++
-    await redis.set(key, JSON.stringify(data), { ex: 3600 })
+    await redis.set(key, JSON.stringify(data), { ex: windowSec })
 
     if (data.count > limit) {
       return { allowed: false, remaining: 0, reset: data.resetAt }
