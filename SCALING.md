@@ -20,9 +20,15 @@
 
 **Bottlenecks:**
 1. Engine: Single instance, ~512MB RAM limit (free tier)
-2. Worker: `WORKER_CONCURRENCY=2` max parallel jobs
+2. Worker: `concurrency: 1` (single job at a time, up to 12 min per job)
 3. Storage: Local filesystem only (no S3/R2 integration yet)
 4. Redis: Free tier limits (10K commands/day)
+
+**Current Capacity (Free Tier):**
+- **Max concurrent jobs:** 1 (global bottleneck)
+- **Job duration:** 2-12 minutes (depending on video length)
+- **Theoretical throughput:** ~5-30 jobs/hour (single engine instance)
+- **User experience:** Users must wait in queue; first-come-first-served
 
 ---
 
