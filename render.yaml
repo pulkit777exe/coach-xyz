@@ -1,6 +1,5 @@
 # render.yaml — Deploy coach-xyz to Render (free tier)
 # Docs: https://render.com/docs/render.yaml
-# IMPORTANT: Replace <your-org> below with your actual GitHub org/username
 
 services:
   # ── Engine (Python/FastAPI — video processing + Gemini AI) ─────────────────
@@ -8,7 +7,7 @@ services:
     name: coachai-engine
     runtime: image
     image:
-      url: https://github.com/<your-org>/coach-xyz.git  # REPLACE with your GitHub org
+      url: https://github.com/pulkit777exe/coach-xyz.git
       tag: main
     rootDir: engine
     plan: free
@@ -30,7 +29,7 @@ services:
     name: coachai-server
     runtime: image
     image:
-      url: https://github.com/<your-org>/coach-xyz.git  # REPLACE with your GitHub org
+      url: https://github.com/pulkit777exe/coach-xyz.git
       tag: main
     rootDir: server
     plan: free
