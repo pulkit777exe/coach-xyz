@@ -39,23 +39,37 @@ export type JobPriority = keyof typeof JOB_PRIORITIES
 
 // ── Keep-Alive Ping (Prevent Free Tier Spin-Down) ─────────────────────────
 // On Render free tier, services spin down after 15 min inactivity.
-// Ping our own health endpoint every 10 min to keep it alive.
+// Ping our own health endpoint AND the engine every 10 min to keep both alive.
 if (process.env.NODE_ENV === "production") {
   const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes
   const port = process.env.PORT || 8000
+  const engineUrl = process.env.ENGINE_URL ?? "http://localhost:8001"
 
+  // Keep server alive
   setInterval(async () => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/health`)
       if (res.ok) {
-        console.log(JSON.stringify({ type: "keepalive", status: "ok" }))
+        console.log(JSON.stringify({ type: "keepalive", target: "server", status: "ok" }))
       }
     } catch {
       // Ignore errors - service might be starting up
     }
   }, KEEPALIVE_INTERVAL)
 
-  console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m" }))
+  // Keep engine alive
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${engineUrl}/health`, { signal: AbortSignal.timeout(5000) })
+      if (res.ok) {
+        console.log(JSON.stringify({ type: "keepalive", target: "engine", status: "ok" }))
+      }
+    } catch {
+      // Ignore errors - engine might be starting up
+    }
+  }, KEEPALIVE_INTERVAL)
+
+  console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m", targets: ["server", "engine"] }))
 }
 
 export interface AnalysisPayload {
