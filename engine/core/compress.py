@@ -3,6 +3,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+# Cached NVENC detection (avoids subprocess per call)
+_nvenc_checked = False
+_has_nvenc = False
+
 
 def compress_for_analysis(video_path: str) -> str:
     """
@@ -49,7 +53,11 @@ def compress_for_analysis(video_path: str) -> str:
 
 
 def _check_nvenc() -> bool:
-    result = subprocess.run(
-        ["ffmpeg", "-encoders"], capture_output=True, text=True
-    )
-    return "h264_nvenc" in result.stdout
+    global _nvenc_checked, _has_nvenc
+    if not _nvenc_checked:
+        result = subprocess.run(
+            ["ffmpeg", "-encoders"], capture_output=True, text=True
+        )
+        _has_nvenc = "h264_nvenc" in result.stdout
+        _nvenc_checked = True
+    return _has_nvenc

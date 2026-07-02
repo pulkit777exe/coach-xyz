@@ -238,7 +238,7 @@ def render_video(
 
     writer = cv2.VideoWriter(
         output_path,
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"avc1"),  # H.264 codec (faster, smaller files)
         use_fps,
         (width, height),
     )
@@ -278,8 +278,6 @@ def render_video(
         summary_frame = _draw_summary_screen(last_frame.copy(), analysis_result)
         for _ in range(max(1, hold_frames)):
             writer.write(summary_frame)
-        del last_frame
-        del summary_frame
 
     writer.release()
     cap.release()

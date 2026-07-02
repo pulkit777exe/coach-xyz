@@ -12,6 +12,10 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 
+# Cached HOG descriptor (avoids re-creation per frame)
+_HOG_DESCRIPTOR = cv2.HOGDescriptor()
+_HOG_DESCRIPTOR.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
 try:
     from google import genai
     from google.genai import errors as genai_errors
@@ -232,10 +236,8 @@ def _candidate_centroid_x(candidate: PoseCandidate) -> float:
 
 def _detect_hog_boxes(frame: np.ndarray) -> list[tuple[tuple[int, int, int, int], float]]:
     frame_h, frame_w = frame.shape[:2]
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
-    boxes, weights = hog.detectMultiScale(
+    boxes, weights = _HOG_DESCRIPTOR.detectMultiScale(
         frame,
         winStride=(8, 8),
         padding=(8, 8),
