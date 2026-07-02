@@ -1,3 +1,5 @@
+# UNUSED — see ARCHITECTURE.md §10 (Known Gaps, Tech Debt, and Contradictions)
+# This module is dead code. It provides per-stage Redis caching but is never imported.
 from __future__ import annotations
 
 import hashlib

@@ -1,3 +1,6 @@
+# UNUSED — see ARCHITECTURE.md §10 (Known Gaps, Tech Debt, and Contradictions)
+# This module is dead code. It provides drawing functions but is never imported.
+# It appears to be an alternative to renderer.py.
 """
 overlay.py — Drawing functions for the sports analyzer video overlay.
 

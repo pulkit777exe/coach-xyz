@@ -1,3 +1,5 @@
+# UNUSED — see ARCHITECTURE.md §10 (Known Gaps, Tech Debt, and Contradictions)
+# This module is dead code. It provides video compression but is never called from the API pipeline.
 from __future__ import annotations
 
 import subprocess

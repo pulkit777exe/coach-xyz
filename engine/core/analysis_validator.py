@@ -1,3 +1,6 @@
+# UNUSED — see ARCHITECTURE.md §10 (Known Gaps, Tech Debt, and Contradictions)
+# This module is dead code. It provides Gemini output validation with retry but is never called.
+# Actual validation in analyzer.py only does json.loads() without schema validation.
 from __future__ import annotations
 
 import json

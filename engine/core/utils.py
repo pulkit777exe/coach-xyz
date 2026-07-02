@@ -1,3 +1,5 @@
+# UNUSED — see ARCHITECTURE.md §10 (Known Gaps, Tech Debt, and Contradictions)
+# This module is only imported by overlay.py (dead code).
 """
 utils.py — Shared helper functions for the sports analyzer.
 """

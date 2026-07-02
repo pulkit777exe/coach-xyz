@@ -7,3 +7,4 @@ python-dotenv==1.1.0
 mediapipe==0.10.35
 upstash-redis==1.7.0
 orjson==3.11.9
+httpx==0.28.1
