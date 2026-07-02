@@ -51,6 +51,7 @@ from core.errors import (
     JobNotFoundError,
     NoPlayersDetectedError,
     VideoDecodeError,
+    VideoExpiredError,
 )
 from core.jobs import create_job, get_job, fail_job, update_job, transition_job
 
@@ -567,7 +568,7 @@ def download(job_id: str):
     if storage.is_local_backend():
         local_video_path = storage.get_local_file_path(job.video_key)
         if not local_video_path:
-            return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
+            return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. The server may have restarted. Please upload your video again.")
 
         return FileResponse(
             path=local_video_path,

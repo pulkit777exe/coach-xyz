@@ -22,6 +22,7 @@ const FALLBACK_MESSAGES: Record<string, string> = {
   GEMINI_TIMEOUT: "AI analysis timed out. Try a shorter video.",
   GEMINI_PARSE_FAILED: "AI returned unexpected response. Try again.",
   JOB_NOT_FOUND: "Session expired. Please upload your video again.",
+  VIDEO_EXPIRED: "This video is no longer available. The server may have restarted. Please upload your video again.",
   ENGINE_UNAVAILABLE: "Analysis engine is temporarily unavailable.",
   INVALID_STATE_TRANSITION: "Analysis is in an unexpected state. Please retry.",
   REDIS_UNAVAILABLE: "Job storage is unavailable. Please try again later.",

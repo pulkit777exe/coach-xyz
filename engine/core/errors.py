@@ -129,3 +129,12 @@ class StorageError(EngineError):
             message=detail or "Failed to save or retrieve video. Please try again.",
             retryable=True,
         )
+
+
+class VideoExpiredError(EngineError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="VIDEO_EXPIRED",
+            message="This video is no longer available. The server may have restarted. Please upload your video again.",
+            retryable=False,
+        )

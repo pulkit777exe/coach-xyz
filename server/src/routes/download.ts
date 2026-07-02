@@ -30,6 +30,11 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
       return buildError("JOB_NOT_FOUND", "Analysis not complete or video not available.", false)
     }
 
+    if (routeError?.code === "VIDEO_EXPIRED") {
+      set.status = 404
+      return buildError("VIDEO_EXPIRED", "This video is no longer available. The server may have restarted. Please upload your video again.", false)
+    }
+
     if (routeError?.code === "ENGINE_UNAVAILABLE") {
       set.status = 503
       return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)

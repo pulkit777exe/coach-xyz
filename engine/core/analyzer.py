@@ -28,7 +28,7 @@ except Exception:
 from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
 from core.dedup import deduplicator
 from core.detector import PoseCandidate, detect_players
-from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError
+from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError, VideoExpiredError
 from core.jobs import STAGES, register_job_input, update_job, transition_job, fail_job
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.renderer import render_video
@@ -660,6 +660,8 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         )
     except EngineError as exc:
         fail_job(job_id, exc)
+    except FileNotFoundError:
+        fail_job(job_id, VideoExpiredError())
     except Exception:
         fail_job(job_id, EngineError(
             code="INTERNAL_ERROR",
