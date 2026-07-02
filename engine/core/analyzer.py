@@ -22,6 +22,7 @@ except Exception:
     genai_types = None
 
 from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
+from core.dedup import deduplicator
 from core.detector import PoseCandidate, detect_players
 from core.errors import EngineError, GeminiParseError, GeminiQuotaError, NoPlayersDetectedError, VideoDecodeError
 from core.jobs import STAGES, register_job_input, update_job, transition_job, fail_job
@@ -531,6 +532,27 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             update_job(job_id, summary=cached_result)
             transition_job(job_id, "completed")
             return
+
+        # Deduplication: check if same video is being analyzed
+        dedup_key = f"{video_hash}:{player_index}"
+        if dedup_key in deduplicator.pending:
+            print(f"[Analyzer] Deduplication: waiting for existing analysis of {video_hash}")
+            # Wait for the existing analysis to complete
+            try:
+                existing_result = asyncio.run(deduplicator.get_or_create(
+                    dedup_key,
+                    lambda: asyncio.sleep(0)  # No-op, just wait
+                ))
+                if existing_result is not None:
+                    # Analysis completed while we were waiting
+                    cached_result = get_cached_analysis(video_hash, player_index)
+                    if cached_result is not None:
+                        transition_job(job_id, "analyzing")
+                        update_job(job_id, summary=cached_result)
+                        transition_job(job_id, "completed")
+                        return
+            except Exception:
+                pass  # Continue with new analysis if dedup fails
 
         # State: scanning (extracting frames and detecting players)
         transition_job(job_id, "scanning")
