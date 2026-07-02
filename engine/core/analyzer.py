@@ -552,11 +552,23 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
         video_hash = compute_video_hash(local_path)
         cached_result = get_cached_analysis(video_hash, player_index)
         if cached_result is not None:
-            print(f"[Analyzer] Cache hit for video hash {video_hash}")
+            logging.info(json.dumps({
+                "type": "cache_hit",
+                "video_hash": video_hash,
+                "player_index": player_index,
+                "job_id": job_id,
+            }))
             transition_job(job_id, "analyzing")
             update_job(job_id, summary=cached_result)
             transition_job(job_id, "completed")
             return
+
+        logging.info(json.dumps({
+            "type": "cache_miss",
+            "video_hash": video_hash,
+            "player_index": player_index,
+            "job_id": job_id,
+        }))
 
         # Deduplication: check if same video is being analyzed
         dedup_key = f"{video_hash}:{player_index}"
@@ -633,6 +645,15 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
 
         # Cache the result
         set_cached_analysis(video_hash, gemini_result, player_index)
+
+        logging.info(json.dumps({
+            "type": "analysis_complete",
+            "video_hash": video_hash,
+            "player_index": player_index,
+            "job_id": job_id,
+            "form_score": gemini_result.get("form_score"),
+            "frames_analyzed": len(best_for_gemini),
+        }))
 
         # Store analysis result
         update_job(job_id, summary=gemini_result)
