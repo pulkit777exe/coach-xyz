@@ -103,7 +103,10 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       canvas.height = window.innerHeight
     }
 
+    let frameCount = 0
     function drawGrain() {
+      frameCount++
+      if (frameCount % 3 !== 0) return // Only redraw every 3rd frame for performance
       const w = canvas.width
       const h = canvas.height
       const imageData = ctx!.createImageData(w, h)
@@ -155,17 +158,18 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       ease: 'power2.out',
     })
 
-    // Scroll-triggered sections
+    // Scroll-triggered sections — use set() to ensure initial state, then animate
     const sections = gsap.utils.toArray('.scroll-section')
     sections.forEach((section: any) => {
-      gsap.from(section, {
+      gsap.set(section, { opacity: 0, y: 40 })
+      gsap.to(section, {
         scrollTrigger: {
           trigger: section,
-          start: 'top 80%',
+          start: 'top 85%',
         },
-        y: 50,
-        opacity: 0,
-        duration: 1,
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
         ease: 'power2.out',
       })
     })
@@ -173,15 +177,16 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
     // Workflow steps
     const steps = gsap.utils.toArray('.workflow-step')
     steps.forEach((step: any, i: number) => {
-      gsap.from(step, {
+      gsap.set(step, { opacity: 0, x: -20 })
+      gsap.to(step, {
         scrollTrigger: {
           trigger: step,
-          start: 'top 85%',
+          start: 'top 90%',
         },
-        x: -30,
-        opacity: 0,
-        duration: 0.8,
-        delay: i * 0.1,
+        opacity: 1,
+        x: 0,
+        duration: 0.6,
+        delay: i * 0.08,
         ease: 'power2.out',
       })
     })
@@ -189,28 +194,18 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
     // Feature cards
     const cards = gsap.utils.toArray('.feature-card')
     cards.forEach((card: any, i: number) => {
-      gsap.from(card, {
+      gsap.set(card, { opacity: 0, y: 30 })
+      gsap.to(card, {
         scrollTrigger: {
           trigger: card,
-          start: 'top 85%',
+          start: 'top 90%',
         },
-        y: 40,
-        opacity: 0,
-        duration: 0.8,
-        delay: i * 0.15,
+        opacity: 1,
+        y: 0,
+        duration: 0.6,
+        delay: i * 0.1,
         ease: 'power2.out',
       })
-    })
-
-    // Marquee fade on scroll
-    gsap.to('.marquee-section', {
-      scrollTrigger: {
-        trigger: '.marquee-section',
-        start: 'top 90%',
-        end: 'bottom 10%',
-        scrub: true,
-      },
-      opacity: 1,
     })
   }, { scope: containerRef })
 
@@ -231,7 +226,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--cream-05)] bg-[var(--bg)]/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-screen items-center justify-between px-6 lg:px-12">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-12">
           <a href="#" className="flex items-center gap-3">
             <span className="font-serif text-xl text-[var(--fg)]">coach.xyz</span>
           </a>
@@ -256,21 +251,21 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex flex-col justify-end px-6 pb-16 pt-32 lg:px-12 lg:pb-24">
-        <div className="mx-auto w-full max-w-[1400px]">
+      <section className="relative flex min-h-[85vh] flex-col justify-end px-6 pb-16 pt-32 lg:px-12 lg:pb-24">
+        <div className="mx-auto w-full max-w-7xl">
           <p className="hero-line mb-6 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
             AI-Powered Sports Video Analysis
           </p>
 
-          <h1 className="hero-line font-serif text-[clamp(3rem,10vw,9rem)] leading-[0.9] tracking-[-0.03em] text-[var(--fg)]">
+          <h1 className="hero-line font-serif text-[clamp(2.5rem,8vw,7rem)] leading-[0.9] tracking-[-0.03em] text-[var(--fg)]">
             Coach smarter.
           </h1>
-          <h1 className="hero-line font-serif text-[clamp(3rem,10vw,9rem)] leading-[0.9] tracking-[-0.03em] text-[var(--fg)] italic">
+          <h1 className="hero-line font-serif text-[clamp(2.5rem,8vw,7rem)] leading-[0.9] tracking-[-0.03em] text-[var(--fg)] italic">
             Review faster.
           </h1>
 
-          <div className="hero-line mt-10 max-w-xl">
-            <p className="text-[0.8rem] leading-relaxed text-[var(--cream-40)]">
+          <div className="hero-line mt-8 max-w-xl">
+            <p className="text-sm leading-relaxed text-[var(--cream-40)]">
               Upload training footage. Get timestamped form scores, correction cues, and annotated video — in under 60 seconds.
             </p>
           </div>
@@ -291,7 +286,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           </div>
 
           {/* Stats */}
-          <div className="hero-line mt-20 flex gap-12 border-t border-[var(--cream-10)] pt-8">
+          <div className="hero-line mt-16 flex gap-12 border-t border-[var(--cream-10)] pt-8">
             {stats.map((stat) => (
               <div key={stat.label} className="stat-item">
                 <p className="font-serif text-3xl text-[var(--fg)]">{stat.value}</p>
@@ -303,7 +298,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Marquee ────────────────────────────────────────────────────────── */}
-      <section className="marquee-section border-y border-[var(--cream-05)] py-5">
+      <section className="border-y border-[var(--cream-05)] py-5">
         <div className="marquee-track">
           <span className="marquee-item">Basketball</span>
           <span className="marquee-item">•</span>
@@ -342,18 +337,18 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Upload Section ─────────────────────────────────────────────────── */}
-      <section id="analyze" className="scroll-section px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[1400px]">
-          <div className="grid gap-16 lg:grid-cols-[1fr_1.2fr]">
+      <section id="analyze" className="scroll-section px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
             {/* Left — Info */}
             <div>
               <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
                 Get started
               </p>
-              <h2 className="font-serif text-[clamp(2.5rem,5vw,4.5rem)] leading-[1] tracking-[-0.02em]">
+              <h2 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em]">
                 Upload your<br />training clip
               </h2>
-              <p className="mt-6 max-w-md text-[0.8rem] leading-relaxed text-[var(--cream-40)]">
+              <p className="mt-6 max-w-md text-sm leading-relaxed text-[var(--cream-40)]">
                 Drop in basketball, football, or cricket footage. The system auto-validates format and detects players before analysis begins.
               </p>
 
@@ -394,7 +389,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 setIsDragging(false)
                 selectFile(e.dataTransfer.files[0])
               }}
-              className={`relative flex min-h-[400px] flex-col items-center justify-center border transition-all duration-500 ${
+              className={`relative flex min-h-[360px] flex-col items-center justify-center border transition-all duration-500 ${
                 isDragging
                   ? 'border-[var(--fg)] bg-[var(--cream-05)]'
                   : 'border-[var(--cream-10)] bg-transparent hover:border-[var(--cream-20)]'
@@ -419,7 +414,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               </svg>
 
               {fileName ? (
-                <p className="text-[0.75rem] text-[var(--fg)]">{fileName}</p>
+                <p className="text-sm text-[var(--fg)]">{fileName}</p>
               ) : (
                 <>
                   <p className="font-serif text-xl text-[var(--fg)]">Drop your video here</p>
@@ -445,26 +440,26 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Workflow ───────────────────────────────────────────────────────── */}
-      <section id="workflow" className="scroll-section border-t border-[var(--cream-05)] px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[1400px]">
+      <section id="workflow" className="scroll-section border-t border-[var(--cream-05)] px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-7xl">
           <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
             How it works
           </p>
-          <h2 className="font-serif text-[clamp(2.5rem,5vw,4.5rem)] leading-[1] tracking-[-0.02em]">
+          <h2 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em]">
             From upload to<br />coaching report
           </h2>
 
-          <div className="mt-20 grid gap-0 lg:grid-cols-4">
+          <div className="mt-16 grid grid-cols-1 gap-0 sm:grid-cols-2 lg:grid-cols-4">
             {workflow.map((item, i) => (
               <div
                 key={item.step}
-                className={`workflow-step border-t border-[var(--cream-10)] py-10 ${
+                className={`workflow-step border-t border-[var(--cream-10)] py-8 ${
                   i < 3 ? 'lg:border-r lg:border-[var(--cream-10)]' : ''
-                }`}
+                } ${i < 2 ? 'sm:border-r sm:border-[var(--cream-10)]' : ''}`}
               >
                 <p className="mb-4 font-serif text-4xl text-[var(--cream-20)]">{item.step}</p>
                 <h3 className="font-serif text-2xl">{item.title}</h3>
-                <p className="mt-3 max-w-[280px] text-[0.75rem] leading-relaxed text-[var(--cream-40)]">
+                <p className="mt-3 max-w-[280px] text-sm leading-relaxed text-[var(--cream-40)]">
                   {item.description}
                 </p>
               </div>
@@ -474,26 +469,26 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Features ───────────────────────────────────────────────────────── */}
-      <section id="features" className="scroll-section border-t border-[var(--cream-05)] px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[1400px]">
+      <section id="features" className="scroll-section border-t border-[var(--cream-05)] px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-7xl">
           <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
             Capabilities
           </p>
-          <h2 className="font-serif text-[clamp(2.5rem,5vw,4.5rem)] leading-[1] tracking-[-0.02em]">
+          <h2 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em]">
             Built for practical<br />coaching sessions
           </h2>
 
-          <div className="mt-20 grid gap-px bg-[var(--cream-05)] lg:grid-cols-3">
+          <div className="mt-16 grid grid-cols-1 gap-px bg-[var(--cream-05)] sm:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
               <div
                 key={feature.eyebrow}
-                className="feature-card bg-[var(--bg)] p-10 transition-colors hover:bg-[var(--cream-03)]"
+                className="feature-card bg-[var(--bg)] p-8 transition-colors hover:bg-[var(--cream-03)]"
               >
-                <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
+                <p className="mb-4 text-[0.6rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
                   {feature.eyebrow}
                 </p>
                 <h3 className="font-serif text-2xl">{feature.title}</h3>
-                <p className="mt-4 text-[0.75rem] leading-relaxed text-[var(--cream-40)]">
+                <p className="mt-3 text-sm leading-relaxed text-[var(--cream-40)]">
                   {feature.description}
                 </p>
               </div>
@@ -503,14 +498,14 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Sports ─────────────────────────────────────────────────────────── */}
-      <section className="scroll-section border-t border-[var(--cream-05)] px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[1400px]">
-          <div className="grid gap-16 lg:grid-cols-[1fr_1.5fr]">
+      <section className="scroll-section border-t border-[var(--cream-05)] px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-[1fr_1.5fr]">
             <div>
               <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
                 Multi-sport
               </p>
-              <h2 className="font-serif text-[clamp(2.5rem,5vw,4.5rem)] leading-[1] tracking-[-0.02em]">
+              <h2 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em]">
                 One platform,<br />three sports
               </h2>
             </div>
@@ -519,7 +514,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               {sports.map((sport, i) => (
                 <div
                   key={sport.name}
-                  className={`flex items-baseline justify-between border-t border-[var(--cream-10)] py-8 ${
+                  className={`flex flex-col gap-2 border-t border-[var(--cream-10)] py-6 sm:flex-row sm:items-baseline sm:justify-between ${
                     i === sports.length - 1 ? 'border-b' : ''
                   }`}
                 >
@@ -535,28 +530,28 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Testimonial ────────────────────────────────────────────────────── */}
-      <section className="scroll-section border-t border-[var(--cream-05)] px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[900px] text-center">
+      <section className="scroll-section border-t border-[var(--cream-05)] px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-3xl text-center">
           <svg className="mx-auto mb-8 h-8 w-8 text-[var(--cream-20)]" viewBox="0 0 24 24" fill="currentColor">
             <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
           </svg>
-          <p className="font-serif text-[clamp(1.5rem,3vw,2.5rem)] leading-snug italic">
-            "CoachXYZ cut our review time in half. Players now receive precise fixes the same day instead of waiting for manual notes."
+          <p className="font-serif text-[clamp(1.25rem,2.5vw,2rem)] leading-snug italic">
+            &ldquo;CoachXYZ cut our review time in half. Players now receive precise fixes the same day instead of waiting for manual notes.&rdquo;
           </p>
           <div className="mt-8">
-            <p className="text-[0.75rem] text-[var(--fg)]">David R.</p>
+            <p className="text-sm text-[var(--fg)]">David R.</p>
             <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-[var(--cream-40)]">Performance Coach</p>
           </div>
         </div>
       </section>
 
       {/* ── FAQ ────────────────────────────────────────────────────────────── */}
-      <section id="faq" className="scroll-section border-t border-[var(--cream-05)] px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[900px]">
+      <section id="faq" className="scroll-section border-t border-[var(--cream-05)] px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-3xl">
           <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
             FAQ
           </p>
-          <h2 className="mb-16 font-serif text-[clamp(2.5rem,5vw,4.5rem)] leading-[1] tracking-[-0.02em]">
+          <h2 className="mb-12 font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em]">
             Questions coaches<br />ask first
           </h2>
 
@@ -564,12 +559,12 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             {faqs.map((faq) => (
               <details
                 key={faq.q}
-                className="group border-t border-[var(--cream-10)] py-6"
+                className="group border-t border-[var(--cream-10)] py-5"
               >
-                <summary className="flex cursor-pointer items-center justify-between text-[0.8rem] text-[var(--fg)] transition-colors group-open:text-[var(--cream-40)]">
+                <summary className="flex cursor-pointer items-center justify-between text-sm text-[var(--fg)] transition-colors group-open:text-[var(--cream-40)]">
                   {faq.q}
                   <svg
-                    className="h-4 w-4 text-[var(--cream-40)] transition-transform group-open:rotate-180"
+                    className="h-4 w-4 shrink-0 text-[var(--cream-40)] transition-transform group-open:rotate-180"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -577,7 +572,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
                   </svg>
                 </summary>
-                <p className="mt-4 text-[0.75rem] leading-relaxed text-[var(--cream-40)]">
+                <p className="mt-3 text-sm leading-relaxed text-[var(--cream-40)]">
                   {faq.a}
                 </p>
               </details>
@@ -588,12 +583,12 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── CTA ────────────────────────────────────────────────────────────── */}
-      <section className="scroll-section px-6 py-32 lg:px-12">
-        <div className="mx-auto max-w-[1400px] border border-[var(--cream-10)] px-6 py-24 text-center lg:px-24">
-          <h2 className="font-serif text-[clamp(2.5rem,6vw,5rem)] leading-[1] tracking-[-0.02em]">
+      <section className="scroll-section px-6 py-24 lg:px-12">
+        <div className="mx-auto max-w-7xl border border-[var(--cream-10)] px-6 py-20 text-center lg:px-24">
+          <h2 className="font-serif text-[clamp(2rem,5vw,4rem)] leading-[1] tracking-[-0.02em]">
             Build stronger athletes<br />with faster review loops
           </h2>
-          <p className="mx-auto mt-6 max-w-lg text-[0.8rem] text-[var(--cream-40)]">
+          <p className="mx-auto mt-6 max-w-lg text-sm text-[var(--cream-40)]">
             Upload the next training clip and generate a complete coaching report before the session ends.
           </p>
           <a
@@ -607,11 +602,11 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-[var(--cream-05)] px-6 py-16 lg:px-12">
-        <div className="mx-auto max-w-[1400px]">
+        <div className="mx-auto max-w-7xl">
           <div className="flex flex-col justify-between gap-12 md:flex-row">
             <div>
               <p className="font-serif text-lg">coach.xyz</p>
-              <p className="mt-3 max-w-sm text-[0.7rem] leading-relaxed text-[var(--cream-40)]">
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--cream-40)]">
                 AI-powered sports video analysis for coaches who want faster feedback and measurable athlete progress.
               </p>
             </div>
@@ -619,17 +614,17 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <div>
                 <p className="mb-4 text-[0.6rem] uppercase tracking-[0.2em] text-[var(--fg)]">Platform</p>
                 <div className="space-y-3">
-                  <a href="#workflow" className="block text-[0.7rem] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">Workflow</a>
-                  <a href="#features" className="block text-[0.7rem] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">Features</a>
-                  <a href="#faq" className="block text-[0.7rem] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">FAQ</a>
+                  <a href="#workflow" className="block text-sm text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">Workflow</a>
+                  <a href="#features" className="block text-sm text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">Features</a>
+                  <a href="#faq" className="block text-sm text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">FAQ</a>
                 </div>
               </div>
               <div>
                 <p className="mb-4 text-[0.6rem] uppercase tracking-[0.2em] text-[var(--fg)]">Sports</p>
                 <div className="space-y-3">
-                  <p className="text-[0.7rem] text-[var(--cream-40)]">Basketball</p>
-                  <p className="text-[0.7rem] text-[var(--cream-40)]">Football</p>
-                  <p className="text-[0.7rem] text-[var(--cream-40)]">Cricket</p>
+                  <p className="text-sm text-[var(--cream-40)]">Basketball</p>
+                  <p className="text-sm text-[var(--cream-40)]">Football</p>
+                  <p className="text-sm text-[var(--cream-40)]">Cricket</p>
                 </div>
               </div>
             </div>
