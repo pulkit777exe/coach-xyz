@@ -8,3 +8,4 @@ mediapipe==0.10.35
 upstash-redis==1.7.0
 orjson==3.11.9
 httpx==0.28.1
+sentry-sdk==2.20.0

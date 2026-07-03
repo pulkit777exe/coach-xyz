@@ -55,7 +55,14 @@ function createRedisClient() {
       // Atomic rate limit increment
       async rateLimitIncrement(key: string, limit: number, windowSec: number): Promise<{ allowed: boolean; current: number; reset: number }> {
         try {
-          const result = await ioredis.eval(RATE_LIMIT_LUA, [key], [String(limit), String(windowSec), String(Math.floor(Date.now() / 1000))]) as number[][]
+          const result = await ioredis.eval(
+            RATE_LIMIT_LUA,
+            1,
+            key,
+            String(limit),
+            String(windowSec),
+            String(Math.floor(Date.now() / 1000))
+          ) as number[][]
           const [current, resetUnix, remaining] = result[0]
           return {
             allowed: current <= limit,

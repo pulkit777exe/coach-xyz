@@ -1,7 +1,9 @@
+// IMPORTANT: Import instrument.ts first (before anything else)
+import "./instrument"
+
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { swagger } from "@elysiajs/swagger"
-
 
 // Start BullMQ worker as a side effect on import
 import "./lib/queue"
