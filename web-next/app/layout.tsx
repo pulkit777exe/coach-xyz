@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SentryProvider } from "./sentry-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,7 +24,9 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <SentryProvider>{children}</SentryProvider>
+      </body>
     </html>
   );
 }
