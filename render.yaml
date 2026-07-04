@@ -45,11 +45,15 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
-      - key: UPSTASH_REDIS_IOREDIS_URL
-        sync: false
       - key: DATABASE_URL
         sync: false
       - key: BETA_CODES
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
         sync: false
       - key: WORKER_CONCURRENCY
         value: "1"

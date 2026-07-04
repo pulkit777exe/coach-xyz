@@ -1,11 +1,9 @@
-// IMPORTANT: Import instrument.ts first (before anything else)
 import "./instrument"
 
 import { Elysia } from "elysia"
 import { cors } from "@elysiajs/cors"
 import { swagger } from "@elysiajs/swagger"
 
-// Start BullMQ worker as a side effect on import
 import "./lib/queue"
 
 import scanRoute from "./routes/scan"
@@ -97,6 +95,7 @@ const app = new Elysia({
   .use(analyzeRoute)
   .use(statusRoute)
   .use(downloadRoute)
+
   // ── Global Error Handler ─────────────────────────────────────────────────
   .onError(({ error, set, request }) => {
     const e = error as any

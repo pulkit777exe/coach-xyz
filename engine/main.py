@@ -24,7 +24,8 @@ import sentry_sdk
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
     send_default_pii=True,
-    default_integrations=False,
+    release="coachai-engine@0.2.0",
+    environment=os.environ.get("ENVIRONMENT", "development"),
 )
 
 # Chunk size for streaming uploads (8MB)

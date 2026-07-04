@@ -1,19 +1,41 @@
 import { Queue, Worker, QueueEvents } from "bullmq"
-import IORedis from "ioredis"
 import { markJobFailed } from "./jobs"
 import { shutdownHistoryStore } from "./supabaseHistory"
 
-const ioredisUrl = process.env.UPSTASH_REDIS_IOREDIS_URL
-const redisAvailable = !!ioredisUrl
+// Derive Redis protocol URL from Upstash REST URL and token
+// REST URL format: https://<endpoint>.upstash.io
+// Redis protocol format: rediss://default:<token>@<endpoint>.upstash.io:6379
+function getRedisConnection() {
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN
 
-let connection: IORedis | null = null
-if (redisAvailable) {
-  const useTls = ioredisUrl!.startsWith("rediss://")
-  connection = new IORedis(
-    ioredisUrl!,
-    { maxRetriesPerRequest: null, ...(useTls ? { tls: {} } : {}) },
-  )
+  if (!restUrl || !token) return null
+
+  // Extract endpoint from REST URL
+  const urlObj = new URL(restUrl)
+  const host = urlObj.host // e.g., "neutral-urchin-104723.upstash.io"
+
+  // Construct Redis protocol URL with TLS
+  const redisUrl = `rediss://default:${token}@${host}:6379`
+
+  // Dynamically import ioredis to avoid crash when not needed
+  try {
+    const IORedis = require("ioredis")
+    return new IORedis(redisUrl, {
+      maxRetriesPerRequest: null,
+      tls: {},
+      // Upstash recommended settings for serverless
+      enableReadyCheck: false,
+      lazyConnect: true,
+    })
+  } catch {
+    console.error(JSON.stringify({ type: "queue_unavailable", message: "ioredis not available, queue disabled" }))
+    return null
+  }
 }
+
+const connection = getRedisConnection()
+const redisAvailable = !!connection
 
 export const analysisQueue = redisAvailable
   ? new Queue("coachai-analysis", {
