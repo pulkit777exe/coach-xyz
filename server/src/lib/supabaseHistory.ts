@@ -1,12 +1,7 @@
 import { SQL } from "bun"
 
-import type { JobStatus, Player } from "../types"
-
-type RequestMeta = {
-  betaCode: string | null
-  clientIp: string | null
-  userAgent: string | null
-}
+import type { Player } from "../types"
+import type { RequestMeta } from "./requestMeta"
 
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
@@ -32,7 +27,17 @@ type AnalysisStatusRecord = {
   sessionToken: string | null
   playerIndex: number | null
   model: string
-  status: JobStatus
+  status: {
+    stage: number
+    stage_name: string
+    progress: number
+    complete: boolean
+    video_ready: boolean
+    summary: unknown
+    error: string | null
+    error_code: string | null
+    retryable: boolean
+  }
 }
 
 const databaseUrl = (process.env.DATABASE_URL ?? "").trim()
@@ -80,8 +85,9 @@ const ensureInitialized = async () => {
 
   if (!initPromise) {
     initPromise = (async () => {
-      await sql.connect()
-      await sql`
+      try {
+        await sql.connect()
+        await sql`
         create table if not exists video_conversations (
           session_token text primary key,
           file_name text not null,
@@ -151,6 +157,11 @@ const ensureInitialized = async () => {
         create index if not exists idx_analysis_history_beta_code
         on analysis_history (beta_code);
       `
+      } catch (err) {
+        // Reset so next call retries initialization
+        initPromise = null
+        throw err
+      }
     })()
   }
 
@@ -260,7 +271,7 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
   const summaryJson = record.status.summary
     ? JSON.stringify(record.status.summary)
     : null
-  const errorCode = record.status.error ? "ANALYSIS_FAILED" : null
+  const errorCode = record.status.error_code ?? (record.status.error ? "ANALYSIS_FAILED" : null)
   const completedAt = record.status.complete ? new Date().toISOString() : null
 
   await withHistoryStore(async (db) => {

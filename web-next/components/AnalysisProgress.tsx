@@ -167,7 +167,10 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
                         ? 'bg-zinc-800 text-teal-500 border border-teal-900'
                         : 'bg-zinc-900/50 text-zinc-600 border border-zinc-800'
                   }`}>
-                    {isCompleted ? '✓' : stage.icon}
+                    <span className="t-icon-swap" data-state={isCompleted ? 'b' : 'a'}>
+                      <span className="t-icon" data-icon="a">{stage.icon}</span>
+                      <span className="t-icon" data-icon="b">✓</span>
+                    </span>
                   </div>
                   <span className={`text-sm tracking-wide ${
                     isActive ? 'text-teal-300 font-semibold' :

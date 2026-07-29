@@ -1,4 +1,5 @@
 import { redis } from "./redis"
+import { readRequestMeta } from "./requestMeta"
 
 // Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
@@ -9,10 +10,25 @@ interface RateLimitResult {
   reset: number
 }
 
-// Simple in-memory rate limit fallback
+// Simple in-memory rate limit fallback with eviction
 const memoryLimits = new Map<string, { count: number; resetAt: number }>()
+const MEMORY_LIMIT_MAX_ENTRIES = 10000
+
+function evictExpiredMemoryLimits(): void {
+  const now = Date.now()
+  for (const [key, entry] of memoryLimits) {
+    if (now > entry.resetAt) memoryLimits.delete(key)
+  }
+  if (memoryLimits.size > MEMORY_LIMIT_MAX_ENTRIES) {
+    const entries = [...memoryLimits.entries()]
+      .sort((a, b) => a[1].resetAt - b[1].resetAt)
+    const toRemove = entries.slice(0, entries.length - MEMORY_LIMIT_MAX_ENTRIES / 2)
+    for (const [key] of toRemove) memoryLimits.delete(key)
+  }
+}
 
 function memoryLimit(key: string, limit: number, windowMs: number): RateLimitResult {
+  evictExpiredMemoryLimits()
   const now = Date.now()
   const entry = memoryLimits.get(key)
   if (!entry || now > entry.resetAt) {
@@ -26,12 +42,15 @@ function memoryLimit(key: string, limit: number, windowMs: number): RateLimitRes
   return { allowed: true, remaining: limit - entry.count, reset: entry.resetAt }
 }
 
-export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
-  try {
-    const key = `rl:scan:${ip}`
-    const limit = 10
-    const windowSec = 60
+interface RateLimitConfig {
+  key: string
+  limit: number
+  windowSec: number
+}
 
+export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResult> {
+  const { key, limit, windowSec } = config
+  try {
     // Try atomic increment first
     if (redis.rateLimitIncrement) {
       const result = await redis.rateLimitIncrement(key, limit, windowSec)
@@ -43,113 +62,41 @@ export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
     }
 
     // Fallback to non-atomic (Upstash REST)
-    const now = Date.now()
-    const raw = await redis.get(key)
-    if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
-      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
+    // Use INCR + EXPIRE for atomicity instead of GET/SET
+    const count = await redis.incr(key)
+    if (count === 1) {
+      // First request in this window — set expiry
+      await redis.expire(key, windowSec)
     }
+    const reset = Date.now() + windowSec * 1000
 
-    const data = typeof raw === "string" ? JSON.parse(raw) : raw
-    data.count++
-    await redis.set(key, JSON.stringify(data), { ex: windowSec })
-
-    if (data.count > limit) {
-      return { allowed: false, remaining: 0, reset: data.resetAt }
+    if (count > limit) {
+      return { allowed: false, remaining: 0, reset }
     }
-    return { allowed: true, remaining: limit - data.count, reset: data.resetAt }
+    return { allowed: true, remaining: limit - count, reset }
   } catch {
-    // Redis down: fail open
-    return memoryLimit(`scan:${ip}`, 10, 60_000)
+    return memoryLimit(key, limit, windowSec * 1000)
   }
+}
+
+export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
+  return checkLimit({ key: `rl:scan:${ip}`, limit: 10, windowSec: 60 })
 }
 
 export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
-  try {
-    const key = `rl:analysis:${ip}`
-    const limit = 5
-    const windowSec = 3600
-
-    // Try atomic increment first
-    if (redis.rateLimitIncrement) {
-      const result = await redis.rateLimitIncrement(key, limit, windowSec)
-      return {
-        allowed: result.allowed,
-        remaining: Math.max(0, limit - result.current),
-        reset: result.reset,
-      }
-    }
-
-    // Fallback to non-atomic (Upstash REST)
-    const now = Date.now()
-    const raw = await redis.get(key)
-    if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
-      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
-    }
-
-    const data = typeof raw === "string" ? JSON.parse(raw) : raw
-    data.count++
-    await redis.set(key, JSON.stringify(data), { ex: windowSec })
-
-    if (data.count > limit) {
-      return { allowed: false, remaining: 0, reset: data.resetAt }
-    }
-    return { allowed: true, remaining: limit - data.count, reset: data.resetAt }
-  } catch {
-    // Redis down: fail open
-    return memoryLimit(`analysis:${ip}`, 5, 3600_000)
-  }
+  return checkLimit({ key: `rl:analysis:${ip}`, limit: 5, windowSec: 3600 })
 }
 
 export async function checkBetaCodeLimit(betaCode: string): Promise<RateLimitResult> {
-  // Per-beta-code rate limit: 20 analyses per hour per code
-  // Prevents IP-hopping when a code is shared/leaked
-  try {
-    const key = `rl:beta:${betaCode}`
-    const limit = 20
-    const windowSec = 3600
-
-    // Try atomic increment first
-    if (redis.rateLimitIncrement) {
-      const result = await redis.rateLimitIncrement(key, limit, windowSec)
-      return {
-        allowed: result.allowed,
-        remaining: Math.max(0, limit - result.current),
-        reset: result.reset,
-      }
-    }
-
-    // Fallback to non-atomic (Upstash REST)
-    const now = Date.now()
-    const raw = await redis.get(key)
-    if (!raw || now > (raw as any).resetAt) {
-      await redis.set(key, JSON.stringify({ count: 1, resetAt: now + windowSec * 1000 }), { ex: windowSec })
-      return { allowed: true, remaining: limit - 1, reset: now + windowSec * 1000 }
-    }
-
-    const data = typeof raw === "string" ? JSON.parse(raw) : raw
-    data.count++
-    await redis.set(key, JSON.stringify(data), { ex: windowSec })
-
-    if (data.count > limit) {
-      return { allowed: false, remaining: 0, reset: data.resetAt }
-    }
-    return { allowed: true, remaining: limit - data.count, reset: data.resetAt }
-  } catch {
-    // Redis down: fail open
-    return memoryLimit(`beta:${betaCode}`, 20, 3600_000)
-  }
+  return checkLimit({ key: `rl:beta:${betaCode}`, limit: 20, windowSec: 3600 })
 }
 
 export function getIP(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    request.headers.get("x-real-ip") ??
-    "anonymous"
-  )
+  const meta = readRequestMeta(request)
+  return meta.clientIp ?? "anonymous"
 }
 
 export function getBetaCode(request: Request): string | null {
-  return request.headers.get("x-beta-code")?.trim().toLowerCase() ?? null
+  const meta = readRequestMeta(request)
+  return meta.betaCode
 }

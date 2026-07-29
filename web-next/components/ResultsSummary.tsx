@@ -27,10 +27,11 @@ const SPORT_EMOJI: Record<string, string> = {
 }
 
 export default function ResultsSummary({ status, jobId, onReset }: ResultsSummaryProps) {
-  const summary = status.summary!
+  const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
 
   useGSAP(() => {
+    if (!summary) return
     gsap.from('.gsap-item', {
       y: 30,
       opacity: 0,
@@ -39,6 +40,15 @@ export default function ResultsSummary({ status, jobId, onReset }: ResultsSummar
       ease: 'power3.out'
     })
   }, { scope: containerRef })
+  
+  if (!summary) {
+    return (
+      <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center">
+        <p className="text-white">No analysis summary available.</p>
+        <Button onClick={onReset} className="mt-4">Try again</Button>
+      </div>
+    )
+  }
   
   const formScoreColor = summary.form_score >= 8 ? 'text-teal-400 drop-shadow-[0_0_12px_rgba(45,212,191,0.5)]' :
     summary.form_score >= 5 ? 'text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.5)]' : 'text-red-400 drop-shadow-[0_0_12px_rgba(248,113,113,0.5)]'

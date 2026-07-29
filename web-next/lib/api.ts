@@ -1,18 +1,13 @@
-import type { ScanResult, JobStatus } from '@/types'
+import type { ScanResult, JobStatus, CoachAIError } from '@/types'
 import { clearBetaCode, getBetaCode } from './betaCode'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
-// ── Error Type ───────────────────────────────────────────────────────────────
-// All errors from the API follow this shape.
-
-export interface CoachAIError {
-  code: string
-  message: string
-  layer: 'engine' | 'server' | 'client'
-  retryable: boolean
-  retry_after?: number
+if (!BASE) {
+  console.error('Missing NEXT_PUBLIC_API_URL environment variable. API calls will fail.')
 }
+
+export type { CoachAIError }
 
 // ── API Client ───────────────────────────────────────────────────────────────
 
@@ -23,9 +18,10 @@ async function apiFetch<T>(
 ): Promise<T> {
   const code = getBetaCode()
   const headers: Record<string, string> = {
-    ...(code ? { 'x-beta-code': code } : {}),
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string> ?? {}),
+    // Beta code header last to prevent override
+    ...(code ? { 'x-beta-code': code } : {}),
   }
 
   let res: Response
@@ -117,7 +113,15 @@ export async function startAnalysis(params: {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  return apiFetch<JobStatus>(`${BASE}/api/job-status/${jobId}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+  try {
+    return await apiFetch<JobStatus>(`${BASE}/api/job-status/${jobId}`, {
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export function getDownloadUrl(jobId: string): string {

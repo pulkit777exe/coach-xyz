@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 
-from core.analyzer import SportsAnalyzer, analyze
+from core.gemini import analyze_video
 from core.chunker import analyze_long_video, needs_chunking
 
 SUPPORTED_SPORTS = {"basketball", "football", "cricket"}
@@ -57,15 +57,10 @@ def _render_video(video_path: str, analysis_result: dict, output_path: str) -> N
     if sport not in SUPPORTED_SPORTS:
         return
 
-    sport_cfg = _load_sport_config(sport)
-    SportsAnalyzer(
-        sport_config=sport_cfg,
-        event_data=analysis_result,
-        process_video=video_path,
-        display_video=video_path,
-        output_path=output_path,
-        preview=False,
-    ).run()
+    # NOTE: Legacy render path — new pipeline uses core.renderer.render_video()
+    # This stub is kept for CLI backward compat. The analysis_result structure
+    # differs from what render_video expects (needs active_player_landmarks_per_frame).
+    print(f"[CLI] Rendering not available for sport '{sport}' — skipping.", file=sys.stderr)
 
 
 def main() -> None:
@@ -95,14 +90,14 @@ def main() -> None:
             raise ValueError(f"Invalid players payload: {exc}") from exc
 
     with contextlib.redirect_stdout(sys.stderr):
-        # Keep multi-player path in core.analyzer.analyze().
+        # Keep multi-player path in core.gemini.analyze_video().
         # For single-player / no players, reuse chunking behavior from CLI.
         if players:
-            result = analyze(
+            result = analyze_video(
                 video_path=args.video,
                 model_name=args.model,
                 strict=args.strict,
-                players=players,
+                player_focus=players[0] if len(players) == 1 else None,
             )
         else:
             should_chunk, _ = needs_chunking(args.video)
@@ -114,11 +109,10 @@ def main() -> None:
                     player_focus=None,
                 )
             else:
-                result = analyze(
+                result = analyze_video(
                     video_path=args.video,
                     model_name=args.model,
                     strict=args.strict,
-                    players=None,
                 )
 
         render_source, rendered_player_label = _pick_render_source(result, players)

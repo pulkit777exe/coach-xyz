@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
+import logging
 import os
-import sys
 import time
 import tempfile
 import subprocess
@@ -16,6 +18,8 @@ except ImportError:
     genai_errors = None
     genai_types = None
 
+from core.config import GEMINI_MODEL
+from core.errors import GeminiProcessingError, GeminiTimeoutError
 from core.prompt import get_system_prompt
 from core.validator import validate_analysis
 
@@ -83,11 +87,11 @@ def _maybe_prepare_analysis_proxy(video_path: str) -> tuple[str, str | None]:
         out_path,
     ]
     try:
-        subprocess.run(cmd, check=True)
-        print(f"[Gemini] Using analysis proxy: {out_path}")
+        subprocess.run(cmd, check=True, timeout=120)
+        logging.info(f"[Gemini] Using analysis proxy: {out_path}")
         return out_path, out_path
     except Exception as exc:
-        print(f"[Gemini] Proxy transcode failed ({exc}); falling back to original.")
+        logging.warning(f"[Gemini] Proxy transcode failed ({exc}); falling back to original.")
         try:
             os.remove(out_path)
         except Exception:
@@ -98,15 +102,11 @@ def _maybe_prepare_analysis_proxy(video_path: str) -> tuple[str, str | None]:
 def _ensure_genai():
     """Configure the SDK or exit with a helpful message."""
     if genai is None:
-        print('ERROR: google-genai package not installed.')
-        print('  Run:  pip install google-genai')
-        sys.exit(1)
+        raise RuntimeError('google-genai package not installed. Run: pip install google-genai')
 
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
-        print('ERROR: GEMINI_API_KEY environment variable is not set.')
-        print('  Export it:  export GEMINI_API_KEY="your-key-here"')
-        sys.exit(1)
+        raise RuntimeError('GEMINI_API_KEY environment variable is not set.')
 
     return genai.Client(api_key=api_key)
 
@@ -145,7 +145,7 @@ def _clean_analysis(result: dict) -> None:
 
 def analyze_video(
     video_path: str,
-    model_name: str = 'gemini-2.5-flash',
+    model_name: str = GEMINI_MODEL,
     strict: bool = False,
     player_focus: dict | None = None,
     chunk_info: dict | None = None,
@@ -169,26 +169,46 @@ def analyze_video(
     client = _ensure_genai()
 
     proxy_path, cleanup_path = _maybe_prepare_analysis_proxy(video_path)
+    try:
+        return _run_gemini_analysis(client, proxy_path, model_name, strict, player_focus, chunk_info)
+    finally:
+        if cleanup_path:
+            try:
+                os.remove(cleanup_path)
+            except Exception:
+                pass
+
+
+def _run_gemini_analysis(client, video_path, model_name, strict, player_focus, chunk_info):
+    """Internal: run the actual Gemini analysis on a video path."""
 
     # ── 1. Upload video ───────────────────────────────────────────────────
-    ext = os.path.splitext(proxy_path)[1].lower()
+    ext = os.path.splitext(video_path)[1].lower()
     mime_type = _MIME_TYPES.get(ext, 'video/mp4')
 
-    print(f'[Gemini] Uploading {proxy_path}  ({mime_type})')
-    video_file = client.files.upload(file=proxy_path, config={'mime_type': mime_type})
-    print(f'[Gemini] Upload complete — file: {video_file.name}')
+    logging.info(f'[Gemini] Uploading {video_path}  ({mime_type})')
+    video_file = client.files.upload(file=video_path, config={'mime_type': mime_type})
+    logging.info(f'[Gemini] Upload complete — file: {video_file.name}')
 
     # ── 2. Wait for processing ────────────────────────────────────────────
-    print('[Gemini] Waiting for video processing', end='', flush=True)
+    logging.info('[Gemini] Waiting for video processing')
+    max_wait_seconds = 600  # 10 minutes max
+    elapsed = 0
     while video_file.state.name == 'PROCESSING':
         time.sleep(5)
-        print('.', end='', flush=True)
+        elapsed += 5
+        if elapsed >= max_wait_seconds:
+            logging.error('[Gemini] TIMEOUT!')
+            raise GeminiTimeoutError(
+                f'Gemini video processing timed out after {max_wait_seconds}s. '
+                f'Final state: {video_file.state}'
+            )
         video_file = client.files.get(name=video_file.name)
-    print(' done.')
+    logging.info('[Gemini] Processing done.')
 
     if video_file.state.name == 'FAILED':
-        raise RuntimeError(
-            f'Gemini video processing failed.  State: {video_file.state}'
+        raise GeminiProcessingError(
+            f'Gemini video processing failed. State: {video_file.state}'
         )
 
     # ── 3. Generate analysis ──────────────────────────────────────────────
@@ -196,7 +216,7 @@ def analyze_video(
         player_focus=player_focus,
         chunk_info=chunk_info,
     )
-    print(f'[Gemini] Analyzing with model: {model_name}')
+    logging.info(f'[Gemini] Analyzing with model: {model_name}')
 
     response = client.models.generate_content(
         model=model_name,
@@ -208,12 +228,17 @@ def analyze_video(
     )
 
     # ── 4. Parse JSON ─────────────────────────────────────────────────────
-    raw_text = _clean_json_text(response.text)
+    raw_text = _clean_json_text(response.text or "")
     try:
         result = json.loads(raw_text)
     except json.JSONDecodeError as exc:
-        print(f'[Gemini] ERROR: Could not parse JSON response.\n{exc}')
-        print('[Gemini] Raw response:\n', raw_text[:2000])
+        logging.error(f'[Gemini] Could not parse JSON response: {exc}')
+        logging.debug(f'[Gemini] Raw response:\n{raw_text[:2000]}')
+        # Clean up remote file before raising
+        try:
+            client.files.delete(name=video_file.name)
+        except Exception:
+            pass
         raise
 
     # ── 4b. Strip N/A noise from form_breakdown ───────────────────────────
@@ -222,25 +247,23 @@ def analyze_video(
     # ── 5. Validate ───────────────────────────────────────────────────────
     warnings = validate_analysis(result)
     if warnings:
-        header = '[Gemini] Validation warnings:'
-        print(header)
+        logging.warning('[Gemini] Validation warnings:')
         for w in warnings:
-            print(f'  ⚠  {w}')
+            logging.warning(f'  ⚠  {w}')
         if strict:
+            # Clean up remote file before raising
+            try:
+                client.files.delete(name=video_file.name)
+            except Exception:
+                pass
             raise ValueError(f'{len(warnings)} validation error(s) — see above.')
 
     # ── 6. Clean up remote file ───────────────────────────────────────────
     try:
         client.files.delete(name=video_file.name)
-        print('[Gemini] Remote video file cleaned up.')
+        logging.info('[Gemini] Remote video file cleaned up.')
     except Exception:
         pass  # best-effort
 
-    if cleanup_path:
-        try:
-            os.remove(cleanup_path)
-        except Exception:
-            pass
-
-    print(f'[Gemini] Analysis complete — {len(result.get("shots", []))} events detected.')
+    logging.info(f'[Gemini] Analysis complete — {len(result.get("shots", []))} events detected.')
     return result

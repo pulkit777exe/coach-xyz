@@ -589,7 +589,7 @@ def _run_render(
     output: pathlib.Path | None,
     duration_s: float,
 ) -> pathlib.Path:
-    from core.analyzer import SportsAnalyzer
+    from core.renderer import render_video
 
     console.print(Rule("[accent]Step 3 / 3  ·  Overlay Render[/]", style="bright_blue"))
     console.print()
@@ -600,61 +600,12 @@ def _run_render(
         return None
 
     out = output or _downloads_dir() / f"{video_path.stem}_analyzed.mp4"
-    cfg = _sport_config(sport)
-    eta_min_s, eta_max_s = _estimate_render_eta_range(duration_s)
-    started_at = time.time()
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console   = console,
-        transient = False,
-    ) as prog:
-        task = prog.add_task(
-            _with_eta("Rendering overlay video…", started_at, eta_min_s, eta_max_s),
-            total=100,
-        )
-
-        result_box: list = [None]
-        error_box:  list = [None]
-
-        def worker():
-            try:
-                SportsAnalyzer(
-                    sport_config  = cfg,
-                    event_data    = result,
-                    process_video = str(video_path),
-                    display_video = str(video_path),
-                    output_path   = str(out),
-                    preview       = False,
-                ).run()
-                result_box[0] = True
-            except Exception as e:
-                error_box[0] = e
-
-        import threading
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-        pct = 0
-        while t.is_alive():
-            time.sleep(1)
-            pct = min(pct + 2, 95)
-            prog.update(
-                task,
-                completed=pct,
-                description=_with_eta("Rendering overlay video…", started_at, eta_min_s, eta_max_s),
-            )
-        t.join()
-        prog.update(task, completed=100, description="✅ Render complete!")
-
-    if error_box[0]:
-        console.print(f"\n[bad]✗  Render failed:[/] {error_box[0]}")
-        raise error_box[0]
-
-    return out
+    # NOTE: Legacy render path — new pipeline uses core.renderer.render_video()
+    # The CLI render requires active_player_landmarks_per_frame which is not
+    # available in this context. Skipping render.
+    console.print(f"[warn]⚠  Rendering requires tracking data — skipping.[/]\n")
+    return None
 
 
 # ── Results display ───────────────────────────────────────────────────────────

@@ -8,6 +8,6 @@ Sentry.init({
 
   enableLogs: true,
 
-  // Add request context
-  sendDefaultPii: true,
+  // Privacy: don't send PII by default
+  sendDefaultPii: false,
 });

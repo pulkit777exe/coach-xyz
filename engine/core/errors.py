@@ -48,7 +48,7 @@ class VideoDecodeError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="VIDEO_DECODE_FAILED",
-            message=detail or "Could not read this video. Please try MP4 or MOV format.",
+            message=detail or "Could not read this video. Try MP4 or MOV format.",
             retryable=True,
         )
 
@@ -59,7 +59,7 @@ class GeminiQuotaError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_QUOTA_EXCEEDED",
-            message=detail or "AI analysis quota reached. Please try again in a few minutes.",
+            message=detail or "AI quota reached. Try again in a few minutes.",
             retryable=True,
         )
 
@@ -68,7 +68,16 @@ class GeminiTimeoutError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_TIMEOUT",
-            message=detail or "AI analysis timed out. Try a shorter video clip.",
+            message=detail or "AI analysis timed out. Try a shorter video.",
+            retryable=True,
+        )
+
+
+class GeminiProcessingError(EngineError):
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            code="GEMINI_PROCESSING_FAILED",
+            message=detail or "AI video processing failed. Try again.",
             retryable=True,
         )
 
@@ -77,7 +86,7 @@ class GeminiParseError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="GEMINI_PARSE_FAILED",
-            message=detail or "AI returned an unexpected response. Please try again.",
+            message=detail or "AI returned unexpected response. Try again.",
             retryable=True,
         )
 
@@ -88,7 +97,7 @@ class JobNotFoundError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="JOB_NOT_FOUND",
-            message=detail or "This analysis session has expired. Please upload again.",
+            message=detail or "Session expired. Please upload your video again.",
             retryable=False,
         )
 
@@ -117,7 +126,7 @@ class MediaPipeUnavailableError(EngineError):
     def __init__(self) -> None:
         super().__init__(
             code="MEDIAPIPE_UNAVAILABLE",
-            message="Player detection is unavailable. Please try again shortly.",
+            message="Player detection is unavailable. Please try again.",
             retryable=False,
         )
 
@@ -126,8 +135,17 @@ class StorageError(EngineError):
     def __init__(self, detail: str = "") -> None:
         super().__init__(
             code="STORAGE_ERROR",
-            message=detail or "Failed to save or retrieve video. Please try again.",
+            message=detail or "Failed to save video. Please try again.",
             retryable=True,
+        )
+
+
+class VideoNotFoundError(EngineError):
+    def __init__(self) -> None:
+        super().__init__(
+            code="VIDEO_NOT_FOUND",
+            message="Rendered video is not available yet.",
+            retryable=False,
         )
 
 

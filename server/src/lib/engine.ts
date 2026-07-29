@@ -1,10 +1,10 @@
-import type { ErrorResponse, JobStatus, ScanResult } from "../types"
+import type { CoachAIError, ScanResult } from "../types"
+import type { EngineJobStatus } from "./jobs"
 
 const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
 
-type EngineError = {
-  code: string
-  message?: string
+function engineError(code: string, message: string, retryable = true): CoachAIError {
+  return { code, message, layer: "engine", retryable }
 }
 
 const withTimeout = async (
@@ -26,13 +26,12 @@ const withTimeout = async (
 }
 
 const throwNonOk = async (res: Response): Promise<never> => {
-  const body = (await res.json().catch(() => ({}))) as Partial<ErrorResponse>
-  throw {
-    code: body.code ?? "UNKNOWN",
-    message: body.message ?? "Something went wrong.",
-    layer: body.layer ?? "engine",
-    retryable: body.retryable ?? true,
-  } satisfies ErrorResponse
+  const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
+  throw engineError(
+    body.code ?? "UNKNOWN",
+    body.message ?? "Something went wrong.",
+    body.retryable ?? true,
+  )
 }
 
 const isConnectivityError = (error: unknown): boolean =>
@@ -56,59 +55,7 @@ export const scanVideo = async (videoFile: File): Promise<ScanResult> => {
     return (await res.json()) as ScanResult
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw { code: "ENGINE_UNAVAILABLE" } satisfies EngineError
-    }
-
-    throw error
-  }
-}
-
-export const startAnalysis = async (params: {
-  session_token: string | null
-  player_index: number | null
-  model: string
-}): Promise<{ job_id: string }> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/analyze`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(params),
-      },
-      30_000,
-    )
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return (await res.json()) as { job_id: string }
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw { code: "ENGINE_UNAVAILABLE" } satisfies EngineError
-    }
-
-    throw error
-  }
-}
-
-export const getJobStatus = async (engineJobId: string): Promise<JobStatus> => {
-  try {
-    const res = await withTimeout(`${ENGINE_URL}/status/${engineJobId}`, {
-      method: "GET",
-    }, 10_000)
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return (await res.json()) as JobStatus
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw { code: "ENGINE_UNAVAILABLE" } satisfies EngineError
+      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
     }
 
     throw error
@@ -122,15 +69,59 @@ export const getDownloadStream = async (engineJobId: string): Promise<Response> 
     }, 60_000)
 
     if (!res.ok) {
-      throw { code: "JOB_NOT_FOUND" } satisfies EngineError
+      throw engineError("JOB_NOT_FOUND", "Job not found or expired.")
     }
 
     return res
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw { code: "ENGINE_UNAVAILABLE" } satisfies EngineError
+      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
     }
 
+    throw error
+  }
+}
+
+export const getEngineJobStatus = async (engineJobId: string): Promise<EngineJobStatus | null> => {
+  try {
+    const res = await withTimeout(`${ENGINE_URL}/status/${engineJobId}`, {
+      method: "GET",
+    }, 5_000)
+
+    if (!res.ok) {
+      if (res.status === 404) return null
+      await throwNonOk(res)
+    }
+
+    return (await res.json()) as EngineJobStatus
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      return null
+    }
+    throw error
+  }
+}
+
+export const markEngineJobFailed = async (
+  engineJobId: string,
+  message: string,
+  code: string,
+  retryable: boolean,
+): Promise<void> => {
+  try {
+    const res = await withTimeout(`${ENGINE_URL}/fail/${engineJobId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, code, retryable }),
+    }, 5_000)
+
+    if (!res.ok && res.status !== 404) {
+      await throwNonOk(res)
+    }
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      return
+    }
     throw error
   }
 }

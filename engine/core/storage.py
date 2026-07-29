@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import BinaryIO
 
 
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
@@ -27,10 +27,14 @@ def is_local_backend() -> bool:
 
 
 def _key_to_local_path(key: str) -> Path:
+    """Convert a storage key to a local file path with path traversal protection."""
     rel = Path(key.lstrip("/"))
     path = (LOCAL_STORAGE_ROOT / rel).resolve()
-    if path != LOCAL_STORAGE_ROOT and LOCAL_STORAGE_ROOT not in path.parents:
-        raise ValueError("Invalid storage key path")
+    # Ensure the resolved path is within LOCAL_STORAGE_ROOT
+    try:
+        path.relative_to(LOCAL_STORAGE_ROOT)
+    except ValueError:
+        raise ValueError(f"Invalid storage key: path traversal detected in '{key}'")
     return path
 
 

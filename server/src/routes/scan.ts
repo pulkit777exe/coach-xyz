@@ -1,12 +1,11 @@
 import { Elysia } from "elysia"
 
 import { scanVideo } from "../lib/engine"
-import { buildError, wrapEngineError } from "../lib/errors"
+import { buildError, isCoachAIError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { checkScanLimit, getIP } from "../lib/ratelimit"
 import { persistVideoConversation } from "../lib/supabaseHistory"
-
-const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+import { MAX_FILE_SIZE_BYTES } from "../types"
 
 const scanErrorStatus = (code: string): number => {
   switch (code) {
@@ -37,6 +36,13 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       "Too many scan requests. Wait a minute before trying again.",
       true,
     )
+  }
+
+  // ── Reject oversized uploads before buffering into memory ─────────────
+  const contentLength = Number(request.headers.get("content-length") || 0)
+  if (contentLength > MAX_FILE_SIZE_BYTES) {
+    set.status = 413
+    return buildError("FILE_TOO_LARGE", "File must be under 500MB.", false)
   }
 
   // ── Validate Request ───────────────────────────────────────────────────
@@ -77,15 +83,14 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     set.status = 200
     return result
   } catch (error) {
-    const routeError = error as any
-
     // If the engine returned a structured error, pass it through
-    if (routeError?.code && routeError?.message && routeError?.layer) {
-      set.status = scanErrorStatus(routeError.code)
-      return routeError
+    if (isCoachAIError(error)) {
+      set.status = scanErrorStatus(error.code)
+      return error
     }
 
     // If it's a network/connectivity error
+    const routeError = error as { code?: string; message?: string }
     if (routeError?.code === "ENGINE_UNAVAILABLE") {
       set.status = 503
       return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)

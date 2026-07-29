@@ -7,7 +7,17 @@ function createRedisClient() {
     try {
       const IORedis = require("ioredis")
       const ioRedisUrl = process.env.UPSTASH_REDIS_REST_URL || "redis://localhost:6379"
-      const ioredis = new IORedis(ioRedisUrl, { maxRetriesPerRequest: null })
+      const ioredis = new IORedis(ioRedisUrl, {
+        maxRetriesPerRequest: null,
+        commandTimeout: 5000,
+        connectTimeout: 5000,
+      })
+      ioredis.on("error", (err: Error) => {
+        console.error(JSON.stringify({ type: "redis_error", source: "ratelimit", message: err.message }))
+      })
+      ioredis.on("reconnecting", (delay: number) => {
+        console.warn(JSON.stringify({ type: "redis_reconnecting", source: "ratelimit", delay_ms: delay }))
+      })
       return {
         async get(key: string) {
           const val = await ioredis.get(key)

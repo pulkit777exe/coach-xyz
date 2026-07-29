@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from upstash_redis import Redis as UpstashRedis
 
@@ -31,8 +31,7 @@ def compute_video_hash(video_path: str) -> str:
     Fast hash for cache key using file size + first/last 1MB.
     Full content hash is slow for large videos.
     """
-    import os as _os
-    size = _os.path.getsize(video_path)
+    size = os.path.getsize(video_path)
     chunk_size = 1024 * 1024
 
     with open(video_path, "rb") as f:
@@ -55,7 +54,7 @@ def get_cached_analysis(video_hash: str, player_index: int | None = None) -> Opt
     r = _get_redis()
     if r is None:
         return None
-    key = f"{CACHE_PREFIX}{video_hash}:p{player_index or 'all'}"
+    key = f"{CACHE_PREFIX}{video_hash}:p{player_index if player_index is not None else 'all'}"
     cached = r.get(key)
     if cached:
         try:
@@ -70,7 +69,7 @@ def set_cached_analysis(video_hash: str, result: dict, player_index: int | None 
     r = _get_redis()
     if r is None:
         return
-    key = f"{CACHE_PREFIX}{video_hash}:p{player_index or 'all'}"
+    key = f"{CACHE_PREFIX}{video_hash}:p{player_index if player_index is not None else 'all'}"
     r.set(key, json.dumps(result, default=str), ex=CACHE_TTL)
 
 
@@ -83,65 +82,12 @@ def warm_cache_for_video(video_hash: str, video_path: str) -> None:
     if r is None:
         return
     
-    # Store video metadata for faster access
+    # Store video metadata for cache warming prioritization
+    # Note: video_path is NOT stored here because temp files are deleted after scan.
+    # The hash itself is the cache key; analysis results are stored separately.
     metadata_key = f"{CACHE_PREFIX}{video_hash}:metadata"
     metadata = {
-        "video_path": video_path,
         "cached_at": time.time(),
         "access_count": 0,
     }
     r.set(metadata_key, json.dumps(metadata), ex=CACHE_TTL)
-
-
-def increment_access_count(video_hash: str) -> int:
-    """
-    Increment access count for cache warming prioritization.
-    Returns the new count.
-    """
-    r = _get_redis()
-    if r is None:
-        return 0
-    
-    metadata_key = f"{CACHE_PREFIX}{video_hash}:metadata"
-    try:
-        # Use INCR for atomic increment
-        count = r.incr(f"{metadata_key}:count")
-        return int(count)
-    except Exception:
-        return 0
-
-
-def get_popular_videos(limit: int = 10) -> list[str]:
-    """
-    Get most accessed video hashes for cache warming.
-    Returns list of video hashes sorted by access count.
-    """
-    r = _get_redis()
-    if r is None:
-        return []
-    
-    try:
-        # Get all metadata keys
-        pattern = f"{CACHE_PREFIX}*:metadata:count"
-        keys = r.keys(pattern)
-        
-        if not keys:
-            return []
-        
-        # Get counts for each key
-        video_counts = []
-        for key in keys:
-            try:
-                count = int(r.get(key) or 0)
-                # Extract video hash from key
-                video_hash = key.replace(f"{CACHE_PREFIX}", "").replace(":metadata:count", "")
-                video_counts.append((video_hash, count))
-            except Exception:
-                continue
-        
-        # Sort by count descending and return top N
-        video_counts.sort(key=lambda x: x[1], reverse=True)
-        return [vh for vh, _ in video_counts[:limit]]
-    
-    except Exception:
-        return []

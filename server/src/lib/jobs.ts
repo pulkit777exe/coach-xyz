@@ -1,4 +1,4 @@
-import { redis } from "./redis"
+import { getEngineJobStatus, markEngineJobFailed } from "./engine"
 
 const KEY = "coachai:srv:"
 const JOB_TTL = 7200
@@ -11,6 +11,24 @@ interface ServerJob {
   model: string
   created_at: number
 }
+
+export interface EngineJobStatus {
+  job_id: string
+  state: string
+  stage: number
+  stage_name: string
+  progress: number
+  summary: unknown | null
+  video_ready: boolean
+  created_at: string | null
+  error: string | null
+  error_code: string | null
+  retryable: boolean
+  complete: boolean
+}
+
+// Re-import redis for raw operations (rate limiting, etc.)
+import { redis } from "./redis"
 
 export async function saveJob(job: ServerJob): Promise<void> {
   await redis.set(
@@ -25,40 +43,36 @@ export async function getJob(
 ): Promise<ServerJob | null> {
   const raw = await redis.get(`${KEY}${serverJobId}`)
   if (!raw) return null
-  return typeof raw === "string" ? JSON.parse(raw) : raw
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      console.error(JSON.stringify({
+        type: "job_json_corrupt",
+        serverJobId,
+        timestamp: new Date().toISOString(),
+      }))
+      return null
+    }
+  }
+  return raw as ServerJob
 }
 
-// Read engine job status directly from Redis
-// Avoids an HTTP hop to the engine just to check progress
-export async function getEngineJobStatus(
+// Read engine job status via HTTP (no direct Redis coupling)
+export async function fetchEngineJobStatus(
   engineJobId: string,
-): Promise<any> {
-  const raw = await redis.get(`coachai:job:${engineJobId}`)
-  if (!raw) return null
-  return typeof raw === "string" ? JSON.parse(raw) : raw
+): Promise<EngineJobStatus | null> {
+  return getEngineJobStatus(engineJobId)
 }
 
+// Mark engine job as failed via HTTP (no direct Redis coupling)
 export async function markJobFailed(
   engineJobId: string,
   message: string,
   code: string,
   retryable: boolean,
 ): Promise<void> {
-  const raw = await redis.get(`coachai:job:${engineJobId}`)
-  if (!raw) return
-  const job = typeof raw === "string" ? JSON.parse(raw) : raw
-  await redis.set(
-    `coachai:job:${engineJobId}`,
-    JSON.stringify({
-      ...job,
-      state: "failed",
-      complete: true,
-      error: message,
-      error_code: code,
-      retryable,
-    }),
-    { ex: JOB_TTL },
-  )
+  await markEngineJobFailed(engineJobId, message, code, retryable)
 }
 
 export { redis }

@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
+import { MAX_FILE_SIZE_BYTES } from '@/types'
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger, useGSAP)
@@ -211,6 +212,14 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
   const selectFile = (file?: File) => {
     if (!file) return
+    if (!file.type.startsWith('video/')) {
+      alert('Please select a video file (MP4, MOV, AVI, MKV).')
+      return
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert('File is too large. Maximum size is 500MB.')
+      return
+    }
     setFileName(file.name)
     onFileSelected(file)
   }

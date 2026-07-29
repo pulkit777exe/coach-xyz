@@ -42,12 +42,15 @@ CHUNK_DURATION_S  = int(os.environ.get("COACHAI_CHUNK_DURATION_S", "180"))
 CHUNK_OVERLAP_S   = int(os.environ.get("COACHAI_CHUNK_OVERLAP_S", "10"))
 CHUNK_WORKERS     = int(os.environ.get("COACHAI_CHUNK_WORKERS", "1"))
 
+# Import from shared config
+from core.config import GEMINI_MODEL, parse_timestamp
+
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def analyze_long_video(
     video_path:   str,
-    model_name:   str  = "gemini-2.5-flash",
+    model_name:   str  = GEMINI_MODEL,
     strict:       bool = False,
     player_focus: dict | None = None,
     progress_cb         = None,   # optional callable(message: str, pct: int)
@@ -75,24 +78,27 @@ def analyze_long_video(
             "  pip install langchain-core"
         )
 
-    # ── Build the LangChain Runnable pipeline ─────────────────────────────
-    split_step   = RunnableLambda(lambda inp: _split_video(**inp))
-    analyze_step = RunnableLambda(
-        lambda chunks: _analyze_all_chunks(
-            chunks, model_name, strict, player_focus, progress_cb
-        )
-    )
-    merge_step   = RunnableLambda(_merge_chunks)
-
-    pipeline = split_step | analyze_step | merge_step
-
+    # ── Split, analyze, merge with cleanup ─────────────────────────────────
     _cb(progress_cb, "Splitting video into analysis windows…", 5)
 
-    return pipeline.invoke({
-        "video_path":        video_path,
-        "chunk_duration_s":  CHUNK_DURATION_S,
-        "chunk_overlap_s":   CHUNK_OVERLAP_S,
-    })
+    import shutil
+    chunks = _split_video(
+        video_path=video_path,
+        chunk_duration_s=CHUNK_DURATION_S,
+        chunk_overlap_s=CHUNK_OVERLAP_S,
+    )
+    try:
+        analyzed = _analyze_all_chunks(chunks, model_name, strict, player_focus, progress_cb)
+        return _merge_chunks(analyzed)
+    finally:
+        # Clean up chunk temp directories
+        for chunk in chunks:
+            tmp = chunk.get("tmp_dir")
+            if tmp:
+                try:
+                    shutil.rmtree(tmp, ignore_errors=True)
+                except Exception:
+                    pass
 
 
 def needs_chunking(video_path: str) -> tuple[bool, float]:
@@ -121,6 +127,11 @@ def _split_video(video_path: str, chunk_duration_s: int,
     total_s= total / fps
 
     step_s = chunk_duration_s - chunk_overlap_s   # how far we advance each time
+    if step_s <= 0:
+        raise ValueError(
+            f"chunk_overlap_s ({chunk_overlap_s}) must be less than "
+            f"chunk_duration_s ({chunk_duration_s})"
+        )
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
     tmp_dir = pathlib.Path(tempfile.mkdtemp(prefix="coachai_chunks_"))
@@ -128,36 +139,38 @@ def _split_video(video_path: str, chunk_duration_s: int,
     idx     = 0
     start_s = 0.0
 
-    while start_s < total_s:
-        end_s      = min(start_s + chunk_duration_s, total_s)
-        out_path   = tmp_dir / f"chunk_{idx:02d}.mp4"
-        writer     = cv2.VideoWriter(str(out_path), fourcc, fps, (fw, fh))
+    try:
+        while start_s < total_s:
+            end_s      = min(start_s + chunk_duration_s, total_s)
+            out_path   = tmp_dir / f"chunk_{idx:02d}.mp4"
+            writer     = cv2.VideoWriter(str(out_path), fourcc, fps, (fw, fh))
 
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_s * fps))
-        frames_to_write = int((end_s - start_s) * fps)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_s * fps))
+            frames_to_write = int((end_s - start_s) * fps)
 
-        for _ in range(frames_to_write):
-            ok, frame = cap.read()
-            if not ok:
+            for _ in range(frames_to_write):
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                writer.write(frame)
+            writer.release()
+
+            chunks.append({
+                "index":   idx,
+                "path":    str(out_path),
+                "start_s": start_s,
+                "end_s":   end_s,
+                "total_s": total_s,
+                "tmp_dir": str(tmp_dir),
+            })
+
+            idx     += 1
+            start_s  = start_s + step_s
+            if end_s >= total_s:
                 break
-            writer.write(frame)
-        writer.release()
+    finally:
+        cap.release()
 
-        chunks.append({
-            "index":   idx,
-            "path":    str(out_path),
-            "start_s": start_s,
-            "end_s":   end_s,
-            "total_s": total_s,
-            "tmp_dir": str(tmp_dir),
-        })
-
-        idx     += 1
-        start_s  = start_s + step_s
-        if end_s >= total_s:
-            break
-
-    cap.release()
     return chunks
 
 
@@ -294,7 +307,7 @@ def _merge_chunks(chunk_results: list[dict]) -> dict:
         all_shots.extend(r.get("shots", []))
 
     # Sort by timestamp_of_shot
-    all_shots.sort(key=lambda s: _ts_to_seconds(s.get("timestamp_of_shot", "0:00")))
+    all_shots.sort(key=lambda s: parse_timestamp(s.get("timestamp_of_shot", "0:00")))
 
     # Deduplicate shots within 8 s of each other (boundary overlap artefacts)
     deduped = _deduplicate_shots(all_shots, window_s=8)
@@ -315,22 +328,14 @@ def _merge_chunks(chunk_results: list[dict]) -> dict:
     }
 
 
-def _ts_to_seconds(ts: str) -> float:
-    try:
-        m, s = ts.split(":")
-        return int(m) * 60 + float(s)
-    except Exception:
-        return 0.0
-
-
 def _deduplicate_shots(shots: list[dict], window_s: float = 8) -> list[dict]:
     """Remove duplicate shots that appear within *window_s* of each other."""
     if not shots:
         return shots
     kept = [shots[0]]
     for shot in shots[1:]:
-        last_t  = _ts_to_seconds(kept[-1].get("timestamp_of_shot", "0:00"))
-        this_t  = _ts_to_seconds(shot.get("timestamp_of_shot", "0:00"))
+        last_t  = parse_timestamp(kept[-1].get("timestamp_of_shot", "0:00"))
+        this_t  = parse_timestamp(shot.get("timestamp_of_shot", "0:00"))
         if this_t - last_t > window_s:
             kept.append(shot)
         # else: duplicate near chunk boundary — skip
@@ -348,10 +353,28 @@ def _compute_summary(shots: list[dict], sport: str) -> dict:
     form_scores    = [s["form_score"] for s in shots if isinstance(s.get("form_score"), (int, float))]
     avg_form       = sum(form_scores) / len(form_scores) if form_scores else 0
 
-    # Aggregate top_issues and strengths from all shots' feedback
-    # (best-effort: pull from existing session summaries of chunks)
-    top_issues: list[str] = []
-    strengths:  list[str] = []
+    # Aggregate top_issues and strengths from shots' form_breakdown
+    issue_counts: dict[str, int] = {}
+    strength_counts: dict[str, int] = {}
+    for s in shots:
+        breakdown = s.get("form_breakdown")
+        if isinstance(breakdown, dict):
+            for criterion, rating in breakdown.items():
+                label = criterion.replace("_", " ").title()
+                if rating in ("needs_work", "poor"):
+                    issue_counts[label] = issue_counts.get(label, 0) + 1
+                elif rating in ("good", "excellent"):
+                    strength_counts[label] = strength_counts.get(label, 0) + 1
+
+    # Sort by frequency, take top items
+    top_issues = [k for k, _ in sorted(issue_counts.items(), key=lambda x: -x[1])[:5]]
+    strengths = [k for k, _ in sorted(strength_counts.items(), key=lambda x: -x[1])[:5]]
+
+    # Build priority drill from most common issue
+    if top_issues:
+        priority_drill = f"Focus on improving: {top_issues[0]}"
+    else:
+        priority_drill = "Maintain current form and continue refining technique."
 
     rating = _overall_rating(avg_form, success_rate)
 
@@ -361,7 +384,7 @@ def _compute_summary(shots: list[dict], sport: str) -> dict:
         "average_form_score":    round(avg_form, 2),
         "top_issues":            top_issues or ["See individual shot feedback above"],
         "strengths":             strengths  or ["Multiple events successfully analyzed"],
-        "priority_drill":        "Review the feedback for each shot above to identify your main focus area.",
+        "priority_drill":        priority_drill,
         "overall_rating":        rating,
     }
 

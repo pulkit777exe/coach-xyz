@@ -6,12 +6,20 @@ services:
     container_name: coachai-engine
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
     ports:
       - "8001:8001"
     volumes:
       - engine_tmp:/app/tmp
     init: true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
 
   server:
     build:
@@ -20,12 +28,15 @@ services:
     container_name: coachai-server
     environment:
       ENGINE_URL: http://engine:8001
-      PORT: ${PORT:-8000}
+      PORT: "8000"
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+      BETA_CODES: ${BETA_CODES:-}
     depends_on:
       engine:
         condition: service_healthy
     ports:
-      - "${PORT:-8000}:8000"
+      - "8000:8000"
     init: true
     restart: unless-stopped
 

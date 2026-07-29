@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Optional
@@ -18,6 +19,25 @@ redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token
 
 JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
+
+# ── Per-job Lock Management ──────────────────────────────────────────────────
+
+_locks: dict[str, threading.Lock] = {}
+_locks_lock = threading.Lock()  # Protects _locks dict itself
+
+def _get_job_lock(job_id: str) -> threading.Lock:
+    """Get or create a per-job lock. Thread-safe."""
+    with _locks_lock:
+        # Evict old locks if dict grows too large (cap at 1000)
+        if len(_locks) > 1000:
+            # Keep only the requested lock and clear the rest
+            lock = _locks.get(job_id)
+            _locks.clear()
+            if lock is not None:
+                _locks[job_id] = lock
+        if job_id not in _locks:
+            _locks[job_id] = threading.Lock()
+        return _locks[job_id]
 
 # ── Explicit Pipeline States ──────────────────────────────────────────────────
 # Each state maps to a stage number and progress percentage.
@@ -82,7 +102,7 @@ def _require_redis():
         raise RedisUnavailableError()
 
 
-def create_job(job_id: str, initial_state: str = "uploading") -> JobStatus:
+def create_job(job_id: str, initial_state: str = "uploading", video_key: str | None = None) -> JobStatus:
     """Create a new job with an explicit initial state."""
     _require_redis()
     state_info = PIPELINE_STATES.get(initial_state, PIPELINE_STATES["uploading"])
@@ -92,6 +112,7 @@ def create_job(job_id: str, initial_state: str = "uploading") -> JobStatus:
         stage=state_info["stage"],
         stage_name=state_info["stage_name"],
         progress=state_info["progress"],
+        video_key=video_key,
     )
     redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
     return job
@@ -100,75 +121,97 @@ def create_job(job_id: str, initial_state: str = "uploading") -> JobStatus:
 def transition_job(job_id: str, new_state: str, **kwargs) -> None:
     """
     Validate and apply a state transition.
+    Uses a per-job lock to prevent race conditions.
     Raises InvalidStateTransition if the transition is not allowed.
     """
     _require_redis()
-    raw = redis.get(f"{KEY}{job_id}")
-    if not raw:
-        raise JobNotFoundError()
+    
+    job_lock = _get_job_lock(job_id)
+    
+    with job_lock:
+        raw = redis.get(f"{KEY}{job_id}")
+        if not raw:
+            raise JobNotFoundError()
 
-    job = JobStatus.from_redis(raw)
+        job = JobStatus.from_redis(raw)
 
-    # Validate transition
-    allowed = VALID_TRANSITIONS.get(job.state, set())
-    if new_state not in allowed:
-        raise InvalidStateTransition(job.state, new_state)
+        # Validate transition
+        allowed = VALID_TRANSITIONS.get(job.state, set())
+        if new_state not in allowed:
+            raise InvalidStateTransition(job.state, new_state)
 
-    # Apply state
-    state_info = PIPELINE_STATES[new_state]
-    job.state = new_state
-    job.stage = state_info["stage"]
-    job.stage_name = state_info["stage_name"]
-    job.progress = state_info["progress"]
+        # Apply state
+        state_info = PIPELINE_STATES[new_state]
+        job.state = new_state
+        job.stage = state_info["stage"]
+        job.stage_name = state_info["stage_name"]
+        job.progress = state_info["progress"]
 
-    # Apply any additional kwargs
-    for k, v in kwargs.items():
-        if hasattr(job, k):
-            setattr(job, k, v)
+        # Apply any additional kwargs
+        for k, v in kwargs.items():
+            if hasattr(job, k):
+                setattr(job, k, v)
 
-    # Mark complete if reaching terminal state
-    if new_state == "completed":
-        job.complete = True
-    elif new_state == "failed":
-        job.complete = True
+        # Mark complete if reaching terminal state
+        if new_state == "completed":
+            job.complete = True
+        elif new_state == "failed":
+            job.complete = True
 
-    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
 
 
 def update_job(job_id: str, **kwargs) -> None:
     """
     Update job fields directly without state transition validation.
     Use transition_job() for state changes.
+    Uses per-job lock to prevent race with transition_job/fail_job.
     """
     _require_redis()
-    raw = redis.get(f"{KEY}{job_id}")
-    if not raw:
-        raise JobNotFoundError()
-    job = JobStatus.from_redis(raw)
-    for k, v in kwargs.items():
-        if hasattr(job, k):
-            setattr(job, k, v)
-    # Auto-set stage_name from stage number if stage is being updated
-    if "stage" in kwargs:
-        job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
-    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+
+    job_lock = _get_job_lock(job_id)
+
+    with job_lock:
+        raw = redis.get(f"{KEY}{job_id}")
+        if not raw:
+            raise JobNotFoundError()
+        job = JobStatus.from_redis(raw)
+        for k, v in kwargs.items():
+            if hasattr(job, k):
+                setattr(job, k, v)
+        # Auto-set stage_name from stage number if stage is being updated
+        if "stage" in kwargs:
+            job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
+        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
 
 
 def get_job(job_id: str) -> JobStatus:
     _require_redis()
-    raw = redis.get(f"{KEY}{job_id}")
-    if not raw:
-        raise JobNotFoundError()
-    return JobStatus.from_redis(raw)
+    job_lock = _get_job_lock(job_id)
+    with job_lock:
+        raw = redis.get(f"{KEY}{job_id}")
+        if not raw:
+            raise JobNotFoundError()
+        return JobStatus.from_redis(raw)
 
 
 def fail_job(job_id: str, error: EngineError) -> None:
-    """Mark a job as failed with structured error info."""
-    try:
+    """Mark a job as failed with structured error info.
+    
+    Raises the original exception if Redis operations fail,
+    so the caller can handle it appropriately.
+    """
+    _require_redis()
+    job_lock = _get_job_lock(job_id)
+
+    with job_lock:
         raw = redis.get(f"{KEY}{job_id}")
         if not raw:
             return
         job = JobStatus.from_redis(raw)
+        # Don't revert completed jobs
+        if job.state == "completed":
+            return
         job.state = "failed"
         job.stage = -1
         job.stage_name = "Failed"
@@ -177,10 +220,3 @@ def fail_job(job_id: str, error: EngineError) -> None:
         job.error_code = error.code
         job.retryable = error.retryable
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
-    except Exception as e:
-        logging.warning(f"Failed to mark job {job_id} as failed: {e}")
-
-
-def register_job_input(job_id: str, video_path: str) -> None:
-    """No-op: kept for backward compat with analyzer.py calls."""
-    pass

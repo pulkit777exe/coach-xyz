@@ -9,9 +9,6 @@ interface ErrorScreenProps {
   onRetry: () => void
 }
 
-// ── Error Details Map ────────────────────────────────────────────────────────
-// Maps error codes to user-friendly details: title, description, and whether to retry.
-
 const ERROR_DETAILS: Record<string, { title: string; description: string; action?: string }> = {
   // Client errors
   INVALID_TYPE: {
@@ -29,8 +26,12 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     description: 'Cannot reach the server.',
     action: 'Check your internet connection and try again.',
   },
+  REQUEST_FAILED: {
+    title: 'Request Failed',
+    description: 'The request could not be completed.',
+    action: 'Check your connection and try again.',
+  },
 
-  // Server errors
   RATE_LIMITED: {
     title: 'Rate Limited',
     description: 'Too many requests.',
@@ -46,8 +47,32 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     description: 'The job queue is not configured.',
     action: 'Try again later.',
   },
+  INVALID_REQUEST: {
+    title: 'Invalid Request',
+    description: 'The request format is invalid.',
+    action: 'Try again with a valid request.',
+  },
+  NO_FILE: {
+    title: 'No File Provided',
+    description: 'No video file was provided.',
+    action: 'Select a video file to upload.',
+  },
+  INVALID_FILE_TYPE: {
+    title: 'Invalid File Type',
+    description: 'The uploaded file is not a video.',
+    action: 'Select a video file (MP4, MOV, AVI).',
+  },
+  INVALID_SESSION_TOKEN: {
+    title: 'Invalid Session',
+    description: 'The session token is invalid.',
+    action: 'Upload your video again.',
+  },
+  INVALID_PLAYER_INDEX: {
+    title: 'Invalid Player',
+    description: 'The player selection is invalid.',
+    action: 'Select a valid player.',
+  },
 
-  // Engine errors
   NO_PLAYERS_DETECTED: {
     title: 'No Players Found',
     description: 'Could not detect any players in the video.',
@@ -57,6 +82,16 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     title: 'Video Error',
     description: 'Could not read the video file.',
     action: 'Try a different video format (MP4, MOV, AVI).',
+  },
+  VIDEO_EXPIRED: {
+    title: 'Video Expired',
+    description: 'The video is no longer available.',
+    action: 'Upload your video again.',
+  },
+  VIDEO_NOT_FOUND: {
+    title: 'Video Not Available',
+    description: 'The rendered video is not available yet.',
+    action: 'Try again in a moment.',
   },
   GEMINI_QUOTA_EXCEEDED: {
     title: 'AI Quota Reached',
@@ -82,6 +117,16 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     title: 'Engine Unavailable',
     description: 'The analysis engine is temporarily offline.',
     action: 'Try again in a few minutes.',
+  },
+  ENGINE_ERROR: {
+    title: 'Engine Error',
+    description: 'The analysis engine encountered an error.',
+    action: 'Try again or contact support.',
+  },
+  UNKNOWN: {
+    title: 'Unknown Error',
+    description: 'An unknown error occurred.',
+    action: 'Try again or contact support.',
   },
   INVALID_STATE_TRANSITION: {
     title: 'Unexpected State',
@@ -110,11 +155,11 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
   },
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
 
 export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const stableOnRetry = useCallback(onRetry, [onRetry])
 
@@ -126,7 +171,7 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
         setCountdown((prev) => {
           if (prev === null || prev <= 1) {
             if (timerRef.current) clearInterval(timerRef.current)
-            setTimeout(stableOnRetry, 100)
+            retryTimeoutRef.current = setTimeout(stableOnRetry, 100)
             return null
           }
           return prev - 1
@@ -136,6 +181,7 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
     }
   }, [error.code, error.retry_after, stableOnRetry])
 

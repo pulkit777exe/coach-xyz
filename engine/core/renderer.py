@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import cv2
 import numpy as np
@@ -9,9 +9,9 @@ from core.pose_backend import get_pose_connections
 
 
 def _score_color(form_score: int) -> tuple[int, int, int]:
-    if form_score > 79:
+    if form_score >= 8:
         return (60, 220, 90)
-    if form_score > 59:
+    if form_score >= 5:
         return (0, 215, 255)
     return (40, 60, 235)
 
@@ -130,7 +130,7 @@ def _draw_hud(
 
     cv2.putText(
         frame,
-        f"Form: {form_score}/100",
+        f"Form: {form_score}/10",
         (24, 88),
         cv2.FONT_HERSHEY_SIMPLEX,
         1.0,
@@ -179,7 +179,7 @@ def _draw_summary_screen(frame: np.ndarray, analysis_result: dict) -> np.ndarray
     y += 70
     cv2.putText(
         frame,
-        f"Form Score: {form_score}/100",
+        f"Form Score: {form_score}/10",
         (center_x - 220, y),
         cv2.FONT_HERSHEY_SIMPLEX,
         1.0,
@@ -245,15 +245,19 @@ def render_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    writer = cv2.VideoWriter(
-        output_path,
-        cv2.VideoWriter_fourcc(*"avc1"),  # H.264 codec (faster, smaller files)
-        use_fps,
-        (width, height),
-    )
-    if not writer.isOpened():
+    # Try H.264 first (avc1 on macOS, H264 on Linux), fallback to mp4v
+    for codec in ["avc1", "H264", "mp4v"]:
+        writer = cv2.VideoWriter(
+            output_path,
+            cv2.VideoWriter_fourcc(*codec),
+            use_fps,
+            (width, height),
+        )
+        if writer.isOpened():
+            break
+    else:
         cap.release()
-        raise RuntimeError("Failed to open output writer")
+        raise RuntimeError("Failed to open output writer with any supported codec")
 
     connections = get_pose_connections()
 

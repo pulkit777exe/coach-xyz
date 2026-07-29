@@ -19,7 +19,7 @@ export const healthRoute = new Elysia({ prefix: "/health" })
       const t = Date.now()
       await Promise.race([
         redis.ping(),
-        new Promise((_, r) => setTimeout(() => r("timeout"), 2000)),
+        new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000)),
       ])
       redisOk = true
       redisLatency = Date.now() - t

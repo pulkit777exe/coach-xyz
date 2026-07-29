@@ -2,6 +2,9 @@
 // These types define the contract between engine → server → frontend.
 // Server is the source of truth. Frontend mirrors them.
 
+export const DEFAULT_MODEL = "gemini-2.5-flash"
+export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+
 export type Player = {
   player_index: number
   confidence: number
@@ -16,7 +19,6 @@ export type ScanResult = {
 
 // ── Pipeline States ──────────────────────────────────────────────────────────
 // Engine states: uploading → scanning → player_selection → analyzing → rendering → completed
-// Frontend adds: idle (before upload), error (terminal failure)
 
 export type EnginePipelineState =
   | "uploading"
@@ -26,16 +28,6 @@ export type EnginePipelineState =
   | "rendering"
   | "completed"
   | "failed"
-
-export type FrontendPipelineState =
-  | "idle"
-  | "uploading"
-  | "scanning"
-  | "selecting"
-  | "analyzing"
-  | "rendering"
-  | "completed"
-  | "error"
 
 // ── Job Status ───────────────────────────────────────────────────────────────
 // Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
@@ -65,6 +57,9 @@ export type AnalysisSummary = {
   strengths: string[]
   priority_drill?: string
   shot_events: ShotEvent[]
+  success_rate_percent?: number
+  average_form_score?: number
+  total_events?: number
 }
 
 export type ShotEvent = {
@@ -76,22 +71,15 @@ export type ShotEvent = {
 }
 
 // ── Error Types ──────────────────────────────────────────────────────────────
-// Standard error shape returned by all layers
+// Canonical error shape returned by all layers (engine, server, client).
+// Engine: EngineError (Python dataclass) → serialized to this shape.
+// Server: CoachAIError (TypeScript) implements this.
+// Frontend: CoachAIError (TypeScript) mirrors this.
 
-export type ErrorResponse = {
+export type CoachAIError = {
   code: string
   message: string
   layer: "engine" | "server" | "client"
   retryable: boolean
-}
-
-// ── Internal Server Types ────────────────────────────────────────────────────
-
-export type AnalysisJob = {
-  job_id: string
-  engine_job_id: string
-  session_token: string | null
-  player_index: number | null
-  model: string
-  created_at: number
+  retry_after?: number
 }

@@ -3,21 +3,21 @@ from __future__ import annotations
 import base64
 import logging
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
 
+from core.detection_utils import (
+    ALL_LANDMARK_INDICES,
+    detect_hog_people,
+    iou,
+    bbox_from_landmarks,
+    deduplicate_by_iou,
+    transform_landmarks_to_global,
+)
 from core.errors import NoPlayersDetectedError, VideoDecodeError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
-
-
-# All 33 MediaPipe pose landmarks — use the full body extent
-# Head (0-10), shoulders (11,12), elbows (13,14), wrists (15,16),
-# hips (23,24), knees (25,26), ankles (27,28), feet (29-32)
-# Filter by visibility > 0.4 to exclude undetected landmarks
-POSE_LANDMARKS_FOR_BOX = list(range(33))
-POSE_LANDMARK_MIN_VISIBILITY = 0.4
 
 
 @dataclass
@@ -27,129 +27,13 @@ class PoseCandidate:
     visibility: float
 
 
-def _detect_hog_people(frame: np.ndarray) -> list[tuple[tuple[int, int, int, int], float]]:
-    frame_h, frame_w = frame.shape[:2]
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-
-    boxes, weights = hog.detectMultiScale(
-        frame,
-        winStride=(8, 8),
-        padding=(8, 8),
-        scale=1.05,
-    )
-
-    out: list[tuple[tuple[int, int, int, int], float]] = []
-    for idx, (x, y, w, h) in enumerate(boxes):
-        x1 = max(0, int(x))
-        y1 = max(0, int(y))
-        x2 = min(frame_w - 1, int(x + w))
-        y2 = min(frame_h - 1, int(y + h))
-        if x2 <= x1 or y2 <= y1:
-            continue
-        weight = float(weights[idx]) if idx < len(weights) else 0.6
-        out.append(((x1, y1, x2, y2), weight))
-
-    return out
-
-
-def _iou(box_a: tuple[int, int, int, int], box_b: tuple[int, int, int, int]) -> float:
-    ax1, ay1, ax2, ay2 = box_a
-    bx1, by1, bx2, by2 = box_b
-
-    ix1 = max(ax1, bx1)
-    iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2)
-    iy2 = min(ay2, by2)
-
-    iw = max(0, ix2 - ix1)
-    ih = max(0, iy2 - iy1)
-    inter = iw * ih
-    if inter == 0:
-        return 0.0
-
-    area_a = max(1, (ax2 - ax1) * (ay2 - ay1))
-    area_b = max(1, (bx2 - bx1) * (by2 - by1))
-    union = area_a + area_b - inter
-    return inter / max(1.0, float(union))
-
-
-def _bbox_from_landmarks(
-    landmarks: list[dict[str, float]],
-    frame_w: int,
-    frame_h: int,
-    padding_ratio: float = 0.35,
-) -> tuple[int, int, int, int]:
-    # Only use landmarks with sufficient visibility
-    visible = [
-        lm for lm in landmarks
-        if lm.get("visibility", 1.0) > POSE_LANDMARK_MIN_VISIBILITY
-    ]
-    if not visible:
-        visible = landmarks  # fallback: use all if none pass threshold
-
-    xs = [lm["x"] for lm in visible]
-    ys = [lm["y"] for lm in visible]
-
-    x_min = int(min(xs) * frame_w)
-    x_max = int(max(xs) * frame_w)
-    y_min = int(min(ys) * frame_h)
-    y_max = int(max(ys) * frame_h)
-
-    width = max(1, x_max - x_min)
-    height = max(1, y_max - y_min)
-
-    # Asymmetric padding: more on top for head clearance
-    pad_x = int(width * padding_ratio)
-    pad_top = int(height * (padding_ratio + 0.15))  # extra head room
-    pad_bot = int(height * padding_ratio)
-
-    x_min = max(0, x_min - pad_x)
-    y_min = max(0, y_min - pad_top)
-    x_max = min(frame_w - 1, x_max + pad_x)
-    y_max = min(frame_h - 1, y_max + pad_bot)
-
-    return x_min, y_min, x_max, y_max
-
-
-def _transform_landmarks_to_global(
-    landmarks: list[dict[str, float]],
-    crop_x1: int,
-    crop_y1: int,
-    crop_w: int,
-    crop_h: int,
-    frame_w: int,
-    frame_h: int,
-) -> list[dict[str, float]]:
-    transformed: list[dict[str, float]] = []
-    for lm in landmarks:
-        gx = (crop_x1 + lm["x"] * crop_w) / max(1, frame_w)
-        gy = (crop_y1 + lm["y"] * crop_h) / max(1, frame_h)
-        transformed.append(
-            {
-                "x": float(np.clip(gx, 0.0, 1.0)),
-                "y": float(np.clip(gy, 0.0, 1.0)),
-                "z": lm["z"],
-                "visibility": lm["visibility"],
-            }
-        )
-    return transformed
-
-
 def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
+    """Detect pose candidates using HOG proposals + pose detection."""
     frame_h, frame_w = frame.shape[:2]
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
-    proposals: list[tuple[int, int, int, int]] = []
-    boxes, _ = hog.detectMultiScale(frame, winStride=(8, 8), padding=(8, 8), scale=1.05)
-    for (x, y, w, h) in boxes:
-        x1 = max(0, int(x))
-        y1 = max(0, int(y))
-        x2 = min(frame_w - 1, int(x + w))
-        y2 = min(frame_h - 1, int(y + h))
-        if x2 > x1 and y2 > y1:
-            proposals.append((x1, y1, x2, y2))
+    # Get HOG proposals
+    hog_detections = detect_hog_people(frame)
+    proposals = [bbox for bbox, _ in hog_detections]
 
     if not proposals:
         proposals = [(0, 0, frame_w - 1, frame_h - 1)]
@@ -166,7 +50,7 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
 
         for local_landmarks in detections:
             avg_visibility = float(np.mean([lm["visibility"] for lm in local_landmarks]))
-            global_landmarks = _transform_landmarks_to_global(
+            global_landmarks = transform_landmarks_to_global(
                 local_landmarks,
                 crop_x1=x1,
                 crop_y1=y1,
@@ -176,12 +60,18 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
                 frame_h=frame_h,
             )
 
-            bbox = _bbox_from_landmarks(global_landmarks, frame_w, frame_h, padding_ratio=0.35)
+            bbox = bbox_from_landmarks(
+                global_landmarks, frame_w, frame_h,
+                landmark_indices=ALL_LANDMARK_INDICES,
+                min_visibility=0.4,
+                padding_ratio=0.35,
+            )
             candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=avg_visibility)
 
+            # Dedup with IoU threshold 0.35 (detector uses wider boxes)
             duplicate = False
             for existing in candidates:
-                if _iou(existing.bbox, candidate.bbox) > 0.35:
+                if iou(existing.bbox, candidate.bbox) > 0.35:
                     duplicate = True
                     if candidate.visibility > existing.visibility:
                         existing.landmarks = candidate.landmarks
@@ -213,16 +103,13 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
 
     if not pose_backend_available():
         for ts in timestamps:
-            if fps <= 0:
-                frame_index = int(ts * 30)
-            else:
-                frame_index = int(ts * fps)
+            frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = cap.read()
             if not ok:
                 continue
 
-            detections = _detect_hog_people(frame)
+            detections = detect_hog_people(frame)
             if not detections:
                 continue
 
@@ -233,7 +120,7 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
             overlap_penalty = 0.0
             for i in range(len(detections)):
                 for j in range(i + 1, len(detections)):
-                    overlap_penalty += _iou(detections[i][0], detections[j][0])
+                    overlap_penalty += iou(detections[i][0], detections[j][0])
 
             score = (num_detected * avg_visibility) - overlap_penalty
             if score > best_score:
@@ -243,10 +130,7 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
     else:
         with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
             for ts in timestamps:
-                if fps <= 0:
-                    frame_index = int(ts * 30)
-                else:
-                    frame_index = int(ts * fps)
+                frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                 ok, frame = cap.read()
                 if not ok:
@@ -264,7 +148,7 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
                 overlap_penalty = 0.0
                 for i in range(len(valid)):
                     for j in range(i + 1, len(valid)):
-                        overlap_penalty += _iou(valid[i].bbox, valid[j].bbox)
+                        overlap_penalty += iou(valid[i].bbox, valid[j].bbox)
 
                 score = (num_detected * avg_visibility) - overlap_penalty
                 if score > best_score:
@@ -303,12 +187,10 @@ def _enhance_and_encode_crop(
     # Step 1: Upscale to consistent display size
     scale = target_size / max(h, w)
     if scale > 1.0:
-        # Use INTER_CUBIC for upscaling — better quality than linear
         new_w = max(1, int(w * scale))
         new_h = max(1, int(h * scale))
         crop = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
     elif scale < 1.0:
-        # Downscale with INTER_AREA — avoids aliasing
         new_w = max(1, int(w * scale))
         new_h = max(1, int(h * scale))
         crop = cv2.resize(crop, (new_w, new_h), interpolation=cv2.INTER_AREA)
@@ -341,7 +223,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
     players: list[dict] = []
 
     if not pose_backend_available():
-        for bbox, weight in _detect_hog_people(frame):
+        for bbox, weight in detect_hog_people(frame):
             x_min, y_min, x_max, y_max = bbox
             crop = frame[y_min:y_max, x_min:x_max]
             if crop.size == 0:

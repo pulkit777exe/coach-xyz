@@ -2,10 +2,11 @@ import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
-import { saveJob, redis } from "../lib/jobs"
+import { saveJob } from "../lib/jobs"
 import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
 import { checkAnalysisLimit, checkBetaCodeLimit, getIP, getBetaCode } from "../lib/ratelimit"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
+import { DEFAULT_MODEL } from "../types"
 
 type AnalyzeBody = {
   session_token: string | null
@@ -62,15 +63,26 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
 
   const sessionToken = body.session_token
   const playerIndex = body.player_index
-  const model = body.model ?? "gemini-2.5-flash"
-  const priority = body.priority ?? "free"
+  const model = body.model ?? DEFAULT_MODEL
 
+  // Server-side priority determination (don't trust client input for priority)
+  const priority = betaCode ? "beta" : "free"
+
+  // Validate session_token format (must be UUID if provided)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (
     sessionToken !== null &&
-    (typeof sessionToken !== "string" || sessionToken.trim().length === 0)
+    (typeof sessionToken !== "string" || !UUID_RE.test(sessionToken))
   ) {
     set.status = 400
-    return buildError("INVALID_SESSION_TOKEN", undefined, false)
+    return buildError("INVALID_SESSION_TOKEN", "Session token must be a valid UUID.", false)
+  }
+
+  // Whitelist allowed models
+  const ALLOWED_MODELS = [DEFAULT_MODEL]
+  if (body.model && !ALLOWED_MODELS.includes(body.model)) {
+    set.status = 400
+    return buildError("INVALID_REQUEST", `Unsupported model: ${body.model}.`, false)
   }
 
   if (
@@ -96,28 +108,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       created_at: Date.now(),
     })
 
-    // 2. Pre-create the engine job in Redis with initial state
-    await redis.set(
-      `coachai:job:${engine_job_id}`,
-      JSON.stringify({
-        job_id: engine_job_id,
-        state: "uploading",
-        stage: 0,
-        stage_name: "Uploading",
-        progress: 0,
-        complete: false,
-        error: null,
-        error_code: null,
-        retryable: true,
-        summary: null,
-        video_key: null,
-        video_path: null,
-        created_at: Date.now() / 1000,
-      }),
-      { ex: 7200 },
-    )
-
-    // 3. Enqueue — BullMQ handles the rest
+    // 2. Enqueue — BullMQ worker calls engine /analyze which creates the engine job
     if (!analysisQueue) {
       set.status = 503
       return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)

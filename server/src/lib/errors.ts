@@ -1,14 +1,10 @@
 // ── Server Error Types ───────────────────────────────────────────────────────
-// All errors returned by the server follow this shape.
+// Canonical error shape shared across all layers.
 // The "layer" field indicates where the error originated.
 
-export interface CoachAIError {
-  code: string
-  message: string
-  layer: "engine" | "server" | "client"
-  retryable: boolean
-  retry_after?: number
-}
+import type { CoachAIError } from "../types"
+
+export type { CoachAIError }
 
 // ── Error Code Messages ──────────────────────────────────────────────────────
 // Every error code used anywhere in the system has a user-friendly message here.
@@ -23,7 +19,10 @@ const FALLBACK_MESSAGES: Record<string, string> = {
   GEMINI_PARSE_FAILED: "AI returned unexpected response. Try again.",
   JOB_NOT_FOUND: "Session expired. Please upload your video again.",
   VIDEO_EXPIRED: "This video is no longer available. The server may have restarted. Please upload your video again.",
+  VIDEO_NOT_FOUND: "Rendered video is not available yet.",
   ENGINE_UNAVAILABLE: "Analysis engine is temporarily unavailable.",
+  ENGINE_ERROR: "Analysis engine encountered an error.",
+  UNKNOWN: "An unknown error occurred.",
   INVALID_STATE_TRANSITION: "Analysis is in an unexpected state. Please retry.",
   REDIS_UNAVAILABLE: "Job storage is unavailable. Please try again later.",
   MEDIAPIPE_UNAVAILABLE: "Player detection is unavailable. Please try again.",
@@ -65,12 +64,12 @@ export function buildError(
  * Wrap an engine error into a CoachAIError.
  * Preserves the engine's code, message, and retryable flag.
  */
-export function wrapEngineError(body: any): CoachAIError {
+export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
   return {
-    code: body?.code ?? "ENGINE_ERROR",
-    message: body?.message ?? FALLBACK_MESSAGES.ENGINE_UNAVAILABLE,
+    code: body.code ?? "ENGINE_ERROR",
+    message: body.message ?? FALLBACK_MESSAGES.ENGINE_UNAVAILABLE,
     layer: "engine",
-    retryable: body?.retryable ?? true,
+    retryable: body.retryable ?? true,
   }
 }
 
@@ -88,4 +87,18 @@ export function buildClientError(
     layer: "client",
     retryable,
   }
+}
+
+/**
+ * Type guard: check if an unknown value is a CoachAIError.
+ */
+export function isCoachAIError(value: unknown): value is CoachAIError {
+  if (typeof value !== "object" || value === null) return false
+  const obj = value as Record<string, unknown>
+  return (
+    typeof obj.code === "string" &&
+    typeof obj.message === "string" &&
+    (obj.layer === "engine" || obj.layer === "server" || obj.layer === "client") &&
+    typeof obj.retryable === "boolean"
+  )
 }

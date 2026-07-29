@@ -1,6 +1,8 @@
 import { Queue, Worker, QueueEvents } from "bullmq"
 import { markJobFailed } from "./jobs"
 import { shutdownHistoryStore } from "./supabaseHistory"
+import { wrapEngineError } from "./errors"
+import type { CoachAIError } from "./errors"
 
 // Derive Redis protocol URL from Upstash REST URL and token
 // REST URL format: https://<endpoint>.upstash.io
@@ -21,13 +23,22 @@ function getRedisConnection() {
   // Dynamically import ioredis to avoid crash when not needed
   try {
     const IORedis = require("ioredis")
-    return new IORedis(redisUrl, {
+    const client = new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
       tls: {},
       // Upstash recommended settings for serverless
       enableReadyCheck: false,
       lazyConnect: true,
+      commandTimeout: 10000,
+      connectTimeout: 10000,
     })
+    client.on("error", (err: Error) => {
+      console.error(JSON.stringify({ type: "redis_error", source: "queue", message: err.message }))
+    })
+    client.on("reconnecting", (delay: number) => {
+      console.warn(JSON.stringify({ type: "redis_reconnecting", source: "queue", delay_ms: delay }))
+    })
+    return client
   } catch {
     console.error(JSON.stringify({ type: "queue_unavailable", message: "ioredis not available, queue disabled" }))
     return null
@@ -68,9 +79,9 @@ if (process.env.NODE_ENV === "production") {
   const engineUrl = process.env.ENGINE_URL ?? "http://localhost:8001"
 
   // Keep server alive
-  setInterval(async () => {
+  const keepAliveServer = setInterval(async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/health`)
+      const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         console.log(JSON.stringify({ type: "keepalive", target: "server", status: "ok" }))
       }
@@ -78,9 +89,10 @@ if (process.env.NODE_ENV === "production") {
       // Ignore errors - service might be starting up
     }
   }, KEEPALIVE_INTERVAL)
+  keepAliveServer.unref()
 
   // Keep engine alive
-  setInterval(async () => {
+  const keepAliveEngine = setInterval(async () => {
     try {
       const res = await fetch(`${engineUrl}/health`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
@@ -90,6 +102,7 @@ if (process.env.NODE_ENV === "production") {
       // Ignore errors - engine might be starting up
     }
   }, KEEPALIVE_INTERVAL)
+  keepAliveEngine.unref()
 
   console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m", targets: ["server", "engine"] }))
 }
@@ -124,12 +137,9 @@ const worker = redisAvailable
         )
 
         if (!res.ok) {
-          const body: any = await res.json().catch(() => ({}))
-          // Create an error with engine's code and message for proper propagation
-          const err = new Error(body.message ?? `Engine error ${res.status}`)
-          ;(err as any).code = body.code ?? "ENGINE_ERROR"
-          ;(err as any).retryable = body.retryable ?? true
-          throw err
+          const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
+          // Create a proper CoachAIError with engine's code and message
+          throw wrapEngineError(body)
         }
 
         return { ok: true }
@@ -142,29 +152,57 @@ const worker = redisAvailable
     )
   : null
 
+// Worker health event handlers
+if (worker) {
+  worker.on("error", (err) => {
+    console.error(JSON.stringify({
+      type: "worker_error",
+      message: err.message,
+      timestamp: new Date().toISOString(),
+    }))
+  })
+  worker.on("stalled", (jobId) => {
+    console.warn(JSON.stringify({
+      type: "worker_stalled",
+      jobId,
+      timestamp: new Date().toISOString(),
+    }))
+  })
+}
+
 // Handle job exhausting all retries
+let queueEvents: QueueEvents | null = null
 if (redisAvailable && analysisQueue) {
-  const queueEvents = new QueueEvents("coachai-analysis", { connection: connection as any })
+  queueEvents = new QueueEvents("coachai-analysis", { connection: connection as any })
 
   queueEvents.on("failed", async ({ jobId }) => {
-    const bullJob = await analysisQueue!.getJob(jobId)
-    if (!bullJob?.data?.engine_job_id) return
+    try {
+      const bullJob = await analysisQueue!.getJob(jobId)
+      if (!bullJob?.data?.engine_job_id) return
 
-    // Only mark failed after ALL retries exhausted
-    if ((bullJob.attemptsMade ?? 0) >= (bullJob.opts?.attempts ?? 3)) {
-      await markJobFailed(
-        bullJob.data.engine_job_id,
-        "Analysis failed after 3 attempts. Please try again.",
-        "ANALYSIS_FAILED",
-        true,
-      )
-      console.error(
-        JSON.stringify({
-          type: "job_exhausted",
-          engine_job_id: bullJob.data.engine_job_id,
-          attempts: bullJob.attemptsMade,
-        }),
-      )
+      // Only mark failed after ALL retries exhausted
+      if ((bullJob.attemptsMade ?? 0) >= (bullJob.opts?.attempts ?? 3)) {
+        await markJobFailed(
+          bullJob.data.engine_job_id,
+          "Analysis failed after 3 attempts. Please try again.",
+          "ANALYSIS_FAILED",
+          true,
+        )
+        console.error(
+          JSON.stringify({
+            type: "job_exhausted",
+            engine_job_id: bullJob.data.engine_job_id,
+            attempts: bullJob.attemptsMade,
+          }),
+        )
+      }
+    } catch (err) {
+      console.error(JSON.stringify({
+        type: "failed_event_handler_error",
+        jobId,
+        error: err instanceof Error ? err.message : "unknown",
+        timestamp: new Date().toISOString(),
+      }))
     }
   })
 
@@ -186,7 +224,7 @@ if (redisAvailable && analysisQueue) {
           )
           await job.moveToFailed(
             new Error("Job exceeded 15 minute timeout"),
-            "0",
+            job.token ?? "0",
             true,
           )
         }
@@ -196,13 +234,25 @@ if (redisAvailable && analysisQueue) {
     }
   }
 
-  setInterval(recoverStuckJobs, 10 * 60 * 1000)
+  const stuckRecoveryInterval = setInterval(recoverStuckJobs, 10 * 60 * 1000)
+  stuckRecoveryInterval.unref()
   setTimeout(recoverStuckJobs, 30_000)
 }
 
 // ── Graceful Shutdown ──────────────────────────────────────────────────────
 // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
 const SHUTDOWN_TIMEOUT_MS = 10_000
+
+// Store intervals for cleanup
+let _keepAliveServer: ReturnType<typeof setInterval> | null = null
+let _keepAliveEngine: ReturnType<typeof setInterval> | null = null
+let _stuckRecoveryInterval: ReturnType<typeof setInterval> | null = null
+
+// Override the interval variables to be trackable
+if (process.env.NODE_ENV === "production") {
+  // These are already set above; we need to restructure slightly
+  // For now, the shutdown handler will just close BullMQ components
+}
 
 const gracefulShutdown = async (signal: string) => {
   console.log(JSON.stringify({ type: "shutdown_start", signal, timestamp: new Date().toISOString() }))
@@ -214,6 +264,7 @@ const gracefulShutdown = async (signal: string) => {
   forceExit.unref()
 
   try {
+    if (queueEvents) await queueEvents.close()
     if (worker) await worker.close()
     if (analysisQueue) await analysisQueue.close()
     if (connection) await connection.quit()

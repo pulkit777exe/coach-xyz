@@ -15,18 +15,28 @@ from dataclasses import dataclass
 from typing import Any
 
 import cv2
-import mediapipe as mp
 import numpy as np
-from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python.vision import (
-    PoseLandmarker,
-    PoseLandmarkerOptions,
-    RunningMode,
-)
 
+try:
+    import mediapipe as mp
+except ImportError:
+    mp = None
+
+try:
+    from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python.vision import (
+        PoseLandmarker,
+        PoseLandmarkerOptions,
+        RunningMode,
+    )
+    _HAS_TASKS = True
+except ImportError:
+    _HAS_TASKS = False
+
+# Use same model as pose_backend for consistent detection
 _MODEL_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)),
-    "pose_landmarker_lite.task",
+    "pose_landmarker_full.task",
 )
 
 _POSE_WEIGHT = 0.40
@@ -59,6 +69,11 @@ def score_frames(video_path: str) -> list[ScoredFrame]:
       - Occlusion penalty  (20%)  -> converted to (1 - penalty)
       - Blur quality       (15%)  -> Laplacian variance
     """
+    if not _HAS_TASKS:
+        raise ImportError(
+            "mediapipe-tasks is required for player tracking. "
+            "Install with: pip install mediapipe"
+        )
     if not os.path.exists(_MODEL_PATH):
         raise FileNotFoundError(f"Pose landmarker model not found at {_MODEL_PATH}")
 
@@ -83,55 +98,56 @@ def score_frames(video_path: str) -> list[ScoredFrame]:
     scored: list[ScoredFrame] = []
     frame_index = 0
 
-    while cap.isOpened():
-        ok, frame = cap.read()
-        if not ok:
-            break
+    try:
+        while cap.isOpened():
+            ok, frame = cap.read()
+            if not ok:
+                break
 
-        if frame_index % process_every_n != 0:
-            frame_index += 1
-            continue
+            if frame_index % process_every_n != 0:
+                frame_index += 1
+                continue
 
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        timestamp_ms = int((frame_index / fps) * 1000)
-        result = pose.detect_for_video(mp_image, timestamp_ms)
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            timestamp_ms = int((frame_index / fps) * 1000)
+            result = pose.detect_for_video(mp_image, timestamp_ms)
 
-        skeletons = _extract_skeletons(
-            result.pose_landmarks,
-            frame_width=frame_width,
-            frame_height=frame_height,
-        )
-        pose_conf = _pose_confidence(skeletons)
-        player_count_score = _player_count_score(len(skeletons))
-        occlusion_penalty = _occlusion_penalty(skeletons)
-        blur_score = _blur_score(frame)
-
-        total = (
-            _POSE_WEIGHT * pose_conf
-            + _COUNT_WEIGHT * player_count_score
-            + _OCCLUSION_WEIGHT * (1.0 - occlusion_penalty)
-            + _BLUR_WEIGHT * blur_score
-        )
-
-        scored.append(
-            ScoredFrame(
-                frame_index=frame_index,
-                timestamp_s=frame_index / fps,
-                total_score=round(total, 4),
-                pose_confidence=round(pose_conf, 4),
-                player_count_score=round(player_count_score, 4),
-                occlusion_penalty=round(occlusion_penalty, 4),
-                blur_score=round(blur_score, 4),
+            skeletons = _extract_skeletons(
+                result.pose_landmarks,
                 frame_width=frame_width,
                 frame_height=frame_height,
-                detected_skeletons=skeletons,
             )
-        )
-        frame_index += 1
+            pose_conf = _pose_confidence(skeletons)
+            player_count_score = _player_count_score(len(skeletons))
+            occlusion_penalty = _occlusion_penalty(skeletons)
+            blur_score = _blur_score(frame)
 
-    cap.release()
-    pose.close()
+            total = (
+                _POSE_WEIGHT * pose_conf
+                + _COUNT_WEIGHT * player_count_score
+                + _OCCLUSION_WEIGHT * (1.0 - occlusion_penalty)
+                + _BLUR_WEIGHT * blur_score
+            )
+
+            scored.append(
+                ScoredFrame(
+                    frame_index=frame_index,
+                    timestamp_s=frame_index / fps,
+                    total_score=round(total, 4),
+                    pose_confidence=round(pose_conf, 4),
+                    player_count_score=round(player_count_score, 4),
+                    occlusion_penalty=round(occlusion_penalty, 4),
+                    blur_score=round(blur_score, 4),
+                    frame_width=frame_width,
+                    frame_height=frame_height,
+                    detected_skeletons=skeletons,
+                )
+            )
+            frame_index += 1
+    finally:
+        cap.release()
+        pose.close()
 
     scored.sort(key=lambda item: item.total_score, reverse=True)
     return scored[:5]

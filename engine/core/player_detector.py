@@ -75,60 +75,61 @@ def detect_players(video_path: str, sample_interval_s: float = 5.0) -> dict:
     }
     """
     cap     = cv2.VideoCapture(video_path)
-    fps     = max(1.0, cap.get(cv2.CAP_PROP_FPS))
-    total   = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fw      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    fh      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_s = total / fps
+    try:
+        fps     = max(1.0, cap.get(cv2.CAP_PROP_FPS))
+        total   = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fw      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        fh      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_s = total / fps
 
-    scan_s  = min(total_s, 90.0)
-    times   = list(np.arange(1.5, max(2.5, scan_s), sample_interval_s))
+        scan_s  = min(total_s, 90.0)
+        times   = list(np.arange(1.5, max(2.5, scan_s), sample_interval_s))
 
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+        hog = cv2.HOGDescriptor()
+        hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
-    best_frame   = None
-    best_raw     = None       # un-annotated original
-    best_fidx    = 0
-    best_ts_s    = 0.0
-    best_boxes:  list = []
-    best_weights: list = []
+        best_frame   = None
+        best_raw     = None       # un-annotated original
+        best_fidx    = 0
+        best_ts_s    = 0.0
+        best_boxes:  list = []
+        best_weights: list = []
 
-    for t in times:
-        fidx = int(fps * t)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, fidx)
-        ok, frame = cap.read()
-        if not ok:
-            continue
+        for t in times:
+            fidx = int(fps * t)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, fidx)
+            ok, frame = cap.read()
+            if not ok:
+                continue
 
-        scale  = min(1.0, 800 / max(fw, fh, 1))
-        small  = cv2.resize(frame, None, fx=scale, fy=scale)
+            scale  = min(1.0, 800 / max(fw, fh, 1))
+            small  = cv2.resize(frame, None, fx=scale, fy=scale)
 
-        boxes, weights = hog.detectMultiScale(
-            small,
-            winStride=(8, 8),
-            padding=(8, 8),
-            scale=1.05,
-        )
+            boxes, weights = hog.detectMultiScale(
+                small,
+                winStride=(8, 8),
+                padding=(8, 8),
+                scale=1.05,
+            )
 
-        if len(boxes) == 0:
-            continue
+            if len(boxes) == 0:
+                continue
 
-        boxes   = (np.array(boxes, dtype=float) / scale).astype(int)
-        weights = list(weights.flatten())
-        boxes, weights = _nms_weighted(boxes, weights, overlap_thresh=0.45)
+            boxes   = (np.array(boxes, dtype=float) / scale).astype(int)
+            weights = list(weights.flatten())
+            boxes, weights = _nms_weighted(boxes, weights, overlap_thresh=0.45)
 
-        # Prefer the frame with the most confident, well-spread detections
-        score = len(boxes) * 10 + sum(weights)
-        if score > (len(best_boxes) * 10 + sum(best_weights)):
-            best_boxes   = boxes
-            best_weights = weights
-            best_frame   = frame.copy()
-            best_raw     = frame.copy()
-            best_fidx    = fidx
-            best_ts_s    = t
-
-    cap.release()
+            # Prefer the frame with the most confident, well-spread detections
+            score = len(boxes) * 10 + sum(weights)
+            if score > (len(best_boxes) * 10 + sum(best_weights)):
+                best_boxes   = boxes
+                best_weights = weights
+                best_frame   = frame.copy()
+                best_raw     = frame.copy()
+                best_fidx    = fidx
+                best_ts_s    = t
+    finally:
+        cap.release()
 
     # Fallback if nothing found
     if best_frame is None:

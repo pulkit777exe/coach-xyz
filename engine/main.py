@@ -23,7 +23,7 @@ import sentry_sdk
 
 sentry_sdk.init(
     dsn=os.environ.get("SENTRY_DSN"),
-    send_default_pii=True,
+    send_default_pii=False,
     release="coachai-engine@0.2.0",
     environment=os.environ.get("ENVIRONMENT", "development"),
 )
@@ -72,6 +72,15 @@ sessions_lock = threading.Lock()
 # Bounded executor for async analysis (memory optimization)
 _analysis_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
 
+# Module-level MediaPipe availability check (used by /health/deep)
+try:
+    from core.pose_backend import pose_backend_name, pose_backend_available
+except Exception:
+    def pose_backend_available() -> bool:
+        return False
+    def pose_backend_name() -> str:
+        return "unavailable"
+
 START_TIME = time.time()
 
 
@@ -79,18 +88,14 @@ START_TIME = time.time()
 async def lifespan(app: FastAPI):
     # Startup
     print("CoachAI Engine running on :8001")
-    try:
-        from core.pose_backend import pose_backend_name, pose_backend_available
-        backend = pose_backend_name()
-        if not pose_backend_available():
-            print(
-                "WARNING: mediapipe Pose backend unavailable. "
-                "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
-            )
-        else:
-            print(f"MediaPipe pose backend: {backend}")
-    except Exception as e:
-        print(f"WARNING: Could not initialize MediaPipe: {e}")
+    backend = pose_backend_name()
+    if not pose_backend_available():
+        print(
+            "WARNING: mediapipe Pose backend unavailable. "
+            "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
+        )
+    else:
+        print(f"MediaPipe pose backend: {backend}")
 
     # Start background session eviction task
     async def session_eviction_loop():
@@ -110,6 +115,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+    _analysis_executor.shutdown(wait=True, cancel_futures=False)
     logging.info("CoachAI Engine shutting down")
     storage_dir = os.environ.get("LOCAL_STORAGE_DIR", "./tmp/storage")
     if os.path.exists(storage_dir):
@@ -125,9 +131,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan, default_response_class=_default_response_class)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+_cors_origins = [o.strip() for o in os.environ.get("SERVER_URL", "http://localhost:8000").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get("SERVER_URL", "http://localhost:8000")],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -161,7 +168,22 @@ async def timing_middleware(request: Request, call_next):
 @app.exception_handler(EngineError)
 async def engine_error_handler(request: Request, exc: EngineError):
     logging.error(f"{exc.code}: {exc.message}")
-    status = 422 if exc.retryable else 500
+    _status_map = {
+        "NO_PLAYERS_DETECTED": 400,
+        "VIDEO_DECODE_FAILED": 400,
+        "VIDEO_EXPIRED": 400,
+        "VIDEO_NOT_FOUND": 404,
+        "JOB_NOT_FOUND": 404,
+        "GEMINI_QUOTA_EXCEEDED": 429,
+        "GEMINI_TIMEOUT": 504,
+        "GEMINI_PARSE_FAILED": 500,
+        "GEMINI_PROCESSING_FAILED": 500,
+        "MEDIAPIPE_UNAVAILABLE": 503,
+        "REDIS_UNAVAILABLE": 503,
+        "STORAGE_ERROR": 503,
+        "ENGINE_UNAVAILABLE": 503,
+    }
+    status = _status_map.get(exc.code, 422 if exc.retryable else 500)
     return JSONResponse(status_code=status, content=exc.to_dict())
 
 
@@ -202,7 +224,7 @@ def _error_response(status_code: int, error: str, message: str) -> JSONResponse:
             "code": error,
             "message": message,
             "layer": "engine",
-            "retryable": status_code < 500,
+            "retryable": status_code >= 500,
         },
     )
 
@@ -216,20 +238,28 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-def _evict_old_sessions() -> None:
-    """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit."""
+def _evict_old_sessions_unlocked() -> None:
+    """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit.
+    
+    Must be called with sessions_lock held.
+    """
     now = time.time()
+    # Remove expired sessions
+    expired = [sid for sid, s in sessions.items()
+               if now - s.get("created_at", 0) > SESSION_TTL]
+    for sid in expired:
+        sessions.pop(sid, None)
+    
+    # Enforce max sessions limit (remove oldest first)
+    while len(sessions) > MAX_SESSIONS:
+        oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
+        sessions.pop(oldest_sid, None)
+
+
+def _evict_old_sessions() -> None:
+    """Thread-safe eviction of old sessions."""
     with sessions_lock:
-        # Remove expired sessions
-        expired = [sid for sid, s in sessions.items()
-                   if now - s.get("created_at", 0) > SESSION_TTL]
-        for sid in expired:
-            sessions.pop(sid, None)
-        
-        # Enforce max sessions limit (remove oldest first)
-        while len(sessions) > MAX_SESSIONS:
-            oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
-            sessions.pop(oldest_sid, None)
+        _evict_old_sessions_unlocked()
 
 
 def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None]) -> Optional[JSONResponse]:
@@ -294,6 +324,9 @@ def health_deep():
     # Check MediaPipe
     mp_ok = pose_backend_available()
 
+    # Check executor queue depth
+    executor_depth = _analysis_executor._work_queue.qsize() if hasattr(_analysis_executor, '_work_queue') else -1
+
     status = "healthy" if (redis_ok and mp_ok) else "degraded"
 
     return {
@@ -301,6 +334,7 @@ def health_deep():
         "checks": {
             "redis": {"ok": redis_ok, "latency_ms": redis_latency},
             "mediapipe": {"ok": mp_ok},
+            "executor": {"queue_depth": executor_depth, "max_workers": _analysis_executor._max_workers},
         },
         "uptime": round(time.time() - START_TIME, 1),
     }
@@ -322,14 +356,24 @@ async def scan(video: UploadFile) -> JSONResponse:
     logging.info(f"[SCAN] Streaming upload to storage: {r2_key}")
 
     # Always stream to disk (memory optimization: remove 10MB threshold)
+    max_upload_size = int(os.environ.get("MAX_FILE_SIZE", 500 * 1024 * 1024))
     fd, temp_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
     try:
+        total_bytes = 0
         with open(temp_path, "wb") as f:
             while True:
                 chunk = await video.read(CHUNK_SIZE)
                 if not chunk:
                     break
+                total_bytes += len(chunk)
+                if total_bytes > max_upload_size:
+                    os.unlink(temp_path)
+                    return _error_response(
+                        413,
+                        "FILE_TOO_LARGE",
+                        f"File exceeds maximum size of {max_upload_size // (1024*1024)}MB.",
+                    )
                 f.write(chunk)
         await video.close()
         logging.info(f"[SCAN] Streamed {os.path.getsize(temp_path)} bytes to temp file")
@@ -343,16 +387,29 @@ async def scan(video: UploadFile) -> JSONResponse:
         except FileNotFoundError:
             pass
 
-    local_path = storage.download_video_to_tmp(r2_key)
+    try:
+        local_path = storage.download_video_to_tmp(r2_key)
+    except Exception:
+        # Clean up the uploaded file if download fails
+        storage.delete_file(r2_key)
+        raise
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
     try:
         from core.detector import detect_players
         players = detect_players(local_path)
     except NoPlayersDetectedError:
         storage.delete_file(r2_key)
+        try:
+            os.unlink(local_path)
+        except FileNotFoundError:
+            pass
         raise  # caught by global handler
     except VideoDecodeError as exc:
         storage.delete_file(r2_key)
+        try:
+            os.unlink(local_path)
+        except FileNotFoundError:
+            pass
         if "MediaPipe Pose backend unavailable" in exc.message:
             return _error_response(
                 503,
@@ -360,16 +417,18 @@ async def scan(video: UploadFile) -> JSONResponse:
                 "MediaPipe runtime is unavailable on the engine.",
             )
         raise  # caught by global handler
-    finally:
+    except Exception:
+        storage.delete_file(r2_key)
         try:
             os.unlink(local_path)
         except FileNotFoundError:
             pass
+        raise  # caught by global handler
 
     session_token = str(uuid.uuid4())
     # Evict old sessions before creating new one (memory optimization)
-    _evict_old_sessions()
     with sessions_lock:
+        _evict_old_sessions_unlocked()
         sessions[session_token] = {
             "video_key": r2_key,
             "players": players,
@@ -377,12 +436,19 @@ async def scan(video: UploadFile) -> JSONResponse:
         }
 
     # Warm cache for this video (makes subsequent analyses faster)
+    # Must happen before local_path is deleted
     try:
         from core.cache import compute_video_hash, warm_cache_for_video
         video_hash = compute_video_hash(local_path)
         warm_cache_for_video(video_hash, local_path)
     except Exception as e:
         logging.warning(f"Cache warming failed: {e}")
+
+    # Delete local temp file AFTER cache warming
+    try:
+        os.unlink(local_path)
+    except FileNotFoundError:
+        pass
 
     response_players = [
         {
@@ -441,11 +507,16 @@ async def analyze(request: Request) -> JSONResponse:
         fail_job(engine_job_id, JobNotFoundError())
         return err
 
-    # Run SYNCHRONOUSLY — BullMQ worker is waiting for this response
-    # Do NOT use threading.Thread
+    # Run in thread pool to avoid blocking the event loop
+    # BullMQ worker waits for this response, so we await the result
     try:
         from core.analyzer import run_analysis
-        run_analysis(engine_job_id, video_key, player_index)
+        import asyncio
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            _analysis_executor,
+            lambda: run_analysis(engine_job_id, video_key, player_index),
+        )
         return JSONResponse({"ok": True})
     except EngineError as e:
         fail_job(engine_job_id, e)
@@ -490,13 +561,24 @@ async def analyze_async(request: Request) -> JSONResponse:
 
     # Create job in Redis
     from core.jobs import create_job
-    engine_job_id = create_job(session_token, video_key)
+    engine_job_id = create_job(session_token, video_key=video_key)
 
     # Start analysis in bounded executor (memory optimization)
     def _run_analysis():
-        from core.analyzer import run_analysis
-        run_analysis(engine_job_id, video_key, player_index)
-    
+        try:
+            from core.analyzer import run_analysis
+            run_analysis(engine_job_id, video_key, player_index)
+        except Exception as e:
+            import traceback
+            logging.error(f"[ASYNC] Analysis failed for {engine_job_id}: {e}\n{traceback.format_exc()}")
+            from core.jobs import fail_job as _fail_job
+            from core.errors import EngineError as _EngineError
+            _fail_job(engine_job_id, _EngineError(
+                code="INTERNAL_ERROR",
+                message="Unexpected analysis error.",
+                retryable=True,
+            ))
+
     _analysis_executor.submit(_run_analysis)
 
     return JSONResponse({
@@ -515,37 +597,57 @@ async def analyze_progress(job_id: str):
     from fastapi.responses import StreamingResponse
 
     async def event_generator():
-        while True:
-            try:
-                from core.jobs import get_job
-                job = get_job(job_id)
+        import asyncio as _asyncio
+        try:
+            while True:
+                try:
+                    from core.jobs import get_job
+                    job = get_job(job_id)
 
-                # Send progress update
-                data = json.dumps({
-                    "job_id": job_id,
-                    "stage": job.stage if hasattr(job, "stage") else "unknown",
-                    "progress": job.progress if hasattr(job, "progress") else 0,
-                    "complete": job.stage == "completed" if hasattr(job, "stage") else False,
-                    "error": job.error if hasattr(job, "error") else None,
-                })
-                yield f"data: {data}\n\n"
+                    # Send progress update
+                    data = json.dumps({
+                        "job_id": job_id,
+                        "stage": job.state,
+                        "progress": job.progress,
+                        "complete": job.complete,
+                        "error": job.error,
+                    })
+                    yield f"data: {data}\n\n"
 
-                # Check if done
-                if hasattr(job, "stage") and job.stage in ("completed", "failed"):
-                    break
+                    # Check if done
+                    if job.state in ("completed", "failed"):
+                        break
 
-            except Exception as e:
-                # Job might not exist yet
-                data = json.dumps({
-                    "job_id": job_id,
-                    "stage": "queued",
-                    "progress": 0,
-                    "complete": False,
-                    "error": None,
-                })
-                yield f"data: {data}\n\n"
+                except Exception:
+                    # Distinguish between "job not found" and transient errors
+                    from core.errors import JobNotFoundError
+                    try:
+                        get_job(job_id)
+                    except JobNotFoundError:
+                        data = json.dumps({
+                            "job_id": job_id,
+                            "stage": "failed",
+                            "progress": 0,
+                            "complete": True,
+                            "error": "Job not found or expired.",
+                            "error_code": "JOB_NOT_FOUND",
+                        })
+                        yield f"data: {data}\n\n"
+                        break
+                    except Exception:
+                        # Transient Redis error, send queued status and retry
+                        data = json.dumps({
+                            "job_id": job_id,
+                            "stage": "queued",
+                            "progress": 0,
+                            "complete": False,
+                            "error": None,
+                        })
+                        yield f"data: {data}\n\n"
 
-            await asyncio.sleep(1)  # Update every second
+                await _asyncio.sleep(1)  # Update every second
+        except _asyncio.CancelledError:
+            pass  # Client disconnected — clean up gracefully
 
     return StreamingResponse(
         event_generator(),
@@ -581,6 +683,22 @@ def status(job_id: str) -> JSONResponse:
             "retryable": job.retryable,
         },
     )
+
+
+@app.post("/fail/{job_id}")
+async def fail(job_id: str) -> JSONResponse:
+    """Mark a job as failed. Called by the server when queue retries are exhausted."""
+    try:
+        from core.errors import EngineError
+        error = EngineError(
+            code="ANALYSIS_FAILED",
+            message="Analysis failed after retries.",
+            retryable=False,
+        )
+        fail_job(job_id, error)
+        return JSONResponse(status_code=200, content={"ok": True})
+    except JobNotFoundError:
+        return _error_response(404, "JOB_NOT_FOUND", "Job not found")
 
 
 @app.get("/download/{job_id}")
