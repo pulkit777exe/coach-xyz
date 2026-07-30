@@ -9,11 +9,12 @@ import os
 
 # ── Gemini Configuration ────────────────────────────────────────────────────
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
 # ── File Limits ─────────────────────────────────────────────────────────────
 
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+CHUNK_SIZE = 8 * 1024 * 1024  # 8MB streaming chunk size
 
 # ── Timeouts ────────────────────────────────────────────────────────────────
 

@@ -27,12 +27,15 @@ except Exception:
     genai_types = None
 
 
-def build_frame_metadata(track: dict[str, Any], fps: float) -> str:
+def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int = 0, motion_score: float = 0.0, player_count: int = 0) -> str:
     """
     Build a text metadata string for a frame to send alongside the image.
-    Includes bounding box position and key pose landmark angles.
+    Includes bounding box position, key pose landmark angles, and motion info.
     """
     parts = []
+
+    if motion_score > 0 or player_count > 0:
+        parts.append(f"Motion: {motion_score:.2f} | Players visible: {player_count}")
 
     bbox = track.get("bbox")
     if bbox:
@@ -71,7 +74,9 @@ def build_frame_metadata(track: dict[str, Any], fps: float) -> str:
         except (KeyError, IndexError, ZeroDivisionError):
             pass
 
-    return ". ".join(parts) if parts else "No position data"
+    timestamp = track.get("timestamp", 0.0)
+    metadata_str = ". ".join(parts) if parts else "No position data"
+    return f"Frame {sequence_index} at {timestamp}s — {metadata_str}"
 
 
 def call_gemini(
@@ -116,7 +121,7 @@ def call_gemini(
 
     parts: list[Any] = [f"{system_prompt}\n\n{video_meta}"]
 
-    for item in frames_with_tracks:
+    for seq_idx, item in enumerate(frames_with_tracks):
         frame = None
         if video_path:
             frame = read_frame_by_index(video_path, item["frame_index"])
@@ -125,8 +130,10 @@ def call_gemini(
         jpeg = frame_to_jpeg_bytes(frame)
         if not jpeg:
             continue
-        metadata_str = build_frame_metadata(item, video_fps)
-        parts.append(f"Frame at {item['timestamp']}s — {metadata_str}")
+        motion_score = item.get("motion_score", 0.0)
+        player_count = item.get("player_count", 0)
+        metadata_str = build_frame_metadata(item, video_fps, sequence_index=seq_idx, motion_score=motion_score, player_count=player_count)
+        parts.append(metadata_str)
         parts.append(genai_types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"))
 
     logging.info(f"[Analyzer] Sending {len(frames_with_tracks)} frames to Gemini with detailed prompt")
@@ -165,11 +172,13 @@ def normalize_gemini_result(raw: dict) -> dict:
     """
     Transform raw Gemini output to match the frontend AnalysisSummary type.
 
-    Gemini returns: { shots: [...], session_summary: {...}, sport, ... }
+    Gemini returns: { shots: [...], session_summary: {...}, sport, player_name, session_date, ... }
     Frontend expects: { shot_events: [...], form_score, overall_rating, top_tips, summary, strengths, ... }
     """
     session_summary = raw.get("session_summary") or {}
     sport = raw.get("sport", "unknown")
+    player_name = raw.get("player_name", "Player")
+    session_date = raw.get("session_date")
 
     form_score = session_summary.get("average_form_score", 0)
     overall_rating = session_summary.get("overall_rating", "N/A")
@@ -198,7 +207,10 @@ def normalize_gemini_result(raw: dict) -> dict:
             "event_type": shot.get("shot_type", "unknown"),
             "form_score": shot.get("form_score", 0),
             "feedback": shot.get("feedback", ""),
+            "result": shot.get("result"),
+            "form_breakdown": shot.get("form_breakdown", {}),
         }
+        # Add key_observation for backward compatibility
         breakdown = shot.get("form_breakdown")
         if isinstance(breakdown, dict) and breakdown:
             for criterion, rating in breakdown.items():
@@ -208,10 +220,16 @@ def normalize_gemini_result(raw: dict) -> dict:
             if "key_observation" not in event and breakdown:
                 first_key = next(iter(breakdown))
                 event["key_observation"] = f"{first_key}: {breakdown[first_key]}"
+        # Keep cumulative stats
+        for key, value in shot.items():
+            if key.endswith("_so_far"):
+                event[key] = value
         shot_events.append(event)
 
     return {
         "sport": sport,
+        "player_name": player_name,
+        "session_date": session_date,
         "form_score": form_score,
         "overall_rating": overall_rating,
         "top_tips": top_tips,

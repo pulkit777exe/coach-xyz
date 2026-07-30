@@ -2,7 +2,7 @@
 validator.py — Validates the JSON response from Gemini against the expected schema.
 """
 
-VALID_SPORTS = ['basketball', 'football', 'cricket']
+VALID_SPORTS = ['basketball', 'football', 'cricket', 'tennis', 'baseball', 'hockey']
 
 REQUIRED_TOP_LEVEL = ['sport', 'shots']
 
@@ -18,6 +18,9 @@ VALID_RESULTS = {
     'football':   ['goal', 'missed', 'saved', 'offside', 'blocked'],
     'cricket':    ['four', 'six', 'boundary', 'wicket', 'dot_ball',
                    'single', 'two', 'three'],
+    'tennis':     ['winner', 'error', 'in_play', 'ace', 'double_fault'],
+    'baseball':   ['hit', 'out', 'error', 'walk', 'strikeout', 'home_run'],
+    'hockey':     ['goal', 'save', 'missed', 'blocked', 'post'],
 }
 
 EXPECTED_STAT_KEYS = {
@@ -41,6 +44,27 @@ EXPECTED_STAT_KEYS = {
         'total_wickets_so_far',
         'total_dot_balls_so_far',
         'balls_faced_so_far',
+    ],
+    'tennis': [
+        'total_aces_so_far',
+        'total_winners_so_far',
+        'total_errors_so_far',
+        'total_double_faults_so_far',
+        'points_played_so_far',
+    ],
+    'baseball': [
+        'total_hits_so_far',
+        'total_outs_so_far',
+        'total_walks_so_far',
+        'total_strikeouts_so_far',
+        'at_bats_so_far',
+    ],
+    'hockey': [
+        'total_goals_so_far',
+        'total_saves_so_far',
+        'total_shots_on_goal_so_far',
+        'total_blocks_so_far',
+        'shots_taken_so_far',
     ],
 }
 
