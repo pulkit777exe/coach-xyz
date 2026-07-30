@@ -1,4 +1,4 @@
-import { getEngineJobStatus, markEngineJobFailed } from "./engine"
+import { getEngineJobStatus, markEngineJobFailed, type EngineStatusResult } from "./engine"
 
 const KEY = "coachai:srv:"
 const JOB_TTL = 7200
@@ -61,7 +61,7 @@ export async function getJob(
 // Read engine job status via HTTP (no direct Redis coupling)
 export async function fetchEngineJobStatus(
   engineJobId: string,
-): Promise<EngineJobStatus | null> {
+): Promise<EngineStatusResult> {
   return getEngineJobStatus(engineJobId)
 }
 

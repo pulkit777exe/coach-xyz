@@ -4,7 +4,7 @@ import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { saveJob } from "../lib/jobs"
 import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
-import { checkAnalysisLimit, checkBetaCodeLimit, getIP, getBetaCode } from "../lib/ratelimit"
+import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 import { DEFAULT_MODEL } from "../types"
 
@@ -18,7 +18,7 @@ type AnalyzeBody = {
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
   // ── Rate Limiting (per-IP) ─────────────────────────────────────────────
   const ip = getIP(request)
-  const { allowed, remaining, reset } = await checkAnalysisLimit(ip)
+  const { allowed, reset } = await checkAnalysisLimit(ip)
   if (!allowed) {
     const retryAfter = Math.ceil((reset - Date.now()) / 1000)
     set.status = 429
@@ -29,24 +29,6 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
         true,
       ),
       retry_after: retryAfter,
-    }
-  }
-
-  // ── Rate Limiting (per-beta-code) ─────────────────────────────────────
-  const betaCode = getBetaCode(request)
-  if (betaCode) {
-    const betaLimit = await checkBetaCodeLimit(betaCode)
-    if (!betaLimit.allowed) {
-      const retryAfter = Math.ceil((betaLimit.reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          "RATE_LIMITED",
-          "Beta code usage limit reached (20 per hour). Try again later.",
-          true,
-        ),
-        retry_after: retryAfter,
-      }
     }
   }
 
@@ -65,8 +47,8 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   const playerIndex = body.player_index
   const model = body.model ?? DEFAULT_MODEL
 
-  // Server-side priority determination (don't trust client input for priority)
-  const priority = betaCode ? "beta" : "free"
+  // Server-side priority determination
+  const priority = "free"
 
   // Validate session_token format (must be UUID if provided)
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

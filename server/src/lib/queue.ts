@@ -1,8 +1,20 @@
-import { Queue, Worker, QueueEvents } from "bullmq"
+import { Queue, Worker, QueueEvents, UnrecoverableError } from "bullmq"
 import { markJobFailed } from "./jobs"
 import { shutdownHistoryStore } from "./supabaseHistory"
 import { wrapEngineError } from "./errors"
 import type { CoachAIError } from "./errors"
+
+// Non-retryable engine error codes — these will never succeed on retry.
+// Note: The engine sets retryable per-error; these codes are inherently
+// non-retryable regardless of the engine's retryable flag.
+const UNRECOVERABLE_CODES = new Set([
+  "VIDEO_DECODE_FAILED",
+  "VIDEO_EXPIRED",
+  "VIDEO_NOT_FOUND",
+  "JOB_NOT_FOUND",
+  "INVALID_REQUEST",
+  "MEDIAPIPE_UNAVAILABLE",
+])
 
 // Derive Redis protocol URL from Upstash REST URL and token
 // REST URL format: https://<endpoint>.upstash.io
@@ -29,8 +41,12 @@ function getRedisConnection() {
       // Upstash recommended settings for serverless
       enableReadyCheck: false,
       lazyConnect: true,
-      commandTimeout: 10000,
-      connectTimeout: 10000,
+      commandTimeout: 30000,
+      connectTimeout: 30000,
+      retryStrategy(times: number) {
+        if (times > 10) return null
+        return Math.min(times * 500, 5000)
+      },
     })
     client.on("error", (err: Error) => {
       console.error(JSON.stringify({ type: "redis_error", source: "queue", message: err.message }))
@@ -73,13 +89,16 @@ export type JobPriority = keyof typeof JOB_PRIORITIES
 // ── Keep-Alive Ping (Prevent Free Tier Spin-Down) ─────────────────────────
 // On Render free tier, services spin down after 15 min inactivity.
 // Ping our own health endpoint AND the engine every 10 min to keep both alive.
+const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes
+let keepAliveServerTimer: ReturnType<typeof setInterval> | null = null
+let keepAliveEngineTimer: ReturnType<typeof setInterval> | null = null
+
 if (process.env.NODE_ENV === "production") {
-  const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes
   const port = process.env.PORT || 8000
   const engineUrl = process.env.ENGINE_URL ?? "http://localhost:8001"
 
   // Keep server alive
-  const keepAliveServer = setInterval(async () => {
+  keepAliveServerTimer = setInterval(async () => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
@@ -89,10 +108,10 @@ if (process.env.NODE_ENV === "production") {
       // Ignore errors - service might be starting up
     }
   }, KEEPALIVE_INTERVAL)
-  keepAliveServer.unref()
+  keepAliveServerTimer.unref()
 
   // Keep engine alive
-  const keepAliveEngine = setInterval(async () => {
+  keepAliveEngineTimer = setInterval(async () => {
     try {
       const res = await fetch(`${engineUrl}/health`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
@@ -102,7 +121,7 @@ if (process.env.NODE_ENV === "production") {
       // Ignore errors - engine might be starting up
     }
   }, KEEPALIVE_INTERVAL)
-  keepAliveEngine.unref()
+  keepAliveEngineTimer.unref()
 
   console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m", targets: ["server", "engine"] }))
 }
@@ -122,6 +141,12 @@ const worker = redisAvailable
       async (job) => {
         const { engine_job_id, session_token, player_index } = job.data
 
+        // Idempotency check: skip if job already processed (race with status poll)
+        const existingJob = await job.getState()
+        if (existingJob === "completed" || existingJob === "failed") {
+          return { ok: true, skipped: "already_terminal" }
+        }
+
         const res = await fetch(
           `${process.env.ENGINE_URL}/analyze`,
           {
@@ -138,8 +163,16 @@ const worker = redisAvailable
 
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
-          // Create a proper CoachAIError with engine's code and message
-          throw wrapEngineError(body)
+          const engineError = wrapEngineError(body)
+
+          // Non-retryable errors: throw UnrecoverableError to stop retries
+          if (UNRECOVERABLE_CODES.has(engineError.code)) {
+            throw new UnrecoverableError(
+              `${engineError.code}: ${engineError.message}`,
+            )
+          }
+
+          throw engineError
         }
 
         return { ok: true }
@@ -175,24 +208,39 @@ let queueEvents: QueueEvents | null = null
 if (redisAvailable && analysisQueue) {
   queueEvents = new QueueEvents("coachai-analysis", { connection: connection as any })
 
-  queueEvents.on("failed", async ({ jobId }) => {
+  queueEvents.on("failed", async ({ jobId, failedReason }) => {
     try {
       const bullJob = await analysisQueue!.getJob(jobId)
       if (!bullJob?.data?.engine_job_id) return
 
-      // Only mark failed after ALL retries exhausted
-      if ((bullJob.attemptsMade ?? 0) >= (bullJob.opts?.attempts ?? 3)) {
+      const isUnrecoverable = failedReason?.includes("UnrecoverableError")
+      const retriesExhausted = (bullJob.attemptsMade ?? 0) >= (bullJob.opts?.attempts ?? 3)
+
+      // Mark failed if: retries exhausted OR unrecoverable error
+      if (retriesExhausted || isUnrecoverable) {
+        // Extract error code from UnrecoverableError message if present
+        let errorCode = "ANALYSIS_FAILED"
+        let retryable = true
+        if (isUnrecoverable && failedReason) {
+          const match = failedReason.match(/^(\w+):/)
+          if (match) {
+            errorCode = match[1]
+            retryable = false
+          }
+        }
+
         await markJobFailed(
           bullJob.data.engine_job_id,
-          "Analysis failed after 3 attempts. Please try again.",
-          "ANALYSIS_FAILED",
-          true,
+          isUnrecoverable ? failedReason : "Analysis failed after retries. Please try again.",
+          errorCode,
+          retryable,
         )
         console.error(
           JSON.stringify({
-            type: "job_exhausted",
+            type: isUnrecoverable ? "job_unrecoverable" : "job_exhausted",
             engine_job_id: bullJob.data.engine_job_id,
             attempts: bullJob.attemptsMade,
+            error_code: errorCode,
           }),
         )
       }
@@ -204,6 +252,15 @@ if (redisAvailable && analysisQueue) {
         timestamp: new Date().toISOString(),
       }))
     }
+  })
+
+  // Queue-level error handler
+  analysisQueue.on("error", (err) => {
+    console.error(JSON.stringify({
+      type: "queue_error",
+      message: err.message,
+      timestamp: new Date().toISOString(),
+    }))
   })
 
   // Stuck job recovery — runs every 10 minutes
@@ -223,7 +280,7 @@ if (redisAvailable && analysisQueue) {
             }),
           )
           await job.moveToFailed(
-            new Error("Job exceeded 15 minute timeout"),
+            new UnrecoverableError("Job exceeded 13 minute timeout"),
             job.token ?? "0",
             true,
           )
@@ -243,17 +300,6 @@ if (redisAvailable && analysisQueue) {
 // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
-// Store intervals for cleanup
-let _keepAliveServer: ReturnType<typeof setInterval> | null = null
-let _keepAliveEngine: ReturnType<typeof setInterval> | null = null
-let _stuckRecoveryInterval: ReturnType<typeof setInterval> | null = null
-
-// Override the interval variables to be trackable
-if (process.env.NODE_ENV === "production") {
-  // These are already set above; we need to restructure slightly
-  // For now, the shutdown handler will just close BullMQ components
-}
-
 const gracefulShutdown = async (signal: string) => {
   console.log(JSON.stringify({ type: "shutdown_start", signal, timestamp: new Date().toISOString() }))
 
@@ -264,6 +310,10 @@ const gracefulShutdown = async (signal: string) => {
   forceExit.unref()
 
   try {
+    // Clear all intervals to prevent firing after shutdown
+    if (keepAliveServerTimer) clearInterval(keepAliveServerTimer)
+    if (keepAliveEngineTimer) clearInterval(keepAliveEngineTimer)
+
     if (queueEvents) await queueEvents.close()
     if (worker) await worker.close()
     if (analysisQueue) await analysisQueue.close()

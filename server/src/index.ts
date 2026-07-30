@@ -44,21 +44,6 @@ if (missingEnvVars.length > 0) {
   process.exit(1)
 }
 
-// ── Beta Code Helpers ──────────────────────────────────────────────────────
-function getValidBetaCodes(): string[] {
-  return (process.env.BETA_CODES ?? "")
-    .split(",")
-    .map((c) => c.trim().toLowerCase())
-    .filter(Boolean)
-}
-
-function isValidBetaCode(code: string | null): boolean {
-  if (!code) return false
-  const validCodes = getValidBetaCodes()
-  if (validCodes.length === 0) return false
-  return validCodes.includes(code.trim().toLowerCase())
-}
-
 const maxRequestBodySize = Math.max(MAX_FILE_SIZE_BYTES + 10 * 1024 * 1024, 64 * 1024 * 1024)
 
 try {
@@ -89,6 +74,15 @@ const app = new Elysia({
     set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     set.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     set.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    set.headers["Content-Security-Policy"] = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: blob:",
+      "connect-src 'self' http://localhost:* https://*.sentry.io https://*.upstash.io",
+      "worker-src 'self' blob:",
+    ].join("; ")
   })
   .use(
     swagger({
@@ -102,23 +96,6 @@ const app = new Elysia({
     }),
   )
   .use(healthRoute)
-  .get("/api/verify-code", ({ request }) => {
-    const code = request.headers.get("x-beta-code")?.trim().toLowerCase() ?? null
-    return { valid: isValidBetaCode(code) }
-  })
-  // ── Beta Code Middleware ────────────────────────────────────────────────
-  // Reject requests with no/invalid beta code (except public endpoints)
-  .onBeforeHandle(({ request, set }) => {
-    const url = new URL(request.url)
-    const publicPaths = ["/health", "/api/verify-code", "/swagger"]
-    if (publicPaths.some((p) => url.pathname.startsWith(p))) return
-
-    const code = request.headers.get("x-beta-code")?.trim().toLowerCase() ?? null
-    if (!isValidBetaCode(code)) {
-      set.status = 401
-      return buildError("INVALID_BETA_CODE", undefined, false)
-    }
-  })
   .use(scanRoute)
   .use(analyzeRoute)
   .use(statusRoute)

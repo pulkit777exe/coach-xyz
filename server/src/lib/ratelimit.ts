@@ -80,23 +80,16 @@ export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResu
 }
 
 export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
-  return checkLimit({ key: `rl:scan:${ip}`, limit: 10, windowSec: 60 })
+  const limit = parseInt(process.env.SCAN_RATE_LIMIT || "100")
+  return checkLimit({ key: `rl:scan:${ip}`, limit, windowSec: 60 })
 }
 
 export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
-  return checkLimit({ key: `rl:analysis:${ip}`, limit: 5, windowSec: 3600 })
-}
-
-export async function checkBetaCodeLimit(betaCode: string): Promise<RateLimitResult> {
-  return checkLimit({ key: `rl:beta:${betaCode}`, limit: 20, windowSec: 3600 })
+  const limit = parseInt(process.env.ANALYSIS_RATE_LIMIT || "50")
+  return checkLimit({ key: `rl:analysis:${ip}`, limit, windowSec: 3600 })
 }
 
 export function getIP(request: Request): string {
   const meta = readRequestMeta(request)
   return meta.clientIp ?? "anonymous"
-}
-
-export function getBetaCode(request: Request): string | null {
-  const meta = readRequestMeta(request)
-  return meta.betaCode
 }

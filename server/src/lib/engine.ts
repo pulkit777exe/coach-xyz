@@ -82,21 +82,26 @@ export const getDownloadStream = async (engineJobId: string): Promise<Response> 
   }
 }
 
-export const getEngineJobStatus = async (engineJobId: string): Promise<EngineJobStatus | null> => {
+export type EngineStatusResult =
+  | { status: "found"; data: EngineJobStatus }
+  | { status: "not_found" }
+  | { status: "transient_error" }
+
+export const getEngineJobStatus = async (engineJobId: string): Promise<EngineStatusResult> => {
   try {
     const res = await withTimeout(`${ENGINE_URL}/status/${engineJobId}`, {
       method: "GET",
     }, 5_000)
 
     if (!res.ok) {
-      if (res.status === 404) return null
+      if (res.status === 404) return { status: "not_found" }
       await throwNonOk(res)
     }
 
-    return (await res.json()) as EngineJobStatus
+    return { status: "found", data: (await res.json()) as EngineJobStatus }
   } catch (error) {
     if (isConnectivityError(error)) {
-      return null
+      return { status: "transient_error" }
     }
     throw error
   }

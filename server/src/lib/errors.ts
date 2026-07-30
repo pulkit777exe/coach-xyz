@@ -31,7 +31,6 @@ const FALLBACK_MESSAGES: Record<string, string> = {
 
   // Server errors
   RATE_LIMITED: "Too many requests. Please wait before trying again.",
-  INVALID_BETA_CODE: "Invalid beta access code.",
   NO_FILE: "No video file provided.",
   INVALID_FILE_TYPE: "Please upload a video file.",
   FILE_TOO_LARGE: "File must be under 500MB.",

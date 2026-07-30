@@ -1,5 +1,4 @@
 export type RequestMeta = {
-  betaCode: string | null
   clientIp: string | null
   userAgent: string | null
 }
@@ -21,9 +20,7 @@ const getClientIp = (request: Request): string | null => {
 }
 
 export const readRequestMeta = (request: Request): RequestMeta => {
-  const betaCodeHeader = request.headers.get("x-beta-code")
   return {
-    betaCode: normalize(betaCodeHeader)?.toLowerCase() ?? null,
     clientIp: getClientIp(request),
     userAgent: normalize(request.headers.get("user-agent")),
   }

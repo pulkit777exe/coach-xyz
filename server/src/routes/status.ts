@@ -1,7 +1,7 @@
 import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
-import { getJob, fetchEngineJobStatus } from "../lib/jobs"
+import { getJob, fetchEngineJobStatus, type EngineJobStatus } from "../lib/jobs"
 import { persistAnalysisStatus } from "../lib/supabaseHistory"
 
 export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }) => {
@@ -13,9 +13,29 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
   }
 
   // Read engine job status via HTTP (engine computes stage_name and video_ready)
-  const engineStatus = await fetchEngineJobStatus(serverJob.engine_job_id)
+  const result = await fetchEngineJobStatus(serverJob.engine_job_id)
 
-  if (!engineStatus) {
+  // Handle transient engine connectivity errors — don't permanently fail the job
+  if (result.status === "transient_error") {
+    // Return last known state or a "retrying" state, don't persist as failed
+    set.status = 200
+    return {
+      job_id: serverJob.server_job_id,
+      state: "scanning",  // Assume still processing
+      stage: 1,
+      stage_name: "Retrying...",
+      progress: 0,
+      complete: false,
+      summary: null,
+      video_ready: false,
+      error: null,
+      error_code: null,
+      retryable: true,
+    }
+  }
+
+  // Handle truly not found — the job expired or was never created
+  if (result.status === "not_found") {
     // Persist the failed status before returning so it shows in history
     await persistAnalysisStatus({
       serverJobId: serverJob.server_job_id,
@@ -51,6 +71,9 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
       retryable: true,
     }
   }
+
+  // Success case — engine returned status
+  const engineStatus: EngineJobStatus = result.data
 
   // Engine returns stage_name and video_ready as computed fields
   const stageName = engineStatus.stage_name ?? engineStatus.state

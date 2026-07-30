@@ -30,12 +30,16 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
   const { allowed, remaining, reset } = await checkScanLimit(ip)
   set.headers["X-RateLimit-Remaining"] = String(remaining)
   if (!allowed) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000)
     set.status = 429
-    return buildError(
-      "RATE_LIMITED",
-      "Too many scan requests. Wait a minute before trying again.",
-      true,
-    )
+    return {
+      ...buildError(
+        "RATE_LIMITED",
+        "Too many scan requests. Wait a minute before trying again.",
+        true,
+      ),
+      retry_after: retryAfter,
+    }
   }
 
   // ── Reject oversized uploads before buffering into memory ─────────────

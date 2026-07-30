@@ -47,7 +47,7 @@ const supabasePublishableKey =
 
 const sql = databaseUrl
   ? new SQL(databaseUrl, {
-      idleTimeout: 30,
+      idleTimeout: 300,
       max: 5,
     })
   : null
@@ -75,6 +75,20 @@ const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | nul
     return await fn(sql)
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown database error"
+
+    if (message.includes("Connection closed")) {
+      console.warn("Supabase connection was closed, reconnecting…")
+      initPromise = null
+      try {
+        await ensureInitialized()
+        return await fn(sql)
+      } catch (retryError) {
+        const retryMessage = retryError instanceof Error ? retryError.message : "Unknown database error"
+        console.error("Supabase history operation failed after retry:", retryMessage)
+        return null
+      }
+    }
+
     console.error("Supabase history operation failed:", message)
     return null
   }
@@ -96,7 +110,6 @@ const ensureInitialized = async () => {
           player_count integer not null,
           players_json jsonb not null default '[]'::jsonb,
           scan_response_json jsonb not null default '{}'::jsonb,
-          beta_code text,
           client_ip text,
           user_agent text,
           source text not null default 'web-next',
@@ -122,7 +135,6 @@ const ensureInitialized = async () => {
           status_json jsonb,
           error_code text,
           error_message text,
-          beta_code text,
           client_ip text,
           user_agent text,
           source text not null default 'web-next',
@@ -142,20 +154,12 @@ const ensureInitialized = async () => {
         on video_conversations (created_at desc);
       `
       await sql`
-        create index if not exists idx_video_conversations_beta_code
-        on video_conversations (beta_code);
-      `
-      await sql`
         create index if not exists idx_analysis_history_requested_at
         on analysis_history (requested_at desc);
       `
       await sql`
         create index if not exists idx_analysis_history_session_token
         on analysis_history (session_token);
-      `
-      await sql`
-        create index if not exists idx_analysis_history_beta_code
-        on analysis_history (beta_code);
       `
       } catch (err) {
         // Reset so next call retries initialization
@@ -188,7 +192,6 @@ export const persistVideoConversation = async (
         player_count,
         players_json,
         scan_response_json,
-        beta_code,
         client_ip,
         user_agent,
         supabase_project_url,
@@ -201,7 +204,6 @@ export const persistVideoConversation = async (
         ${record.playerCount},
         ${JSON.stringify(record.players)}::jsonb,
         ${JSON.stringify(record.scanResponse)}::jsonb,
-        ${record.betaCode},
         ${record.clientIp},
         ${record.userAgent},
         ${supabaseProjectUrl},
@@ -214,7 +216,6 @@ export const persistVideoConversation = async (
         player_count = excluded.player_count,
         players_json = excluded.players_json,
         scan_response_json = excluded.scan_response_json,
-        beta_code = excluded.beta_code,
         client_ip = excluded.client_ip,
         user_agent = excluded.user_agent,
         supabase_project_url = excluded.supabase_project_url,
@@ -233,7 +234,6 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         session_token,
         player_index,
         model,
-        beta_code,
         client_ip,
         user_agent,
         supabase_project_url,
@@ -245,7 +245,6 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         ${record.sessionToken},
         ${record.playerIndex},
         ${record.model},
-        ${record.betaCode},
         ${record.clientIp},
         ${record.userAgent},
         ${supabaseProjectUrl},
@@ -257,7 +256,6 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         session_token = excluded.session_token,
         player_index = excluded.player_index,
         model = excluded.model,
-        beta_code = excluded.beta_code,
         client_ip = excluded.client_ip,
         user_agent = excluded.user_agent,
         supabase_project_url = excluded.supabase_project_url,
