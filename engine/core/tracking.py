@@ -193,7 +193,7 @@ def build_active_player_tracks(
                 }
             )
     else:
-        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=4) as pose:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
             for entry in keyframes:
                 frame_idx = entry["frame_index"]
                 if frame_cache and frame_idx in frame_cache:

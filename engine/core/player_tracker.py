@@ -17,6 +17,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from core.detection_utils import iou
+
 try:
     import mediapipe as mp
 except ImportError:
@@ -278,7 +280,10 @@ def _occlusion_penalty(skeletons: list[dict[str, Any]]) -> float:
         for j in range(i + 1, len(skeletons)):
             b1 = skeletons[i]["bbox"]
             b2 = skeletons[j]["bbox"]
-            ious.append(_iou(b1, b2))
+            # Convert dict bbox to tuple for detection_utils.iou
+            box1 = (b1["x_min"], b1["y_min"], b1["x_max"], b1["y_max"])
+            box2 = (b2["x_min"], b2["y_min"], b2["x_max"], b2["y_max"])
+            ious.append(iou(box1, box2))
     return float(np.clip(np.mean(ious) if ious else 0.0, 0.0, 1.0))
 
 
@@ -287,24 +292,6 @@ def _blur_score(frame: np.ndarray) -> float:
     variance = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     # Saturate around 300 variance.
     return float(np.clip(variance / 300.0, 0.0, 1.0))
-
-
-def _iou(b1: dict[str, int], b2: dict[str, int]) -> float:
-    x_left = max(b1["x_min"], b2["x_min"])
-    y_top = max(b1["y_min"], b2["y_min"])
-    x_right = min(b1["x_max"], b2["x_max"])
-    y_bottom = min(b1["y_max"], b2["y_max"])
-
-    if x_right <= x_left or y_bottom <= y_top:
-        return 0.0
-
-    inter = float((x_right - x_left) * (y_bottom - y_top))
-    area1 = float(max(0, b1["x_max"] - b1["x_min"]) * max(0, b1["y_max"] - b1["y_min"]))
-    area2 = float(max(0, b2["x_max"] - b2["x_min"]) * max(0, b2["y_max"] - b2["y_min"]))
-    union = area1 + area2 - inter
-    if union <= 0:
-        return 0.0
-    return inter / union
 
 
 def _bbox_to_pixels(

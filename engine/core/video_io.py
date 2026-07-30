@@ -78,13 +78,13 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
 
         duration = frame_count / fps if frame_count > 0 else 90.0
 
-        timestamps = np.arange(0.0, duration + 0.01, 3.0)
+        timestamps = np.arange(0.0, duration + 0.01, 2.0)
         if len(timestamps) > 30:
             timestamps = timestamps[:30]
 
         keyframes: list[dict[str, Any]] = []
         frame_cache: dict[int, np.ndarray] = {}
-        max_cached_frames = 15
+        max_cached_frames = 30
         for ts in timestamps:
             frame_index = int(round(ts * fps))
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)

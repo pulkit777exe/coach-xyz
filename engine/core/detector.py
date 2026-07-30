@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import logging
 from dataclasses import dataclass
-from typing import Any
 
 import cv2
 import numpy as np
@@ -13,7 +12,6 @@ from core.detection_utils import (
     detect_hog_people,
     iou,
     bbox_from_landmarks,
-    deduplicate_by_iou,
     transform_landmarks_to_global,
 )
 from core.errors import NoPlayersDetectedError, VideoDecodeError
@@ -89,46 +87,20 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
     if not cap.isOpened():
         raise VideoDecodeError("Could not open video for frame extraction")
 
-    fps = float(cap.get(cv2.CAP_PROP_FPS))
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    duration_seconds = frame_count / fps if fps > 0 else 0
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS))
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_seconds = frame_count / fps if fps > 0 else 0
 
-    max_scan_seconds = min(60.0, duration_seconds if duration_seconds > 0 else 60.0)
-    timestamps = np.arange(0.0, max_scan_seconds + 0.01, 2.0)
+        max_scan_seconds = duration_seconds if duration_seconds > 0 else 60.0
+        timestamps = np.arange(0.0, max_scan_seconds + 0.01, 1.0)
 
-    best_frame: np.ndarray | None = None
-    best_timestamp = 0.0
-    best_score = -1e9
-    found_visible_pose = False
+        best_frame: np.ndarray | None = None
+        best_timestamp = 0.0
+        best_score = -1e9
+        found_visible_pose = False
 
-    if not pose_backend_available():
-        for ts in timestamps:
-            frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-            ok, frame = cap.read()
-            if not ok:
-                continue
-
-            detections = detect_hog_people(frame)
-            if not detections:
-                continue
-
-            found_visible_pose = True
-            num_detected = len(detections)
-            avg_visibility = float(np.mean([weight for _, weight in detections]))
-
-            overlap_penalty = 0.0
-            for i in range(len(detections)):
-                for j in range(i + 1, len(detections)):
-                    overlap_penalty += iou(detections[i][0], detections[j][0])
-
-            score = (num_detected * avg_visibility) - overlap_penalty
-            if score > best_score:
-                best_score = score
-                best_frame = frame.copy()
-                best_timestamp = float(ts)
-    else:
-        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+        if not pose_backend_available():
             for ts in timestamps:
                 frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
@@ -136,27 +108,54 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
                 if not ok:
                     continue
 
-                candidates = _detect_pose_candidates(frame, pose)
-                valid = [c for c in candidates if c.visibility > 0.5]
-                if not valid:
+                detections = detect_hog_people(frame)
+                if not detections:
                     continue
 
                 found_visible_pose = True
-                num_detected = len(valid)
-                avg_visibility = float(np.mean([c.visibility for c in valid]))
+                num_detected = len(detections)
+                avg_visibility = float(np.mean([weight for _, weight in detections]))
 
                 overlap_penalty = 0.0
-                for i in range(len(valid)):
-                    for j in range(i + 1, len(valid)):
-                        overlap_penalty += iou(valid[i].bbox, valid[j].bbox)
+                for i in range(len(detections)):
+                    for j in range(i + 1, len(detections)):
+                        overlap_penalty += iou(detections[i][0], detections[j][0])
 
                 score = (num_detected * avg_visibility) - overlap_penalty
                 if score > best_score:
                     best_score = score
                     best_frame = frame.copy()
                     best_timestamp = float(ts)
+        else:
+            with StaticPoseDetector(min_detection_confidence=0.5, num_poses=12) as pose:
+                for ts in timestamps:
+                    frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                    ok, frame = cap.read()
+                    if not ok:
+                        continue
 
-    cap.release()
+                    candidates = _detect_pose_candidates(frame, pose)
+                    valid = [c for c in candidates if c.visibility > 0.5]
+                    if not valid:
+                        continue
+
+                    found_visible_pose = True
+                    num_detected = len(valid)
+                    avg_visibility = float(np.mean([c.visibility for c in valid]))
+
+                    overlap_penalty = 0.0
+                    for i in range(len(valid)):
+                        for j in range(i + 1, len(valid)):
+                            overlap_penalty += iou(valid[i].bbox, valid[j].bbox)
+
+                    score = (num_detected * avg_visibility) - overlap_penalty
+                    if score > best_score:
+                        best_score = score
+                        best_frame = frame.copy()
+                        best_timestamp = float(ts)
+    finally:
+        cap.release()
 
     if not found_visible_pose or best_frame is None:
         raise NoPlayersDetectedError(
@@ -168,7 +167,7 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
 
 def _enhance_and_encode_crop(
     crop: np.ndarray,
-    target_size: int = 320,
+    target_size: int = 480,
 ) -> str:
     """
     Enhance a player crop for display quality:
@@ -198,14 +197,14 @@ def _enhance_and_encode_crop(
     # Step 2: CLAHE for contrast (helps dark/poorly lit crops)
     lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+    clahe = cv2.createCLAHE(clipLimit=1.5, tileGridSize=(4, 4))
     l_channel = clahe.apply(l_channel)
     lab = cv2.merge([l_channel, a_channel, b_channel])
     crop = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
     # Step 3: Mild unsharp mask for motion blur
-    gaussian = cv2.GaussianBlur(crop, (0, 0), 1.5)
-    crop = cv2.addWeighted(crop, 1.4, gaussian, -0.4, 0)
+    gaussian = cv2.GaussianBlur(crop, (0, 0), 1.2)
+    crop = cv2.addWeighted(crop, 1.3, gaussian, -0.3, 0)
     crop = np.clip(crop, 0, 255).astype(np.uint8)
 
     # Step 4: Encode as JPEG (better file size, good visual quality)
@@ -242,7 +241,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
                 }
             )
     else:
-        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=8) as pose:
+        with StaticPoseDetector(min_detection_confidence=0.5, num_poses=12) as pose:
             candidates = _detect_pose_candidates(frame, pose)
 
         for candidate in candidates:
@@ -252,7 +251,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
 
             # Skip crops that are too small to be useful
             # A real player should occupy at least 40x80 pixels
-            if crop_w < 40 or crop_h < 80:
+            if crop_w < 24 or crop_h < 48:
                 continue
 
             crop = frame[y_min:y_max, x_min:x_max]
