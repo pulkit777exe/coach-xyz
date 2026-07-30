@@ -1,16 +1,7 @@
 "use client";
 
-import * as Sentry from "@sentry/nextjs";
-import { useEffect } from "react";
-
+// @sentry/nextjs automatically instruments error capturing via its SDK.
+// This provider is a thin wrapper that can be extended if needed.
 export function SentryProvider({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    const handler = (event: ErrorEvent) => {
-      Sentry.captureException(event.error);
-    };
-    window.addEventListener("error", handler);
-    return () => window.removeEventListener("error", handler);
-  }, []);
-
   return <>{children}</>;
 }

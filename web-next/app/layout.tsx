@@ -21,10 +21,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="min-h-screen antialiased">
+        <a
+          href="#analyze"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-teal-600 focus:text-white focus:outline-none"
+        >
+          Skip to upload
+        </a>
         <SentryProvider>{children}</SentryProvider>
       </body>
     </html>

@@ -1,5 +1,4 @@
 import type { ScanResult, JobStatus, CoachAIError } from '@/types'
-import { clearBetaCode, getBetaCode } from './betaCode'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
@@ -16,12 +15,9 @@ async function apiFetch<T>(
   options: RequestInit = {},
   isFormData = false,
 ): Promise<T> {
-  const code = getBetaCode()
   const headers: Record<string, string> = {
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string> ?? {}),
-    // Beta code header last to prevent override
-    ...(code ? { 'x-beta-code': code } : {}),
   }
 
   let res: Response
@@ -33,16 +29,6 @@ async function apiFetch<T>(
       message: 'Cannot connect to server. Check your connection.',
       layer: 'client',
       retryable: true,
-    } as CoachAIError
-  }
-
-  if (res.status === 401) {
-    clearBetaCode()
-    throw {
-      code: 'INVALID_BETA_CODE',
-      message: 'Beta access expired. Please re-enter your code.',
-      layer: 'server',
-      retryable: false,
     } as CoachAIError
   }
 
@@ -93,23 +79,37 @@ export async function scanVideo(file: File): Promise<ScanResult> {
   const formData = new FormData()
   formData.append('video', file)
 
-  return apiFetch<ScanResult>(`${BASE}/api/scan-video`, {
-    method: 'POST',
-    body: formData,
-  }, true)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120_000) // 2 min for uploads
+  try {
+    return await apiFetch<ScanResult>(`${BASE}/api/scan-video`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    }, true)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function startAnalysis(params: {
   session_token: string | null
   player_index: number | null
 }): Promise<{ job_id: string }> {
-  return apiFetch<{ job_id: string }>(`${BASE}/api/analyze-video`, {
-    method: 'POST',
-    body: JSON.stringify({
-      ...params,
-      model: 'gemini-2.5-flash',
-    }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000) // 30s for enqueue
+  try {
+    return await apiFetch<{ job_id: string }>(`${BASE}/api/analyze-video`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...params,
+        model: 'gemini-3.5-flash',
+      }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {

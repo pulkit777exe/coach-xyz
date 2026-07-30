@@ -1,42 +1,78 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap');
 @import "tailwindcss";
 
-:root {
-  --bg: #0d0d0d;
-  --fg: #f0ebe1;
-  --cream-40: rgba(240, 235, 225, 0.4);
-  --cream-20: rgba(240, 235, 225, 0.2);
-  --cream-10: rgba(240, 235, 225, 0.1);
-  --cream-05: rgba(240, 235, 225, 0.05);
-  --cream-03: rgba(240, 235, 225, 0.03);
-  --red: #c8003c;
+@layer theme {
+  :root {
+    --bg: #0d0d0d;
+    --fg: #f0ebe1;
+    --cream-40: rgba(240, 235, 225, 0.4);
+    --cream-20: rgba(240, 235, 225, 0.2);
+    --cream-10: rgba(240, 235, 225, 0.1);
+    --cream-05: rgba(240, 235, 225, 0.05);
+    --cream-03: rgba(240, 235, 225, 0.03);
+    --red: #c8003c;
 
-  --font-mono: 'DM Mono', monospace;
-  --font-serif: 'Instrument Serif', serif;
+    --font-mono: 'DM Mono', monospace;
+    --font-serif: 'Instrument Serif', serif;
+
+    --icon-swap-dur: 200ms;
+    --icon-swap-blur: 2px;
+    --icon-swap-start-scale: 0.25;
+    --icon-swap-ease: ease-in-out;
+  }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(200, 0, 60, 0.3);
+    color: var(--fg);
+  }
+
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .font-display {
+    font-family: var(--font-serif);
+  }
 }
 
-html {
-  scroll-behavior: smooth;
+/* ── Button Accent ─────────────────────────────────────────────────────────── */
+
+.button-accent {
+  background: var(--fg);
+  color: var(--bg);
+  font-weight: 700;
+  transition: all 0.2s ease-out;
 }
 
-body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: var(--font-mono);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+.button-accent:hover {
+  background: rgba(240, 235, 225, 0.9);
+  box-shadow: 0 0 25px rgba(240, 235, 225, 0.3);
 }
 
-::selection {
-  background: rgba(200, 0, 60, 0.3);
-  color: var(--fg);
+.button-accent:disabled {
+  background: rgba(240, 235, 225, 0.2);
+  color: rgba(240, 235, 225, 0.4);
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* ── Film Grain ─────────────────────────────────────────────────────────────── */
@@ -49,16 +85,6 @@ body {
   pointer-events: none;
   z-index: 9999;
   opacity: 0.06;
-}
-
-/* ── Typography ─────────────────────────────────────────────────────────────── */
-
-.font-serif {
-  font-family: var(--font-serif);
-}
-
-.font-mono {
-  font-family: var(--font-mono);
 }
 
 /* ── Utility ────────────────────────────────────────────────────────────────── */
@@ -104,21 +130,7 @@ body {
   color: var(--red);
 }
 
-/* ── Horizontal Scroll Section ──────────────────────────────────────────────── */
-
-@keyframes dotPop {
-  from { opacity: 0; transform: scale(0); }
-  to { opacity: 1; transform: scale(1); }
-}
-
 /* ── Icon Swap (transitions-dev) ─────────────────────────────────────────── */
-
-:root {
-  --icon-swap-dur: 200ms;
-  --icon-swap-blur: 2px;
-  --icon-swap-start-scale: 0.25;
-  --icon-swap-ease: ease-in-out;
-}
 
 .t-icon-swap {
   position: relative;
@@ -147,4 +159,5 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .t-icon-swap .t-icon { transition: none !important; }
+  .marquee-track { animation: none; }
 }

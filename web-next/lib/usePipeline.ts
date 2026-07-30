@@ -7,6 +7,24 @@ import { MAX_FILE_SIZE_BYTES } from '@/types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
+// ── Shared Error Conversion ───────────────────────────────────────────────────
+// Converts unknown errors from fetch/API calls into CoachAIError format.
+function toCoachAIError(err: unknown): CoachAIError {
+  // AbortError from AbortSignal.timeout()
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
+  }
+  // Already a CoachAIError (has code, message, layer, retryable)
+  if (err && typeof err === 'object' && 'code' in err && typeof (err as Record<string, unknown>).code === 'string') {
+    const obj = err as Record<string, unknown>
+    if (typeof obj.message === 'string' && typeof obj.retryable === 'boolean') {
+      return err as CoachAIError
+    }
+  }
+  // Unknown error
+  return { code: 'UNKNOWN', message: String(err), layer: 'client', retryable: false }
+}
+
 const ENGINE_STATE_MAP: Record<string, PipelineState> = {
   uploading: 'uploading',
   scanning: 'scanning',
@@ -43,11 +61,16 @@ export function usePipeline(): Pipeline {
 
   const pollInterval = useRef<NodeJS.Timeout | null>(null)
   const pollStart = useRef<number>(Date.now())
+  const pipelineStateRef = useRef<PipelineState>(pipelineState)
+  const retryGenerationRef = useRef(0)
+
+  // Keep ref in sync with state for use in callbacks without stale closures
+  useEffect(() => { pipelineStateRef.current = pipelineState }, [pipelineState])
 
   // ── Keep-alive ping ────────────────────────────────────────────────────
   useEffect(() => {
     if (!BASE) return
-    const ping = () => fetch(`${BASE}/health`).catch(() => {})
+    const ping = () => fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {})
     ping()
     const t = setInterval(ping, 8 * 60 * 1000)
     return () => clearInterval(t)
@@ -55,9 +78,12 @@ export function usePipeline(): Pipeline {
 
   // ── Polling ────────────────────────────────────────────────────────────
   const pollActiveRef = useRef(false)
+  const pollConsecutiveFailures = useRef(0)
+  const MAX_POLL_RETRIES = 5
 
   const stopPolling = useCallback(() => {
     pollActiveRef.current = false
+    pollConsecutiveFailures.current = 0
     if (pollInterval.current) {
       clearInterval(pollInterval.current)
       pollInterval.current = null
@@ -69,9 +95,11 @@ export function usePipeline(): Pipeline {
       stopPolling()
       pollActiveRef.current = true
       pollStart.current = Date.now()
+      pollConsecutiveFailures.current = 0
       const POLL_TIMEOUT = 12 * 60 * 1000
+      const BASE_POLL_INTERVAL = 2000
 
-      pollInterval.current = setInterval(async () => {
+      const pollFn = async () => {
         if (!pollActiveRef.current) return
         if (Date.now() - pollStart.current > POLL_TIMEOUT) {
           stopPolling()
@@ -88,6 +116,9 @@ export function usePipeline(): Pipeline {
         try {
           const status = await getJobStatus(pollJobId)
           if (!pollActiveRef.current) return
+
+          // Reset failure count on success
+          pollConsecutiveFailures.current = 0
           setJobStatus(status)
 
           if (status.complete) {
@@ -109,20 +140,28 @@ export function usePipeline(): Pipeline {
           }
         } catch (err: unknown) {
           if (!pollActiveRef.current) return
-          stopPolling()
-          // Distinguish AbortError (timeout) from other errors
-          let coachErr: CoachAIError
-          if (err instanceof DOMException && err.name === 'AbortError') {
-            coachErr = { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
-          } else if (err && typeof err === 'object' && 'code' in err && typeof (err as any).code === 'string') {
-            coachErr = err as CoachAIError
+
+          pollConsecutiveFailures.current++
+
+          // Check if error is transient (network, timeout)
+          const isTransient = err instanceof DOMException && err.name === 'AbortError'
+            || (err && typeof err === 'object' && 'code' in err && (err as Record<string, unknown>).code === 'NETWORK_ERROR')
+
+          if (isTransient && pollConsecutiveFailures.current < MAX_POLL_RETRIES) {
+            // Back off but keep polling for transient errors
+            const delay = Math.min(BASE_POLL_INTERVAL * Math.pow(2, pollConsecutiveFailures.current), 30_000)
+            if (pollInterval.current) clearInterval(pollInterval.current)
+            pollInterval.current = setInterval(pollFn, delay)
           } else {
-            coachErr = { code: 'UNKNOWN', message: String(err), layer: 'client', retryable: false }
+            // Permanent failure or max retries exceeded
+            stopPolling()
+            setErrorStatus(toCoachAIError(err))
+            setPipelineState('error')
           }
-          setErrorStatus(coachErr)
-          setPipelineState('error')
         }
-      }, 2000)
+      }
+
+      pollInterval.current = setInterval(pollFn, BASE_POLL_INTERVAL)
     },
     [stopPolling],
   )
@@ -161,11 +200,12 @@ export function usePipeline(): Pipeline {
       setScanResult(result)
 
       if (result.player_count === 1) {
-        setSelectedPlayerIndex(1)
+        const playerIdx = result.players[0]?.player_index ?? 1
+        setSelectedPlayerIndex(playerIdx)
         setPipelineState('analyzing')
         const { job_id } = await startAnalysis({
           session_token: result.session_token,
-          player_index: 1,
+          player_index: playerIdx,
         })
         setJobId(job_id)
         startPolling(job_id)
@@ -173,39 +213,24 @@ export function usePipeline(): Pipeline {
         setPipelineState('selecting')
       }
     } catch (e: unknown) {
-      let coachErr: CoachAIError
-      if (e instanceof DOMException && e.name === 'AbortError') {
-        coachErr = { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
-      } else if (e && typeof e === 'object' && 'code' in e && typeof (e as any).code === 'string') {
-        coachErr = e as CoachAIError
-      } else {
-        coachErr = { code: 'UNKNOWN', message: String(e), layer: 'client', retryable: false }
-      }
-      setErrorStatus(coachErr)
+      setErrorStatus(toCoachAIError(e))
       setPipelineState('error')
     }
   }
 
   const handlePlayerSelected = async (playerIndex: number) => {
+    if (!scanResult) return
     setSelectedPlayerIndex(playerIndex)
     setPipelineState('analyzing')
     try {
       const { job_id } = await startAnalysis({
-        session_token: scanResult!.session_token,
+        session_token: scanResult.session_token,
         player_index: playerIndex,
       })
       setJobId(job_id)
       startPolling(job_id)
     } catch (e: unknown) {
-      let coachErr: CoachAIError
-      if (e instanceof DOMException && e.name === 'AbortError') {
-        coachErr = { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
-      } else if (e && typeof e === 'object' && 'code' in e && typeof (e as any).code === 'string') {
-        coachErr = e as CoachAIError
-      } else {
-        coachErr = { code: 'UNKNOWN', message: String(e), layer: 'client', retryable: false }
-      }
-      setErrorStatus(coachErr)
+      setErrorStatus(toCoachAIError(e))
       setPipelineState('error')
     }
   }
@@ -219,22 +244,20 @@ export function usePipeline(): Pipeline {
 
       if (selectedPlayerIndex !== null) {
         setPipelineState('analyzing')
+        const gen = ++retryGenerationRef.current
         startAnalysis({
           session_token: scanResult.session_token,
           player_index: selectedPlayerIndex,
         })
           .then(({ job_id }) => {
-            // Don't start polling if pipeline was reset while request was in-flight
-            if (pipelineState === 'idle') return
+            // Don't start polling if pipeline was reset or another retry started
+            if (pipelineStateRef.current === 'idle' || retryGenerationRef.current !== gen) return
             setJobId(job_id)
             startPolling(job_id)
           })
           .catch((e: unknown) => {
-            const coachErr: CoachAIError =
-              e && typeof e === 'object' && 'code' in e && typeof (e as any).code === 'string'
-                ? e as CoachAIError
-                : { code: 'UNKNOWN', message: String(e), layer: 'client', retryable: false }
-            setErrorStatus(coachErr)
+            if (retryGenerationRef.current !== gen) return
+            setErrorStatus(toCoachAIError(e))
             setPipelineState('error')
           })
       } else {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
+import { AppHeader } from '@/components/AppHeader'
 import type { CoachAIError } from '@/lib/api'
 
 interface ErrorScreenProps {
@@ -36,11 +37,6 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     title: 'Rate Limited',
     description: 'Too many requests.',
     action: 'Wait a moment and try again.',
-  },
-  INVALID_BETA_CODE: {
-    title: 'Access Denied',
-    description: 'Your beta code is invalid or expired.',
-    action: 'Enter a valid beta code.',
   },
   QUEUE_UNAVAILABLE: {
     title: 'Service Unavailable',
@@ -107,6 +103,26 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     title: 'Analysis Error',
     description: 'The AI returned an unexpected response.',
     action: 'Try again — this usually resolves on retry.',
+  },
+  GEMINI_PROCESSING_FAILED: {
+    title: 'AI Processing Error',
+    description: 'The AI failed to process the video.',
+    action: 'Try again with a different video clip.',
+  },
+  REQUEST_TIMEOUT: {
+    title: 'Request Timed Out',
+    description: 'The request took too long to complete.',
+    action: 'Check your connection and try again.',
+  },
+  REDIS_UNAVAILABLE: {
+    title: 'Service Unavailable',
+    description: 'Job storage is temporarily unavailable.',
+    action: 'Try again in a few minutes.',
+  },
+  INTERNAL_ERROR: {
+    title: 'Internal Error',
+    description: 'An unexpected server error occurred.',
+    action: 'Try again or contact support if this persists.',
   },
   JOB_NOT_FOUND: {
     title: 'Session Expired',
@@ -192,61 +208,63 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6">
-      <div className="max-w-md w-full text-center">
-        <svg
-          className="w-16 h-16 mx-auto mb-6 text-red-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-
-        <h1 className="text-2xl font-semibold text-white mb-3">
-          {details.title}
-        </h1>
-
-        <p className="text-gray-400 mb-2">{details.description}</p>
-
-        {details.action && (
-          <p className="text-sm text-gray-500 mb-2">{details.action}</p>
-        )}
-
-        <p className="text-xs text-gray-600 mb-8">
-          Error: {error.code} | Layer: {error.layer}
-        </p>
-
-        {countdown !== null && (
-          <p className="text-sm text-indigo-400 mb-4 animate-pulse">
-            Retrying in {countdown} seconds...
-          </p>
-        )}
-
-        {error.retryable ? (
-          <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white"
-            size="lg"
-            onClick={onRetry}
-            disabled={countdown !== null}
+    <>
+      <AppHeader />
+      <div className="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center p-6 pt-20">
+        <div className="max-w-md w-full text-center">
+          <svg
+            className="w-16 h-16 mx-auto mb-6 text-red-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
-            {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
-          </Button>
-        ) : (
-          <p className="text-sm text-gray-500">
-            This error cannot be retried. Please{' '}
-            <a href="mailto:support@coachai.dev" className="text-indigo-400 underline">
-              contact support
-            </a>
-            .
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+
+          <h1 className="text-2xl font-semibold text-[var(--fg)] mb-3">
+            {details.title}
+          </h1>
+
+          <p className="text-[var(--cream-40)] mb-2">{details.description}</p>
+
+          {details.action && (
+            <p className="text-sm text-[var(--cream-40)] mb-2">{details.action}</p>
+          )}
+
+          <p className="text-xs text-[var(--cream-20)] mb-8">
+            Error: {error.code} | Layer: {error.layer}
           </p>
-        )}
+
+          {countdown !== null && (
+            <p className="text-sm text-[var(--fg)] mb-4 animate-pulse">
+              Retrying in {countdown} seconds...
+            </p>
+          )}
+
+          {error.retryable ? (
+            <Button
+              size="lg"
+              onClick={onRetry}
+              disabled={countdown !== null}
+            >
+              {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
+            </Button>
+          ) : (
+            <p className="text-sm text-[var(--cream-40)]">
+              This error cannot be retried. Please{' '}
+              <a href="mailto:support@coachai.dev" className="text-[var(--fg)] underline">
+                contact support
+              </a>
+              .
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

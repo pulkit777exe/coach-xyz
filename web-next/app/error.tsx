@@ -1,5 +1,9 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
+import { useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+
 export default function Error({
   error,
   reset,
@@ -7,22 +11,26 @@ export default function Error({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
+
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
       <div className="text-center max-w-md mx-auto px-4">
-        <h2 className="text-white text-xl font-semibold mb-4">Something went wrong</h2>
-        <p className="text-gray-400 mb-6">
+        <h2 className="text-[var(--fg)] text-xl font-semibold mb-4">Something went wrong</h2>
+        <p className="text-[var(--cream-40)] mb-6">
           {error?.message || 'An unexpected error occurred.'}
         </p>
         {error?.digest && (
-          <p className="text-gray-500 text-sm mb-4">Error ID: {error.digest}</p>
+          <p className="text-zinc-500 text-sm mb-4">Error ID: {error.digest}</p>
         )}
-        <button
+        <Button
           onClick={reset}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          size="lg"
         >
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   )
