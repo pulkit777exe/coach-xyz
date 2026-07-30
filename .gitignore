@@ -36,3 +36,5 @@ mediapipe
 
 # Duplicate configs (use /sports/ instead)
 engine/json/
+todo.md
+.playwright-mcp

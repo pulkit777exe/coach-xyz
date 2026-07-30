@@ -2,32 +2,50 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Python Engine: Install Dependencies",
+      "label": "Start All (Server + Engine + Frontend)",
+      "dependsOn": [
+        "Engine: Start Dev Server",
+        "Backend: Start Development Server",
+        "Frontend: Start Development Server"
+      ],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Start Backend (Server + Engine)",
+      "dependsOn": [
+        "Engine: Start Dev Server",
+        "Backend: Start Development Server"
+      ],
+      "dependsOrder": "parallel",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Engine: Start Dev Server",
+      "type": "shell",
+      "command": "cd engine && python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Engine: Install Dependencies",
       "type": "shell",
       "command": "cd engine && pip install -r requirements.txt",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
-    },
-    {
-      "label": "Python Engine: Run CLI Analysis",
-      "type": "shell",
-      "command": "cd engine && python cli/main.py analyze ${input:videoPath}",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
-      "label": "Backend: Install Dependencies",
-      "type": "shell",
-      "command": "cd server && bun install",
       "group": "none",
       "presentation": {
         "reveal": "always",
@@ -41,40 +59,9 @@
       "group": "none",
       "presentation": {
         "reveal": "always",
-        "panel": "new"
+        "panel": "dedicated"
       },
       "isBackground": true
-    },
-    {
-      "label": "Backend: Start Production Server",
-      "type": "shell",
-      "command": "cd server && bun run start",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      },
-      "isBackground": true
-    },
-    {
-      "label": "Backend: Type Check",
-      "type": "shell",
-      "command": "cd server && bun run type-check",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
-      "label": "Frontend: Install Dependencies",
-      "type": "shell",
-      "command": "cd web-next && bun install",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
     },
     {
       "label": "Frontend: Start Development Server",
@@ -83,28 +70,7 @@
       "group": "none",
       "presentation": {
         "reveal": "always",
-        "panel": "new"
-      },
-      "isBackground": true
-    },
-    {
-      "label": "Frontend: Build for Production",
-      "type": "shell",
-      "command": "cd web-next && bun run build",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
-      }
-    },
-    {
-      "label": "Frontend: Start Production Server",
-      "type": "shell",
-      "command": "cd web-next && bun run start",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
+        "panel": "dedicated"
       },
       "isBackground": true
     }
