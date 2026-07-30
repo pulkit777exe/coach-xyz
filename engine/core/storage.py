@@ -6,6 +6,8 @@ import tempfile
 from pathlib import Path
 from typing import BinaryIO
 
+from core.config import CHUNK_SIZE
+
 
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 TMP_ROOT = (ENGINE_ROOT / "tmp").resolve()
@@ -17,9 +19,6 @@ if _local_storage_env:
     LOCAL_STORAGE_ROOT = _local_storage_path.resolve()
 else:
     LOCAL_STORAGE_ROOT = (TMP_ROOT / "storage").resolve()
-
-# Chunk size for streaming uploads/downloads (8MB)
-CHUNK_SIZE = 8 * 1024 * 1024
 
 
 def is_local_backend() -> bool:

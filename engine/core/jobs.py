@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import threading
 import time
@@ -125,9 +124,9 @@ def transition_job(job_id: str, new_state: str, **kwargs) -> None:
     Raises InvalidStateTransition if the transition is not allowed.
     """
     _require_redis()
-    
+
     job_lock = _get_job_lock(job_id)
-    
+
     with job_lock:
         raw = redis.get(f"{KEY}{job_id}")
         if not raw:
@@ -197,7 +196,7 @@ def get_job(job_id: str) -> JobStatus:
 
 def fail_job(job_id: str, error: EngineError) -> None:
     """Mark a job as failed with structured error info.
-    
+
     Raises the original exception if Redis operations fail,
     so the caller can handle it appropriately.
     """

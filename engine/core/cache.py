@@ -81,7 +81,7 @@ def warm_cache_for_video(video_hash: str, video_path: str) -> None:
     r = _get_redis()
     if r is None:
         return
-    
+
     # Store video metadata for cache warming prioritization
     # Note: video_path is NOT stored here because temp files are deleted after scan.
     # The hash itself is the cache key; analysis results are stored separately.

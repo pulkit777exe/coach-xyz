@@ -20,19 +20,15 @@ Each chunk is CHUNK_DURATION_S (default 180 s / 3 min) with a 10-second
 overlap so events near boundaries are not missed.
 """
 
-import json
 import os
 import pathlib
 import tempfile
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
 
 import cv2
-import numpy as np
 
 try:
-    from langchain_core.runnables import RunnableLambda
+    from langchain_core.runnables import RunnableLambda  # noqa: F401
     _HAS_LANGCHAIN = True
 except ImportError:
     _HAS_LANGCHAIN = False
@@ -104,9 +100,11 @@ def analyze_long_video(
 def needs_chunking(video_path: str) -> tuple[bool, float]:
     """Return (should_chunk, duration_seconds)."""
     cap = cv2.VideoCapture(video_path)
-    fps   = max(1.0, cap.get(cv2.CAP_PROP_FPS))
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
+    try:
+        fps   = max(1.0, cap.get(cv2.CAP_PROP_FPS))
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    finally:
+        cap.release()
     dur = total / fps
     return dur >= CHUNK_THRESHOLD_S, dur
 
@@ -391,10 +389,14 @@ def _compute_summary(shots: list[dict], sport: str) -> dict:
 
 def _overall_rating(avg_form: float, success_pct: float) -> str:
     combined = avg_form * 5 + success_pct * 0.5
-    if combined >= 55:   return "Elite"
-    if combined >= 45:   return "Advanced"
-    if combined >= 32:   return "Intermediate"
-    if combined >= 20:   return "Developing"
+    if combined >= 55:
+        return "Elite"
+    if combined >= 45:
+        return "Advanced"
+    if combined >= 32:
+        return "Intermediate"
+    if combined >= 20:
+        return "Developing"
     return "Beginner"
 
 

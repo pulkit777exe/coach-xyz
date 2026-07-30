@@ -21,15 +21,23 @@ load_dotenv()
 # Initialize Sentry (must be early in lifecycle)
 import sentry_sdk
 
-sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
-    send_default_pii=False,
-    release="coachai-engine@0.2.0",
-    environment=os.environ.get("ENVIRONMENT", "development"),
-)
+try:
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN"),
+        send_default_pii=False,
+        release="coachai-engine@0.2.0",
+        environment=os.environ.get("ENVIRONMENT", "development"),
+        integrations=[],
+    )
+except Exception:
+    pass
 
-# Chunk size for streaming uploads (8MB)
-CHUNK_SIZE = 8 * 1024 * 1024
+# Set up structured logging
+from core.logging_config import setup_logging, set_job_id
+setup_logging()
+
+# Import shared constants
+from core.config import CHUNK_SIZE
 
 # Session management constants (memory optimization)
 SESSION_TTL = 7200  # 2 hours (aligned with job TTL)
@@ -62,9 +70,8 @@ from core.errors import (
     JobNotFoundError,
     NoPlayersDetectedError,
     VideoDecodeError,
-    VideoExpiredError,
 )
-from core.jobs import create_job, get_job, fail_job, update_job, transition_job
+from core.jobs import create_job, get_job, fail_job
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
@@ -240,7 +247,7 @@ def _safe_int(value: Any) -> Optional[int]:
 
 def _evict_old_sessions_unlocked() -> None:
     """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit.
-    
+
     Must be called with sessions_lock held.
     """
     now = time.time()
@@ -249,7 +256,7 @@ def _evict_old_sessions_unlocked() -> None:
                if now - s.get("created_at", 0) > SESSION_TTL]
     for sid in expired:
         sessions.pop(sid, None)
-    
+
     # Enforce max sessions limit (remove oldest first)
     while len(sessions) > MAX_SESSIONS:
         oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
@@ -492,11 +499,16 @@ async def analyze(request: Request) -> JSONResponse:
     if not engine_job_id:
         return _error_response(400, "MISSING_JOB_ID", "engine_job_id required")
 
-    # Verify job exists in Redis
+    # Set correlation ID for structured logging
+    set_job_id(engine_job_id)
+
+    # Create job in Redis if it doesn't exist (server may not have created it yet)
     try:
         get_job(engine_job_id)
     except JobNotFoundError:
-        return _error_response(404, "JOB_NOT_FOUND", "Job not found")
+        # Create the job with uploading state so it can be tracked
+        from core.jobs import create_job
+        create_job(engine_job_id, initial_state="uploading")
 
     # Get video key from session
     if not session_token:
@@ -511,17 +523,20 @@ async def analyze(request: Request) -> JSONResponse:
     # BullMQ worker waits for this response, so we await the result
     try:
         from core.analyzer import run_analysis
+        from contextvars import copy_context
         import asyncio
         loop = asyncio.get_running_loop()
+        # Propagate ContextVar (job_id) to the thread
+        ctx = copy_context()
         await loop.run_in_executor(
             _analysis_executor,
-            lambda: run_analysis(engine_job_id, video_key, player_index),
+            lambda: ctx.run(run_analysis, engine_job_id, video_key, player_index),
         )
         return JSONResponse({"ok": True})
     except EngineError as e:
         fail_job(engine_job_id, e)
         return JSONResponse(status_code=500, content=e.to_dict())
-    except Exception as e:
+    except Exception:
         logging.error(traceback.format_exc())
         err = EngineError(
             code="INTERNAL_ERROR",
@@ -560,7 +575,6 @@ async def analyze_async(request: Request) -> JSONResponse:
         return err
 
     # Create job in Redis
-    from core.jobs import create_job
     engine_job_id = create_job(session_token, video_key=video_key)
 
     # Start analysis in bounded executor (memory optimization)
@@ -686,14 +700,35 @@ def status(job_id: str) -> JSONResponse:
 
 
 @app.post("/fail/{job_id}")
-async def fail(job_id: str) -> JSONResponse:
-    """Mark a job as failed. Called by the server when queue retries are exhausted."""
+async def fail(job_id: str, request: Request) -> JSONResponse:
+    """Mark a job as failed. Called by the server when queue retries are exhausted.
+
+    Accepts optional body with { code, message, retryable } to preserve
+    the actual error details from the engine instead of overwriting them.
+    """
+    from core.errors import EngineError
+
+    # Parse optional body for error details
+    code = "ANALYSIS_FAILED"
+    message = "Analysis failed after retries."
+    retryable = False
+
     try:
-        from core.errors import EngineError
+        content_type = (request.headers.get("content-type") or "").lower()
+        if content_type.startswith("application/json"):
+            body = await request.json()
+            if isinstance(body, dict):
+                code = body.get("code", code)
+                message = body.get("message", message)
+                retryable = body.get("retryable", retryable)
+    except Exception:
+        pass  # Use defaults
+
+    try:
         error = EngineError(
-            code="ANALYSIS_FAILED",
-            message="Analysis failed after retries.",
-            retryable=False,
+            code=code,
+            message=message,
+            retryable=retryable,
         )
         fail_job(job_id, error)
         return JSONResponse(status_code=200, content={"ok": True})

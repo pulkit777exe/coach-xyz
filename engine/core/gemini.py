@@ -56,9 +56,11 @@ def _maybe_prepare_analysis_proxy(video_path: str) -> tuple[str, str | None]:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         return video_path, None
-    src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 0
-    src_f = float(cap.get(cv2.CAP_PROP_FPS)) or 0.0
-    cap.release()
+    try:
+        src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 0
+        src_f = float(cap.get(cv2.CAP_PROP_FPS)) or 0.0
+    finally:
+        cap.release()
 
     if src_h <= 0 or src_h <= max_height and src_f <= max_fps:
         return video_path, None
