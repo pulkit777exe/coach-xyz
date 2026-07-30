@@ -91,6 +91,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [fileName, setFileName] = useState('')
+  const [fileError, setFileError] = useState<string | null>(null)
 
   // ── Film Grain Canvas ───────────────────────────────────────────────────
   useEffect(() => {
@@ -140,6 +141,10 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
   // ── GSAP Animations ─────────────────────────────────────────────────────
   useGSAP(() => {
+    // Skip animations for users who prefer reduced motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
     // Hero entrance
     gsap.from('.hero-line', {
       y: 60,
@@ -212,12 +217,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
   const selectFile = (file?: File) => {
     if (!file) return
+    setFileError(null)
     if (!file.type.startsWith('video/')) {
-      alert('Please select a video file (MP4, MOV, AVI, MKV).')
+      setFileError('Please select a video file (MP4, MOV, AVI, MKV).')
       return
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      alert('File is too large. Maximum size is 500MB.')
+      setFileError('File is too large. Maximum size is 500MB.')
       return
     }
     setFileName(file.name)
@@ -307,7 +313,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Marquee ────────────────────────────────────────────────────────── */}
-      <section className="border-y border-[var(--cream-05)] py-5">
+      <section className="border-y border-[var(--cream-05)] py-5" aria-hidden="true">
         <div className="marquee-track">
           <span className="marquee-item">Basketball</span>
           <span className="marquee-item">•</span>
@@ -444,6 +450,9 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 Choose video
               </button>
             </div>
+            {fileError && (
+              <p className="mt-4 text-sm text-red-400 text-center">{fileError}</p>
+            )}
           </div>
         </div>
       </section>

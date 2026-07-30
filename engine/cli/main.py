@@ -34,23 +34,20 @@ from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
 # ── Rich imports ──────────────────────────────────────────────────────────────
-from rich                 import print as rprint
 from rich.align           import Align
 from rich.columns         import Columns
 from rich.console         import Console
-from rich.live            import Live
 from rich.markup          import escape
 from rich.padding         import Padding
 from rich.panel           import Panel
 from rich.progress        import (BarColumn, Progress, SpinnerColumn,
                                   TaskProgressColumn, TextColumn,
                                   TimeElapsedColumn)
-from rich.prompt          import Confirm, Prompt
+from rich.prompt          import Prompt
 from rich.rule            import Rule
 from rich.table           import Table
 from rich.text            import Text
 from rich.theme           import Theme
-from rich.tree            import Tree
 
 console = Console(theme=Theme({
     "accent":   "bold cyan",
@@ -366,8 +363,8 @@ def _detect_players_step(video_path: pathlib.Path) -> dict | None:
     # ── Prompt ───────────────────────────────────────────────────────────
     choices = [str(p.id) for p in players] + ["all"]
     choice  = Prompt.ask(
-        f"[accent]Which player do you want to analyse?[/] "
-        f"[dim](enter a number or 'all')[/]",
+        "[accent]Which player do you want to analyse?[/] "
+        "[dim](enter a number or 'all')[/]",
         choices  = choices,
         default  = "all",
         console  = console,
@@ -409,7 +406,7 @@ def _run_analysis(
     player_focus: dict | None,
     duration_s:   float,
 ) -> dict:
-    from core.chunker import needs_chunking, CHUNK_THRESHOLD_S
+    from core.chunker import needs_chunking
 
     console.print(Rule("[accent]Step 2 / 3  ·  Gemini AI Analysis[/]", style="bright_blue"))
     console.print()
@@ -589,7 +586,6 @@ def _run_render(
     output: pathlib.Path | None,
     duration_s: float,
 ) -> pathlib.Path:
-    from core.renderer import render_video
 
     console.print(Rule("[accent]Step 3 / 3  ·  Overlay Render[/]", style="bright_blue"))
     console.print()
@@ -599,12 +595,10 @@ def _run_render(
         console.print(f"[warn]⚠  Sport '{sport}' has no render config — skipping render.[/]\n")
         return None
 
-    out = output or _downloads_dir() / f"{video_path.stem}_analyzed.mp4"
-
     # NOTE: Legacy render path — new pipeline uses core.renderer.render_video()
     # The CLI render requires active_player_landmarks_per_frame which is not
     # available in this context. Skipping render.
-    console.print(f"[warn]⚠  Rendering requires tracking data — skipping.[/]\n")
+    console.print("[warn]⚠  Rendering requires tracking data — skipping.[/]\n")
     return None
 
 
@@ -677,9 +671,12 @@ def _show_results(result: dict, events_path: pathlib.Path, video_out: pathlib.Pa
 
             form = shot.get("form_score")
             if form is not None:
-                if form >= 8:   form_str = f"[good]{form}[/]"
-                elif form >= 5: form_str = f"[warn]{form}[/]"
-                else:           form_str = f"[bad]{form}[/]"
+                if form >= 8:
+                    form_str = f"[good]{form}[/]"
+                elif form >= 5:
+                    form_str = f"[warn]{form}[/]"
+                else:
+                    form_str = f"[bad]{form}[/]"
             else:
                 form_str = "[dim]—[/]"
 
@@ -914,7 +911,7 @@ def main():
     p.add_argument("video",             help="Path to the video file.")
     p.add_argument("-o", "--output",    default=None,
                    help="Output .mp4 path (default: ~/Downloads/<name>_analyzed.mp4).")
-    p.add_argument("-m", "--model",     default="gemini-2.5-flash",
+    p.add_argument("-m", "--model",     default="gemini-3.5-flash",
                    help="Gemini model ID.")
     p.add_argument("--api-url",         default=None,
                    help="Route through a running backend (e.g. http://localhost:8000).")

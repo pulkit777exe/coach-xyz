@@ -66,7 +66,7 @@ def _render_video(video_path: str, analysis_result: dict, output_path: str) -> N
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run CoachAI analysis and emit JSON.")
     parser.add_argument("--video", required=True, help="Path to source video")
-    parser.add_argument("--model", default="gemini-2.5-flash", help="Gemini model")
+    parser.add_argument("--model", default="gemini-3.5-flash", help="Gemini model")
     parser.add_argument("--players-json", default="", help="JSON array of selected players")
     parser.add_argument("--players-file", default="", help="Path to JSON file with selected players")
     parser.add_argument("--output", default="", help="Rendered output video path")
