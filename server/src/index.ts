@@ -10,6 +10,7 @@ import scanRoute from "./routes/scan"
 import analyzeRoute from "./routes/analyze"
 import statusRoute from "./routes/status"
 import downloadRoute from "./routes/download"
+import chatRoute from "./routes/chat"
 import { healthRoute } from "./routes/health"
 import { historyStoreEnabled, initializeHistoryStore } from "./lib/supabaseHistory"
 import { buildError, isCoachAIError } from "./lib/errors"
@@ -100,6 +101,7 @@ const app = new Elysia({
   .use(analyzeRoute)
   .use(statusRoute)
   .use(downloadRoute)
+  .use(chatRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────
   .onError(({ error, set, request }) => {
