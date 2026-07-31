@@ -156,6 +156,53 @@ export async function sendChatMessage(
   }
 }
 
+export type StreamEvent =
+  | { type: 'token'; text: string }
+  | { type: 'done'; text: string; timestamp_refs: number[]; event_refs: number[] }
+  | { type: 'error'; message: string }
+
+/**
+ * Stream a chat message via SSE. Yields parsed StreamEvents as they arrive.
+ * The caller should iterate with `for await (const event of sendChatMessageStream(...))`.
+ */
+export async function* sendChatMessageStream(
+  jobId: string,
+  message: string,
+): AsyncGenerator<StreamEvent> {
+  const res = await fetch(`${BASE}/api/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ job_id: jobId, message }),
+  })
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
+    throw new Error((errBody.message as string) ?? 'Chat request failed')
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    // Process complete SSE lines
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? '' // Keep incomplete line in buffer
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      try {
+        const event = JSON.parse(line.slice(6)) as StreamEvent
+        yield event
+      } catch { /* partial JSON, skip */ }
+    }
+  }
+}
+
 export async function getConversation(
   jobId: string,
 ): Promise<{ messages: ChatMessage[] }> {

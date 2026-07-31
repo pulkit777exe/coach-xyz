@@ -1,12 +1,13 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import { sendChatMessage, getConversation } from '@/lib/api'
+import { sendChatMessageStream } from '@/lib/api'
 import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTyping } from './ChatTyping'
 import { QuickActions } from './QuickActions'
+import { getConversation } from '@/lib/api'
 import type { JobStatus } from '@/types'
 
 export const SPORT_EMOJI: Record<string, string> = {
@@ -26,6 +27,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
   const [isTyping, setIsTyping] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [historyError, setHistoryError] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasLoadedRef = useRef(false)
 
@@ -56,7 +58,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, isTyping, scrollToBottom])
+  }, [messages, isTyping, streamingText, scrollToBottom])
 
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return
@@ -69,18 +71,46 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     }
     setMessages((prev) => [...prev, userMsg])
     setIsTyping(true)
+    setStreamingText('')
 
     try {
-      const response = await sendChatMessage(jobId, text)
+      let finalText = ''
+      let finalTimestampRefs: number[] = []
+      let finalEventRefs: number[] = []
+
+      for await (const event of sendChatMessageStream(jobId, text)) {
+        if (event.type === 'token') {
+          finalText += event.text
+          setStreamingText(finalText)
+        } else if (event.type === 'done') {
+          finalText = event.text
+          finalTimestampRefs = event.timestamp_refs
+          finalEventRefs = event.event_refs
+        } else if (event.type === 'error') {
+          const errorMsg: ChatMessage = {
+            id: `err-${Date.now()}`,
+            role: 'system',
+            content: event.message,
+            created_at: Date.now(),
+          }
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
+          setStreamingText('')
+          setIsTyping(false)
+          return
+        }
+      }
+
+      // Stream complete — add final message
       const assistantMsg: ChatMessage = {
         id: `resp-${Date.now()}`,
         role: 'assistant',
-        content: response.reply,
-        timestamp_refs: response.timestamp_refs,
-        event_refs: response.event_refs,
+        content: finalText,
+        timestamp_refs: finalTimestampRefs,
+        event_refs: finalEventRefs,
         created_at: Date.now(),
       }
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
+      setStreamingText('')
     } catch {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
@@ -89,6 +119,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         created_at: Date.now(),
       }
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
+      setStreamingText('')
     } finally {
       setIsTyping(false)
     }
@@ -179,7 +210,20 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
               />
             ))}
 
-            {isTyping && <ChatTyping />}
+            {/* Streaming message bubble */}
+            {streamingText && (
+              <ChatMessageBubble
+                message={{
+                  id: 'streaming',
+                  role: 'assistant',
+                  content: streamingText,
+                  created_at: Date.now(),
+                }}
+                onSeekTo={onSeekTo}
+              />
+            )}
+
+            {isTyping && !streamingText && <ChatTyping />}
 
             <div ref={messagesEndRef} />
           </div>

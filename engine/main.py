@@ -828,6 +828,97 @@ def chat(request: Request) -> JSONResponse:
     })
 
 
+@app.post("/chat/stream")
+def chat_stream(request: Request):
+    """Streaming version of /chat — returns Server-Sent Events.
+
+    Each SSE event is one of:
+      data: {"type":"token","text":"..."}   — incremental text chunk
+      data: {"type":"done","text":"full reply","timestamp_refs":[...]}  — final
+      data: {"type":"error","message":"..."}  — error
+    """
+    from fastapi.responses import StreamingResponse
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("application/json"):
+        return _error_response(415, "INVALID_REQUEST", "JSON required")
+
+    try:
+        payload = request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    job_id = payload.get("job_id")
+    user_message = (payload.get("message") or "").strip()
+    conversation_history = payload.get("conversation_history") or []
+
+    if not job_id:
+        return _error_response(400, "INVALID_REQUEST", "job_id required")
+    if not user_message:
+        return _error_response(400, "INVALID_REQUEST", "message required")
+
+    try:
+        job = get_job(job_id)
+    except JobNotFoundError:
+        return _error_response(404, "JOB_NOT_FOUND", "Job not found or expired")
+
+    if not job.summary:
+        return _error_response(400, "INVALID_REQUEST", "Analysis not complete yet — no summary available")
+
+    from core.chat_prompt import get_chat_prompt
+    from core.config import GEMINI_MODEL
+
+    messages = get_chat_prompt(
+        analysis_result=job.summary,
+        conversation_history=conversation_history,
+        user_message=user_message,
+    )
+
+    if _gemini_client is None:
+        return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+
+    def generate():
+        full_text = ""
+        try:
+            for chunk in _gemini_client.models.generate_content_stream(
+                model=GEMINI_MODEL,
+                contents=messages[0]["content"],
+                config=genai_types.GenerateContentConfig(temperature=0.4),
+            ):
+                text = getattr(chunk, "text", None) or ""
+                if text:
+                    full_text += text
+                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            msg = str(exc)
+            is_quota = (
+                status_code == 429
+                or "RESOURCE_EXHAUSTED" in msg
+                or "quota" in msg.lower()
+            )
+            if is_quota:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'AI quota exceeded. Please try again later.'})}\n\n"
+            else:
+                logging.error(f"Chat stream Gemini error: {exc}")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'AI service error. Please try again.'})}\n\n"
+            return
+
+        import re
+        timestamp_refs = sorted(set(float(m) for m in re.findall(r'(\d+\.?\d*)s', full_text)))
+        yield f"data: {json.dumps({'type': 'done', 'text': full_text, 'timestamp_refs': timestamp_refs, 'event_refs': []})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get("/download/{job_id}")
 def download(job_id: str):
     try:
