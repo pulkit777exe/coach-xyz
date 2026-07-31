@@ -73,6 +73,13 @@ from core.errors import (
 )
 from core.jobs import create_job, get_job, fail_job
 
+try:
+    from google import genai
+    from google.genai import types as genai_types
+except ImportError:
+    genai = None
+    genai_types = None
+
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
 
@@ -736,6 +743,85 @@ async def fail(job_id: str, request: Request) -> JSONResponse:
         return _error_response(404, "JOB_NOT_FOUND", "Job not found")
 
 
+@app.post("/chat")
+async def chat(request: Request) -> JSONResponse:
+    """Conversational follow-up on an analysis result.
+
+    Accepts a job_id, user message, and optional conversation history.
+    Returns an AI reply grounded in the original analysis data.
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("application/json"):
+        return _error_response(415, "INVALID_REQUEST", "JSON required")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    job_id = payload.get("job_id")
+    user_message = (payload.get("message") or "").strip()
+    conversation_history = payload.get("conversation_history") or []
+
+    if not job_id:
+        return _error_response(400, "INVALID_REQUEST", "job_id required")
+    if not user_message:
+        return _error_response(400, "INVALID_REQUEST", "message required")
+
+    # Load the job's analysis result
+    try:
+        job = get_job(job_id)
+    except JobNotFoundError:
+        return _error_response(404, "JOB_NOT_FOUND", "Job not found or expired")
+
+    if not job.summary:
+        return _error_response(400, "INVALID_REQUEST", "Analysis not complete yet — no summary available")
+
+    # Build the chat prompt
+    from core.chat_prompt import get_chat_prompt
+    from core.config import GEMINI_MODEL
+
+    messages = get_chat_prompt(
+        analysis_result=job.summary,
+        conversation_history=conversation_history,
+        user_message=user_message,
+    )
+
+    # Call Gemini
+    try:
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=messages[0]["content"],
+            config=genai_types.GenerateContentConfig(
+                temperature=0.4,
+            ),
+        )
+        reply = getattr(response, "text", None) or ""
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", None)
+        message = str(exc)
+        is_quota = (
+            status_code == 429
+            or "RESOURCE_EXHAUSTED" in message
+            or "quota" in message.lower()
+        )
+        if is_quota:
+            return _error_response(429, "GEMINI_QUOTA_EXCEEDED", "AI quota exceeded. Please try again later.")
+        logging.error(f"Chat Gemini error: {exc}")
+        return _error_response(500, "GEMINI_ERROR", "AI service error. Please try again.")
+
+    # Extract timestamp references from the reply
+    import re
+    timestamp_refs = [float(m) for m in re.findall(r'(\d+\.?\d*)s', reply)]
+
+    return JSONResponse(content={
+        "reply": reply,
+        "timestamp_refs": sorted(set(timestamp_refs)),
+        "event_refs": [],
+    })
+
+
 @app.get("/download/{job_id}")
 def download(job_id: str):
     try:
@@ -755,6 +841,7 @@ def download(job_id: str):
             path=local_video_path,
             media_type="video/mp4",
             filename="coachai_analysis.mp4",
+            headers={"Content-Disposition": 'inline; filename="coachai_analysis.mp4"'},
         )
 
     url = storage.get_download_url(job.video_key)
