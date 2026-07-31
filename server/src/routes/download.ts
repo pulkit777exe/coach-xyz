@@ -15,12 +15,18 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
 
   try {
     const engineResponse = await getDownloadStream(serverJob.engine_job_id)
-    const response = new Response(engineResponse.body, {
-      headers: {
-        "Content-Type": "video/mp4",
-        "Content-Disposition": 'attachment; filename="coachai_analysis.mp4"',
-      },
-    })
+    const contentType = engineResponse.headers?.get("content-type") ?? "video/mp4"
+    const contentLength = engineResponse.headers?.get("content-length")
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Content-Disposition": 'inline; filename="coachai_analysis.mp4"',
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "public, max-age=3600",
+    }
+    if (contentLength) {
+      headers["Content-Length"] = contentLength
+    }
+    const response = new Response(engineResponse.body, { headers })
     // Increment download count after successful stream creation
     await markAnalysisDownloaded(serverJob.server_job_id)
     return response
