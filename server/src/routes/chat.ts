@@ -41,14 +41,10 @@ export default new Elysia()
       return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
     }
 
-    // Save user message
-    await saveMessage(job_id, { role: "user", content: message.trim() })
-
-    // Load conversation history
+    // Load conversation history (before saving user message)
     const history = await getConversation(job_id)
     const historyForEngine = history
       .filter((m) => m.role === "user" || m.role === "assistant")
-      .slice(0, -1) // Exclude the just-saved user message (engine will add it)
       .map((m) => ({ role: m.role, content: m.content }))
 
     // Proxy to engine /chat
@@ -77,7 +73,12 @@ export default new Elysia()
         event_refs?: number[]
       }
 
-      // Save assistant message
+      // Save both user and assistant messages only after engine success
+      // This prevents orphaned user messages when the engine fails
+      await saveMessage(job_id, {
+        role: "user",
+        content: message.trim(),
+      })
       await saveMessage(job_id, {
         role: "assistant",
         content: data.reply,

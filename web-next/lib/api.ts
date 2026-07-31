@@ -130,14 +130,8 @@ export function getDownloadUrl(jobId: string): string {
 
 // ── Chat API ─────────────────────────────────────────────────────────────────
 
-export type ChatMessage = {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp_refs?: number[]
-  event_refs?: number[]
-  created_at: number
-}
+export type { ChatMessage } from '@/types'
+import type { ChatMessage } from '@/types'
 
 export type ChatResponse = {
   reply: string

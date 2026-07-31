@@ -1,12 +1,19 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
-import { sendChatMessage, getConversation, type ChatMessage } from '@/lib/api'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import { sendChatMessage, getConversation } from '@/lib/api'
+import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTyping } from './ChatTyping'
 import { QuickActions } from './QuickActions'
 import type { JobStatus } from '@/types'
+
+export const SPORT_EMOJI: Record<string, string> = {
+  basketball: '🏀',
+  football: '⚽',
+  cricket: '🏏',
+}
 
 interface ChatPanelProps {
   jobId: string
@@ -18,6 +25,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  const [historyError, setHistoryError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasLoadedRef = useRef(false)
 
@@ -36,8 +44,9 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         if (history.length > 0) {
           setMessages(history)
         }
-      } catch {
-        // No history yet, that's fine
+      } catch (err) {
+        console.error('Failed to load chat history:', err)
+        setHistoryError(true)
       } finally {
         setIsLoadingHistory(false)
       }
@@ -49,7 +58,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     scrollToBottom()
   }, [messages, isTyping, scrollToBottom])
 
-  const handleSend = async (text: string) => {
+  const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return
 
     const userMsg: ChatMessage = {
@@ -83,13 +92,20 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     } finally {
       setIsTyping(false)
     }
-  }
+  }, [jobId, isTyping])
 
-  const handleQuickAction = (prompt: string) => {
+  const handleQuickAction = useCallback((prompt: string) => {
     handleSend(prompt)
-  }
+  }, [handleSend])
 
   const summary = jobStatus?.summary
+
+  const welcomeMessage = useMemo<ChatMessage>(() => ({
+    id: 'welcome',
+    role: 'assistant',
+    content: `Analysis complete! I found **${summary?.total_events ?? 0} events** in your ${summary?.sport ?? 'sports'} video with an overall form score of **${summary?.form_score ?? 0}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
+    created_at: Date.now(),
+  }), [summary])
 
   return (
     <div className="flex h-full flex-col bg-transparent">
@@ -102,22 +118,26 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
               </div>
             )}
 
+            {historyError && !isLoadingHistory && (
+              <div className="text-center text-[var(--cream-40)] text-xs py-4 opacity-60">
+                Could not load previous messages
+              </div>
+            )}
+
             {!isLoadingHistory && messages.length === 0 && summary && (
               <div className="space-y-6">
                 {/* Initial analysis summary card */}
                 <div className="rounded-none border border-[var(--cream-10)] bg-[var(--cream-05)] p-6">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-2xl">
-                      {summary.sport === 'basketball' ? '🏀' :
-                       summary.sport === 'football' ? '⚽' :
-                       summary.sport === 'cricket' ? '🏏' : '🎯'}
+                      {SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}
                     </span>
                     <div>
                       <h3 className="font-serif text-lg text-[var(--fg)] capitalize">
                         {summary.sport} Analysis Complete
                       </h3>
                       <p className="text-[0.65rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">
-                        {summary.total_events} events detected
+                        {summary.total_events ?? 0} events detected
                       </p>
                     </div>
                   </div>
@@ -131,7 +151,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                       <p className="text-[0.6rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">Rating</p>
                     </div>
                     <div>
-                      <p className="font-serif text-lg text-[var(--fg)]">{summary.success_rate_percent}%</p>
+                      <p className="font-serif text-lg text-[var(--fg)]">{summary.success_rate_percent ?? 0}%</p>
                       <p className="text-[0.6rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">Success Rate</p>
                     </div>
                   </div>
@@ -139,12 +159,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
 
                 {/* Welcome message */}
                 <ChatMessageBubble
-                  message={{
-                    id: 'welcome',
-                    role: 'assistant',
-                    content: `Analysis complete! I found **${summary.total_events} events** in your ${summary.sport} video with an overall form score of **${summary.form_score}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
-                    created_at: Date.now(),
-                  }}
+                  message={welcomeMessage}
                   onSeekTo={onSeekTo}
                 />
 
@@ -175,8 +190,8 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
           <div className="mx-auto max-w-3xl px-4 py-4">
             <ChatInput
               onSend={handleSend}
-              disabled={isTyping}
-              placeholder="Ask about your analysis..."
+              disabled={isTyping || isLoadingHistory}
+              placeholder={isLoadingHistory ? 'Loading...' : 'Ask about your analysis...'}
             />
           </div>
         </div>

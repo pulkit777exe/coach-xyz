@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChatMessage } from '@/lib/api'
+import type { ChatMessage } from '@/types'
 
 interface ChatMessageBubbleProps {
   message: ChatMessage

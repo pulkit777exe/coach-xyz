@@ -32,6 +32,36 @@ export async function getConversation(
   return conv.messages ?? []
 }
 
+/**
+ * Atomically append a message to a conversation using a Lua script.
+ * This eliminates the read-modify-write race condition where concurrent
+ * saveMessage calls could silently lose messages.
+ */
+const APPEND_MSG_SCRIPT = `
+local key = KEYS[1]
+local msg = ARGV[1]
+local ttl = tonumber(ARGV[2])
+local now = ARGV[3]
+
+local raw = redis.call('GET', key)
+local conv
+
+if raw then
+  conv = cjson.decode(raw)
+  table.insert(conv.messages, cjson.decode(msg))
+  conv.updated_at = tonumber(now)
+else
+  conv = {
+    messages = { cjson.decode(msg) },
+    created_at = tonumber(now),
+    updated_at = tonumber(now),
+  }
+end
+
+redis.call('SET', key, cjson.encode(conv), 'EX', ttl)
+return #conv.messages
+`
+
 export async function saveMessage(
   serverJobId: string,
   message: Omit<ChatMessage, "id" | "created_at">,
@@ -42,22 +72,15 @@ export async function saveMessage(
     created_at: Date.now(),
   }
 
-  const raw = await redis.get(`${KEY}${serverJobId}`)
-  let conv: Conversation
+  await redis.eval(
+    APPEND_MSG_SCRIPT,
+    1,
+    `${KEY}${serverJobId}`,
+    JSON.stringify(msg),
+    String(CONV_TTL),
+    String(Date.now()),
+  )
 
-  if (raw) {
-    conv = raw as Conversation
-    conv.messages.push(msg)
-    conv.updated_at = Date.now()
-  } else {
-    conv = {
-      messages: [msg],
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    }
-  }
-
-  await redis.set(`${KEY}${serverJobId}`, JSON.stringify(conv), { ex: CONV_TTL })
   return msg
 }
 

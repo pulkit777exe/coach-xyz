@@ -43,7 +43,7 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
 
       {/* Split Screen */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Video + Stats */}
+        {/* Left: Video + Stats (desktop) */}
         <div className="hidden lg:flex lg:w-[45%] xl:w-[50%] flex-col border-r border-[var(--cream-05)]">
           {/* Video Player */}
           <div className="flex-1 min-h-0">
@@ -75,15 +75,10 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
 
         {/* Right: Chat */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile: Video thumbnail */}
+          {/* Mobile: Video (using VideoPlayer for seekTo support) */}
           <div className="lg:hidden shrink-0 border-b border-[var(--cream-05)]">
-            <div className="aspect-video w-full bg-black">
-              <video
-                src={`${process.env.NEXT_PUBLIC_API_URL}/api/download/${jobId}`}
-                controls
-                className="h-full w-full object-contain"
-                preload="metadata"
-              />
+            <div className="aspect-video w-full">
+              <VideoPlayer ref={videoRef} jobId={jobId} />
             </div>
           </div>
 

@@ -54,6 +54,7 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         disabled={disabled}
         placeholder={placeholder}
         rows={1}
+        maxLength={2000}
         className="flex-1 resize-none rounded-none border border-[var(--cream-10)] bg-transparent px-4 py-3 text-sm text-[var(--fg)] placeholder:text-[var(--cream-40)] focus:border-[var(--cream-20)] focus:outline-none disabled:opacity-50"
       />
       <button

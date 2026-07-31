@@ -76,9 +76,11 @@ from core.jobs import create_job, get_job, fail_job
 try:
     from google import genai
     from google.genai import types as genai_types
+    _gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")) if os.getenv("GEMINI_API_KEY") else None
 except ImportError:
     genai = None
     genai_types = None
+    _gemini_client = None
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
@@ -744,18 +746,21 @@ async def fail(job_id: str, request: Request) -> JSONResponse:
 
 
 @app.post("/chat")
-async def chat(request: Request) -> JSONResponse:
+def chat(request: Request) -> JSONResponse:
     """Conversational follow-up on an analysis result.
 
     Accepts a job_id, user message, and optional conversation history.
     Returns an AI reply grounded in the original analysis data.
+
+    Uses a plain `def` (not async) so FastAPI runs this in a thread pool,
+    avoiding event loop blocking during the synchronous Gemini call.
     """
     content_type = (request.headers.get("content-type") or "").lower()
     if not content_type.startswith("application/json"):
         return _error_response(415, "INVALID_REQUEST", "JSON required")
 
     try:
-        payload = await request.json()
+        payload = request.json()
     except Exception:
         return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
 
@@ -789,8 +794,9 @@ async def chat(request: Request) -> JSONResponse:
 
     # Call Gemini
     try:
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        response = client.models.generate_content(
+        if _gemini_client is None:
+            return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+        response = _gemini_client.models.generate_content(
             model=GEMINI_MODEL,
             contents=messages[0]["content"],
             config=genai_types.GenerateContentConfig(
