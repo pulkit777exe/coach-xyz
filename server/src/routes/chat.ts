@@ -152,7 +152,9 @@ export default new Elysia()
       // to save messages once the stream completes
       const [clientStream, parseStream] = (engineRes.body as ReadableStream).tee()
 
-      // Background: consume parseStream to save conversation on completion
+      // Background: consume parseStream to save conversation on completion.
+      // Always saves the user message; saves assistant message only if
+      // the stream completed successfully with a "done" event.
       const userMsg = message.trim()
       const jobId = job_id
       ;(async () => {
@@ -162,33 +164,51 @@ export default new Elysia()
         let timestampRefs: number[] = []
         let eventRefs: number[] = []
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const text = decoder.decode(value, { stream: true })
-          // Parse SSE data lines
-          for (const line of text.split("\n")) {
-            if (!line.startsWith("data: ")) continue
-            try {
-              const event = JSON.parse(line.slice(6))
-              if (event.type === "done") {
-                fullText = event.text || ""
-                timestampRefs = event.timestamp_refs || []
-                eventRefs = event.event_refs || []
-              }
-            } catch { /* partial JSON, ignore */ }
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            const text = decoder.decode(value, { stream: true })
+            for (const line of text.split("\n")) {
+              if (!line.startsWith("data: ")) continue
+              try {
+                const event = JSON.parse(line.slice(6))
+                if (event.type === "done") {
+                  fullText = event.text || ""
+                  timestampRefs = event.timestamp_refs || []
+                  eventRefs = event.event_refs || []
+                }
+              } catch { /* partial JSON, ignore */ }
+            }
           }
+        } catch (err) {
+          console.error(JSON.stringify({
+            type: "chat_stream_parse_error",
+            message: err instanceof Error ? err.message : "unknown",
+            timestamp: new Date().toISOString(),
+          }))
+        } finally {
+          reader.releaseLock()
         }
 
-        // Save conversation after stream completes
-        if (fullText) {
+        try {
+          // Always save the user message
           await saveMessage(jobId, { role: "user", content: userMsg })
-          await saveMessage(jobId, {
-            role: "assistant",
-            content: fullText,
-            timestamp_refs: timestampRefs,
-            event_refs: eventRefs,
-          })
+          // Save assistant reply only if we got a complete response
+          if (fullText) {
+            await saveMessage(jobId, {
+              role: "assistant",
+              content: fullText,
+              timestamp_refs: timestampRefs,
+              event_refs: eventRefs,
+            })
+          }
+        } catch (err) {
+          console.error(JSON.stringify({
+            type: "chat_stream_save_error",
+            message: err instanceof Error ? err.message : "unknown",
+            timestamp: new Date().toISOString(),
+          }))
         }
       })()
 

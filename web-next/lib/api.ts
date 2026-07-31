@@ -163,16 +163,18 @@ export type StreamEvent =
 
 /**
  * Stream a chat message via SSE. Yields parsed StreamEvents as they arrive.
- * The caller should iterate with `for await (const event of sendChatMessageStream(...))`.
+ * Pass an AbortSignal to cancel the stream on unmount or user action.
  */
 export async function* sendChatMessageStream(
   jobId: string,
   message: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const res = await fetch(`${BASE}/api/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ job_id: jobId, message }),
+    signal,
   })
 
   if (!res.ok) {
@@ -184,22 +186,25 @@ export async function* sendChatMessageStream(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-    // Process complete SSE lines
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? '' // Keep incomplete line in buffer
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      try {
-        const event = JSON.parse(line.slice(6)) as StreamEvent
-        yield event
-      } catch { /* partial JSON, skip */ }
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6)) as StreamEvent
+          yield event
+        } catch { /* partial JSON, skip */ }
+      }
     }
+  } finally {
+    reader.releaseLock()
   }
 }
 

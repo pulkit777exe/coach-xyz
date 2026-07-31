@@ -30,6 +30,12 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
   const [streamingText, setStreamingText] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const hasLoadedRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Cancel any in-flight stream on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -63,6 +69,11 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return
 
+    // Cancel any previous stream
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     const userMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
       role: 'user',
@@ -78,7 +89,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       let finalTimestampRefs: number[] = []
       let finalEventRefs: number[] = []
 
-      for await (const event of sendChatMessageStream(jobId, text)) {
+      for await (const event of sendChatMessageStream(jobId, text, controller.signal)) {
         if (event.type === 'token') {
           finalText += event.text
           setStreamingText(finalText)

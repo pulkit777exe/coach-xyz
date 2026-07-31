@@ -69,19 +69,26 @@ const app = new Elysia({
     credentials: true,
   }))
   // ── Security Headers ───────────────────────────────────────────────────
-  .onAfterHandle(({ set }) => {
+  .onAfterHandle(({ set, request }) => {
     set.headers["X-Content-Type-Options"] = "nosniff"
     set.headers["X-Frame-Options"] = "DENY"
     set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     set.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    set.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+
+    // Only set HSTS over HTTPS to avoid pinning localhost during development
+    const isHttps = request.url.startsWith("https")
+    if (isHttps) {
+      set.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    }
+
+    const isDev = process.env.NODE_ENV !== "production"
     set.headers["Content-Security-Policy"] = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob:",
-      "connect-src 'self' http://localhost:* https://*.sentry.io https://*.upstash.io",
+      `connect-src 'self' https://*.sentry.io https://*.upstash.io${isDev ? " http://localhost:*" : ""}`,
       "worker-src 'self' blob:",
     ].join("; ")
   })

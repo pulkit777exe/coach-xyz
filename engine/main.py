@@ -746,21 +746,21 @@ async def fail(job_id: str, request: Request) -> JSONResponse:
 
 
 @app.post("/chat")
-def chat(request: Request) -> JSONResponse:
+async def chat(request: Request) -> JSONResponse:
     """Conversational follow-up on an analysis result.
 
     Accepts a job_id, user message, and optional conversation history.
     Returns an AI reply grounded in the original analysis data.
 
-    Uses a plain `def` (not async) so FastAPI runs this in a thread pool,
-    avoiding event loop blocking during the synchronous Gemini call.
+    Uses asyncio.to_thread for the blocking Gemini call so the event loop
+    stays responsive.
     """
     content_type = (request.headers.get("content-type") or "").lower()
     if not content_type.startswith("application/json"):
         return _error_response(415, "INVALID_REQUEST", "JSON required")
 
     try:
-        payload = request.json()
+        payload = await request.json()
     except Exception:
         return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
 
@@ -792,17 +792,19 @@ def chat(request: Request) -> JSONResponse:
         user_message=user_message,
     )
 
-    # Call Gemini
+    # Call Gemini in a thread to avoid blocking the event loop
     try:
         if _gemini_client is None:
             return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
-        response = _gemini_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=messages[0]["content"],
-            config=genai_types.GenerateContentConfig(
-                temperature=0.4,
-            ),
-        )
+
+        def _call_gemini():
+            return _gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=messages[0]["content"],
+                config=genai_types.GenerateContentConfig(temperature=0.4),
+            )
+
+        response = await asyncio.to_thread(_call_gemini)
         reply = getattr(response, "text", None) or ""
     except Exception as exc:
         status_code = getattr(exc, "status_code", None)
@@ -829,7 +831,7 @@ def chat(request: Request) -> JSONResponse:
 
 
 @app.post("/chat/stream")
-def chat_stream(request: Request):
+async def chat_stream(request: Request):
     """Streaming version of /chat — returns Server-Sent Events.
 
     Each SSE event is one of:
@@ -844,7 +846,7 @@ def chat_stream(request: Request):
         return _error_response(415, "INVALID_REQUEST", "JSON required")
 
     try:
-        payload = request.json()
+        payload = await request.json()
     except Exception:
         return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
 
