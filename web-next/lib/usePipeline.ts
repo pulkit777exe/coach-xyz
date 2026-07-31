@@ -40,6 +40,8 @@ export interface PipelineActions {
   handlePlayerSelected: (playerIndex: number) => void
   handleRetry: () => void
   handleReset: () => void
+  handleStartChat: () => void
+  handleBackToResults: () => void
 }
 
 export interface Pipeline extends PipelineActions {
@@ -283,6 +285,14 @@ export function usePipeline(): Pipeline {
     setErrorStatus(null)
   }, [stopPolling])
 
+  const handleStartChat = useCallback(() => {
+    setPipelineState('chatting')
+  }, [])
+
+  const handleBackToResults = useCallback(() => {
+    setPipelineState('completed')
+  }, [])
+
   return {
     pipelineState,
     scanResult,
@@ -294,5 +304,7 @@ export function usePipeline(): Pipeline {
     handlePlayerSelected,
     handleRetry,
     handleReset,
+    handleStartChat,
+    handleBackToResults,
   }
 }

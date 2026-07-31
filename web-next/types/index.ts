@@ -28,6 +28,7 @@ export type PipelineState =
   | "analyzing"
   | "rendering"
   | "completed"
+  | "chatting"
   | "error"
 
 // ── Job Status ───────────────────────────────────────────────────────────────
@@ -90,4 +91,15 @@ export type CoachAIError = {
   layer: "engine" | "server" | "client"
   retryable: boolean
   retry_after?: number
+}
+
+// ── Chat Types ───────────────────────────────────────────────────────────────
+
+export type ChatMessage = {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+  created_at: number
 }

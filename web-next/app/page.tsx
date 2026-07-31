@@ -5,6 +5,7 @@ import PlayerSelector from '@/components/PlayerSelector'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ResultsSummary from '@/components/ResultsSummary'
 import ErrorScreen from '@/components/ErrorScreen'
+import ChatLayout from '@/components/ChatLayout'
 import { usePipeline } from '@/lib/usePipeline'
 
 export default function Home() {
@@ -18,6 +19,8 @@ export default function Home() {
     handlePlayerSelected,
     handleRetry,
     handleReset,
+    handleStartChat,
+    handleBackToResults,
   } = usePipeline()
 
   switch (pipelineState) {
@@ -45,7 +48,24 @@ export default function Home() {
 
     case 'completed':
       if (!jobStatus || !jobId) return <LandingPage onFileSelected={handleFileSelected} />
-      return <ResultsSummary status={jobStatus} jobId={jobId} onReset={handleReset} />
+      return (
+        <ResultsSummary
+          status={jobStatus}
+          jobId={jobId}
+          onReset={handleReset}
+          onStartChat={handleStartChat}
+        />
+      )
+
+    case 'chatting':
+      if (!jobId) return <LandingPage onFileSelected={handleFileSelected} />
+      return (
+        <ChatLayout
+          jobId={jobId}
+          jobStatus={jobStatus}
+          onBackToResults={handleBackToResults}
+        />
+      )
 
     case 'error':
       if (!errorStatus) return <LandingPage onFileSelected={handleFileSelected} />

@@ -127,3 +127,52 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export function getDownloadUrl(jobId: string): string {
   return `${BASE}/api/download/${jobId}`
 }
+
+// ── Chat API ─────────────────────────────────────────────────────────────────
+
+export type ChatMessage = {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+  created_at: number
+}
+
+export type ChatResponse = {
+  reply: string
+  timestamp_refs: number[]
+  event_refs: number[]
+}
+
+export async function sendChatMessage(
+  jobId: string,
+  message: string,
+): Promise<ChatResponse> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 60_000)
+  try {
+    return await apiFetch<ChatResponse>(`${BASE}/api/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ job_id: jobId, message }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function getConversation(
+  jobId: string,
+): Promise<{ messages: ChatMessage[] }> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  try {
+    return await apiFetch<{ messages: ChatMessage[] }>(
+      `${BASE}/api/conversation/${jobId}`,
+      { signal: controller.signal },
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}

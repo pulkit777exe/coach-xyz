@@ -18,6 +18,7 @@ interface ResultsSummaryProps {
   status: JobStatus
   jobId: string
   onReset: () => void
+  onStartChat?: () => void
 }
 
 const SPORT_EMOJI: Record<string, string> = {
@@ -27,7 +28,7 @@ const SPORT_EMOJI: Record<string, string> = {
   unknown: "🎯"
 }
 
-export default function ResultsSummary({ status, jobId, onReset }: ResultsSummaryProps) {
+export default function ResultsSummary({ status, jobId, onReset, onStartChat }: ResultsSummaryProps) {
   const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -137,15 +138,25 @@ export default function ResultsSummary({ status, jobId, onReset }: ResultsSummar
           </Card>
 
           {/* Action Buttons */}
-          <div className="gsap-item grid sm:grid-cols-2 gap-4 mb-8">
+          <div className={`gsap-item gap-4 mb-8 ${onStartChat ? 'grid sm:grid-cols-3' : 'grid sm:grid-cols-2'}`}>
+            {onStartChat && (
+              <Button
+                className="button-accent h-16 rounded-none text-base font-bold transition-transform hover:scale-[1.02]"
+                onClick={onStartChat}
+              >
+                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                Chat with AI
+              </Button>
+            )}
+            
             <a
               href={getDownloadUrl(jobId)}
               download="coachai_analysis.mp4"
               className="flex-1 block group"
             >
-              <Button className="w-full button-accent h-16 rounded-none text-base font-bold transition-transform group-hover:scale-[1.02]">
+              <Button className="w-full h-16 rounded-none text-base font-bold transition-transform group-hover:scale-[1.02] bg-[var(--fg)] text-[var(--bg)]">
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Download Annotated Video
+                Download Video
               </Button>
             </a>
             
@@ -155,7 +166,7 @@ export default function ResultsSummary({ status, jobId, onReset }: ResultsSummar
               onClick={onReset}
             >
               <svg className="w-5 h-5 mr-3 text-[var(--cream-40)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              Analyze Another Clip
+              New Analysis
             </Button>
           </div>
 
