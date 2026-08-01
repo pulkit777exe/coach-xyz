@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SentryProvider } from "./sentry-provider";
+import AuthHeader from "@/components/AuthHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +26,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen antialiased pt-14">
+        <AuthHeader />
         <a
           href="#analyze"
           className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-teal-600 focus:text-white focus:outline-none"

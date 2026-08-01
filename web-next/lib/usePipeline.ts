@@ -53,7 +53,7 @@ export interface Pipeline extends PipelineActions {
   errorStatus: CoachAIError | null
 }
 
-export function usePipeline(): Pipeline {
+export function usePipeline(auth0Id: string | null = null): Pipeline {
   const [pipelineState, setPipelineState] = useState<PipelineState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<number | null>(null)
@@ -198,7 +198,7 @@ export function usePipeline(): Pipeline {
 
     setPipelineState('uploading')
     try {
-      const result = await scanVideo(file)
+      const result = await scanVideo(file, auth0Id)
       setScanResult(result)
 
       if (result.player_count === 1) {
@@ -208,6 +208,7 @@ export function usePipeline(): Pipeline {
         const { job_id } = await startAnalysis({
           session_token: result.session_token,
           player_index: playerIdx,
+          auth0Id,
         })
         setJobId(job_id)
         startPolling(job_id)
@@ -228,6 +229,7 @@ export function usePipeline(): Pipeline {
       const { job_id } = await startAnalysis({
         session_token: scanResult.session_token,
         player_index: playerIndex,
+        auth0Id,
       })
       setJobId(job_id)
       startPolling(job_id)
@@ -250,6 +252,7 @@ export function usePipeline(): Pipeline {
         startAnalysis({
           session_token: scanResult.session_token,
           player_index: selectedPlayerIndex,
+          auth0Id,
         })
           .then(({ job_id }) => {
             // Don't start polling if pipeline was reset or another retry started

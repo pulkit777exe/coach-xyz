@@ -46,7 +46,7 @@ export const scanVideo = async (videoFile: File): Promise<ScanResult> => {
     const res = await withTimeout(`${ENGINE_URL}/scan`, {
       method: "POST",
       body: form,
-    }, 60_000)
+    }, 180_000)
 
     if (!res.ok) {
       await throwNonOk(res)

@@ -115,6 +115,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       sessionToken,
       playerIndex,
       model,
+      auth0Id: request.headers.get("x-auth0-id"),
     })
 
     set.status = 200

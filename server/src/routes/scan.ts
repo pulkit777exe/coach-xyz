@@ -82,6 +82,7 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       playerCount: result.player_count,
       players: result.players,
       scanResponse: result as Record<string, unknown>,
+      auth0Id: request.headers.get("x-auth0-id"),
     })
 
     set.status = 200

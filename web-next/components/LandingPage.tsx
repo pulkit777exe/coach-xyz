@@ -239,34 +239,8 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       {/* Film grain */}
       <canvas id="grain-canvas" />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-[var(--cream-05)] bg-[var(--bg)]/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 lg:px-12">
-          <a href="#" className="flex items-center gap-3">
-            <span className="font-serif text-xl text-[var(--fg)]">coach.xyz</span>
-          </a>
-          <nav className="hidden items-center gap-8 md:flex">
-            <a href="#workflow" className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">
-              Workflow
-            </a>
-            <a href="#features" className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">
-              Features
-            </a>
-            <a href="#faq" className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]">
-              FAQ
-            </a>
-          </nav>
-          <a
-            href="#analyze"
-            className="border border-[var(--cream-10)] px-5 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
-          >
-            Analyze Now
-          </a>
-        </div>
-      </header>
-
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-[85vh] flex-col justify-end px-6 pb-16 pt-32 lg:px-12 lg:pb-24">
+      <section className="relative flex min-h-[85vh] flex-col justify-end px-6 pb-16 pt-20 lg:px-12 lg:pb-24">
         <div className="mx-auto w-full max-w-7xl">
           <p className="hero-line mb-6 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
             AI-Powered Sports Video Analysis
