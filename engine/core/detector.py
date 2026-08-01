@@ -211,8 +211,11 @@ def _enhance_and_encode_crop(
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, 92]
     ok, buffer = cv2.imencode(".jpg", crop, encode_params)
     if not ok:
+        logging.warning(f"[SCAN] cv2.imencode failed for crop of shape {crop.shape}")
         return ""
-    return base64.b64encode(buffer.tobytes()).decode("utf-8")
+    result = base64.b64encode(buffer.tobytes()).decode("utf-8")
+    logging.info(f"[SCAN] crop encoded: shape={crop.shape}, jpeg_bytes={len(buffer)}, base64_len={len(result)}")
+    return result
 
 
 def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dict]:

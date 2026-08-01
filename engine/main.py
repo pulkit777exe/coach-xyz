@@ -475,6 +475,13 @@ async def scan(video: UploadFile) -> JSONResponse:
         for p in players
     ]
 
+    for rp in response_players:
+        cb64 = rp.get("crop_base64", "")
+        logging.info(
+            f"[SCAN] player {rp['player_index']}: crop_base64 length={len(cb64)}, "
+            f"starts_with={cb64[:20]!r}..."
+        )
+
     return JSONResponse(
         status_code=200,
         content={
