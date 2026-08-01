@@ -18,6 +18,41 @@ interface PlayerSelectorProps {
   onSelect: (playerIndex: number) => void
 }
 
+function PlayerImage({ player }: { player: Player }) {
+  const [imgError, setImgError] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
+
+  const hasBase64 = !!player.crop_base64 && player.crop_base64.trim().length > 0
+
+  if (!hasBase64 || imgError) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-[var(--cream-40)]">
+        <svg className="w-12 h-12 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        <span className="text-xs">No preview</span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {!imgLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--cream-20)] border-t-transparent" />
+        </div>
+      )}
+      <img
+        src={`data:image/jpeg;base64,${player.crop_base64.trim()}`}
+        alt={`Subject ${player.player_index}`}
+        className={`w-full h-full object-cover transition-all duration-700 ease-in-out ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+        onLoad={() => setImgLoaded(true)}
+        onError={() => setImgError(true)}
+      />
+    </>
+  )
+}
+
 export default function PlayerSelector({ players, onSelect }: PlayerSelectorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -89,11 +124,7 @@ export default function PlayerSelector({ players, onSelect }: PlayerSelectorProp
                 <Card className={`relative h-full w-full bg-[var(--bg)] border-none rounded-none overflow-hidden transition-all ${isSelected ? 'bg-[var(--bg)]' : ''}`}>
                   <CardContent className="p-5 flex flex-col items-center text-center">
                     <div className="relative w-full aspect-square rounded-none overflow-hidden mb-5 bg-[var(--cream-05)] border border-[var(--cream-10)] shadow-inner">
-                      <img
-                        src={`data:image/jpeg;base64,${player.crop_base64}`}
-                        alt={`Subject ${player.player_index}`}
-                        className={`w-full h-full object-cover transition-transform duration-700 ease-in-out ${isSelected ? 'scale-110' : 'group-hover:scale-105'}`}
-                      />
+                      <PlayerImage player={player} />
                       {isSelected && (
                         <div className="absolute inset-0 bg-[var(--cream-10)] mix-blend-overlay"></div>
                       )}
