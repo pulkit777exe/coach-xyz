@@ -1,17 +1,11 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import gsap from 'gsap'
-import { useGSAP } from '@gsap/react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AppHeader } from '@/components/AppHeader'
 import type { Player } from '@/types'
-
-if (typeof window !== 'undefined') {
-  gsap.registerPlugin(useGSAP)
-}
 
 interface PlayerSelectorProps {
   players: Player[]
@@ -62,126 +56,98 @@ function PlayerImage({ player }: { player: Player }) {
 
 export default function PlayerSelector({ players, onSelect }: PlayerSelectorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  useGSAP(() => {
-    gsap.from('.gsap-header', {
-      y: -30,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.1,
-      ease: 'power3.out'
-    })
-
-    gsap.from('.gsap-card', {
-      y: 40,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.1,
-      ease: 'back.out(1.5)',
-      delay: 0.3
-    })
-
-    gsap.from('.gsap-button', {
-      y: 20,
-      opacity: 0,
-      duration: 0.6,
-      ease: 'power2.out',
-      delay: 0.8
-    })
-  }, { scope: containerRef })
 
   return (
     <>
       <AppHeader />
-      <div ref={containerRef} className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-24 pb-20">
-
+      <div className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-24 pb-20">
         <div className="max-w-5xl w-full">
-          <div className="text-center mb-12">
-            <h1 className="gsap-header font-serif text-[clamp(2rem,5vw,4rem)] font-bold text-[var(--fg)] mb-4 leading-tight tracking-tight">
+          <div className="text-center mb-12 animate-[fadeInDown_0.8s_ease-out]">
+            <h1 className="font-serif text-[clamp(2rem,5vw,4rem)] font-bold text-[var(--fg)] mb-4 leading-tight tracking-tight">
               Who do you want to <span className="text-[var(--fg)]">analyze?</span>
             </h1>
-            <p className="gsap-header text-lg text-[var(--cream-40)] max-w-2xl mx-auto">
+            <p className="text-lg text-[var(--cream-40)] max-w-2xl mx-auto">
               Our vision models detected <span className="text-[var(--fg)] font-bold">{players.length}</span> potential subjects. Select the primary athlete to continue the pipeline.
             </p>
           </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8 mb-16 px-4">
-          {players.map((player) => {
-            const isSelected = selectedIndex === player.player_index
-            return (
-              <div
-                key={player.player_index}
-                role="button"
-                tabIndex={0}
-                aria-label={`Select Subject ${player.player_index}, confidence ${(player.confidence * 100).toFixed(0)}%`}
-                aria-pressed={isSelected}
-                className={`gsap-card cursor-pointer group relative rounded-none p-[2px] overflow-hidden transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${isSelected ? 'scale-105' : 'hover:scale-105'}`}
-                onClick={() => setSelectedIndex(player.player_index)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setSelectedIndex(player.player_index)
-                  }
-                }}
-              >
-                {/* Animated Border */}
-                <div className={`absolute inset-0 transition-opacity duration-300 ${isSelected ? 'border-[var(--cream-20)] opacity-100' : 'bg-[var(--cream-05)] opacity-100'}`}></div>
-                
-                <Card className={`relative h-full w-full bg-[var(--bg)] border-none rounded-none overflow-hidden transition-all ${isSelected ? 'bg-[var(--bg)]' : ''}`}>
-                  <CardContent className="p-5 flex flex-col items-center text-center">
-                    <div className="relative w-full aspect-square rounded-none overflow-hidden mb-5 bg-[var(--cream-05)] border border-[var(--cream-10)] shadow-inner">
-                      <PlayerImage player={player} />
-                      {isSelected && (
-                        <div className="absolute inset-0 bg-[var(--cream-10)] mix-blend-overlay"></div>
-                      )}
-                      {isSelected && (
-                        <div className="absolute top-3 right-3 w-8 h-8 bg-[var(--fg)] rounded-full flex items-center justify-center text-[var(--bg)]">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <h3 className={`font-serif text-xl font-bold mb-3 transition-colors ${isSelected ? 'text-[var(--fg)]' : 'text-[var(--cream-40)] group-hover:text-[var(--fg)]'}`}>
-                      Subject {player.player_index}
-                    </h3>
-                    
-                    <div className="w-full flex justify-center">
-                      <Badge variant="outline" className={`font-mono text-[0.65rem] uppercase tracking-widest px-3 py-1 border transition-colors ${
-                        player.confidence >= 0.8 ? 'border-[var(--cream-20)] text-[var(--fg)] bg-[var(--cream-05)]' : 
-                        player.confidence >= 0.6 ? 'border-amber-500/30 text-amber-300 bg-amber-500/10' : 
-                        'border-rose-500/30 text-rose-300 bg-rose-500/10'
-                      }`}>
-                        Confidence: {(player.confidence * 100).toFixed(0)}%
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )
-          })}
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8 mb-16 px-4">
+            {players.map((player, i) => {
+              const isSelected = selectedIndex === player.player_index
+              return (
+                <div
+                  key={player.player_index}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select Subject ${player.player_index}, confidence ${(player.confidence * 100).toFixed(0)}%`}
+                  aria-pressed={isSelected}
+                  className={`animate-[fadeInUp_0.6s_ease-out_both] cursor-pointer group relative rounded-none p-[2px] overflow-hidden transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fg)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] ${isSelected ? 'scale-105' : 'hover:scale-105'}`}
+                  style={{ animationDelay: `${0.2 + i * 0.1}s` }}
+                  onClick={() => setSelectedIndex(player.player_index)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedIndex(player.player_index)
+                    }
+                  }}
+                >
+                  {/* Animated Border */}
+                  <div className={`absolute inset-0 transition-opacity duration-300 ${isSelected ? 'border-[var(--cream-20)] opacity-100' : 'bg-[var(--cream-05)] opacity-100'}`}></div>
 
-        <div className="gsap-button max-w-sm mx-auto">
-          <Button
-            className={`w-full h-16 rounded-none text-base font-bold transition-all duration-300 ${
-              selectedIndex !== null 
-                ? 'button-accent hover:scale-105' 
-                : 'bg-[var(--cream-05)] border border-[var(--cream-10)] text-[var(--cream-40)] cursor-not-allowed shadow-none'
-            }`}
-            size="lg"
-            disabled={selectedIndex === null}
-            onClick={() => selectedIndex !== null && onSelect(selectedIndex)}
-          >
-            {selectedIndex !== null ? (
-              <span className="flex items-center gap-2 text-[var(--bg)]">
-                Confirm Selection 
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-              </span>
-            ) : 'Select a subject to continue'}
-          </Button>
+                  <Card className={`relative h-full w-full bg-[var(--bg)] border-none rounded-none overflow-hidden transition-all ${isSelected ? 'bg-[var(--bg)]' : ''}`}>
+                    <CardContent className="p-5 flex flex-col items-center text-center">
+                      <div className="relative w-full aspect-square rounded-none overflow-hidden mb-5 bg-[var(--cream-05)] border border-[var(--cream-10)] shadow-inner">
+                        <PlayerImage player={player} />
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-[var(--cream-10)] mix-blend-overlay"></div>
+                        )}
+                        {isSelected && (
+                          <div className="absolute top-3 right-3 w-8 h-8 bg-[var(--fg)] rounded-full flex items-center justify-center text-[var(--bg)]">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                          </div>
+                        )}
+                      </div>
+
+                      <h3 className={`font-serif text-xl font-bold mb-3 transition-colors ${isSelected ? 'text-[var(--fg)]' : 'text-[var(--cream-40)] group-hover:text-[var(--fg)]'}`}>
+                        Subject {player.player_index}
+                      </h3>
+
+                      <div className="w-full flex justify-center">
+                        <Badge variant="outline" className={`font-mono text-[0.65rem] uppercase tracking-widest px-3 py-1 border transition-colors ${
+                          player.confidence >= 0.8 ? 'border-[var(--cream-20)] text-[var(--fg)] bg-[var(--cream-05)]' :
+                          player.confidence >= 0.6 ? 'border-amber-500/30 text-amber-300 bg-amber-500/10' :
+                          'border-rose-500/30 text-rose-300 bg-rose-500/10'
+                        }`}>
+                          Confidence: {(player.confidence * 100).toFixed(0)}%
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="animate-[fadeInUp_0.6s_ease-out_0.6s_both] max-w-sm mx-auto">
+            <Button
+              className={`w-full h-16 rounded-none text-base font-bold transition-all duration-300 ${
+                selectedIndex !== null
+                  ? 'button-accent hover:scale-105'
+                  : 'bg-[var(--cream-05)] border border-[var(--cream-10)] text-[var(--cream-40)] cursor-not-allowed shadow-none'
+              }`}
+              size="lg"
+              disabled={selectedIndex === null}
+              onClick={() => selectedIndex !== null && onSelect(selectedIndex)}
+            >
+              {selectedIndex !== null ? (
+                <span className="flex items-center gap-2 text-[var(--bg)]">
+                  Confirm Selection
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                </span>
+              ) : 'Select a subject to continue'}
+            </Button>
+          </div>
         </div>
-      </div>
       </div>
     </>
   )
