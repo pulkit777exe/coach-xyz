@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 from dataclasses import dataclass
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -82,7 +83,10 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
     return candidates
 
 
-def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
+def score_and_select_best_frame(
+    video_path: str,
+    on_progress: "Callable[[int, int], None] | None" = None,
+) -> tuple[np.ndarray, float]:
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise VideoDecodeError("Could not open video for frame extraction")
@@ -94,6 +98,7 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
 
         max_scan_seconds = duration_seconds if duration_seconds > 0 else 60.0
         timestamps = np.arange(0.0, max_scan_seconds + 0.01, 1.0)
+        total_frames = len(timestamps)
 
         best_frame: np.ndarray | None = None
         best_timestamp = 0.0
@@ -101,7 +106,10 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
         found_visible_pose = False
 
         if not pose_backend_available():
-            for ts in timestamps:
+            for frame_idx, ts in enumerate(timestamps):
+                if on_progress:
+                    on_progress(frame_idx + 1, total_frames)
+
                 frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                 ok, frame = cap.read()
@@ -128,7 +136,10 @@ def score_and_select_best_frame(video_path: str) -> tuple[np.ndarray, float]:
                     best_timestamp = float(ts)
         else:
             with StaticPoseDetector(min_detection_confidence=0.5, num_poses=12) as pose:
-                for ts in timestamps:
+                for frame_idx, ts in enumerate(timestamps):
+                    if on_progress:
+                        on_progress(frame_idx + 1, total_frames)
+
                     frame_index = int(ts * fps) if fps > 0 else int(ts * 30)
                     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                     ok, frame = cap.read()
@@ -288,9 +299,12 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
     return players
 
 
-def detect_players(video_path: str) -> list[dict]:
+def detect_players(
+    video_path: str,
+    on_progress: "Callable[[int, int], None] | None" = None,
+) -> list[dict]:
     try:
-        frame, timestamp = score_and_select_best_frame(video_path)
+        frame, timestamp = score_and_select_best_frame(video_path, on_progress=on_progress)
         return extract_players(frame, frame_timestamp=timestamp)
     except (NoPlayersDetectedError, VideoDecodeError):
         raise

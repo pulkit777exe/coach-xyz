@@ -75,4 +75,3 @@ export async function markJobFailed(
   await markEngineJobFailed(engineJobId, message, code, retryable)
 }
 
-export { redis }

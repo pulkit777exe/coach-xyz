@@ -1,13 +1,13 @@
 import type { CoachAIError, ScanResult } from "../types"
-import type { EngineJobStatus } from "./jobs"
+import type { EngineJobStatus } from "./jobs" // type-only: no runtime cycle
 
-const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
+export const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
 
 function engineError(code: string, message: string, retryable = true): CoachAIError {
   return { code, message, layer: "engine", retryable }
 }
 
-const withTimeout = async (
+export const withTimeout = async (
   input: string,
   init: RequestInit,
   timeoutMs: number,
@@ -126,6 +126,35 @@ export const markEngineJobFailed = async (
   } catch (error) {
     if (isConnectivityError(error)) {
       return
+    }
+    throw error
+  }
+}
+
+export type ScanProgressEvent = {
+  session_token: string
+  current: number
+  total: number
+  complete: boolean
+  error: string | null
+}
+
+export const getScanProgressStream = async (
+  sessionToken: string,
+): Promise<Response> => {
+  try {
+    const res = await fetch(`${ENGINE_URL}/scan-progress/${sessionToken}`, {
+      headers: { Accept: "text/event-stream" },
+    })
+
+    if (!res.ok) {
+      await throwNonOk(res)
+    }
+
+    return res
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
     }
     throw error
   }

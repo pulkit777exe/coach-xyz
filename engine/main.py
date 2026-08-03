@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Union
 
+logger = logging.getLogger(__name__)
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,7 +39,7 @@ from core.logging_config import setup_logging, set_job_id
 setup_logging()
 
 # Import shared constants
-from core.config import CHUNK_SIZE
+from core.config import CHUNK_SIZE, MAX_FILE_SIZE_BYTES
 
 # Session management constants (memory optimization)
 SESSION_TTL = 7200  # 2 hours (aligned with job TTL)
@@ -71,7 +73,7 @@ from core.errors import (
     NoPlayersDetectedError,
     VideoDecodeError,
 )
-from core.jobs import create_job, get_job, fail_job
+from core.jobs import create_job, get_job, update_job, fail_job
 
 try:
     from google import genai
@@ -84,6 +86,10 @@ except ImportError:
 
 sessions: Dict[str, Dict[str, Any]] = {}
 sessions_lock = threading.Lock()
+
+# Scan progress tracking (keyed by session_token)
+scan_progress: Dict[str, Dict[str, Any]] = {}
+scan_progress_lock = threading.Lock()
 
 # Bounded executor for async analysis (memory optimization)
 _analysis_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
@@ -103,15 +109,15 @@ START_TIME = time.time()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("CoachAI Engine running on :8001")
+    logger.info("CoachAI Engine running on :8001")
     backend = pose_backend_name()
     if not pose_backend_available():
-        print(
-            "WARNING: mediapipe Pose backend unavailable. "
+        logger.warning(
+            "mediapipe Pose backend unavailable. "
             "Install a mediapipe build with either `mp.solutions.pose` or `mediapipe.tasks` support."
         )
     else:
-        print(f"MediaPipe pose backend: {backend}")
+        logger.info(f"MediaPipe pose backend: {backend}")
 
     # Start background session eviction task
     async def session_eviction_loop():
@@ -120,7 +126,7 @@ async def lifespan(app: FastAPI):
             _evict_old_sessions()
 
     eviction_task = asyncio.create_task(session_eviction_loop())
-    print(f"Session eviction task started (interval: {SESSION_EVICTION_INTERVAL}s)")
+    logger.info(f"Session eviction task started (interval: {SESSION_EVICTION_INTERVAL}s)")
 
     yield
 
@@ -350,7 +356,7 @@ def health_deep():
         "checks": {
             "redis": {"ok": redis_ok, "latency_ms": redis_latency},
             "mediapipe": {"ok": mp_ok},
-            "executor": {"queue_depth": executor_depth, "max_workers": _analysis_executor._max_workers},
+            "executor": {"queue_depth": executor_depth, "max_workers": getattr(_analysis_executor, '_max_workers', -1)},
         },
         "uptime": round(time.time() - START_TIME, 1),
     }
@@ -372,7 +378,7 @@ async def scan(video: UploadFile) -> JSONResponse:
     logging.info(f"[SCAN] Streaming upload to storage: {r2_key}")
 
     # Always stream to disk (memory optimization: remove 10MB threshold)
-    max_upload_size = int(os.environ.get("MAX_FILE_SIZE", 500 * 1024 * 1024))
+    max_upload_size = int(os.environ.get("MAX_FILE_SIZE", MAX_FILE_SIZE_BYTES))
     fd, temp_path = tempfile.mkstemp(suffix=".mp4")
     os.close(fd)
     try:
@@ -410,10 +416,33 @@ async def scan(video: UploadFile) -> JSONResponse:
         storage.delete_file(r2_key)
         raise
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
+
+    # Create session token early so scan progress can be tracked
+    session_token = str(uuid.uuid4())
+
+    # Set up scan progress tracking
+    with scan_progress_lock:
+        scan_progress[session_token] = {
+            "current": 0,
+            "total": 0,
+            "complete": False,
+            "error": None,
+        }
+
+    def _report_scan_progress(current: int, total: int) -> None:
+        with scan_progress_lock:
+            if session_token in scan_progress:
+                scan_progress[session_token]["current"] = current
+                scan_progress[session_token]["total"] = total
+
     try:
         from core.detector import detect_players
-        players = detect_players(local_path)
-    except NoPlayersDetectedError:
+        players = detect_players(local_path, on_progress=_report_scan_progress)
+    except NoPlayersDetectedError as e:
+        with scan_progress_lock:
+            if session_token in scan_progress:
+                scan_progress[session_token]["complete"] = True
+                scan_progress[session_token]["error"] = str(e)
         storage.delete_file(r2_key)
         try:
             os.unlink(local_path)
@@ -421,6 +450,10 @@ async def scan(video: UploadFile) -> JSONResponse:
             pass
         raise  # caught by global handler
     except VideoDecodeError as exc:
+        with scan_progress_lock:
+            if session_token in scan_progress:
+                scan_progress[session_token]["complete"] = True
+                scan_progress[session_token]["error"] = str(exc)
         storage.delete_file(r2_key)
         try:
             os.unlink(local_path)
@@ -433,7 +466,11 @@ async def scan(video: UploadFile) -> JSONResponse:
                 "MediaPipe runtime is unavailable on the engine.",
             )
         raise  # caught by global handler
-    except Exception:
+    except Exception as exc:
+        with scan_progress_lock:
+            if session_token in scan_progress:
+                scan_progress[session_token]["complete"] = True
+                scan_progress[session_token]["error"] = str(exc)
         storage.delete_file(r2_key)
         try:
             os.unlink(local_path)
@@ -441,7 +478,11 @@ async def scan(video: UploadFile) -> JSONResponse:
             pass
         raise  # caught by global handler
 
-    session_token = str(uuid.uuid4())
+    # Mark scan progress as complete
+    with scan_progress_lock:
+        if session_token in scan_progress:
+            scan_progress[session_token]["complete"] = True
+
     # Evict old sessions before creating new one (memory optimization)
     with sessions_lock:
         _evict_old_sessions_unlocked()
@@ -486,8 +527,81 @@ async def scan(video: UploadFile) -> JSONResponse:
         status_code=200,
         content={
             "session_token": session_token,
+            "video_key": r2_key,
             "player_count": len(response_players),
             "players": response_players,
+        },
+    )
+
+
+@app.get("/scan-progress/{session_token}")
+async def scan_progress_endpoint(session_token: str):
+    """
+    SSE endpoint for live scan progress updates.
+    Client can listen for real-time frame scanning progress.
+    """
+    from fastapi.responses import StreamingResponse
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    with scan_progress_lock:
+                        progress = scan_progress.get(session_token)
+
+                    if progress is None:
+                        # Session not found or expired
+                        data = json.dumps({
+                            "session_token": session_token,
+                            "current": 0,
+                            "total": 0,
+                            "complete": True,
+                            "error": "Session not found.",
+                        })
+                        yield f"data: {data}\n\n"
+                        break
+
+                    # Send progress update
+                    data = json.dumps({
+                        "session_token": session_token,
+                        "current": progress["current"],
+                        "total": progress["total"],
+                        "complete": progress["complete"],
+                        "error": progress["error"],
+                    })
+                    yield f"data: {data}\n\n"
+
+                    # Check if done
+                    if progress["complete"]:
+                        break
+
+                except Exception:
+                    # Transient error, send current state and retry
+                    with scan_progress_lock:
+                        progress = scan_progress.get(session_token, {})
+                    data = json.dumps({
+                        "session_token": session_token,
+                        "current": progress.get("current", 0),
+                        "total": progress.get("total", 0),
+                        "complete": progress.get("complete", False),
+                        "error": progress.get("error"),
+                    })
+                    yield f"data: {data}\n\n"
+
+                    if progress.get("complete"):
+                        break
+
+                await asyncio.sleep(0.5)  # Update every 500ms for smooth progress
+        except asyncio.CancelledError:
+            pass  # Client disconnected — clean up gracefully
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     )
 
@@ -511,6 +625,7 @@ async def analyze(request: Request) -> JSONResponse:
     engine_job_id = payload.get("engine_job_id")
     session_token = payload.get("session_token")
     player_index = _safe_int(payload.get("player_index"))
+    video_key_fallback = payload.get("video_key")
 
     if not engine_job_id:
         return _error_response(400, "MISSING_JOB_ID", "engine_job_id required")
@@ -523,24 +638,37 @@ async def analyze(request: Request) -> JSONResponse:
         get_job(engine_job_id)
     except JobNotFoundError:
         # Create the job with uploading state so it can be tracked
-        from core.jobs import create_job
         create_job(engine_job_id, initial_state="uploading")
 
-    # Get video key from session
-    if not session_token:
-        return _error_response(400, "INVALID_REQUEST", "session_token required")
+    # Get video key from session (with fallback to persisted video_key)
+    video_key = None
+    if session_token:
+        video_key, err = _session_video_path(session_token)
+        if err:
+            # Session expired — try fallback video_key from job state
+            if video_key_fallback:
+                video_key = video_key_fallback
+                err = None
+            else:
+                fail_job(engine_job_id, JobNotFoundError())
+                return err
+    elif video_key_fallback:
+        video_key = video_key_fallback
+    else:
+        return _error_response(400, "INVALID_REQUEST", "session_token or video_key required")
 
-    video_key, err = _session_video_path(session_token)
-    if err:
-        fail_job(engine_job_id, JobNotFoundError())
-        return err
+    # Persist video_key in Redis job so retry can find it after session expires
+    if video_key:
+        try:
+            update_job(engine_job_id, video_key=video_key)
+        except Exception:
+            pass  # Best effort — don't fail analysis over this
 
     # Run in thread pool to avoid blocking the event loop
     # BullMQ worker waits for this response, so we await the result
     try:
         from core.analyzer import run_analysis
         from contextvars import copy_context
-        import asyncio
         loop = asyncio.get_running_loop()
         # Propagate ContextVar (job_id) to the thread
         ctx = copy_context()
@@ -599,7 +727,6 @@ async def analyze_async(request: Request) -> JSONResponse:
             from core.analyzer import run_analysis
             run_analysis(engine_job_id, video_key, player_index)
         except Exception as e:
-            import traceback
             logging.error(f"[ASYNC] Analysis failed for {engine_job_id}: {e}\n{traceback.format_exc()}")
             from core.jobs import fail_job as _fail_job
             from core.errors import EngineError as _EngineError
@@ -627,11 +754,9 @@ async def analyze_progress(job_id: str):
     from fastapi.responses import StreamingResponse
 
     async def event_generator():
-        import asyncio as _asyncio
         try:
             while True:
                 try:
-                    from core.jobs import get_job
                     job = get_job(job_id)
 
                     # Send progress update
@@ -650,7 +775,6 @@ async def analyze_progress(job_id: str):
 
                 except Exception:
                     # Distinguish between "job not found" and transient errors
-                    from core.errors import JobNotFoundError
                     try:
                         get_job(job_id)
                     except JobNotFoundError:
@@ -675,8 +799,8 @@ async def analyze_progress(job_id: str):
                         })
                         yield f"data: {data}\n\n"
 
-                await _asyncio.sleep(1)  # Update every second
-        except _asyncio.CancelledError:
+                await asyncio.sleep(1)  # Update every second
+        except asyncio.CancelledError:
             pass  # Client disconnected — clean up gracefully
 
     return StreamingResponse(

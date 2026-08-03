@@ -297,7 +297,7 @@ def _merge_chunks(chunk_results: list[dict]) -> dict:
 
     # Use the first successful result as the base for metadata
     base   = chunk_results[0]
-    sport  = base.get("sport", "basketball")
+    sport  = base.get("sport", "unknown")
     player = base.get("player_name", "Unknown")
 
     all_shots: list[dict] = []
@@ -342,7 +342,7 @@ def _deduplicate_shots(shots: list[dict], window_s: float = 8) -> list[dict]:
 
 def _compute_summary(shots: list[dict], sport: str) -> dict:
     """Recompute session_summary from the merged, deduplicated shot list."""
-    valid_results  = {"basketball": ["made"], "football": ["goal"], "cricket": ["four","six","boundary"]}
+    valid_results  = {"basketball": ["made"], "football": ["goal"], "cricket": ["four","six","boundary"], "tennis": ["winner","ace"], "baseball": ["hit","home_run"], "hockey": ["goal"]}
     success_vals   = valid_results.get(sport, ["made", "goal"])
 
     total          = len(shots)

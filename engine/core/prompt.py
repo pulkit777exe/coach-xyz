@@ -140,6 +140,13 @@ Scan the entire video chronologically. For EVERY significant event:
 
 ### Basketball events to detect:
 - **Shot attempts**: jump shots, layups, floaters, dunks, free throws, three-pointers
+- **Shot type classification**: classify each shot as one of:
+  - "catch_and_shoot" — off a pass or rebound, no dribble
+  - "off_dribble" — pull-up jump shot or floater off the dribble
+  - "contested" — close defender pressure affecting form
+  - "layup" — close-range shot off the glass
+  - "free_throw" — uncontested shot from the line
+  - "three_pointer" — shot from beyond the three-point line
 - **Outcome**: "made" or "missed"
 - **Timestamp**: the moment the ball leaves the player's hands (release point)
 - **Outcome timestamp**: the moment the ball hits the rim/net or misses entirely
@@ -186,6 +193,13 @@ Scan the entire video chronologically. For EVERY significant event:
 
 ### Basketball events to detect:
 - **Shot attempts**: jump shots, layups, floaters, dunks, free throws, three-pointers
+- **Shot type classification**: classify each shot as one of:
+  - "catch_and_shoot" — off a pass or rebound, no dribble
+  - "off_dribble" — pull-up jump shot or floater off the dribble
+  - "contested" — close defender pressure affecting form
+  - "layup" — close-range shot off the glass
+  - "free_throw" — uncontested shot from the line
+  - "three_pointer" — shot from beyond the three-point line
 - **Outcome**: "made" or "missed"
 - **Timestamp**: the moment the ball leaves the player's hands (release point)
 - **Outcome timestamp**: the moment the ball hits the rim/net or misses entirely
@@ -251,7 +265,8 @@ Scan the entire video chronologically. For EVERY significant event:
 _FORM_CHECKLIST_ALL = """\
 ## FORM & BIOMECHANICS ANALYSIS
 
-For every event, analyze the player's body mechanics using these criteria:
+For every event, analyze the player's body mechanics using these criteria.
+Provide quantitative measurements where possible (joint angles in degrees, pixel deviations, timing in ms).
 
 ### Basketball — Form Checklist:
 - **Stance & base**: feet shoulder-width apart, weight balanced, knees bent
@@ -320,13 +335,16 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Body rotation**: shoulders and hips rotate through the shot
 - **Head position**: eyes on the puck through contact
 - **Balance**: stable base, not reaching or lunging
+
+For each criterion, include the measured value, the ideal range, and whether it falls within acceptable bounds.
 """
 
 _FORM_CHECKLIST_SPORTS = {
     "basketball": """\
 ## FORM & BIOMECHANICS ANALYSIS
 
-For every event, analyze the player's body mechanics using these criteria:
+For every event, analyze the player's body mechanics using these criteria.
+Provide quantitative measurements where possible (joint angles in degrees, pixel deviations, timing in ms).
 
 ### Basketball — Form Checklist:
 - **Stance & base**: feet shoulder-width apart, weight balanced, knees bent
@@ -339,6 +357,8 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Eyes**: focused on the back of the rim, not the ball
 - **Off-hand**: guide hand stays still on the side — does not push the ball
 - **Jump mechanics**: balanced vertical jump, no excessive fade or drift
+
+For each criterion, include the measured value, the ideal range, and whether it falls within acceptable bounds.
 """,
     "football": """\
 ## FORM & BIOMECHANICS ANALYSIS
@@ -470,10 +490,43 @@ Return ONLY valid JSON. No preamble, no explanation, no markdown fences. The JSO
       "timestamp_of_shot": "<M:SS.s>",
       "timestamp_of_outcome": "<M:SS.s>",
       "result": "<sport-appropriate result string>",
-      "shot_type": "<descriptive label>",
+      "shot_type": "<catch_and_shoot|off_dribble|contested|layup|free_throw|three_pointer>",
       "form_score": <integer 1-10>,
       "form_breakdown": {
         "<criterion_1>": "<good|needs_work|poor>"
+      },
+      "weighted_scoring": {
+        "composite_score": <float 1.0-10.0>,
+        "criteria": [
+          {
+            "criterion": "<criterion_key>",
+            "label": "<criterion_label>",
+            "measured_value": <number>,
+            "unit": "<degrees|pixels|frames>",
+            "ideal_range": [<min>, <max>],
+            "acceptable_range": [<min>, <max>],
+            "score": <float 0.0-1.0>,
+            "weight": <float>,
+            "rationale": "<one-line coaching note>"
+          }
+        ],
+        "weighted_rationale": "<one-sentence summary of the weighted composite>"
+      },
+      "biomechanics": {
+        "joint_angles": {
+          "<joint_name>": <angle_in_degrees>
+        },
+        "elbow_extension_angle": <degrees>,
+        "confidence": <0.0-1.0>,
+        "measured_at_frame": <frame_index>,
+        "measured_at_timestamp": <seconds>
+      },
+      "injury_risk": {
+        "<indicator_name>": {
+          "value": <number>,
+          "flagged": <bool>,
+          "risk_association": "<string>"
+        }
       },
       "feedback": "<1-2 sentence coaching note>",
       "total_shots_made_so_far": <integer>,

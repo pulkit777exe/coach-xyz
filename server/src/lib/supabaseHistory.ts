@@ -63,7 +63,7 @@ const warnDisabled = () => {
   if (warnedDisabled) return
   warnedDisabled = true
   console.warn(
-    "Supabase history storage is disabled because DATABASE_URL is not set.",
+    JSON.stringify({ type: "history_store_disabled", message: "DATABASE_URL not set" }),
   )
 }
 
@@ -79,19 +79,19 @@ const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | nul
     const message = error instanceof Error ? error.message : "Unknown database error"
 
     if (message.includes("Connection closed")) {
-      console.warn("Supabase connection was closed, reconnecting…")
+      console.warn(JSON.stringify({ type: "history_store_reconnecting" }))
       initPromise = null
       try {
         await ensureInitialized()
         return await fn(sql)
       } catch (retryError) {
         const retryMessage = retryError instanceof Error ? retryError.message : "Unknown database error"
-        console.error("Supabase history operation failed after retry:", retryMessage)
+        console.error(JSON.stringify({ type: "history_store_retry_failed", error: retryMessage }))
         return null
       }
     }
 
-    console.error("Supabase history operation failed:", message)
+    console.error(JSON.stringify({ type: "history_store_operation_failed", error: message }))
     return null
   }
 }
@@ -147,6 +147,7 @@ const ensureInitialized = async () => {
           completed_at timestamptz,
           last_downloaded_at timestamptz,
           download_count integer not null default 0,
+          display_name text,
           updated_at timestamptz not null default now()
         );
       `
@@ -191,6 +192,31 @@ const ensureInitialized = async () => {
       await sql`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
       await sql`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`
       await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
+
+      await sql`alter table analysis_history add column if not exists display_name text;`
+
+      await sql`
+        create table if not exists chat_messages (
+          id uuid primary key default gen_random_uuid(),
+          server_job_id text not null,
+          auth0_id text not null,
+          role text not null check (role in ('user', 'assistant', 'system')),
+          content text not null,
+          timestamp_refs jsonb,
+          event_refs jsonb,
+          created_at timestamptz not null default now()
+        );
+      `
+
+      await sql`
+        create index if not exists idx_chat_messages_server_job_id
+        on chat_messages (server_job_id);
+      `
+
+      await sql`
+        create index if not exists idx_chat_messages_auth0_id
+        on chat_messages (auth0_id);
+      `
       } catch (err) {
         // Reset so next call retries initialization
         initPromise = null
@@ -383,6 +409,24 @@ export const markAnalysisDownloaded = async (serverJobId: string): Promise<void>
   })
 }
 
+export const updateAnalysisDisplayName = async (
+  auth0Id: string,
+  serverJobId: string,
+  displayName: string,
+): Promise<DashboardAnalysis | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<DashboardAnalysis[]>`
+      update analysis_history
+      set display_name = ${displayName || null}, updated_at = now()
+      where server_job_id = ${serverJobId}
+        and auth0_id = ${auth0Id}
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const historyStoreEnabled = isEnabled
 
 export const shutdownHistoryStore = async (): Promise<void> => {
@@ -458,6 +502,7 @@ export type DashboardAnalysis = {
   requested_at: string
   completed_at: string | null
   download_count: number
+  display_name: string | null
   file_name: string | null
   file_size_bytes: number | null
   player_count: number | null
@@ -496,6 +541,7 @@ export const getUserAnalyses = async (
         a.requested_at,
         a.completed_at,
         a.download_count,
+        a.display_name,
         v.file_name,
         v.file_size_bytes,
         v.player_count
@@ -533,6 +579,7 @@ export const getUserAnalysisById = async (
         a.requested_at,
         a.completed_at,
         a.download_count,
+        a.display_name,
         v.file_name,
         v.file_size_bytes,
         v.player_count
@@ -572,4 +619,59 @@ export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => 
     failed_analyses: 0,
     total_downloads: 0,
   }
+}
+
+// ── Chat Messages ────────────────────────────────────────────────────────────
+
+export type ChatMessageRecord = {
+  id: string
+  server_job_id: string
+  auth0_id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  timestamp_refs: number[] | null
+  event_refs: number[] | null
+  created_at: string
+}
+
+export const saveChatMessage = async (msg: {
+  serverJobId: string
+  auth0Id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  timestampRefs?: number[]
+  eventRefs?: number[]
+}): Promise<ChatMessageRecord | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<ChatMessageRecord[]>`
+      insert into chat_messages (server_job_id, auth0_id, role, content, timestamp_refs, event_refs)
+      values (
+        ${msg.serverJobId},
+        ${msg.auth0Id},
+        ${msg.role},
+        ${msg.content},
+        ${msg.timestampRefs ? JSON.stringify(msg.timestampRefs) : null}::jsonb,
+        ${msg.eventRefs ? JSON.stringify(msg.eventRefs) : null}::jsonb
+      )
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const getChatMessages = async (
+  serverJobId: string,
+  auth0Id: string,
+): Promise<ChatMessageRecord[]> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<ChatMessageRecord[]>`
+      select * from chat_messages
+      where server_job_id = ${serverJobId}
+        and auth0_id = ${auth0Id}
+      order by created_at asc;
+    `
+    return rows ?? []
+  })) ?? []
 }

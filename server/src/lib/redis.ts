@@ -24,7 +24,7 @@ function createRedisClient() {
           if (!val) return null
           try { return JSON.parse(val) } catch { return val }
         },
-        async set(key: string, value: any, opts?: { ex?: number }) {
+        async set(key: string, value: string | number | Record<string, unknown>, opts?: { ex?: number }) {
           const str = typeof value === "string" ? value : JSON.stringify(value)
           if (opts?.ex) {
             await ioredis.setex(key, opts.ex, str)
@@ -54,6 +54,28 @@ function createRedisClient() {
             return { allowed: true, current, reset: (now + ttl) * 1000 }
           }
         },
+        async eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<number> {
+          try {
+            const result = await ioredis.eval(script, numKeys, ...args)
+            return typeof result === "number" ? result : parseInt(String(result), 10) || 0
+          } catch {
+            return 0
+          }
+        },
+        async incr(key: string): Promise<number> {
+          try {
+            return await ioredis.incr(key)
+          } catch {
+            return 1
+          }
+        },
+        async expire(key: string, seconds: number): Promise<number> {
+          try {
+            return await ioredis.expire(key, seconds)
+          } catch {
+            return 1
+          }
+        },
       }
     } catch {
       console.error(JSON.stringify({ type: "redis_fallback_noop", message: "ioredis not available for local Redis, using noop client" }))
@@ -81,6 +103,15 @@ function createNoopClient() {
     async ping() { return "PONG" },
     async del() { return 0 },
     async rateLimitIncrement() { return { allowed: true, current: 0, reset: Date.now() } },
+    async eval(_script: string, _numKeys: number, ..._args: (string | number)[]): Promise<number> {
+      return 0
+    },
+    async incr(_key: string): Promise<number> {
+      return 1
+    },
+    async expire(_key: string, _seconds: number): Promise<number> {
+      return 1
+    },
   }
 }
 

@@ -124,6 +124,9 @@ Backend API documentation is available at: http://localhost:8000/swagger
 - **Basketball** (🏀): Jump shots, layups, dunks, free throws, 3-pt
 - **Football** (⚽): Strikes, headers, volleys, penalties
 - **Cricket** (🏏): Drives, pulls, sweeps, cuts, hooks
+- **Tennis** (🎾): Serves, forehands, backhands, volleys, overheads
+- **Baseball** (⚾): Singles, doubles, home runs, strikeouts
+- **Hockey** (🏒): Wrist shots, slap shots, backhands, one-timers
 
 ## Security Measures
 

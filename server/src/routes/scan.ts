@@ -1,6 +1,6 @@
 import { Elysia } from "elysia"
 
-import { scanVideo } from "../lib/engine"
+import { scanVideo, getScanProgressStream } from "../lib/engine"
 import { buildError, isCoachAIError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { checkScanLimit, getIP } from "../lib/ratelimit"
@@ -107,3 +107,39 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     return buildError(code, routeError?.message)
   }
 })
+  .get("/api/scan-progress/:sessionToken", async ({ params, set }) => {
+    const { sessionToken } = params
+
+    if (!sessionToken) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "sessionToken required.", false)
+    }
+
+    try {
+      const engineRes = await getScanProgressStream(sessionToken)
+
+      // Proxy the SSE stream from the engine
+      return new Response(engineRes.body, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      })
+    } catch (error) {
+      if (isCoachAIError(error)) {
+        set.status = error.retryable ? 503 : 500
+        return error
+      }
+
+      const routeError = error as { code?: string; message?: string }
+      if (routeError?.code === "ENGINE_UNAVAILABLE") {
+        set.status = 503
+        return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
+      }
+
+      set.status = 500
+      return buildError("UNKNOWN", "Failed to get scan progress.")
+    }
+  })

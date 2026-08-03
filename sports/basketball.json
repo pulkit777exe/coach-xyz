@@ -3,7 +3,39 @@
   "display_name": "Basketball",
   "events": {
     "positive": ["made"],
-    "negative": ["missed"]
+    "negative": ["missed"],
+    "shot_types": {
+      "catch_and_shoot": {
+        "label": "Catch-and-Shoot",
+        "description": "Shot taken without dribbling, off a pass or rebound",
+        "key_criteria": ["stance_and_base", "release_point", "follow_through"]
+      },
+      "off_dribble": {
+        "label": "Off-Dribble",
+        "description": "Shot taken while dribbling, including pull-up jumpers and floaters",
+        "key_criteria": ["stance_and_base", "jump_mechanics", "release_point"]
+      },
+      "contested": {
+        "label": "Contested",
+        "description": "Shot taken with close defender pressure affecting form",
+        "key_criteria": ["body_alignment", "release_point", "follow_through"]
+      },
+      "layup": {
+        "label": "Layup",
+        "description": "Close-range shot off the glass, two-step or one-step",
+        "key_criteria": ["jump_mechanics", "off_hand", "follow_through"]
+      },
+      "free_throw": {
+        "label": "Free Throw",
+        "description": "Uncontested shot from the free-throw line",
+        "key_criteria": ["stance_and_base", "shot_pocket", "release_point", "follow_through"]
+      },
+      "three_pointer": {
+        "label": "Three-Point Shot",
+        "description": "Shot from beyond the three-point line",
+        "key_criteria": ["stance_and_base", "elbow_alignment", "release_point", "follow_through"]
+      }
+    }
   },
   "stats": [
     {
@@ -33,17 +65,145 @@
     }
   ],
   "form_criteria": [
-    "stance_and_base",
-    "shot_pocket",
-    "elbow_alignment",
-    "wrist_and_finger_position",
-    "release_point",
-    "follow_through",
-    "body_alignment",
-    "eyes",
-    "off_hand",
-    "jump_mechanics"
+    {
+      "key": "stance_and_base",
+      "label": "Stance & Base",
+      "metric": "hip_width_stance_deg",
+      "ideal_range": [45, 65],
+      "acceptable_range": [35, 75],
+      "measured_at_frame": "setup",
+      "weight": 0.10,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "shot_pocket",
+      "label": "Shot Pocket",
+      "metric": "ball_consistency_px",
+      "ideal_range": [0, 30],
+      "acceptable_range": [0, 60],
+      "measured_at_frame": "setup",
+      "weight": 0.08,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "elbow_alignment",
+      "label": "Elbow Alignment",
+      "metric": "elbow_extension_angle_deg",
+      "ideal_range": [160, 175],
+      "acceptable_range": [150, 180],
+      "measured_at_frame": "release",
+      "weight": 0.20,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "wrist_and_finger_position",
+      "label": "Wrist & Finger Position",
+      "metric": "wrist_finger_angle_deg",
+      "ideal_range": [150, 170],
+      "acceptable_range": [135, 175],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "release_point",
+      "label": "Release Point",
+      "metric": "release_height_px",
+      "ideal_range": [180, 250],
+      "acceptable_range": [150, 280],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [15, 30],
+      "acceptable_range": [10, 40],
+      "measured_at_frame": "follow_through",
+      "weight": 0.10,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "body_alignment",
+      "label": "Body Alignment",
+      "metric": "shoulder_hip_alignment_deg",
+      "ideal_range": [0, 15],
+      "acceptable_range": [0, 30],
+      "measured_at_frame": "release",
+      "weight": 0.08,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "eyes",
+      "label": "Eyes on Target",
+      "metric": "gaze_angle_deg",
+      "ideal_range": [0, 10],
+      "acceptable_range": [0, 20],
+      "measured_at_frame": "release",
+      "weight": 0.05,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "off_hand",
+      "label": "Off Hand Stability",
+      "metric": "off_hand_deviation_px",
+      "ideal_range": [0, 20],
+      "acceptable_range": [0, 40],
+      "measured_at_frame": "release",
+      "weight": 0.05,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "jump_mechanics",
+      "label": "Jump Mechanics",
+      "metric": "vertical_jump_consistency_px",
+      "ideal_range": [0, 15],
+      "acceptable_range": [0, 30],
+      "measured_at_frame": "release",
+      "weight": 0.07,
+      "phase": "ascent",
+      "confidence_score": null
+    }
   ],
+  "consistency_metrics": {
+    "release_point_variance": null,
+    "contact_point_std_dev": null,
+    "tempo_variance": null,
+    "elbow_extension_std_dev": null
+  },
+  "phase_timing": {
+    "setup_duration_ms": null,
+    "load_duration_ms": null,
+    "ascent_duration_ms": null,
+    "release_to_follow_through_ms": null
+  },
+  "scoring": {
+    "method": "weighted_composite",
+    "description": "Per-criterion weighted score with rationale, aggregated into a composite form score",
+    "weights_sum_check": true,
+    "score_range": {
+      "min": 1,
+      "max": 10
+    },
+    "per_criterion_scoring": {
+      "in_ideal": 1.0,
+      "in_acceptable": 0.5,
+      "outside_acceptable": 0.0
+    },
+    "rationale_format": "{criterion_label}: {measured_value} {unit} (ideal: {ideal_range}, {rationale})",
+    "composite_formula": "sum(criterion_score * criterion_weight) / sum(criterion_weights)"
+  },
   "colors": {
     "primary": [0, 165, 255],
     "positive": [0, 255, 0],

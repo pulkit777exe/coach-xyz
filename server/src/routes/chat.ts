@@ -3,22 +3,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
 import { getConversation, saveMessage } from "../lib/conversation"
-
-const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
-
-const withTimeout = async (
-  input: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> => {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(input, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timeoutId)
-  }
-}
+import { ENGINE_URL, withTimeout } from "../lib/engine"
 
 /**
  * Resolve the engine job ID and conversation history for a given server job.
@@ -130,7 +115,7 @@ export default new Elysia()
     const { engineJobId, historyForEngine } = ctx
 
     try {
-      const engineRes = await fetch(`${ENGINE_URL}/chat/stream`, {
+      const engineRes = await withTimeout(`${ENGINE_URL}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -138,7 +123,7 @@ export default new Elysia()
           message: message.trim(),
           conversation_history: historyForEngine,
         }),
-      })
+      }, 120_000)
 
       if (!engineRes.ok) {
         const errBody = (await engineRes.json().catch(() => ({}))) as Record<string, unknown>

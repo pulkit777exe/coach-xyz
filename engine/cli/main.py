@@ -62,7 +62,6 @@ console = Console(theme=Theme({
     "player5":  "bold yellow",
 }))
 
-SUPPORTED_SPORTS = ["basketball", "football", "cricket"]
 PLAYER_RICH_STYLES = [
     "bold cyan", "bold blue", "bold green",
     "bold magenta", "bold yellow", "bold red",
@@ -84,11 +83,6 @@ def _downloads_dir() -> pathlib.Path:
 def _save_json(path: pathlib.Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2))
-
-
-def _sport_config(sport: str) -> dict:
-    with open(ROOT / "sports" / f"{sport}.json") as f:
-        return json.load(f)
 
 
 def _fmt_dur(seconds: float) -> str:
@@ -578,30 +572,6 @@ def _run_direct(video_path, model, strict, player_focus, duration_s: float):
     return result_box[0]
 
 
-# ── Step 3: render ────────────────────────────────────────────────────────────
-
-def _run_render(
-    video_path: pathlib.Path,
-    result: dict,
-    output: pathlib.Path | None,
-    duration_s: float,
-) -> pathlib.Path:
-
-    console.print(Rule("[accent]Step 3 / 3  ·  Overlay Render[/]", style="bright_blue"))
-    console.print()
-
-    sport = result.get("sport", "")
-    if sport not in SUPPORTED_SPORTS:
-        console.print(f"[warn]⚠  Sport '{sport}' has no render config — skipping render.[/]\n")
-        return None
-
-    # NOTE: Legacy render path — new pipeline uses core.renderer.render_video()
-    # The CLI render requires active_player_landmarks_per_frame which is not
-    # available in this context. Skipping render.
-    console.print("[warn]⚠  Rendering requires tracking data — skipping.[/]\n")
-    return None
-
-
 # ── Results display ───────────────────────────────────────────────────────────
 
 def _show_results(result: dict, events_path: pathlib.Path, video_out: pathlib.Path | None):
@@ -609,7 +579,7 @@ def _show_results(result: dict, events_path: pathlib.Path, video_out: pathlib.Pa
     shots   = result.get("shots", [])
     sport   = result.get("sport", "?")
 
-    EMOJIS = {"basketball": "🏀", "football": "⚽", "cricket": "🏏"}
+    EMOJIS = {"basketball": "🏀", "football": "⚽", "cricket": "🏏", "tennis": "🎾", "baseball": "⚾", "hockey": "🏒"}
     emoji  = EMOJIS.get(sport, "🎯")
 
     console.print()
@@ -791,8 +761,7 @@ def _run_local(args):
         return
 
     # ── Render ────────────────────────────────────────────────────────────
-    out_path  = pathlib.Path(args.output) if args.output else None
-    video_out = _run_render(video_path, result, out_path, duration_s)
+    video_out = None
 
     # ── Display results ───────────────────────────────────────────────────
     _show_results(result, events_path, video_out)

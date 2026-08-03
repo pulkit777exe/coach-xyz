@@ -29,7 +29,17 @@ def preprocess_video_ffmpeg(video_path: str) -> str:
     """
     Normalize input video stream for stable OpenCV decoding.
     Uses ffmpeg only for pre-processing.
+    Skips re-encode if video dimensions are already even.
     """
+    # Quick check: if dimensions are already even, skip re-encode
+    cap = cv2.VideoCapture(video_path)
+    if cap.isOpened():
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        if w > 0 and h > 0 and w % 2 == 0 and h % 2 == 0:
+            return video_path
+
     td = tmp_dir()
     td.mkdir(parents=True, exist_ok=True)
 
@@ -79,12 +89,12 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
         duration = frame_count / fps if frame_count > 0 else 90.0
 
         timestamps = np.arange(0.0, duration + 0.01, 2.0)
-        if len(timestamps) > 30:
-            timestamps = timestamps[:30]
+        if len(timestamps) > 20:
+            timestamps = timestamps[:20]
 
         keyframes: list[dict[str, Any]] = []
         frame_cache: dict[int, np.ndarray] = {}
-        max_cached_frames = 30
+        max_cached_frames = 20
         for ts in timestamps:
             frame_index = int(round(ts * fps))
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
@@ -121,7 +131,7 @@ def read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None:
 
 def frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
     """Encode a numpy frame to JPEG bytes for API transmission."""
-    ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
     if not ok:
         return b""
     return bytes(buffer.tobytes())

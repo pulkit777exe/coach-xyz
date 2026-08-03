@@ -11,6 +11,7 @@ import { DEFAULT_MODEL } from "../types"
 type AnalyzeBody = {
   session_token: string | null
   player_index: number | null
+  video_key?: string | null
   model?: string
   priority?: keyof typeof JOB_PRIORITIES
 }
@@ -45,6 +46,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
 
   const sessionToken = body.session_token
   const playerIndex = body.player_index
+  const videoKey = body.video_key ?? null
   const model = body.model ?? DEFAULT_MODEL
 
   // Server-side priority determination
@@ -102,6 +104,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
         engine_job_id,
         session_token: sessionToken,
         player_index: playerIndex,
+        video_key: videoKey,
       } satisfies AnalysisPayload,
       {
         priority: JOB_PRIORITIES[priority] ?? JOB_PRIORITIES.free,

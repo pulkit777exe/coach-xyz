@@ -25,6 +25,84 @@ from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.video_io import read_frame_by_index
 
 
+def compute_joint_angles(landmarks: list[dict[str, float]]) -> dict[str, float]:
+    """
+    Compute 2D joint angles from pose landmarks using geometric math.
+    Returns dictionary of joint names to angles in degrees.
+
+    Landmarks should contain all 33 MediaPipe pose landmarks with x, y, z coordinates.
+    Joint angles are calculated using vector cross product and dot product.
+    """
+    if not landmarks or len(landmarks) < 33:
+        return {}
+
+    def angle_between(v1: np.ndarray, v2: np.ndarray) -> float:
+        """Calculate angle between two vectors in degrees."""
+        dot = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        cos_angle = dot / (norm_v1 * norm_v2 + 1e-6)
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)
+        angle = np.degrees(np.arccos(cos_angle))
+        return angle
+
+    def vector(p1: dict, p2: dict) -> np.ndarray:
+        return np.array([p2["x"] - p1["x"], p2["y"] - p1["y"]])
+
+    def calculate_angle(a: int, b: int, c: int) -> float:
+        """Calculate angle between points a-b-c (b is vertex)."""
+        a_landmark = landmarks[a]
+        b_landmark = landmarks[b]
+        c_landmark = landmarks[c]
+
+        v1 = vector(a_landmark, b_landmark)
+        v2 = vector(c_landmark, b_landmark)
+        return angle_between(v1, v2)
+
+    # Key joint angle calculations using standard anatomical landmarks
+    # MediaPipe pose landmark indices:
+    # 11: left_shoulder, 12: right_shoulder
+    # 23: left_hip, 24: right_hip
+    # 13: left_elbow, 14: right_elbow
+    # 15: left_wrist, 16: right_wrist
+    # 25: left_pinky, 26: right_pinky
+    # 27: left_index, 28: right_index
+    # 19: left_thumb, 20: right_thumb
+    # 23: left_hip, 24: right_hip
+    # 25: left_knee, 26: right_knee
+    # 27: left_ankle, 28: right_ankle
+    # 31: left_heel, 32: right_heel
+    # 29: left_foot_index, 30: right_foot_index
+
+    joints = {}
+
+    # Upper body
+    joints["left_shoulder_elbow_angle"] = calculate_angle(11, 13, 15)
+    joints["right_shoulder_elbow_angle"] = calculate_angle(12, 14, 16)
+    joints["left_elbow_wrist_angle"] = calculate_angle(13, 15, 17)
+    joints["right_elbow_wrist_angle"] = calculate_angle(14, 16, 18)
+
+    # Lower body - typically measured from knee to hip
+    joints["left_hip_knee_angle"] = calculate_angle(23, 25, 27)
+    joints["right_hip_knee_angle"] = calculate_angle(24, 26, 28)
+    joints["left_knee_ankle_angle"] = calculate_angle(25, 27, 29)
+    joints["right_knee_ankle_angle"] = calculate_angle(26, 28, 30)
+
+    # Torso - shoulder to hip angle (important for posture)
+    joints["torso_lean_left"] = calculate_angle(11, 23, 24)
+    joints["torso_lean_right"] = calculate_angle(12, 23, 24)
+
+    # Wrist/hand - finger extension
+    joints["left_wrist_finger_ext"] = calculate_angle(15, 17, 19)
+    joints["right_wrist_finger_ext"] = calculate_angle(16, 18, 20)
+
+    # Ankle - knee to ankle to foot angle
+    joints["left_ankle_foot_angle"] = calculate_angle(27, 29, 31)
+    joints["right_ankle_foot_angle"] = calculate_angle(28, 30, 32)
+
+    return joints
+
+
 def compute_motion_scores(
     video_path: str,
     keyframes: list[dict[str, Any]],
@@ -231,5 +309,36 @@ def build_active_player_tracks(
         raise NoPlayersDetectedError(
             "No players detected clearly in this video. Try better lighting or a less crowded frame."
         )
+
+    # Compute joint angles for each track (biomechanical metrics)
+    for track in active_tracks:
+        landmarks = track.get("landmarks", [])
+        if landmarks:
+            # Compute joint angles using deterministic geometry
+            angles = compute_joint_angles(landmarks)
+            track["joint_angles"] = angles
+
+        # Add elbow extension angle (key metric for shooting sports)
+        landmarks = track.get("landmarks", [])
+        if landmarks and len(landmarks) > 16:
+            # Elbow extension angle using left shoulder (11), left elbow (13), left wrist (15)
+            def vector_angle(p1: dict, p2: dict) -> float:
+                return np.arctan2(p2["y"] - p1["y"], p2["x"] - p1["x"])
+
+            try:
+                shoulder = landmarks[11]
+                elbow = landmarks[13]
+                wrist = landmarks[15]
+
+                # Vector from shoulder to elbow
+                v_shoulder_elbow = vector_angle(shoulder, elbow)
+                # Vector from elbow to wrist
+                v_elbow_wrist = vector_angle(elbow, wrist)
+
+                # Angle difference (larger = more extended)
+                elbow_extension = abs(v_elbow_wrist - v_shoulder_elbow)
+                track["elbow_extension_angle"] = float(np.degrees(elbow_extension))
+            except (IndexError, KeyError):
+                pass
 
     return active_tracks

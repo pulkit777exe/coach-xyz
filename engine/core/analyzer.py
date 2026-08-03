@@ -33,6 +33,285 @@ from core.video_io import (
 )
 
 
+def _attach_biomechanical_metrics(
+    shot_events: list[dict],
+    active_tracks: list[dict],
+) -> None:
+    """
+    Attach deterministic joint-angle metrics to each shot event by
+    looking up the nearest tracked frame for the event timestamp.
+
+    Mutates each event dict in-place, adding a `biomechanics` key with
+    per-joint measurements and confidence scores.
+    """
+    import bisect
+
+    # Build a sorted list of (timestamp, track) for binary search
+    sorted_tracks = sorted(
+        [t for t in active_tracks if t.get("landmarks")],
+        key=lambda t: t["timestamp"],
+    )
+    if not sorted_tracks:
+        return
+
+    timestamps = [t["timestamp"] for t in sorted_tracks]
+
+    for event in shot_events:
+        event_ts = event.get("timestamp")
+        if event_ts is None:
+            continue
+
+        # Find the nearest track by timestamp
+        idx = bisect.bisect_left(timestamps, event_ts)
+        if idx >= len(sorted_tracks):
+            idx = len(sorted_tracks) - 1
+        elif idx > 0 and abs(event_ts - timestamps[idx - 1]) < abs(event_ts - timestamps[idx]):
+            idx = idx - 1
+
+        track = sorted_tracks[idx]
+        time_delta = abs(event_ts - track["timestamp"])
+
+        # Only attach metrics if the track is within 2 seconds of the event
+        if time_delta > 2.0:
+            continue
+
+        biomechanics: dict = {}
+
+        # Joint angles from deterministic pose geometry
+        joint_angles = track.get("joint_angles", {})
+        if joint_angles:
+            biomechanics["joint_angles"] = joint_angles
+
+        # Elbow extension angle (key metric for shooting sports)
+        elbow_ext = track.get("elbow_extension_angle")
+        if elbow_ext is not None:
+            biomechanics["elbow_extension_angle"] = round(elbow_ext, 1)
+
+        # Visibility-based confidence (higher visibility = more reliable)
+        visibility = track.get("visibility", 0.5)
+        biomechanics["confidence"] = round(visibility, 2)
+
+        # Frame reference
+        biomechanics["measured_at_frame"] = track.get("frame_index")
+        biomechanics["measured_at_timestamp"] = track.get("timestamp")
+
+        if biomechanics:
+            event["biomechanics"] = biomechanics
+
+
+def _load_sport_config(sport: str) -> dict:
+    """Load sport configuration from sports/<sport>.json."""
+    from pathlib import Path as _Path
+
+    config_path = (
+        _Path(__file__).resolve().parent.parent.parent
+        / "sports"
+        / f"{sport.lower()}.json"
+    )
+    try:
+        with open(config_path, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _compute_criterion_score(
+    criterion: dict,
+    measured_value: float | None,
+) -> dict[str, Any]:
+    """
+    Score a single criterion against its ideal and acceptable ranges.
+
+    Returns dict with score (0.0-1.0), rationale, and whether it's in range.
+    """
+    ideal = criterion.get("ideal_range")
+    acceptable = criterion.get("acceptable_range")
+    metric_label = criterion.get("label", criterion.get("key", "unknown"))
+    unit = criterion.get("metric", "")
+
+    if measured_value is None:
+        return {
+            "criterion": criterion["key"],
+            "label": metric_label,
+            "measured_value": None,
+            "unit": unit,
+            "ideal_range": ideal,
+            "acceptable_range": acceptable,
+            "score": 0.0,
+            "weight": criterion.get("weight", 0.0),
+            "in_ideal": False,
+            "in_acceptable": False,
+            "rationale": "No measurement available",
+        }
+
+    if ideal and ideal[0] <= measured_value <= ideal[1]:
+        score = 1.0
+        rationale = f"Within ideal range ({ideal[0]}–{ideal[1]}{unit})"
+        in_ideal = True
+        in_acceptable = True
+    elif acceptable and acceptable[0] <= measured_value <= acceptable[1]:
+        score = 0.5
+        rationale = f"Acceptable but outside ideal ({ideal[0]}–{ideal[1]}{unit})"
+        in_ideal = False
+        in_acceptable = True
+    else:
+        score = 0.0
+        if ideal:
+            rationale = f"Outside acceptable range (ideal: {ideal[0]}–{ideal[1]}{unit}, measured: {measured_value}{unit})"
+        else:
+            rationale = f"Measured {measured_value}{unit} — no reference range configured"
+        in_ideal = False
+        in_acceptable = False
+
+    return {
+        "criterion": criterion["key"],
+        "label": metric_label,
+        "measured_value": round(measured_value, 1),
+        "unit": unit,
+        "ideal_range": ideal,
+        "acceptable_range": acceptable,
+        "score": score,
+        "weight": criterion.get("weight", 0.0),
+        "in_ideal": in_ideal,
+        "in_acceptable": in_acceptable,
+        "rationale": rationale,
+    }
+
+
+def _compute_weighted_scoring(
+    shot_events: list[dict],
+    sport: str,
+) -> None:
+    """
+    Compute weighted composite scores for each shot event.
+
+    Uses the sport's form_criteria config to score each criterion,
+    then aggregates into a weighted composite score (1.0–10.0 scale).
+    Also generates per-criterion rationales and a summary rationale.
+    """
+    config = _load_sport_config(sport)
+    criteria = config.get("form_criteria", [])
+
+    # Build lookup by key for criteria that have metric definitions
+    criteria_by_key = {c["key"]: c for c in criteria if isinstance(c, dict)}
+
+    for event in shot_events:
+        breakdown = event.get("form_breakdown", {})
+        biomechanics = event.get("biomechanics", {})
+        joint_angles = biomechanics.get("joint_angles", {})
+        elbow_ext = biomechanics.get("elbow_extension_angle")
+
+        # Map form_breakdown criteria to measured values
+        criterion_scores = []
+        for criterion in criteria:
+            if not isinstance(criterion, dict):
+                continue
+
+            key = criterion["key"]
+            metric = criterion.get("metric")
+            measured_value = None
+
+            # Try to find the measured value from biomechanics
+            if metric == "elbow_extension_angle_deg" and elbow_ext is not None:
+                measured_value = elbow_ext
+            elif metric and metric in joint_angles:
+                measured_value = joint_angles[metric]
+
+            # If no biomechanical measurement, try to infer from form_breakdown
+            if measured_value is None and key in breakdown:
+                rating = breakdown[key]
+                # Map qualitative ratings to approximate numeric values
+                rating_map = {"good": 1.0, "needs_work": 0.5, "poor": 0.0}
+                numeric = rating_map.get(rating, 0.5)
+                # Use the midpoint of the ideal range as a proxy
+                ideal = criterion.get("ideal_range")
+                if ideal:
+                    measured_value = (ideal[0] + ideal[1]) / 2.0 * (0.8 if rating == "needs_work" else 1.0 if rating == "good" else 0.6)
+
+            score_result = _compute_criterion_score(criterion, measured_value)
+            criterion_scores.append(score_result)
+
+        # Compute weighted composite
+        total_weight = sum(cs["weight"] for cs in criterion_scores if cs["weight"] > 0)
+        if total_weight > 0:
+            weighted_sum = sum(cs["score"] * cs["weight"] for cs in criterion_scores)
+            composite = (weighted_sum / total_weight) * 10.0
+        else:
+            composite = event.get("form_score", 5.0)
+
+        # Generate weighted rationale
+        poor_criteria = [cs for cs in criterion_scores if cs["score"] == 0.0]
+        good_criteria = [cs for cs in criterion_scores if cs["score"] == 1.0]
+
+        if poor_criteria:
+            worst = poor_criteria[0]
+            weighted_rationale = f"Needs work on {worst['label']}: {worst['rationale']}"
+        elif good_criteria and len(good_criteria) == len(criterion_scores):
+            weighted_rationale = "All criteria within ideal ranges — textbook form"
+        elif good_criteria:
+            weighted_rationale = f"Strong on {', '.join(cs['label'] for cs in good_criteria)}"
+        else:
+            weighted_rationale = "Mixed results — review individual criteria"
+
+        event["weighted_scoring"] = {
+            "composite_score": round(composite, 1),
+            "criteria": criterion_scores,
+            "weighted_rationale": weighted_rationale,
+        }
+
+
+def _compute_injury_risk(
+    shot_events: list[dict],
+    active_tracks: list[dict],
+) -> None:
+    """
+    Compute injury-risk indicators for each shot event.
+
+    Flags biomechanical patterns associated with elevated injury risk:
+    - Knee valgus > 10° during landing (ACL risk)
+    - Spine flexion > 45° under load (lumbar disc risk)
+    - Arm slot drift (UCL stress in overhead athletes)
+    """
+    from core.injury_risk import compute_all_indicators
+
+    # Build sorted tracks by timestamp
+    sorted_tracks = sorted(
+        [t for t in active_tracks if t.get("landmarks")],
+        key=lambda t: t["timestamp"],
+    )
+    if not sorted_tracks:
+        return
+
+    timestamps = [t["timestamp"] for t in sorted_tracks]
+
+    for event in shot_events:
+        event_ts = event.get("timestamp")
+        if event_ts is None:
+            continue
+
+        # Find nearest track
+        import bisect as _bisect
+
+        idx = _bisect.bisect_left(timestamps, event_ts)
+        if idx >= len(sorted_tracks):
+            idx = len(sorted_tracks) - 1
+        elif idx > 0 and abs(event_ts - timestamps[idx - 1]) < abs(event_ts - timestamps[idx]):
+            idx = idx - 1
+
+        track = sorted_tracks[idx]
+        time_delta = abs(event_ts - track["timestamp"])
+        if time_delta > 2.0:
+            continue
+
+        landmarks = track.get("landmarks", [])
+        if not landmarks:
+            continue
+
+        indicators = compute_all_indicators(landmarks, event.get("event_type", "unknown"))
+        if indicators:
+            event["injury_risk"] = indicators
+
+
 def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
     """Transition a job to completed, handling cases where the job is already
     past earlier states (e.g. retry after long Gemini call)."""
@@ -49,24 +328,30 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
         return
 
     state = current.state
-    # Already terminal — just update the summary
-    if state in ("completed", "failed"):
+    # Completed is terminal. Failed is retryable and must route through scanning
+    # before walking forward to completed.
+    if state == "completed":
         update_job(job_id, summary=cached_result)
         return
+    if state == "failed":
+        try:
+            transition_job(job_id, "scanning")
+            state = "scanning"
+        except Exception:
+            update_job(job_id, summary=cached_result)
+            return
 
-    # Walk forward through valid transitions until we reach a state
-    # from which we can jump to "completed"
-    state_order = ["uploading", "scanning", "analyzing", "completed"]
+    # Walk forward through valid transitions until we reach "completed"
+    state_order = ["uploading", "scanning", "player_selection", "analyzing", "rendering", "completed"]
     try:
         idx = state_order.index(state)
     except ValueError:
-        # Unknown state — try to update summary and force complete
-        update_job(job_id, summary=cached_result)
+        # failed or unknown state — reset to scanning so we can walk forward
         try:
-            transition_job(job_id, "completed")
+            transition_job(job_id, "scanning")
         except Exception:
             pass
-        return
+        idx = state_order.index("scanning")
 
     # Transition forward through intermediate states
     for next_state in state_order[idx + 1:]:
@@ -87,16 +372,17 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
 def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
     """Run the full analysis pipeline for a video.
 
-    Idempotent: if the job is already in a terminal state (completed/failed),
-    this function returns immediately without re-processing.
+    Idempotent: if the job is already completed, this function returns
+    immediately. Failed jobs are retried from scanning.
     """
-    # Idempotency guard: skip if job already processed
+    # Idempotency guard: skip if job is already being processed or completed.
+    # Only allow analysis from "uploading" (new) or "failed" (retry) states.
     try:
         existing_job = get_job(job_id)
-        if existing_job.state in ("completed", "failed"):
+        if existing_job.state not in ("uploading", "failed"):
             logging.info(json.dumps({
                 "type": "analysis_skipped",
-                "reason": "job_already_terminal",
+                "reason": "job_already_in_progress",
                 "job_id": job_id,
                 "state": existing_job.state,
             }))
@@ -190,7 +476,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             )
         finally:
             # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
-            default_executor = loop._default_executor
+            default_executor = getattr(loop, '_default_executor', None)
             loop.close()
             if default_executor is not None:
                 default_executor.shutdown(wait=False)
@@ -205,7 +491,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
 
         # State: analyzing (calling Gemini)
         transition_job(job_id, "analyzing")
-        frame_budget = min(30, len(active_tracks))
+        frame_budget = min(20, len(active_tracks))
         best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
         logging.info(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
         for i, t in enumerate(best_for_gemini[:5]):
@@ -219,10 +505,26 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             video_height=video_height,
             player_index=player_index,
             video_path=preprocessed_path,
+            frame_cache=frame_cache,
         )
 
         # Normalize Gemini output to match frontend type contract
         gemini_result = normalize_gemini_result(gemini_result)
+
+        # Extract sport from Gemini result for scoring config
+        sport = gemini_result.get("sport", "cricket")
+
+        # Attach deterministic biomechanical metrics to each shot event
+        # by looking up the nearest tracked frame for each event timestamp
+        shot_events = gemini_result.get("shot_events", [])
+        if shot_events and active_tracks:
+            _attach_biomechanical_metrics(shot_events, active_tracks)
+
+        # Compute weighted composite scoring with per-criterion rationale
+        _compute_weighted_scoring(shot_events, sport)
+
+        # Compute injury-risk indicators for each shot event
+        _compute_injury_risk(shot_events, active_tracks)
 
         # Validate and correct stats from shot events
         corrected_stats = validate_and_correct_stats(gemini_result.get("shot_events", []))
@@ -254,6 +556,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             analysis_result=gemini_result,
             active_player_landmarks_per_frame=active_tracks,
             fps=fps,
+            sport=gemini_result.get("sport"),
         )
 
         result_key = storage.upload_result_video(output_path, job_id)

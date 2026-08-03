@@ -7,10 +7,19 @@ detector.py and analyzer.py into a single configurable module.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import cv2
 import numpy as np
+
+
+@dataclass
+class PoseCandidate:
+    landmarks: list[dict[str, float]]
+    bbox: tuple[int, int, int, int]
+    visibility: float
+
 
 # Module-level HOG descriptor (shared by all callers)
 _HOG_DESCRIPTOR = cv2.HOGDescriptor(

@@ -6,15 +6,17 @@ Handles prompt construction, API calls, response parsing, and result normalizati
 
 from __future__ import annotations
 
-import json
 import logging
 import os
+import time
 from typing import Any
 
 import numpy as np
 
 from core.config import GEMINI_MODEL, parse_timestamp
 from core.errors import GeminiParseError, GeminiQuotaError
+from core.gemini_common import parse_json_response
+from core.validator import validate_analysis
 from core.video_io import read_frame_by_index, frame_to_jpeg_bytes
 
 try:
@@ -30,7 +32,7 @@ except Exception:
 def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int = 0, motion_score: float = 0.0, player_count: int = 0) -> str:
     """
     Build a text metadata string for a frame to send alongside the image.
-    Includes bounding box position, key pose landmark angles, and motion info.
+    Includes bounding box position, key pose landmark angles, joint angles, and motion info.
     """
     parts = []
 
@@ -74,6 +76,20 @@ def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int 
         except (KeyError, IndexError, ZeroDivisionError):
             pass
 
+    # Add computed joint angles from tracking pipeline
+    joint_angles = track.get("joint_angles", {})
+    elbow_extension = track.get("elbow_extension_angle")
+    if elbow_extension is not None:
+        joint_angles["elbow_extension_angle"] = elbow_extension
+
+    if joint_angles:
+        angle_parts = []
+        for joint_name, angle_val in joint_angles.items():
+            if isinstance(angle_val, (int, float)):
+                angle_parts.append(f"{joint_name}={angle_val:.1f}")
+        if angle_parts:
+            parts.append(f"Joint angles: {', '.join(angle_parts)}")
+
     timestamp = track.get("timestamp", 0.0)
     metadata_str = ". ".join(parts) if parts else "No position data"
     return f"Frame {sequence_index} at {timestamp}s — {metadata_str}"
@@ -87,10 +103,13 @@ def call_gemini(
     video_height: int = 0,
     player_index: int | None = None,
     video_path: str | None = None,
+    frame_cache: dict[int, np.ndarray] | None = None,
+    max_retries: int = 3,
 ) -> dict:
     """
     Build a multimodal Gemini prompt with frame images + metadata text,
     send to gemini-2.5-flash, and parse the JSON response.
+    Retries on transient errors (503, 429) with exponential backoff.
     """
     if genai is None or genai_types is None:
         raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
@@ -123,8 +142,12 @@ def call_gemini(
 
     for seq_idx, item in enumerate(frames_with_tracks):
         frame = None
-        if video_path:
-            frame = read_frame_by_index(video_path, item["frame_index"])
+        # Use frame cache first (avoids redundant file opens)
+        frame_idx = item["frame_index"]
+        if frame_cache and frame_idx in frame_cache:
+            frame = frame_cache[frame_idx]
+        elif video_path:
+            frame = read_frame_by_index(video_path, frame_idx)
         if frame is None:
             continue
         jpeg = frame_to_jpeg_bytes(frame)
@@ -138,34 +161,53 @@ def call_gemini(
 
     logging.info(f"[Analyzer] Sending {len(frames_with_tracks)} frames to Gemini with detailed prompt")
 
-    try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=parts,
-            config=genai_types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1,
-            ),
-        )
-    except Exception as exc:
-        status_code = getattr(exc, "status_code", None)
-        message = str(exc)
-        is_quota = (
-            status_code == 429
-            or "RESOURCE_EXHAUSTED" in message
-            or "quota" in message.lower()
-        )
-        if is_quota:
-            raise GeminiQuotaError("Gemini quota exceeded. Please retry later.") from exc
-        if genai_errors is not None and isinstance(exc, getattr(genai_errors, "APIError", tuple())):
-            raise GeminiParseError(f"Gemini API error: {message}") from exc
-        raise GeminiParseError("Gemini request failed unexpectedly") from exc
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=parts,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                ),
+            )
+            break  # success
+        except Exception as exc:
+            last_exc = exc
+            status_code = getattr(exc, "status_code", None)
+            message = str(exc)
+            is_transient = (
+                status_code == 503
+                or status_code == 429
+                or "UNAVAILABLE" in message
+                or "RESOURCE_EXHAUSTED" in message
+                or "quota" in message.lower()
+            )
+            if is_transient and attempt < max_retries - 1:
+                delay = 2 ** attempt * 3  # 3s, 6s, 12s
+                logging.warning(f"[Analyzer] Gemini transient error (attempt {attempt + 1}/{max_retries}): {message}. Retrying in {delay}s...")
+                time.sleep(delay)
+                continue
+            if status_code == 429 or "RESOURCE_EXHAUSTED" in message or "quota" in message.lower():
+                raise GeminiQuotaError("Gemini quota exceeded. Please retry later.") from exc
+            if genai_errors is not None and isinstance(exc, getattr(genai_errors, "APIError", tuple())):
+                raise GeminiParseError(f"Gemini API error: {message}") from exc
+            raise GeminiParseError("Gemini request failed unexpectedly") from exc
 
     try:
         text = getattr(response, "text", None) or ""
-        return json.loads(text)
+        result = parse_json_response(text)
     except Exception as exc:
         raise GeminiParseError("Gemini returned malformed JSON") from exc
+
+    errors = validate_analysis(result)
+    if errors:
+        raise GeminiParseError(
+            f"Gemini output failed schema validation: {'; '.join(errors)}"
+        )
+
+    return result
 
 
 def normalize_gemini_result(raw: dict) -> dict:
@@ -209,6 +251,9 @@ def normalize_gemini_result(raw: dict) -> dict:
             "feedback": shot.get("feedback", ""),
             "result": shot.get("result"),
             "form_breakdown": shot.get("form_breakdown", {}),
+            "biomechanics": shot.get("biomechanics"),
+            "weighted_scoring": shot.get("weighted_scoring"),
+            "injury_risk": shot.get("injury_risk"),
         }
         # Add key_observation for backward compatibility
         breakdown = shot.get("form_breakdown")

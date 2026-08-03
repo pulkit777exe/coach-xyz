@@ -20,20 +20,9 @@ except ImportError:
 
 from core.config import GEMINI_MODEL
 from core.errors import GeminiProcessingError, GeminiTimeoutError
+from core.gemini_common import MIME_TYPES, clean_json_text
 from core.prompt import get_system_prompt
 from core.validator import validate_analysis
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-_MIME_TYPES = {
-    '.mp4': 'video/mp4',
-    '.mov': 'video/quicktime',
-    '.avi': 'video/x-msvideo',
-    '.mkv': 'video/x-matroska',
-    '.webm': 'video/webm',
-    '.m4v': 'video/mp4',
-}
 
 
 def _truthy(value: str | None) -> bool:
@@ -113,20 +102,6 @@ def _ensure_genai():
     return genai.Client(api_key=api_key)
 
 
-def _clean_json_text(raw: str) -> str:
-    """Strip markdown fences or preamble that Gemini may add around JSON."""
-    text = raw.strip()
-    if text.startswith('```'):
-        lines = text.split('\n')
-        # Remove opening fence (```json or ```)
-        lines = lines[1:]
-        # Remove closing fence if present
-        if lines and lines[-1].strip() == '```':
-            lines = lines[:-1]
-        text = '\n'.join(lines)
-    return text
-
-
 def _clean_analysis(result: dict) -> None:
     """
     Remove inapplicable (N/A) entries from every shot's form_breakdown in-place.
@@ -186,7 +161,7 @@ def _run_gemini_analysis(client, video_path, model_name, strict, player_focus, c
 
     # ── 1. Upload video ───────────────────────────────────────────────────
     ext = os.path.splitext(video_path)[1].lower()
-    mime_type = _MIME_TYPES.get(ext, 'video/mp4')
+    mime_type = MIME_TYPES.get(ext.lstrip('.'), 'video/mp4')
 
     logging.info(f'[Gemini] Uploading {video_path}  ({mime_type})')
     video_file = client.files.upload(file=video_path, config={'mime_type': mime_type})
@@ -230,7 +205,7 @@ def _run_gemini_analysis(client, video_path, model_name, strict, player_focus, c
     )
 
     # ── 4. Parse JSON ─────────────────────────────────────────────────────
-    raw_text = _clean_json_text(response.text or "")
+    raw_text = clean_json_text(response.text or "")
     try:
         result = json.loads(raw_text)
     except json.JSONDecodeError as exc:

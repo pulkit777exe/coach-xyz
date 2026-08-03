@@ -1,0 +1,35 @@
+{
+  "sport": "hockey",
+  "display_name": "Hockey",
+  "events": {
+    "positive": ["goal"],
+    "negative": ["save", "missed", "blocked", "post"]
+  },
+  "stats": [
+    { "key": "total_goals_so_far", "label": "Goals", "event_type": "goal" },
+    { "key": "total_saves_so_far", "label": "Saves", "event_type": "save" },
+    { "key": "total_shots_on_goal_so_far", "label": "Shots on Goal", "event_type": null },
+    { "key": "total_blocks_so_far", "label": "Blocks", "event_type": "blocked" },
+    { "key": "shots_taken_so_far", "label": "Shots Taken", "event_type": null }
+  ],
+  "form_criteria": [
+    "grip",
+    "weight_transfer",
+    "puck_position",
+    "stick_flex",
+    "contact_point",
+    "follow_through",
+    "body_rotation",
+    "head_position",
+    "balance"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 220, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}

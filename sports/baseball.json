@@ -1,0 +1,36 @@
+{
+  "sport": "baseball",
+  "display_name": "Baseball",
+  "events": {
+    "positive": ["hit", "home_run"],
+    "negative": ["out", "strikeout", "error"]
+  },
+  "stats": [
+    { "key": "total_hits_so_far", "label": "Hits", "event_type": "hit" },
+    { "key": "total_outs_so_far", "label": "Outs", "event_type": "out" },
+    { "key": "total_walks_so_far", "label": "Walks", "event_type": "walk" },
+    { "key": "total_strikeouts_so_far", "label": "Strikeouts", "event_type": "strikeout" },
+    { "key": "at_bats_so_far", "label": "At Bats", "event_type": null }
+  ],
+  "form_criteria": [
+    "stance",
+    "grip",
+    "load",
+    "stride",
+    "hip_rotation",
+    "hand_path",
+    "contact_point",
+    "extension",
+    "follow_through",
+    "head_position"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 220, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}

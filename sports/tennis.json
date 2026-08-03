@@ -1,0 +1,35 @@
+{
+  "sport": "tennis",
+  "display_name": "Tennis",
+  "events": {
+    "positive": ["winner", "ace"],
+    "negative": ["error", "double_fault"]
+  },
+  "stats": [
+    { "key": "total_aces_so_far", "label": "Aces", "event_type": "ace" },
+    { "key": "total_winners_so_far", "label": "Winners", "event_type": "winner" },
+    { "key": "total_errors_so_far", "label": "Errors", "event_type": "error" },
+    { "key": "total_double_faults_so_far", "label": "Double Faults", "event_type": "double_fault" },
+    { "key": "points_played_so_far", "label": "Points", "event_type": null }
+  ],
+  "form_criteria": [
+    "grip",
+    "stance",
+    "backswing",
+    "contact_point",
+    "footwork",
+    "follow_through",
+    "body_rotation",
+    "racket_head_speed",
+    "balance"
+  ],
+  "colors": {
+    "primary": [0, 165, 255],
+    "positive": [0, 220, 0],
+    "negative": [0, 0, 255],
+    "neutral": [255, 255, 255]
+  },
+  "feedback_display_seconds": 4,
+  "animation_duration_seconds": 1.25,
+  "summary_duration_seconds": 6
+}

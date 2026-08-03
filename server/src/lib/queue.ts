@@ -1,8 +1,9 @@
 import { Queue, Worker, QueueEvents, UnrecoverableError } from "bullmq"
-import { markJobFailed } from "./jobs"
-import { shutdownHistoryStore } from "./supabaseHistory"
+import { markJobFailed, getJob } from "./jobs"
+import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
 import { wrapEngineError } from "./errors"
 import type { CoachAIError } from "./errors"
+import { ENGINE_URL } from "./engine"
 
 // Non-retryable engine error codes — these will never succeed on retry.
 // Note: The engine sets retryable per-error; these codes are inherently
@@ -95,7 +96,6 @@ let keepAliveEngineTimer: ReturnType<typeof setInterval> | null = null
 
 if (process.env.NODE_ENV === "production") {
   const port = process.env.PORT || 8000
-  const engineUrl = process.env.ENGINE_URL ?? "http://localhost:8001"
 
   // Keep server alive
   keepAliveServerTimer = setInterval(async () => {
@@ -113,7 +113,7 @@ if (process.env.NODE_ENV === "production") {
   // Keep engine alive
   keepAliveEngineTimer = setInterval(async () => {
     try {
-      const res = await fetch(`${engineUrl}/health`, { signal: AbortSignal.timeout(5000) })
+      const res = await fetch(`${ENGINE_URL}/health`, { signal: AbortSignal.timeout(5000) })
       if (res.ok) {
         console.log(JSON.stringify({ type: "keepalive", target: "engine", status: "ok" }))
       }
@@ -131,6 +131,7 @@ export interface AnalysisPayload {
   engine_job_id: string
   session_token: string | null
   player_index: number | null
+  video_key: string | null
 }
 
 // The worker calls the engine synchronously.
@@ -139,7 +140,7 @@ const worker = redisAvailable
   ? new Worker<AnalysisPayload>(
       "coachai-analysis",
       async (job) => {
-        const { engine_job_id, session_token, player_index } = job.data
+        const { engine_job_id, session_token, player_index, video_key } = job.data
 
         // Idempotency check: skip if job already processed (race with status poll)
         const existingJob = await job.getState()
@@ -148,7 +149,7 @@ const worker = redisAvailable
         }
 
         const res = await fetch(
-          `${process.env.ENGINE_URL}/analyze`,
+          `${ENGINE_URL}/analyze`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -156,6 +157,7 @@ const worker = redisAvailable
               engine_job_id,
               session_token,
               player_index,
+              video_key,
             }),
             signal: AbortSignal.timeout(12 * 60 * 1000), // 12 min max
           },
@@ -235,6 +237,37 @@ if (redisAvailable && analysisQueue) {
           errorCode,
           retryable,
         )
+
+        // Persist failed status to history so it appears even if client stops polling
+        try {
+          const serverJob = await getJob(bullJob.data.server_job_id)
+          await persistAnalysisStatus({
+            serverJobId: bullJob.data.server_job_id,
+            engineJobId: bullJob.data.engine_job_id,
+            sessionToken: bullJob.data.session_token,
+            playerIndex: bullJob.data.player_index,
+            model: serverJob?.model ?? "gemini-3.5-flash",
+            status: {
+              stage: -1,
+              stage_name: "Failed",
+              progress: 0,
+              complete: true,
+              video_ready: false,
+              summary: null,
+              error: isUnrecoverable ? failedReason : "Analysis failed after retries. Please try again.",
+              error_code: errorCode,
+              retryable,
+            },
+          })
+        } catch (persistErr) {
+          console.error(JSON.stringify({
+            type: "failed_persist_history_error",
+            engine_job_id: bullJob.data.engine_job_id,
+            error: persistErr instanceof Error ? persistErr.message : "unknown",
+            timestamp: new Date().toISOString(),
+          }))
+        }
+
         console.error(
           JSON.stringify({
             type: isUnrecoverable ? "job_unrecoverable" : "job_exhausted",
@@ -287,7 +320,7 @@ if (redisAvailable && analysisQueue) {
         }
       }
     } catch (err) {
-      console.error("Stuck job recovery error:", err)
+      console.error(JSON.stringify({ type: "stuck_job_recovery_error", error: String(err) }))
     }
   }
 

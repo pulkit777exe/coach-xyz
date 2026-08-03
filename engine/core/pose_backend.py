@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import cv2
+import numpy as np
 try:
     import mediapipe as mp
 except Exception:
@@ -104,7 +105,7 @@ class StaticPoseDetector:
     def __init__(self, min_detection_confidence: float = 0.5, num_poses: int = 4) -> None:
         self.mode = pose_backend_name()
         self._detector: Any = None
-        self._rgb_buffer: Any = None  # Reuse RGB buffer across calls
+        self._rgb_buffer: np.ndarray | None = None  # Reuse RGB buffer across calls
 
         if self.mode == "solutions":
             pose_root = mp.solutions
@@ -139,7 +140,7 @@ class StaticPoseDetector:
     def __enter__(self) -> "StaticPoseDetector":
         return self
 
-    def __exit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> None:
+    def __exit__(self, _exc_type: type[BaseException] | None, _exc: BaseException | None, _tb: object | None) -> None:
         self.close()
 
     def close(self) -> None:
@@ -151,7 +152,7 @@ class StaticPoseDetector:
             pass
         self._detector = None
 
-    def detect(self, frame_bgr: Any) -> list[list[dict[str, float]]]:
+    def detect(self, frame_bgr: np.ndarray) -> list[list[dict[str, float]]]:
         if frame_bgr is None:
             return []
 

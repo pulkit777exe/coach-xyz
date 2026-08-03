@@ -22,14 +22,6 @@ from dotenv import load_dotenv
 from core.gemini import analyze_video
 from core.chunker import analyze_long_video, needs_chunking
 
-SUPPORTED_SPORTS = {"basketball", "football", "cricket"}
-
-
-def _load_sport_config(sport: str) -> dict:
-    config_path = ROOT.parent / "sports" / f"{sport}.json"
-    with open(config_path, "r") as f:
-        return json.load(f)
-
 
 def _pick_render_source(
     analysis_result: Any,
@@ -50,17 +42,6 @@ def _pick_render_source(
             return value, label
 
     return None, None
-
-
-def _render_video(video_path: str, analysis_result: dict, output_path: str) -> None:
-    sport = str(analysis_result.get("sport", "")).lower()
-    if sport not in SUPPORTED_SPORTS:
-        return
-
-    # NOTE: Legacy render path — new pipeline uses core.renderer.render_video()
-    # This stub is kept for CLI backward compat. The analysis_result structure
-    # differs from what render_video expects (needs active_player_landmarks_per_frame).
-    print(f"[CLI] Rendering not available for sport '{sport}' — skipping.", file=sys.stderr)
 
 
 def main() -> None:
@@ -117,19 +98,6 @@ def main() -> None:
 
         render_source, rendered_player_label = _pick_render_source(result, players)
         rendered_video_path = None
-
-        if not args.events_only and render_source is not None:
-            if args.output:
-                output_path = pathlib.Path(args.output)
-            else:
-                output_path = pathlib.Path(args.video).with_name(
-                    f"{pathlib.Path(args.video).stem}_analyzed.mp4"
-                )
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            _render_video(args.video, render_source, str(output_path))
-            if output_path.exists():
-                rendered_video_path = str(output_path.resolve())
 
     payload = {
         "analysis": result,

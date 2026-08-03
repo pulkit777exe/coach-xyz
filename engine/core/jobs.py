@@ -61,7 +61,7 @@ VALID_TRANSITIONS = {
     "analyzing": {"rendering", "completed", "failed"},  # completed if no render needed
     "rendering": {"completed", "failed"},
     "completed": set(),  # terminal state
-    "failed": set(),  # terminal state (retry creates new job)
+    "failed": {"scanning"},  # retry resets to scanning
 }
 
 # Keep STAGES alias for backward compat in analyzer.py
@@ -151,11 +151,17 @@ def transition_job(job_id: str, new_state: str, **kwargs) -> None:
             if hasattr(job, k):
                 setattr(job, k, v)
 
-        # Mark complete if reaching terminal state
+        # Terminal states mark the job complete. Retrying from failed must clear
+        # stale terminal/error fields so clients keep polling the live retry.
         if new_state == "completed":
             job.complete = True
         elif new_state == "failed":
             job.complete = True
+        else:
+            job.complete = False
+            job.error = None
+            job.error_code = None
+            job.retryable = True
 
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
 

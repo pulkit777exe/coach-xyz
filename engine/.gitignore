@@ -45,14 +45,10 @@ virtualenv/
 # IDE files
 .vscode/
 .idea/
-*.swp
-*.swo
-*.swn
 *.project
 *.pydevproject
 *.tmproj
 *.vs
-*.vscode/
 
 # Build files
 build/
@@ -61,6 +57,7 @@ dist/
 *.eggs/
 .eggs/
 .pytest_cache/
+.ruff_cache/
 .tox/
 
 # OS files

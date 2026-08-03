@@ -1,4 +1,5 @@
 import { Elysia } from "elysia"
+import { ENGINE_URL } from "../lib/engine"
 import { analysisQueue } from "../lib/queue"
 import { redis } from "../lib/redis"
 
@@ -32,7 +33,7 @@ export const healthRoute = new Elysia({ prefix: "/health" })
     let engineLatency = 0
     try {
       const t = Date.now()
-      const res = await fetch(`${process.env.ENGINE_URL}/health`, {
+      const res = await fetch(`${ENGINE_URL}/health`, {
         signal: AbortSignal.timeout(5000),
       })
       engineOk = res.ok

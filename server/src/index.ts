@@ -137,9 +137,6 @@ const app = new Elysia({
     maxRequestBodySize,
   })
 
-console.log(`CoachAI Server running on :${app.server?.port}`)
-console.log(`CoachAI maxRequestBodySize: ${maxRequestBodySize} bytes`)
-console.log(
-  `CoachAI Supabase history store: ${historyStoreEnabled() ? "enabled" : "disabled"}`,
-)
-console.log(`CoachAI BullMQ worker started`)
+console.log(JSON.stringify({ type: "server_started", port: app.server?.port, maxRequestBodySize }))
+console.log(JSON.stringify({ type: "history_store_status", enabled: historyStoreEnabled() }))
+console.log(JSON.stringify({ type: "worker_started" }))
