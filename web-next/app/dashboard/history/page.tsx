@@ -1,5 +1,6 @@
 import { auth0 } from "@/lib/auth0";
 import { getDashboardAnalyses } from "@/lib/api";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export default async function HistoryPage({
@@ -8,7 +9,10 @@ export default async function HistoryPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const session = await auth0.getSession();
-  const auth0Id = session!.user.sub;
+  if (!session) {
+    redirect("/auth/login");
+  }
+  const auth0Id = session.user.sub;
   const params = await searchParams;
   const page = Math.max(Number(params.page || 1), 1);
   const perPage = 20;
@@ -25,38 +29,38 @@ export default async function HistoryPage({
 
   return (
     <div className="p-8 lg:p-12 max-w-5xl">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
+      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
         History
       </p>
-      <h1 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em] text-[var(--fg)] mb-12">
+      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
         All Analyses
       </h1>
 
       {analyses.length === 0 ? (
-        <div className="border border-[var(--cream-10)] p-12 text-center">
-          <p className="text-[var(--cream-40)] mb-4">No analyses found</p>
+        <div className="border border-(--cream-10) p-12 text-center">
+          <p className="text-(--cream-40) mb-4">No analyses found</p>
           <Link
             href="/"
-            className="border border-[var(--cream-10)] px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
+            className="border border-(--cream-10) px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
           >
             Start Your First Analysis
           </Link>
         </div>
       ) : (
         <>
-          <div className="border border-[var(--cream-10)] divide-y divide-[var(--cream-05)]">
+          <div className="border border-(--cream-10) divide-y divide-(--cream-05)">
             {analyses.map((a) => (
               <Link
                 key={a.server_job_id}
                 href={`/dashboard/analysis/${a.server_job_id}`}
-                className="flex items-center justify-between p-6 transition-colors hover:bg-[var(--cream-03)]"
+                className="flex items-center justify-between p-6 transition-colors hover:bg-(--cream-03)"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-[var(--fg)] truncate">
-                    {a.file_name || "Untitled video"}
+                  <p className="text-sm text-(--fg) truncate">
+                    {a.display_name || a.file_name || "Untitled"}
                     {a.player_index !== null && ` — Player ${a.player_index}`}
                   </p>
-                  <div className="mt-2 flex items-center gap-4 text-[0.6rem] text-[var(--cream-40)]">
+                  <div className="mt-2 flex items-center gap-4 text-[0.6rem] text-(--cream-40)">
                     <span>
                       {new Date(a.requested_at).toLocaleDateString("en-US", {
                         month: "short",
@@ -76,10 +80,10 @@ export default async function HistoryPage({
                 <div className="flex items-center gap-4 ml-4">
                   {a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json ? (
                     <div className="text-right">
-                      <p className="font-serif text-2xl text-[var(--fg)]">
+                      <p className="font-serif text-2xl text-(--fg)">
                         {(a.summary_json as { form_score: number }).form_score}
                       </p>
-                      <p className="text-[0.55rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">
+                      <p className="text-[0.55rem] uppercase tracking-[0.15em] text-(--cream-40)">
                         Score
                       </p>
                     </div>
@@ -87,10 +91,10 @@ export default async function HistoryPage({
                   <span
                     className={`text-[0.6rem] uppercase tracking-[0.15em] px-3 py-1.5 border ${
                       a.complete
-                        ? "border-[var(--cream-10)] text-[var(--cream-40)]"
+                        ? "border-(--cream-10) text-(--cream-40)"
                         : a.error_code
-                          ? "border-[var(--red)] text-[var(--red)]"
-                          : "border-[var(--cream-20)] text-[var(--cream-20)]"
+                          ? "border-(--red) text-(--red)"
+                          : "border-(--cream-20) text-(--cream-20)"
                     }`}
                   >
                     {a.complete ? "Done" : a.error_code ? "Failed" : "Running"}
@@ -106,14 +110,14 @@ export default async function HistoryPage({
               {page > 1 && (
                 <Link
                   href={`/dashboard/history?page=${page - 1}`}
-                  className="border border-[var(--cream-10)] px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
+                  className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
                 >
                   Previous
                 </Link>
               )}
               <Link
                 href={`/dashboard/history?page=${page + 1}`}
-                className="border border-[var(--cream-10)] px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
+                className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
               >
                 Next
               </Link>

@@ -5,9 +5,9 @@ export default async function AuthHeader() {
   const session = await auth0.getSession();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-[var(--bg)]/80 backdrop-blur-md border-b border-[var(--cream-05)]">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-(--bg)/80 backdrop-blur-md border-b border-(--cream-05)">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <a href="/" className="font-serif text-xl text-[var(--fg)]">
+        <a href="/" className="font-serif text-xl text-(--fg)">
           coach.xyz
         </a>
 
@@ -16,13 +16,13 @@ export default async function AuthHeader() {
             <>
               <a
                 href="/dashboard"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]"
+                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
               >
                 Dashboard
               </a>
               <a
                 href="/account"
-                className="flex items-center gap-2 text-sm text-[var(--cream-40)] hover:text-[var(--fg)] transition-colors"
+                className="flex items-center gap-2 text-sm text-(--cream-40) hover:text-(--fg) transition-colors"
               >
                 <UserAvatar
                   picture={session.user.picture}
@@ -34,7 +34,7 @@ export default async function AuthHeader() {
               </a>
               <a
                 href="/auth/logout"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]"
+                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
               >
                 Log Out
               </a>
@@ -43,13 +43,13 @@ export default async function AuthHeader() {
             <>
               <a
                 href="/auth/login"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)] transition-colors hover:text-[var(--fg)]"
+                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
               >
                 Log In
               </a>
               <a
                 href="/auth/login?screen_hint=signup"
-                className="border border-[var(--cream-10)] px-5 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
+                className="border border-(--cream-10) px-5 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
               >
                 Sign Up
               </a>

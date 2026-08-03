@@ -56,7 +56,18 @@ Any step can fail. Errors surface in a dedicated `ErrorScreen` with 25+ error co
 
 ### 3.1 Route Structure
 
-The app is a **single-page application** with one route (`/`). All "pages" are client-side state transitions driven by `usePipeline()`.
+The app uses Next.js App Router with server-rendered pages for dashboard/history, and client-side state for the upload pipeline.
+
+| Route | Rendering | Purpose |
+|---|---|---|
+| `/` | Client (SPA) | Landing page with upload pipeline (`usePipeline()`) |
+| `/dashboard` | Server | Dashboard home — recent analyses |
+| `/dashboard/history` | Server | Paginated history of all analyses |
+| `/dashboard/analysis/[id]` | Server | Analysis detail — results, chat, download |
+| `/dashboard/analysis/[id]/chat` | Server | Standalone chat page for an analysis |
+| `/account` | Server | Account settings |
+
+#### Pipeline states (client-side on `/`)
 
 | Pipeline State | Rendered Component | Lines |
 |---|---|---|
@@ -76,7 +87,9 @@ The app is a **single-page application** with one route (`/`). All "pages" are c
 | `AnalysisProgress` | `components/AnalysisProgress.tsx` | Progress bar, stage stepper (Queued → Detecting → Analyzing → Rendering → Complete), ETA. |
 | `ResultsSummary` | `components/ResultsSummary.tsx` | Form score, overall assessment, priority tips, strengths, shot event timeline, download button. |
 | `ErrorScreen` | `components/ErrorScreen.tsx` | Error details with 25+ code mappings, auto-retry countdown, retry button. |
-| `AppHeader` | `components/AppHeader.tsx` | Minimal fixed header: "coach.xyz" logo + "New Analysis" link. 10 lines. |
+| `AnalysisTitle` | `components/AnalysisTitle.tsx` | Inline rename component for analysis display name. |
+| `InlineRename` | `components/InlineRename.tsx` | Editable text field with save/cancel for renaming analyses. |
+| `HistoryChat` | `components/HistoryChat.tsx` | Chat panel for asking follow-up questions about a completed analysis. |
 
 ### 3.3 UI Primitives
 
@@ -104,10 +117,16 @@ The app is a **single-page application** with one route (`/`). All "pages" are c
 
 | Endpoint | Method | Purpose | Timeout |
 |---|---|---|---|
-| `/api/scan-video` | POST | Upload video, detect players, return session token | 120s |
+| `/api/scan-video` | POST | Upload video, detect players, return session token + video_key | 120s |
 | `/api/analyze-video` | POST | Enqueue analysis job, return job ID | 30s |
 | `/api/job-status/:jobId` | GET | Poll job progress (state, stage, summary, video_ready) | 15s |
 | `/api/download/:jobId` | GET | Stream annotated video file | — |
+| `/api/chat` | POST | Send message to AI coach about an analysis | 30s |
+| `/api/conversations` | GET | List user's conversations | 10s |
+| `/api/conversations/:jobId` | GET | Load conversation history | 10s |
+| `/api/conversations/:jobId` | DELETE | Clear conversation | 5s |
+| `/api/rename/:jobId` | PATCH | Rename an analysis | 5s |
+| `/api/dashboard` | GET | Get user's analyses with stats | 10s |
 
 ### 4.2 Server → Engine
 
@@ -123,12 +142,15 @@ The app is a **single-page application** with one route (`/`). All "pages" are c
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `POST /scan` | Upload video, detect players, create session |
+| `POST /scan` | Upload video, detect players, create session, return video_key |
 | `POST /analyze` | Run full analysis pipeline (sync, called by BullMQ) |
 | `POST /analyze-async` | Fire-and-forget analysis (returns job ID immediately) |
 | `GET /status/:jobId` | Read job status from Redis |
 | `GET /download/:jobId` | Stream video from local storage |
 | `GET /analyze-progress/:jobId` | SSE stream for live progress |
+| `POST /chat` | Chat with AI coach about an analysis |
+| `GET /chat-history/:jobId` | Get conversation history from Redis |
+| `POST /fail/:jobId` | Mark a job as failed (called by server on BullMQ exhaustion) |
 | `GET /health` | Shallow health check |
 | `GET /health/deep` | Deep health (Redis, disk, MediaPipe) |
 
@@ -312,14 +334,14 @@ type CoachAIError = {
 
 ## 10. What's Missing (Known Gaps)
 
-| Gap | Impact |
-|---|---|
-| No conversational follow-up | User gets one analysis, can't ask questions |
-| No URL routing | Can't share results, back button broken |
-| No page transitions | Jarring state switches |
-| Bare upload UX | Spinner only, no progress percentage |
-| Film grain only on landing | Visual inconsistency across screens |
-| No breadcrumbs | User doesn't know where they are in the flow |
-| Single-player analysis only | Can't compare players or track progress over time |
-| No history browsing | Past analyses not accessible from UI |
-| No export/share | Can't share results link or export PDF report |
+| Gap | Impact | Status |
+|---|---|---|
+| No conversational follow-up | User gets one analysis, can't ask questions | ✅ Implemented — chat with AI coach on analysis detail page |
+| No URL routing | Can't share results, back button broken | ⚠️ Partial — `/dashboard/analysis/[id]` and `/dashboard/history` exist, but pipeline steps still client-side state |
+| No page transitions | Jarring state switches | ❌ Open |
+| Bare upload UX | Spinner only, no progress percentage | ⚠️ Partial — scan progress SSE exists, but UI shows spinner |
+| Film grain only on landing | Visual inconsistency across screens | ❌ Open |
+| No breadcrumbs | User doesn't know where they are in the flow | ❌ Open |
+| Single-player analysis only | Can't compare players or track progress over time | ❌ Open |
+| No history browsing | Past analyses not accessible from UI | ✅ Implemented — `/dashboard/history` with pagination |
+| No export/share | Can't share results link or export PDF report | ❌ Open |

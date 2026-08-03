@@ -1,4 +1,4 @@
-import type { ScanResult, JobStatus, CoachAIError } from '@/types'
+import type { ScanResult, JobStatus, CoachAIError, UploadProgress, ChatMessage } from '@/types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
@@ -44,7 +44,7 @@ async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    let body: any = {}
+    let body: Record<string, unknown> = {}
     try {
       body = await res.json()
     } catch {
@@ -75,27 +75,153 @@ async function apiFetch<T>(
 
 // ── API Functions ────────────────────────────────────────────────────────────
 
-export async function scanVideo(file: File, auth0Id?: string | null): Promise<ScanResult> {
-  const formData = new FormData()
-  formData.append('video', file)
+export function scanVideoWithProgress(
+  file: File,
+  onProgress: (progress: UploadProgress) => void,
+  auth0Id?: string | null,
+): Promise<ScanResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE}/api/scan-video`)
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 180_000) // 3 min for uploads
+    if (auth0Id) {
+      xhr.setRequestHeader('x-auth0-id', auth0Id)
+    }
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100)
+        onProgress({ phase: 'uploading', percent })
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as ScanResult)
+        } catch {
+          reject({
+            code: 'PARSE_ERROR',
+            message: 'Invalid response from server.',
+            layer: 'server',
+            retryable: false,
+          } as CoachAIError)
+        }
+      } else if (xhr.status === 429) {
+        let body: Record<string, unknown> = {}
+        try { body = JSON.parse(xhr.responseText) } catch { /* ignore */ }
+        reject({
+          code: 'RATE_LIMITED',
+          message: (body.message as string) ?? 'Too many requests. Please wait.',
+          layer: 'server',
+          retryable: true,
+          retry_after: body.retry_after as number | undefined,
+        } as CoachAIError)
+      } else {
+        let body: Record<string, unknown> = {}
+        try { body = JSON.parse(xhr.responseText) } catch { /* ignore */ }
+        if (body.code && body.message) {
+          reject({
+            code: body.code as string,
+            message: body.message as string,
+            layer: (body.layer as string) ?? 'server',
+            retryable: (body.retryable as boolean) ?? true,
+          } as CoachAIError)
+        } else {
+          reject({
+            code: 'REQUEST_FAILED',
+            message: `Request failed (${xhr.status})`,
+            layer: 'server',
+            retryable: xhr.status >= 500,
+          } as CoachAIError)
+        }
+      }
+    })
+
+    xhr.addEventListener('error', () => {
+      reject({
+        code: 'NETWORK_ERROR',
+        message: 'Cannot connect to server. Check your connection.',
+        layer: 'client',
+        retryable: true,
+      } as CoachAIError)
+    })
+
+    xhr.addEventListener('abort', () => {
+      reject({
+        code: 'REQUEST_TIMEOUT',
+        message: 'Request timed out.',
+        layer: 'client',
+        retryable: true,
+      } as CoachAIError)
+    })
+
+    const formData = new FormData()
+    formData.append('video', file)
+    xhr.send(formData)
+  })
+}
+
+export type ScanProgressEvent = {
+  session_token: string
+  current: number
+  total: number
+  complete: boolean
+  error: string | null
+}
+
+/**
+ * Stream scan progress via SSE. Yields ScanProgressEvents as they arrive.
+ * Pass an AbortSignal to cancel the stream on unmount.
+ */
+export async function* streamScanProgress(
+  sessionToken: string,
+  signal?: AbortSignal,
+): AsyncGenerator<ScanProgressEvent> {
+  const res = await fetch(`${BASE}/api/scan-progress/${sessionToken}`, {
+    signal,
+  })
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
+    throw {
+      code: 'SCAN_PROGRESS_FAILED',
+      message: (errBody.message as string) ?? 'Failed to get scan progress.',
+      layer: 'server',
+      retryable: true,
+    } as CoachAIError
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
   try {
-    return await apiFetch<ScanResult>(`${BASE}/api/scan-video`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-      headers: auth0Id ? { 'x-auth0-id': auth0Id } : {},
-    }, true)
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6)) as ScanProgressEvent
+          yield event
+        } catch { /* partial JSON, skip */ }
+      }
+    }
   } finally {
-    clearTimeout(timeout)
+    reader.releaseLock()
   }
 }
 
 export async function startAnalysis(params: {
   session_token: string | null
   player_index: number | null
+  video_key?: string | null
   auth0Id?: string | null
 }): Promise<{ job_id: string }> {
   const { auth0Id, ...rest } = params
@@ -129,36 +255,12 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 }
 
 export function getDownloadUrl(jobId: string): string {
-  return `${BASE}/api/download/${jobId}`
+  return `/api/download/${jobId}`
 }
 
 // ── Chat API ─────────────────────────────────────────────────────────────────
 
 export type { ChatMessage } from '@/types'
-import type { ChatMessage } from '@/types'
-
-export type ChatResponse = {
-  reply: string
-  timestamp_refs: number[]
-  event_refs: number[]
-}
-
-export async function sendChatMessage(
-  jobId: string,
-  message: string,
-): Promise<ChatResponse> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 60_000)
-  try {
-    return await apiFetch<ChatResponse>(`${BASE}/api/chat`, {
-      method: 'POST',
-      body: JSON.stringify({ job_id: jobId, message }),
-      signal: controller.signal,
-    })
-  } finally {
-    clearTimeout(timeout)
-  }
-}
 
 export type StreamEvent =
   | { type: 'token'; text: string }
@@ -255,10 +357,6 @@ export async function syncUser(user: {
   })
 }
 
-export async function getUser(auth0Id: string): Promise<{ user: UserRecord }> {
-  return apiFetch<{ user: UserRecord }>(`${BASE}/api/auth/user/${auth0Id}`)
-}
-
 // ── Dashboard API ───────────────────────────────────────────────────────────
 
 export type DashboardAnalysis = {
@@ -279,6 +377,7 @@ export type DashboardAnalysis = {
   completed_at: string | null
   download_count: number
   file_name: string | null
+  display_name: string | null
   file_size_bytes: number | null
   player_count: number | null
 }
@@ -297,7 +396,7 @@ export async function getDashboardAnalyses(
   offset = 0,
 ): Promise<{ analyses: DashboardAnalysis[] }> {
   return apiFetch<{ analyses: DashboardAnalysis[] }>(
-    `${BASE}/api/auth/user/${auth0Id}/analyses?limit=${limit}&offset=${offset}`,
+    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?limit=${limit}&offset=${offset}`,
   )
 }
 
@@ -306,7 +405,7 @@ export async function getDashboardAnalysisDetail(
   jobId: string,
 ): Promise<{ analysis: DashboardAnalysis }> {
   return apiFetch<{ analysis: DashboardAnalysis }>(
-    `${BASE}/api/auth/user/${auth0Id}/analyses/${jobId}`,
+    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
   )
 }
 
@@ -314,6 +413,37 @@ export async function getDashboardStats(
   auth0Id: string,
 ): Promise<{ stats: DashboardStats }> {
   return apiFetch<{ stats: DashboardStats }>(
-    `${BASE}/api/auth/user/${auth0Id}/stats`,
+    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/stats`,
   )
+}
+
+export const renameAnalysis = async (
+  auth0Id: string,
+  jobId: string,
+  displayName: string,
+): Promise<{ analysis: DashboardAnalysis }> => {
+  return apiFetch<{ analysis: DashboardAnalysis }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  })
+}
+
+export const getHistoryChatMessages = async (
+  auth0Id: string,
+  jobId: string,
+): Promise<{ messages: ChatMessage[] }> => {
+  return apiFetch<{ messages: ChatMessage[] }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`)
+}
+
+export const sendHistoryChatMessage = async (
+  auth0Id: string,
+  jobId: string,
+  message: string,
+): Promise<{ message: string; role: string }> => {
+  return apiFetch<{ message: string; role: string }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  })
 }

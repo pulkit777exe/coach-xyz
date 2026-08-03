@@ -15,11 +15,13 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
-      "connect-src 'self' http://localhost:* https://*.sentry.io https://*.upstash.io",
+      "connect-src 'self' http://localhost:* https://*.sentry.io https://*.upstash.io https://coachai-server.onrender.com",
       "worker-src 'self' blob:",
     ].join("; "),
   },
 ];
+
+const API_PROXY = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -27,6 +29,14 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/download/:path*",
+        destination: `${API_PROXY}/api/download/:path*`,
       },
     ];
   },

@@ -8,7 +8,7 @@ function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-zinc-800 bg-zinc-950/80 text-zinc-100 shadow-[0_20px_80px_-40px_rgba(0,0,0,0.95)]",
+        "rounded-lg border border-(--cream-05) bg-(--bg)/80 text-(--fg) shadow-[0_20px_80px_-40px_rgba(0,0,0,0.95)]",
         className
       )}
       {...props}
@@ -52,4 +52,3 @@ function CardContent({
 }
 
 export { Card, CardContent, CardDescription, CardHeader, CardTitle };
-

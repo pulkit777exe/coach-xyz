@@ -12,6 +12,7 @@ export type Player = {
 
 export type ScanResult = {
   session_token: string
+  video_key: string
   player_count: number
   players: Player[]
 }
@@ -92,6 +93,12 @@ export type CoachAIError = {
   retryable: boolean
   retry_after?: number
 }
+
+// ── Upload Progress ──────────────────────────────────────────────────────────
+
+export type UploadProgress =
+  | { phase: 'uploading'; percent: number }
+  | { phase: 'scanning'; percent: number }
 
 // ── Chat Types ───────────────────────────────────────────────────────────────
 

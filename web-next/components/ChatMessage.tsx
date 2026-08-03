@@ -26,13 +26,13 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
       <div
         className={`max-w-[85%] rounded-none px-5 py-4 ${
           isUser
-            ? 'bg-[var(--fg)] text-[var(--bg)]'
-            : 'border border-[var(--cream-10)] bg-[var(--cream-05)] text-[var(--fg)]'
+            ? 'bg-(--fg) text-(--bg)'
+            : 'border border-(--cream-10) bg-(--cream-05) text-(--fg)'
         }`}
       >
         {!isUser && (
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--cream-40)] uppercase tracking-wider">
+            <span className="text-xs font-semibold text-(--cream-40) uppercase tracking-wider">
               Coach
             </span>
           </div>
@@ -48,7 +48,7 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
               <button
                 key={ts}
                 onClick={() => onSeekTo(ts)}
-                className="inline-flex items-center gap-1 rounded-none border border-[var(--cream-10)] bg-[var(--cream-05)] px-2 py-1 text-[0.65rem] font-mono text-[var(--cream-40)] transition-colors hover:border-[var(--cream-20)] hover:text-[var(--fg)]"
+                className="inline-flex items-center gap-1 rounded-none border border-(--cream-10) bg-(--cream-05) px-2 py-1 text-[0.65rem] font-mono text-(--cream-40) transition-colors hover:border-(--cream-20) hover:text-(--fg)"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -96,7 +96,7 @@ function renderContent(
     // Inline code
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="rounded bg-[var(--cream-05)] px-1.5 py-0.5 font-mono text-xs">
+        <code key={i} className="rounded bg-(--cream-05) px-1.5 py-0.5 font-mono text-xs">
           {part.slice(1, -1)}
         </code>
       )
@@ -110,7 +110,7 @@ function renderContent(
           <button
             key={i}
             onClick={() => onSeekTo(ts)}
-            className="font-mono text-[var(--cream-40)] underline decoration-[var(--cream-20)] underline-offset-2 hover:text-[var(--fg)]"
+            className="font-mono text-(--cream-40) underline decoration-(--cream-20) underline-offset-2 hover:text-(--fg)"
           >
             {formatTimestamp(ts)}
           </button>

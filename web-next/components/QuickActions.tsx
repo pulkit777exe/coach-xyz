@@ -39,7 +39,7 @@ export function QuickActions({ onAction, disabled, hasSummary }: QuickActionsPro
           key={action.label}
           onClick={() => onAction(action.prompt)}
           disabled={disabled}
-          className="inline-flex items-center gap-2 rounded-none border border-[var(--cream-10)] bg-[var(--cream-05)] px-4 py-2 text-xs text-[var(--cream-40)] transition-all hover:border-[var(--cream-20)] hover:text-[var(--fg)] disabled:opacity-30 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-2 rounded-none border border-(--cream-10) bg-(--cream-05) px-4 py-2 text-xs text-(--cream-40) transition-all hover:border-(--cream-20) hover:text-(--fg) disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <span>{action.icon}</span>
           <span>{action.label}</span>

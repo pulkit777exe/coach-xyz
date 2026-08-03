@@ -9,12 +9,7 @@ import { ChatTyping } from './ChatTyping'
 import { QuickActions } from './QuickActions'
 import { getConversation } from '@/lib/api'
 import type { JobStatus } from '@/types'
-
-export const SPORT_EMOJI: Record<string, string> = {
-  basketball: '🏀',
-  football: '⚽',
-  cricket: '🏏',
-}
+import { SPORT_EMOJI } from '@/lib/sports'
 
 interface ChatPanelProps {
   jobId: string
@@ -155,13 +150,13 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         <div className="flex-1 overflow-y-auto px-4 py-6">
           <div className="mx-auto max-w-3xl space-y-6">
             {isLoadingHistory && (
-              <div className="text-center text-[var(--cream-40)] text-sm py-8">
+              <div className="text-center text-(--cream-40) text-sm py-8">
                 Loading conversation...
               </div>
             )}
 
             {historyError && !isLoadingHistory && (
-              <div className="text-center text-[var(--cream-40)] text-xs py-4 opacity-60">
+              <div className="text-center text-(--cream-40) text-xs py-4 opacity-60">
                 Could not load previous messages
               </div>
             )}
@@ -169,32 +164,32 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
             {!isLoadingHistory && messages.length === 0 && summary && (
               <div className="space-y-6">
                 {/* Initial analysis summary card */}
-                <div className="rounded-none border border-[var(--cream-10)] bg-[var(--cream-05)] p-6">
+                <div className="rounded-none border border-(--cream-10) bg-(--cream-05) p-6">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-2xl">
                       {SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}
                     </span>
                     <div>
-                      <h3 className="font-serif text-lg text-[var(--fg)] capitalize">
+                      <h3 className="font-serif text-lg text-(--fg) capitalize">
                         {summary.sport} Analysis Complete
                       </h3>
-                      <p className="text-[0.65rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">
+                      <p className="text-[0.65rem] uppercase tracking-[0.15em] text-(--cream-40)">
                         {summary.total_events ?? 0} events detected
                       </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                      <p className="font-serif text-3xl text-[var(--fg)]">{summary.form_score}</p>
-                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">Form Score</p>
+                      <p className="font-serif text-3xl text-(--fg)">{summary.form_score}</p>
+                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-(--cream-40)">Form Score</p>
                     </div>
                     <div>
-                      <p className="font-serif text-lg text-[var(--fg)]">{summary.overall_rating}</p>
-                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">Rating</p>
+                      <p className="font-serif text-lg text-(--fg)">{summary.overall_rating}</p>
+                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-(--cream-40)">Rating</p>
                     </div>
                     <div>
-                      <p className="font-serif text-lg text-[var(--fg)]">{summary.success_rate_percent ?? 0}%</p>
-                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-[var(--cream-40)]">Success Rate</p>
+                      <p className="font-serif text-lg text-(--fg)">{summary.success_rate_percent ?? 0}%</p>
+                      <p className="text-[0.6rem] uppercase tracking-[0.15em] text-(--cream-40)">Success Rate</p>
                     </div>
                   </div>
                 </div>
@@ -241,7 +236,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-[var(--cream-05)] bg-[var(--bg)]/80 backdrop-blur-md">
+        <div className="border-t border-(--cream-05) bg-(--bg)/80 backdrop-blur-md">
           <div className="mx-auto max-w-3xl px-4 py-4">
             <ChatInput
               onSend={handleSend}

@@ -28,16 +28,16 @@ export default async function AccountPage() {
   return (
     <div className="min-h-screen pb-12 px-6 lg:px-12">
       <div className="max-w-2xl mx-auto pt-8">
-        <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
+        <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
           Settings
         </p>
-        <h1 className="font-serif text-[clamp(2rem,4vw,3.5rem)] leading-[1] tracking-[-0.02em] text-[var(--fg)] mb-12">
+        <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
           Account
         </h1>
 
         {/* Profile Card */}
-        <div className="border border-[var(--cream-10)] p-8 mb-8">
-          <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
+        <div className="border border-(--cream-10) p-8 mb-8">
+          <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
             Profile
           </p>
 
@@ -49,10 +49,10 @@ export default async function AccountPage() {
               size="lg"
             />
             <div>
-              <p className="font-serif text-2xl text-[var(--fg)]">
+              <p className="font-serif text-2xl text-(--fg)">
                 {session.user.name || "No name"}
               </p>
-              <p className="mt-1 text-sm text-[var(--cream-40)]">{session.user.email}</p>
+              <p className="mt-1 text-sm text-(--cream-40)">{session.user.email}</p>
             </div>
           </div>
 
@@ -70,14 +70,14 @@ export default async function AccountPage() {
               <div
                 key={row.label}
                 className={`flex justify-between items-baseline py-3 ${
-                  i < 4 ? "border-b border-[var(--cream-05)]" : ""
+                  i < 4 ? "border-b border-(--cream-05)" : ""
                 }`}
               >
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)]">
+                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
                   {row.label}
                 </span>
                 <span
-                  className={`text-sm text-[var(--fg)] ${row.mono ? "font-mono" : ""}`}
+                  className={`text-sm text-(--fg) ${row.mono ? "font-mono" : ""}`}
                 >
                   {row.value}
                 </span>
@@ -88,24 +88,24 @@ export default async function AccountPage() {
 
         {/* Database Record */}
         {user && (
-          <div className="border border-[var(--cream-10)] p-8 mb-8">
-            <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-[var(--cream-40)]">
+          <div className="border border-(--cream-10) p-8 mb-8">
+            <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
               Database Record
             </p>
             <div className="space-y-0">
-              <div className="flex justify-between items-baseline py-3 border-b border-[var(--cream-05)]">
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)]">
+              <div className="flex justify-between items-baseline py-3 border-b border-(--cream-05)">
+                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
                   Created
                 </span>
-                <span className="text-sm text-[var(--fg)]">
+                <span className="text-sm text-(--fg)">
                   {new Date(user.created_at).toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-baseline py-3">
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-[var(--cream-40)]">
+                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
                   Last Updated
                 </span>
-                <span className="text-sm text-[var(--fg)]">
+                <span className="text-sm text-(--fg)">
                   {new Date(user.updated_at).toLocaleString()}
                 </span>
               </div>
@@ -117,13 +117,13 @@ export default async function AccountPage() {
         <div className="flex gap-4">
           <a
             href="/"
-            className="border border-[var(--cream-10)] px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--fg)] transition-all hover:bg-[var(--fg)] hover:text-[var(--bg)]"
+            className="border border-(--cream-10) px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
           >
             Back to Home
           </a>
           <a
             href="/auth/logout"
-            className="px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-[var(--red)] border border-[var(--red)] transition-all hover:bg-[var(--red)] hover:text-[var(--bg)]"
+            className="px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--red) border border-(--red) transition-all hover:bg-(--red) hover:text-(--bg)"
           >
             Log Out
           </a>

@@ -36,7 +36,7 @@ export default function UserAvatar({ picture, name, email, size = 'md', classNam
 
   return (
     <div
-      className={`rounded-full border border-[var(--cream-10)] flex items-center justify-center bg-[var(--cream-05)] text-[var(--cream-40)] font-medium ${sizeClasses[size]} ${className}`}
+      className={`rounded-full border border-(--cream-10) flex items-center justify-center bg-(--cream-05) text-(--cream-40) font-medium ${sizeClasses[size]} ${className}`}
     >
       {showImage ? (
         <img

@@ -1,263 +1,93 @@
-# ⚡ CoachAI — Multi-Sport AI Video Analyzer
+<p align="center">
+  <samp>
+    <b>Coach0</b> · multi-sport AI video analyzer<br>
+    <sub>personal project · open source · built with next.js, elysia, fastapi, gemini</sub>
+  </samp>
+</p>
 
-> Upload any basketball, football, or cricket video → get instant form scores,
-> shot-by-shot coaching feedback, and a professionally annotated video.
->
-> Powered by **Google Gemini AI** + **MediaPipe** pose detection.
-
----
-
-## Architecture
-
-```
-gemini-bball/
-├── engine/        Python engine for video analysis
-│   ├── core/      Shared Python engine (Gemini, overlay renderer, validator)
-│   ├── cli/       Command-line interface (local or API-backed)
-│   ├── main.py    Main entry point
-│   └── requirements.txt
-├── backend/       FastAPI REST API (legacy)
-├── server/        Elysia/Bun backend (new, recommended)
-├── web/           Web App (HTML/CSS/JS SPA, legacy)
-├── web-next/      Next.js frontend with TypeScript and Tailwind
-├── android/       React Native Android app
-├── sports/        Per-sport config JSON (basketball, football, cricket)
-└── events/        Output event JSON files
-```
+<p align="center">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+</p>
 
 ---
 
-## Quick Start
+Upload any basketball, football, cricket, tennis, baseball, or hockey video — get instant form scores, shot-by-shot coaching feedback, and a professionally annotated video.
 
-### For Development (Recommended)
+Powered by **Google Gemini AI** + **MediaPipe** pose detection.
 
-#### 1. Install Python dependencies
+## Tech
+
+next.js, typescript, tailwind css, elysia/bun, fastapi, bullmq, google gemini, mediapipe, opencv, upstash redis, supabase postgresql, docker
+
+## Quick start
+
+### Option A: Docker (recommended)
 
 ```bash
+docker compose up
+```
+
+Starts the Python analysis engine and the Elysia server. See [ARCHITECTURE.md](./ARCHITECTURE.md) for environment setup.
+
+### Option B: Local setup
+
+```bash
+# Engine (Python)
 cd engine
 pip install -r requirements.txt
 cd ..
-pip install -r backend/requirements.txt
-```
 
-#### 2. Set your Gemini API key
-
-```bash
-# .env (already in the project root)
-GEMINI_API_KEY=your_key_here
-```
-
-#### 3. Start Elysia Backend
-
-```bash
+# Server (Bun)
 cd server
 bun install
 cp .env.example .env
-# Add GEMINI_API_KEY and API_KEY
+# Add GEMINI_API_KEY
 bun run dev
-```
 
-Backend will be at: http://localhost:8000
-
-#### 4. Start Next.js Frontend
-
-```bash
+# Frontend (Next.js)
 cd web-next
 bun install
 cp .env.local.example .env.local
 bun run dev
 ```
 
-Frontend will be at: http://localhost:3000
+Frontend at `:3000`, server at `:8000`, engine at `:8001`.
 
-### For Production
+## Project
 
-#### Build Frontend
-
-```bash
-cd web-next
-bun run build
-bun run start
+```
+├── web-next/      Next.js 16 + React 19 frontend
+├── server/        Elysia/Bun middleware + BullMQ job queue
+├── engine/        FastAPI video analysis pipeline (Gemini + MediaPipe)
+├── sports/        Per-sport config JSON
+└── docker-compose.yml
 ```
 
-#### Run Backend
+| Layer | What it does |
+|---|---|
+| `web-next/` | SPA — upload video, pick player, poll progress, download result |
+| `server/` | Rate limiting, beta codes, job orchestration, Supabase history |
+| `engine/` | Player detection, Gemini analysis, video annotation, caching |
+| `sports/` | Sport-specific event definitions and scoring rules |
 
-```bash
-cd server
-bun run start
-```
+## Supported sports
 
----
-
-## CLI
-
-Runs the full pipeline locally — no server needed.
-
-```bash
-# Analyze + render in one command (output → ~/Downloads/)
-python cli/main.py analyze video.mp4
-
-# Analysis only (skip render)
-python cli/main.py analyze video.mp4 --events-only
-
-# Use a different Gemini model
-python cli/main.py analyze video.mp4 --model gemini-1.5-pro
-
-# Connect to a running backend instead of running locally
-python cli/main.py analyze video.mp4 --api-url http://localhost:8000
-```
-
----
-
-## Backend API
-
-### Elysia/Bun Backend (Recommended)
-
-Serves the Web App and Android app with modern, performant backend.
-
-```bash
-cd server
-# Install dependencies
-bun install
-
-# Set environment variables
-cp .env.example .env
-# Add GEMINI_API_KEY and API_KEY
-
-# Start development server
-bun run dev
-
-# Start production server
-bun run start
-```
-
-| Endpoint             | Method | Description                    |
-| -------------------- | ------ | ------------------------------ |
-| `/health`            | GET    | Health check                   |
-| `/api/sports`        | GET    | List supported sports          |
-| `/api/analyze`       | POST   | Upload video → start async job |
-| `/api/jobs/{id}`     | GET    | Poll job status / results      |
-| `/api/download/{id}` | GET    | Stream the rendered `.mp4`     |
-| `/api/events/{id}`   | GET    | Get the raw event JSON         |
-| `/api/jobs/{id}`     | DELETE | Clean up a job                 |
-
-### FastAPI Backend (Legacy)
-
-```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
-```
-
-### Example — cURL
-
-```bash
-# Upload and get a job ID
-curl -F "video=@video.mp4" -F "model=gemini-2.5-flash" -F "render=true" \
-     http://localhost:8000/api/analyze
-
-# Poll until done
-curl http://localhost:8000/api/jobs/<job_id>
-
-# Download the result
-curl -O http://localhost:8000/api/download/<job_id>
-```
-
----
-
-## Web App
-
-### Next.js 14+ Frontend (Recommended)
-
-Modern web interface with TypeScript and Tailwind CSS.
-
-```bash
-cd web-next
-# Install dependencies
-bun install
-
-# Set environment variables
-cp .env.local.example .env.local
-
-# Start development server
-bun run dev
-
-# Build for production
-bun run build
-
-# Start production server
-bun run start
-```
-
-Frontend will be available at: http://localhost:3000
-
-### Legacy HTML/CSS/JS SPA
-
-Open `web/index.html` directly in a browser **while the backend is running**.
-
-Or serve it with any static file server:
-
-```bash
-# Python built-in
-python -m http.server 3000 --directory web/
-
-# Then open: http://localhost:3000
-```
-
-> **PWA**: In Chrome on Android, tap the browser menu → _"Add to Home Screen"_
-> to install CoachAI as a native-feeling app.
-
----
-
-## Android App (React Native)
-
-### Prerequisites
-
-- Node.js 18+
-- Android Studio + Android SDK
-- React Native CLI
-
-### Setup
-
-```bash
-cd android
-npm install
-
-# Start Metro
-npm start
-
-# Run on connected device / emulator
-npm run android
-```
-
-### Configure the server URL
-
-In **Settings → Backend API URL**:
-
-- Android emulator → `http://10.0.2.2:8000`
-- Real device on same WiFi → `http://<your-machine-IP>:8000`
-
----
-
-## Supported Sports
-
-| Sport      | Events detected                              |
-| ---------- | -------------------------------------------- |
+| Sport | Events detected |
+|---|---|
 | Basketball | Jump shots, layups, dunks, free throws, 3-pt |
-| Football   | Strikes, headers, volleys, penalties         |
-| Cricket    | Drives, pulls, sweeps, cuts, hooks           |
-
----
-
-## Environment Variables
-
-| Variable         | Required | Description           |
-| ---------------- | -------- | --------------------- |
-| `GEMINI_API_KEY` | ✅       | Google Gemini API key |
-
----
+| Football | Strikes, headers, volleys, penalties |
+| Cricket | Drives, pulls, sweeps, cuts, hooks |
+| Tennis | Serves, forehands, backhands, volleys, overheads, drop shots |
+| Baseball | Singles, doubles, home runs, strikeouts |
+| Hockey | Wrist shots, slap shots, backhands, one-timers |
 
 ## Output
 
 Every analysis produces:
 
-1. **`events/<name>.json`** — Structured event data (timestamps, form scores, feedback, session summary)
-2. **`~/Downloads/<name>_analyzed.mp4`** — Original video with AI overlays baked in
+1. **Event JSON** — structured event data (timestamps, form scores, feedback, session summary)
+2. **Annotated MP4** — original video with AI overlays baked in
+
+## License
+
+MIT — see [LICENSE](./LICENSE).

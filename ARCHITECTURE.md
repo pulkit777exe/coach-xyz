@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to analyze athlete technique. Users upload sports videos (basketball, football, cricket), the system detects players, sends frames to Gemini for biomechanical analysis, and returns an annotated video with performance feedback. The system is designed for zero-cost deployment on free-tier infrastructure.
+Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to analyze athlete technique. Users upload sports videos (basketball, football, cricket, tennis, baseball, hockey), the system detects players, sends frames to Gemini for biomechanical analysis, and returns an annotated video with performance feedback. The system is designed for zero-cost deployment on free-tier infrastructure.
 
 ---
 
@@ -145,7 +145,7 @@ coach-xyz/
 ├── docker-compose.yml         # Local development (engine + server)
 ├── docker-compose.prod.yml    # Production compose
 ├── render.yaml                # Render deployment config
-└── sports/                    # Sport-specific configs (basketball.json, etc.)
+└── sports/                    # Sport-specific configs (basketball.json, football.json, cricket.json, tennis.json, baseball.json, hockey.json)
 ```
 
 ---

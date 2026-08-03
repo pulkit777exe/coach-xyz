@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 type BadgeVariant = "default" | "secondary" | "destructive" | "muted" | "outline";
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: "bg-green-500 text-white",
-  secondary: "bg-yellow-500 text-white",
-  destructive: "bg-red-500 text-white",
+  default: "bg-green-500 text-(--bg)",
+  secondary: "bg-yellow-500 text-(--bg)",
+  destructive: "bg-red-500 text-(--bg)",
   muted: "bg-zinc-900 text-zinc-300 border border-zinc-800",
   outline: "border border-zinc-700 text-zinc-300 bg-transparent",
 };

@@ -45,9 +45,6 @@
     font-family: var(--font-mono);
   }
 
-  .font-display {
-    font-family: var(--font-serif);
-  }
 }
 
 /* ── Button Accent ─────────────────────────────────────────────────────────── */
@@ -85,13 +82,7 @@
 
 /* ── Utility ────────────────────────────────────────────────────────────────── */
 
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
+
 
 /* ── Marquee ────────────────────────────────────────────────────────────────── */
 
@@ -122,9 +113,7 @@
   color: var(--cream-40);
 }
 
-.marquee-record {
-  color: var(--red);
-}
+
 
 /* ── Icon Swap (transitions-dev) ─────────────────────────────────────────── */
 
