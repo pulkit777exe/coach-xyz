@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { scanVideo, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
-import type { PipelineState, ScanResult, JobStatus } from '@/types'
+import { useRouter, usePathname } from 'next/navigation'
+import { scanVideoWithProgress, streamScanProgress, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
+import type { PipelineState, ScanResult, JobStatus, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
@@ -51,15 +52,19 @@ export interface Pipeline extends PipelineActions {
   jobId: string | null
   jobStatus: JobStatus | null
   errorStatus: CoachAIError | null
+  uploadProgress: UploadProgress | null
 }
 
 export function usePipeline(auth0Id: string | null = null): Pipeline {
+  const router = useRouter()
+  const pathname = usePathname()
   const [pipelineState, setPipelineState] = useState<PipelineState>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<number | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
   const [errorStatus, setErrorStatus] = useState<CoachAIError | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
   const pollInterval = useRef<NodeJS.Timeout | null>(null)
   const pollStart = useRef<number>(Date.now())
@@ -173,7 +178,7 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
   }, [stopPolling])
 
   // ── Handlers ───────────────────────────────────────────────────────────
-  const handleFileSelected = async (file: File) => {
+  const handleFileSelected = useCallback(async (file: File) => {
     if (!file.type.startsWith('video/')) {
       setErrorStatus({
         code: 'INVALID_TYPE',
@@ -197,31 +202,79 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
     }
 
     setPipelineState('uploading')
+    setUploadProgress({ phase: 'uploading', percent: 0 })
+
+    // AbortController for scan progress SSE stream
+    const scanAbort = new AbortController()
+
     try {
-      const result = await scanVideo(file, auth0Id)
+      const result = await scanVideoWithProgress(
+        file,
+        (progress) => setUploadProgress(progress),
+        auth0Id,
+      )
+
+      // Upload done — transition to scanning phase
+      setPipelineState('scanning')
+      setUploadProgress({ phase: 'scanning', percent: 0 })
+
+      // Stream real scan progress from engine via SSE
+      try {
+        for await (const event of streamScanProgress(result.session_token, scanAbort.signal)) {
+          if (event.total > 0) {
+            const percent = Math.round((event.current / event.total) * 100)
+            setUploadProgress({ phase: 'scanning', percent })
+          }
+          if (event.complete) {
+            if (event.error) {
+              throw {
+                code: 'SCAN_FAILED',
+                message: event.error,
+                layer: 'engine',
+                retryable: true,
+              } as CoachAIError
+            }
+            break
+          }
+        }
+      } catch (err: unknown) {
+        // If aborted (e.g., unmount), don't throw
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        throw err
+      }
+
       setScanResult(result)
 
       if (result.player_count === 1) {
         const playerIdx = result.players[0]?.player_index ?? 1
         setSelectedPlayerIndex(playerIdx)
         setPipelineState('analyzing')
+        setUploadProgress(null)
         const { job_id } = await startAnalysis({
           session_token: result.session_token,
           player_index: playerIdx,
+          video_key: result.video_key,
           auth0Id,
         })
         setJobId(job_id)
         startPolling(job_id)
+        if (pathname !== `/dashboard/analysis/${job_id}`) {
+          router.push(`/dashboard/analysis/${job_id}`)
+        }
       } else {
         setPipelineState('selecting')
+        setUploadProgress(null)
       }
     } catch (e: unknown) {
       setErrorStatus(toCoachAIError(e))
       setPipelineState('error')
+      setUploadProgress(null)
+    } finally {
+      scanAbort.abort()
     }
-  }
+  }, [auth0Id, startPolling, router, pathname])
 
-  const handlePlayerSelected = async (playerIndex: number) => {
+  const handlePlayerSelected = useCallback(async (playerIndex: number) => {
     if (!scanResult) return
     setSelectedPlayerIndex(playerIndex)
     setPipelineState('analyzing')
@@ -229,15 +282,19 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
       const { job_id } = await startAnalysis({
         session_token: scanResult.session_token,
         player_index: playerIndex,
+        video_key: scanResult.video_key,
         auth0Id,
       })
       setJobId(job_id)
       startPolling(job_id)
+      if (pathname !== `/dashboard/analysis/${job_id}`) {
+        router.push(`/dashboard/analysis/${job_id}`)
+      }
     } catch (e: unknown) {
       setErrorStatus(toCoachAIError(e))
       setPipelineState('error')
     }
-  }
+  }, [scanResult, startPolling, auth0Id, router, pathname])
 
   const handleRetry = useCallback(() => {
     stopPolling()
@@ -252,6 +309,7 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
         startAnalysis({
           session_token: scanResult.session_token,
           player_index: selectedPlayerIndex,
+          video_key: scanResult.video_key,
           auth0Id,
         })
           .then(({ job_id }) => {
@@ -275,8 +333,9 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
       setJobId(null)
       setJobStatus(null)
       setErrorStatus(null)
+      setUploadProgress(null)
     }
-  }, [scanResult, selectedPlayerIndex, errorStatus, stopPolling, startPolling])
+  }, [scanResult, selectedPlayerIndex, errorStatus, stopPolling, startPolling, auth0Id])
 
   const handleReset = useCallback(() => {
     stopPolling()
@@ -286,6 +345,7 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
     setJobId(null)
     setJobStatus(null)
     setErrorStatus(null)
+    setUploadProgress(null)
   }, [stopPolling])
 
   const handleStartChat = useCallback(() => {
@@ -303,6 +363,7 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
     jobId,
     jobStatus,
     errorStatus,
+    uploadProgress,
     handleFileSelected,
     handlePlayerSelected,
     handleRetry,
