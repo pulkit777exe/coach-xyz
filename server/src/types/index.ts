@@ -2,7 +2,7 @@
 // These types define the contract between engine → server → frontend.
 // Server is the source of truth. Frontend mirrors them.
 
-export const DEFAULT_MODEL = "gemini-3.5-flash"
+export const DEFAULT_MODEL = "gemini-2.5-flash"
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 
 export type Player = {
@@ -13,6 +13,7 @@ export type Player = {
 
 export type ScanResult = {
   session_token: string
+  video_key: string
   player_count: number
   players: Player[]
 }
@@ -82,4 +83,50 @@ export type CoachAIError = {
   layer: "engine" | "server" | "client"
   retryable: boolean
   retry_after?: number
+}
+
+// ── Chat Types ─────────────────────────────────────────────────────────────
+
+export type ChatMessage = {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+  created_at: number
+}
+
+// ── Dashboard Types ────────────────────────────────────────────────────────
+
+export type DashboardAnalysis = {
+  server_job_id: string
+  engine_job_id: string
+  session_token: string
+  player_index: number | null
+  model: string
+  stage: number | null
+  stage_name: string | null
+  progress: number
+  complete: boolean
+  video_ready: boolean
+  summary_json: unknown
+  status_json: unknown
+  error_code: string | null
+  error_message: string | null
+  download_count: number
+  display_name: string | null
+  file_name: string | null
+  file_size_bytes: number | null
+  player_count: number | null
+  requested_at: string
+  completed_at: string | null
+  auth0_id: string | null
+}
+
+export type DashboardStats = {
+  total_analyses: number
+  completed_analyses: number
+  in_progress_analyses: number
+  failed_analyses: number
+  total_downloads: number
 }

@@ -232,7 +232,7 @@ export async function startAnalysis(params: {
       method: 'POST',
       body: JSON.stringify({
         ...rest,
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
       }),
       signal: controller.signal,
       headers: auth0Id ? { 'x-auth0-id': auth0Id } : {},
@@ -362,24 +362,26 @@ export async function syncUser(user: {
 export type DashboardAnalysis = {
   server_job_id: string
   engine_job_id: string
-  session_token: string | null
+  session_token: string
   player_index: number | null
   model: string
   stage: number | null
   stage_name: string | null
-  progress: number | null
+  progress: number
   complete: boolean
   video_ready: boolean
-  summary_json: Record<string, unknown> | null
+  summary_json: unknown
+  status_json: unknown
   error_code: string | null
   error_message: string | null
-  requested_at: string
-  completed_at: string | null
   download_count: number
-  file_name: string | null
   display_name: string | null
+  file_name: string | null
   file_size_bytes: number | null
   player_count: number | null
+  requested_at: string
+  completed_at: string | null
+  auth0_id: string | null
 }
 
 export type DashboardStats = {
