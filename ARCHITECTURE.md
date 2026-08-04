@@ -92,19 +92,52 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 ```
 coach-xyz/
 ├── web-next/                  # Frontend (Next.js + React)
-│   ├── app/page.tsx           # Main SPA entry point
-│   ├── components/            # UI components (LandingPage, PlayerSelector, etc.)
-│   ├── lib/api.ts             # API client (scanVideo, startAnalysis, getJobStatus)
-│   ├── lib/betaCode.ts        # Beta code localStorage management
+│   ├── app/page.tsx           # Home — renders AppClient (SPA pipeline)
+│   ├── app/account/page.tsx   # Account / profile page (Auth0 session)
+│   ├── app/dashboard/         # Dashboard (requires Auth0 session)
+│   │   ├── layout.tsx         # Sidebar layout with DashboardNav
+│   │   ├── page.tsx           # Overview — stats + recent analyses
+│   │   ├── history/page.tsx   # Paginated analysis history
+│   │   └── analysis/[id]/     # Analysis detail
+│   │       ├── page.tsx       # Server component — fetches initialData
+│   │       └── chat/page.tsx  # Chat route (V2 — see V2_COACH.md)
+│   ├── components/            # UI components
+│   │   ├── AppClient.tsx      # Pipeline state machine (idle→uploading→…→chatting)
+│   │   ├── AnalysisDetailClient.tsx  # Detail page polling + expired state
+│   │   ├── AnalysisProgress.tsx      # In-progress view
+│   │   ├── ResultsSummary.tsx        # Completed analysis view
+│   │   ├── ErrorScreen.tsx           # Structured error display
+│   │   ├── LandingPage.tsx           # Upload entry point
+│   │   ├── PlayerSelector.tsx        # Player crop selection
+│   │   ├── AuthHeader.tsx            # Fixed top nav (Auth0 session-aware)
+│   │   ├── DashboardNav.tsx          # Active-link sidebar nav (client component)
+│   │   ├── ChatLayout.tsx            # V2 chat split-screen layout
+│   │   ├── ChatPanel.tsx             # V2 chat message list + input
+│   │   ├── ChatMessage.tsx           # V2 individual message bubble
+│   │   ├── ChatInput.tsx             # V2 chat text input
+│   │   ├── ChatTyping.tsx            # V2 typing indicator
+│   │   ├── HistoryChat.tsx           # Per-analysis chat (history detail page)
+│   │   ├── VideoPlayer.tsx           # Video player with timestamp controls
+│   │   ├── QuickActions.tsx          # Pre-built chat action buttons
+│   │   ├── ResultsSummary.tsx        # Completed analysis summary
+│   │   ├── UserAvatar.tsx            # Auth0 profile picture / initials
+│   │   └── ui/                       # shadcn/ui primitives
+│   ├── lib/
+│   │   ├── api.ts             # API client (all fetch calls)
+│   │   ├── auth0.ts           # Auth0Client singleton
+│   │   ├── usePipeline.ts     # Pipeline state hook
+│   │   └── sports.ts          # Sport config helpers
 │   └── types/index.ts         # Shared type definitions
 │
 ├── server/                    # Middleware server (Bun + Elysia)
-│   ├── src/index.ts           # Entry point, middleware, beta code validation
+│   ├── src/index.ts           # Entry point, CORS, security headers, error handler
 │   ├── src/routes/
 │   │   ├── scan.ts            # POST /api/scan-video — upload + player detection
 │   │   ├── analyze.ts         # POST /api/analyze-video — enqueue analysis job
 │   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
 │   │   ├── download.ts        # GET /api/download/:jobId — stream result video
+│   │   ├── chat.ts            # POST /api/chat — V2 chat proxy to engine
+│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
 │   │   ├── queue.ts           # BullMQ queue + worker + keep-alive + shutdown
@@ -112,7 +145,8 @@ coach-xyz/
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
 │   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
-│   │   ├── supabaseHistory.ts # PostgreSQL history persistence
+│   │   ├── supabaseHistory.ts # PostgreSQL history + user + chat persistence
+│   │   ├── conversation.ts    # Redis-backed conversation storage (V2)
 │   │   └── errors.ts          # Error types and builders
 │   └── src/types/index.ts     # Shared API types
 │
@@ -121,25 +155,37 @@ coach-xyz/
 │   ├── core/
 │   │   ├── analyzer.py        # Main analysis pipeline (run_analysis)
 │   │   ├── detector.py        # Player detection (HOG + MediaPipe pose)
+│   │   ├── player_detector.py # Alternate player detection path
 │   │   ├── renderer.py        # Video annotation (HUD, landmarks, summary)
-│   │   ├── gemini.py          # Gemini API client
-│   │   ├── prompt.py          # System prompt for Gemini
+│   │   ├── gemini.py          # Gemini API client (legacy entry point)
+│   │   ├── gemini_client.py   # Gemini call + normalize (active)
+│   │   ├── gemini_common.py   # Shared Gemini helpers
+│   │   ├── chat_prompt.py     # V2 chat prompt builder
+│   │   ├── prompt.py          # Analysis system prompt for Gemini
 │   │   ├── validator.py       # Gemini output schema validation
-│   │   ├── analysis_validator.py # Gemini output validation with retry
 │   │   ├── jobs.py            # Engine-side job state machine (Redis)
 │   │   ├── cache.py           # Video hash + Redis caching
 │   │   ├── dedup.py           # Request deduplication
 │   │   ├── storage.py         # Local file storage
+│   │   ├── video_io.py        # FFmpeg preprocessing + keyframe extraction
+│   │   ├── tracking.py        # Player track building + motion scoring
 │   │   ├── pose_backend.py    # MediaPipe pose detection abstraction
-│   │   ├── compress.py        # Video compression (FFmpeg)
-│   │   ├── quality.py         # Frame quality filtering
+│   │   ├── detection_utils.py # Shared detection helpers
+│   │   ├── stats.py           # Shot-event stat validation + correction
+│   │   ├── baseline.py        # Sport baseline metrics
+│   │   ├── injury_risk.py     # Injury-risk indicator computation
+│   │   ├── config.py          # Engine configuration constants
+│   │   ├── logging_config.py  # Structured logging setup
 │   │   ├── errors.py          # Error types hierarchy
 │   │   ├── pipeline.py        # Staged pipeline (DEAD CODE — not imported)
 │   │   ├── connection_pool.py # HTTP connection pooling (DEAD CODE — not imported)
-│   │   ├── player_tracker.py  # Player tracking
-│   │   ├── chunker.py         # Video chunking
-│   │   ├── overlay.py         # Video overlay
-│   │   └── utils.py           # Utilities
+│   │   ├── analysis_validator.py # Schema validation with retry (DEAD CODE — not called)
+│   │   ├── compress.py        # Video compression (DEAD CODE — not called from pipeline)
+│   │   ├── quality.py         # Frame quality filtering (DEAD CODE — not called from pipeline)
+│   │   ├── overlay.py         # Video overlay (DEAD CODE — not imported)
+│   │   ├── utils.py           # Utilities (only imported by overlay.py — dead)
+│   │   ├── player_tracker.py  # Player tracking (CLI only)
+│   │   └── chunker.py         # Video chunking (CLI only)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -160,6 +206,15 @@ coach-xyz/
 - Shape: `JobStatus` dataclass (job_id, state, stage, stage_name, progress, complete, error, error_code, retryable, summary, video_key, video_path, created_at)
 - States: uploading → scanning → player_selection → analyzing → rendering → completed (or → failed)
 
+**Error Responses** (`server/src/lib/errors.ts`)
+- All error responses conform to the `CoachAIError` shape:
+  - `code: string` — machine-readable error code (e.g. `ANALYSIS_FAILED`, `JOB_NOT_FOUND`)
+  - `message: string` — human-readable error message
+  - `layer: "engine" | "server" | "client"` — where the error originated
+  - `retryable: boolean` — whether the client should retry the request
+  - `retry_after?: number` — seconds to wait before retrying (optional)
+- The `isCoachAIError` type guard validates all five fields
+
 **Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
 - Key: `coachai:srv:{server_job_id}`
 - TTL: 7200 seconds (2 hours)
@@ -178,15 +233,26 @@ coach-xyz/
 - Key: `coachai:analysis:{video_hash}:metadata`
 - Shape: `{ video_path, cached_at, access_count }`
 
-### Supabase Tables (CONFIRMED — `server/src/lib/supabaseHistory.ts:84-132`)
+### Supabase Tables (CONFIRMED — `server/src/lib/supabaseHistory.ts`)
 
 **video_conversations**
 - Primary key: `session_token`
-- Fields: file_name, file_mime_type, file_size_bytes, player_count, players_json, scan_response_json, beta_code, client_ip, user_agent, source
+- Fields: file_name, file_mime_type, file_size_bytes, player_count, players_json, scan_response_json, client_ip, user_agent, source, auth0_id
 
 **analysis_history**
 - Primary key: `server_job_id`
-- Fields: engine_job_id, session_token, player_index, model, stage, stage_name, progress, complete, video_ready, summary_json, status_json, error_code, error_message, download_count
+- Fields: engine_job_id, session_token, player_index, model, stage, stage_name, progress, complete, video_ready, summary_json, status_json, error_code, error_message, download_count, display_name, auth0_id, requested_at, completed_at
+
+**users**
+- Primary key: `id` (UUID)
+- Unique: `auth0_id`
+- Fields: auth0_id, email, name, nickname, picture, email_verified, created_at, updated_at
+- Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`
+
+**chat_messages**
+- Primary key: `id` (UUID)
+- Fields: server_job_id, auth0_id, role (user/assistant/system), content, timestamp_refs (jsonb), event_refs (jsonb), created_at
+- Purpose: Persistent per-analysis chat history (V2 feature)
 
 ### In-Memory State
 
@@ -298,15 +364,32 @@ coach-xyz/
 
 ## 6. Authentication & Authorization
 
-### Beta Code System (CONFIRMED)
+### Auth0 (CONFIRMED — replaces earlier "beta code gate" description)
 
-The system uses a simple beta code gate, not JWT or session-based auth:
+The system uses Auth0 for user authentication. The beta-code gate described in earlier versions of this document **no longer exists** in the server code.
 
-- **Validation:** `server/src/index.ts:26-37` — codes from `BETA_CODES` env var (comma-separated)
-- **Middleware:** `server/src/index.ts:82-92` — `onBeforeHandle` checks `x-beta-code` header
-- **Public endpoints:** `/health`, `/api/verify-code`, `/swagger` (exempt from check)
-- **Frontend:** `web-next/lib/betaCode.ts` — stores code in localStorage, sends as header
-- **Storage:** `server/src/lib/supabaseHistory.ts:93,119` — beta code logged to database
+- **Provider:** `@auth0/nextjs-auth0` v4.26.0 (`web-next/package.json`)
+- **Client:** `web-next/lib/auth0.ts` — `Auth0Client` singleton with 30s HTTP timeout
+- **Session check:** `auth0.getSession()` called in every protected server component
+- **Protected routes:** `/dashboard/*`, `/account` — redirect to `/auth/login` when session absent
+- **User identity:** `session.user.sub` (Auth0 subject claim, e.g. `google-oauth2|123` or `github|456`)
+- **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table
+- **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
+- **Logout:** `/auth/logout` (Auth0 SDK route)
+- **`auth0_id` propagation:** Frontend sends `x-auth0-id` header on scan and analyze requests; server stores it in `video_conversations.auth0_id` and `analysis_history.auth0_id`
+
+### Auth Routes (CONFIRMED — `server/src/routes/auth.ts`)
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/auth/sync` | Upsert Auth0 user into `users` table |
+| `GET /api/auth/user/:auth0Id` | Fetch user record |
+| `GET /api/auth/user/:auth0Id/analyses` | Paginated analysis history for user |
+| `GET /api/auth/user/:auth0Id/analyses/:jobId` | Single analysis detail |
+| `PATCH /api/auth/user/:auth0Id/analyses/:jobId` | Rename analysis (display_name) |
+| `GET /api/auth/user/:auth0Id/stats` | Aggregate stats (total, completed, failed, downloads) |
+| `GET /api/auth/user/:auth0Id/analyses/:jobId/chat` | Load chat history for analysis |
+| `POST /api/auth/user/:auth0Id/analyses/:jobId/chat` | Send chat message, get AI reply |
 
 ### Session Tokens (CONFIRMED)
 
@@ -326,9 +409,9 @@ The system uses a simple beta code gate, not JWT or session-based auth:
 
 ### Google Gemini API (CONFIRMED)
 
-- **Client:** `engine/core/gemini.py:11-17` — `google-genai` SDK
+- **Client:** `engine/core/gemini_client.py` — `google-genai` SDK
 - **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
-- **Model:** `gemini-2.5-flash` (`web-next/lib/api.ts:114`, `server/src/routes/analyze.ts:47`)
+- **Model:** `gemini-2.5-flash` — used by the engine; stored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/api.ts`
 - **Usage:** Video analysis with structured JSON output
 - **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`)
 
@@ -341,9 +424,9 @@ The system uses a simple beta code gate, not JWT or session-based auth:
 
 ### Supabase PostgreSQL (CONFIRMED)
 
-- **Client:** `server/src/lib/supabaseHistory.ts:1,43-48` — Bun's `SQL` client
+- **Client:** `server/src/lib/supabaseHistory.ts` — Bun's `SQL` client
 - **Env var:** `DATABASE_URL`
-- **Tables:** `video_conversations`, `analysis_history` (auto-created on startup)
+- **Tables:** `video_conversations`, `analysis_history`, `users`, `chat_messages` (all auto-created on startup)
 - **Status:** Optional — graceful degradation if not configured (`supabaseHistory.ts:55-61`)
 
 ### FFmpeg (CONFIRMED)
