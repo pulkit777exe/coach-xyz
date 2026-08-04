@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { auth0 } from "@/lib/auth0";
 import { getDashboardStats, getDashboardAnalyses } from "@/lib/api";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Dashboard | CoachXYZ",
+  description: "Overview of your analyses and activity.",
+};
 
 export default async function DashboardPage() {
   const session = await auth0.getSession();
@@ -12,6 +18,7 @@ export default async function DashboardPage() {
 
   let stats = null;
   let analyses = null;
+  let error = null;
 
   try {
     const [statsRes, analysesRes] = await Promise.all([
@@ -20,8 +27,9 @@ export default async function DashboardPage() {
     ]);
     stats = statsRes.stats;
     analyses = analysesRes.analyses;
-  } catch (error) {
-    console.error("Failed to load dashboard data:", error);
+  } catch (err) {
+    console.error("Failed to load dashboard data:", err);
+    error = err instanceof Error ? err.message : "Failed to load dashboard data";
   }
 
   return (
@@ -32,6 +40,13 @@ export default async function DashboardPage() {
       <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
         Welcome back{session.user.name ? `, ${session.user.name.split(" ")[0]}` : ""}
       </h1>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="border border-(--red) p-4 mb-8">
+          <p className="text-sm text-(--red)">Failed to load dashboard data. Please try again later.</p>
+        </div>
+      )}
 
       {/* Stats Grid */}
       {stats && (

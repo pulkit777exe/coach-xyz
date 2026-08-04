@@ -174,6 +174,7 @@ const ensureInitialized = async () => {
           nickname text,
           picture text,
           email_verified boolean default false,
+          linked_auth0_ids text[] default '{}',
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -194,6 +195,9 @@ const ensureInitialized = async () => {
       await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
 
       await sql`alter table analysis_history add column if not exists display_name text;`
+
+      // Account linking: add linked_auth0_ids column to users (idempotent)
+      await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`
 
       await sql`
         create table if not exists chat_messages (
@@ -443,6 +447,7 @@ export type UserRecord = {
   nickname: string | null
   picture: string | null
   email_verified: boolean
+  linked_auth0_ids: string[]
   created_at: string
   updated_at: string
 }
@@ -457,16 +462,59 @@ export const upsertUser = async (user: {
 }): Promise<UserRecord | null> => {
   return withHistoryStore(async (db) => {
     await ensureInitialized()
+
+    // Check if a user with this auth0_id already exists
+    const existingById = await db<UserRecord[]>`
+      select * from users where auth0_id = ${user.sub} limit 1;
+    `
+    if (existingById?.[0]) {
+      // Existing user — update profile fields
+      const rows = await db<UserRecord[]>`
+        update users set
+          email = ${user.email || existingById[0].email},
+          name = ${user.name || existingById[0].name},
+          nickname = ${user.nickname || existingById[0].nickname},
+          picture = ${user.picture || existingById[0].picture},
+          email_verified = ${user.email_verified ?? existingById[0].email_verified},
+          updated_at = now()
+        where auth0_id = ${user.sub}
+        returning *;
+      `
+      return rows?.[0] ?? null
+    }
+
+    // No existing user with this auth0_id — check if email matches an existing account
+    if (user.email) {
+      const existingByEmail = await db<UserRecord[]>`
+        select * from users where email = ${user.email} limit 1;
+      `
+      if (existingByEmail?.[0]) {
+        // Found existing account by email — keep original auth0_id as primary,
+        // add the new provider's sub to linked list so future logins resolve correctly.
+        const mergedLinked = [
+          ...(existingByEmail[0].linked_auth0_ids || []),
+          user.sub,
+        ]
+        const uniqueLinked = [...new Set(mergedLinked)]
+        const rows = await db<UserRecord[]>`
+          update users set
+            linked_auth0_ids = ${uniqueLinked},
+            name = ${user.name || existingByEmail[0].name},
+            nickname = ${user.nickname || existingByEmail[0].nickname},
+            picture = ${user.picture || existingByEmail[0].picture},
+            email_verified = ${user.email_verified ?? existingByEmail[0].email_verified},
+            updated_at = now()
+          where id = ${existingByEmail[0].id}
+          returning *;
+        `
+        return rows?.[0] ?? null
+      }
+    }
+
+    // New user — create record
     const rows = await db<UserRecord[]>`
       insert into users (auth0_id, email, name, nickname, picture, email_verified)
       values (${user.sub}, ${user.email || null}, ${user.name || null}, ${user.nickname || null}, ${user.picture || null}, ${user.email_verified || false})
-      on conflict (auth0_id) do update set
-        email = excluded.email,
-        name = excluded.name,
-        nickname = excluded.nickname,
-        picture = excluded.picture,
-        email_verified = excluded.email_verified,
-        updated_at = now()
       returning *;
     `
     return rows?.[0] ?? null
@@ -481,6 +529,25 @@ export const getUserByAuth0Id = async (auth0Id: string): Promise<UserRecord | nu
     `
     return rows?.[0] ?? null
   })
+}
+
+/**
+ * Resolves an auth0_id to the primary user record. Handles linked accounts:
+ * if the given auth0_id is in another user's `linked_auth0_ids`, returns that
+ * user's primary record so all historical data is accessible.
+ */
+export const resolveAuth0Id = async (auth0Id: string): Promise<string> => {
+  const result = await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ auth0_id: string }[]>`
+      select auth0_id from users
+      where auth0_id = ${auth0Id}
+         or ${auth0Id} = any(linked_auth0_ids)
+      limit 1;
+    `
+    return rows?.[0]?.auth0_id ?? auth0Id
+  })
+  return result ?? auth0Id
 }
 
 // ── Dashboard Queries ───────────────────────────────────────────────────────

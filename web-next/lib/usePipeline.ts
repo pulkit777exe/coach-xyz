@@ -55,7 +55,7 @@ export interface Pipeline extends PipelineActions {
   uploadProgress: UploadProgress | null
 }
 
-export function usePipeline(auth0Id: string | null = null): Pipeline {
+export function usePipeline(auth0Id: string | null = null, initialJobId: string | null = null): Pipeline {
   const router = useRouter()
   const pathname = usePathname()
   const [pipelineState, setPipelineState] = useState<PipelineState>('idle')
@@ -126,24 +126,40 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
 
           // Reset failure count on success
           pollConsecutiveFailures.current = 0
-          setJobStatus(status)
 
           if (status.complete) {
             stopPolling()
             if (status.error) {
+              // Store the error status first, then flip pipeline state.
+              // Never store a complete/100% jobStatus while still on the
+              // progress screen — that's what causes the 100% flash.
               setErrorStatus({
                 code: status.error_code ?? 'ANALYSIS_FAILED',
                 message: status.error,
                 layer: 'engine',
                 retryable: status.retryable ?? true,
               })
+              setJobStatus(status)
               setPipelineState('error')
             } else {
+              // Flip pipeline state BEFORE writing jobStatus so that
+              // AnalysisProgress never receives a status with progress=100.
+              // React batches these two setState calls in the same render.
               setPipelineState('completed')
+              setJobStatus(status)
             }
-          } else if (status.state) {
-            const mapped = ENGINE_STATE_MAP[status.state]
-            if (mapped) setPipelineState(mapped)
+          } else {
+            // Job still in progress — safe to update status and stage display.
+            // Cap the displayed progress at 99 while the job is not yet
+            // complete, so the bar never reaches 100% on the loading screen.
+            const displayStatus = status.progress >= 100
+              ? { ...status, progress: 99 }
+              : status
+            setJobStatus(displayStatus)
+            if (status.state) {
+              const mapped = ENGINE_STATE_MAP[status.state]
+              if (mapped) setPipelineState(mapped)
+            }
           }
         } catch (err: unknown) {
           if (!pollActiveRef.current) return
@@ -176,6 +192,55 @@ export function usePipeline(auth0Id: string | null = null): Pipeline {
   useEffect(() => {
     return () => stopPolling()
   }, [stopPolling])
+
+  // ── Resume from initialJobId ────────────────────────────────────────────
+  useEffect(() => {
+    if (!initialJobId) return
+    let cancelled = false
+
+    const resume = async () => {
+      try {
+        const status = await getJobStatus(initialJobId)
+        if (cancelled) return
+        setJobId(initialJobId)
+        if (status.complete) {
+          if (status.error) {
+            setErrorStatus({
+              code: status.error_code ?? 'ANALYSIS_FAILED',
+              message: status.error,
+              layer: 'engine',
+              retryable: status.retryable ?? true,
+            })
+            setJobStatus(status)
+            setPipelineState('error')
+          } else {
+            setPipelineState('completed')
+            setJobStatus(status)
+          }
+        } else {
+          // Job still in progress — resume polling
+          setJobStatus(status)
+          if (status.state) {
+            const mapped = ENGINE_STATE_MAP[status.state]
+            if (mapped) setPipelineState(mapped)
+          }
+          startPolling(initialJobId)
+        }
+      } catch {
+        if (cancelled) return
+        setErrorStatus({
+          code: 'JOB_NOT_FOUND',
+          message: 'Could not resume analysis. It may have expired.',
+          layer: 'client',
+          retryable: false,
+        })
+        setPipelineState('error')
+      }
+    }
+
+    resume()
+    return () => { cancelled = true }
+  }, [initialJobId, startPolling])
 
   // ── Handlers ───────────────────────────────────────────────────────────
   const handleFileSelected = useCallback(async (file: File) => {

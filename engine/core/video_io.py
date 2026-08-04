@@ -88,13 +88,16 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
 
         duration = frame_count / fps if frame_count > 0 else 90.0
 
-        timestamps = np.arange(0.0, duration + 0.01, 2.0)
-        if len(timestamps) > 20:
-            timestamps = timestamps[:20]
+        # Sample every 3 seconds, cap at 30 frames.
+        # 3s intervals give good event coverage without overwhelming Gemini's
+        # context window; 30 frames × ~50 KB ≈ 1.5 MB total payload.
+        timestamps = np.arange(0.0, duration + 0.01, 3.0)
+        if len(timestamps) > 30:
+            timestamps = timestamps[:30]
 
         keyframes: list[dict[str, Any]] = []
         frame_cache: dict[int, np.ndarray] = {}
-        max_cached_frames = 20
+        max_cached_frames = 30
         for ts in timestamps:
             frame_index = int(round(ts * fps))
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
@@ -129,9 +132,24 @@ def read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None:
     return frame if ok else None
 
 
-def frame_to_jpeg_bytes(frame: np.ndarray) -> bytes:
-    """Encode a numpy frame to JPEG bytes for API transmission."""
-    ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+_MAX_FRAME_DIM = 768  # px — Gemini doesn't benefit from higher resolution for pose analysis
+
+
+def frame_to_jpeg_bytes(frame: np.ndarray, max_dim: int = _MAX_FRAME_DIM) -> bytes:
+    """Encode a numpy frame to JPEG bytes for API transmission.
+
+    Downscales the frame so its longest side is at most *max_dim* pixels before
+    encoding.  This keeps Gemini payloads small (~30–60 KB per frame instead of
+    200–400 KB) without losing the pose/form detail the model needs.
+    """
+    h, w = frame.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
     if not ok:
         return b""
     return bytes(buffer.tobytes())

@@ -75,15 +75,18 @@ def upload_video(file_bytes: bytes, key: str) -> str:
 
 
 def download_video_to_tmp(key: str) -> str:
-    """Download video to temp file using streaming."""
-    fd, local_path = tempfile.mkstemp(suffix=".mp4")
-    os.close(fd)
+    """Return the local path for a stored video.
 
+    On the local backend both source and destination are on the same
+    filesystem, so copying is wasteful.  We return the storage path
+    directly and let callers treat it as read-only.  The caller is
+    responsible for NOT deleting this path (use ``delete_file(key)``
+    instead of unlinking the returned path directly).
+    """
     source = _key_to_local_path(key)
     if not source.exists():
         raise FileNotFoundError(f"Storage object not found: {key}")
-    shutil.copy2(source, local_path)
-    return local_path
+    return str(source)
 
 
 def upload_result_video(local_path: str, job_id: str) -> str:

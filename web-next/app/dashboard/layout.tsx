@@ -2,13 +2,20 @@ import { auth0 } from "@/lib/auth0";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UserAvatar from "@/components/UserAvatar";
+import DashboardNav from "@/components/DashboardNav";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth0.getSession();
+  let session;
+  try {
+    session = await auth0.getSession();
+  } catch (error) {
+    console.error("Failed to get auth session:", error);
+    redirect("/auth/login");
+  }
 
   if (!session) {
     redirect("/auth/login");
@@ -22,32 +29,7 @@ export default async function DashboardLayout({
           coach.xyz
         </Link>
 
-        <nav className="flex flex-col gap-1 flex-1">
-          <Link
-            href="/dashboard"
-            className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
-          >
-            Overview
-          </Link>
-          <Link
-            href="/dashboard/history"
-            className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
-          >
-            History
-          </Link>
-          <Link
-            href="/"
-            className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
-          >
-            New Analysis
-          </Link>
-          <Link
-            href="/account"
-            className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
-          >
-            Account
-          </Link>
-        </nav>
+        <DashboardNav />
 
         <div className="border-t border-(--cream-05) pt-4 mt-auto">
           <div className="flex items-center gap-3">

@@ -222,14 +222,44 @@ def build_active_player_tracks(
     For each keyframe, detect and select the active player.
     Returns list of track dicts with landmarks, bbox, and visibility.
     """
+    # Resolve the target player's horizontal centroid so we can pick the
+    # closest candidate in each frame.  We derive it from the first keyframe
+    # that has a detectable player rather than re-running detect_players()
+    # (which would open the video a second time and repeat HOG scanning).
     selected_centroid_x: Optional[float] = None
     if player_index is not None:
-        detected_players = detect_players(video_path)
-        target = next((p for p in detected_players if p["player_index"] == player_index), None)
-        if target is None:
-            raise NoPlayersDetectedError("Selected player index not found in this video")
-        bbox = target["bbox"]
-        selected_centroid_x = (bbox["x_min"] + bbox["x_max"]) / 2.0
+        # Try to infer centroid from the first available keyframe
+        _first_frame: Optional[np.ndarray] = None
+        for _kf in keyframes[:3]:  # check up to the first 3 frames
+            _fi = _kf["frame_index"]
+            if frame_cache and _fi in frame_cache:
+                _first_frame = frame_cache[_fi]
+            else:
+                _first_frame = read_frame_by_index(video_path, _fi)
+            if _first_frame is not None:
+                break
+
+        if _first_frame is not None:
+            _detections = detect_hog_people(_first_frame)
+            if _detections:
+                # Sort by area descending; player_index is 1-based
+                _sorted = sorted(
+                    _detections,
+                    key=lambda d: (d[0][2] - d[0][0]) * (d[0][3] - d[0][1]),
+                    reverse=True,
+                )
+                _idx = min(player_index - 1, len(_sorted) - 1)
+                _bbox = _sorted[_idx][0]
+                selected_centroid_x = (_bbox[0] + _bbox[2]) / 2.0
+
+        # Fall back to full detect_players() only if HOG gave nothing
+        if selected_centroid_x is None:
+            detected_players = detect_players(video_path)
+            target = next((p for p in detected_players if p["player_index"] == player_index), None)
+            if target is None:
+                raise NoPlayersDetectedError("Selected player index not found in this video")
+            bbox = target["bbox"]
+            selected_centroid_x = (bbox["x_min"] + bbox["x_max"]) / 2.0
 
     active_tracks: list[dict[str, Any]] = []
 

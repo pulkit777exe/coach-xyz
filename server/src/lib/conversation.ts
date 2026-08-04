@@ -83,7 +83,3 @@ export async function saveMessage(
 
   return msg
 }
-
-export async function clearConversation(serverJobId: string): Promise<void> {
-  await redis.del(`${KEY}${serverJobId}`)
-}

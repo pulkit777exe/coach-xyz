@@ -17,12 +17,13 @@ export default function HistoryChat({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [historyError, setHistoryError] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getHistoryChatMessages(auth0Id, jobId)
       .then(res => setMessages(res.messages || []))
-      .catch(() => {})
+      .catch(() => setHistoryError(true))
       .finally(() => setInitialLoading(false))
   }, [auth0Id, jobId])
 
@@ -88,6 +89,11 @@ export default function HistoryChat({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {initialLoading ? (
           <div className="text-center text-(--cream-40) text-sm py-8">Loading conversation...</div>
+        ) : historyError ? (
+          <div className="text-center py-8">
+            <p className="text-(--red) text-sm mb-2">Failed to load conversation history</p>
+            <p className="text-(--cream-40) text-xs">You can still send new messages.</p>
+          </div>
         ) : messages.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-(--fg) font-serif text-lg mb-2">Ask about your analysis</p>

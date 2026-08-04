@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 import {
   upsertUser,
   getUserByAuth0Id,
+  resolveAuth0Id,
   getUserAnalyses,
   getUserAnalysisById,
   getUserStats,
@@ -79,8 +80,11 @@ export default new Elysia()
       return buildError("INTERNAL_ERROR", "Failed to sync user", true)
     }
 
+    // Resolve to primary auth0_id in case this is a linked account
+    const primaryAuth0Id = await resolveAuth0Id(sub)
+
     set.status = 200
-    return { user }
+    return { user: { ...user, auth0_id: primaryAuth0Id } }
   })
   .get("/api/auth/user/:auth0Id", async ({ params, set }) => {
     const { auth0Id } = params
@@ -173,7 +177,11 @@ export default new Elysia()
 
     const messages = await getChatMessages(jobId, auth0Id)
     const converted = messages.map(m => ({
-      ...m,
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp_refs: m.timestamp_refs ?? undefined,
+      event_refs: m.event_refs ?? undefined,
       created_at: typeof m.created_at === "string" ? new Date(m.created_at).getTime() / 1000 : m.created_at,
     }))
     set.status = 200

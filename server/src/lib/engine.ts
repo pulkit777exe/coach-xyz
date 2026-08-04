@@ -91,7 +91,7 @@ export const getEngineJobStatus = async (engineJobId: string): Promise<EngineSta
   try {
     const res = await withTimeout(`${ENGINE_URL}/status/${engineJobId}`, {
       method: "GET",
-    }, 5_000)
+    }, 15_000) // 15s — free-tier Render instances can take 10–30s to respond after spin-up
 
     if (!res.ok) {
       if (res.status === 404) return { status: "not_found" }
@@ -118,7 +118,7 @@ export const markEngineJobFailed = async (
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, code, retryable }),
-    }, 5_000)
+    }, 10_000)
 
     if (!res.ok && res.status !== 404) {
       await throwNonOk(res)

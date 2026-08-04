@@ -40,12 +40,7 @@ function PlayerImage({ player }: { player: Player }) {
         alt={`Subject ${player.player_index}`}
         className={`w-full h-full object-cover transition-all duration-700 ease-in-out ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setImgLoaded(true)}
-        onError={(e) => {
-          console.error(`[PlayerImage] Failed to load crop for player ${player.player_index}:`, {
-            base64Length: player.crop_base64?.length,
-            base64Prefix: player.crop_base64?.substring(0, 40),
-            error: e,
-          })
+        onError={() => {
           setImgError(true)
         }}
       />

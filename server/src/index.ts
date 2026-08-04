@@ -88,7 +88,7 @@ const app = new Elysia({
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
       `connect-src 'self' https://*.sentry.io https://*.upstash.io${isDev ? " http://localhost:*" : ""}`,
       "worker-src 'self' blob:",
     ].join("; ")

@@ -73,22 +73,6 @@ export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
 }
 
 /**
- * Build a client-side error (validation, network, etc.)
- */
-export function buildClientError(
-  code: string,
-  message?: string,
-  retryable = false,
-): CoachAIError {
-  return {
-    code,
-    message: message ?? FALLBACK_MESSAGES[code] ?? "Something went wrong.",
-    layer: "client",
-    retryable,
-  }
-}
-
-/**
  * Type guard: check if an unknown value is a CoachAIError.
  */
 export function isCoachAIError(value: unknown): value is CoachAIError {

@@ -596,14 +596,19 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
             frame_cache.clear()
         # Clear dedup entry so other threads can proceed
         deduplicator.mark_done(dedup_key)
-        if cleanup_preprocessed:
+        # Clean up the ffmpeg-preprocessed copy (only if it differs from the
+        # storage path — storage.download_video_to_tmp now returns the storage
+        # path directly, so we must NOT unlink local_path itself).
+        if cleanup_preprocessed and preprocessed_path and preprocessed_path != local_path:
             try:
                 Path(preprocessed_path).unlink(missing_ok=True)
             except Exception:
                 pass
-        if local_path and os.path.exists(local_path):
+        # Delete the source upload via the storage API (not os.unlink) so the
+        # storage layer stays consistent.
+        if video_key:
             try:
-                os.unlink(local_path)
+                storage.delete_file(video_key)
             except Exception:
                 pass
         if output_path and os.path.exists(output_path):

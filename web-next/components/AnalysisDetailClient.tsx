@@ -12,6 +12,7 @@ import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
 
 const POLL_INTERVAL = 2000
+const MAX_POLL_RETRIES = 3
 
 interface AnalysisDetailClientProps {
   auth0Id: string
@@ -27,8 +28,12 @@ export default function AnalysisDetailClient({
   const [status, setStatus] = useState<JobStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [expiredMessage, setExpiredMessage] = useState<string | null>(null)
+  const [pollError, setPollError] = useState<string | null>(null)
+  const [stuckWarning, setStuckWarning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const hasPolledSuccessfully = useRef(false)
+  const pollRetryCount = useRef(0)
+  const pollStartTime = useRef<number>(Date.now())
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -47,19 +52,39 @@ export default function AnalysisDetailClient({
         setStatus(s)
         setLoading(false)
         hasPolledSuccessfully.current = true
+        pollRetryCount.current = 0
+        setPollError(null)
         if (s.complete) {
           if (s.error_code === 'JOB_NOT_FOUND') {
             setExpiredMessage(s.error ?? 'Analysis not found or expired.')
           }
           stopPolling()
+        } else if (!stuckWarning && Date.now() - pollStartTime.current > 5 * 60 * 1000) {
+          setStuckWarning(true)
         }
-      } catch {
+      } catch (err) {
         if (cancelled) return
         setLoading(false)
+        
+        // Distinguish between transient errors and permanent failures
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        const isTransient = errorMessage.includes('network') || 
+                           errorMessage.includes('timeout') ||
+                           errorMessage.includes('fetch')
+        
         if (!hasPolledSuccessfully.current) {
+          // Never polled successfully - treat as expired
           setExpiredMessage('Analysis not found or expired.')
+          stopPolling()
+        } else if (isTransient && pollRetryCount.current < MAX_POLL_RETRIES) {
+          // Transient error - retry without stopping
+          pollRetryCount.current++
+          setPollError(`Connection issue. Retrying... (${pollRetryCount.current}/${MAX_POLL_RETRIES})`)
+        } else {
+          // Permanent failure or max retries exceeded
+          setPollError('Unable to update status. Please refresh the page.')
+          stopPolling()
         }
-        stopPolling()
       }
     }
 
@@ -103,9 +128,57 @@ export default function AnalysisDetailClient({
     )
   }
 
+  // ── Poll Error Banner ────────────────────────────────────────────────────
+  if (pollError && status && !status.complete) {
+    return (
+      <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full text-center">
+          <div className="w-12 h-12 border-4 border-(--cream-10) border-t-(--fg) rounded-full animate-spin mb-4" />
+          <p className="text-(--cream-40) text-sm mb-2">Loading analysis...</p>
+          <p className="text-(--red) text-xs">{pollError}</p>
+        </div>
+      </div>
+    )
+  }
+
   // ── In Progress: analyzing / rendering / scanning / player_selection ──────
   if (status && !status.complete) {
-    return <AnalysisProgress status={status} />
+    if (!stuckWarning) {
+      return <AnalysisProgress status={status} />
+    }
+    // Show stuck warning below the progress view
+    return (
+      <>
+        <AnalysisProgress status={status} />
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-(--bg) border border-(--cream-10) px-6 py-4 text-center shadow-lg">
+          <p className="text-(--cream-40) text-sm mb-3">
+            This analysis is taking longer than usual.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                const s = await getJobStatus(jobId)
+                setStatus(s)
+                if (s.complete) {
+                  stopPolling()
+                  if (s.error_code === 'JOB_NOT_FOUND') {
+                    setExpiredMessage(s.error ?? 'Analysis not found or expired.')
+                  }
+                } else {
+                  setStuckWarning(false)
+                  pollStartTime.current = Date.now()
+                }
+              } catch {
+                setPollError('Unable to refresh status. Please try again.')
+              }
+            }}
+            className="px-4 py-2 border border-(--cream-10) text-(--cream-40) text-[0.65rem] uppercase tracking-[0.15em] hover:text-(--fg) hover:border-(--cream-20) transition-colors"
+          >
+            Refresh Status
+          </button>
+        </div>
+      </>
+    )
   }
 
   if (!initialData && status?.complete && status.error) {
@@ -394,14 +467,18 @@ export default function AnalysisDetailClient({
         </dl>
       </div>
 
-      <div className="mt-8">
-        <p className="mb-4 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
-          Chat with AI
-        </p>
-        <div className="border border-(--cream-10)" style={{ height: 'min(500px, 60vh)' }}>
-          <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
+      {/* Only show chat when the analysis actually completed with a summary.
+          Failed analyses have no context for the AI to answer questions about. */}
+      {summary && (
+        <div className="mt-8">
+          <p className="mb-4 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+            Chat with AI
+          </p>
+          <div className="border border-(--cream-10)" style={{ height: 'min(500px, 60vh)' }}>
+            <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

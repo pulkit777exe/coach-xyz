@@ -283,7 +283,7 @@ if (redisAvailable && analysisQueue) {
             engineJobId: bullJob.data.engine_job_id,
             sessionToken: bullJob.data.session_token,
             playerIndex: bullJob.data.player_index,
-            model: serverJob?.model ?? "gemini-3.5-flash",
+            model: serverJob?.model ?? "gemini-2.5-flash",
             status: {
               stage: -1,
               stage_name: "Failed",

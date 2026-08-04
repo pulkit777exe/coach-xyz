@@ -18,7 +18,12 @@ const STAGES = [
 export default function AnalysisProgress({ status }: AnalysisProgressProps) {
   const progress = status?.progress ?? 0
   const stageName = status?.stage_name ?? "Queued"
-  const boundedProgress = Math.max(0, Math.min(100, progress))
+  // Cap at 99 while the job is not yet complete — the engine stamps
+  // progress=100 on the "completed" state, but this component is only
+  // rendered while the pipeline is still in-progress.  Showing 100% here
+  // would mislead the user into thinking it's done when it isn't.
+  const maxProgress = status?.complete ? 100 : 99
+  const boundedProgress = Math.max(0, Math.min(maxProgress, progress))
   const lastProgressRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(Date.now())
 
@@ -36,24 +41,33 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     return Math.min((status?.stage ?? 0), STAGES.length - 1)
   }, [stageName, status?.stage])
 
-  const estimatedSeconds = useMemo(() => {
-    if (boundedProgress <= 0 || boundedProgress >= 100) return 0
-    const now = Date.now()
-    const timeElapsed = (now - lastTimeRef.current) / 1000
-    const progressDelta = boundedProgress - lastProgressRef.current
-
-    if (progressDelta <= 0) return 0
-
-    const timePerPercent = timeElapsed / progressDelta
-    const remainingPercent = 100 - boundedProgress
-    return Math.round(timePerPercent * remainingPercent)
-  }, [boundedProgress])
+  // ETA: track the timestamp of the *first* non-zero progress tick so we can
+  // compute a stable rate over the full elapsed window rather than just the
+  // last render cycle (which produces wildly fluctuating estimates).
+  const startProgressRef = useRef<{ progress: number; time: number } | null>(null)
 
   useEffect(() => {
-    if (boundedProgress > lastProgressRef.current) {
+    if (boundedProgress > 0 && boundedProgress < 100) {
+      if (!startProgressRef.current) {
+        startProgressRef.current = { progress: boundedProgress, time: Date.now() }
+      }
       lastProgressRef.current = boundedProgress
       lastTimeRef.current = Date.now()
     }
+  }, [boundedProgress])
+
+  const estimatedSeconds = useMemo(() => {
+    if (boundedProgress <= 0 || boundedProgress >= 100) return 0
+    const start = startProgressRef.current
+    if (!start) return 0
+    const elapsedMs = Date.now() - start.time
+    const progressMade = boundedProgress - start.progress
+    if (progressMade <= 0) return 0
+    const msPerPercent = elapsedMs / progressMade
+    const remaining = 100 - boundedProgress
+    const etaSec = Math.round((msPerPercent * remaining) / 1000)
+    // Cap at 15 min to avoid absurd estimates early in the pipeline
+    return Math.min(etaSec, 900)
   }, [boundedProgress])
 
   const isWaitingForQuota = stageName.toLowerCase().includes("waiting for ai quota")

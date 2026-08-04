@@ -28,6 +28,23 @@ except Exception:
     genai_errors = None
     genai_types = None
 
+# Module-level singleton — avoids re-creating the HTTP client on every call.
+# Initialised lazily on first use so import-time failures don't crash the engine.
+_gemini_client: "genai.Client | None" = None  # type: ignore[name-defined]
+
+
+def _get_client() -> "genai.Client":  # type: ignore[name-defined]
+    """Return (or lazily create) the shared Gemini client."""
+    global _gemini_client
+    if _gemini_client is None:
+        if genai is None:
+            raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise GeminiQuotaError("GEMINI_API_KEY is not configured")
+        _gemini_client = genai.Client(api_key=api_key)
+    return _gemini_client
+
 
 def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int = 0, motion_score: float = 0.0, player_count: int = 0) -> str:
     """
@@ -111,16 +128,12 @@ def call_gemini(
     send to gemini-2.5-flash, and parse the JSON response.
     Retries on transient errors (503, 429) with exponential backoff.
     """
-    if genai is None or genai_types is None:
+    if genai_types is None:
         raise GeminiParseError("google-genai is not installed. Install with: pip install google-genai")
-
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise GeminiQuotaError("GEMINI_API_KEY is not configured")
 
     from core.prompt import get_system_prompt
 
-    client = genai.Client(api_key=api_key)
+    client = _get_client()
 
     player_focus = None
     if player_index is not None:

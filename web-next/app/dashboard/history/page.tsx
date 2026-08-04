@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { auth0 } from "@/lib/auth0";
 import { getDashboardAnalyses } from "@/lib/api";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "History | CoachXYZ",
+  description: "Browse all your past video analyses.",
+};
 
 export default async function HistoryPage({
   searchParams,
@@ -18,13 +24,18 @@ export default async function HistoryPage({
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
+  // Fetch one extra to detect whether a next page exists without a separate count query
   let analyses: Awaited<ReturnType<typeof getDashboardAnalyses>>["analyses"] = [];
+  let hasNextPage = false;
+  let error = null;
 
   try {
-    const res = await getDashboardAnalyses(auth0Id, perPage, offset);
-    analyses = res.analyses;
-  } catch (error) {
-    console.error("Failed to load history:", error);
+    const res = await getDashboardAnalyses(auth0Id, perPage + 1, offset);
+    hasNextPage = res.analyses.length > perPage;
+    analyses = res.analyses.slice(0, perPage);
+  } catch (err) {
+    console.error("Failed to load history:", err);
+    error = err instanceof Error ? err.message : "Failed to load history";
   }
 
   return (
@@ -35,6 +46,13 @@ export default async function HistoryPage({
       <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
         All Analyses
       </h1>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="border border-(--red) p-4 mb-8">
+          <p className="text-sm text-(--red)">Failed to load history. Please try again later.</p>
+        </div>
+      )}
 
       {analyses.length === 0 ? (
         <div className="border border-(--cream-10) p-12 text-center">
@@ -105,7 +123,7 @@ export default async function HistoryPage({
           </div>
 
           {/* Pagination */}
-          {analyses.length === perPage && (
+          {(page > 1 || hasNextPage) && (
             <div className="flex justify-center gap-4 mt-8">
               {page > 1 && (
                 <Link
@@ -115,12 +133,14 @@ export default async function HistoryPage({
                   Previous
                 </Link>
               )}
-              <Link
-                href={`/dashboard/history?page=${page + 1}`}
-                className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-              >
-                Next
-              </Link>
+              {hasNextPage && (
+                <Link
+                  href={`/dashboard/history?page=${page + 1}`}
+                  className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
+                >
+                  Next
+                </Link>
+              )}
             </div>
           )}
         </>
