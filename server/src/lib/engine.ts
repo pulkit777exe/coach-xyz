@@ -36,7 +36,9 @@ const throwNonOk = async (res: Response): Promise<never> => {
 
 const isConnectivityError = (error: unknown): boolean =>
   error instanceof TypeError ||
-  (error instanceof DOMException && error.name === "AbortError")
+  (error instanceof DOMException && error.name === "AbortError") ||
+  (error instanceof Error && /ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|fetch failed/i.test(`${error.message} ${error.cause ?? ""}`)) ||
+  (typeof error === "object" && error !== null && "code" in error && /^(ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|UND_ERR)$/i.test(String((error as Record<string, unknown>).code)))
 
 export const scanVideo = async (videoFile: File): Promise<ScanResult> => {
   const form = new FormData()

@@ -133,6 +133,11 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
     description: 'The analysis engine is temporarily offline.',
     action: 'Try again in a few minutes.',
   },
+  CONNECTION_REFUSED: {
+    title: 'Connection Refused',
+    description: 'The server refused the connection.',
+    action: 'Check that the backend server is running and try again.',
+  },
   ENGINE_ERROR: {
     title: 'Engine Error',
     description: 'The analysis engine encountered an error.',
