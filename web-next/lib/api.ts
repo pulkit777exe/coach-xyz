@@ -285,7 +285,12 @@ export async function* sendChatMessageStream(
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
-    throw new Error((errBody.message as string) ?? 'Chat request failed')
+    throw {
+      code: 'CHAT_FAILED',
+      message: (errBody.message as string) ?? 'Chat request failed.',
+      layer: 'server',
+      retryable: true,
+    } as CoachAIError
   }
 
   const reader = res.body!.getReader()
@@ -362,16 +367,15 @@ export async function syncUser(user: {
 export type DashboardAnalysis = {
   server_job_id: string
   engine_job_id: string
-  session_token: string
+  session_token: string | null
   player_index: number | null
   model: string
   stage: number | null
   stage_name: string | null
-  progress: number
+  progress: number | null
   complete: boolean
   video_ready: boolean
   summary_json: unknown
-  status_json: unknown
   error_code: string | null
   error_message: string | null
   download_count: number
@@ -381,7 +385,6 @@ export type DashboardAnalysis = {
   player_count: number | null
   requested_at: string
   completed_at: string | null
-  auth0_id: string | null
 }
 
 export type DashboardStats = {

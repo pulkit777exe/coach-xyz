@@ -382,6 +382,9 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
             if (pipelineStateRef.current === 'idle' || retryGenerationRef.current !== gen) return
             setJobId(job_id)
             startPolling(job_id)
+            if (pathname !== `/dashboard/analysis/${job_id}`) {
+              router.push(`/dashboard/analysis/${job_id}`)
+            }
           })
           .catch((e: unknown) => {
             if (retryGenerationRef.current !== gen) return

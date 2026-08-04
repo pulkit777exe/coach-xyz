@@ -159,7 +159,18 @@ export default new Elysia()
       return buildError("INVALID_REQUEST", "display_name must be a string", false)
     }
 
-    const analysis = await updateAnalysisDisplayName(auth0Id, jobId, display_name ?? "")
+    // Only update if display_name was explicitly provided (PATCH semantics)
+    if (display_name === undefined) {
+      const existing = await getUserAnalysisById(auth0Id, jobId)
+      if (!existing) {
+        set.status = 404
+        return buildError("NOT_FOUND", "Analysis not found", false)
+      }
+      set.status = 200
+      return { analysis: existing }
+    }
+
+    const analysis = await updateAnalysisDisplayName(auth0Id, jobId, display_name)
     if (!analysis) {
       set.status = 404
       return buildError("NOT_FOUND", "Analysis not found", false)
