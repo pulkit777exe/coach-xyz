@@ -33,7 +33,7 @@ function getRedisConnection() {
   // Construct Redis protocol URL with TLS
   const redisUrl = `rediss://default:${token}@${host}:6379`
 
-  // Dynamically import ioredis to avoid crash when not needed
+  // Connect to Redis at module load time
   try {
     const IORedis = require("ioredis")
     const client = new IORedis(redisUrl, {
@@ -175,6 +175,43 @@ const worker = redisAvailable
           }
 
           throw engineError
+        }
+
+        // Persist completed status immediately so history is accurate even if
+        // the client never polls again (browser closed, network drop, etc.)
+        try {
+          const { getEngineJobStatus } = await import("./engine")
+          const statusResult = await getEngineJobStatus(engine_job_id)
+          if (statusResult.status === "found") {
+            const engineStatus = statusResult.data
+            const serverJob = await getJob(job.data.server_job_id)
+            await persistAnalysisStatus({
+              serverJobId: job.data.server_job_id,
+              engineJobId: engine_job_id,
+              sessionToken: job.data.session_token,
+              playerIndex: job.data.player_index,
+              model: serverJob?.model ?? "gemini-2.5-flash",
+              status: {
+                stage: engineStatus.stage ?? 6,
+                stage_name: engineStatus.stage_name ?? "Complete",
+                progress: engineStatus.progress ?? 100,
+                complete: engineStatus.complete,
+                video_ready: engineStatus.video_ready ?? false,
+                summary: engineStatus.summary ?? null,
+                error: engineStatus.error ?? null,
+                error_code: engineStatus.error_code ?? null,
+                retryable: engineStatus.retryable ?? false,
+              },
+            })
+          }
+        } catch (persistErr) {
+          // Non-fatal — client polling will catch up; log and continue
+          console.error(JSON.stringify({
+            type: "worker_completion_persist_error",
+            engine_job_id,
+            error: persistErr instanceof Error ? persistErr.message : "unknown",
+            timestamp: new Date().toISOString(),
+          }))
         }
 
         return { ok: true }

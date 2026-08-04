@@ -144,7 +144,7 @@ async def lifespan(app: FastAPI):
         now = time.time()
         for f in glob.glob(os.path.join(storage_dir, "*")):
             try:
-                if os.path.isfile(f) and now - os.path.getmtime(f) > 3600:
+                if os.path.isfile(f) and now - os.path.getmtime(f) > 7200:
                     os.unlink(f)
                     logging.info(f"[SHUTDOWN] Cleaned up orphaned file: {f}")
             except Exception:
@@ -444,10 +444,7 @@ async def scan(video: UploadFile) -> JSONResponse:
                 scan_progress[session_token]["complete"] = True
                 scan_progress[session_token]["error"] = str(e)
         storage.delete_file(r2_key)
-        try:
-            os.unlink(local_path)
-        except FileNotFoundError:
-            pass
+        # local_path IS the storage path now — delete_file above already removed it.
         raise  # caught by global handler
     except VideoDecodeError as exc:
         with scan_progress_lock:
@@ -455,10 +452,7 @@ async def scan(video: UploadFile) -> JSONResponse:
                 scan_progress[session_token]["complete"] = True
                 scan_progress[session_token]["error"] = str(exc)
         storage.delete_file(r2_key)
-        try:
-            os.unlink(local_path)
-        except FileNotFoundError:
-            pass
+        # local_path IS the storage path now — delete_file above already removed it.
         if "MediaPipe Pose backend unavailable" in exc.message:
             return _error_response(
                 503,
@@ -472,10 +466,7 @@ async def scan(video: UploadFile) -> JSONResponse:
                 scan_progress[session_token]["complete"] = True
                 scan_progress[session_token]["error"] = str(exc)
         storage.delete_file(r2_key)
-        try:
-            os.unlink(local_path)
-        except FileNotFoundError:
-            pass
+        # local_path IS the storage path now — delete_file above already removed it.
         raise  # caught by global handler
 
     # Mark scan progress as complete
@@ -501,11 +492,9 @@ async def scan(video: UploadFile) -> JSONResponse:
     except Exception as e:
         logging.warning(f"Cache warming failed: {e}")
 
-    # Delete local temp file AFTER cache warming
-    try:
-        os.unlink(local_path)
-    except FileNotFoundError:
-        pass
+    # Do NOT delete local_path here — storage.download_video_to_tmp now returns
+    # the storage path directly (no copy), so local_path IS the stored file.
+    # The analysis pipeline will clean it up via storage.delete_file(video_key).
 
     response_players = [
         {
