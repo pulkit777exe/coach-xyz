@@ -2,12 +2,31 @@ import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
 import { getJob, fetchEngineJobStatus, type EngineJobStatus } from "../lib/jobs"
-import { persistAnalysisStatus } from "../lib/supabaseHistory"
+import { persistAnalysisStatus, getAnalysisByServerJobId } from "../lib/supabaseHistory"
 
 export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }) => {
   const serverJob = await getJob(params.jobId)
 
   if (!serverJob) {
+    // Redis key expired — check Supabase for persisted analysis
+    const persisted = await getAnalysisByServerJobId(params.jobId)
+    if (persisted) {
+      set.status = 200
+      return {
+        job_id: persisted.server_job_id,
+        state: persisted.complete ? "completed" : "failed",
+        stage: persisted.stage ?? -1,
+        stage_name: persisted.stage_name ?? (persisted.complete ? "Complete" : "Failed"),
+        progress: persisted.progress ?? 0,
+        complete: persisted.complete,
+        summary: persisted.summary_json,
+        video_ready: persisted.video_ready,
+        error: persisted.error_message,
+        error_code: persisted.error_code,
+        retryable: false,
+      }
+    }
+
     set.status = 404
     return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
   }

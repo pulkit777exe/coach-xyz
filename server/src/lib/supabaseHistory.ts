@@ -659,6 +659,42 @@ export const getUserAnalysisById = async (
   })
 }
 
+export const getAnalysisByServerJobId = async (
+  serverJobId: string,
+): Promise<DashboardAnalysis | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<DashboardAnalysis[]>`
+      select
+        a.server_job_id,
+        a.engine_job_id,
+        a.session_token,
+        a.player_index,
+        a.model,
+        a.stage,
+        a.stage_name,
+        a.progress,
+        a.complete,
+        a.video_ready,
+        a.summary_json,
+        a.error_code,
+        a.error_message,
+        a.requested_at,
+        a.completed_at,
+        a.download_count,
+        a.display_name,
+        v.file_name,
+        v.file_size_bytes,
+        v.player_count
+      from analysis_history a
+      left join video_conversations v on a.session_token = v.session_token
+      where a.server_job_id = ${serverJobId}
+      limit 1;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
   return (await withHistoryStore(async (db) => {
     await ensureInitialized()
