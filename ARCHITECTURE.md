@@ -11,9 +11,9 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 ### Frontend (`web-next/`)
 | Technology | Version | Source |
 |------------|---------|--------|
-| Next.js | ^16.2.9 | `web-next/package.json:13` |
-| React | ^19.2.7 | `web-next/package.json:14` |
-| Tailwind CSS | ^4.3.1 | `web-next/package.json:20` |
+| Next.js | ^16.3.0 | `web-next/package.json:13` |
+| React | ^19.2.8 | `web-next/package.json:14` |
+| Tailwind CSS | ^4.3.3 | `web-next/package.json:20` |
 | GSAP | ^3.15.0 | `web-next/package.json:12` |
 | TypeScript | ^5.9.3 | `web-next/package.json:24` |
 
@@ -22,9 +22,9 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 |------------|---------|--------|
 | Bun | (runtime) | `server/Dockerfile:1` — `oven/bun:1` |
 | Elysia | ^1.4.29 | `server/package.json:17` |
-| BullMQ | ^5.79.2 | `server/package.json:16` |
+| BullMQ | ^5.81.3 | `server/package.json:16` |
 | ioredis | ^5.11.1 | `server/package.json:18` |
-| @upstash/redis | ^1.38.0 | `server/package.json:15` |
+| @upstash/redis | ^1.38.2 | `server/package.json:15` |
 | @upstash/ratelimit | ^2.0.8 | `server/package.json:14` |
 | TypeScript | ^5.9.3 | `server/package.json:22` |
 
@@ -32,11 +32,11 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 | Technology | Version | Source |
 |------------|---------|--------|
 | Python | 3.11 | `engine/Dockerfile:1` |
-| FastAPI | 0.138.2 | `engine/requirements.txt:1` |
-| uvicorn | 0.49.0 | `engine/requirements.txt:2` |
-| google-genai | 2.10.0 | `engine/requirements.txt:3` |
+| FastAPI | 0.141.1 | `engine/requirements.txt:1` |
+| uvicorn | 0.52.0 | `engine/requirements.txt:2` |
+| google-genai | 2.15.0 | `engine/requirements.txt:3` |
 | opencv-python-headless | 4.13.0.92 | `engine/requirements.txt:4` |
-| mediapipe | 0.10.35 | `engine/requirements.txt:7` |
+| mediapipe | 1.0.0 | `engine/requirements.txt:7` |
 | upstash-redis | 1.7.0 | `engine/requirements.txt:8` |
 | orjson | 3.11.9 | `engine/requirements.txt:9` |
 
@@ -147,17 +147,23 @@ coach-xyz/
 │   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
 │   │   ├── supabaseHistory.ts # PostgreSQL history + user + chat persistence
 │   │   ├── conversation.ts    # Redis-backed conversation storage (V2)
+│   │   ├── serviceRegistry.ts # Central service status (redis, queue, history_store)
 │   │   └── errors.ts          # Error types and builders
 │   └── src/types/index.ts     # Shared API types
 │
 ├── engine/                    # Video analysis engine (Python + FastAPI)
-│   ├── main.py                # FastAPI app, routes, session management
+│   ├── main.py                # Composition root — app factory, middleware, lifespan
+│   ├── api/                   # Route modules (extracted from main.py)
+│   │   ├── sessions.py        # Shared state: sessions, scan_progress, executor
+│   │   ├── health.py          # GET /health, /health/deep
+│   │   ├── scan.py            # POST /scan, GET /scan-progress/{token}
+│   │   ├── analyze.py         # POST /analyze, /analyze-async, /analyze-progress, /status, /fail
+│   │   ├── chat.py            # POST /chat, /chat/stream
+│   │   └── download.py        # GET /download/{job_id}
 │   ├── core/
 │   │   ├── analyzer.py        # Main analysis pipeline (run_analysis)
 │   │   ├── detector.py        # Player detection (HOG + MediaPipe pose)
-│   │   ├── player_detector.py # Alternate player detection path
 │   │   ├── renderer.py        # Video annotation (HUD, landmarks, summary)
-│   │   ├── gemini.py          # Gemini API client (legacy entry point)
 │   │   ├── gemini_client.py   # Gemini call + normalize (active)
 │   │   ├── gemini_common.py   # Shared Gemini helpers
 │   │   ├── chat_prompt.py     # V2 chat prompt builder
@@ -172,20 +178,10 @@ coach-xyz/
 │   │   ├── pose_backend.py    # MediaPipe pose detection abstraction
 │   │   ├── detection_utils.py # Shared detection helpers
 │   │   ├── stats.py           # Shot-event stat validation + correction
-│   │   ├── baseline.py        # Sport baseline metrics
 │   │   ├── injury_risk.py     # Injury-risk indicator computation
 │   │   ├── config.py          # Engine configuration constants
 │   │   ├── logging_config.py  # Structured logging setup
-│   │   ├── errors.py          # Error types hierarchy
-│   │   ├── pipeline.py        # Staged pipeline (DEAD CODE — not imported)
-│   │   ├── connection_pool.py # HTTP connection pooling (DEAD CODE — not imported)
-│   │   ├── analysis_validator.py # Schema validation with retry (DEAD CODE — not called)
-│   │   ├── compress.py        # Video compression (DEAD CODE — not called from pipeline)
-│   │   ├── quality.py         # Frame quality filtering (DEAD CODE — not called from pipeline)
-│   │   ├── overlay.py         # Video overlay (DEAD CODE — not imported)
-│   │   ├── utils.py           # Utilities (only imported by overlay.py — dead)
-│   │   ├── player_tracker.py  # Player tracking (CLI only)
-│   │   └── chunker.py         # Video chunking (CLI only)
+│   │   └── errors.py          # Error types hierarchy
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -227,7 +223,7 @@ coach-xyz/
 **Video Cache** (`engine/core/cache.py:26-27`)
 - Key: `coachai:analysis:{video_hash}:p{player_index|all}`
 - TTL: 86400 seconds (24 hours)
-- Shape: Full Gemini analysis JSON
+- Shape: Full analysis JSON
 
 **Cache Metadata** (`engine/core/cache.py:87-93`)
 - Key: `coachai:analysis:{video_hash}:metadata`
@@ -256,9 +252,9 @@ coach-xyz/
 
 ### In-Memory State
 
-**Engine Sessions** (`engine/main.py:57-58`)
+**Engine Sessions** (`engine/api/sessions.py:23-25`)
 - Stored in Python dict with threading lock
-- TTL: 3600 seconds (1 hour), max 10 sessions
+- TTL: 7200 seconds (2 hours), max 10 sessions
 - Shape: `{ video_key, players, created_at }`
 
 ---
@@ -279,17 +275,17 @@ coach-xyz/
    → server/src/lib/engine.ts:42-64 (60s timeout)
 
 4. Engine streams upload to local storage
-   → engine/main.py:291-315
+   → engine/api/scan.py:33-55
 
 5. Engine runs player detection (HOG + MediaPipe)
-   → engine/main.py:320-321
+   → engine/api/scan.py:93-94
    → engine/core/detector.py
 
 6. Engine creates session (in-memory dict)
-   → engine/main.py:340-348
+   → engine/api/scan.py:73-82
 
 7. Engine warms cache for video hash
-   → engine/main.py:351-356
+   → engine/api/scan.py:117-120
    → engine/core/cache.py:77-93
 
 8. Server persists to Supabase + returns session_token
@@ -324,8 +320,8 @@ coach-xyz/
    → server/src/lib/queue.ts:76-88
 
 8. Engine runs analysis synchronously
-   → engine/main.py:415-432
-   → engine/core/analyzer.py:541-684
+   → engine/api/analyze.py:38-72
+   → engine/core/analyzer.py:372-618
    a. Download video from local storage
    b. Check Redis cache → return if hit
    c. Check deduplication → wait if in-progress
@@ -356,7 +352,7 @@ coach-xyz/
    → server/src/lib/engine.ts:118-136 (60s timeout)
 
 4. Engine serves file from local storage
-   → engine/main.py:557-579
+   → engine/api/download.py:8-27
    → engine/core/storage.py:37-41, 74-83
 ```
 
@@ -393,15 +389,15 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ### Session Tokens (CONFIRMED)
 
-- **Generation:** `engine/main.py:340` — UUID4 on scan
-- **Storage:** In-memory dict (`engine/main.py:57`) with threading lock
-- **TTL:** 1 hour (`engine/main.py:25`), max 10 sessions (`engine/main.py:26`)
-- **Validation:** `engine/main.py:221-236` — checks session exists and has video_key
+- **Generation:** `engine/api/scan.py:73` — UUID4 on scan
+- **Storage:** In-memory dict (`engine/api/sessions.py:23`) with threading lock
+- **TTL:** 2 hours (`engine/api/sessions.py:12`), max 10 sessions (`engine/api/sessions.py:13`)
+- **Validation:** `engine/api/sessions.py:54-64` — checks session exists and has video_key
 
 ### CORS (CONFIRMED)
 
-- **Server:** `server/src/index.ts:52-55` — allows `FRONTEND_URL` origin
-- **Engine:** `engine/main.py:99-105` — allows `SERVER_URL` origin
+- **Server:** `server/src/index.ts:68-71` — allows `FRONTEND_URL` origin
+- **Engine:** `engine/main.py:159-163` — allows `SERVER_URL` origin
 
 ---
 
@@ -410,10 +406,10 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 ### Google Gemini API (CONFIRMED)
 
 - **Client:** `engine/core/gemini_client.py` — `google-genai` SDK
-- **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
+- **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:37`)
 - **Model:** `gemini-2.5-flash` — used by the engine; stored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/api.ts`
 - **Usage:** Video analysis with structured JSON output
-- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`)
+- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:169`)
 
 ### Upstash Redis (CONFIRMED)
 
@@ -431,7 +427,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ### FFmpeg (CONFIRMED)
 
-- **Usage:** Video preprocessing (`engine/core/analyzer.py:42-72`), compression (`engine/core/compress.py:26-38`)
+- **Usage:** Video preprocessing (`engine/core/analyzer.py:380-460`)
 - **Installed in:** `engine/Dockerfile:12` — `apt-get install ffmpeg`
 
 ### MediaPipe (CONFIRMED)
@@ -485,7 +481,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - SIGTERM/SIGINT handlers
 - Closes: worker → queue → Redis connection → Supabase SQL
 - 10 second timeout before force exit
-- Engine: cleans up orphaned files on shutdown (`engine/main.py:84-94`)
+- Engine: cleans up orphaned files on shutdown (`engine/main.py:88-106`)
 
 ---
 
@@ -499,13 +495,13 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ### Synchronous Engine Analysis (CONFIRMED)
 
-- `engine/main.py:415-419` — `run_analysis()` called synchronously in `/analyze`
-- BullMQ worker waits for response (`server/src/lib/queue.ts:76-88`)
+- `engine/api/analyze.py:38-72` — `run_analysis()` called synchronously in `/analyze`
+- BullMQ worker waits for response (`server/src/lib/queue.ts:158-171`)
 - **Trade-off:** Simpler error handling, but single job at a time per engine instance
 
 ### In-Memory Sessions (CONFIRMED)
 
-- `engine/main.py:57-58` — Python dict with threading lock
+- `engine/api/sessions.py:23-24` — Python dict with threading lock
 - **Trade-off:** Fast, but sessions lost on restart, no horizontal scaling
 
 ### Two Redis Clients (CONFIRMED)
@@ -525,53 +521,49 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - `server/src/lib/ratelimit.ts:50-53` — Redis-backed with in-memory fallback
 - **Trade-off:** Rate limits lost on restart when using memory fallback, but service stays available
 
+### Route Module Extraction (2026-08-08)
+
+- `engine/main.py` refactored from 1073-line monolith to 199-line composition root
+- Routes extracted into `engine/api/` as 5 modules: `health`, `scan`, `analyze`, `chat`, `download`
+- Shared state (sessions, scan_progress, executor) moved to `engine/api/sessions.py`
+- Dead code deleted: `core/baseline.py`, `core/gemini.py`, `core/chunker.py`, `core/player_tracker.py`, `core/player_detector.py`, `cli/` (2,891 lines total)
+
+### Service Registry (2026-08-08)
+
+- `server/src/lib/serviceRegistry.ts` — central service status tracker
+- Wired into `redis.ts`, `queue.ts`, `supabaseHistory.ts`, `ratelimit.ts`
+- `/health/deep` now returns full `services` map showing live/degraded/disabled status
+- Eliminates silent degradation: every state transition is logged
+
 ---
 
 ## 10. Known Gaps, Tech Debt, and Contradictions
 
-### Dead Code
-
-1. **`engine/core/pipeline.py`** — `AnalysisPipeline` class exists but is never imported by `analyzer.py` or any other file. Provides per-stage Redis caching that is not used.
-
-2. **`engine/core/connection_pool.py`** — `ConnectionPool` class exists but is never imported. Gemini API calls use new connections each time. Also imports `httpx` which is not in `requirements.txt`.
-
-3. **`engine/core/compress.py`** — `compress_for_analysis()` function exists but is never called from the API pipeline.
-
-4. **`engine/core/quality.py`** — `filter_quality_frames()` and `assess_frame_quality()` exist but are never called from the API pipeline.
-
-5. **`engine/core/analysis_validator.py`** — `validate_gemini_output()` exists but is never called. Actual Gemini validation in `analyzer.py:536` only does `json.loads()`.
-
-6. **`engine/core/overlay.py`** — Drawing functions exist but are never imported. Appears to be an alternative to `renderer.py`.
-
-7. **`engine/core/utils.py`** — Only imported by `overlay.py` (dead code).
-
-### Partially Used Code
-
-8. **`engine/core/chunker.py`** — Used only by CLI tools (`engine/cli/`), not the API pipeline.
-
-9. **`engine/core/player_tracker.py`** — Used only by CLI tools (`engine/cli/frame_selector.py`), not the API pipeline.
-
 ### Inconsistencies
 
-3. **`detector.py:32-33`** — Creates new `HOGDescriptor` per call, while `analyzer.py:16-17` caches it at module level. Both exist in the same codebase.
+1. **`detector.py`** — Creates new `HOGDescriptor` per call, while `analyzer.py` caches it at module level. Both exist in the same codebase.
 
-4. **`register_job_input`** — `engine/core/jobs.py:184-186` is a no-op stub, called from `analyzer.py:549`.
+2. **`register_job_input`** — `engine/core/jobs.py` contains a no-op stub, called from `analyzer.py`.
+
+3. **Stage number gap** — `engine/core/jobs.py` has stage 4 missing (analyzing=3, rendering=5). Consumers indexing by stage number must handle this gap.
+
+4. **State machine duplication** — Pipeline state names (`uploading`, `scanning`, etc.) are duplicated across engine, server, and frontend. Adding a state requires coordinated edits in 5+ locations.
 
 ### Missing Features
 
-5. **No test suite** — No test files found anywhere in the codebase.
+5. **Minimal test suite** — Only `engine/tests/test_state_machine.py` exists. Zero tests in `server/` or `web-next/`.
 
 6. **No CI/CD** — No GitHub Actions workflows, no `.github/` directory.
 
 7. **`render.yaml:11,33`** — `<your-org>` placeholder not replaced; deployment will fail.
 
-8. **`httpx` not in requirements** — `engine/core/connection_pool.py:3` imports `httpx` but it is not listed in `engine/requirements.txt`.
-
 ### Technical Debt
 
-8. **Session memory leak potential** — `engine/main.py:57` dict grows unbounded if `_evict_old_sessions()` is not called frequently enough.
+8. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
 
-9. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
+9. **Silent degradation** — Server modules fall back to no-op clients (Redis, queue, history) without centralized observability. The new `serviceRegistry.ts` tracks status but does not yet cover all edge cases.
+
+10. **`supabaseHistory.ts`** — 770+ lines covering users, analyses, chat messages, and conversations in one module. Adding a new query requires understanding the entire file.
 
 ---
 
@@ -579,30 +571,24 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 | Claim | Verification |
 |-------|--------------|
-| Next.js ^16.2.9 | `web-next/package.json:13` |
+| Next.js ^16.3.0 | `web-next/package.json:13` |
 | Elysia ^1.4.29 | `server/package.json:17` |
-| FastAPI 0.138.2 | `engine/requirements.txt:1` |
-| google-genai 2.10.0 | `engine/requirements.txt:3` |
-| BullMQ concurrency: 1 | `server/src/lib/queue.ts:104` |
-| Worker timeout: 12 min | `server/src/lib/queue.ts:86` |
-| Stuck job recovery: 13 min | `server/src/lib/queue.ts:139` |
-| Session TTL: 1 hour | `engine/main.py:25` |
+| FastAPI 0.141.1 | `engine/requirements.txt:1` |
+| google-genai 2.15.0 | `engine/requirements.txt:3` |
+| BullMQ concurrency: 1 | `server/src/lib/queue.ts:229` |
+| Worker timeout: 12 min | `server/src/lib/queue.ts:169` |
+| Stuck job recovery: 13 min | `server/src/lib/queue.ts:253` |
+| Session TTL: 2 hours | `engine/api/sessions.py:12` |
 | Cache TTL: 24 hours | `engine/core/cache.py:25` |
-| Rate limit: 5 analysis/hour | `server/src/lib/ratelimit.ts:60-61` |
+| Rate limit: 5 analysis/hour | `server/src/lib/ratelimit.ts:88` |
 | Local storage only | `engine/core/storage.py:25-26` |
-| Pipeline states | `engine/core/jobs.py:27-35` |
-| Valid transitions | `engine/core/jobs.py:38-46` |
-| Dead code: pipeline.py | `grep -r "from core.pipeline" engine/` returns nothing |
-| Dead code: connection_pool.py | `grep -r "from core.connection_pool" engine/` returns nothing |
-| Dead code: compress.py | `grep -r "compress_for_analysis" engine/` only returns definition |
-| Dead code: quality.py | `grep -r "filter_quality_frames" engine/` only returns definition |
-| Dead code: analysis_validator.py | `grep -r "validate_gemini_output" engine/` only returns definition |
-| Dead code: overlay.py | `grep -r "from core.overlay" engine/` returns nothing |
-| Dead code: utils.py | `grep -r "from core.utils" engine/` only returns overlay.py import |
-| Beta code middleware | `server/src/index.ts:82-92` |
-| Keep-alive: 10 min | `server/src/lib/queue.ts:44` |
-| Frontend keep-alive: 8 min | `web-next/app/page.tsx:40` |
+| Pipeline states | `engine/core/jobs.py:46-54` |
+| Valid transitions | `engine/core/jobs.py:57-65` |
+| Route modules | `engine/api/*.py` |
+| Service registry | `server/src/lib/serviceRegistry.ts` |
+| Keep-alive: 10 min | `server/src/lib/queue.ts:93` |
+| Frontend keep-alive: 8 min | `web-next/lib/usePipeline.ts:78` |
 
 ---
 
-*Last verified: 2026-07-02, against commit 2c37df2*
+*Last verified: 2026-08-08, against branch `arch/deepen-engine`*
