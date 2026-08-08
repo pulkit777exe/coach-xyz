@@ -1,5 +1,6 @@
 // ── Shared API Types ──────────────────────────────────────────────────────────
-// These types mirror the server/src/types/index.ts (source of truth).
+// These types mirror the server/src/types/index.ts (which mirrors the engine).
+// Engine is the source of truth (see GET /pipeline-schema).
 // Frontend adds "idle" and "error" states for UI state management.
 
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024

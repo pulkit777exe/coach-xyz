@@ -8,11 +8,12 @@ interface AnalysisProgressProps {
 }
 
 const STAGES = [
-  { name: "Queued", label: "01" },
+  { name: "Uploading", label: "01" },
   { name: "Detecting Players", label: "02" },
-  { name: "Analyzing Technique", label: "03" },
-  { name: "Rendering Video", label: "04" },
-  { name: "Complete", label: "05" },
+  { name: "Waiting for Selection", label: "03" },
+  { name: "Analyzing Technique", label: "04" },
+  { name: "Rendering Video", label: "05" },
+  { name: "Complete", label: "06" },
 ]
 
 export default function AnalysisProgress({ status }: AnalysisProgressProps) {
@@ -33,11 +34,12 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
       s => stageName.toLowerCase().startsWith(s.name.toLowerCase())
     )
     if (idx >= 0) return idx
-    if (stageName.toLowerCase().includes("queue")) return 0
+    if (stageName.toLowerCase().includes("upload")) return 0
     if (stageName.toLowerCase().includes("detect")) return 1
-    if (stageName.toLowerCase().includes("analy")) return 2
-    if (stageName.toLowerCase().includes("render")) return 3
-    if (stageName.toLowerCase().includes("complete")) return 4
+    if (stageName.toLowerCase().includes("selection")) return 2
+    if (stageName.toLowerCase().includes("analy")) return 3
+    if (stageName.toLowerCase().includes("render")) return 4
+    if (stageName.toLowerCase().includes("complete")) return 5
     return Math.min((status?.stage ?? 0), STAGES.length - 1)
   }, [stageName, status?.stage])
 
