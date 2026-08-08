@@ -452,3 +452,113 @@ export const sendHistoryChatMessage = async (
     body: JSON.stringify({ message }),
   })
 }
+
+// ── Deep Search API ─────────────────────────────────────────────────────────
+
+export type SearchSource = {
+  url: string
+  title: string
+  snippet: string
+  relevance: string
+}
+
+export type SearchResult = {
+  query: string
+  report: string
+  sources: SearchSource[]
+  angles_covered: string[]
+  searches_performed: number
+  depth_reached: number
+  total_time_seconds: number
+  metadata: {
+    understood_intent?: string
+    key_entities?: string[]
+    coverage_score?: number
+  }
+}
+
+export type SearchStreamEvent =
+  | { type: "status"; message: string }
+  | { type: "decomposition"; intent: string; angles: string[]; entities: string[] }
+  | { type: "searching"; current: number; total: number; angle: string }
+  | { type: "angle_complete"; angle: string; sources_found: number; current: number; total: number }
+  | { type: "gap_filled"; question: string; current: number; total: number }
+  | { type: "done"; result: SearchResult }
+  | { type: "error"; message: string }
+
+/**
+ * Execute a deep research search and stream progress via SSE.
+ * Yields SearchStreamEvents as they arrive.
+ * Pass an AbortSignal to cancel.
+ */
+export async function* deepSearchStream(
+  query: string,
+  maxAngles?: number,
+  maxGapSearches?: number,
+  signal?: AbortSignal,
+): AsyncGenerator<SearchStreamEvent> {
+  const body: Record<string, unknown> = { query }
+  if (maxAngles) body.max_angles = maxAngles
+  if (maxGapSearches) body.max_gap_searches = maxGapSearches
+
+  const res = await fetch(`${BASE}/api/search/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  })
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
+    throw {
+      code: "SEARCH_FAILED",
+      message: (errBody.message as string) ?? "Search request failed.",
+      layer: "server",
+      retryable: true,
+    } as CoachAIError
+  }
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue
+        try {
+          const event = JSON.parse(line.slice(6)) as SearchStreamEvent
+          yield event
+        } catch { /* partial JSON, skip */ }
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Execute a deep research search (non-streaming).
+ * Returns the full SearchResult.
+ */
+export async function deepSearch(
+  query: string,
+  maxAngles?: number,
+  maxGapSearches?: number,
+): Promise<SearchResult> {
+  const body: Record<string, unknown> = { query }
+  if (maxAngles) body.max_angles = maxAngles
+  if (maxGapSearches) body.max_gap_searches = maxGapSearches
+
+  return apiFetch<SearchResult>(`${BASE}/api/search`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
