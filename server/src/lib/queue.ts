@@ -4,6 +4,7 @@ import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
 import { wrapEngineError } from "./errors"
 import type { CoachAIError } from "./errors"
 import { ENGINE_URL } from "./engine"
+import { serviceRegister, serviceUpdate } from "./serviceRegistry"
 
 // Non-retryable engine error codes — these will never succeed on retry.
 // Note: The engine sets retryable per-error; these codes are inherently
@@ -62,8 +63,14 @@ function getRedisConnection() {
   }
 }
 
+serviceRegister("queue", "disabled", "not initialized")
+
 const connection = getRedisConnection()
 const redisAvailable = !!connection
+
+if (!redisAvailable) {
+  serviceUpdate("queue", "disabled", "Redis connection unavailable")
+}
 
 export const analysisQueue = redisAvailable
   ? new Queue("coachai-analysis", {
@@ -223,6 +230,10 @@ const worker = redisAvailable
       },
     )
   : null
+
+if (worker) {
+  serviceUpdate("queue", "live")
+}
 
 // Worker health event handlers
 if (worker) {

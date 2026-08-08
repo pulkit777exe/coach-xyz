@@ -1,6 +1,6 @@
 // ── Shared API Types ──────────────────────────────────────────────────────────
 // These types define the contract between engine → server → frontend.
-// Server is the source of truth. Frontend mirrors them.
+// Engine is the source of truth (see GET /pipeline-schema). Server and frontend mirror.
 
 export const DEFAULT_MODEL = "gemini-2.5-flash"
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024

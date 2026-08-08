@@ -140,11 +140,17 @@ Backend API documentation is available at: http://localhost:8000/swagger
 
 ```
 coach-xyz/
-├── core/          # Shared Python engine (Gemini, overlay renderer, validator)
-├── server/        # Elysia/Bun backend for sports video analysis
-├── web-next/      # Next.js 14+ frontend with TypeScript and Tailwind
-├── web/           # Legacy HTML/CSS/JS SPA
-├── android/       # React Native Android app
-├── cli/           # Command-line interface
-└── sports/        # Per-sport config JSON
+├── engine/          # Python FastAPI analysis engine
+│   ├── api/         # Route modules (health, scan, analyze, chat, download)
+│   ├── core/        # Business logic (analyzer, detector, renderer, jobs, etc.)
+│   └── main.py      # Composition root
+├── server/          # Elysia/Bun middleware (queue, redis, auth, history)
+│   ├── src/routes/  # HTTP handlers
+│   └── src/lib/     # Orchestration (incl. serviceRegistry)
+├── web-next/        # Next.js frontend (React 19, Tailwind 4)
+├── sports/          # Per-sport config JSON (6 sports)
+├── docs/            # V1/V2 coach specs
+├── ARCHITECTURE.md  # Canonical architecture document
+├── CONTEXT.md       # Agent context (layer seams, state machine)
+└── render.yaml      # Render deployment config
 ```
