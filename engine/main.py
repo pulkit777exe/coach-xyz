@@ -59,7 +59,6 @@ from api.scan import router as scan_router
 from api.analyze import router as analyze_router
 from api.chat import router as chat_router
 from api.download import router as download_router
-from api.search import router as search_router
 
 
 @asynccontextmanager
@@ -192,7 +191,6 @@ app.include_router(scan_router)
 app.include_router(analyze_router)
 app.include_router(chat_router)
 app.include_router(download_router)
-app.include_router(search_router)
 
 
 if __name__ == "__main__":

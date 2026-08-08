@@ -11,7 +11,6 @@ export function CommandPaletteWrapper() {
   const commands: CommandItem[] = [
     { id: 'home', label: 'Go to Home', hint: 'Upload a new video' },
     { id: 'dashboard', label: 'Go to Dashboard', hint: 'View your overview' },
-    { id: 'search', label: 'Deep Research', hint: 'AI-powered comprehensive web research' },
     { id: 'history', label: 'Go to History', hint: 'Browse all analyses' },
     { id: 'account', label: 'Go to Account', hint: 'Manage your profile' },
     { id: 'theme-toggle', label: 'Toggle Theme', hint: 'Switch between light and dark mode' },
@@ -35,7 +34,6 @@ export function CommandPaletteWrapper() {
     setOpen(false)
     if (item.id === 'home') router.push('/')
     else if (item.id === 'dashboard') router.push('/dashboard')
-    else if (item.id === 'search') router.push('/search')
     else if (item.id === 'history') router.push('/dashboard/history')
     else if (item.id === 'account') router.push('/account')
     else if (item.id === 'theme-toggle') {
