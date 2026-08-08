@@ -18,5 +18,4 @@ ignore = [
 
 [tool.ruff.per-file-ignores]
 "main.py" = ["E402"]
-"cli/*.py" = ["E402"]
-"core/chunker.py" = ["E402"]
+"api/chat.py" = ["E402"]
