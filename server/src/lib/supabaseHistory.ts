@@ -2,6 +2,7 @@ import { SQL } from "bun"
 
 import type { Player } from "../types"
 import type { RequestMeta } from "./requestMeta"
+import { serviceRegister, serviceUpdate } from "./serviceRegistry"
 
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
@@ -47,6 +48,8 @@ const supabaseProjectUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() |
 const supabasePublishableKey =
   (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? "").trim() || null
 
+serviceRegister("history_store", databaseUrl ? "disabled" : "disabled", "not initialized")
+
 const sql = databaseUrl
   ? new SQL(databaseUrl, {
       idleTimeout: 300,
@@ -65,6 +68,7 @@ const warnDisabled = () => {
   console.warn(
     JSON.stringify({ type: "history_store_disabled", message: "DATABASE_URL not set" }),
   )
+  serviceUpdate("history_store", "disabled", "DATABASE_URL not set")
 }
 
 const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | null> => {
@@ -80,13 +84,16 @@ const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | nul
 
     if (message.includes("Connection closed")) {
       console.warn(JSON.stringify({ type: "history_store_reconnecting" }))
+      serviceUpdate("history_store", "degraded", "Connection closed, reconnecting")
       initPromise = null
       try {
         await ensureInitialized()
+        serviceUpdate("history_store", "live")
         return await fn(sql)
       } catch (retryError) {
         const retryMessage = retryError instanceof Error ? retryError.message : "Unknown database error"
         console.error(JSON.stringify({ type: "history_store_retry_failed", error: retryMessage }))
+        serviceUpdate("history_store", "degraded", retryMessage)
         return null
       }
     }
@@ -236,6 +243,9 @@ export const initializeHistoryStore = async (): Promise<void> => {
   await withHistoryStore(async () => {
     await ensureInitialized()
   })
+  if (sql) {
+    serviceUpdate("history_store", "live")
+  }
 }
 
 export const persistVideoConversation = async (

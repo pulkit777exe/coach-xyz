@@ -12,10 +12,12 @@ import statusRoute from "./routes/status"
 import downloadRoute from "./routes/download"
 import chatRoute from "./routes/chat"
 import authRoute from "./routes/auth"
+import searchRoute from "./routes/search"
 import { healthRoute } from "./routes/health"
 import { historyStoreEnabled, initializeHistoryStore } from "./lib/supabaseHistory"
 import { buildError, isCoachAIError } from "./lib/errors"
 import { MAX_FILE_SIZE_BYTES } from "./types"
+import { serviceAll } from "./lib/serviceRegistry"
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -110,6 +112,7 @@ const app = new Elysia({
   .use(statusRoute)
   .use(downloadRoute)
   .use(chatRoute)
+  .use(searchRoute)
   .use(authRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────
@@ -138,5 +141,4 @@ const app = new Elysia({
   })
 
 console.log(JSON.stringify({ type: "server_started", port: app.server?.port, maxRequestBodySize }))
-console.log(JSON.stringify({ type: "history_store_status", enabled: historyStoreEnabled() }))
-console.log(JSON.stringify({ type: "worker_started" }))
+console.log(JSON.stringify({ type: "service_status", services: serviceAll() }))

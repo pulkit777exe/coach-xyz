@@ -1,5 +1,6 @@
 import { redis } from "./redis"
 import { readRequestMeta } from "./requestMeta"
+import { serviceUpdate } from "./serviceRegistry"
 
 // Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
@@ -75,6 +76,7 @@ export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResu
     }
     return { allowed: true, remaining: limit - count, reset }
   } catch {
+    serviceUpdate("redis", "degraded", "Rate limiter using in-memory fallback")
     return memoryLimit(key, limit, windowSec * 1000)
   }
 }

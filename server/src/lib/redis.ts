@@ -1,3 +1,5 @@
+import { serviceRegister, serviceUpdate } from "./serviceRegistry"
+
 const REST_URL = process.env.UPSTASH_REDIS_REST_URL || ""
 const isLocalRedis = REST_URL.includes("localhost") || REST_URL.includes("127.0.0.1")
 
@@ -17,7 +19,9 @@ function createRedisClient() {
       })
       ioredis.on("reconnecting", (delay: number) => {
         console.warn(JSON.stringify({ type: "redis_reconnecting", source: "ratelimit", delay_ms: delay }))
+        serviceUpdate("redis", "degraded", `reconnecting in ${delay}ms`)
       })
+      serviceUpdate("redis", "live")
       return {
         async get(key: string) {
           const val = await ioredis.get(key)
@@ -79,18 +83,22 @@ function createRedisClient() {
       }
     } catch {
       console.error(JSON.stringify({ type: "redis_fallback_noop", message: "ioredis not available for local Redis, using noop client" }))
+      serviceUpdate("redis", "disabled", "ioredis module not available")
       return createNoopClient()
     }
   } else {
     // Upstash REST API
     try {
       const { Redis } = require("@upstash/redis")
-      return new Redis({
+      const client = new Redis({
         url: process.env.UPSTASH_REDIS_REST_URL!,
         token: process.env.UPSTASH_REDIS_REST_TOKEN!,
       })
+      serviceUpdate("redis", "live")
+      return client
     } catch {
       console.error(JSON.stringify({ type: "redis_fallback_noop", message: "@upstash/redis module not available, using noop client" }))
+      serviceUpdate("redis", "disabled", "@upstash/redis module not available")
       return createNoopClient()
     }
   }
@@ -114,5 +122,7 @@ function createNoopClient() {
     },
   }
 }
+
+serviceRegister("redis", "disabled", "not initialized")
 
 export const redis = createRedisClient()
