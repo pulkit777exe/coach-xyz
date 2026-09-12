@@ -51,6 +51,7 @@ import {
   orgStudentPerformance,
   orgAddPerformanceMetric,
   orgDeletePerformanceMetric,
+  orgUpdatePerformanceMetric,
   orgDeleteStudent,
   orgDeleteReport,
   linkAnalysisToStudent,
@@ -184,19 +185,28 @@ export default function StudentProfile({
     const payload: {
       metric_key: string
       metric_value: number
-      unit?: string
+      unit?: string | null
       measured_at?: string
     } = {
       metric_key: metricForm.metric_key.trim() || "form_score",
       metric_value: raw,
     }
     if (metricForm.unit.trim()) payload.unit = metricForm.unit.trim()
-    if (editingMetric) payload.measured_at = editingMetric.measured_at
-    else if (metricForm.measured_at) payload.measured_at = metricForm.measured_at
+    else payload.unit = null
+    if (metricForm.measured_at) payload.measured_at = metricForm.measured_at
 
     setMetricSubmitting(true)
     try {
-      await orgAddPerformanceMetric(auth0Id, student_.id, payload)
+      if (editingMetric) {
+        const id = editingMetric.id
+        if (!id) return
+        await orgUpdatePerformanceMetric(auth0Id, id, {
+          metric_value: payload.metric_value,
+          unit: payload.unit ?? null,
+        })
+      } else {
+        await orgAddPerformanceMetric(auth0Id, student_.id, payload)
+      }
       toast.success(editingMetric ? "Metric updated" : "Metric logged")
       setEditingMetric(null)
       setMetricForm({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
@@ -526,15 +536,17 @@ export default function StudentProfile({
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="text-muted-foreground text-xs">{formatDateShort(p.measured_at)}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground"
-                      onClick={() => openMetricEdit(p)}
-                      aria-label="Edit metric"
-                    >
-                      <PencilIcon className="size-3.5" />
-                    </Button>
+                    {p.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground"
+                        onClick={() => openMetricEdit(p)}
+                        aria-label="Edit metric"
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon-sm"

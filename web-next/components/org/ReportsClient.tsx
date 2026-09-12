@@ -21,16 +21,16 @@ import { Spinner } from "./Spinner"
 import ReportBody, { shortDate } from "./ReportBody"
 import { downloadCSV } from "@/lib/csv"
 
-import type { ReportRecord, Student } from "@/lib/org"
-import { orgCreateReport, orgUpdateReport, orgDeleteReport } from "@/lib/org"
+import type { ReportRecord, Student, ReportType } from "@/lib/org"
+import { orgCreateReport, orgUpdateReport, orgDeleteReport, REPORT_TYPES } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
-const REPORT_TYPES = [
-  { value: "progress", label: "Progress Report" },
-  { value: "attendance", label: "Attendance Report" },
-  { value: "performance", label: "Performance Report" },
-  { value: "monthly", label: "Monthly Summary" },
-] as const
+const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  progress: "Progress Report",
+  attendance: "Attendance Report",
+  performance: "Performance Report",
+  monthly: "Monthly Summary",
+}
 
 const TYPE_BADGE: Record<string, string> = {
   progress: "border-(--info-border) text-(--info)",
@@ -40,7 +40,7 @@ const TYPE_BADGE: Record<string, string> = {
 }
 
 function typeLabel(t: string) {
-  return REPORT_TYPES.find((r) => r.value === t)?.label ?? t
+  return REPORT_TYPE_LABELS[t as ReportType] ?? t
 }
 
 export default function ReportsClient({
@@ -296,11 +296,11 @@ export default function ReportsClient({
                 onChange={(e) => setForm((f) => ({ ...f, report_type: e.target.value }))}
                 className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
               >
-                {REPORT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+{(REPORT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {REPORT_TYPE_LABELS[t]}
                   </option>
-                ))}
+                )))}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -395,11 +395,11 @@ export default function ReportsClient({
                   onChange={(e) => setEditForm((f) => ({ ...f, report_type: e.target.value }))}
                   className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
                 >
-                  {REPORT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
+                  {(REPORT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {REPORT_TYPE_LABELS[t]}
                     </option>
-                  ))}
+                  )))}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">

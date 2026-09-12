@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { auth0 } from "@/lib/auth0";
 import { redirect } from "next/navigation";
 import { orgSchedule } from "@/lib/org";
+import { toISODate } from "@/lib/date";
 import ScheduleClient from "@/components/org/ScheduleClient";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -17,13 +18,10 @@ export default async function SchedulePage() {
   const auth0Id = session.user.sub;
 
   const today = new Date();
-  const month = today.getMonth() + 1;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const from = new Date(`${today.getFullYear()}-${pad(month)}-01T00:00:00`).toISOString();
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const to = new Date(
-    `${today.getFullYear()}-${pad(month)}-${pad(lastDay)}T23:59:59`,
-  ).toISOString();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const from = new Date(`${toISODate(first)}T00:00:00`).toISOString();
+  const to = new Date(`${toISODate(lastDay)}T23:59:59`).toISOString();
 
   const res = await orgSchedule(auth0Id, { from, to }).catch(() => ({ events: [] }));
 

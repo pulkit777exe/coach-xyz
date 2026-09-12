@@ -2,6 +2,13 @@ import { SQL } from "bun"
 
 import type { Player } from "../types"
 import type { RequestMeta } from "./requestMeta"
+import {
+  ATTENDANCE_STATUSES,
+  EVENT_STATUSES,
+  EVENT_TYPES,
+  REPORT_TYPES,
+  STUDENT_STATUSES,
+} from "./orgEnums"
 
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
@@ -132,6 +139,8 @@ export const ensureInitialized = async () => {
     initPromise = (async () => {
       try {
         await sql.connect()
+        const inList = (vals: readonly string[]) =>
+          sql.unsafe(`(${vals.map((v) => `'${v}'`).join(",")})`)
         await sql`
         create table if not exists video_conversations (
           session_token text primary key,
@@ -268,7 +277,7 @@ export const ensureInitialized = async () => {
           guardian_phone text,
           notes text,
           status text not null default 'active'
-            check (status in ('active', 'inactive', 'transferred')),
+            check (status in ${inList(STUDENT_STATUSES)}),
           joined_on date,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
@@ -286,7 +295,7 @@ export const ensureInitialized = async () => {
           student_id uuid not null references students(id) on delete cascade,
           session_date date not null,
           status text not null
-            check (status in ('present', 'absent', 'late', 'excused')),
+            check (status in ${inList(ATTENDANCE_STATUSES)}),
           note text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
@@ -308,13 +317,13 @@ export const ensureInitialized = async () => {
           auth0_id text not null,
           title text not null,
           event_type text not null default 'practice'
-            check (event_type in ('practice', 'match', 'tournament', 'meeting', 'other')),
+            check (event_type in ${inList(EVENT_TYPES)}),
           starts_at timestamptz not null,
           ends_at timestamptz,
           location text,
           description text,
           status text not null default 'scheduled'
-            check (status in ('scheduled', 'completed', 'cancelled')),
+            check (status in ${inList(EVENT_STATUSES)}),
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -334,7 +343,7 @@ export const ensureInitialized = async () => {
           auth0_id text not null,
           student_id uuid references students(id) on delete set null,
           report_type text not null default 'progress'
-            check (report_type in ('progress', 'attendance', 'performance', 'monthly')),
+            check (report_type in ${inList(REPORT_TYPES)}),
           title text not null,
           period_start date,
           period_end date,
@@ -378,6 +387,13 @@ export const ensureInitialized = async () => {
       await sql`
         alter table analysis_history add column if not exists student_id uuid;
       `
+      console.info(
+        JSON.stringify({
+          type: "analysis_history_student_link_ensured",
+          message:
+            "analysis_history.student_id ensured (idempotent). Existing rows stay NULL until an analysis is linked to a student.",
+        }),
+      )
       await sql`
         create index if not exists idx_analysis_history_student_id
         on analysis_history (student_id);

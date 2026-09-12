@@ -12,10 +12,10 @@ import { Spinner } from "./Spinner"
 import { NativeSelect } from "./EventFormDialog"
 
 import type { Student, StudentFormValues } from "@/lib/org"
-import { orgCreateStudent, orgUpdateStudent } from "@/lib/org"
+import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
-const STATUSES = ["active", "inactive", "transferred"] as const
+const STATUSES = STUDENT_STATUSES
 const GENDERS = ["female", "male", "other"] as const
 
 export type StudentFormDialogProps = {

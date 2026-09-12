@@ -8,6 +8,23 @@ const org = (auth0Id: string, path: string) =>
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+// Org vocabulary — single source of truth for the web app. The server mirrors
+// these in server/src/lib/orgEnums.ts; add a value there and here.
+export const STUDENT_STATUSES = ["active", "inactive", "transferred"] as const
+export type StudentStatus = (typeof STUDENT_STATUSES)[number]
+
+export const ATTENDANCE_STATUSES = ["present", "late", "absent", "excused"] as const
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
+
+export const EVENT_TYPES = ["practice", "match", "tournament", "meeting", "other"] as const
+export type EventType = (typeof EVENT_TYPES)[number]
+
+export const EVENT_STATUSES = ["scheduled", "completed", "cancelled"] as const
+export type EventStatus = (typeof EVENT_STATUSES)[number]
+
+export const REPORT_TYPES = ["progress", "attendance", "performance", "monthly"] as const
+export type ReportType = (typeof REPORT_TYPES)[number]
+
 export type Student = {
   id: string
   auth0_id: string
@@ -22,7 +39,7 @@ export type Student = {
   guardian_name: string | null
   guardian_phone: string | null
   notes: string | null
-  status: "active" | "inactive" | "transferred"
+  status: StudentStatus
   joined_on: string | null
   created_at: string
   updated_at: string
@@ -32,8 +49,6 @@ export type StudentFormValues = Omit<
   Student,
   "id" | "auth0_id" | "created_at" | "updated_at"
 >
-
-export type AttendanceStatus = "present" | "absent" | "late" | "excused"
 
 export type AttendanceRecord = {
   id: string
@@ -52,13 +67,13 @@ export type AttendanceWithStudent = AttendanceRecord & {
 
 export type ScheduleEvent = {
   id: string
-  event_type: "practice" | "match" | "tournament" | "meeting" | "other"
+  event_type: EventType
   title: string
   starts_at: string
   ends_at: string | null
   location: string | null
   description: string | null
-  status: "scheduled" | "completed" | "cancelled"
+  status: EventStatus
   created_at: string
   updated_at: string
 }
@@ -66,7 +81,7 @@ export type ScheduleEvent = {
 export type ReportRecord = {
   id: string
   student_id: string | null
-  report_type: string
+  report_type: ReportType
   title: string
   period_start: string | null
   period_end: string | null
@@ -238,7 +253,7 @@ export const orgStudentPerformance = async (
 export const orgAddPerformanceMetric = async (
   auth0Id: string,
   studentId: string,
-  input: { metric_key: string; metric_value: number; unit?: string; measured_at?: string },
+  input: { metric_key: string; metric_value: number; unit?: string | null; measured_at?: string },
 ): Promise<{ metric: PerformanceMetric }> => {
   return apiFetch<{ metric: PerformanceMetric }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance`),
@@ -434,6 +449,17 @@ export const orgDeletePerformanceMetric = async (
   return apiFetch<{ deleted: boolean }>(org(auth0Id, `/performance/${encodeURIComponent(id)}`), {
     method: "DELETE",
   })
+}
+
+export const orgUpdatePerformanceMetric = async (
+  auth0Id: string,
+  id: string,
+  input: { metric_value: number; unit?: string | null },
+): Promise<{ metric: PerformanceMetric }> => {
+  return apiFetch<{ metric: PerformanceMetric }>(
+    org(auth0Id, `/performance/${encodeURIComponent(id)}`),
+    { method: "PUT", body: JSON.stringify(input) },
+  )
 }
 
 // ── Overview & analysis linking ──────────────────────────────────────────────

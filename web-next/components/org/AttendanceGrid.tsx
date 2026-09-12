@@ -20,29 +20,25 @@ import { downloadCSV } from "@/lib/csv"
 
 import type { AttendanceStatus, Student } from "@/lib/org"
 import {
+  ATTENDANCE_STATUSES,
   orgAttendance,
   orgStudents,
   orgUpsertAttendance,
   orgBatchAttendance,
   orgDeleteAttendance,
 } from "@/lib/org"
+import { toISODate } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
 
 type GridRecord = { student_id: string; session_date: string; status: AttendanceStatus; note?: string | null }
 
-const STATUSES: AttendanceStatus[] = ["present", "late", "absent", "excused"]
+const STATUSES = ATTENDANCE_STATUSES
 
 const STATUS_META: Record<AttendanceStatus, { color: string; letter: string; label: string }> = {
   present: { color: "var(--color-success)", letter: "P", label: "Present" },
   late: { color: "var(--color-warning)", letter: "L", label: "Late" },
   absent: { color: "var(--color-destructive)", letter: "A", label: "Absent" },
   excused: { color: "var(--color-info)", letter: "E", label: "Excused" },
-}
-
-function toISO(date: Date) {
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const d = String(date.getDate()).padStart(2, "0")
-  return `${date.getFullYear()}-${m}-${d}`
 }
 
 function startOfLocalDay(d: Date) {
@@ -73,6 +69,7 @@ export default function AttendanceGrid({
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [dayDialog, setDayDialog] = useState<Date | null>(null)
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
+  const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
   const [notesSaving, setNotesSaving] = useState(false)
 
   useEffect(() => {
@@ -104,8 +101,8 @@ export default function AttendanceGrid({
       const first = new Date(y, m, 1)
       const last = new Date(y, m + 1, 0)
       const res = await orgAttendance(auth0Id, {
-        from: toISO(first),
-        to: toISO(last),
+        from: toISODate(first),
+        to: toISODate(last),
       })
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
@@ -122,10 +119,10 @@ export default function AttendanceGrid({
     fetchMonth(next)
   }
 
-  const isToday = (d: Date) => toISO(d) === toISO(today)
+  const isToday = (d: Date) => toISODate(d) === toISODate(today)
 
   const cycle = async (studentId: string, date: Date) => {
-    const dateStr = toISO(date)
+    const dateStr = toISODate(date)
     const k = keyOf(studentId, dateStr)
     const current = records.get(k)
     const currentNote = notes.get(k)
@@ -171,18 +168,23 @@ export default function AttendanceGrid({
   }
 
   const openDayDialog = (d: Date) => {
-    const dateStr = toISO(d)
+    const dateStr = toISODate(d)
     const draft: Record<string, string> = {}
+    const statuses: Record<string, AttendanceStatus> = {}
     for (const s of roster) {
       const k = keyOf(s.id, dateStr)
-      if (records.has(k)) draft[s.id] = notes.get(k) ?? ""
+      const existingNote = notes.get(k)
+      if (existingNote) draft[s.id] = existingNote
+      const st = records.get(k)
+      if (st) statuses[s.id] = st
     }
     setNoteDraft(draft)
+    setStatusDraft(statuses)
     setDayDialog(d)
   }
 
   const markRemainingPresent = async (date: Date) => {
-    const dateStr = toISO(date)
+    const dateStr = toISODate(date)
     const unmarked = roster.filter((s) => !records.has(keyOf(s.id, dateStr)))
     if (unmarked.length === 0) {
       toast.info("Everyone already has a status for this day")
@@ -199,9 +201,14 @@ export default function AttendanceGrid({
         for (const r of res.records) map.set(keyOf(r.student_id, r.session_date), r.status)
         return map
       })
+      setStatusDraft((prev) => {
+        const next = { ...prev }
+        for (const s of unmarked) next[s.id] = "present"
+        return next
+      })
       setNoteDraft((prev) => {
         const next = { ...prev }
-        for (const s of unmarked) next[s.id] = ""
+        for (const s of unmarked) next[s.id] = next[s.id] ?? ""
         return next
       })
       toast.success(`Marked ${unmarked.length} student(s) present`)
@@ -214,42 +221,58 @@ export default function AttendanceGrid({
 
   const saveNotes = async () => {
     if (!dayDialog) return
-    const dateStr = toISO(dayDialog)
-    const changed = roster.filter((s) => {
+    const dateStr = toISODate(dayDialog)
+    const upserts: { student: Student; status: AttendanceStatus; note: string | null }[] = []
+    for (const s of roster) {
       const k = keyOf(s.id, dateStr)
-      if (!records.has(k)) return false
-      return (notes.get(k) ?? "") !== (noteDraft[s.id] ?? "")
-    })
-    if (changed.length === 0) {
+      const currentStatus = records.get(k)
+      const draftStatus = statusDraft[s.id]
+      const desiredStatus = draftStatus ?? currentStatus
+      const existingNote = notes.get(k) ?? ""
+      const draftNote = noteDraft[s.id]?.trim() ?? ""
+      const noteChanged = draftNote !== existingNote
+      const statusChanged = currentStatus !== desiredStatus
+      if (!statusChanged && !noteChanged) continue
+      upserts.push({
+        student: s,
+        status: desiredStatus ?? "present",
+        note: noteChanged ? (draftNote || null) : (existingNote || null),
+      })
+    }
+    if (upserts.length === 0) {
       setDayDialog(null)
       return
     }
     setNotesSaving(true)
     try {
       await Promise.all(
-        changed.map((s) =>
+        upserts.map((u) =>
           orgUpsertAttendance(auth0Id, {
-            student_id: s.id,
+            student_id: u.student.id,
             session_date: dateStr,
-            status: records.get(keyOf(s.id, dateStr)) as AttendanceStatus,
-            note: noteDraft[s.id]?.trim() || undefined,
+            status: u.status,
+            note: u.note ?? undefined,
           }),
         ),
       )
+      setRecords((prev) => {
+        const map = new Map(prev)
+        for (const u of upserts) map.set(keyOf(u.student.id, dateStr), u.status)
+        return map
+      })
       setNotes((prev) => {
         const map = new Map(prev)
-        for (const s of changed) {
-          const k = keyOf(s.id, dateStr)
-          const v = noteDraft[s.id]?.trim()
-          if (v) map.set(k, v)
+        for (const u of upserts) {
+          const k = keyOf(u.student.id, dateStr)
+          if (u.note) map.set(k, u.note)
           else map.delete(k)
         }
         return map
       })
-      toast.success("Notes saved")
+      toast.success("Saved")
       setDayDialog(null)
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to save notes")
+      toast.error((err as CoachAIError).message ?? "Failed to save")
     } finally {
       setNotesSaving(false)
     }
@@ -263,7 +286,7 @@ export default function AttendanceGrid({
         s.full_name,
         s.sport ?? "",
         ...days.map((d) => {
-          const st = records.get(keyOf(s.id, toISO(d)))
+          const st = records.get(keyOf(s.id, toISODate(d)))
           return st ? STATUS_META[st].letter : ""
         }),
         counts.present,
@@ -278,14 +301,14 @@ export default function AttendanceGrid({
   const rowCounts = (studentId: string) => {
     const counts: Record<string, number> = { present: 0, late: 0, absent: 0, excused: 0 }
     for (const d of days) {
-      const st = records.get(keyOf(studentId, toISO(d)))
+      const st = records.get(keyOf(studentId, toISODate(d)))
       if (st) counts[st] += 1
     }
     return counts
   }
 
   const dayCounts = (date: Date) => {
-    const dateStr = toISO(date)
+    const dateStr = toISODate(date)
     let marked = 0
     let present = 0
     let late = 0
@@ -300,7 +323,7 @@ export default function AttendanceGrid({
     return { marked, present, late }
   }
 
-  const dialogDateStr = dayDialog ? toISO(dayDialog) : ""
+  const dialogDateStr = dayDialog ? toISODate(dayDialog) : ""
   const dialogMarked = dayDialog ? roster.filter((s) => records.has(keyOf(s.id, dialogDateStr))) : []
   const dialogUnmarked = roster.length - dialogMarked.length
 
@@ -374,7 +397,7 @@ export default function AttendanceGrid({
               {days.map((d) => {
                 const counts = dayCounts(d)
                 const noteCount = roster.reduce((acc, s) => {
-                  const k = keyOf(s.id, toISO(d))
+                  const k = keyOf(s.id, toISODate(d))
                   return acc + (records.has(k) && notes.has(k) ? 1 : 0)
                 }, 0)
                 return (
@@ -432,7 +455,7 @@ export default function AttendanceGrid({
                     </a>
                   </td>
                   {days.map((d) => {
-                    const dateStr = toISO(d)
+                    const dateStr = toISODate(d)
                     const k = keyOf(s.id, dateStr)
                     const st = records.get(k)
                     const meta = st ? STATUS_META[st] : null
@@ -515,45 +538,60 @@ export default function AttendanceGrid({
               </Button>
             )}
 
-            {dialogMarked.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No attendance marked for this day yet. Mark students present, then add notes.
-              </p>
-            ) : (
-              <div className="grid gap-3">
-                {dialogMarked.map((s) => {
-                  const k = keyOf(s.id, dialogDateStr)
-                  const st = records.get(k)
-                  return (
-                    <div key={s.id} className="grid gap-1.5">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span
-                          className="inline-flex size-5 items-center justify-center rounded text-[0.6rem] font-semibold text-background"
-                          style={{ background: st ? STATUS_META[st].color : "var(--color-muted)" }}
-                        >
-                          {st ? STATUS_META[st].letter : ""}
-                        </span>
-                        <span className="text-(--fg)">{s.full_name}</span>
-                      </div>
-                      <Input
-                        value={noteDraft[s.id] ?? ""}
-                        onChange={(e) => setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                        placeholder="Add a note (e.g. injured, arrived late)…"
-                        className="h-8 text-sm"
-                      />
+            <div className="grid gap-3">
+              {roster.map((s) => {
+                const k = keyOf(s.id, dialogDateStr)
+                const st = records.get(k)
+                return (
+                  <div key={s.id} className="grid gap-1.5">
+                    <div className="flex items-center gap-2 text-sm">
+                      <select
+                        value={statusDraft[s.id] ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value as AttendanceStatus
+                          setStatusDraft((prev) => {
+                            const next = { ...prev }
+                            if (v) next[s.id] = v
+                            else delete next[s.id]
+                            return next
+                          })
+                        }}
+                        className={`h-7 rounded border px-1 text-[0.65rem] font-semibold ${
+                          st
+                            ? "text-background"
+                            : "text-muted-foreground border-border/60 bg-transparent"
+                        }`}
+                        style={st ? { background: STATUS_META[st].color, borderColor: STATUS_META[st].color } : undefined}
+                        title="Status for this day"
+                      >
+                        <option value="">—</option>
+                        {STATUSES.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {STATUS_META[opt].label}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-(--fg)">{s.full_name}</span>
+                      {!st && <span className="text-muted-foreground text-xs">not yet marked</span>}
                     </div>
-                  )
-                })}
-              </div>
-            )}
+                    <Input
+                      value={noteDraft[s.id] ?? ""}
+                      onChange={(e) => setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      placeholder="Add a note (e.g. injured, arrived late)…"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDayDialog(null)}>
               Cancel
             </Button>
-            <Button onClick={saveNotes} disabled={notesSaving || dialogMarked.length === 0}>
-              {notesSaving ? <Spinner /> : "Save notes"}
+            <Button onClick={saveNotes} disabled={notesSaving}>
+              {notesSaving ? <Spinner /> : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

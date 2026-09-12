@@ -2,6 +2,8 @@
 // Kept separate from the Elysia route file so they can be tested without
 // booting the server or touching the database.
 
+import type { ReportType } from "./orgEnums"
+
 /** Matches a YYYY-MM-DD calendar string (format-level only; real calendar
  *  validity is enforced by the DB date cast). */
 export const isDate = (value: unknown): value is string =>
@@ -11,7 +13,7 @@ export const isDate = (value: unknown): value is string =>
 export const isIsoDate = (value: unknown): value is string =>
   typeof value === "string" && !Number.isNaN(Date.parse(value))
 
-export const REPORT_TYPE_LABELS: Record<string, string> = {
+export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   progress: "Progress Report",
   attendance: "Attendance Report",
   performance: "Performance Report",
@@ -23,5 +25,5 @@ export function defaultReportTitle(
   student: { full_name: string } | null,
 ): string {
   const label = student ? student.full_name : "Organization"
-  return `${label} — ${REPORT_TYPE_LABELS[reportType] ?? "Report"}`
+  return `${label} — ${(REPORT_TYPE_LABELS as Record<string, string>)[reportType] ?? "Report"}`
 }

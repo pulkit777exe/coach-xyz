@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { auth0 } from "@/lib/auth0";
 import { redirect } from "next/navigation";
 import { orgStudents, orgAttendance } from "@/lib/org";
+import { toISODate } from "@/lib/date";
 import AttendanceGrid from "@/components/org/AttendanceGrid";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -9,12 +10,6 @@ export const metadata: Metadata = {
   title: "Attendance | CoachXYZ",
   description: "Track session attendance day by day.",
 };
-
-function localISO(d: Date) {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
 
 export default async function AttendancePage() {
   noStore();
@@ -28,7 +23,7 @@ export default async function AttendancePage() {
 
   const [studentsRes, attendanceRes] = await Promise.all([
     orgStudents(auth0Id),
-    orgAttendance(auth0Id, { from: localISO(first), to: localISO(last) }),
+    orgAttendance(auth0Id, { from: toISODate(first), to: toISODate(last) }),
   ]);
 
   const active = studentsRes.students.filter((s) => s.status === "active");

@@ -11,11 +11,9 @@ import { Textarea } from "@/components/9ui/ui/textarea"
 import { Spinner } from "./Spinner"
 
 import type { ScheduleEvent } from "@/lib/org"
-import { orgCreateEvent, orgUpdateEvent } from "@/lib/org"
+import { orgCreateEvent, orgUpdateEvent, EVENT_STATUSES, EVENT_TYPES } from "@/lib/org"
+import { toISODate, toISOTime } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
-
-const EVENT_TYPES = ["practice", "match", "tournament", "meeting", "other"] as const
-const EVENT_STATUSES = ["scheduled", "completed", "cancelled"] as const
 
 export type EventFormValues = {
   title: string
@@ -31,13 +29,12 @@ export type EventFormValues = {
 function toFormValues(event?: ScheduleEvent | null, initialDate?: string): EventFormValues {
   if (event) {
     const start = new Date(event.starts_at)
-    const pad = (n: number) => String(n).padStart(2, "0")
-    const date = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`
-    const start_time = `${pad(start.getHours())}:${pad(start.getMinutes())}`
+    const date = toISODate(start)
+    const start_time = toISOTime(start)
     let end_time = ""
     if (event.ends_at) {
       const end = new Date(event.ends_at)
-      if (!Number.isNaN(end.getTime())) end_time = `${pad(end.getHours())}:${pad(end.getMinutes())}`
+      if (!Number.isNaN(end.getTime())) end_time = toISOTime(end)
     }
     return {
       title: event.title,

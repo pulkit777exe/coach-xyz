@@ -1,5 +1,19 @@
 import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from "./supabaseHistory"
 import type { DashboardAnalysis } from "./supabaseHistory"
+import {
+  EVENT_STATUSES,
+  EVENT_TYPES,
+  REPORT_TYPES,
+  STUDENT_STATUSES,
+} from "./orgEnums"
+import type { AttendanceStatus } from "./orgEnums"
+export type {
+  AttendanceStatus,
+  EventStatus,
+  EventType,
+  ReportType,
+  StudentStatus,
+} from "./orgEnums"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,13 +31,11 @@ export type Student = {
   guardian_name: string | null
   guardian_phone: string | null
   notes: string | null
-  status: "active" | "inactive" | "transferred"
+  status: (typeof STUDENT_STATUSES)[number]
   joined_on: string | null
   created_at: string
   updated_at: string
 }
-
-export type AttendanceStatus = "present" | "absent" | "late" | "excused"
 
 export type AttendanceRecord = {
   id: string
@@ -45,12 +57,12 @@ export type ScheduleEvent = {
   id: string
   auth0_id: string
   title: string
-  event_type: "practice" | "match" | "tournament" | "meeting" | "other"
+  event_type: (typeof EVENT_TYPES)[number]
   starts_at: string
   ends_at: string | null
   location: string | null
   description: string | null
-  status: "scheduled" | "completed" | "cancelled"
+  status: (typeof EVENT_STATUSES)[number]
   created_at: string
   updated_at: string
 }
@@ -59,7 +71,7 @@ export type ReportRecord = {
   id: string
   auth0_id: string
   student_id: string | null
-  report_type: string
+  report_type: (typeof REPORT_TYPES)[number]
   title: string
   period_start: string | null
   period_end: string | null
@@ -867,11 +879,26 @@ export const createPerformanceMetric = async (
         ${input.source_analysis_id ?? null},
         ${input.measured_at ?? null}::timestamptz
       )
-      on conflict (student_id, metric_key, measured_at) do update set
-        metric_value = excluded.metric_value,
-        unit = excluded.unit,
-        source_analysis_id = excluded.source_analysis_id,
-        updated_at = now()
+      on conflict (student_id, metric_key, measured_at) do nothing
+      returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
+        unit, source_analysis_id, measured_at, created_at;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const updatePerformanceMetric = async (
+  auth0Id: string,
+  id: string,
+  input: { metric_value: number; unit?: string | null },
+): Promise<PerformanceMetric | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<PerformanceMetric[]>`
+      update performance_metrics set
+        metric_value = ${input.metric_value}::float8,
+        unit = ${input.unit ?? null}
+      where auth0_id = ${auth0Id} and id = ${id}::uuid and source_analysis_id is null
       returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
         unit, source_analysis_id, measured_at, created_at;
     `

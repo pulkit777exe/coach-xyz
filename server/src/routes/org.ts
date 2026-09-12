@@ -23,6 +23,7 @@ import {
   buildReportContent,
   listPerformance,
   createPerformanceMetric,
+  updatePerformanceMetric,
   deletePerformanceMetric,
   getStudentPerformanceSeries,
   getStudentAnalyses,
@@ -33,12 +34,19 @@ import {
 } from "../lib/orgData"
 import { buildError } from "../lib/errors"
 import { isDate, isIsoDate, defaultReportTitle } from "../lib/orgValidate"
+import {
+  ATTENDANCE_STATUSES,
+  EVENT_STATUSES,
+  EVENT_TYPES,
+  REPORT_TYPES,
+  STUDENT_STATUSES,
+} from "../lib/orgEnums"
 
-const ATTENDANCE_STATUSES = new Set(["present", "absent", "late", "excused"])
-const EVENT_TYPES = new Set(["practice", "match", "tournament", "meeting", "other"])
-const EVENT_STATUSES = new Set(["scheduled", "completed", "cancelled"])
-const STUDENT_STATUSES = new Set(["active", "inactive", "transferred"])
-const REPORT_TYPES = new Set(["progress", "attendance", "performance", "monthly"])
+const ATTENDANCE_STATUS_SET: ReadonlySet<string> = new Set(ATTENDANCE_STATUSES)
+const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES)
+const EVENT_STATUS_SET: ReadonlySet<string> = new Set(EVENT_STATUSES)
+const STUDENT_STATUS_SET: ReadonlySet<string> = new Set(STUDENT_STATUSES)
+const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
 
 const parseStudentInput = (body: Record<string, unknown>) => {
   const input: StudentInput = {}
@@ -117,9 +125,9 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "Missing required field: full_name", false)
     }
-    if (input.status !== undefined && !STUDENT_STATUSES.has(input.status as string)) {
+    if (input.status !== undefined && !STUDENT_STATUS_SET.has(input.status as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `status must be one of ${[...STUDENT_STATUSES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `status must be one of ${[...STUDENT_STATUS_SET].join(", ")}`, false)
     }
     if (input.jersey_number !== undefined && typeof input.jersey_number !== "number") {
       set.status = 400
@@ -159,9 +167,9 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "full_name must be a string", false)
     }
-    if (input.status !== undefined && !STUDENT_STATUSES.has(input.status as string)) {
+    if (input.status !== undefined && !STUDENT_STATUS_SET.has(input.status as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `status must be one of ${[...STUDENT_STATUSES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `status must be one of ${[...STUDENT_STATUS_SET].join(", ")}`, false)
     }
     if (input.jersey_number !== undefined && input.jersey_number !== null && typeof input.jersey_number !== "number") {
       set.status = 400
@@ -230,8 +238,8 @@ export default new Elysia()
       measured_at: typeof measured_at === "string" ? measured_at : null,
     })
     if (!metric) {
-      set.status = 500
-      return buildError("INTERNAL_ERROR", "Failed to save performance metric", true)
+      set.status = 409
+      return buildError("ALREADY_EXISTS", "A metric for this key already exists at that timestamp", false)
     }
     set.status = 201
     return { metric }
@@ -272,7 +280,7 @@ export default new Elysia()
   .put("/api/org/:auth0Id/attendance", async ({ params, body, set }) => {
     const { auth0Id } = params
     const { student_id, session_date, status, note } = body as Record<string, unknown>
-    if (!student_id || !session_date || !ATTENDANCE_STATUSES.has(status as string)) {
+    if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "Missing or invalid attendance fields", false)
     }
@@ -304,7 +312,7 @@ export default new Elysia()
         typeof e.student_id !== "string" ||
         !e.student_id ||
         !isDate(sessionDate) ||
-        !ATTENDANCE_STATUSES.has(e.status as string)
+        !ATTENDANCE_STATUS_SET.has(e.status as string)
       )
     })
     if (invalid) {
@@ -364,13 +372,13 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "starts_at must be a valid ISO datetime", false)
     }
-    if (input.event_type !== undefined && !EVENT_TYPES.has(input.event_type as string)) {
+    if (input.event_type !== undefined && !EVENT_TYPE_SET.has(input.event_type as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `event_type must be one of ${[...EVENT_TYPES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `event_type must be one of ${[...EVENT_TYPE_SET].join(", ")}`, false)
     }
-    if (input.status !== undefined && !EVENT_STATUSES.has(input.status as string)) {
+    if (input.status !== undefined && !EVENT_STATUS_SET.has(input.status as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `status must be one of ${[...EVENT_STATUSES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `status must be one of ${[...EVENT_STATUS_SET].join(", ")}`, false)
     }
     if (input.ends_at !== undefined && input.ends_at !== null && !isIsoDate(input.ends_at)) {
       set.status = 400
@@ -396,13 +404,13 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "starts_at must be a valid ISO datetime", false)
     }
-    if (input.event_type !== undefined && !EVENT_TYPES.has(input.event_type as string)) {
+    if (input.event_type !== undefined && !EVENT_TYPE_SET.has(input.event_type as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `event_type must be one of ${[...EVENT_TYPES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `event_type must be one of ${[...EVENT_TYPE_SET].join(", ")}`, false)
     }
-    if (input.status !== undefined && !EVENT_STATUSES.has(input.status as string)) {
+    if (input.status !== undefined && !EVENT_STATUS_SET.has(input.status as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `status must be one of ${[...EVENT_STATUSES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `status must be one of ${[...EVENT_STATUS_SET].join(", ")}`, false)
     }
 
     const event = await updateScheduleEvent(auth0Id, id, input)
@@ -447,9 +455,9 @@ export default new Elysia()
     const { auth0Id } = params
     const { student_id, report_type, period_start, period_end, title } = body as Record<string, unknown>
 
-    if (!report_type || !REPORT_TYPES.has(report_type as string)) {
+    if (!report_type || !REPORT_TYPE_SET.has(report_type as string)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPE_SET].join(", ")}`, false)
     }
     if (student_id && (await getStudent(auth0Id, student_id as string)) === null) {
       set.status = 404
@@ -502,9 +510,9 @@ export default new Elysia()
     const { report_type, period_start, period_end, title } = body as Record<string, unknown>
 
     const nextType = report_type === undefined ? existing.report_type : String(report_type)
-    if (!REPORT_TYPES.has(nextType)) {
+    if (!REPORT_TYPE_SET.has(nextType)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPES].join(", ")}`, false)
+      return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPE_SET].join(", ")}`, false)
     }
     if (period_start !== undefined && period_start !== null && !isDate(period_start)) {
       set.status = 400
@@ -578,6 +586,24 @@ export default new Elysia()
     }
     set.status = 200
     return { deleted: true }
+  })
+  .put("/api/org/:auth0Id/performance/:id", async ({ params, body, set }) => {
+    const { auth0Id, id } = params
+    const { metric_value, unit } = body as Record<string, unknown>
+    if (typeof metric_value !== "number" || !Number.isFinite(metric_value)) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "metric_value must be a finite number", false)
+    }
+    const metric = await updatePerformanceMetric(auth0Id, id, {
+      metric_value: metric_value as number,
+      unit: typeof unit === "string" ? unit : null,
+    })
+    if (!metric) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Performance metric not found or is analysis-linked", false)
+    }
+    set.status = 200
+    return { metric }
   })
   // ── Overview ───────────────────────────────────────────────────────────────
   .get("/api/org/:auth0Id/overview", async ({ params, set }) => {

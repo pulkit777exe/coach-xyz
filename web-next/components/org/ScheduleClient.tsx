@@ -17,8 +17,9 @@ import { Spinner } from "./Spinner"
 import EventFormDialog from "./EventFormDialog"
 import { downloadCSV } from "@/lib/csv"
 
-import type { ScheduleEvent } from "@/lib/org"
-import { orgSchedule, orgDeleteEvent } from "@/lib/org"
+import type { EventStatus, ScheduleEvent } from "@/lib/org"
+import { orgSchedule, orgDeleteEvent, EVENT_STATUSES } from "@/lib/org"
+import { toISODate } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
 
 const TYPE_META: Record<
@@ -57,22 +58,16 @@ const TYPE_META: Record<
   },
 }
 
-const STATUS_META: Record<ScheduleEvent["status"], { label: string; className: string }> = {
+const STATUS_META: Record<EventStatus, { label: string; className: string }> = {
   scheduled: { label: "Scheduled", className: "border-(--info-border) text-(--info)" },
   completed: { label: "Completed", className: "border-(--success-border) text-(--success)" },
   cancelled: { label: "Cancelled", className: "border-(--danger-border) text-(--danger)" },
 }
 
-function localISO(d: Date) {
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${d.getFullYear()}-${m}-${day}`
-}
-
 function localDateTimeKey(iso: string) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
-  return localISO(d)
+  return toISODate(d)
 }
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -112,7 +107,7 @@ export default function ScheduleClient({
     const blanks = Array.from({ length: offset }, () => null)
     const dayCells = Array.from({ length: daysInMonth }, (_, i) => {
       const date = new Date(year, monthNum, i + 1)
-      return { key: localISO(date), date, events: [] as ScheduleEvent[] }
+      return { key: toISODate(date), date, events: [] as ScheduleEvent[] }
     })
     return [...blanks, ...dayCells] as ({ key: string; date: Date; events: ScheduleEvent[] } | null)[]
   }, [year, monthNum])
@@ -151,7 +146,7 @@ export default function ScheduleClient({
 
   const openCreate = (date: Date) => {
     setEditingEvent(null)
-    setInitialDate(localISO(date))
+    setInitialDate(toISODate(date))
     setDialogOpen(true)
   }
 
@@ -212,7 +207,7 @@ export default function ScheduleClient({
   }
 
   const todayKey = today.toDateString()
-  const dayViewEvents = dayView ? byDay.get(localISO(dayView)) ?? [] : []
+  const dayViewEvents = dayView ? byDay.get(toISODate(dayView)) ?? [] : []
 
   return (
     <div>
@@ -249,9 +244,11 @@ export default function ScheduleClient({
             aria-label="Filter by status"
           >
             <option value="">All statuses</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
+            {EVENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_META[s].label}
+              </option>
+            ))}
           </select>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <DownloadIcon /> Export
