@@ -80,12 +80,12 @@ export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResu
 }
 
 export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
-  const limit = parseInt(process.env.SCAN_RATE_LIMIT || "100")
+  const limit = parseInt(process.env.SCAN_RATE_LIMIT || "10")
   return checkLimit({ key: `rl:scan:${ip}`, limit, windowSec: 60 })
 }
 
 export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
-  const limit = parseInt(process.env.ANALYSIS_RATE_LIMIT || "50")
+  const limit = parseInt(process.env.ANALYSIS_RATE_LIMIT || "5")
   return checkLimit({ key: `rl:analysis:${ip}`, limit, windowSec: 3600 })
 }
 

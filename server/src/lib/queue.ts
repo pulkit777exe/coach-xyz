@@ -80,7 +80,6 @@ export const analysisQueue = redisAvailable
 // Job priority configuration
 // Higher number = higher priority
 export const JOB_PRIORITIES = {
-  beta: 10,      // Beta users get highest priority
   paid: 5,       // Paid users (future)
   free: 0,       // Free users (default)
 } as const

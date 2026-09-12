@@ -1,150 +1,143 @@
-# CoachAI Setup Instructions
+# Coach-XYZ Setup Instructions
 
 ## Overview
-This document provides instructions for setting up and running the CoachAI system, which includes:
-- Python engine for video analysis
-- Elysia backend with Bun for API services
-- Next.js frontend with TypeScript and Tailwind CSS
-- Android app (React Native)
+
+This document explains how to run the Coach-XYZ system locally. The project has three tiers:
+
+- **`engine/`** — Python 3.11 + FastAPI video-analysis pipeline (MediaPipe + Gemini)
+- **`server/`** — Bun + Elysia middleware (BullMQ worker, Redis, Supabase persistence)
+- **`web-next/`** — Next.js 16 + React 19 frontend
+
+There is **no Android / React Native app** and no `backend/`, `web/`, or root `cli/` directory anymore.
+The CLI tool lives at `engine/cli/`.
 
 ## Prerequisites
-- Python 3.8+ and pip
-- Node.js 18+ and npm (or Bun)
-- React Native development environment (for Android app)
-- VSCode (recommended for development)
 
-## Python Engine Setup
+- Docker (recommended) — dev setup is driven by `docker-compose.yml`
+- Python 3.11 (for non-Docker engine)
+- Bun 1.x (for non-Docker server + frontend)
 
-### 1. Install Python Dependencies
+## Quick start (Docker)
+
+```bash
+cp .env.prod.example .env
+# Fill in GEMINI_API_KEY, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
+docker compose up --build
+```
+
+- Engine: http://localhost:8001 (`/health`)
+- Server: http://localhost:8000 (`/health`, Swagger at `/swagger`)
+
+The server depends on the engine being healthy and will wait (`condition: service_healthy`).
+
+## Local setup (without Docker)
+
+### 1. Engine (Python)
+
 ```bash
 cd engine
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cd ..
+cp .env.sample .env            # fill in GEMINI_API_KEY, UPSTASH_REDIS_*
+python -m uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
-### 2. Install Backend Dependencies
+Required env: `GEMINI_API_KEY` (engine startup fails without it). Redis (Upstash) is used for
+job state, caching, and rate limiting; if unset, the engine still runs but job status is degraded.
+
+Run the test suite:
+
 ```bash
-pip install -r backend/requirements.txt
+python -m pytest tests/ -q
 ```
 
-### 3. Set Environment Variables
-```bash
-# Copy and edit the .env file
-cp .env.sample .env
-# Add your GEMINI_API_KEY
-```
+### 2. Server (Bun + Elysia)
 
-## Elysia Backend Setup (Bun)
-
-### 1. Install Dependencies
 ```bash
 cd server
 bun install
+cp .env.example .env           # fill in UPSTASH_REDIS_*, optional DATABASE_URL, SENTRY_DSN
+bun run dev                    # or bun run start
 ```
 
-### 2. Set Environment Variables
-```bash
-cp .env.example .env
-# Add your GEMINI_API_KEY and API_KEY
-```
+Required env: `ENGINE_URL` (`http://localhost:8001` by default). `DATABASE_URL` is optional —
+history/chat persistence degrades gracefully when absent. Rate limits are configured with
+`SCAN_RATE_LIMIT` (default 10/min) and `ANALYSIS_RATE_LIMIT` (default 5/hour).
 
-### 3. Start Development Server
-```bash
-bun run dev
-```
+### 3. Frontend (Next.js)
 
-Backend will be available at: http://localhost:8000
-
-## Next.js Frontend Setup (Bun)
-
-### 1. Install Dependencies
 ```bash
 cd web-next
 bun install
-```
-
-### 2. Set Environment Variables
-```bash
-cp .env.local.example .env.local
-# Update API_BASE if backend is running on different port
-```
-
-### 3. Start Development Server
-```bash
+cp .env.example .env.local     # set NEXT_PUBLIC_API_URL, Auth0 vars, NEXT_PUBLIC_SENTRY_DSN
 bun run dev
 ```
 
-Frontend will be available at: http://localhost:3000
+Frontend: http://localhost:3000
 
-## Android App Setup
+Auth0 is required for `/dashboard/*`, `/account`, and authenticated uploads. Minimal vars:
+`AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` (64-hex),
+`APP_BASE_URL=http://localhost:3000`.
 
-### 1. Install Dependencies
-```bash
-cd android
-npm install
-```
+## Environment variables
 
-### 2. Start Metro
-```bash
-npm start
-```
+| Variable | Where | Default | Required |
+|---|---|---|---|
+| `GEMINI_API_KEY` | engine | — | yes |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | engine + server | — | recommended |
+| `ENGINE_URL` | server | `http://localhost:8001` | yes |
+| `FRONTEND_URL` | server | `http://localhost:3000` (CORS) | no |
+| `PORT` | server | `8000` | no |
+| `WORKER_CONCURRENCY` | server | `1` | no |
+| `SCAN_RATE_LIMIT` | server | `10` (per minute) | no |
+| `ANALYSIS_RATE_LIMIT` | server | `5` (per hour) | no |
+| `DATABASE_URL` | server | — | no (graceful degradation) |
+| `SENTRY_DSN` | engine + server + web | — | no |
+| `NEXT_PUBLIC_API_URL` | web-next | `http://localhost:8000` | yes |
+| Auth0 vars (`AUTH0_*`, `APP_BASE_URL`) | web-next | — | yes (for auth) |
 
-### 3. Run on Device/Emulator
-```bash
-npm run android
-```
+Storage is **local-only** — the engine writes to `/app/tmp/storage` (Docker) or `engine/tmp/storage`.
+The only storage var is `LOCAL_STORAGE_DIR`; there is no S3/R2 integration.
 
 ## VSCode Tasks
 
-A `tasks.json` file has been created with all the necessary tasks:
-
-- **Python Engine**: Install dependencies, run CLI analysis
-- **Backend**: Install dependencies, start dev/prod server, type check
-- **Frontend**: Install dependencies, start dev/prod server, build
-- **Android**: Install dependencies, start Metro, run on device
-
-To run a task:
-1. Open VSCode
-2. Press `Ctrl+Shift+P` (or Cmd+Shift+P on Mac)
-3. Type "Tasks: Run Task"
-4. Select the desired task
-
-## API Documentation
-
-Backend API documentation is available at: http://localhost:8000/swagger
+`.vscode/tasks.json` wires up Docker-compose tasks for engine + server + frontend (build/up/logs).
+Open the Command Palette (`Ctrl+Shift+P`) → "Tasks: Run Task" to use them.
 
 ## Usage
 
-1. **Web Interface**: Open http://localhost:3000 in your browser
-2. **Upload Video**: Select a video file (MP4, MOV, AVI, MKV, max 500MB)
-3. **Analyze**: Click "Start AI Analysis" to process the video
-4. **View Results**: Wait for analysis to complete (30-60 seconds per minute of video)
+1. Open http://localhost:3000
+2. Upload a video (MP4/MOV/AVI/MKV, ≤500 MB). The system detects players and either auto-analyses
+   single-player clips or asks you to pick a player.
+3. Wait for analysis (30–120s), then view results and chat with the AI coach.
+4. Download the annotated video from the results or dashboard detail page.
 
-## Supported Sports
-- **Basketball** (🏀): Jump shots, layups, dunks, free throws, 3-pt
-- **Football** (⚽): Strikes, headers, volleys, penalties
-- **Cricket** (🏏): Drives, pulls, sweeps, cuts, hooks
-- **Tennis** (🎾): Serves, forehands, backhands, volleys, overheads
-- **Baseball** (⚾): Singles, doubles, home runs, strikeouts
-- **Hockey** (🏒): Wrist shots, slap shots, backhands, one-timers
+## Supported sports
 
-## Security Measures
+| Sport | Events detected |
+|---|---|
+| Basketball | Jump shots, layups, dunks, free throws, 3-pt |
+| Football | Strikes, headers, volleys, penalties |
+| Cricket | Drives, pulls, sweeps, cuts, hooks |
+| Tennis | Serves, forehands, backhands, volleys, overheads, drop shots |
+| Baseball | Singles, doubles, home runs, strikeouts |
+| Hockey | Wrist shots, slap shots, backhands, one-timers |
 
-- API key authentication for protected routes
-- CORS configuration for frontend-backend communication
-- File size validation
-- Rate limiting (100 requests per minute)
-- Error handling and logging
+Sport is auto-detected by Gemini unless forced via the `sport` parameter.
 
 ## Architecture
 
 ```
 coach-xyz/
-├── core/          # Shared Python engine (Gemini, overlay renderer, validator)
-├── server/        # Elysia/Bun backend for sports video analysis
-├── web-next/      # Next.js 14+ frontend with TypeScript and Tailwind
-├── web/           # Legacy HTML/CSS/JS SPA
-├── android/       # React Native Android app
-├── cli/           # Command-line interface
-└── sports/        # Per-sport config JSON
+├── engine/          # Python FastAPI analysis engine (MediaPipe + Gemini)
+├── server/          # Bun/Elysia middleware (BullMQ worker, Supabase history, rate limiting)
+├── web-next/        # Next.js 16 frontend (upload → analyze → chat)
+├── sports/          # Per-sport config JSON (6 sports)
+├── docs/            # V1 (current app) and V2 (chat design) feature docs
+├── docker-compose.yml       # dev compose (engine + server)
+├── docker-compose.prod.yml  # hardened prod compose
+└── render.yaml              # Render blueprint (engine + server)
 ```
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full data model and request flows.

@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import cv2
+from typing import Any
 
 from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
 from core.dedup import deduplicator
@@ -151,7 +152,8 @@ def _compute_criterion_score(
         in_acceptable = True
     elif acceptable and acceptable[0] <= measured_value <= acceptable[1]:
         score = 0.5
-        rationale = f"Acceptable but outside ideal ({ideal[0]}–{ideal[1]}{unit})"
+        ideal_desc = f" ({ideal[0]}–{ideal[1]}{unit})" if ideal else ""
+        rationale = f"Acceptable but outside ideal{ideal_desc}"
         in_ideal = False
         in_acceptable = True
     else:
@@ -192,9 +194,6 @@ def _compute_weighted_scoring(
     config = _load_sport_config(sport)
     criteria = config.get("form_criteria", [])
 
-    # Build lookup by key for criteria that have metric definitions
-    criteria_by_key = {c["key"]: c for c in criteria if isinstance(c, dict)}
-
     for event in shot_events:
         breakdown = event.get("form_breakdown", {})
         biomechanics = event.get("biomechanics", {})
@@ -220,9 +219,6 @@ def _compute_weighted_scoring(
             # If no biomechanical measurement, try to infer from form_breakdown
             if measured_value is None and key in breakdown:
                 rating = breakdown[key]
-                # Map qualitative ratings to approximate numeric values
-                rating_map = {"good": 1.0, "needs_work": 0.5, "poor": 0.0}
-                numeric = rating_map.get(rating, 0.5)
                 # Use the midpoint of the ideal range as a proxy
                 ideal = criterion.get("ideal_range")
                 if ideal:

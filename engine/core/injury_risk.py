@@ -119,9 +119,6 @@ def spine_flexion_angle(landmarks: list[dict]) -> float | None:
             "y": (left_shoulder["y"] + right_shoulder["y"]) / 2.0,
         }
 
-        hip_spine = _vector(spine, left_hip)
-        spine_shoulder = _vector(spine, shoulder)
-
         return _angle(left_hip, spine, shoulder)
     except (IndexError, KeyError, ZeroDivisionError):
         return None

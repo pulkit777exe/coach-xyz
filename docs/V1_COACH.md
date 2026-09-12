@@ -1,6 +1,6 @@
 # V1 — Current Application
 
-> A living document of what Coach-XYZ offers today. Last verified against source: July 2026.
+> A living document of what Coach-XYZ offers today. Last verified against source: 2026-09-11.
 
 ---
 
@@ -13,7 +13,8 @@ Coach-XYZ is a **one-shot sports video analysis platform**. A user uploads a tra
 - An **annotated video** with pose overlays, HUD stats, and a summary screen
 - A **session summary** with strengths, weaknesses, and a priority drill
 
-The entire flow is **fire-and-forget**: upload → wait → get results. There is no follow-up, no conversation, no way to ask questions about the analysis.
+The entire flow is **fire-and-forget**: upload → wait → get results. Follow-up questions about the
+analysis are answered by the **chat with the AI coach** (see §8.4 and `V2_COACH.md` — now implemented).
 
 ---
 
@@ -67,29 +68,32 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 | `/dashboard/analysis/[id]/chat` | Server | Standalone chat page for an analysis |
 | `/account` | Server | Account settings |
 
-#### Pipeline states (client-side on `/`)
+#### Pipeline states (client-side on `/`, rendered by `AppClient.tsx`)
 
 | Pipeline State | Rendered Component | Lines |
 |---|---|---|
-| `idle` | `LandingPage` | 657 |
-| `uploading` / `scanning` | Inline spinner in `page.tsx` | 10 |
-| `selecting` | `PlayerSelector` | 150 |
-| `analyzing` / `rendering` | `AnalysisProgress` | 190 |
-| `completed` | `ResultsSummary` | 221 |
-| `error` | `ErrorScreen` | 270 |
+| `idle` | `LandingPage` | 620 |
+| `uploading` / `scanning` | `RotatingMessage` spinner (in `AppClient.tsx`) | 25 |
+| `selecting` | `PlayerSelector` | 144 |
+| `analyzing` / `rendering` | `AnalysisProgress` | 176 |
+| `completed` | `ResultsSummary` | 223 |
+| `chatting` | `ChatLayout` (video + chat, V2) | 93 |
+| `error` | `ErrorScreen` | 273 |
 
 ### 3.2 Component Inventory
 
 | Component | File | Purpose |
 |---|---|---|
-| `LandingPage` | `components/LandingPage.tsx` | Full marketing page: hero, upload zone, workflow, features, sports, testimonial, FAQ, CTA, footer. 657 lines. |
+| `LandingPage` | `components/LandingPage.tsx` | Full marketing page: hero, upload zone, workflow, features, sports, testimonial, FAQ, CTA, footer. 620 lines. |
+| `AppClient` | `components/AppClient.tsx` | Root pipeline renderer — switches on `pipelineState`. |
 | `PlayerSelector` | `components/PlayerSelector.tsx` | Grid of detected players with base64 crop images, confidence badges, select + confirm. |
 | `AnalysisProgress` | `components/AnalysisProgress.tsx` | Progress bar, stage stepper (Queued → Detecting → Analyzing → Rendering → Complete), ETA. |
 | `ResultsSummary` | `components/ResultsSummary.tsx` | Form score, overall assessment, priority tips, strengths, shot event timeline, download button. |
 | `ErrorScreen` | `components/ErrorScreen.tsx` | Error details with 25+ code mappings, auto-retry countdown, retry button. |
-| `AnalysisTitle` | `components/AnalysisTitle.tsx` | Inline rename component for analysis display name. |
-| `InlineRename` | `components/InlineRename.tsx` | Editable text field with save/cancel for renaming analyses. |
-| `HistoryChat` | `components/HistoryChat.tsx` | Chat panel for asking follow-up questions about a completed analysis. |
+| `AnalysisDetailClient` | `components/AnalysisDetailClient.tsx` | Dashboard detail page: polling, rename, download/preview, stats, shot events, embedded chat. |
+| `AnalysisTitle` | `components/AnalysisTitle.tsx` | Click-to-rename analysis heading (PATCH via `renameAnalysis`). |
+| `InlineRename` | `components/InlineRename.tsx` | Inline-rename helper — **currently not imported by any other file (dead)**. |
+| `HistoryChat` | `components/HistoryChat.tsx` | Auth-scoped chat panel for a completed analysis (dashboard detail page). |
 
 ### 3.3 UI Primitives
 
@@ -117,42 +121,59 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 
 | Endpoint | Method | Purpose | Timeout |
 |---|---|---|---|
-| `/api/scan-video` | POST | Upload video, detect players, return session token + video_key | 120s |
+| `/api/scan-video` | POST | Upload video, detect players, return session token + video_key | 120s (upload) / 180s (engine) |
+| `/api/scan-progress/:sessionToken` | GET | SSE stream of scan progress (proxied from engine) | — |
 | `/api/analyze-video` | POST | Enqueue analysis job, return job ID | 30s |
-| `/api/job-status/:jobId` | GET | Poll job progress (state, stage, summary, video_ready) | 15s |
-| `/api/download/:jobId` | GET | Stream annotated video file | — |
-| `/api/chat` | POST | Send message to AI coach about an analysis | 30s |
-| `/api/conversations` | GET | List user's conversations | 10s |
-| `/api/conversations/:jobId` | GET | Load conversation history | 10s |
-| `/api/conversations/:jobId` | DELETE | Clear conversation | 5s |
-| `/api/rename/:jobId` | PATCH | Rename an analysis | 5s |
-| `/api/dashboard` | GET | Get user's analyses with stats | 10s |
+| `/api/job-status/:jobId` | GET | Poll job progress (state, stage, summary, video_ready); falls back to Supabase when Redis expires | 15s |
+| `/api/download/:jobId` | GET | Stream annotated video (served inline; via Next.js `/api/download` rewrite) | — |
+| `/api/chat` | POST | Send one message to AI coach (non-streaming) | 60s |
+| `/api/chat/stream` | POST | SSE streaming chat (token-by-token) | 120s |
+| `/api/conversation/:jobId` | GET | Load in-memory (Redis) conversation history | 10s |
+| `/api/auth/sync` | POST | Upsert Auth0 user into `users` | 10s |
+| `/api/auth/user/:auth0Id` | GET | Fetch user record | 10s |
+| `/api/auth/user/:auth0Id/analyses` | GET | Paginated analysis history (limit ≤ 100, default 20) | 10s |
+| `/api/auth/user/:auth0Id/analyses/:jobId` | GET | Single analysis detail with file info | 10s |
+| `/api/auth/user/:auth0Id/stats` | GET | Aggregate stats (total/completed/in-progress/failed, downloads) | 10s |
+| `/api/auth/user/:auth0Id/analyses/:jobId` | PATCH | Rename an analysis (`display_name`) — the only rename endpoint | 5s |
+| `/api/auth/user/:auth0Id/analyses/:jobId/chat` | GET | Load persisted chat history (Supabase `chat_messages`) | 10s |
+| `/api/auth/user/:auth0Id/analyses/:jobId/chat` | POST | Send chat message; persists + falls back to keyword reply when engine is down | 30s |
+
+> **Note:** `/api/rename/:jobId`, `/api/conversations` (list), `DELETE /api/conversations/:jobId`,
+> and `/api/dashboard` are documented in older revisions but **do not exist**. Rename is the
+> auth-scoped PATCH above; dashboard data comes from `/api/auth/user/:id/analyses` + `/stats`.
 
 ### 4.2 Server → Engine
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `POST /scan` | Forward video upload, run player detection | 
+| `POST /scan` | Forward video upload, run player detection |
+| `GET /scan-progress/{session_token}` | SSE scan progress feed |
 | `POST /analyze` | Trigger synchronous analysis (BullMQ worker calls this) |
 | `GET /status/:jobId` | Read job status from engine Redis |
-| `GET /download/:jobId` | Stream video file from engine storage |
+| `GET /download/:jobId` | Stream video file from engine storage (inline) |
 | `POST /fail/:jobId` | Mark a job as failed |
+| `POST /chat` | Chat with AI coach (non-streaming) |
+| `POST /chat/stream` | SSE streaming chat |
 
 ### 4.3 Engine Endpoints
 
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `POST /scan` | Upload video, detect players, create session, return video_key |
+| `GET /scan-progress/{session_token}` | SSE stream for live scan progress |
 | `POST /analyze` | Run full analysis pipeline (sync, called by BullMQ) |
 | `POST /analyze-async` | Fire-and-forget analysis (returns job ID immediately) |
 | `GET /status/:jobId` | Read job status from Redis |
-| `GET /download/:jobId` | Stream video from local storage |
+| `GET /download/:jobId` | Stream video from local storage (inline) |
 | `GET /analyze-progress/:jobId` | SSE stream for live progress |
-| `POST /chat` | Chat with AI coach about an analysis |
-| `GET /chat-history/:jobId` | Get conversation history from Redis |
+| `POST /chat` | Chat with AI coach about an analysis (non-streaming) |
+| `POST /chat/stream` | SSE streaming chat |
 | `POST /fail/:jobId` | Mark a job as failed (called by server on BullMQ exhaustion) |
 | `GET /health` | Shallow health check |
 | `GET /health/deep` | Deep health (Redis, disk, MediaPipe) |
+
+> **Note:** `GET /chat-history/:jobId` was documented in an earlier revision but is **not implemented**
+> in `engine/main.py`. Chat history is served by the server from Redis/Supabase instead.
 
 ---
 
@@ -211,7 +232,7 @@ Engine streams to /app/tmp/storage/
 Player detection (HOG + MediaPipe pose)
     │
     ▼
-Keyframe extraction (2s intervals, max 30 frames)
+Keyframe extraction (3s intervals, max 30 frames)
     │
     ▼
 Frame scoring (0.4 × visibility + 0.6 × motion)
@@ -314,21 +335,20 @@ type CoachAIError = {
 |---|---|---|
 | Frontend → Server | 8 min | `GET /health` |
 | Server → Engine | 10 min | `GET /health` |
-| Server → Engine (deep) | 10 min | `GET /health/deep` |
-| Engine session eviction | 5 min | In-memory cleanup |
-| BullMQ stuck recovery | 5 min | Re-enqueue stuck jobs |
+| Engine session eviction | 5 min | In-memory cleanup (`_evict_old_sessions`) |
+| BullMQ stuck recovery | 10 min | Jobs active > 13 min → `moveToFailed` (1 min buffer over 12-min timeout) |
 
 ---
 
 ## 9. Security
 
-- **CORS:** Configured for frontend origin only
-- **CSP:** Strict Content-Security-Policy header
-- **HSTS:** Strict-Transport-Security enabled
-- **Rate limiting:** Per-IP (scan: 100/min, analysis: 50/hr) with atomic Redis Lua script
-- **File validation:** MIME type check, 500MB size limit
+- **Auth:** Auth0 (Google + GitHub social login) via `@auth0/nextjs-auth0`. `/dashboard/*` and `/account` redirect to `/auth/login` when unauthenticated. APIs are identified by the `x-auth0-id` header or `:auth0Id` path params (no server-side session check on API routes).
+- **CORS:** Configured for `FRONTEND_URL` origin only (server) and `SERVER_URL` origin (engine)
+- **CSP:** Strict Content-Security-Policy header on both Next.js and Elysia
+- **HSTS:** Strict-Transport-Security enabled (Next.js always; Elysia when serving over HTTPS)
+- **Rate limiting:** Per-IP — scan: **10/min**, analysis: **5/hour** (`SCAN_RATE_LIMIT`/`ANALYSIS_RATE_LIMIT`, atomic Redis increments, in-memory fallback)
+- **File validation:** MIME type check, 500MB size limit (413 on oversized Content-Length)
 - **Sentry:** Integrated on all three layers (frontend, server, engine)
-- **No auth:** Currently no user authentication (beta)
 
 ---
 
@@ -336,12 +356,13 @@ type CoachAIError = {
 
 | Gap | Impact | Status |
 |---|---|---|
-| No conversational follow-up | User gets one analysis, can't ask questions | ✅ Implemented — chat with AI coach on analysis detail page |
-| No URL routing | Can't share results, back button broken | ⚠️ Partial — `/dashboard/analysis/[id]` and `/dashboard/history` exist, but pipeline steps still client-side state |
+| No conversational follow-up | User gets one analysis, can't ask questions | ✅ Implemented — chat with AI coach on analysis detail page (streaming + non-streaming + Supabase persistence) |
+| No URL routing | Can't share results, back button broken | ✅ Implemented — full pipeline URL routing, refresh resilience, `/dashboard/analysis/[id]` |
 | No page transitions | Jarring state switches | ❌ Open |
-| Bare upload UX | Spinner only, no progress percentage | ⚠️ Partial — scan progress SSE exists, but UI shows spinner |
+| Bare upload UX | Spinner only, no progress percentage | ✅ Implemented — SSE scan progress with rotating status lines + percentage |
 | Film grain only on landing | Visual inconsistency across screens | ❌ Open |
 | No breadcrumbs | User doesn't know where they are in the flow | ❌ Open |
 | Single-player analysis only | Can't compare players or track progress over time | ❌ Open |
 | No history browsing | Past analyses not accessible from UI | ✅ Implemented — `/dashboard/history` with pagination |
 | No export/share | Can't share results link or export PDF report | ❌ Open |
+| `/dashboard/analysis/[id]` page won't build | AnalysisDetailClient imported 17 nonexistent `@/components/interior/*` components; `next build` failed. | ✅ Fixed — the `interior/` component library now exists (`components/interior/`); `next build` + `tsc` pass |

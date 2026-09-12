@@ -31,7 +31,6 @@ services:
       PORT: "8000"
       UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
       UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
-      BETA_CODES: ${BETA_CODES:-}
     depends_on:
       engine:
         condition: service_healthy

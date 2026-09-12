@@ -174,7 +174,7 @@ def call_gemini(
 
     logging.info(f"[Analyzer] Sending {len(frames_with_tracks)} frames to Gemini with detailed prompt")
 
-    last_exc = None
+    response = None
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
@@ -187,7 +187,6 @@ def call_gemini(
             )
             break  # success
         except Exception as exc:
-            last_exc = exc
             status_code = getattr(exc, "status_code", None)
             message = str(exc)
             is_transient = (

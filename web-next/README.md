@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# web-next — Coach-XYZ Frontend
 
-## Getting Started
+Next.js 16 (App Router) + React 19 + TypeScript frontend for Coach-XYZ, a multi-sport AI video analyzer.
 
-First, run the development server:
+## Scripts
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install       # install dependencies
+bun run dev       # start dev server on :3000
+bun run build     # production build
+bun run start     # serve production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` → `.env.local` and set:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_API_URL` — base URL of the Elysia server (default `http://localhost:8000`)
+- `NEXT_PUBLIC_SENTRY_DSN` — Sentry DSN (optional)
+- Auth0: `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` (64-hex), `APP_BASE_URL`
 
-## Learn More
+Auth0 is required for `/dashboard`, `/account`, and authenticated uploads. Auth is handled by
+`@auth0/nextjs-auth0` through `lib/auth0.ts` and `proxy.ts`.
 
-To learn more about Next.js, take a look at the following resources:
+## Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/
+  page.tsx                     Home — pipeline SPA (idle → … → chatting/error)
+  dashboard/                   Authenticated area (overview, history, analysis detail, chat)
+  account/                     Auth0 profile + DB record
+lib/
+  api.ts                       API client (all fetch + SSE helpers)
+  usePipeline.ts               Upload→analyze→chat pipeline state machine
+  auth0.ts                     Auth0Client singleton
+  sports.ts / utils.ts         Helpers
+components/                    UI: LandingPage, PlayerSelector, AnalysisProgress,
+                               ResultsSummary, ErrorScreen, ChatLayout, ChatPanel,
+                               VideoPlayer, DashboardNav, ui/ primitives, …
+types/index.ts                 Shared API types
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The pipeline polls `GET /api/job-status/:jobId`, streams scan/chat progress over SSE, and proxies
+video downloads through `next.config.ts` `/api/download/:path*` rewrite.
 
-## Deploy on Vercel
+See [../ARCHITECTURE.md](../ARCHITECTURE.md) for the full architecture and [../setup.md](../setup.md) for setup.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [../ARCHITECTURE.md](../ARCHITECTURE.md) for the full architecture and [../setup.md](../setup.md) for setup.

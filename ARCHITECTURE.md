@@ -11,34 +11,39 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 ### Frontend (`web-next/`)
 | Technology | Version | Source |
 |------------|---------|--------|
-| Next.js | ^16.2.9 | `web-next/package.json:13` |
-| React | ^19.2.7 | `web-next/package.json:14` |
-| Tailwind CSS | ^4.3.1 | `web-next/package.json:20` |
-| GSAP | ^3.15.0 | `web-next/package.json:12` |
-| TypeScript | ^5.9.3 | `web-next/package.json:24` |
+| Next.js | ^16.2.12 | `web-next/package.json:15` |
+| React | ^19.2.8 | `web-next/package.json:16` |
+| Tailwind CSS | ^4.3.3 | `web-next/package.json:24` |
+| GSAP | ^3.15.0 | `web-next/package.json:14` |
+| TypeScript | ^5.9.3 | `web-next/package.json:25` |
+| @auth0/nextjs-auth0 | ^4.26.0 | `web-next/package.json:11` |
+| @sentry/nextjs | ^10.69.0 | `web-next/package.json:13` |
 
 ### Server (`server/`)
 | Technology | Version | Source |
 |------------|---------|--------|
 | Bun | (runtime) | `server/Dockerfile:1` — `oven/bun:1` |
-| Elysia | ^1.4.29 | `server/package.json:17` |
-| BullMQ | ^5.79.2 | `server/package.json:16` |
-| ioredis | ^5.11.1 | `server/package.json:18` |
-| @upstash/redis | ^1.38.0 | `server/package.json:15` |
-| @upstash/ratelimit | ^2.0.8 | `server/package.json:14` |
-| TypeScript | ^5.9.3 | `server/package.json:22` |
+| Elysia | ^1.4.29 | `server/package.json:18` |
+| BullMQ | ^5.81.3 | `server/package.json:17` |
+| ioredis | ^5.11.1 | `server/package.json:19` |
+| @upstash/redis | ^1.38.0 | `server/package.json:16` |
+| @upstash/ratelimit | ^2.0.8 | `server/package.json:15` |
+| @sentry/node | ^10.69.0 | `server/package.json:14` |
+| TypeScript | ^5.9.3 | `server/package.json:24` |
 
 ### Engine (`engine/`)
 | Technology | Version | Source |
 |------------|---------|--------|
 | Python | 3.11 | `engine/Dockerfile:1` |
-| FastAPI | 0.138.2 | `engine/requirements.txt:1` |
-| uvicorn | 0.49.0 | `engine/requirements.txt:2` |
-| google-genai | 2.10.0 | `engine/requirements.txt:3` |
-| opencv-python-headless | 4.13.0.92 | `engine/requirements.txt:4` |
-| mediapipe | 0.10.35 | `engine/requirements.txt:7` |
-| upstash-redis | 1.7.0 | `engine/requirements.txt:8` |
+| FastAPI | 0.141.1 | `engine/requirements.txt:1` |
+| uvicorn | 0.52.0 | `engine/requirements.txt:2` |
+| google-genai | 2.15.0 | `engine/requirements.txt:3` |
+| httpx | 0.28.1 | `engine/requirements.txt:4` |
+| mediapipe | 1.0.0 | `engine/requirements.txt:5` |
+| opencv-python-headless | 4.13.0.92 | `engine/requirements.txt:7` |
 | orjson | 3.11.9 | `engine/requirements.txt:9` |
+| sentry-sdk | 2.66.1 | `engine/requirements.txt:14` |
+| upstash-redis | 1.7.0 | `engine/requirements.txt:15` |
 
 ### Infrastructure
 | Component | Technology | Source |
@@ -119,14 +124,17 @@ coach-xyz/
 │   │   ├── HistoryChat.tsx           # Per-analysis chat (history detail page)
 │   │   ├── VideoPlayer.tsx           # Video player with timestamp controls
 │   │   ├── QuickActions.tsx          # Pre-built chat action buttons
-│   │   ├── ResultsSummary.tsx        # Completed analysis summary
+│   │   ├── AnalysisTitle.tsx         # Click-to-rename analysis heading
+│   │   ├── InlineRename.tsx          # Inline rename (unused — not imported)
 │   │   ├── UserAvatar.tsx            # Auth0 profile picture / initials
-│   │   └── ui/                       # shadcn/ui primitives
+│   │   └── ui/                       # Custom button/card/badge primitives
 │   ├── lib/
 │   │   ├── api.ts             # API client (all fetch calls)
 │   │   ├── auth0.ts           # Auth0Client singleton
-│   │   ├── usePipeline.ts     # Pipeline state hook
-│   │   └── sports.ts          # Sport config helpers
+│   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
+│   │   ├── sports.ts          # Sport emoji helpers
+│   │   └── utils.ts           # cn() class-name helper
+│   ├── proxy.ts               # Auth0 middleware proxy (Next.js 16)
 │   └── types/index.ts         # Shared type definitions
 │
 ├── server/                    # Middleware server (Bun + Elysia)
@@ -177,15 +185,10 @@ coach-xyz/
 │   │   ├── config.py          # Engine configuration constants
 │   │   ├── logging_config.py  # Structured logging setup
 │   │   ├── errors.py          # Error types hierarchy
-│   │   ├── pipeline.py        # Staged pipeline (DEAD CODE — not imported)
-│   │   ├── connection_pool.py # HTTP connection pooling (DEAD CODE — not imported)
-│   │   ├── analysis_validator.py # Schema validation with retry (DEAD CODE — not called)
-│   │   ├── compress.py        # Video compression (DEAD CODE — not called from pipeline)
-│   │   ├── quality.py         # Frame quality filtering (DEAD CODE — not called from pipeline)
-│   │   ├── overlay.py         # Video overlay (DEAD CODE — not imported)
-│   │   ├── utils.py           # Utilities (only imported by overlay.py — dead)
-│   │   ├── player_tracker.py  # Player tracking (CLI only)
-│   │   └── chunker.py         # Video chunking (CLI only)
+│   │   ├── player_tracker.py  # Player tracking (CLI only — engine/cli/frame_selector.py)
+│   │   ├── chunker.py         # Video chunking (CLI only)
+│   │   └── baseline.py        # Sport baseline metrics (dead code — unused by API pipeline)
+│   ├── tests/                 # pytest: test_state_machine.py + conftest.py (46 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -220,9 +223,9 @@ coach-xyz/
 - TTL: 7200 seconds (2 hours)
 - Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at }`
 
-**Rate Limits** (`server/src/lib/ratelimit.ts:31-38`)
-- Key: `rl:scan:{ip}` (TTL 60s) — 10 requests/minute
-- Key: `rl:analysis:{ip}` (TTL 3600s) — 5 requests/hour
+**Rate Limits** (`server/src/lib/ratelimit.ts:82-90`)
+- Key: `rl:scan:{ip}` (TTL 60s) — 10 requests/minute (`SCAN_RATE_LIMIT`, default `"10"`)
+- Key: `rl:analysis:{ip}` (TTL 3600s) — 5 requests/hour (`ANALYSIS_RATE_LIMIT`, default `"5"` — the 429 message in `analyze.ts:29` states "5 per hour", consistent)
 
 **Video Cache** (`engine/core/cache.py:26-27`)
 - Key: `coachai:analysis:{video_hash}:p{player_index|all}`
@@ -258,8 +261,8 @@ coach-xyz/
 
 **Engine Sessions** (`engine/main.py:57-58`)
 - Stored in Python dict with threading lock
-- TTL: 3600 seconds (1 hour), max 10 sessions
-- Shape: `{ video_key, players, created_at }`
+- TTL: 7200 seconds (2 hours, aligned with job TTL), max 10 sessions (`engine/main.py:45-46`)
+- Evicted every 300s by `_evict_old_sessions()` loop (`engine/main.py:123-128`)
 
 ---
 
@@ -294,6 +297,10 @@ coach-xyz/
 
 8. Server persists to Supabase + returns session_token
    → server/src/routes/scan.ts:66-78
+
+9. [Optional] Frontend subscribes to scan progress via SSE
+   → GET /api/scan-progress/:sessionToken (server/src/routes/scan.ts:115, proxies raw SSE)
+   → GET /scan-progress/{session_token} (engine/main.py:526)
 ```
 
 ### Flow 2: Analysis (CONFIRMED)
@@ -359,6 +366,30 @@ coach-xyz/
    → engine/main.py:557-579
    → engine/core/storage.py:37-41, 74-83
 ```
+
+### Flow 4: Chat with AI Coach (IMPLEMENTED — formerly V2)
+
+Two server paths, both proxying to the engine's Gemini chat:
+
+**Non-streaming** (`POST /api/chat`)
+1. Frontend sends `{ job_id, message }`
+   → web-next/lib/api.ts `getConversation`/`sendChatMessageStream`
+   → server/src/routes/chat.ts:26
+2. Server loads conversation history from Redis (`coachai:conv:{server_job_id}`, TTL 2h)
+   → server/src/lib/conversation.ts
+3. Server POSTs to engine `/chat` (60s timeout)
+   → engine/main.py:868 → engine/core/chat_prompt.py (analysis context + history)
+4. Persists user + assistant messages to Redis; returns `{ reply, timestamp_refs, event_refs }`
+
+**Streaming (SSE)** (`POST /api/chat/stream`)
+1. Frontend POSTs `{ job_id, message }` with `Accept: text/event-stream`
+   → web-next/lib/api.ts `sendChatMessageStream` (AsyncGenerator over SSE)
+   → server/src/routes/chat.ts:101
+2. Server calls engine `POST /chat/stream` (120s timeout), `tee()`s the body
+   → engine/main.py:953 (SSE token stream with final `done` event)
+3. Client gets the stream; background parser saves the full assistant reply on completion
+
+**Auth-scoped chat** (`/api/auth/user/:auth0Id/analyses/:jobId/chat` — GET/POST, server/src/routes/auth.ts:182/201) persists messages to Supabase `chat_messages` and falls back to a keyword-based `generateSimpleResponse` when the engine is down.
 
 ---
 
@@ -463,10 +494,9 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ### Render Deployment (CONFIRMED — `render.yaml`)
 
-- Engine: Free tier web service, image deployment from GitHub
-- Server: Free tier web service, image deployment from GitHub
+- Engine: Free tier web service, Dockerfile build from GitHub repo (`runtime: docker`, `rootDir: engine`)
+- Server: Free tier web service, Dockerfile build from GitHub repo (`runtime: docker`, `rootDir: server`)
 - Env vars synced from Render dashboard (secrets)
-- `<your-org>` placeholder must be replaced with actual GitHub org
 
 ### Vercel Deployment (CONFIRMED — `web-next/vercel.json`)
 
@@ -477,10 +507,10 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ### Keep-Alive (CONFIRMED)
 
-- **Server:** `server/src/lib/queue.ts:43-58` — pings `/health` every 10 minutes in production
-- **Frontend:** `web-next/app/page.tsx:37-42` — pings server `/health` every 8 minutes
+- **Server:** `server/src/lib/queue.ts:90-127` — pings `/health` every 10 minutes in production (`KEEPALIVE_INTERVAL`, production only)
+- **Frontend:** `web-next/lib/usePipeline.ts:78-84` — pings server `/health` every 8 minutes
 
-### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:167-193`)
+### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:369-400`)
 
 - SIGTERM/SIGINT handlers
 - Closes: worker → queue → Redis connection → Supabase SQL
@@ -529,49 +559,43 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 ## 10. Known Gaps, Tech Debt, and Contradictions
 
-### Dead Code
+### Dead Code (files still present)
 
-1. **`engine/core/pipeline.py`** — `AnalysisPipeline` class exists but is never imported by `analyzer.py` or any other file. Provides per-stage Redis caching that is not used.
+1. **`engine/core/player_tracker.py`** — Player tracking used only by the CLI (`engine/cli/frame_selector.py`), not the API pipeline.
 
-2. **`engine/core/connection_pool.py`** — `ConnectionPool` class exists but is never imported. Gemini API calls use new connections each time. Also imports `httpx` which is not in `requirements.txt`.
+2. **`engine/core/chunker.py`** — Video chunking used only by the CLI, not the API pipeline.
 
-3. **`engine/core/compress.py`** — `compress_for_analysis()` function exists but is never called from the API pipeline.
+3. **`engine/core/baseline.py`** — Sport baseline loaders that no Python module imports.
 
-4. **`engine/core/quality.py`** — `filter_quality_frames()` and `assess_frame_quality()` exist but are never called from the API pipeline.
+4. **`web-next/components/InlineRename.tsx`** — Exists but is not imported by any other source file.
 
-5. **`engine/core/analysis_validator.py`** — `validate_gemini_output()` exists but is never called. Actual Gemini validation in `analyzer.py:536` only does `json.loads()`.
+### Removed Dead Code (since last verification)
 
-6. **`engine/core/overlay.py`** — Drawing functions exist but are never imported. Appears to be an alternative to `renderer.py`.
-
-7. **`engine/core/utils.py`** — Only imported by `overlay.py` (dead code).
-
-### Partially Used Code
-
-8. **`engine/core/chunker.py`** — Used only by CLI tools (`engine/cli/`), not the API pipeline.
-
-9. **`engine/core/player_tracker.py`** — Used only by CLI tools (`engine/cli/frame_selector.py`), not the API pipeline.
+Previously documented as dead and since **deleted** from the repo — `pipeline.py`, `connection_pool.py`, `compress.py`, `quality.py`, `analysis_validator.py`, `overlay.py`, `utils.py` (plus the `register_job_input` no-op stub). Not present in `engine/core/` anymore.
 
 ### Inconsistencies
 
-3. **`detector.py:32-33`** — Creates new `HOGDescriptor` per call, while `analyzer.py:16-17` caches it at module level. Both exist in the same codebase.
+1. **`detector.py:32-33`** — Creates a new `HOGDescriptor` per call, while `analyzer.py` caches it at module level. Both exist in the same codebase.
 
-4. **`register_job_input`** — `engine/core/jobs.py:184-186` is a no-op stub, called from `analyzer.py:549`.
+### Resolved (fixed 2026-09-11)
+
+1. ~~`engine/core/analyzer.py` F821 `Any` never imported~~ — `from typing import Any` added; ruff now clean.
+2. ~~`web-next` build failure (17 missing `@/components/interior/*` modules)~~ — the component library now lives in `web-next/components/interior/`; `tsc` and `next build` pass. (The unused `dropdown`, `press-depth`, `sticky-header` imports were dropped rather than implemented.)
+3. ~~`docker-compose.prod.yml` engine `SERVER_URL: http://engine:8001`~~ — corrected to `http://server:8000` so engine CORS allows the real server origin.
+4. ~~Ghost env vars (`BETA_CODES`, `R2_*`, `STORAGE_BACKEND=r2`, `NEXT_PUBLIC_SUPABASE_URL` on server/web samples)~~ — removed from `docker-compose*.yml`, `render.yaml`, `.env.prod.example`, `engine/.env.sample`, `server/.env.example`, `web-next/.env.example`.
+5. ~~`JOB_PRIORITIES.beta` dead entry~~ — removed from `server/src/lib/queue.ts`.
+6. ~~ruff config deprecation~~ — `engine/pyproject.toml` now uses `[tool.ruff.lint]`.
+7. ~~`render.yaml` `runtime: image` with a GitHub URL~~ — switched to `runtime: docker` + `dockerfilePath: Dockerfile` for both services.
 
 ### Missing Features
 
-5. **No test suite** — No test files found anywhere in the codebase.
-
-6. **No CI/CD** — No GitHub Actions workflows, no `.github/` directory.
-
-7. **`render.yaml:11,33`** — `<your-org>` placeholder not replaced; deployment will fail.
-
-8. **`httpx` not in requirements** — `engine/core/connection_pool.py:3` imports `httpx` but it is not listed in `engine/requirements.txt`.
+1. **No CI/CD** — No `.github/` directory, no GitHub Actions workflows.
 
 ### Technical Debt
 
-8. **Session memory leak potential** — `engine/main.py:57` dict grows unbounded if `_evict_old_sessions()` is not called frequently enough.
+1. **Session memory leak potential** — `engine/main.py:57` dict grows unbounded if `_evict_old_sessions()` is not called frequently enough.
 
-9. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
+2. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
 
 ---
 
@@ -579,30 +603,27 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 | Claim | Verification |
 |-------|--------------|
-| Next.js ^16.2.9 | `web-next/package.json:13` |
-| Elysia ^1.4.29 | `server/package.json:17` |
-| FastAPI 0.138.2 | `engine/requirements.txt:1` |
-| google-genai 2.10.0 | `engine/requirements.txt:3` |
-| BullMQ concurrency: 1 | `server/src/lib/queue.ts:104` |
-| Worker timeout: 12 min | `server/src/lib/queue.ts:86` |
-| Stuck job recovery: 13 min | `server/src/lib/queue.ts:139` |
-| Session TTL: 1 hour | `engine/main.py:25` |
+| Next.js ^16.2.12 | `web-next/package.json:15` |
+| Elysia ^1.4.29 | `server/package.json:18` |
+| FastAPI 0.141.1 | `engine/requirements.txt:1` |
+| google-genai 2.15.0 | `engine/requirements.txt:3` |
+| BullMQ concurrency: 1 | `server/src/lib/queue.ts:222` |
+| Worker timeout: 12 min | `server/src/lib/queue.ts:162` |
+| Stuck job recovery: 13 min | `server/src/lib/queue.ts:340` |
+| Session TTL: 2 hours | `engine/main.py:45` |
 | Cache TTL: 24 hours | `engine/core/cache.py:25` |
-| Rate limit: 5 analysis/hour | `server/src/lib/ratelimit.ts:60-61` |
-| Local storage only | `engine/core/storage.py:25-26` |
-| Pipeline states | `engine/core/jobs.py:27-35` |
-| Valid transitions | `engine/core/jobs.py:38-46` |
-| Dead code: pipeline.py | `grep -r "from core.pipeline" engine/` returns nothing |
-| Dead code: connection_pool.py | `grep -r "from core.connection_pool" engine/` returns nothing |
-| Dead code: compress.py | `grep -r "compress_for_analysis" engine/` only returns definition |
-| Dead code: quality.py | `grep -r "filter_quality_frames" engine/` only returns definition |
-| Dead code: analysis_validator.py | `grep -r "validate_gemini_output" engine/` only returns definition |
-| Dead code: overlay.py | `grep -r "from core.overlay" engine/` returns nothing |
-| Dead code: utils.py | `grep -r "from core.utils" engine/` only returns overlay.py import |
-| Beta code middleware | `server/src/index.ts:82-92` |
-| Keep-alive: 10 min | `server/src/lib/queue.ts:44` |
-| Frontend keep-alive: 8 min | `web-next/app/page.tsx:40` |
+| Rate limit: scan 10/min | `server/src/lib/ratelimit.ts:83` |
+| Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:88` |
+| Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
+| Pipeline states | `engine/core/jobs.py` |
+| Test suite: 46 tests pass | `cd engine && python -m pytest tests/` |
+| Dead code: baseline.py | `grep -rn "baseline" engine/core/*.py engine/main.py` only self-references |
+| Dead code: player_tracker.py/chunker.py | only imported by `engine/cli/` |
+| Dead code: InlineRename.tsx | `grep -rn "InlineRename" web-next/` only matches its own file |
+| Auth0 auth (beta gate removed) | `grep -rn "BETA_CODES" server/src/` returns nothing |
+| Keep-alive: 10 min | `server/src/lib/queue.ts:93` |
+| Frontend keep-alive: 8 min | `web-next/lib/usePipeline.ts:80` |
 
 ---
 
-*Last verified: 2026-07-02, against commit 2c37df2*
+*Last verified: 2026-09-11 (working tree — includes interior-components fix + lint/infra cleanup)*

@@ -2,6 +2,10 @@
 
 > Transform Coach-XYZ from a one-shot analysis tool into a conversational sports coaching interface.
 
+> **Status (2026-09-11): largely implemented.** Streaming SSE chat, Redis + Supabase persistence,
+> split-screen video + chat layout, timestamp seeking, and quick actions ship in the app. V2 features
+> that remain unbuilt are explicitly marked below. This doc keeps the original design text for reference.
+
 ---
 
 ## 1. Vision
@@ -29,14 +33,14 @@ The experience should feel like **Claude for sports video** — a persistent, co
 
 ### 2.2 New Capabilities
 
-1. **Chat interface** — Claude-like message thread with typing indicators and streaming responses
-2. **Context-aware follow-ups** — AI remembers the full analysis and conversation history
-3. **Timestamp references** — AI can point to specific moments ("At 0:12.3, your elbow angle was...")
-4. **Deep-dive queries** — "Break down my 3-point form" → AI re-examines specific events
-5. **Drill generation** — "Give me 3 drills for my weak side" → AI generates personalized drills
-6. **Comparison mode** — "How did my second shot differ from my first?" → event-level comparison
-7. **Conversation persistence** — Conversations saved, browsable, resumable
-8. **Video + chat side-by-side** — Video player with timestamp sync alongside chat
+1. ✅ **Chat interface** — Claude-like message thread with typing indicators and **streaming** responses (`ChatLayout`/`ChatPanel`, SSE via `/api/chat/stream`)
+2. ✅ **Context-aware follow-ups** — AI remembers the full analysis and conversation history
+3. ✅ **Timestamp references** — AI points to specific moments; references render as seekable buttons in the video player
+4. ⚠️ **Deep-dive queries** — "Break down my 3-point form"; supported via prompt grounding + `timestamp_refs`/`event_refs`, but no dedicated re-analysis of other events
+5. ⚠️ **Drill generation** — "Give me 3 drills for my weak side"; works as free-text, no structured drill card
+6. ⚠️ **Comparison mode** — "How did my second shot differ from my first?"; offered via the `QuickActions` Compare chip, free-text only
+7. ✅ **Conversation persistence** — Redis (`coachai:conv:*`, 2h) + Supabase `chat_messages` table, browsable from dashboard
+8. ✅ **Video + chat side-by-side** — Video player with timestamp sync alongside chat (`ChatLayout`)
 
 ---
 
@@ -382,35 +386,36 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 
 ## 9. Implementation Phases
 
-### Phase 1: Engine Chat Endpoint (Backend)
-- Add `POST /chat` endpoint to engine
-- Build `get_chat_prompt()` with analysis context
+### Phase 1: Engine Chat Endpoint (Backend) — ✅ Done
+- Add `POST /chat` endpoint to engine (`engine/main.py:868`)
+- Build `get_chat_prompt()` with analysis context (`engine/core/chat_prompt.py`)
 - Add conversation_history support to Gemini calls
-- Test with manual curl requests
+- Also added `POST /chat/stream` (SSE) (`engine/main.py:953`)
 
-### Phase 2: Server Chat Proxy + Storage
-- Add `POST /api/chat` endpoint to server
-- Create `conversation.ts` library for Redis storage
-- Add conversation persistence on each message
-- Add `GET /api/conversation/:jobId` for history loading
+### Phase 2: Server Chat Proxy + Storage — ✅ Done
+- Add `POST /api/chat` endpoint to server (`server/src/routes/chat.ts:26`)
+- Create `conversation.ts` library for Redis storage (`server/src/lib/conversation.ts`)
+- Add conversation persistence on each message (`saveMessage` with Lua append)
+- Add `GET /api/conversation/:jobId` for history loading (`chat.ts:228`)
+- **Bonus:** `POST /api/chat/stream` (SSE, `tee()`d) and auth-scoped chat persisted to Supabase `chat_messages`
 
-### Phase 3: Chat UI Components
+### Phase 3: Chat UI Components — ✅ Done
 - Build `ChatPanel`, `ChatMessage`, `ChatInput`, `ChatTyping`
 - Build `VideoPlayer` with timestamp seeking
-- Build `QuickActions` bar
-- Build `TimestampLink` component
+- Build `QuickActions` bar (Strengths / Weaknesses / Drill / Compare)
+- `TimestampLink` folded into `ChatMessage` (bare `12.3s` tokens + `timestamp_refs` → seek buttons)
 
-### Phase 4: Layout + Integration
-- Create split-screen layout (video left, chat right)
-- Add `chatting` pipeline state
-- Wire `useConversation()` hook
-- Connect video player seek to AI timestamp references
+### Phase 4: Layout + Integration — ✅ Done
+- Create split-screen layout (video left, chat right) — `ChatLayout.tsx`
+- Add `chatting` pipeline state (`usePipeline.ts`)
+- Wire `useConversation()`-equivalent state (loading via `getConversation`, streaming via `sendChatMessageStream`)
+- Connect video player seek to AI timestamp references (`onSeekTo` handle)
 
-### Phase 5: Polish + History
-- Add conversation history sidebar
-- Add export functionality
-- Add message animations
-- Add typing indicator with streaming (V2.1)
+### Phase 5: Polish + History — ⚠️ Partial
+- ✅ Conversation history in dashboard (`GET/POST /api/auth/user/:id/analyses/:jobId/chat`, `HistoryChat.tsx`)
+- ❌ Conversation-history *sidebar* listing past conversations (planned `ConversationHistory` component)
+- ❌ Export functionality (report export not built)
+- ✅ Typing indicator + streaming done (beyond the old "V2.1" plan)
 
 ---
 
@@ -418,12 +423,15 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 
 ### New Endpoints
 
-| Endpoint | Method | Layer | Purpose |
-|---|---|---|---|
-| `POST /api/chat` | POST | Server | Send message, get AI reply |
-| `GET /api/conversation/:jobId` | GET | Server | Load conversation history |
-| `DELETE /api/conversation/:jobId` | DELETE | Server | Clear conversation |
-| `POST /chat` | POST | Engine | Chat with AI (proxied by server) |
+| Endpoint | Method | Layer | Purpose | Status |
+|---|---|---|---|---|
+| `POST /api/chat` | POST | Server | Send message, get AI reply | ✅ implemented |
+| `POST /api/chat/stream` | POST | Server | SSE streaming chat | ✅ implemented (beyond original plan) |
+| `GET /api/conversation/:jobId` | GET | Server | Load conversation history (Redis) | ✅ implemented |
+| `DELETE /api/conversation/:jobId` | DELETE | Server | Clear conversation | ❌ not implemented |
+| `POST /chat` | POST | Engine | Chat with AI (proxied by server) | ✅ implemented |
+| `POST /chat/stream` | POST | Engine | SSE streaming chat | ✅ implemented |
+| `GET/POST /api/auth/user/:auth0Id/analyses/:jobId/chat` | GET/POST | Server | Auth-scoped chat persisted to Supabase `chat_messages` | ✅ implemented |
 
 ### Updated Types
 

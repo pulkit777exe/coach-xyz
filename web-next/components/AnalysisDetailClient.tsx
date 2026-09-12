@@ -14,9 +14,8 @@ import { CopyButton } from '@/components/interior/copy-button'
 import { SegmentedControl } from '@/components/interior/segmented-control'
 import { ReadingProgress } from '@/components/interior/reading-progress'
 import { Popover } from '@/components/interior/popover'
-import { Dropdown } from '@/components/interior/dropdown'
 import { ScrollSpy } from '@/components/interior/scroll-spy'
-import { TreeView, type TreeNode } from '@/components/interior/tree-view'
+import { TreeView } from '@/components/interior/tree-view'
 import { HoldToConfirm } from '@/components/interior/hold-to-confirm'
 import { ReorderList } from '@/components/interior/reorder-list'
 import { Modal } from '@/components/interior/modal'
@@ -25,8 +24,6 @@ import { LoadingButton } from '@/components/interior/loading-button'
 import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
-import { usePressDepth } from '@/components/interior/press-depth'
-import { StickyHeader } from '@/components/interior/sticky-header'
 
 
 const POLL_INTERVAL = 2000
@@ -63,7 +60,6 @@ export default function AnalysisDetailClient({
   const [showMetadataDrawer, setShowMetadataDrawer] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
-  const pressDepth = usePressDepth({ max: 0.03 })
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -337,7 +333,7 @@ export default function AnalysisDetailClient({
       <div className="flex items-center gap-3 mb-8">
         {data.complete && data.video_ready && (
           <LoadingButton
-            onAction={() => window.location.href = getDownloadUrl(data.server_job_id)}
+            onAction={() => { window.location.href = getDownloadUrl(data.server_job_id) }}
             pendingLabel="Downloading..."
             successLabel="Started!"
             className="!border !border-(--cream-10) !bg-transparent !px-4 !py-2 !text-[0.65rem] !uppercase tracking-[0.15em] !text-(--cream-40) hover:!text-(--fg)"

@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
-from core.errors import InvalidStateTransition, EngineError
+from core.errors import InvalidStateTransition
 from core import jobs
 from core.jobs import (
     JOB_TTL,
     KEY,
     VALID_TRANSITIONS,
     JobStatus,
-    create_job,
     transition_job,
     get_job,
-    fail_job,
 )
 from core.analyzer import _safe_transition_to_completed
 

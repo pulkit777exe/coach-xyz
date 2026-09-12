@@ -5,18 +5,14 @@ services:
   # ── Engine (Python/FastAPI — video processing + Gemini AI) ─────────────────
   - type: web
     name: coachai-engine
-    runtime: image
-    image:
-      url: https://github.com/pulkit777exe/coach-xyz.git
-      tag: main
+    runtime: docker
     rootDir: engine
+    dockerfilePath: Dockerfile
     plan: free
     healthCheckPath: /health
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-      - key: STORAGE_BACKEND
-        value: local
       - key: LOCAL_STORAGE_DIR
         value: /tmp/storage
       - key: UPSTASH_REDIS_REST_URL
@@ -27,11 +23,9 @@ services:
   # ── Server (Bun/Elysia — middleware + BullMQ worker) ──────────────────────
   - type: web
     name: coachai-server
-    runtime: image
-    image:
-      url: https://github.com/pulkit777exe/coach-xyz.git
-      tag: main
+    runtime: docker
     rootDir: server
+    dockerfilePath: Dockerfile
     plan: free
     healthCheckPath: /health
     envVars:
@@ -47,13 +41,7 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
-      - key: BETA_CODES
-        sync: false
       - key: SENTRY_DSN
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
         sync: false
       - key: WORKER_CONCURRENCY
         value: "1"
