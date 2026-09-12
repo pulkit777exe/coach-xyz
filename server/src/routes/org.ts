@@ -30,18 +30,13 @@ import {
   type AttendanceStatus,
 } from "../lib/orgData"
 import { buildError } from "../lib/errors"
+import { isDate, isIsoDate, defaultReportTitle } from "../lib/orgValidate"
 
 const ATTENDANCE_STATUSES = new Set(["present", "absent", "late", "excused"])
 const EVENT_TYPES = new Set(["practice", "match", "tournament", "meeting", "other"])
 const EVENT_STATUSES = new Set(["scheduled", "completed", "cancelled"])
 const STUDENT_STATUSES = new Set(["active", "inactive", "transferred"])
 const REPORT_TYPES = new Set(["progress", "attendance", "performance", "monthly"])
-
-const isDate = (value: unknown): value is string =>
-  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
-
-const isIsoDate = (value: unknown): value is string =>
-  typeof value === "string" && !Number.isNaN(Date.parse(value))
 
 const parseStudentInput = (body: Record<string, unknown>) => {
   const input: StudentInput = {}
@@ -589,17 +584,3 @@ export default new Elysia()
     set.status = 200
     return { overview }
   })
-
-function defaultReportTitle(
-  reportType: string,
-  student: { full_name: string } | null,
-): string {
-  const label = student ? student.full_name : "Organization"
-  const typeMap: Record<string, string> = {
-    progress: "Progress Report",
-    attendance: "Attendance Report",
-    performance: "Performance Report",
-    monthly: "Monthly Summary",
-  }
-  return `${label} — ${typeMap[reportType] ?? "Report"}`
-}

@@ -10,6 +10,7 @@ import HistoryChat from '@/components/HistoryChat'
 import { getJobStatus, getDownloadUrl } from '@/lib/api'
 import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
+import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import { CopyButton } from '@/components/interior/copy-button'
 import { SegmentedControl } from '@/components/interior/segmented-control'
 import { ReadingProgress } from '@/components/interior/reading-progress'
@@ -372,6 +373,7 @@ export default function AnalysisDetailClient({
         >
           Share
         </button>
+        <AnalysisLinkControl auth0Id={auth0Id} jobId={data.server_job_id} initialStudentId={data.student_id} />
         <HoldToConfirm
           onConfirm={() => {}}
           confirmLabel="Analysis deleted"
