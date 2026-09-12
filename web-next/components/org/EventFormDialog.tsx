@@ -108,15 +108,15 @@ export default function EventFormDialog({
     setError(null)
     try {
       const starts_at = `${values.date}T${values.start_time}:00`
-      const ends_at = values.end_time ? `${values.date}T${values.end_time}:00` : undefined
+      const ends_at = values.end_time ? `${values.date}T${values.end_time}:00` : null
       if (editing && event) {
         const res = await orgUpdateEvent(auth0Id, event.id, {
           title: values.title,
           event_type: values.event_type as ScheduleEvent["event_type"],
           starts_at,
           ends_at,
-          location: values.location || undefined,
-          description: values.description || undefined,
+          location: values.location || null,
+          description: values.description || null,
           status: values.status as ScheduleEvent["status"],
         })
         toast.success("Event updated")
@@ -127,8 +127,8 @@ export default function EventFormDialog({
           event_type: values.event_type as ScheduleEvent["event_type"],
           starts_at,
           ends_at,
-          location: values.location || undefined,
-          description: values.description || undefined,
+          location: values.location || null,
+          description: values.description || null,
           status: values.status as ScheduleEvent["status"],
         })
         toast.success("Event added")

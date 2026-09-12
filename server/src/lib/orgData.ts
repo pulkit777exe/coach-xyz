@@ -1,4 +1,4 @@
-import { withHistoryStore, ensureInitialized } from "./supabaseHistory"
+import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from "./supabaseHistory"
 import type { DashboardAnalysis } from "./supabaseHistory"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -642,11 +642,37 @@ export const listRecentAnalysisScores = async (
   )
 }
 
+function buildPeriodLabel(
+  reportType: string | null | undefined,
+  from: string | null | undefined,
+  to: string | null | undefined,
+): string {
+  const fmt = (iso: string) =>
+    new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  if (reportType === "monthly") {
+    const anchor = from ? new Date(`${from.slice(0, 10)}T00:00:00`) : new Date()
+    return `Month of ${anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`
+  }
+  if (from && to) return `from ${fmt(from)} to ${fmt(to)}`
+  if (from) return `since ${fmt(from)}`
+  if (to) return `through ${fmt(to)}`
+  return "All time"
+}
+
 export const buildReportContent = async (
   auth0Id: string,
-  opts: { student_id?: string | null; from?: string | null; to?: string | null } = {},
+  opts: {
+    student_id?: string | null
+    from?: string | null
+    to?: string | null
+    report_type?: string | null
+  } = {},
 ): Promise<Record<string, unknown>> => {
-  const { student_id, from, to } = opts
+  const { student_id, from, to, report_type } = opts
   const [attendance, series, analyses] = await Promise.all([
     attendanceSummary(auth0Id, {
       from: from ?? undefined,
@@ -751,7 +777,7 @@ export const buildReportContent = async (
           status: student.status,
         }
       : null,
-    period: { start: from ?? null, end: to ?? null },
+    period: { start: from ?? null, end: to ?? null, label: buildPeriodLabel(report_type, from, to) },
     attendance: attendanceBlock,
     performance: performanceBlock,
     analyses: analysesBlock,

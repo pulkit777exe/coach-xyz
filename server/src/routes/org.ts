@@ -297,11 +297,26 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "entries must be a non-empty array", false)
     }
+    const invalid = entries.find((entry) => {
+      const e = entry as Record<string, unknown>
+      const sessionDate = typeof e.session_date === "string" ? e.session_date : ""
+      return (
+        typeof e.student_id !== "string" ||
+        !e.student_id ||
+        !isDate(sessionDate) ||
+        !ATTENDANCE_STATUSES.has(e.status as string)
+      )
+    })
+    if (invalid) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Entry requires a valid student_id, session_date (YYYY-MM-DD) and status", false)
+    }
+
     const parsed = entries.map((entry) => {
       const e = entry as Record<string, unknown>
       return {
-        studentId: String(e.student_id),
-        sessionDate: String(e.session_date),
+        studentId: e.student_id as string,
+        sessionDate: e.session_date as string,
         status: e.status as AttendanceStatus,
         note: typeof e.note === "string" ? e.note : null,
       }
@@ -456,6 +471,7 @@ export default new Elysia()
       student_id: student_id ? (student_id as string) : null,
       from,
       to,
+      report_type: report_type as string,
     })
 
     const student = student_id ? await getStudent(auth0Id, student_id as string) : null
@@ -490,22 +506,23 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPES].join(", ")}`, false)
     }
-    if (period_start !== undefined && !isDate(period_start)) {
+    if (period_start !== undefined && period_start !== null && !isDate(period_start)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "period_start must be YYYY-MM-DD", false)
     }
-    if (period_end !== undefined && !isIsoDate(period_end) && !isDate(period_end)) {
+    if (period_end !== undefined && period_end !== null && !isIsoDate(period_end) && !isDate(period_end)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "period_end must be YYYY-MM-DD", false)
     }
 
-    const from = isDate(period_start) ? period_start : existing.period_start
-    const to = isDate(period_end) ? period_end : existing.period_end
+    const from = period_start === undefined ? existing.period_start : isDate(period_start) ? period_start : null
+    const to = period_end === undefined ? existing.period_end : isDate(period_end) ? period_end : null
 
     const content = await buildReportContent(auth0Id, {
       student_id: existing.student_id,
       from,
       to,
+      report_type: nextType,
     })
 
     const report = await updateReportRecord(auth0Id, id, {

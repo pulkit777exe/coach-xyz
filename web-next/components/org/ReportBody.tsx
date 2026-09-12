@@ -1,9 +1,9 @@
 import type { ReportContent, ReportRecord } from "@/lib/org"
 
 const TYPE_ORDER: Record<string, string[]> = {
-  attendance: ["summary", "attendance", "performance", "analyses"],
-  performance: ["summary", "performance", "attendance", "analyses"],
-  progress: ["summary", "attendance", "performance", "analyses"],
+  attendance: ["summary", "org", "attendance", "performance", "analyses"],
+  performance: ["summary", "org", "performance", "attendance", "analyses"],
+  progress: ["summary", "org", "attendance", "performance", "analyses"],
   monthly: ["summary", "org", "attendance", "performance", "analyses"],
 }
 
@@ -51,6 +51,10 @@ export default function ReportBody({
             </p>
           )
         })()}
+
+      {c.period?.label && c.period.label !== "All time" && (
+        <p className="text-muted-foreground text-xs">{c.period.label}</p>
+      )}
 
       {order.map((k) => {
         if (!has(k)) return null

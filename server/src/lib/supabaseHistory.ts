@@ -96,6 +96,35 @@ export const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<
   }
 }
 
+export const withHistoryStoreOrThrow = async <T>(fn: (db: SQL) => Promise<T>): Promise<T> => {
+  if (!sql) {
+    warnDisabled()
+    throw new Error("History store is not configured (DATABASE_URL not set)")
+  }
+
+  try {
+    return await fn(sql)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown database error"
+
+    if (message.includes("Connection closed")) {
+      console.warn(JSON.stringify({ type: "history_store_reconnecting" }))
+      initPromise = null
+      try {
+        await ensureInitialized()
+        return await fn(sql)
+      } catch (retryError) {
+        const retryMessage = retryError instanceof Error ? retryError.message : "Unknown database error"
+        console.error(JSON.stringify({ type: "history_store_retry_failed", error: retryMessage }))
+        throw retryError
+      }
+    }
+
+    console.error(JSON.stringify({ type: "history_store_operation_failed", error: message }))
+    throw error
+  }
+}
+
 export const ensureInitialized = async () => {
   if (!sql) return
 

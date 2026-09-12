@@ -127,8 +127,8 @@ export default function ReportsClient({
     try {
       const res = await orgUpdateReport(auth0Id, editing.id, {
         report_type: editForm.report_type,
-        period_start: editForm.period_start || undefined,
-        period_end: editForm.period_end || undefined,
+        period_start: editForm.period_start || null,
+        period_end: editForm.period_end || null,
         title: editForm.title || undefined,
       })
       setReports((prev) => prev.map((r) => (r.id === editing.id ? { ...r, ...res.report } : r)))

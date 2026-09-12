@@ -106,7 +106,7 @@ export type ReportContent = {
     position: string | null
     status: string
   } | null
-  period: { start: string | null; end: string | null }
+  period: { start: string | null; end: string | null; label: string }
   attendance: {
     total_records: number
     present: number
@@ -404,7 +404,7 @@ export const orgDeleteReport = async (
 export const orgUpdateReport = async (
   auth0Id: string,
   id: string,
-  input: { report_type?: string; period_start?: string; period_end?: string; title?: string },
+  input: { report_type?: string; period_start?: string | null; period_end?: string | null; title?: string },
 ): Promise<{ report: ReportRecord }> => {
   return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
     method: "PUT",
