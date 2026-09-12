@@ -7,6 +7,7 @@ import {
   getUserAnalysisById,
   getUserStats,
   updateAnalysisDisplayName,
+  linkAnalysisToStudent,
   saveChatMessage,
   getChatMessages,
 } from "../lib/supabaseHistory"
@@ -153,31 +154,46 @@ export default new Elysia()
       return buildError("INVALID_REQUEST", "Missing required parameters", false)
     }
 
-    const { display_name } = body as { display_name?: string }
+    const { display_name, student_id } = body as {
+      display_name?: string
+      student_id?: string | null
+    }
     if (display_name !== undefined && typeof display_name !== "string") {
       set.status = 400
       return buildError("INVALID_REQUEST", "display_name must be a string", false)
     }
+    if (student_id !== undefined && student_id !== null && typeof student_id !== "string") {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "student_id must be a string or null", false)
+    }
 
-    // Only update if display_name was explicitly provided (PATCH semantics)
-    if (display_name === undefined) {
-      const existing = await getUserAnalysisById(auth0Id, jobId)
-      if (!existing) {
+    if (display_name !== undefined) {
+      const analysis = await updateAnalysisDisplayName(auth0Id, jobId, display_name)
+      if (!analysis) {
         set.status = 404
         return buildError("NOT_FOUND", "Analysis not found", false)
       }
       set.status = 200
-      return { analysis: existing }
+      return { analysis }
     }
 
-    const analysis = await updateAnalysisDisplayName(auth0Id, jobId, display_name)
-    if (!analysis) {
+    if (student_id !== undefined) {
+      const analysis = await linkAnalysisToStudent(auth0Id, jobId, student_id)
+      if (!analysis) {
+        set.status = 404
+        return buildError("NOT_FOUND", "Analysis not found", false)
+      }
+      set.status = 200
+      return { analysis }
+    }
+
+    const existing = await getUserAnalysisById(auth0Id, jobId)
+    if (!existing) {
       set.status = 404
       return buildError("NOT_FOUND", "Analysis not found", false)
     }
-
     set.status = 200
-    return { analysis }
+    return { analysis: existing }
   })
   .get("/api/auth/user/:auth0Id/analyses/:jobId/chat", async ({ params, set }) => {
     const { auth0Id, jobId } = params

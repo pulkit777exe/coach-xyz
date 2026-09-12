@@ -10,7 +10,7 @@ export type { CoachAIError }
 
 // ── API Client ───────────────────────────────────────────────────────────────
 
-async function apiFetch<T>(
+export async function apiFetch<T>(
   url: string,
   options: RequestInit = {},
   isFormData = false,
@@ -385,6 +385,7 @@ export type DashboardAnalysis = {
   player_count: number | null
   requested_at: string
   completed_at: string | null
+  student_id: string | null
 }
 
 export type DashboardStats = {

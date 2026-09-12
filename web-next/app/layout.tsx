@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { ThemeProvider } from "next-themes";
 import { SentryProvider } from "./sentry-provider";
 import AuthHeader from "@/components/AuthHeader";
+import { Toaster } from "@/components/9ui/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,7 +36,12 @@ export default function RootLayout({
         >
           Skip to upload
         </a>
-        <SentryProvider>{children}</SentryProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <div className="root">{children}</div>
+        </ThemeProvider>
+        <SentryProvider>
+          <Toaster position="bottom-right" richColors theme="dark" />
+        </SentryProvider>
       </body>
     </html>
   );

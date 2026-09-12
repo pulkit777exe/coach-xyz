@@ -67,7 +67,7 @@ const warnDisabled = () => {
   )
 }
 
-const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | null> => {
+export const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | null> => {
   if (!sql) {
     warnDisabled()
     return null
@@ -96,7 +96,7 @@ const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | nul
   }
 }
 
-const ensureInitialized = async () => {
+export const ensureInitialized = async () => {
   if (!sql) return
 
   if (!initPromise) {
@@ -220,6 +220,138 @@ const ensureInitialized = async () => {
       await sql`
         create index if not exists idx_chat_messages_auth0_id
         on chat_messages (auth0_id);
+      `
+
+      // ── Coach / Organization tables ──────────────────────────────────────────
+      await sql`
+        create table if not exists students (
+          id uuid primary key default gen_random_uuid(),
+          auth0_id text not null,
+          full_name text not null,
+          email text,
+          phone text,
+          sport text,
+          "position" text,
+          jersey_number integer,
+          date_of_birth date,
+          gender text,
+          guardian_name text,
+          guardian_phone text,
+          notes text,
+          status text not null default 'active'
+            check (status in ('active', 'inactive', 'transferred')),
+          joined_on date,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_students_auth0_id
+        on students (auth0_id);
+      `
+
+      await sql`
+        create table if not exists attendance (
+          id uuid primary key default gen_random_uuid(),
+          auth0_id text not null,
+          student_id uuid not null references students(id) on delete cascade,
+          session_date date not null,
+          status text not null
+            check (status in ('present', 'absent', 'late', 'excused')),
+          note text,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now(),
+          unique (student_id, session_date)
+        );
+      `
+      await sql`
+        create index if not exists idx_attendance_auth0_id
+        on attendance (auth0_id);
+      `
+      await sql`
+        create index if not exists idx_attendance_session_date
+        on attendance (session_date);
+      `
+
+      await sql`
+        create table if not exists schedule_events (
+          id uuid primary key default gen_random_uuid(),
+          auth0_id text not null,
+          title text not null,
+          event_type text not null default 'practice'
+            check (event_type in ('practice', 'match', 'tournament', 'meeting', 'other')),
+          starts_at timestamptz not null,
+          ends_at timestamptz,
+          location text,
+          description text,
+          status text not null default 'scheduled'
+            check (status in ('scheduled', 'completed', 'cancelled')),
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_schedule_auth0_id
+        on schedule_events (auth0_id);
+      `
+      await sql`
+        create index if not exists idx_schedule_starts_at
+        on schedule_events (starts_at);
+      `
+
+      await sql`
+        create table if not exists reports (
+          id uuid primary key default gen_random_uuid(),
+          auth0_id text not null,
+          student_id uuid references students(id) on delete set null,
+          report_type text not null default 'progress'
+            check (report_type in ('progress', 'attendance', 'performance', 'monthly')),
+          title text not null,
+          period_start date,
+          period_end date,
+          content_json jsonb not null default '{}'::jsonb,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_reports_auth0_id
+        on reports (auth0_id);
+      `
+      await sql`
+        create index if not exists idx_reports_student_id
+        on reports (student_id);
+      `
+
+      await sql`
+        create table if not exists performance_metrics (
+          id uuid primary key default gen_random_uuid(),
+          auth0_id text not null,
+          student_id uuid not null references students(id) on delete cascade,
+          metric_key text not null,
+          metric_value numeric not null,
+          unit text,
+          source_analysis_id text,
+          measured_at timestamptz not null default now(),
+          created_at timestamptz not null default now(),
+          unique (student_id, metric_key, measured_at)
+        );
+      `
+      await sql`
+        create index if not exists idx_perf_auth0_id
+        on performance_metrics (auth0_id);
+      `
+      await sql`
+        create index if not exists idx_perf_student
+        on performance_metrics (student_id, metric_key, measured_at desc);
+      `
+
+      await sql`
+        alter table analysis_history add column if not exists student_id uuid;
+      `
+      await sql`
+        create index if not exists idx_analysis_history_student_id
+        on analysis_history (student_id);
       `
       } catch (err) {
         // Reset so next call retries initialization
@@ -431,6 +563,24 @@ export const updateAnalysisDisplayName = async (
   })
 }
 
+export const linkAnalysisToStudent = async (
+  auth0Id: string,
+  serverJobId: string,
+  studentId: string | null,
+): Promise<DashboardAnalysis | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<DashboardAnalysis[]>`
+      update analysis_history
+      set student_id = ${studentId ?? null}, updated_at = now()
+      where server_job_id = ${serverJobId}
+        and auth0_id = ${auth0Id}
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const historyStoreEnabled = isEnabled
 
 export const shutdownHistoryStore = async (): Promise<void> => {
@@ -573,6 +723,7 @@ export type DashboardAnalysis = {
   file_name: string | null
   file_size_bytes: number | null
   player_count: number | null
+  student_id: string | null
 }
 
 export type DashboardStats = {
@@ -609,6 +760,7 @@ export const getUserAnalyses = async (
         a.completed_at,
         a.download_count,
         a.display_name,
+        a.student_id,
         v.file_name,
         v.file_size_bytes,
         v.player_count
@@ -647,6 +799,7 @@ export const getUserAnalysisById = async (
         a.completed_at,
         a.download_count,
         a.display_name,
+        a.student_id,
         v.file_name,
         v.file_size_bytes,
         v.player_count
@@ -683,6 +836,7 @@ export const getAnalysisByServerJobId = async (
         a.completed_at,
         a.download_count,
         a.display_name,
+        a.student_id,
         v.file_name,
         v.file_size_bytes,
         v.player_count

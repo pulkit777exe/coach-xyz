@@ -47,6 +47,92 @@
 
 }
 
+/* ── 9ui / shadcn theme tokens ────────────────────────────────────────────── */
+:root,
+.root {
+  --background: #0d0d0d;
+  --foreground: #f0ebe1;
+  --card: #141414;
+  --card-foreground: #f0ebe1;
+  --popover: #151515;
+  --popover-foreground: #f0ebe1;
+  --primary: #f0ebe1;
+  --primary-foreground: #0d0d0d;
+  --secondary: #1d1d1d;
+  --secondary-foreground: #f0ebe1;
+  --muted: #1a1a1a;
+  --muted-foreground: rgba(240, 235, 225, 0.5);
+  --accent: rgba(240, 235, 225, 0.08);
+  --accent-foreground: #f0ebe1;
+  --destructive: #c8003c;
+  --destructive-foreground: #ffffff;
+  --border: rgba(240, 235, 225, 0.12);
+  --input: rgba(240, 235, 225, 0.15);
+  --ring: rgba(240, 235, 225, 0.3);
+
+  --chart-1: #f0ebe1;
+  --chart-2: #c8003c;
+  --chart-3: #8ab08a;
+  --chart-4: #d4a76a;
+  --chart-5: #7d9ec0;
+
+  --danger: #c8003c;
+  --danger-foreground: #ffffff;
+  --danger-border: rgba(200, 0, 60, 0.4);
+  --warning: #e0b341;
+  --warning-foreground: #1a1a1a;
+  --warning-border: rgba(224, 179, 65, 0.4);
+  --info: #6b93c9;
+  --info-foreground: #ffffff;
+  --info-border: rgba(107, 147, 201, 0.4);
+  --success: #6fbf91;
+  --success-foreground: #0d0d0d;
+  --success-border: rgba(111, 191, 145, 0.4);
+
+  --score: #d4a76a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-border: var(--danger-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-border: var(--info-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-border: var(--success-border);
+
+  --color-score: var(--score);
+}
+
 /* ── Button Accent ─────────────────────────────────────────────────────────── */
 
 .button-accent {
