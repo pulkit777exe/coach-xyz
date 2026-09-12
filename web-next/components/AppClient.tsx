@@ -33,19 +33,23 @@ function RotatingMessage({
   const [opacity, setOpacity] = useState(0)
 
   useEffect(() => {
-    setOpacity(0)
     const fadeIn = setTimeout(() => setOpacity(1), 50)
     return () => clearTimeout(fadeIn)
-  }, [index])
+  }, [])
 
   useEffect(() => {
+    let fadeBack: ReturnType<typeof setTimeout> | undefined
     const interval = setInterval(() => {
       setOpacity(0)
-      setTimeout(() => {
+      fadeBack = setTimeout(() => {
         setIndex((prev) => (prev + 1) % messages.length)
+        setOpacity(1)
       }, 300)
     }, 2500)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (fadeBack) clearTimeout(fadeBack)
+    }
   }, [messages.length])
 
   return (

@@ -1,4 +1,4 @@
-type StateFn = (state: any) => string | undefined;
+type StateFn<S> = (state: S) => string | undefined;
 
 type StaticValue =
   | string
@@ -9,7 +9,7 @@ type StaticValue =
   | undefined
   | Record<string, boolean>;
 
-type ClassValue = StaticValue | StateFn;
+type ClassValue<S> = StaticValue | StateFn<S>;
 
 function flattenClasses(input: StaticValue): string[] {
   if (!input) return [];
@@ -24,10 +24,10 @@ function flattenClasses(input: StaticValue): string[] {
 }
 
 export function cn(...inputs: StaticValue[]): string;
-export function cn(...inputs: ClassValue[]): string | StateFn;
-export function cn(...inputs: ClassValue[]) {
+export function cn<S>(...inputs: ClassValue<S>[]): string | StateFn<S>;
+export function cn<S>(...inputs: ClassValue<S>[]) {
   const staticParts: string[] = [];
-  const dynamicParts: StateFn[] = [];
+  const dynamicParts: StateFn<S>[] = [];
 
   for (const input of inputs) {
     if (typeof input === "function") {
@@ -41,7 +41,7 @@ export function cn(...inputs: ClassValue[]) {
     return staticParts.join(" ");
   }
 
-  return (state: any) => {
+  return (state: S) => {
     const dynamic = dynamicParts
       .map((fn) => fn(state))
       .filter(Boolean)

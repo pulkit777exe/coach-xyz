@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 
@@ -61,9 +62,6 @@ export default function AttendanceGrid({
     [year, monthNum, daysInMonth],
   )
   const monthLabel = month.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-
-  const rangeFrom = toISO(days[0] ?? today)
-  const rangeTo = toISO(days[days.length - 1] ?? today)
 
   const fetchMonth = async (targetMonth: Date) => {
     setLoading(true)
@@ -182,12 +180,12 @@ export default function AttendanceGrid({
         <p className="text-muted-foreground mb-2 text-sm">
           Add students to your roster before marking attendance.
         </p>
-        <a
+        <Link
           href="/dashboard/students"
           className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg)"
         >
           Go to roster →
-        </a>
+        </Link>
       </div>
     )
   }

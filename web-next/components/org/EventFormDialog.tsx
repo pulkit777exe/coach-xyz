@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/9ui/ui/dialog"
@@ -84,9 +84,13 @@ export default function EventFormDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // Re-seed the form from the target event/date whenever the dialog is (re)opened.
+  // Render-time state adjustment is the documented alternative to setState-in-effect.
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
     if (open) setValues(toFormValues(event, initialDate))
-  }, [open, event, initialDate])
+  }
 
   const set = <K extends keyof EventFormValues>(key: K, value: EventFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }))

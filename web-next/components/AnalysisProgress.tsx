@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import type { JobStatus } from '@/types'
 
 interface AnalysisProgressProps {
@@ -25,7 +25,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
   const maxProgress = status?.complete ? 100 : 99
   const boundedProgress = Math.max(0, Math.min(maxProgress, progress))
   const lastProgressRef = useRef<number>(0)
-  const lastTimeRef = useRef<number>(Date.now())
+  const lastTimeRef = useRef<number>(0)
 
   // Match current stage by stage_name string, not stage number
   const currentStageIndex = useMemo(() => {
@@ -43,32 +43,43 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
   // ETA: track the timestamp of the *first* non-zero progress tick so we can
   // compute a stable rate over the full elapsed window rather than just the
-  // last render cycle (which produces wildly fluctuating estimates).
-  const startProgressRef = useRef<{ progress: number; time: number } | null>(null)
+  // last render cycle (which produces wildly fluctuating estimates). Captured
+  // in a deferred timer callback (not synchronously in an effect body).
+  const [startMark, setStartMark] = useState<{ progress: number; time: number } | null>(null)
 
   useEffect(() => {
     if (boundedProgress > 0 && boundedProgress < 100) {
-      if (!startProgressRef.current) {
-        startProgressRef.current = { progress: boundedProgress, time: Date.now() }
-      }
       lastProgressRef.current = boundedProgress
       lastTimeRef.current = Date.now()
     }
   }, [boundedProgress])
 
+  useEffect(() => {
+    if (startMark || boundedProgress <= 0 || boundedProgress >= 100) return
+    const t = setTimeout(() => setStartMark({ progress: boundedProgress, time: Date.now() }), 0)
+    return () => clearTimeout(t)
+  }, [boundedProgress, startMark])
+
+  // "Now" is external state; keep a ticking snapshot in state (updated from a
+  // timer callback) so the ETA below can be derived purely during render.
+  const [now, setNow] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   const estimatedSeconds = useMemo(() => {
     if (boundedProgress <= 0 || boundedProgress >= 100) return 0
-    const start = startProgressRef.current
-    if (!start) return 0
-    const elapsedMs = Date.now() - start.time
-    const progressMade = boundedProgress - start.progress
+    if (!startMark) return 0
+    const elapsedMs = now - startMark.time
+    const progressMade = boundedProgress - startMark.progress
     if (progressMade <= 0) return 0
     const msPerPercent = elapsedMs / progressMade
     const remaining = 100 - boundedProgress
     const etaSec = Math.round((msPerPercent * remaining) / 1000)
     // Cap at 15 min to avoid absurd estimates early in the pipeline
     return Math.min(etaSec, 900)
-  }, [boundedProgress])
+  }, [boundedProgress, startMark, now])
 
   const isWaitingForQuota = stageName.toLowerCase().includes("waiting for ai quota")
 

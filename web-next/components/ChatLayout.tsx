@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import Link from 'next/link'
 import ChatPanel from '@/components/ChatPanel'
 import { VideoPlayer, type VideoPlayerHandle } from '@/components/VideoPlayer'
 import type { JobStatus } from '@/types'
@@ -23,7 +24,7 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
       {/* Header */}
       <header className="shrink-0 border-b border-(--cream-05) bg-(--bg)/80 backdrop-blur-md z-50">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 lg:px-6">
-          <a href="/" className="font-serif text-lg text-(--fg)">coach.xyz</a>
+          <Link href="/" className="font-serif text-lg text-(--fg)">coach.xyz</Link>
           <div className="flex items-center gap-4">
             <button
               onClick={onBackToResults}
@@ -31,12 +32,12 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
             >
               ← Results
             </button>
-            <a
+            <Link
               href="/"
               className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
             >
               New Analysis
-            </a>
+            </Link>
           </div>
         </div>
       </header>

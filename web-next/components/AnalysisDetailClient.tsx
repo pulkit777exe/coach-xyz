@@ -50,7 +50,7 @@ export default function AnalysisDetailClient({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const hasPolledSuccessfully = useRef(false)
   const pollRetryCount = useRef(0)
-  const pollStartTime = useRef<number>(Date.now())
+  const pollStartTime = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const shotEvents = initialData?.summary_json && typeof initialData.summary_json === 'object' && 'shot_events' in (initialData.summary_json as Record<string, unknown>)
@@ -86,7 +86,7 @@ export default function AnalysisDetailClient({
             setExpiredMessage(s.error ?? 'Analysis not found or expired.')
           }
           stopPolling()
-        } else if (!stuckWarning && Date.now() - pollStartTime.current > 5 * 60 * 1000) {
+        } else if (!stuckWarning && (pollStartTime.current === null || Date.now() - pollStartTime.current > 5 * 60 * 1000)) {
           setStuckWarning(true)
         }
       } catch (err) {
@@ -264,7 +264,7 @@ export default function AnalysisDetailClient({
     <div ref={containerRef} className="p-8 lg:p-12 max-w-5xl">
       {/* Reading Progress */}
       <ReadingProgress
-        scroller={{ current: containerRef.current }}
+        scroller={containerRef}
         className="fixed top-14 left-0 right-0 z-40"
       />
 

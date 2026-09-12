@@ -181,12 +181,24 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const stableOnRetry = useCallback(onRetry, [onRetry])
+  const stableOnRetry = useCallback(() => onRetry(), [onRetry])
+
+  // Initialize the countdown when a rate-limit error appears/changes. Done via
+  // render-time state adjustment (the documented alternative to a sync
+  // setState-in-effect); the interval below only ticks it down.
+  const rateLimitKey = `${error.code}:${error.retry_after ?? ''}`
+  const [prevRateLimitKey, setPrevRateLimitKey] = useState(rateLimitKey)
+  if (prevRateLimitKey !== rateLimitKey) {
+    setPrevRateLimitKey(rateLimitKey)
+    setCountdown(
+      error.code === 'RATE_LIMITED' && error.retry_after && error.retry_after > 0
+        ? error.retry_after
+        : null
+    )
+  }
 
   useEffect(() => {
     if (error.code === 'RATE_LIMITED' && error.retry_after && error.retry_after > 0) {
-      setCountdown(error.retry_after)
-
       timerRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev === null || prev <= 1) {

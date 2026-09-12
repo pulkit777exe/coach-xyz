@@ -11,6 +11,12 @@ import { getConversation } from '@/lib/api'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 
+// Timestamps captured once at module load: welcome/streaming bubbles are
+// transient render artifacts, not real history, so a stable created_at is fine
+// and keeps render pure.
+const WELCOME_MESSAGE_AT = Date.now()
+const STREAMING_MESSAGE_AT = Date.now()
+
 interface ChatPanelProps {
   jobId: string
   jobStatus: JobStatus | null
@@ -141,7 +147,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     id: 'welcome',
     role: 'assistant',
     content: `Analysis complete! I found **${summary?.total_events ?? 0} events** in your ${summary?.sport ?? 'sports'} video with an overall form score of **${summary?.form_score ?? 0}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
-    created_at: Date.now(),
+    created_at: WELCOME_MESSAGE_AT,
   }), [summary])
 
   return (
@@ -223,7 +229,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                   id: 'streaming',
                   role: 'assistant',
                   content: streamingText,
-                  created_at: Date.now(),
+                  created_at: STREAMING_MESSAGE_AT,
                 }}
                 onSeekTo={onSeekTo}
               />

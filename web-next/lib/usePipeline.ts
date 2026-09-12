@@ -67,7 +67,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
   const pollInterval = useRef<NodeJS.Timeout | null>(null)
-  const pollStart = useRef<number>(Date.now())
+  const pollStart = useRef<number>(0)
   const pipelineStateRef = useRef<PipelineState>(pipelineState)
   const retryGenerationRef = useRef(0)
 

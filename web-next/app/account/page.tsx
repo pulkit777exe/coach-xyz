@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { auth0 } from "@/lib/auth0";
 import { syncUser } from "@/lib/api";
 import { redirect } from "next/navigation";
@@ -147,12 +148,12 @@ export default async function AccountPage() {
 
         {/* Actions */}
         <div className="flex gap-4">
-          <a
+          <Link
             href="/"
             className="border border-(--cream-10) px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
           >
             Back to Home
-          </a>
+          </Link>
           <a
             href="/auth/logout"
             className="px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--red) border border-(--red) transition-all hover:bg-(--red) hover:text-(--bg)"

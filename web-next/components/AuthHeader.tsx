@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth0 } from "@/lib/auth0";
 import UserAvatar from "./UserAvatar";
 
@@ -7,9 +8,9 @@ export default async function AuthHeader() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-(--bg)/80 backdrop-blur-md border-b border-(--cream-05)">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <a href="/" className="font-serif text-xl text-(--fg)">
+        <Link href="/" className="font-serif text-xl text-(--fg)">
           coach.xyz
-        </a>
+        </Link>
 
         <nav className="flex items-center gap-4">
           {session ? (

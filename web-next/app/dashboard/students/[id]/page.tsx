@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { auth0 } from "@/lib/auth0";
 import { redirect, notFound } from "next/navigation";
 import { getDashboardAnalyses } from "@/lib/api";
@@ -46,12 +47,12 @@ export default async function StudentDetailPage({
 
   return (
     <div className="p-8 lg:p-12 max-w-6xl">
-      <a
+      <Link
         href="/dashboard/students"
         className="mb-8 inline-block text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
       >
         ← Back to roster
-      </a>
+      </Link>
 
       <StudentProfile
         auth0Id={auth0Id}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 
@@ -106,12 +106,6 @@ export default function ScheduleClient({
     for (const list of map.values()) list.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     return map
   }, [events])
-
-  useEffect(() => {
-    if (dialogOpen) return
-    setEditingEvent(null)
-    setInitialDate(undefined)
-  }, [dialogOpen])
 
   const fetchMonth = async (target: Date) => {
     setLoading(true)

@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Button } from '@/components/ui/button'
 
 export default function NotFound() {
@@ -9,11 +10,11 @@ export default function NotFound() {
         <p className="text-(--cream-40) mb-8">
           The page you are looking for does not exist or has been moved.
         </p>
-        <a href="/">
+        <Link href="/">
           <Button size="lg">
             Go home
           </Button>
-        </a>
+        </Link>
       </div>
     </div>
   )

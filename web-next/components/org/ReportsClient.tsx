@@ -19,7 +19,7 @@ import {
 import { Spinner } from "./Spinner"
 
 import type { ReportRecord, Student } from "@/lib/org"
-import { orgReports, orgCreateReport, orgDeleteReport } from "@/lib/org"
+import { orgCreateReport, orgDeleteReport } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
 const REPORT_TYPES = [
