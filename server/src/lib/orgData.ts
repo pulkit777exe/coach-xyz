@@ -99,6 +99,7 @@ export type OrgOverview = {
 }
 
 export type PerformanceSeriesPoint = {
+  id: string | null
   measured_at: string
   metric_key: string
   metric_value: number
@@ -198,7 +199,11 @@ export const updateStudent = async (
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
     `
-    const values = cols.map((k) => (input[k] === undefined ? null : String(input[k])))
+    const values = cols.map((k) => {
+      const v = input[k]
+      if (v === undefined || v === null) return null
+      return typeof v === "number" ? v : String(v)
+    })
     const rows = await db.unsafe<Student[]>(sql, [...values, auth0Id, id])
     return rows[0] ?? null
   })
@@ -447,7 +452,11 @@ export const updateScheduleEvent = async (
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
     `
-    const values = cols.map((k) => (input[k] === undefined ? null : String(input[k])))
+    const values = cols.map((k) => {
+      const v = input[k]
+      if (v === undefined || v === null) return null
+      return String(v)
+    })
     const rows = await db.unsafe<ScheduleEvent[]>(sql, [...values, auth0Id, id])
     return rows[0] ?? null
   })
@@ -537,11 +546,18 @@ export const listReports = async (
   )
 }
 
-export const getReport = async (auth0Id: string, id: string): Promise<ReportRecord | null> => {
+export const getReport = async (
+  auth0Id: string,
+  id: string,
+): Promise<(ReportRecord & { full_name: string | null }) | null> => {
   return withHistoryStore(async (db) => {
     await ensureInitialized()
-    const rows = await db<ReportRecord[]>`
-      select * from reports where auth0_id = ${auth0Id} and id = ${id} limit 1;
+    const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
+      select r.*, s.full_name
+      from reports r
+      left join students s on s.id = r.student_id
+      where r.auth0_id = ${auth0Id} and r.id = ${id}
+      limit 1;
     `
     return rows?.[0] ?? null
   })
@@ -580,6 +596,196 @@ export const deleteReport = async (auth0Id: string, id: string): Promise<boolean
     return rows?.[0] ? true : false
   })
   return res ?? false
+}
+
+export const listRecentAnalysisScores = async (
+  auth0Id: string,
+  limit = 20,
+): Promise<DashboardAnalysis[]> => {
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<DashboardAnalysis[]>`
+        select
+          a.server_job_id,
+          a.engine_job_id,
+          a.session_token,
+          a.player_index,
+          a.model,
+          a.stage,
+          a.stage_name,
+          a.progress,
+          a.complete,
+          a.video_ready,
+          a.summary_json,
+          a.error_code,
+          a.error_message,
+          a.requested_at,
+          a.completed_at,
+          a.download_count,
+          a.display_name,
+          a.student_id,
+          v.file_name,
+          v.file_size_bytes,
+          v.player_count
+        from analysis_history a
+        left join video_conversations v on a.session_token = v.session_token
+        where a.auth0_id = ${auth0Id}
+          and a.complete = true
+          and a.summary_json is not null
+          and (a.summary_json->>'form_score') is not null
+        order by a.requested_at desc
+        limit ${limit};
+      `
+      return rows ?? []
+    })) ?? []
+  )
+}
+
+export const buildReportContent = async (
+  auth0Id: string,
+  opts: { student_id?: string | null; from?: string | null; to?: string | null } = {},
+): Promise<Record<string, unknown>> => {
+  const { student_id, from, to } = opts
+  const [attendance, series, analyses] = await Promise.all([
+    attendanceSummary(auth0Id, {
+      from: from ?? undefined,
+      to: to ?? undefined,
+      studentId: student_id ?? undefined,
+    }),
+    student_id
+      ? getStudentPerformanceSeries(auth0Id, student_id, { from: from ?? undefined, to: to ?? undefined })
+      : Promise.resolve([]),
+    student_id
+      ? getStudentAnalyses(auth0Id, student_id, 20)
+      : listRecentAnalysisScores(auth0Id, 20),
+  ])
+
+  const student = student_id ? await getStudent(auth0Id, student_id) : null
+
+  const formScores = series.filter((s) => s.metric_key === "form_score")
+  const formScoreAvg =
+    formScores.length > 0
+      ? Math.round((formScores.reduce((acc, s) => acc + s.metric_value, 0) / formScores.length) * 10) / 10
+      : null
+  const formScoreLatest = formScores.length > 0 ? formScores[formScores.length - 1].metric_value : null
+
+  const orgBlock = student_id
+    ? null
+    : await (async () => {
+        const o = await getOrgOverview(auth0Id)
+        return {
+          student_count: o.student_count,
+          active_students: o.active_students,
+          sessions_this_month: o.sessions_this_month,
+          upcoming_events: o.upcoming_events,
+          analyses_linked: o.analyses_linked,
+          avg_attendance_rate: o.avg_attendance_rate,
+        }
+      })()
+
+  const attendanceBlock = {
+    total_records: attendance.total_records,
+    present: attendance.present,
+    absent: attendance.absent,
+    late: attendance.late,
+    excused: attendance.excused,
+    attendance_rate: attendance.attendance_rate,
+  }
+  const performanceBlock = {
+    form_score_avg: formScoreAvg,
+    form_score_latest: formScoreLatest,
+    total_sessions: formScores.length,
+    latest_analysis_at: formScores.length > 0 ? formScores[formScores.length - 1].measured_at : null,
+  }
+  const analysesBlock = analyses.map((a) => ({
+    server_job_id: a.server_job_id,
+    requested_at: a.requested_at,
+    display_name: a.display_name,
+    student_id: a.student_id,
+    form_score:
+      typeof a.summary_json === "object" && a.summary_json && "form_score" in a.summary_json
+        ? Number((a.summary_json as Record<string, unknown>).form_score)
+        : null,
+  }))
+
+  let summary: string | null
+  if (orgBlock) {
+    const parts: string[] = []
+    parts.push(`${orgBlock.student_count} student(s) on the roster (${orgBlock.active_students} active).`)
+    if (orgBlock.avg_attendance_rate !== null) {
+      parts.push(`Roster attendance over the last 30 days: ${orgBlock.avg_attendance_rate}%.`)
+    }
+    if (orgBlock.sessions_this_month > 0) parts.push(`${orgBlock.sessions_this_month} session(s) scheduled this month.`)
+    if (orgBlock.analyses_linked > 0) parts.push(`${orgBlock.analyses_linked} analysis(ies) linked to students.`)
+    if (performanceBlock.form_score_avg !== null) {
+      parts.push(
+        `Average form score across the ${performanceBlock.total_sessions} most recent analyzed session(s) is ${performanceBlock.form_score_avg}/10.`,
+      )
+    } else if (attendanceBlock.total_records > 0) {
+      parts.push(
+        `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`,
+      )
+    }
+    summary = parts.length ? parts.join(" ") : "No data is available yet for this academy."
+  } else if (performanceBlock.form_score_avg !== null) {
+    summary = `Average form score across ${performanceBlock.total_sessions} analyzed session(s) is ${performanceBlock.form_score_avg}/10${
+      attendanceBlock.total_records > 0
+        ? `; attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}%`
+        : ""
+    }.`
+  } else if (attendanceBlock.total_records > 0) {
+    summary = `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`
+  } else {
+    summary = "No attendance or performance data is available for the selected period."
+  }
+
+  return {
+    generated_at: new Date().toISOString(),
+    student: student
+      ? {
+          id: student.id,
+          full_name: student.full_name,
+          sport: student.sport,
+          position: student.position,
+          status: student.status,
+        }
+      : null,
+    period: { start: from ?? null, end: to ?? null },
+    attendance: attendanceBlock,
+    performance: performanceBlock,
+    analyses: analysesBlock,
+    summary,
+    org: orgBlock,
+  }
+}
+
+export const updateReportRecord = async (
+  auth0Id: string,
+  id: string,
+  input: {
+    report_type: string
+    title: string
+    period_start: string | null
+    period_end: string | null
+    content_json: Record<string, unknown>
+  },
+): Promise<(ReportRecord & { full_name: string | null }) | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
+      update reports set
+        report_type = ${input.report_type},
+        title = ${input.title},
+        period_start = ${input.period_start}::date,
+        period_end = ${input.period_end}::date,
+        content_json = ${JSON.stringify(input.content_json)}::jsonb,
+        updated_at = now()
+      where auth0_id = ${auth0Id} and id = ${id}
+      returning *, (select full_name from students s where s.id = reports.student_id) as full_name;
+    `
+    return rows?.[0] ?? null
+  })
 }
 
 // ── Performance ──────────────────────────────────────────────────────────────
@@ -695,6 +901,7 @@ export const getStudentPerformanceSeries = async (
 
       const points: PerformanceSeriesPoint[] = [
         ...(analyses ?? []).map((a) => ({
+          id: null as string | null,
           measured_at: a.requested_at,
           metric_key: "form_score",
           metric_value: a.form_score as number,
@@ -703,6 +910,7 @@ export const getStudentPerformanceSeries = async (
           source_analysis_id: a.server_job_id,
         })),
         ...(manual ?? []).map((m) => ({
+          id: m.id,
           measured_at: m.measured_at,
           metric_key: m.metric_key,
           metric_value: m.metric_value,

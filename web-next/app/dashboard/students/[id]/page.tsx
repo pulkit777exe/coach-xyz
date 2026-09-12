@@ -3,7 +3,7 @@ import Link from "next/link";
 import { auth0 } from "@/lib/auth0";
 import { redirect, notFound } from "next/navigation";
 import { getDashboardAnalyses } from "@/lib/api";
-import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports } from "@/lib/org";
+import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports } from "@/lib/org";
 import StudentProfile from "@/components/org/StudentProfile";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -38,11 +38,12 @@ export default async function StudentDetailPage({
   if (!studentRes) notFound();
   const student = studentRes.student;
 
-  const [seriesRes, attRes, analysesRes, sportsRes] = await Promise.all([
+  const [seriesRes, attRes, analysesRes, sportsRes, reportsRes] = await Promise.all([
     orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
     orgAttendanceSummary(auth0Id, { studentId: id }).catch(() => null),
     getDashboardAnalyses(auth0Id, 200, 0).catch(() => ({ analyses: [] })),
     orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
+    orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
   ]);
 
   return (
@@ -59,6 +60,7 @@ export default async function StudentDetailPage({
         student={student}
         initialSeries={seriesRes.series}
         initialAttendance={attRes?.summary ?? null}
+        initialReports={reportsRes.reports}
         allAnalyses={analysesRes.analyses}
         sports={sportsRes.sports}
       />

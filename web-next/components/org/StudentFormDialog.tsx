@@ -78,14 +78,27 @@ export default function StudentFormDialog({
       const numbered = ["jersey_number"] as const
       const dates = ["date_of_birth", "joined_on"] as const
       for (const [key, value] of Object.entries(values)) {
-        if (value === undefined || value === null || value === "") continue
+        if (value === undefined) continue
         if ((numbered as readonly string[]).includes(key)) {
+          if (value === "" || value === null) {
+            if (editing) payload[key] = null
+            continue
+          }
           const n = Number(value)
           if (Number.isFinite(n)) payload[key] = n
           continue
         }
         if ((dates as readonly string[]).includes(key)) {
+          if (value === "" || value === null) {
+            if (editing) payload[key] = null
+            continue
+          }
           payload[key] = String(value)
+          continue
+        }
+        if (value === null) continue
+        if (value === "") {
+          if (editing) payload[key] = null
           continue
         }
         payload[key] = value

@@ -2,15 +2,18 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   PlusIcon,
   PencilIcon,
+  TrashIcon,
   LinkIcon,
   UnlinkIcon,
   MailIcon,
   PhoneIcon,
   CalendarIcon,
+  FileTextIcon,
 } from "lucide-react"
 import { Line, LineChart, XAxis, YAxis, CartesianGrid } from "recharts"
 
@@ -19,6 +22,14 @@ import { Badge } from "@/components/9ui/ui/badge"
 import { Input } from "@/components/9ui/ui/input"
 import { Label } from "@/components/9ui/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/9ui/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -34,11 +45,14 @@ import {
 import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
 
-import type { Student, PerformanceSeriesPoint, AttendanceSummary } from "@/lib/org"
+import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord } from "@/lib/org"
 import type { DashboardAnalysis, CoachAIError } from "@/lib/api"
 import {
   orgStudentPerformance,
   orgAddPerformanceMetric,
+  orgDeletePerformanceMetric,
+  orgDeleteStudent,
+  orgDeleteReport,
   linkAnalysisToStudent,
   orgAttendanceSummary,
 } from "@/lib/org"
@@ -70,6 +84,7 @@ export default function StudentProfile({
   student,
   initialSeries,
   initialAttendance,
+  initialReports,
   allAnalyses,
   sports,
 }: {
@@ -77,24 +92,61 @@ export default function StudentProfile({
   student: Student
   initialSeries: PerformanceSeriesPoint[]
   initialAttendance: AttendanceSummary | null
+  initialReports: ReportRecord[]
   allAnalyses: DashboardAnalysis[]
   sports: string[]
 }) {
+  const router = useRouter()
   const [student_, setStudent] = useState<Student>(student)
   const [series, setSeries] = useState<PerformanceSeriesPoint[]>(initialSeries)
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(initialAttendance)
+  const [reports, setReports] = useState<ReportRecord[]>(initialReports)
   const [editOpen, setEditOpen] = useState(false)
+  const [confirm, setConfirm] = useState<{
+    title: string
+    description: string
+    action: () => Promise<void>
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
 
   const [selectedKey, setSelectedKey] = useState<string>("all")
   const [isMetricSubmitting, setMetricSubmitting] = useState(false)
+  const [editingMetric, setEditingMetric] = useState<PerformanceSeriesPoint | null>(null)
   const [metricForm, setMetricForm] = useState({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
 
   const keys = useMemo(() => [...new Set(series.map((s) => s.metric_key))].sort(), [series])
 
   const chartData = useMemo(() => {
-    if (selectedKey === "all") return series
-    return series.filter((s) => s.metric_key === selectedKey)
+    const includeAll = selectedKey === "all"
+    const rows: Record<string, string | number>[] = []
+    const byDate = new Map<string, Record<string, string | number>>()
+    for (const s of series) {
+      if (!includeAll && s.metric_key !== selectedKey) continue
+      const date = s.measured_at.slice(0, 10)
+      let row = byDate.get(date)
+      if (!row) {
+        row = { date }
+        byDate.set(date, row)
+        rows.push(row)
+      }
+      row[s.metric_key] = s.metric_value
+    }
+    return rows
   }, [series, selectedKey])
+
+  const shownKeys = useMemo(
+    () => (selectedKey === "all" ? keys : [selectedKey]),
+    [selectedKey, keys],
+  )
+
+  const manualPoints = useMemo(
+    () =>
+      series
+        .filter((s) => s.source === "manual")
+        .slice()
+        .sort((a, b) => b.measured_at.localeCompare(a.measured_at)),
+    [series],
+  )
 
   const chartConfig: ChartConfig = useMemo(() => {
     const config: ChartConfig = {}
@@ -112,6 +164,17 @@ export default function StudentProfile({
   const linked = allAnalyses.filter((a) => a.student_id === student_.id)
   const unlinked = allAnalyses.filter((a) => !a.student_id)
 
+  const runConfirm = async () => {
+    if (!confirm) return
+    setConfirmBusy(true)
+    try {
+      await confirm.action()
+      setConfirm(null)
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
+
   const addMouseMetric = async () => {
     const raw = Number(metricForm.metric_value)
     if (!Number.isFinite(raw)) {
@@ -128,29 +191,31 @@ export default function StudentProfile({
       metric_value: raw,
     }
     if (metricForm.unit.trim()) payload.unit = metricForm.unit.trim()
-    if (metricForm.measured_at) payload.measured_at = metricForm.measured_at
+    if (editingMetric) payload.measured_at = editingMetric.measured_at
+    else if (metricForm.measured_at) payload.measured_at = metricForm.measured_at
 
     setMetricSubmitting(true)
     try {
-      const res = await orgAddPerformanceMetric(auth0Id, student_.id, payload)
-      setSeries((prev) => [
-        ...prev,
-        {
-          measured_at: res.metric.measured_at,
-          metric_key: res.metric.metric_key,
-          metric_value: res.metric.metric_value,
-          unit: res.metric.unit,
-          source: "manual",
-          source_analysis_id: null,
-        },
-      ])
+      await orgAddPerformanceMetric(auth0Id, student_.id, payload)
+      toast.success(editingMetric ? "Metric updated" : "Metric logged")
+      setEditingMetric(null)
       setMetricForm({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
-      toast.success("Metric logged")
+      await refresh()
     } catch (err) {
       toast.error((err as CoachAIError).message ?? "Failed to log metric")
     } finally {
       setMetricSubmitting(false)
     }
+  }
+
+  const openMetricEdit = (p: PerformanceSeriesPoint) => {
+    setEditingMetric(p)
+    setMetricForm({
+      metric_key: p.metric_key,
+      metric_value: String(p.metric_value),
+      unit: p.unit ?? "",
+      measured_at: p.measured_at.slice(0, 10),
+    })
   }
 
   const setAnalysisLink = async (analysis: DashboardAnalysis, studentId: string | null) => {
@@ -162,7 +227,7 @@ export default function StudentProfile({
         student_id: res.analysis.student_id ?? null,
       }
       allAnalyses.splice(allAnalyses.indexOf(analysis), 1, updated)
-      refreshAttendance()
+      await refresh()
     } catch (err) {
       toast.error((err as CoachAIError).message ?? "Failed to update link")
     }
@@ -175,11 +240,6 @@ export default function StudentProfile({
     ])
     setSeries(seriesRes.series)
     setAttendance(attRes.summary)
-  }
-
-  const refreshAttendance = async () => {
-    const attRes = await orgAttendanceSummary(auth0Id, { studentId: student_.id }).catch(() => null)
-    if (attRes) setAttendance(attRes.summary)
   }
 
   const attStats = [
@@ -243,6 +303,45 @@ export default function StudentProfile({
             <PencilIcon />
             Edit
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-muted-foreground hover:text-(--danger)"
+            onClick={() =>
+              setConfirm({
+                title: `Remove ${student_.full_name}?`,
+                description:
+                  "This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.",
+                action: async () => {
+                  await orgDeleteStudent(auth0Id, student_.id)
+                  toast.success(`${student_.full_name} removed`)
+                  router.push("/dashboard/students")
+                },
+              })
+            }
+          >
+            <TrashIcon />
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      {/* Profile details */}
+      <div className="mt-8">
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+          Profile Details
+        </p>
+        <div className="border-border bg-card grid gap-px rounded-lg border sm:grid-cols-2">
+          <DetailRow label="Date of birth" value={student_.date_of_birth ? formatDate(student_.date_of_birth) : "—"} />
+          <DetailRow label="Gender" value={student_.gender ? capitalize(student_.gender) : "—"} />
+          <DetailRow label="Guardian" value={student_.guardian_name || "—"} />
+          <DetailRow label="Guardian phone" value={student_.guardian_phone || "—"} />
+          <div className="border-border border-t p-4 sm:col-span-2">
+            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">Notes</p>
+            <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-sm">
+              {student_.notes || "No notes recorded."}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -303,7 +402,7 @@ export default function StudentProfile({
               <LineChart data={chartData} margin={{ left: -14, right: 8 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
                 <XAxis
-                  dataKey="measured_at"
+                  dataKey="date"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
@@ -315,15 +414,15 @@ export default function StudentProfile({
                   content={<ChartTooltipContent style={{ background: "var(--color-popover)" }} />}
                   cursor={{ stroke: "var(--color-border)", strokeDasharray: "3 3" }}
                 />
-                {Object.entries(chartConfig).map(([key, cfg]) => (
+                {shownKeys.map((key) => (
                   <Line
                     key={key}
-                    dataKey="metric_value"
+                    dataKey={key}
                     name={key}
                     type="monotone"
-                    stroke={cfg.color}
+                    stroke={chartConfig[key]?.color}
                     strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 0, fill: cfg.color }}
+                    dot={{ r: 3, strokeWidth: 0, fill: chartConfig[key]?.color }}
                     activeDot={{ r: 5 }}
                     connectNulls
                   />
@@ -340,59 +439,127 @@ export default function StudentProfile({
         </div>
 
         {/* Log metric */}
-        <div className="border-border bg-card mt-4 flex flex-wrap items-end gap-3 rounded-lg border p-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="metric_key" className="text-xs">
-              Metric
-            </Label>
-            <Input
-              id="metric_key"
-              className="h-8 w-40 text-sm"
-              placeholder="form_score"
-              value={metricForm.metric_key}
-              onChange={(e) => setMetricForm((f) => ({ ...f, metric_key: e.target.value }))}
-            />
+        <div className="border-border bg-card mt-4 rounded-lg border p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="metric_key" className="text-xs">
+                Metric
+              </Label>
+              <Input
+                id="metric_key"
+                className="h-8 w-40 text-sm"
+                placeholder="form_score"
+                disabled={Boolean(editingMetric)}
+                value={metricForm.metric_key}
+                onChange={(e) => setMetricForm((f) => ({ ...f, metric_key: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="metric_value" className="text-xs">
+                Value *
+              </Label>
+              <Input
+                id="metric_value"
+                type="number"
+                step="any"
+                className="h-8 w-24 text-sm"
+                value={metricForm.metric_value}
+                onChange={(e) => setMetricForm((f) => ({ ...f, metric_value: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="metric_unit" className="text-xs">
+                Unit
+              </Label>
+              <Input
+                id="metric_unit"
+                className="h-8 w-24 text-sm"
+                placeholder="pts"
+                value={metricForm.unit}
+                onChange={(e) => setMetricForm((f) => ({ ...f, unit: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="metric_at" className="text-xs">
+                Date
+              </Label>
+              <Input
+                id="metric_at"
+                type="date"
+                className="h-8 w-36 text-sm"
+                disabled={Boolean(editingMetric)}
+                value={metricForm.measured_at}
+                onChange={(e) => setMetricForm((f) => ({ ...f, measured_at: e.target.value }))}
+              />
+            </div>
+            <Button size="sm" onClick={addMouseMetric} disabled={isMetricSubmitting}>
+              {isMetricSubmitting ? <Spinner /> : editingMetric ? <PencilIcon /> : <PlusIcon />}{" "}
+              {editingMetric ? "Update metric" : "Log metric"}
+            </Button>
+            {editingMetric && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditingMetric(null)
+                  setMetricForm({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
+                }}
+              >
+                Cancel
+              </Button>
+            )}
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="metric_value" className="text-xs">
-              Value *
-            </Label>
-            <Input
-              id="metric_value"
-              type="number"
-              step="any"
-              className="h-8 w-24 text-sm"
-              value={metricForm.metric_value}
-              onChange={(e) => setMetricForm((f) => ({ ...f, metric_value: e.target.value }))}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="metric_unit" className="text-xs">
-              Unit
-            </Label>
-            <Input
-              id="metric_unit"
-              className="h-8 w-24 text-sm"
-              placeholder="pts"
-              value={metricForm.unit}
-              onChange={(e) => setMetricForm((f) => ({ ...f, unit: e.target.value }))}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="metric_at" className="text-xs">
-              Date
-            </Label>
-            <Input
-              id="metric_at"
-              type="date"
-              className="h-8 w-36 text-sm"
-              value={metricForm.measured_at}
-              onChange={(e) => setMetricForm((f) => ({ ...f, measured_at: e.target.value }))}
-            />
-          </div>
-          <Button size="sm" onClick={addMouseMetric} disabled={isMetricSubmitting}>
-            {isMetricSubmitting ? <Spinner /> : <PlusIcon />} Log metric
-          </Button>
+
+          {manualPoints.length > 0 && (
+            <ul className="mt-4 space-y-1 border-t border-border pt-3">
+              {manualPoints.map((p) => (
+                <li
+                  key={p.id ?? `${p.metric_key}-${p.measured_at}`}
+                  className="flex items-center justify-between gap-2 py-1 text-sm"
+                >
+                  <span className="text-(--fg)">
+                    {formatKey(p.metric_key)}{" "}
+                    <span className="text-muted-foreground">
+                      {p.metric_value}
+                      {p.unit ? ` ${p.unit}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-muted-foreground text-xs">{formatDateShort(p.measured_at)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => openMetricEdit(p)}
+                      aria-label="Edit metric"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-(--danger)"
+                      onClick={() =>
+                        p.id &&
+                        setConfirm({
+                          title: "Delete this metric?",
+                          description: `${formatKey(p.metric_key)} · ${p.metric_value}${p.unit ? ` ${p.unit}` : ""} on ${formatDateShort(p.measured_at)}.`,
+                          action: async () => {
+                            await orgDeletePerformanceMetric(auth0Id, p.id as string)
+                            toast.success("Metric deleted")
+                            await refresh()
+                          },
+                        })
+                      }
+                      aria-label="Delete metric"
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
@@ -478,6 +645,63 @@ export default function StudentProfile({
         )}
       </div>
 
+      {/* Reports */}
+      <div className="mt-8">
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">Reports</p>
+        {reports.length === 0 ? (
+          <div className="border-border bg-card flex flex-col items-center gap-2 rounded-lg border p-10 text-center">
+            <FileTextIcon className="text-muted-foreground size-6" />
+            <p className="text-muted-foreground text-sm">No reports generated for {student_.full_name} yet.</p>
+            <Link href="/dashboard/reports" className="text-(--fg) text-xs underline">
+              Go to Reports
+            </Link>
+          </div>
+        ) : (
+          <div className="border-border overflow-hidden rounded-lg border">
+            <ul>
+              {reports.map((r) => (
+                <li
+                  key={r.id}
+                  className="hover:bg-accent/50 border-b border-border last:border-0 flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                >
+                  <Link href={`/dashboard/reports/${r.id}`} className="text-(--fg) hover:underline">
+                    {r.title}
+                  </Link>
+                  <span className="flex items-center gap-3">
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(r.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-(--danger)"
+                      onClick={() =>
+                        setConfirm({
+                          title: "Delete this report?",
+                          description: "This permanently removes the generated report. This cannot be undone.",
+                          action: async () => {
+                            await orgDeleteReport(auth0Id, r.id)
+                            setReports((prev) => prev.filter((x) => x.id !== r.id))
+                            toast.success("Report deleted")
+                          },
+                        })
+                      }
+                      aria-label="Delete report"
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       <StudentFormDialog
         key={student_.id}
         auth0Id={auth0Id}
@@ -491,8 +715,39 @@ export default function StudentProfile({
         }}
         onCreated={() => undefined}
       />
+
+      {/* Destructive confirm */}
+      <Dialog open={Boolean(confirm)} onOpenChange={(open) => !open && setConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirm?.title}</DialogTitle>
+            <DialogDescription>{confirm?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={runConfirm} disabled={confirmBusy}>
+              {confirmBusy ? <Spinner /> : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-border border-t p-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
+      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">{label}</p>
+      <p className="text-(--fg) mt-1 text-sm">{value}</p>
+    </div>
+  )
+}
+
+function capitalize(v: string) {
+  return v.charAt(0).toUpperCase() + v.slice(1)
 }
 
 function MetricPill({

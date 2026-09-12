@@ -18,7 +18,9 @@ import {
   listReports,
   getReport,
   createReportRecord,
+  updateReportRecord,
   deleteReport,
+  buildReportContent,
   listPerformance,
   createPerformanceMetric,
   deletePerformanceMetric,
@@ -161,15 +163,15 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", `status must be one of ${[...STUDENT_STATUSES].join(", ")}`, false)
     }
-    if (input.jersey_number !== undefined && typeof input.jersey_number !== "number") {
+    if (input.jersey_number !== undefined && input.jersey_number !== null && typeof input.jersey_number !== "number") {
       set.status = 400
       return buildError("INVALID_REQUEST", "jersey_number must be a number", false)
     }
-    if (input.date_of_birth !== undefined && !isDate(input.date_of_birth)) {
+    if (input.date_of_birth !== undefined && input.date_of_birth !== null && !isDate(input.date_of_birth)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "date_of_birth must be YYYY-MM-DD", false)
     }
-    if (input.joined_on !== undefined && !isDate(input.joined_on)) {
+    if (input.joined_on !== undefined && input.joined_on !== null && !isDate(input.joined_on)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "joined_on must be YYYY-MM-DD", false)
     }
@@ -450,80 +452,13 @@ export default new Elysia()
     const from = isDate(period_start) ? period_start : undefined
     const to = isDate(period_end) ? period_end : undefined
 
-    const [attendance, series, analyses] = await Promise.all([
-      attendanceSummary(auth0Id, {
-        from,
-        to,
-        studentId: student_id as string | undefined,
-      }),
-      student_id
-        ? getStudentPerformanceSeries(auth0Id, student_id as string, { from, to })
-        : Promise.resolve([]),
-      student_id
-        ? getStudentAnalyses(auth0Id, student_id as string, 20)
-        : Promise.resolve([]),
-    ])
+    const content = await buildReportContent(auth0Id, {
+      student_id: student_id ? (student_id as string) : null,
+      from,
+      to,
+    })
 
     const student = student_id ? await getStudent(auth0Id, student_id as string) : null
-
-    const formScores = series.filter((s) => s.metric_key === "form_score")
-    const formScoreAvg =
-      formScores.length > 0
-        ? Math.round((formScores.reduce((acc, s) => acc + s.metric_value, 0) / formScores.length) * 10) / 10
-        : null
-    const formScoreLatest = formScores.length > 0 ? formScores[formScores.length - 1].metric_value : null
-
-    const content = {
-      generated_at: new Date().toISOString(),
-      student: student
-        ? {
-            id: student.id,
-            full_name: student.full_name,
-            sport: student.sport,
-            position: student.position,
-            status: student.status,
-          }
-        : null,
-      period: { start: from ?? null, end: to ?? null },
-      attendance: {
-        total_records: attendance.total_records,
-        present: attendance.present,
-        absent: attendance.absent,
-        late: attendance.late,
-        excused: attendance.excused,
-        attendance_rate: attendance.attendance_rate,
-      },
-      performance: {
-        form_score_avg: formScoreAvg,
-        form_score_latest: formScoreLatest,
-        total_sessions: formScores.length,
-        latest_analysis_at: formScores.length > 0 ? formScores[formScores.length - 1].measured_at : null,
-      },
-      analyses: analyses.map((a) => ({
-        server_job_id: a.server_job_id,
-        requested_at: a.requested_at,
-        display_name: a.display_name,
-        form_score:
-          typeof a.summary_json === "object" && a.summary_json && "form_score" in a.summary_json
-            ? Number((a.summary_json as Record<string, unknown>).form_score)
-            : null,
-      })),
-      summary: null as string | null,
-    }
-
-    if (content.performance.form_score_avg !== null) {
-      content.summary = `Average form score across ${content.performance.total_sessions} analyzed session(s) is ${content.performance.form_score_avg}/10${
-        content.attendance.total_records > 0
-          ? `; attendance rate over the period was ${content.attendance.attendance_rate ?? 0}%`
-          : ""
-      }.`
-    } else if (content.attendance.total_records > 0) {
-      content.summary = `Attendance rate over the period was ${content.attendance.attendance_rate ?? 0}% across ${
-        content.attendance.total_records
-      } record(s).`
-    } else {
-      content.summary = "No attendance or performance data is available for the selected period."
-    }
 
     const report = await createReportRecord(auth0Id, {
       student_id: student_id ? (student_id as string) : null,
@@ -538,6 +473,56 @@ export default new Elysia()
       return buildError("INTERNAL_ERROR", "Failed to create report", true)
     }
     set.status = 201
+    return { report }
+  })
+  .put("/api/org/:auth0Id/reports/:id", async ({ params, body, set }) => {
+    const { auth0Id, id } = params
+    const existing = await getReport(auth0Id, id)
+    if (!existing) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Report not found", false)
+    }
+
+    const { report_type, period_start, period_end, title } = body as Record<string, unknown>
+
+    const nextType = report_type === undefined ? existing.report_type : String(report_type)
+    if (!REPORT_TYPES.has(nextType)) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPES].join(", ")}`, false)
+    }
+    if (period_start !== undefined && !isDate(period_start)) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "period_start must be YYYY-MM-DD", false)
+    }
+    if (period_end !== undefined && !isIsoDate(period_end) && !isDate(period_end)) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "period_end must be YYYY-MM-DD", false)
+    }
+
+    const from = isDate(period_start) ? period_start : existing.period_start
+    const to = isDate(period_end) ? period_end : existing.period_end
+
+    const content = await buildReportContent(auth0Id, {
+      student_id: existing.student_id,
+      from,
+      to,
+    })
+
+    const report = await updateReportRecord(auth0Id, id, {
+      report_type: nextType,
+      title:
+        typeof title === "string" && title.trim()
+          ? title.trim()
+          : existing.title,
+      period_start: from ?? null,
+      period_end: to ?? null,
+      content_json: content,
+    })
+    if (!report) {
+      set.status = 500
+      return buildError("INTERNAL_ERROR", "Failed to update report", true)
+    }
+    set.status = 200
     return { report }
   })
   .delete("/api/org/:auth0Id/reports/:id", async ({ params, set }) => {

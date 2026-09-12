@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { auth0 } from "@/lib/auth0";
 import { getDashboardStats, getDashboardAnalyses } from "@/lib/api";
-import { orgOverview, orgAttendanceSummary } from "@/lib/org";
+import { orgOverview, orgAttendanceSummary, orgSchedule, orgReports } from "@/lib/org";
+import type { ScheduleEvent, ReportRecord } from "@/lib/org";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { CalendarIcon, FileTextIcon, ClockIcon } from "lucide-react";
 import {
   FormScoreTrend,
   AttendanceDonut,
@@ -31,21 +33,34 @@ export default async function DashboardPage() {
   let analyses = null;
   let overview = null;
   let attendance = null;
+  let upcomingEvents: ScheduleEvent[] | null = null;
+  let recentReports: ReportRecord[] | null = null;
   let error: string | null = null;
 
   try {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const [statsRes, analysesRes, overviewRes, attendanceRes] = await Promise.all([
-      getDashboardStats(auth0Id),
-      getDashboardAnalyses(auth0Id, 20, 0),
-      orgOverview(auth0Id),
-      orgAttendanceSummary(auth0Id, { from: thirtyDaysAgo.toISOString().slice(0, 10) }),
-    ]);
+    const now = new Date();
+    const inThirtyDays = new Date();
+    inThirtyDays.setDate(inThirtyDays.getDate() + 30);
+    const [statsRes, analysesRes, overviewRes, attendanceRes, scheduleRes, reportsRes] =
+      await Promise.all([
+        getDashboardStats(auth0Id),
+        getDashboardAnalyses(auth0Id, 20, 0),
+        orgOverview(auth0Id),
+        orgAttendanceSummary(auth0Id, { from: thirtyDaysAgo.toISOString().slice(0, 10) }),
+        orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
+        orgReports(auth0Id),
+      ]);
     stats = statsRes.stats;
     analyses = analysesRes.analyses;
     overview = overviewRes.overview;
     attendance = attendanceRes.summary;
+    upcomingEvents = scheduleRes.events
+      .filter((e) => e.status === "scheduled" && new Date(e.starts_at).getTime() >= now.getTime())
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+      .slice(0, 5);
+    recentReports = reportsRes.reports.slice(0, 4);
   } catch (err) {
     console.error("Failed to load dashboard data:", err);
     error = err instanceof Error ? err.message : "Failed to load dashboard data";
@@ -107,7 +122,7 @@ export default async function DashboardPage() {
     },
     {
       label: "Attendance (30d)",
-      value: attendance?.attendance_rate ?? null,
+      value: overview?.avg_attendance_rate ?? attendance?.attendance_rate ?? null,
       href: "/dashboard/attendance",
       suffix: "%",
     },
@@ -219,6 +234,93 @@ export default async function DashboardPage() {
           ))}
         </div>
       )}
+
+      {/* Upcoming & Reports */}
+      <section className="grid md:grid-cols-2 gap-px bg-(--cream-05) mb-12">
+        <div className="bg-(--bg) p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+              Upcoming Events
+            </p>
+            <Link
+              href="/dashboard/schedule"
+              className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
+            >
+              Schedule
+            </Link>
+          </div>
+          {!upcomingEvents || upcomingEvents.length === 0 ? (
+            <p className="text-(--cream-40) py-6 text-sm">No upcoming events in the next 30 days.</p>
+          ) : (
+            <ul className="space-y-0">
+              {upcomingEvents.map((e, i) => (
+                <li
+                  key={e.id}
+                  className={`flex items-start justify-between gap-3 py-3 ${
+                    i < upcomingEvents.length - 1 ? "border-b border-(--cream-05)" : ""
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-(--fg) truncate flex items-center gap-2">
+                      <CalendarIcon className="size-3.5 shrink-0 text-(--cream-40)" />
+                      {e.title}
+                    </p>
+                    <p className="mt-1 text-[0.6rem] text-(--cream-40) flex items-center gap-1.5">
+                      <ClockIcon className="size-3" />
+                      {new Date(e.starts_at).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                      {" · "}
+                      {new Date(e.starts_at).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="bg-(--bg) p-6">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+              Recent Reports
+            </p>
+            <Link
+              href="/dashboard/reports"
+              className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
+            >
+              All Reports
+            </Link>
+          </div>
+          {!recentReports || recentReports.length === 0 ? (
+            <p className="text-(--cream-40) py-6 text-sm">No reports generated yet.</p>
+          ) : (
+            <ul className="space-y-0">
+              {recentReports.map((r, i) => (
+                <li
+                  key={r.id}
+                  className={i < recentReports.length - 1 ? "border-b border-(--cream-05)" : ""}
+                >
+                  <Link
+                    href={`/dashboard/reports/${r.id}`}
+                    className="flex items-center gap-2 py-3 text-sm text-(--fg) transition-colors hover:text-(--cream-40)"
+                  >
+                    <FileTextIcon className="size-3.5 shrink-0 text-(--cream-40)" />
+                    <span className="truncate">{r.title}</span>
+                    <span className="ml-auto shrink-0 text-[0.6rem] text-(--cream-40)">
+                      {r.full_name || "Organization"}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
 
       {/* Recent Analyses */}
       <div className="border border-(--cream-10) p-8">

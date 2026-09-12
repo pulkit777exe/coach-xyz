@@ -88,12 +88,55 @@ export type PerformanceMetric = {
 }
 
 export type PerformanceSeriesPoint = {
+  id: string | null
   measured_at: string
   metric_key: string
   metric_value: number
   unit: string | null
   source: "analysis" | "manual"
   source_analysis_id: string | null
+}
+
+export type ReportContent = {
+  generated_at: string
+  student: {
+    id: string
+    full_name: string
+    sport: string | null
+    position: string | null
+    status: string
+  } | null
+  period: { start: string | null; end: string | null }
+  attendance: {
+    total_records: number
+    present: number
+    absent: number
+    late: number
+    excused: number
+    attendance_rate: number | null
+  }
+  performance: {
+    form_score_avg: number | null
+    form_score_latest: number | null
+    total_sessions: number
+    latest_analysis_at: string | null
+  }
+  analyses: {
+    server_job_id: string
+    requested_at: string
+    display_name: string | null
+    student_id: string | null
+    form_score: number | null
+  }[]
+  summary: string | null
+  org: {
+    student_count: number
+    active_students: number
+    sessions_this_month: number
+    upcoming_events: number
+    analyses_linked: number
+    avg_attendance_rate: number | null
+  } | null
 }
 
 export type AttendanceSummary = {
@@ -355,6 +398,17 @@ export const orgDeleteReport = async (
 ): Promise<{ deleted: boolean }> => {
   return apiFetch<{ deleted: boolean }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
     method: "DELETE",
+  })
+}
+
+export const orgUpdateReport = async (
+  auth0Id: string,
+  id: string,
+  input: { report_type?: string; period_start?: string; period_end?: string; title?: string },
+): Promise<{ report: ReportRecord }> => {
+  return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
+    method: "PUT",
+    body: JSON.stringify(pickDefined(input)),
   })
 }
 

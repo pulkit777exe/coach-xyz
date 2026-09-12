@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon } from "lucide-react"
+import Link from "next/link"
+import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon, DownloadIcon, PencilIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
@@ -17,9 +18,11 @@ import {
   DialogFooter,
 } from "@/components/9ui/ui/dialog"
 import { Spinner } from "./Spinner"
+import ReportBody, { shortDate } from "./ReportBody"
+import { downloadCSV } from "@/lib/csv"
 
 import type { ReportRecord, Student } from "@/lib/org"
-import { orgCreateReport, orgDeleteReport } from "@/lib/org"
+import { orgCreateReport, orgUpdateReport, orgDeleteReport } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
 const REPORT_TYPES = [
@@ -52,6 +55,7 @@ export default function ReportsClient({
   const [reports, setReports] = useState<ReportRecord[]>(initialReports)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [viewing, setViewing] = useState<ReportRecord | null>(null)
+  const [editing, setEditing] = useState<ReportRecord | null>(null)
   const [deleting, setDeleting] = useState<ReportRecord | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -62,7 +66,26 @@ export default function ReportsClient({
     period_end: "",
     title: "",
   })
+  const [editForm, setEditForm] = useState({ report_type: "progress", period_start: "", period_end: "", title: "" })
   const [error, setError] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const exportCSV = () => {
+    downloadCSV(
+      `reports-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        ["Title", "Type", "Student", "Period start", "Period end", "Generated"],
+        ...reports.map((r) => [
+          r.title,
+          typeLabel(r.report_type),
+          r.full_name ?? "Organization",
+          r.period_start ?? "",
+          r.period_end ?? "",
+          r.created_at,
+        ]),
+      ],
+    )
+  }
 
   const generate = async () => {
     setSubmitting(true)
@@ -81,6 +104,38 @@ export default function ReportsClient({
       setForm({ student_id: "all", report_type: "progress", period_start: "", period_end: "", title: "" })
     } catch (err) {
       setError((err as CoachAIError).message ?? "Failed to generate report")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const openEdit = (r: ReportRecord) => {
+    setEditForm({
+      report_type: r.report_type,
+      period_start: r.period_start ?? "",
+      period_end: r.period_end ?? "",
+      title: r.title,
+    })
+    setEditError(null)
+    setEditing(r)
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    setSubmitting(true)
+    setEditError(null)
+    try {
+      const res = await orgUpdateReport(auth0Id, editing.id, {
+        report_type: editForm.report_type,
+        period_start: editForm.period_start || undefined,
+        period_end: editForm.period_end || undefined,
+        title: editForm.title || undefined,
+      })
+      setReports((prev) => prev.map((r) => (r.id === editing.id ? { ...r, ...res.report } : r)))
+      toast.success("Report updated")
+      setEditing(null)
+    } catch (err) {
+      setEditError((err as CoachAIError).message ?? "Failed to update report")
     } finally {
       setSubmitting(false)
     }
@@ -108,9 +163,16 @@ export default function ReportsClient({
         <p className="text-muted-foreground text-sm">
           {reports.length} generated {reports.length === 1 ? "report" : "reports"}
         </p>
-        <Button size="sm" onClick={() => setGenerateOpen(true)}>
-          <PlusIcon /> Generate report
-        </Button>
+        <div className="flex items-center gap-2">
+          {reports.length > 0 && (
+            <Button variant="outline" size="sm" onClick={exportCSV}>
+              <DownloadIcon /> Export
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setGenerateOpen(true)}>
+            <PlusIcon /> Generate report
+          </Button>
+        </div>
       </div>
 
       {/* List */}
@@ -151,9 +213,9 @@ export default function ReportsClient({
               {reports.map((r) => (
                 <tr key={r.id} className="hover:bg-accent/50 border-border border-b last:border-0">
                   <td className="px-4 py-3 font-medium text-(--fg)">
-                    <button type="button" onClick={() => setViewing(r)} className="hover:underline">
+                    <Link href={`/dashboard/reports/${r.id}`} className="hover:underline">
                       {r.title}
-                    </button>
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     <Badge className={(TYPE_BADGE[r.report_type] ?? "border-border") + " border"}>
@@ -171,6 +233,15 @@ export default function ReportsClient({
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon-sm" onClick={() => setViewing(r)} aria-label="View report">
                         <EyeIcon />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground"
+                        onClick={() => openEdit(r)}
+                        aria-label="Edit report"
+                      >
+                        <PencilIcon className="size-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -297,6 +368,74 @@ export default function ReportsClient({
         </DialogContent>
       </Dialog>
 
+      {/* Edit dialog */}
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Report</DialogTitle>
+            <DialogDescription>
+              Updating scope or period regenerates the report content.
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit_report_title">Title</Label>
+                <Input
+                  id="edit_report_title"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit_report_type">Report type</Label>
+                <select
+                  id="edit_report_type"
+                  value={editForm.report_type}
+                  onChange={(e) => setEditForm((f) => ({ ...f, report_type: e.target.value }))}
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                >
+                  {REPORT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_period_start">Period start</Label>
+                  <Input
+                    id="edit_period_start"
+                    type="date"
+                    value={editForm.period_start}
+                    onChange={(e) => setEditForm((f) => ({ ...f, period_start: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit_period_end">Period end</Label>
+                  <Input
+                    id="edit_period_end"
+                    type="date"
+                    value={editForm.period_end}
+                    onChange={(e) => setEditForm((f) => ({ ...f, period_end: e.target.value }))}
+                  />
+                </div>
+              </div>
+              {editError && <p className="text-sm text-(--danger)">{editError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={submitting}>
+              {submitting ? <Spinner /> : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirm */}
       <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="sm:max-w-md">
@@ -316,117 +455,4 @@ export default function ReportsClient({
       </Dialog>
     </div>
   )
-}
-
-function ReportBody({ report }: { report: ReportRecord }) {
-  const c = report.content_json ?? {}
-  const summary = typeof c.summary === "string" ? c.summary : null
-  const period = c.period as { start?: string | null; end?: string | null } | undefined
-  const attendance = c.attendance as
-    | {
-        total_records?: number
-        present?: number
-        absent?: number
-        late?: number
-        excused?: number
-        attendance_rate?: number | null
-      }
-    | undefined
-  const performance = c.performance as
-    | {
-        form_score_avg?: number | null
-        form_score_latest?: number | null
-        total_sessions?: number
-        latest_analysis_at?: string | null
-      }
-    | undefined
-  const analyses = (c.analyses as
-    | { display_name?: string | null; requested_at?: string; form_score?: number | null }[]
-    | undefined) ?? []
-
-  return (
-    <div className="space-y-5 text-sm">
-      {summary && (
-        <div className="border-border bg-muted/30 rounded-md border p-4">
-          <p className="text-muted-foreground mb-1 text-[0.6rem] uppercase tracking-[0.2em]">Summary</p>
-          <p className="text-(--fg)">{summary}</p>
-        </div>
-      )}
-
-      <div>
-        <p className="text-muted-foreground mb-2 text-[0.6rem] uppercase tracking-[0.2em]">Period</p>
-        <p className="text-muted-foreground">
-          {period?.start && period?.end ? `${shortDate(period.start)} → ${shortDate(period.end)}` : "All time"}
-        </p>
-      </div>
-
-      {attendance && (
-        <div>
-          <p className="text-muted-foreground mb-2 text-[0.6rem] uppercase tracking-[0.2em]">Attendance</p>
-          <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-5">
-            {[
-              ["Records", String(attendance.total_records ?? 0)],
-              ["Present", String(attendance.present ?? 0)],
-              ["Late", String(attendance.late ?? 0)],
-              ["Absent", String(attendance.absent ?? 0)],
-              ["Rate", attendance.attendance_rate === null ? "—" : `${attendance.attendance_rate ?? 0}%`],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-card p-3">
-                <p className="font-serif text-lg text-(--fg)">{value}</p>
-                <p className="text-muted-foreground text-[0.6rem] uppercase tracking-[0.15em]">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {performance && (
-        <div>
-          <p className="text-muted-foreground mb-2 text-[0.6rem] uppercase tracking-[0.2em]">Performance</p>
-          <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
-            {[
-              ["Avg form", performance.form_score_avg === null ? "—" : `${performance.form_score_avg}/10`],
-              ["Latest form", performance.form_score_latest === null ? "—" : `${performance.form_score_latest}/10`],
-              ["Analyzed sessions", String(performance.total_sessions ?? 0)],
-              [
-                "Last analysis",
-                performance.latest_analysis_at ? shortDate(performance.latest_analysis_at.slice(0, 10)) : "—",
-              ],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-card p-3">
-                <p className="font-serif text-lg text-(--fg)">{value}</p>
-                <p className="text-muted-foreground text-[0.6rem] uppercase tracking-[0.15em]">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {analyses.length > 0 && (
-        <div>
-          <p className="text-muted-foreground mb-2 text-[0.6rem] uppercase tracking-[0.2em]">
-            Referenced analyses
-          </p>
-          <ul className="space-y-1">
-            {analyses.map((a) => (
-              <li key={a.display_name ?? String(a.form_score) ?? a.requested_at} className="flex justify-between border-b border-border/60 py-1.5 text-sm">
-                <span className="text-(--fg)">{a.display_name || "Untitled video"}</span>
-                <span className="text-muted-foreground">
-                  {a.form_score === null ? "—" : `${a.form_score}/10`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function shortDate(iso: string) {
-  return new Date(`${iso.length === 10 ? iso : iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 }

@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, MoreHorizontalIcon } from "lucide-react"
+import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, MoreHorizontalIcon, DownloadIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
+import { Checkbox } from "@/components/9ui/ui/checkbox"
+import { downloadCSV } from "@/lib/csv"
 import {
   Dialog,
   DialogContent,
@@ -28,7 +30,7 @@ import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
 
 import type { Student } from "@/lib/org"
-import { orgDeleteStudent } from "@/lib/org"
+import { orgDeleteStudent, orgUpdateStudent } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
 const STATUS_STYLE: Record<string, string> = {
@@ -62,6 +64,8 @@ export default function StudentsClient({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -72,6 +76,86 @@ export default function StudentsClient({
       return true
     })
   }, [students, search, sport, status])
+
+  const selectedIds = filtered.filter((s) => selected.has(s.id)).map((s) => s.id)
+  const allFilteredSelected = filtered.length > 0 && selectedIds.length === filtered.length
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) filtered.forEach((s) => next.delete(s.id))
+      else filtered.forEach((s) => next.add(s.id))
+      return next
+    })
+  }
+
+  const applyBulkStatus = async (nextStatus: Student["status"]) => {
+    if (!selectedIds.length) return
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => orgUpdateStudent(auth0Id, id, { status: nextStatus })),
+      )
+      const ok = results.filter((r) => r.status === "fulfilled").length
+      setStudents((prev) =>
+        prev.map((p) =>
+          selected.has(p.id) ? { ...p, status: nextStatus } : p,
+        ),
+      )
+      toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
+      setSelected(new Set())
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const confirmBulkDelete = async () => {
+    if (!selectedIds.length) return
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(selectedIds.map((id) => orgDeleteStudent(auth0Id, id)))
+      const ok = results.filter((r) => r.status === "fulfilled").length
+      setStudents((prev) => prev.filter((p) => !selected.has(p.id)))
+      if (ok > 0) toast.success(`Removed ${ok} student(s)`)
+      if (ok < selectedIds.length) toast.error(`${selectedIds.length - ok} student(s) could not be removed`)
+      setSelected(new Set())
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const exportCSV = () => {
+    downloadCSV(
+      `roster-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        ["Full name", "Email", "Phone", "Sport", "Position", "Jersey #", "Status", "Joined", "Date of birth", "Gender", "Guardian name", "Guardian phone", "Notes"],
+        ...filtered.map((s) => [
+          s.full_name,
+          s.email,
+          s.phone,
+          s.sport,
+          s.position,
+          s.jersey_number,
+          s.status,
+          s.joined_on,
+          s.date_of_birth,
+          s.gender,
+          s.guardian_name,
+          s.guardian_phone,
+          s.notes,
+        ]),
+      ],
+    )
+  }
 
   const openCreate = () => {
     setEditingStudent(null)
@@ -146,11 +230,58 @@ export default function StudentsClient({
           </select>
         </div>
 
-        <Button size="sm" onClick={openCreate}>
-          <PlusIcon />
-          Add student
-        </Button>
+        <div className="flex items-center gap-2">
+          {filtered.length > 0 && (
+            <Button variant="outline" size="sm" onClick={exportCSV}>
+              <DownloadIcon /> Export
+            </Button>
+          )}
+          <Button size="sm" onClick={openCreate}>
+            <PlusIcon />
+            Add student
+          </Button>
+        </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.length > 0 && (
+        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
+          <span className="text-muted-foreground text-sm">
+            {selectedIds.length} selected
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("active")}>
+              Mark active
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("inactive")}>
+              Mark inactive
+            </Button>
+            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("transferred")}>
+              Mark transferred
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => {
+                if (window.confirm(`Remove ${selectedIds.length} selected student(s)? This cannot be undone.`)) {
+                  confirmBulkDelete()
+                }
+              }}
+            >
+              <TrashIcon /> Delete
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="border-border overflow-hidden rounded-lg border">
@@ -164,6 +295,9 @@ export default function StudentsClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
+                <th className="px-4 py-3">
+                  <Checkbox checked={allFilteredSelected} indeterminate={selectedIds.length > 0 && !allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Select all students" />
+                </th>
                 <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
                   Student
                 </th>
@@ -187,6 +321,9 @@ export default function StudentsClient({
             <tbody className="bg-card">
               {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-accent/50 border-b border-border last:border-0">
+                  <td className="px-4 py-3">
+                    <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggleSelect(s.id)} aria-label={`Select ${s.full_name}`} />
+                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
                       <Avatar className="border-border size-9 border">

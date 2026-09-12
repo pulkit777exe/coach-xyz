@@ -55,6 +55,7 @@ export default async function AttendancePage() {
           student_id: r.student_id,
           session_date: r.session_date,
           status: r.status,
+          note: r.note,
         }))}
       />
     </div>

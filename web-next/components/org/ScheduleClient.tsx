@@ -2,17 +2,24 @@
 
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { PlusIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, ClockIcon, MapPinIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/9ui/ui/dialog"
 import { Spinner } from "./Spinner"
 import EventFormDialog from "./EventFormDialog"
+import { downloadCSV } from "@/lib/csv"
 
 import type { ScheduleEvent } from "@/lib/org"
 import { orgSchedule, orgDeleteEvent } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
-
-const TYPES = ["practice", "match", "tournament", "meeting", "other"] as const
 
 const TYPE_META: Record<
   ScheduleEvent["event_type"],
@@ -50,6 +57,12 @@ const TYPE_META: Record<
   },
 }
 
+const STATUS_META: Record<ScheduleEvent["status"], { label: string; className: string }> = {
+  scheduled: { label: "Scheduled", className: "border-(--info-border) text-(--info)" },
+  completed: { label: "Completed", className: "border-(--success-border) text-(--success)" },
+  cancelled: { label: "Cancelled", className: "border-(--danger-border) text-(--danger)" },
+}
+
 function localISO(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
@@ -78,10 +91,19 @@ export default function ScheduleClient({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null)
   const [initialDate, setInitialDate] = useState<string | undefined>(undefined)
+  const [statusFilter, setStatusFilter] = useState("")
+  const [dayView, setDayView] = useState<Date | null>(null)
+  const [confirmEvent, setConfirmEvent] = useState<ScheduleEvent | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const year = month.getFullYear()
   const monthNum = month.getMonth()
   const monthLabel = month.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+
+  const visibleEvents = useMemo(
+    () => (statusFilter ? events.filter((e) => e.status === statusFilter) : events),
+    [events, statusFilter],
+  )
 
   const cells = useMemo(() => {
     const firstDay = new Date(year, monthNum, 1)
@@ -97,7 +119,7 @@ export default function ScheduleClient({
 
   const byDay = useMemo(() => {
     const map = new Map<string, ScheduleEvent[]>()
-    for (const ev of events) {
+    for (const ev of visibleEvents) {
       const k = localDateTimeKey(ev.starts_at)
       const list = map.get(k) ?? []
       list.push(ev)
@@ -105,7 +127,7 @@ export default function ScheduleClient({
     }
     for (const list of map.values()) list.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     return map
-  }, [events])
+  }, [visibleEvents])
 
   const fetchMonth = async (target: Date) => {
     setLoading(true)
@@ -135,6 +157,7 @@ export default function ScheduleClient({
 
   const openEdit = (ev: ScheduleEvent, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    setDayView(null)
     setEditingEvent(ev)
     setInitialDate(undefined)
     setDialogOpen(true)
@@ -150,18 +173,46 @@ export default function ScheduleClient({
     })
   }
 
-  const onDelete = async (ev: ScheduleEvent) => {
+  const confirmDelete = async () => {
+    if (!confirmEvent) return
+    setDeleteBusy(true)
     try {
-      await orgDeleteEvent(auth0Id, ev.id)
-      setEvents((prev) => prev.filter((p) => p.id !== ev.id))
+      await orgDeleteEvent(auth0Id, confirmEvent.id)
+      setEvents((prev) => prev.filter((p) => p.id !== confirmEvent.id))
       toast.success("Event deleted")
       setDialogOpen(false)
+      setConfirmEvent(null)
     } catch (err) {
       toast.error((err as CoachAIError).message ?? "Failed to delete event")
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
+  const exportCSV = () => {
+    downloadCSV(
+      `schedule-${year}-${String(monthNum + 1).padStart(2, "0")}.csv`,
+      [
+        ["Date", "Start", "End", "Title", "Type", "Status", "Location", "Description"],
+        ...visibleEvents
+          .slice()
+          .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+          .map((e) => [
+            localDateTimeKey(e.starts_at),
+            e.starts_at.slice(11, 16),
+            e.ends_at ? e.ends_at.slice(11, 16) : "",
+            e.title,
+            TYPE_META[e.event_type]?.label ?? e.event_type,
+            STATUS_META[e.status]?.label ?? e.status,
+            e.location ?? "",
+            e.description ?? "",
+          ]),
+      ],
+    )
+  }
+
   const todayKey = today.toDateString()
+  const dayViewEvents = dayView ? byDay.get(localISO(dayView)) ?? [] : []
 
   return (
     <div>
@@ -191,17 +242,20 @@ export default function ScheduleClient({
           {loading && <Spinner className="ml-3 inline text-(--cream-40)" />}
         </p>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-3 text-xs">
-            {TYPES.map((t) => (
-              <span key={t} className="flex items-center gap-1.5 text-(--cream-40)">
-                <span
-                  className="inline-block size-2.5 rounded-full"
-                  style={{ background: TYPE_META[t].color }}
-                />
-                {TYPE_META[t].label}
-              </span>
-            ))}
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-input text-foreground border-input focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <Button variant="outline" size="sm" onClick={exportCSV}>
+            <DownloadIcon /> Export
+          </Button>
           <Button size="sm" onClick={() => openCreate(new Date())}>
             <PlusIcon /> Add event
           </Button>
@@ -230,7 +284,7 @@ export default function ScheduleClient({
               <button
                 key={key}
                 type="button"
-                onClick={() => openCreate(date)}
+                onClick={() => setDayView(date)}
                 className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 ${
                   isToday ? "bg-(--success)/5 border-(--success-border)" : ""
                 }`}
@@ -250,7 +304,9 @@ export default function ScheduleClient({
                         key={ev.id}
                         onClick={(e) => openEdit(ev, e)}
                         title={ev.title}
-                        className="truncate rounded px-1.5 py-0.5 text-[0.6rem] leading-tight"
+                        className={`truncate rounded px-1.5 py-0.5 text-[0.6rem] leading-tight ${
+                          ev.status === "cancelled" ? "line-through opacity-60" : ""
+                        }`}
                         style={{
                           color: meta.color,
                           background: meta.bg,
@@ -276,11 +332,106 @@ export default function ScheduleClient({
         </div>
       </div>
 
-      {events.length === 0 && (
+      {visibleEvents.length === 0 && (
         <p className="text-muted-foreground mt-4 text-xs">
-          No events in {monthLabel}. Click any day to add one.
+          {events.length === 0
+            ? `No events in ${monthLabel}. Click any day to add one.`
+            : "No events match the selected status."}
         </p>
       )}
+
+      {/* Day view */}
+      <Dialog open={Boolean(dayView)} onOpenChange={(open) => !open && setDayView(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {dayView?.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {dayViewEvents.length === 0
+                ? "No events on this day."
+                : `${dayViewEvents.length} event${dayViewEvents.length === 1 ? "" : "s"}`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            {dayViewEvents.map((ev) => {
+              const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
+              return (
+                <button
+                  key={ev.id}
+                  type="button"
+                  onClick={() => openEdit(ev)}
+                  className="border-border hover:bg-accent/50 rounded-md border p-3 text-left"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-(--fg) font-medium">{ev.title}</span>
+                    <span
+                      className={`rounded border px-1.5 py-0.5 text-[0.6rem] uppercase tracking-[0.1em] ${
+                        STATUS_META[ev.status]?.className ?? "border-border"
+                      }`}
+                    >
+                      {STATUS_META[ev.status]?.label ?? ev.status}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1">
+                      <ClockIcon className="size-3" />
+                      {ev.starts_at.slice(11, 16)}
+                      {ev.ends_at ? `–${ev.ends_at.slice(11, 16)}` : ""}
+                    </span>
+                    {ev.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPinIcon className="size-3" /> {ev.location}
+                      </span>
+                    )}
+                    <span style={{ color: meta.color }}>{meta.label}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDayView(null)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                if (dayView) {
+                  setDayView(null)
+                  openCreate(dayView)
+                }
+              }}
+            >
+              <PlusIcon /> Add event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm */}
+      <Dialog open={Boolean(confirmEvent)} onOpenChange={(open) => !open && setConfirmEvent(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete “{confirmEvent?.title}”?</DialogTitle>
+            <DialogDescription>This permanently removes the event. This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmEvent(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleteBusy}>
+              {deleteBusy ? <Spinner /> : "Delete event"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EventFormDialog
         key={editingEvent?.id ?? `new-${initialDate ?? "none"}`}
@@ -290,7 +441,7 @@ export default function ScheduleClient({
         event={editingEvent}
         initialDate={initialDate}
         onSaved={onSaved}
-        onDelete={onDelete}
+        onDelete={(ev) => setConfirmEvent(ev)}
       />
     </div>
   )
