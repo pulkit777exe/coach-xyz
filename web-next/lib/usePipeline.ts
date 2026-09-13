@@ -3,29 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { scanVideoWithProgress, streamScanProgress, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
+import { toCoachAIError } from '@/lib/errors'
+import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import { mapEngineStateToPipeline } from '@/lib/pipelineState'
 import type { PipelineState, ScanResult, JobStatus, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
-
-// ── Shared Error Conversion ───────────────────────────────────────────────────
-// Converts unknown errors from fetch/API calls into CoachAIError format.
-function toCoachAIError(err: unknown): CoachAIError {
-  // AbortError from AbortSignal.timeout()
-  if (err instanceof DOMException && err.name === 'AbortError') {
-    return { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
-  }
-  // Already a CoachAIError (has code, message, layer, retryable)
-  if (err && typeof err === 'object' && 'code' in err && typeof (err as Record<string, unknown>).code === 'string') {
-    const obj = err as Record<string, unknown>
-    if (typeof obj.message === 'string' && typeof obj.retryable === 'boolean') {
-      return err as CoachAIError
-    }
-  }
-  // Unknown error
-  return { code: 'UNKNOWN', message: String(err), layer: 'client', retryable: false }
-}
 
 export interface PipelineActions {
   handleFileSelected: (file: File) => void
@@ -57,8 +41,6 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   const [errorStatus, setErrorStatus] = useState<CoachAIError | null>(null)
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null)
 
-  const pollInterval = useRef<NodeJS.Timeout | null>(null)
-  const pollStart = useRef<number>(0)
   const pipelineStateRef = useRef<PipelineState>(pipelineState)
   const retryGenerationRef = useRef(0)
 
@@ -75,106 +57,61 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   }, [])
 
   // ── Polling ────────────────────────────────────────────────────────────
-  const pollActiveRef = useRef(false)
-  const pollConsecutiveFailures = useRef(0)
-  const MAX_POLL_RETRIES = 5
+  const pollControllerRef = useRef<JobPollingController | null>(null)
 
   const stopPolling = useCallback(() => {
-    pollActiveRef.current = false
-    pollConsecutiveFailures.current = 0
-    if (pollInterval.current) {
-      clearInterval(pollInterval.current)
-      pollInterval.current = null
-    }
+    pollControllerRef.current?.stop()
+    pollControllerRef.current = null
   }, [])
 
   const startPolling = useCallback(
     (pollJobId: string) => {
       stopPolling()
-      pollActiveRef.current = true
-      pollStart.current = Date.now()
-      pollConsecutiveFailures.current = 0
-      const POLL_TIMEOUT = 12 * 60 * 1000
-      const BASE_POLL_INTERVAL = 2000
-
-      const pollFn = async () => {
-        if (!pollActiveRef.current) return
-        if (Date.now() - pollStart.current > POLL_TIMEOUT) {
-          stopPolling()
-          setErrorStatus({
-            code: 'ANALYSIS_TIMEOUT',
-            message: 'Analysis is taking longer than expected. The job may still complete.',
-            layer: 'client',
-            retryable: false,
-          })
-          setPipelineState('error')
-          return
-        }
-
-        try {
-          const status = await getJobStatus(pollJobId)
-          if (!pollActiveRef.current) return
-
-          // Reset failure count on success
-          pollConsecutiveFailures.current = 0
-
-          if (status.complete) {
-            stopPolling()
-            if (status.error) {
-              // Store the error status first, then flip pipeline state.
-              // Never store a complete/100% jobStatus while still on the
-              // progress screen — that's what causes the 100% flash.
-              setErrorStatus({
-                code: status.error_code ?? 'ANALYSIS_FAILED',
-                message: status.error,
-                layer: 'engine',
-                retryable: status.retryable ?? true,
-              })
-              setJobStatus(status)
-              setPipelineState('error')
-            } else {
-              // Flip pipeline state BEFORE writing jobStatus so that
-              // AnalysisProgress never receives a status with progress=100.
-              // React batches these two setState calls in the same render.
-              setPipelineState('completed')
-              setJobStatus(status)
-            }
-          } else {
-            // Job still in progress — safe to update status and stage display.
-            // Cap the displayed progress at 99 while the job is not yet
-            // complete, so the bar never reaches 100% on the loading screen.
-            const displayStatus = status.progress >= 100
-              ? { ...status, progress: 99 }
-              : status
-            setJobStatus(displayStatus)
-            if (status.state) {
-              setPipelineState(mapEngineStateToPipeline(status.state))
-            }
+      pollControllerRef.current = startJobPolling({
+        jobId: pollJobId,
+        fetchStatus: getJobStatus,
+        isComplete: (status) => status.complete,
+        intervalMs: 2000,
+        timeoutMs: 12 * 60 * 1000,
+        maxFailures: 5,
+        // Job still in progress — safe to update status and stage display.
+        // Cap the displayed progress at 99 while the job is not yet
+        // complete, so the bar never reaches 100% on the loading screen.
+        onStatus: (status) => {
+          const displayStatus = status.progress >= 100
+            ? { ...status, progress: 99 }
+            : status
+          setJobStatus(displayStatus)
+          if (status.state) {
+            setPipelineState(mapEngineStateToPipeline(status.state))
           }
-        } catch (err: unknown) {
-          if (!pollActiveRef.current) return
-
-          pollConsecutiveFailures.current++
-
-          // Check if error is transient (network, timeout)
-          const isTransient = err instanceof DOMException && err.name === 'AbortError'
-            || (err && typeof err === 'object' && 'code' in err && (err as Record<string, unknown>).code === 'NETWORK_ERROR')
-
-          if (isTransient && pollConsecutiveFailures.current < MAX_POLL_RETRIES) {
-            // Back off but keep polling for transient errors
-            const delay = Math.min(BASE_POLL_INTERVAL * Math.pow(2, pollConsecutiveFailures.current), 30_000)
-            if (pollInterval.current) clearInterval(pollInterval.current)
-            pollInterval.current = setInterval(pollFn, delay)
-          } else {
-            // Permanent failure or max retries exceeded
-            stopPolling()
-            setErrorStatus(toCoachAIError(err))
+        },
+        onComplete: (status) => {
+          if (status.error) {
+            // Store the error status first, then flip pipeline state.
+            // Never store a complete/100% jobStatus while still on the
+            // progress screen — that's what causes the 100% flash.
+            setErrorStatus({
+              code: status.error_code ?? 'ANALYSIS_FAILED',
+              message: status.error,
+              layer: 'engine',
+              retryable: status.retryable ?? true,
+            })
+            setJobStatus(status)
             setPipelineState('error')
+          } else {
+            // Flip pipeline state BEFORE writing jobStatus so that
+            // AnalysisProgress never receives a status with progress=100.
+            // React batches these two setState calls in the same render.
+            setPipelineState('completed')
+            setJobStatus(status)
           }
-        }
-      }
-
-      pollInterval.current = setInterval(pollFn, BASE_POLL_INTERVAL)
+        },
+        onError: (failure) => {
+          setErrorStatus(failure.error)
+          setPipelineState('error')
+        },
+      })
     },
     [stopPolling],
   )

@@ -1,4 +1,5 @@
 import type { ScanResult, JobStatus, CoachAIError, UploadProgress, ChatMessage } from '@/types'
+import { parseEventStream } from '@/lib/sse'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
@@ -192,30 +193,7 @@ export async function* streamScanProgress(
     } as CoachAIError
   }
 
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const event = JSON.parse(line.slice(6)) as ScanProgressEvent
-          yield event
-        } catch { /* partial JSON, skip */ }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
+  yield* parseEventStream<ScanProgressEvent>(res)
 }
 
 export async function startAnalysis(params: {
@@ -293,30 +271,7 @@ export async function* sendChatMessageStream(
     } as CoachAIError
   }
 
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        try {
-          const event = JSON.parse(line.slice(6)) as StreamEvent
-          yield event
-        } catch { /* partial JSON, skip */ }
-      }
-    }
-  } finally {
-    reader.releaseLock()
-  }
+  yield* parseEventStream<StreamEvent>(res)
 }
 
 export async function getConversation(

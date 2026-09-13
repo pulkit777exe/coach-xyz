@@ -132,6 +132,10 @@ coach-xyz/
 │   │   ├── api.ts             # API client (all fetch calls)
 │   │   ├── auth0.ts           # Auth0Client singleton
 │   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
+│   │   ├── jobPolling.ts      # Single job-status poll engine (injected clock/fetch/callbacks)
+│   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
+│   │   ├── errors.ts          # Client error normalization + transient classification
+│   │   ├── sse.ts             # Shared SSE line parser (data: JSON)
 │   │   ├── sports.ts          # Sport emoji helpers
 │   │   └── utils.ts           # cn() class-name helper
 │   ├── proxy.ts               # Auth0 middleware proxy (Next.js 16)
@@ -508,7 +512,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 ### Keep-Alive (CONFIRMED)
 
 - **Server:** `server/src/lib/queue.ts:90-127` — pings `/health` every 10 minutes in production (`KEEPALIVE_INTERVAL`, production only)
-- **Frontend:** `web-next/lib/usePipeline.ts:78-84` — pings server `/health` every 8 minutes
+- **Frontend:** `web-next/lib/usePipeline.ts:51-57` — pings server `/health` every 8 minutes
 
 ### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:369-400`)
 

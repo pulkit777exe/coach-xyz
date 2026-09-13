@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import AnalysisTitle from '@/components/AnalysisTitle'
 import AnalysisProgress from '@/components/AnalysisProgress'
@@ -8,6 +8,7 @@ import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
 import { getJobStatus, getDownloadUrl } from '@/lib/api'
+import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
@@ -29,6 +30,7 @@ import { Lightbox } from '@/components/interior/lightbox'
 
 const POLL_INTERVAL = 2000
 const MAX_POLL_RETRIES = 3
+const STUCK_WARNING_MS = 5 * 60 * 1000
 
 interface AnalysisDetailClientProps {
   auth0Id: string
@@ -47,10 +49,7 @@ export default function AnalysisDetailClient({
   const [pollError, setPollError] = useState<string | null>(null)
   const [stuckWarning, setStuckWarning] = useState(false)
   const [activeView, setActiveView] = useState('overview')
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const hasPolledSuccessfully = useRef(false)
-  const pollRetryCount = useRef(0)
-  const pollStartTime = useRef<number | null>(null)
+  const pollControllerRef = useRef<JobPollingController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const shotEvents = initialData?.summary_json && typeof initialData.summary_json === 'object' && 'shot_events' in (initialData.summary_json as Record<string, unknown>)
@@ -62,65 +61,62 @@ export default function AnalysisDetailClient({
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
 
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }, [])
-
   useEffect(() => {
     let cancelled = false
 
-    const poll = async () => {
-      try {
-        const s = await getJobStatus(jobId)
+    const controller = startJobPolling({
+      jobId,
+      fetchStatus: getJobStatus,
+      isComplete: (s) => s.complete,
+      intervalMs: POLL_INTERVAL,
+      // The detail page is driven by server-side data when available; a job
+      // that does not respond before ever succeeding is treated as expired.
+      giveUpOnFirstFailure: true,
+      maxFailures: MAX_POLL_RETRIES,
+      backoffFactor: 1,
+      warnAfterMs: STUCK_WARNING_MS,
+      onStatus: (s) => {
         if (cancelled) return
         setStatus(s)
         setLoading(false)
-        hasPolledSuccessfully.current = true
-        pollRetryCount.current = 0
         setPollError(null)
-        if (s.complete) {
-          if (s.error_code === 'JOB_NOT_FOUND' && !initialData) {
-            setExpiredMessage(s.error ?? 'Analysis not found or expired.')
-          }
-          stopPolling()
-        } else if (!stuckWarning && (pollStartTime.current === null || Date.now() - pollStartTime.current > 5 * 60 * 1000)) {
-          setStuckWarning(true)
+      },
+      onComplete: (s) => {
+        if (cancelled) return
+        setStatus(s)
+        setLoading(false)
+        if (s.error_code === 'JOB_NOT_FOUND' && !initialData) {
+          setExpiredMessage(s.error ?? 'Analysis not found or expired.')
         }
-      } catch (err) {
+      },
+      onTransient: (failure) => {
         if (cancelled) return
         setLoading(false)
-
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        const isTransient = errorMessage.includes('network') ||
-                           errorMessage.includes('timeout') ||
-                           errorMessage.includes('fetch')
-
-        if (!hasPolledSuccessfully.current) {
+        setPollError(`Connection issue. Retrying... (${failure.attempts}/${MAX_POLL_RETRIES})`)
+      },
+      onError: (failure) => {
+        if (cancelled) return
+        setLoading(false)
+        if (!failure.hadSucceeded) {
           if (!initialData) {
             setExpiredMessage('Analysis not found or expired.')
           }
-          stopPolling()
-        } else if (isTransient && pollRetryCount.current < MAX_POLL_RETRIES) {
-          pollRetryCount.current++
-          setPollError(`Connection issue. Retrying... (${pollRetryCount.current}/${MAX_POLL_RETRIES})`)
         } else {
           setPollError('Unable to update status. Please refresh the page.')
-          stopPolling()
         }
-      }
-    }
-
-    poll()
-    intervalRef.current = setInterval(poll, POLL_INTERVAL)
+      },
+      onWarn: () => {
+        if (cancelled) return
+        setStuckWarning(true)
+      },
+    })
+    pollControllerRef.current = controller
 
     return () => {
       cancelled = true
-      stopPolling()
+      controller.stop()
     }
-  }, [jobId, stopPolling])
+  }, [jobId, initialData])
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -179,22 +175,9 @@ export default function AnalysisDetailClient({
             This analysis is taking longer than usual.
           </p>
           <button
-            onClick={async () => {
-              try {
-                const s = await getJobStatus(jobId)
-                setStatus(s)
-                if (s.complete) {
-                  stopPolling()
-                  if (s.error_code === 'JOB_NOT_FOUND' && !initialData) {
-                    setExpiredMessage(s.error ?? 'Analysis not found or expired.')
-                  }
-                } else {
-                  setStuckWarning(false)
-                  pollStartTime.current = Date.now()
-                }
-              } catch {
-                setPollError('Unable to refresh status. Please try again.')
-              }
+            onClick={() => {
+              setStuckWarning(false)
+              pollControllerRef.current?.refresh()
             }}
             className="px-4 py-2 border border-(--cream-10) text-(--cream-40) text-[0.65rem] uppercase tracking-[0.15em] hover:text-(--fg) hover:border-(--cream-20) transition-colors"
           >
