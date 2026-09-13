@@ -34,7 +34,7 @@ const throwNonOk = async (res: Response): Promise<never> => {
   )
 }
 
-const isConnectivityError = (error: unknown): boolean =>
+export const isConnectivityError = (error: unknown): boolean =>
   error instanceof TypeError ||
   (error instanceof DOMException && error.name === "AbortError") ||
   (error instanceof Error && /ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|fetch failed/i.test(`${error.message} ${error.cause ?? ""}`)) ||
@@ -75,6 +75,33 @@ export const getDownloadStream = async (engineJobId: string): Promise<Response> 
     }
 
     return res
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
+    }
+
+    throw error
+  }
+}
+
+export type AnalyzePayload = {
+  engine_job_id: string
+  session_token: string | null
+  player_index: number | null
+  video_key: string | null
+}
+
+export const analyzeVideo = async (payload: AnalyzePayload): Promise<void> => {
+  try {
+    const res = await withTimeout(`${ENGINE_URL}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }, 12 * 60 * 1000) // 12 min max — longest single analysis span
+
+    if (!res.ok) {
+      await throwNonOk(res)
+    }
   } catch (error) {
     if (isConnectivityError(error)) {
       throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")

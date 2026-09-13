@@ -73,6 +73,17 @@ export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
 }
 
 /**
+ * Whether a queue should retry an engine error.
+ *
+ * The engine owns retryability (the `retryable` flag on every engine error);
+ * the queue no longer re-literalizes a per-code policy. Only errors the
+ * engine explicitly marks non-retryable are unrecoverable.
+ */
+export function isQueueRetryable(error: Pick<CoachAIError, "retryable">): boolean {
+  return error.retryable !== false
+}
+
+/**
  * Type guard: check if an unknown value is a CoachAIError.
  */
 export function isCoachAIError(value: unknown): value is CoachAIError {

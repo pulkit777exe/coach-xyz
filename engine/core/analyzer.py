@@ -23,7 +23,7 @@ from core.dedup import deduplicator
 from core.errors import EngineError, VideoExpiredError, JobNotFoundError
 from core.gemini_client import call_gemini, normalize_gemini_result
 from core.stats import validate_and_correct_stats
-from core.jobs import get_job, update_job, transition_job, fail_job
+from core.jobs import get_job, update_job, transition_job, fail_job, STATE_FLOW
 from core.renderer import render_video
 from core import storage
 from core.tracking import build_active_player_tracks, compute_motion_scores
@@ -338,7 +338,7 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
             return
 
     # Walk forward through valid transitions until we reach "completed"
-    state_order = ["uploading", "scanning", "player_selection", "analyzing", "rendering", "completed"]
+    state_order: list[str] = list(STATE_FLOW)
     try:
         idx = state_order.index(state)
     except ValueError:

@@ -1,0 +1,113 @@
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  ATTENDANCE_STATUSES,
+  EVENT_STATUSES,
+  EVENT_TYPES,
+  REPORT_TYPES,
+  STUDENT_STATUSES,
+  linkAnalysisToStudent,
+  orgCreateStudent,
+  orgStudents,
+} from "../org"
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe("org enum constants", () => {
+  it("have no duplicate values", () => {
+    const noDupes = (values: readonly string[]) =>
+      expect(new Set(values).size).toBe(values.length)
+    noDupes(STUDENT_STATUSES)
+    noDupes(ATTENDANCE_STATUSES)
+    noDupes(EVENT_TYPES)
+    noDupes(EVENT_STATUSES)
+    noDupes(REPORT_TYPES)
+  })
+
+  it("define the expected vocabulary", () => {
+    expect(STUDENT_STATUSES).toEqual(["active", "inactive", "transferred"])
+    expect(ATTENDANCE_STATUSES).toEqual(["present", "late", "absent", "excused"])
+    expect(EVENT_TYPES).toEqual(["practice", "match", "tournament", "meeting", "other"])
+    expect(EVENT_STATUSES).toEqual(["scheduled", "completed", "cancelled"])
+    expect(REPORT_TYPES).toEqual(["progress", "attendance", "performance", "monthly"])
+  })
+})
+
+describe("orgStudents", () => {
+  it("builds the students URL and forwards search/sport/status filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ students: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgStudents("auth|123", { search: "Al", sport: "tennis", status: "active" })
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C123/students?search=Al&sport=tennis&status=active",
+    )
+  })
+
+  it("omits empty filters from the query string", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ students: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgStudents("auth|123")
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/org/auth%7C123/students")
+  })
+})
+
+describe("linkAnalysisToStudent", () => {
+  it("PUTs the student id to the job's student endpoint", async () => {
+    const analysis = { server_job_id: "job-1", student_id: "stu-9" }
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ analysis }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await linkAnalysisToStudent("auth|123", "job-1", "stu-9")
+
+    expect(result.analysis).toEqual(analysis)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/org/auth%7C123/analyses/job-1/student")
+    expect(init.method).toBe("PUT")
+    expect(JSON.parse(init.body as string)).toEqual({ student_id: "stu-9" })
+  })
+
+  it("sends null to unlink a student", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ analysis: {} }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await linkAnalysisToStudent("auth|123", "job-1", null)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({ student_id: null })
+  })
+})
+
+describe("orgCreateStudent", () => {
+  it("drops undefined and empty-string fields before POSTing", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ student: {} }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgCreateStudent("auth|123", {
+      full_name: "Alex Rivera",
+      email: "",
+      jersey_number: undefined,
+      status: "active",
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({
+      full_name: "Alex Rivera",
+      status: "active",
+    })
+  })
+})

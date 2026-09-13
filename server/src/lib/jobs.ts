@@ -1,5 +1,7 @@
 import { getEngineJobStatus, markEngineJobFailed, type EngineStatusResult } from "./engine"
 
+import type { EnginePipelineState } from "../types"
+
 const KEY = "coachai:srv:"
 const JOB_TTL = 7200
 
@@ -14,7 +16,7 @@ interface ServerJob {
 
 export interface EngineJobStatus {
   job_id: string
-  state: string
+  state: EnginePipelineState
   stage: number
   stage_name: string
   progress: number

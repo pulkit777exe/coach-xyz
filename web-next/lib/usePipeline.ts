@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { scanVideoWithProgress, streamScanProgress, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
+import { mapEngineStateToPipeline } from '@/lib/pipelineState'
 import type { PipelineState, ScanResult, JobStatus, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
@@ -24,16 +25,6 @@ function toCoachAIError(err: unknown): CoachAIError {
   }
   // Unknown error
   return { code: 'UNKNOWN', message: String(err), layer: 'client', retryable: false }
-}
-
-const ENGINE_STATE_MAP: Record<string, PipelineState> = {
-  uploading: 'uploading',
-  scanning: 'scanning',
-  player_selection: 'selecting',
-  analyzing: 'analyzing',
-  rendering: 'rendering',
-  completed: 'completed',
-  failed: 'error',
 }
 
 export interface PipelineActions {
@@ -157,8 +148,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
               : status
             setJobStatus(displayStatus)
             if (status.state) {
-              const mapped = ENGINE_STATE_MAP[status.state]
-              if (mapped) setPipelineState(mapped)
+              setPipelineState(mapEngineStateToPipeline(status.state))
             }
           }
         } catch (err: unknown) {
@@ -221,8 +211,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
           // Job still in progress — resume polling
           setJobStatus(status)
           if (status.state) {
-            const mapped = ENGINE_STATE_MAP[status.state]
-            if (mapped) setPipelineState(mapped)
+            setPipelineState(mapEngineStateToPipeline(status.state))
           }
           startPolling(initialJobId)
         }

@@ -20,15 +20,23 @@ export type ScanResult = {
 
 // ── Pipeline States ──────────────────────────────────────────────────────────
 // Engine states: uploading → scanning → player_selection → analyzing → rendering → completed
+// Failed is a terminal state outside the forward flow.
+//
+// This list is a wire contract pinned by the pipeline contract tests in all
+// three layers (engine/tests/test_state_machine.py, server/tests/, web-next).
+// Keep it in sync with the engine's STATE_FLOW in engine/core/jobs.py.
 
-export type EnginePipelineState =
-  | "uploading"
-  | "scanning"
-  | "player_selection"
-  | "analyzing"
-  | "rendering"
-  | "completed"
-  | "failed"
+export const ENGINE_PIPELINE_STATES = [
+  "uploading",
+  "scanning",
+  "player_selection",
+  "analyzing",
+  "rendering",
+  "completed",
+  "failed",
+] as const
+
+export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number]
 
 // ── Job Status ───────────────────────────────────────────────────────────────
 // Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
@@ -48,9 +56,14 @@ export type JobStatus = {
 }
 
 // ── Analysis Results ─────────────────────────────────────────────────────────
+// Wire contract emitted by engine/core/gemini_client.py normalize_gemini_result.
+// The engine is the source of truth — keep this type in sync with it and with
+// the analysis contract tests in all three layers.
 
 export type AnalysisSummary = {
   sport: string
+  player_name?: string
+  session_date?: string | null
   form_score: number
   overall_rating: string
   top_tips: string[]
@@ -67,8 +80,13 @@ export type ShotEvent = {
   timestamp: number
   event_type: string
   form_score: number
-  key_observation?: string
   feedback: string
+  key_observation?: string
+  result?: string
+  form_breakdown?: Record<string, string>
+  biomechanics?: Record<string, unknown> | null
+  weighted_scoring?: Record<string, unknown> | null
+  injury_risk?: Record<string, unknown> | null
 }
 
 // ── Error Types ──────────────────────────────────────────────────────────────

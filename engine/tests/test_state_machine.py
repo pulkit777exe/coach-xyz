@@ -157,6 +157,39 @@ def test_completed_is_terminal():
     assert VALID_TRANSITIONS["completed"] == set()
 
 
+# ── Pipeline contract (single-sourced order) ──────────────────────────────────
+
+WIRE_ORDER = ("uploading", "scanning", "player_selection", "analyzing", "rendering", "completed")
+
+
+class TestPipelineContract:
+    """STATE_FLOW is the wire contract: engine, server, and web tests each pin it.
+
+    Keep this list in sync with:
+      - server/src/types/index.ts: ENGINE_PIPELINE_STATES
+      - web-next/types/index.ts: ENGINE_PIPELINE_STATES
+    """
+
+    def test_state_flow_matches_wire_order(self):
+        assert jobs.STATE_FLOW == WIRE_ORDER
+
+    def test_state_flow_matches_forward_pipeline_states(self):
+        # STATE_FLOW must be exactly the non-terminal (stage >= 0) members of
+        # PIPELINE_STATES, in the same order.
+        expected = tuple(
+            state for state, info in jobs.PIPELINE_STATES.items() if info["stage"] >= 0
+        )
+        assert jobs.STATE_FLOW == expected
+
+    def test_failed_is_terminal_outside_flow(self):
+        assert jobs.PIPELINE_STATES["failed"]["stage"] < 0
+        assert "failed" not in jobs.STATE_FLOW
+
+    def test_stages_alias_derives_from_pipeline_states(self):
+        assert jobs.STAGES[1] == jobs.PIPELINE_STATES["scanning"]["stage_name"]
+        assert jobs.STAGES[6] == jobs.PIPELINE_STATES["completed"]["stage_name"]
+
+
 # ── Idempotency guard (run_analysis) ─────────────────────────────────────────
 
 class TestIdempotencyGuard:

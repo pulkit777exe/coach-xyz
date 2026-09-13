@@ -72,6 +72,7 @@ from core.errors import (
     JobNotFoundError,
     NoPlayersDetectedError,
     VideoDecodeError,
+    error_status,
 )
 from core.jobs import create_job, get_job, update_job, fail_job
 
@@ -190,22 +191,7 @@ async def timing_middleware(request: Request, call_next):
 @app.exception_handler(EngineError)
 async def engine_error_handler(request: Request, exc: EngineError):
     logging.error(f"{exc.code}: {exc.message}")
-    _status_map = {
-        "NO_PLAYERS_DETECTED": 400,
-        "VIDEO_DECODE_FAILED": 400,
-        "VIDEO_EXPIRED": 400,
-        "VIDEO_NOT_FOUND": 404,
-        "JOB_NOT_FOUND": 404,
-        "GEMINI_QUOTA_EXCEEDED": 429,
-        "GEMINI_TIMEOUT": 504,
-        "GEMINI_PARSE_FAILED": 500,
-        "GEMINI_PROCESSING_FAILED": 500,
-        "MEDIAPIPE_UNAVAILABLE": 503,
-        "REDIS_UNAVAILABLE": 503,
-        "STORAGE_ERROR": 503,
-        "ENGINE_UNAVAILABLE": 503,
-    }
-    status = _status_map.get(exc.code, 422 if exc.retryable else 500)
+    status = error_status(exc)
     return JSONResponse(status_code=status, content=exc.to_dict())
 
 
@@ -678,129 +664,6 @@ async def analyze(request: Request) -> JSONResponse:
         )
         fail_job(engine_job_id, err)
         return JSONResponse(status_code=500, content=err.to_dict())
-
-
-@app.post("/analyze-async")
-async def analyze_async(request: Request) -> JSONResponse:
-    """
-    Start analysis and return job ID immediately.
-    Client can poll /status/{job_id} or use /analyze-progress/{job_id} for SSE.
-    """
-    content_type = (request.headers.get("content-type") or "").lower()
-
-    if not content_type.startswith("application/json"):
-        return _error_response(415, "INVALID_REQUEST", "JSON required")
-
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
-
-    session_token = payload.get("session_token")
-    player_index = _safe_int(payload.get("player_index"))
-
-    if not session_token:
-        return _error_response(400, "INVALID_REQUEST", "session_token required")
-
-    # Get video key from session
-    video_key, err = _session_video_path(session_token)
-    if err:
-        return err
-
-    # Create job in Redis
-    engine_job_id = create_job(session_token, video_key=video_key)
-
-    # Start analysis in bounded executor (memory optimization)
-    def _run_analysis():
-        try:
-            from core.analyzer import run_analysis
-            run_analysis(engine_job_id, video_key, player_index)
-        except Exception as e:
-            logging.error(f"[ASYNC] Analysis failed for {engine_job_id}: {e}\n{traceback.format_exc()}")
-            from core.jobs import fail_job as _fail_job
-            from core.errors import EngineError as _EngineError
-            _fail_job(engine_job_id, _EngineError(
-                code="INTERNAL_ERROR",
-                message="Unexpected analysis error.",
-                retryable=True,
-            ))
-
-    _analysis_executor.submit(_run_analysis)
-
-    return JSONResponse({
-        "job_id": engine_job_id,
-        "status": "processing",
-        "message": "Analysis started. Use GET /status/{job_id} or GET /analyze-progress/{job_id} for updates.",
-    })
-
-
-@app.get("/analyze-progress/{job_id}")
-async def analyze_progress(job_id: str):
-    """
-    SSE endpoint for live progress updates.
-    Client can listen for real-time stage updates.
-    """
-    from fastapi.responses import StreamingResponse
-
-    async def event_generator():
-        try:
-            while True:
-                try:
-                    job = get_job(job_id)
-
-                    # Send progress update
-                    data = json.dumps({
-                        "job_id": job_id,
-                        "stage": job.state,
-                        "progress": job.progress,
-                        "complete": job.complete,
-                        "error": job.error,
-                    })
-                    yield f"data: {data}\n\n"
-
-                    # Check if done
-                    if job.state in ("completed", "failed"):
-                        break
-
-                except Exception:
-                    # Distinguish between "job not found" and transient errors
-                    try:
-                        get_job(job_id)
-                    except JobNotFoundError:
-                        data = json.dumps({
-                            "job_id": job_id,
-                            "stage": "failed",
-                            "progress": 0,
-                            "complete": True,
-                            "error": "Job not found or expired.",
-                            "error_code": "JOB_NOT_FOUND",
-                        })
-                        yield f"data: {data}\n\n"
-                        break
-                    except Exception:
-                        # Transient Redis error, send queued status and retry
-                        data = json.dumps({
-                            "job_id": job_id,
-                            "stage": "queued",
-                            "progress": 0,
-                            "complete": False,
-                            "error": None,
-                        })
-                        yield f"data: {data}\n\n"
-
-                await asyncio.sleep(1)  # Update every second
-        except asyncio.CancelledError:
-            pass  # Client disconnected — clean up gracefully
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @app.get("/status/{job_id}")

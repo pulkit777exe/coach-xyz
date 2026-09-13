@@ -1,21 +1,8 @@
 import { Queue, Worker, QueueEvents, UnrecoverableError } from "bullmq"
 import { markJobFailed, getJob } from "./jobs"
 import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
-import { wrapEngineError } from "./errors"
-import type { CoachAIError } from "./errors"
-import { ENGINE_URL } from "./engine"
-
-// Non-retryable engine error codes — these will never succeed on retry.
-// Note: The engine sets retryable per-error; these codes are inherently
-// non-retryable regardless of the engine's retryable flag.
-const UNRECOVERABLE_CODES = new Set([
-  "VIDEO_DECODE_FAILED",
-  "VIDEO_EXPIRED",
-  "VIDEO_NOT_FOUND",
-  "JOB_NOT_FOUND",
-  "INVALID_REQUEST",
-  "MEDIAPIPE_UNAVAILABLE",
-])
+import { wrapEngineError, isQueueRetryable, isCoachAIError } from "./errors"
+import { analyzeVideo } from "./engine"
 
 // Derive Redis protocol URL from Upstash REST URL and token
 // REST URL format: https://<endpoint>.upstash.io
@@ -86,45 +73,6 @@ export const JOB_PRIORITIES = {
 
 export type JobPriority = keyof typeof JOB_PRIORITIES
 
-// ── Keep-Alive Ping (Prevent Free Tier Spin-Down) ─────────────────────────
-// On Render free tier, services spin down after 15 min inactivity.
-// Ping our own health endpoint AND the engine every 10 min to keep both alive.
-const KEEPALIVE_INTERVAL = 10 * 60 * 1000 // 10 minutes
-let keepAliveServerTimer: ReturnType<typeof setInterval> | null = null
-let keepAliveEngineTimer: ReturnType<typeof setInterval> | null = null
-
-if (process.env.NODE_ENV === "production") {
-  const port = process.env.PORT || 8000
-
-  // Keep server alive
-  keepAliveServerTimer = setInterval(async () => {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(5000) })
-      if (res.ok) {
-        console.log(JSON.stringify({ type: "keepalive", target: "server", status: "ok" }))
-      }
-    } catch {
-      // Ignore errors - service might be starting up
-    }
-  }, KEEPALIVE_INTERVAL)
-  keepAliveServerTimer.unref()
-
-  // Keep engine alive
-  keepAliveEngineTimer = setInterval(async () => {
-    try {
-      const res = await fetch(`${ENGINE_URL}/health`, { signal: AbortSignal.timeout(5000) })
-      if (res.ok) {
-        console.log(JSON.stringify({ type: "keepalive", target: "engine", status: "ok" }))
-      }
-    } catch {
-      // Ignore errors - engine might be starting up
-    }
-  }, KEEPALIVE_INTERVAL)
-  keepAliveEngineTimer.unref()
-
-  console.log(JSON.stringify({ type: "keepalive_enabled", interval: "10m", targets: ["server", "engine"] }))
-}
-
 export interface AnalysisPayload {
   server_job_id: string
   engine_job_id: string
@@ -147,27 +95,19 @@ const worker = redisAvailable
           return { ok: true, skipped: "already_terminal" }
         }
 
-        const res = await fetch(
-          `${ENGINE_URL}/analyze`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              engine_job_id,
-              session_token,
-              player_index,
-              video_key,
-            }),
-            signal: AbortSignal.timeout(12 * 60 * 1000), // 12 min max
-          },
-        )
+        // Cross the same engine adapter as the routes — one client, one
+        // timeout posture, one error shape.
+        try {
+          await analyzeVideo({ engine_job_id, session_token, player_index, video_key })
+        } catch (error) {
+          const engineError = isCoachAIError(error)
+            ? error
+            : wrapEngineError({ message: error instanceof Error ? error.message : "Unknown engine error." })
 
-        if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
-          const engineError = wrapEngineError(body)
-
-          // Non-retryable errors: throw UnrecoverableError to stop retries
-          if (UNRECOVERABLE_CODES.has(engineError.code)) {
+          // The engine owns retryability. Non-retryable errors will never
+          // succeed on retry, so throw UnrecoverableError to stop BullMQ
+          // (attempts: 3) from retrying a doomed job.
+          if (!isQueueRetryable(engineError)) {
             throw new UnrecoverableError(
               `${engineError.code}: ${engineError.message}`,
             )
@@ -379,10 +319,6 @@ const gracefulShutdown = async (signal: string) => {
   forceExit.unref()
 
   try {
-    // Clear all intervals to prevent firing after shutdown
-    if (keepAliveServerTimer) clearInterval(keepAliveServerTimer)
-    if (keepAliveEngineTimer) clearInterval(keepAliveEngineTimer)
-
     if (queueEvents) await queueEvents.close()
     if (worker) await worker.close()
     if (analysisQueue) await analysisQueue.close()
