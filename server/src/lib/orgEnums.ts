@@ -1,12 +1,14 @@
-// ── Org vocabulary (single source of truth) ─────────────────────────────────
+// ── Org vocabulary (single source of truth, server side) ─────────────────────
 // Types are derived from the arrays below; the schema CHECK constraints
 // (supabaseHistory.ts), route validation (org.ts) and report titles
 // (orgValidate.ts) all import from here so a new value is added in one place.
+// NOTE: values AND order must match web-next/lib/org.ts — pinned by the
+// org *Contract tests on both sides.
 
 export const STUDENT_STATUSES = ["active", "inactive", "transferred"] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
-export const ATTENDANCE_STATUSES = ["present", "absent", "late", "excused"] as const
+export const ATTENDANCE_STATUSES = ["present", "late", "absent", "excused"] as const
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
 
 export const EVENT_TYPES = ["practice", "match", "tournament", "meeting", "other"] as const

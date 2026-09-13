@@ -1,18 +1,12 @@
 import type { ReportContent, ReportRecord } from "@/lib/org"
+import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from "@/lib/org"
+import { formatDateMed } from "@/lib/date"
 
 const TYPE_ORDER: Record<string, string[]> = {
   attendance: ["summary", "org", "attendance", "performance", "analyses"],
   performance: ["summary", "org", "performance", "attendance", "analyses"],
   progress: ["summary", "org", "attendance", "performance", "analyses"],
   monthly: ["summary", "org", "attendance", "performance", "analyses"],
-}
-
-export function shortDate(iso: string) {
-  return new Date(`${iso.length === 10 ? iso : iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 }
 
 export default function ReportBody({
@@ -108,7 +102,7 @@ function OrgStatStrip({ c }: { c: ReportContent }) {
       <StatCells
         items={[
           ["Students", String(o.student_count)],
-          ["Active", String(o.active_students)],
+          [STUDENT_STATUS_LABELS.active, String(o.active_students)],
           ["Sessions this month", String(o.sessions_this_month)],
           ["Upcoming events", String(o.upcoming_events)],
           ["Analyses linked", String(o.analyses_linked)],
@@ -126,10 +120,10 @@ function AttendanceBlock({ c }: { c: ReportContent }) {
       <StatCells
         items={[
           ["Records", String(a.total_records)],
-          ["Present", String(a.present)],
-          ["Late", String(a.late)],
-          ["Absent", String(a.absent)],
-          ["Excused", String(a.excused)],
+          [ATTENDANCE_STATUS_LABELS.present, String(a.present)],
+          [ATTENDANCE_STATUS_LABELS.late, String(a.late)],
+          [ATTENDANCE_STATUS_LABELS.absent, String(a.absent)],
+          [ATTENDANCE_STATUS_LABELS.excused, String(a.excused)],
           ["Rate", a.attendance_rate === null ? "—" : `${a.attendance_rate}%`],
         ]}
       />
@@ -146,7 +140,7 @@ function PerformanceBlock({ c }: { c: ReportContent }) {
           ["Avg form", p.form_score_avg === null ? "—" : `${p.form_score_avg}/10`],
           ["Latest form", p.form_score_latest === null ? "—" : `${p.form_score_latest}/10`],
           ["Analyzed sessions", String(p.total_sessions)],
-          ["Last analysis", p.latest_analysis_at ? shortDate(p.latest_analysis_at.slice(0, 10)) : "—"],
+          ["Last analysis", p.latest_analysis_at ? formatDateMed(p.latest_analysis_at.slice(0, 10)) : "—"],
         ]}
       />
     </Section>

@@ -9,7 +9,8 @@ const org = (auth0Id: string, path: string) =>
 // ── Types ────────────────────────────────────────────────────────────────────
 
 // Org vocabulary — single source of truth for the web app. The server mirrors
-// these in server/src/lib/orgEnums.ts; add a value there and here.
+// these (same values AND order: order is contractual — see server/src/lib/orgEnums.ts
+// and the org *Contract tests on both sides). Add a value there and here.
 export const STUDENT_STATUSES = ["active", "inactive", "transferred"] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
@@ -24,6 +25,41 @@ export type EventStatus = (typeof EVENT_STATUSES)[number]
 
 export const REPORT_TYPES = ["progress", "attendance", "performance", "monthly"] as const
 export type ReportType = (typeof REPORT_TYPES)[number]
+
+// Human-readable labels — single source of truth for presentation.
+export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
+  active: "Active",
+  inactive: "Inactive",
+  transferred: "Transferred",
+}
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  present: "Present",
+  late: "Late",
+  absent: "Absent",
+  excused: "Excused",
+}
+
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  practice: "Practice",
+  match: "Match",
+  tournament: "Tournament",
+  meeting: "Meeting",
+  other: "Other",
+}
+
+export const EVENT_STATUS_LABELS: Record<EventStatus, string> = {
+  scheduled: "Scheduled",
+  completed: "Completed",
+  cancelled: "Cancelled",
+}
+
+export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  progress: "Progress Report",
+  attendance: "Attendance Report",
+  performance: "Performance Report",
+  monthly: "Monthly Summary",
+}
 
 export type Student = {
   id: string

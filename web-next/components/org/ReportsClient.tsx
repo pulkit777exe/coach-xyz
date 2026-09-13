@@ -18,19 +18,19 @@ import {
   DialogFooter,
 } from "@/components/9ui/ui/dialog"
 import { Spinner } from "./Spinner"
-import ReportBody, { shortDate } from "./ReportBody"
+import ReportBody from "./ReportBody"
 import { downloadCSV } from "@/lib/csv"
+import { formatDateMed } from "@/lib/date"
 
 import type { ReportRecord, Student, ReportType } from "@/lib/org"
-import { orgCreateReport, orgUpdateReport, orgDeleteReport, REPORT_TYPES } from "@/lib/org"
+import {
+  orgCreateReport,
+  orgUpdateReport,
+  orgDeleteReport,
+  REPORT_TYPES,
+  REPORT_TYPE_LABELS,
+} from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
-
-const REPORT_TYPE_LABELS: Record<ReportType, string> = {
-  progress: "Progress Report",
-  attendance: "Attendance Report",
-  performance: "Performance Report",
-  monthly: "Monthly Summary",
-}
 
 const TYPE_BADGE: Record<string, string> = {
   progress: "border-(--info-border) text-(--info)",
@@ -224,7 +224,7 @@ export default function ReportsClient({
                   </td>
                   <td className="hidden px-4 py-3 md:table-cell">{r.full_name || "Organization"}</td>
                   <td className="text-muted-foreground hidden px-4 py-3 lg:table-cell">
-                    {r.period_start ? `${shortDate(r.period_start)} → ${shortDate(r.period_end ?? r.period_start)}` : "All time"}
+                    {r.period_start ? `${formatDateMed(r.period_start)} → ${formatDateMed(r.period_end ?? r.period_start)}` : "All time"}
                   </td>
                   <td className="text-muted-foreground px-4 py-3">
                     {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}

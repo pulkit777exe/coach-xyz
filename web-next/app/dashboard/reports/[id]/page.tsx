@@ -2,22 +2,17 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { auth0 } from "@/lib/auth0"
 import { redirect } from "next/navigation"
-import { orgReport } from "@/lib/org"
+import { orgReport, REPORT_TYPE_LABELS } from "@/lib/org"
+import type { ReportType } from "@/lib/org"
+import { formatDateMed } from "@/lib/date"
 import { unstable_noStore as noStore } from "next/cache"
-import ReportBody, { shortDate } from "@/components/org/ReportBody"
+import ReportBody from "@/components/org/ReportBody"
 import PrintReportButton from "@/components/org/PrintReportButton"
 
 export const dynamic = "force-dynamic";
 
 export function generateMetadata(): Metadata {
   return { title: "Report | CoachXYZ", description: "Generated coach report." }
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  progress: "Progress Report",
-  attendance: "Attendance Report",
-  performance: "Performance Report",
-  monthly: "Monthly Summary",
 }
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -37,8 +32,8 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         <div>
           <h1 className="font-serif text-4xl leading-none text-(--fg) sm:text-5xl">{report.title}</h1>
           <p className="text-muted-foreground mt-3 text-sm">
-            {report.full_name || "Organization"} · {TYPE_LABELS[report.report_type] ?? report.report_type} ·{" "}
-            {report.period_start ? `${shortDate(report.period_start)} → ${shortDate(report.period_end ?? report.period_start)}` : "All time"}
+            {report.full_name || "Organization"} · {REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type} ·{" "}
+            {report.period_start ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}` : "All time"}
           </p>
         </div>
         <PrintReportButton />

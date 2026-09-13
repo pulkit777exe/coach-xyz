@@ -21,6 +21,7 @@ import { downloadCSV } from "@/lib/csv"
 import type { AttendanceStatus, Student } from "@/lib/org"
 import {
   ATTENDANCE_STATUSES,
+  ATTENDANCE_STATUS_LABELS,
   orgAttendance,
   orgStudents,
   orgUpsertAttendance,
@@ -34,11 +35,11 @@ type GridRecord = { student_id: string; session_date: string; status: Attendance
 
 const STATUSES = ATTENDANCE_STATUSES
 
-const STATUS_META: Record<AttendanceStatus, { color: string; letter: string; label: string }> = {
-  present: { color: "var(--color-success)", letter: "P", label: "Present" },
-  late: { color: "var(--color-warning)", letter: "L", label: "Late" },
-  absent: { color: "var(--color-destructive)", letter: "A", label: "Absent" },
-  excused: { color: "var(--color-info)", letter: "E", label: "Excused" },
+const STATUS_META: Record<AttendanceStatus, { color: string; letter: string }> = {
+  present: { color: "var(--color-success)", letter: "P" },
+  late: { color: "var(--color-warning)", letter: "L" },
+  absent: { color: "var(--color-destructive)", letter: "A" },
+  excused: { color: "var(--color-info)", letter: "E" },
 }
 
 function startOfLocalDay(d: Date) {
@@ -279,7 +280,12 @@ export default function AttendanceGrid({
   }
 
   const exportCSV = () => {
-    const header = ["Student", "Sport", ...days.map((d) => String(d.getDate())), "Present", "Late", "Absent", "Excused"]
+    const header = [
+      "Student",
+      "Sport",
+      ...days.map((d) => String(d.getDate())),
+      ...ATTENDANCE_STATUSES.map((s) => ATTENDANCE_STATUS_LABELS[s]),
+    ]
     const rows = roster.map((s) => {
       const counts = rowCounts(s.id)
       return [
@@ -377,7 +383,7 @@ export default function AttendanceGrid({
                   className="inline-block size-2.5 rounded-full"
                   style={{ background: STATUS_META[s].color }}
                 />
-                {STATUS_META[s].label}
+                {ATTENDANCE_STATUS_LABELS[s]}
               </span>
             ))}
           </div>
@@ -467,7 +473,7 @@ export default function AttendanceGrid({
                           onClick={() => cycle(s.id, d)}
                           title={
                             st
-                              ? `${meta ? meta.label : ""}${hasNote ? ` · ${notes.get(k)}` : ""} — click to change`
+                              ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ""}${hasNote ? ` · ${notes.get(k)}` : ""} — click to change`
                               : "Click to mark present"
                           }
                           disabled={savingKey === k}
@@ -567,7 +573,7 @@ export default function AttendanceGrid({
                         <option value="">—</option>
                         {STATUSES.map((opt) => (
                           <option key={opt} value={opt}>
-                            {STATUS_META[opt].label}
+                            {ATTENDANCE_STATUS_LABELS[opt]}
                           </option>
                         ))}
                       </select>

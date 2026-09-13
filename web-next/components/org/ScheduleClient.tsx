@@ -18,50 +18,45 @@ import EventFormDialog from "./EventFormDialog"
 import { downloadCSV } from "@/lib/csv"
 
 import type { EventStatus, ScheduleEvent } from "@/lib/org"
-import { orgSchedule, orgDeleteEvent, EVENT_STATUSES } from "@/lib/org"
+import { orgSchedule, orgDeleteEvent, EVENT_STATUSES, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from "@/lib/org"
 import { toISODate } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
 
 const TYPE_META: Record<
   ScheduleEvent["event_type"],
-  { color: string; bg: string; border: string; label: string }
+  { color: string; bg: string; border: string }
 > = {
   practice: {
     color: "var(--color-info)",
     bg: "rgba(107, 147, 201, 0.12)",
     border: "var(--color-info-border)",
-    label: "Practice",
   },
   match: {
     color: "var(--color-danger)",
     bg: "rgba(200, 0, 60, 0.12)",
     border: "var(--color-danger-border)",
-    label: "Match",
   },
   tournament: {
     color: "var(--color-warning)",
     bg: "rgba(224, 179, 65, 0.12)",
     border: "var(--color-warning-border)",
-    label: "Tournament",
   },
   meeting: {
     color: "var(--color-success)",
     bg: "rgba(111, 191, 145, 0.12)",
     border: "var(--color-success-border)",
-    label: "Meeting",
   },
   other: {
     color: "var(--color-muted-foreground)",
     bg: "rgba(240, 235, 225, 0.06)",
     border: "var(--color-border)",
-    label: "Other",
   },
 }
 
-const STATUS_META: Record<EventStatus, { label: string; className: string }> = {
-  scheduled: { label: "Scheduled", className: "border-(--info-border) text-(--info)" },
-  completed: { label: "Completed", className: "border-(--success-border) text-(--success)" },
-  cancelled: { label: "Cancelled", className: "border-(--danger-border) text-(--danger)" },
+const STATUS_META: Record<EventStatus, { className: string }> = {
+  scheduled: { className: "border-(--info-border) text-(--info)" },
+  completed: { className: "border-(--success-border) text-(--success)" },
+  cancelled: { className: "border-(--danger-border) text-(--danger)" },
 }
 
 function localDateTimeKey(iso: string) {
@@ -197,8 +192,8 @@ export default function ScheduleClient({
             e.starts_at.slice(11, 16),
             e.ends_at ? e.ends_at.slice(11, 16) : "",
             e.title,
-            TYPE_META[e.event_type]?.label ?? e.event_type,
-            STATUS_META[e.status]?.label ?? e.status,
+            TYPE_META[e.event_type] ? EVENT_TYPE_LABELS[e.event_type] : e.event_type,
+            EVENT_STATUS_LABELS[e.status] ?? e.status,
             e.location ?? "",
             e.description ?? "",
           ]),
@@ -246,7 +241,7 @@ export default function ScheduleClient({
             <option value="">All statuses</option>
             {EVENT_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {STATUS_META[s].label}
+                {EVENT_STATUS_LABELS[s]}
               </option>
             ))}
           </select>
@@ -373,7 +368,7 @@ export default function ScheduleClient({
                         STATUS_META[ev.status]?.className ?? "border-border"
                       }`}
                     >
-                      {STATUS_META[ev.status]?.label ?? ev.status}
+                      {EVENT_STATUS_LABELS[ev.status] ?? ev.status}
                     </span>
                   </div>
                   <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-xs">
@@ -387,7 +382,7 @@ export default function ScheduleClient({
                         <MapPinIcon className="size-3" /> {ev.location}
                       </span>
                     )}
-                    <span style={{ color: meta.color }}>{meta.label}</span>
+                    <span style={{ color: meta.color }}>{EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}</span>
                   </div>
                 </button>
               )

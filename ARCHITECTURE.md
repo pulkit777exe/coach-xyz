@@ -131,13 +131,15 @@ coach-xyz/
 │   ├── lib/
 │   │   ├── api.ts             # API client (all fetch calls)
 │   │   ├── auth0.ts           # Auth0Client singleton
+│   │   ├── org.ts             # Org domain: entity types, org API client, enum vocab + labels
 │   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
 │   │   ├── jobPolling.ts      # Single job-status poll engine (injected clock/fetch/callbacks)
 │   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
 │   │   ├── errors.ts          # Client error normalization + transient classification
 │   │   ├── sse.ts             # Shared SSE line parser (data: JSON)
+│   │   ├── date.ts            # ISO date/time conversions + shared display formatters
 │   │   ├── sports.ts          # Sport emoji helpers
-│   │   └── utils.ts           # cn() class-name helper
+│   │   └── utils.ts           # cn() class-name helper + capitalize
 │   ├── proxy.ts               # Auth0 middleware proxy (Next.js 16)
 │   └── types/index.ts         # Shared type definitions
 │

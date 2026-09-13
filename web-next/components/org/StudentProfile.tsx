@@ -57,6 +57,9 @@ import {
   linkAnalysisToStudent,
   orgAttendanceSummary,
 } from "@/lib/org"
+import { formatDateLong, formatDateShort } from "@/lib/date"
+import { ATTENDANCE_STATUS_LABELS } from "@/lib/org"
+import { capitalize } from "@/lib/utils"
 
 const STATUS_STYLE: Record<string, string> = {
   active: "border-(--success-border) text-(--success) bg-(--success)",
@@ -253,10 +256,10 @@ export default function StudentProfile({
   }
 
   const attStats = [
-    { label: "Present", value: attendance?.present ?? 0, color: "var(--color-success)" },
-    { label: "Late", value: attendance?.late ?? 0, color: "var(--color-warning)" },
-    { label: "Absent", value: attendance?.absent ?? 0, color: "var(--color-destructive)" },
-    { label: "Excused", value: attendance?.excused ?? 0, color: "var(--color-info)" },
+    { label: ATTENDANCE_STATUS_LABELS.present, value: attendance?.present ?? 0, color: "var(--color-success)" },
+    { label: ATTENDANCE_STATUS_LABELS.late, value: attendance?.late ?? 0, color: "var(--color-warning)" },
+    { label: ATTENDANCE_STATUS_LABELS.absent, value: attendance?.absent ?? 0, color: "var(--color-destructive)" },
+    { label: ATTENDANCE_STATUS_LABELS.excused, value: attendance?.excused ?? 0, color: "var(--color-info)" },
   ]
 
   return (
@@ -301,7 +304,7 @@ export default function StudentProfile({
               {student_.joined_on && (
                 <span className="flex items-center gap-1.5">
                   <CalendarIcon className="size-3" /> Joined{" "}
-                  {formatDate(student_.joined_on)}
+                  {formatDateLong(student_.joined_on)}
                 </span>
               )}
             </div>
@@ -342,7 +345,7 @@ export default function StudentProfile({
           Profile Details
         </p>
         <div className="border-border bg-card grid gap-px rounded-lg border sm:grid-cols-2">
-          <DetailRow label="Date of birth" value={student_.date_of_birth ? formatDate(student_.date_of_birth) : "—"} />
+          <DetailRow label="Date of birth" value={student_.date_of_birth ? formatDateLong(student_.date_of_birth) : "—"} />
           <DetailRow label="Gender" value={student_.gender ? capitalize(student_.gender) : "—"} />
           <DetailRow label="Guardian" value={student_.guardian_name || "—"} />
           <DetailRow label="Guardian phone" value={student_.guardian_phone || "—"} />
@@ -758,10 +761,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function capitalize(v: string) {
-  return v.charAt(0).toUpperCase() + v.slice(1)
-}
-
 function MetricPill({
   active,
   onClick,
@@ -818,17 +817,4 @@ function formatKey(key: string) {
     .split("_")
     .map((p) => p[0]?.toUpperCase() + p.slice(1))
     .join(" ")
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })
-}
-
-function formatDateShort(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }

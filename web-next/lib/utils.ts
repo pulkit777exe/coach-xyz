@@ -1,5 +1,9 @@
 type StateFn<S> = (state: S) => string | undefined;
 
+export function capitalize(v: string): string {
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
 type StaticValue =
   | string
   | number

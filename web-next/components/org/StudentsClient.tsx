@@ -30,7 +30,8 @@ import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
 
 import type { Student } from "@/lib/org"
-import { orgDeleteStudent, orgUpdateStudent } from "@/lib/org"
+import { orgDeleteStudent, orgUpdateStudent, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from "@/lib/org"
+import { formatDateMed } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
 
 const STATUS_STYLE: Record<string, string> = {
@@ -224,9 +225,11 @@ export default function StudentsClient({
             className="bg-input text-foreground border-input focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
           >
             <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="transferred">Transferred</option>
+            {STUDENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STUDENT_STATUS_LABELS[s]}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -352,7 +355,7 @@ export default function StudentsClient({
                     {s.position || "—"}
                   </td>
                   <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
-                    {s.joined_on ? formatDate(s.joined_on) : "—"}
+                    {s.joined_on ? formatDateMed(s.joined_on) : "—"}
                   </td>
                   <td className="px-4 py-3">
                     <Badge
@@ -436,12 +439,4 @@ export default function StudentsClient({
       </Dialog>
     </div>
   )
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
 }
