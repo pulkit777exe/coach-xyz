@@ -49,6 +49,32 @@ type AnalysisStatusRecord = {
   }
 }
 
+/** Shared column list for the analysis_history + video_conversations dashboard
+ *  query. Used via `db.unsafe(ANALYSES_SELECT_COLUMNS)` inside a select. */
+export const ANALYSES_SELECT_COLUMNS = `
+  a.server_job_id,
+  a.engine_job_id,
+  a.session_token,
+  a.player_index,
+  a.model,
+  a.stage,
+  a.stage_name,
+  a.progress,
+  a.complete,
+  a.video_ready,
+  a.summary_json,
+  a.error_code,
+  a.error_message,
+  a.requested_at,
+  a.completed_at,
+  a.download_count,
+  a.display_name,
+  a.student_id,
+  v.file_name,
+  v.file_size_bytes,
+  v.player_count
+`
+
 const databaseUrl = (process.env.DATABASE_URL ?? "").trim()
 const supabaseProjectUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() || null
 const supabasePublishableKey =
@@ -787,28 +813,7 @@ export const getUserAnalyses = async (
   return (await withHistoryStore(async (db) => {
     await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
-      select
-        a.server_job_id,
-        a.engine_job_id,
-        a.session_token,
-        a.player_index,
-        a.model,
-        a.stage,
-        a.stage_name,
-        a.progress,
-        a.complete,
-        a.video_ready,
-        a.summary_json,
-        a.error_code,
-        a.error_message,
-        a.requested_at,
-        a.completed_at,
-        a.download_count,
-        a.display_name,
-        a.student_id,
-        v.file_name,
-        v.file_size_bytes,
-        v.player_count
+      select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id}
@@ -826,28 +831,7 @@ export const getUserAnalysisById = async (
   return withHistoryStore(async (db) => {
     await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
-      select
-        a.server_job_id,
-        a.engine_job_id,
-        a.session_token,
-        a.player_index,
-        a.model,
-        a.stage,
-        a.stage_name,
-        a.progress,
-        a.complete,
-        a.video_ready,
-        a.summary_json,
-        a.error_code,
-        a.error_message,
-        a.requested_at,
-        a.completed_at,
-        a.download_count,
-        a.display_name,
-        a.student_id,
-        v.file_name,
-        v.file_size_bytes,
-        v.player_count
+      select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id} and a.server_job_id = ${serverJobId}
@@ -863,28 +847,7 @@ export const getAnalysisByServerJobId = async (
   return withHistoryStore(async (db) => {
     await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
-      select
-        a.server_job_id,
-        a.engine_job_id,
-        a.session_token,
-        a.player_index,
-        a.model,
-        a.stage,
-        a.stage_name,
-        a.progress,
-        a.complete,
-        a.video_ready,
-        a.summary_json,
-        a.error_code,
-        a.error_message,
-        a.requested_at,
-        a.completed_at,
-        a.download_count,
-        a.display_name,
-        a.student_id,
-        v.file_name,
-        v.file_size_bytes,
-        v.player_count
+      select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.server_job_id = ${serverJobId}

@@ -34,12 +34,14 @@ import {
 } from "../lib/orgData"
 import { buildError } from "../lib/errors"
 import { isDate, isIsoDate, defaultReportTitle } from "../lib/orgValidate"
+import { linkAnalysisToStudent } from "../lib/supabaseHistory"
 import {
   ATTENDANCE_STATUSES,
   EVENT_STATUSES,
   EVENT_TYPES,
   REPORT_TYPES,
   STUDENT_STATUSES,
+  type ReportType,
 } from "../lib/orgEnums"
 
 const ATTENDANCE_STATUS_SET: ReadonlySet<string> = new Set(ATTENDANCE_STATUSES)
@@ -253,6 +255,29 @@ export default new Elysia()
     const analyses = await getStudentAnalyses(auth0Id, id)
     set.status = 200
     return { analyses }
+  })
+  .put("/api/org/:auth0Id/analyses/:jobId/student", async ({ params, body, set }) => {
+    const { auth0Id, jobId } = params
+    if (!auth0Id || !jobId) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+    }
+    const { student_id } = body as { student_id?: unknown }
+    if (student_id !== undefined && student_id !== null && typeof student_id !== "string") {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "student_id must be a string or null", false)
+    }
+    if (student_id && (await getStudent(auth0Id, student_id)) === null) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Student not found", false)
+    }
+    const analysis = await linkAnalysisToStudent(auth0Id, jobId, (student_id as string | null) ?? null)
+    if (!analysis) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Analysis not found", false)
+    }
+    set.status = 200
+    return { analysis }
   })
   // ── Attendance ─────────────────────────────────────────────────────────────
   .get("/api/org/:auth0Id/attendance", async ({ params, request, set }) => {
@@ -474,20 +499,21 @@ export default new Elysia()
 
     const from = isDate(period_start) ? period_start : undefined
     const to = isDate(period_end) ? period_end : undefined
+    const nextType = report_type as ReportType
 
     const content = await buildReportContent(auth0Id, {
       student_id: student_id ? (student_id as string) : null,
       from,
       to,
-      report_type: report_type as string,
+      report_type: nextType,
     })
 
     const student = student_id ? await getStudent(auth0Id, student_id as string) : null
 
     const report = await createReportRecord(auth0Id, {
       student_id: student_id ? (student_id as string) : null,
-      report_type: report_type as string,
-      title: typeof title === "string" && title ? title : defaultReportTitle(report_type as string, student),
+      report_type: nextType,
+      title: typeof title === "string" && title ? title : defaultReportTitle(nextType, student),
       period_start: from ?? null,
       period_end: to ?? null,
       content_json: content,
@@ -509,7 +535,7 @@ export default new Elysia()
 
     const { report_type, period_start, period_end, title } = body as Record<string, unknown>
 
-    const nextType = report_type === undefined ? existing.report_type : String(report_type)
+    const nextType = (report_type === undefined ? existing.report_type : String(report_type)) as ReportType
     if (!REPORT_TYPE_SET.has(nextType)) {
       set.status = 400
       return buildError("INVALID_REQUEST", `report_type must be one of ${[...REPORT_TYPE_SET].join(", ")}`, false)

@@ -1,4 +1,8 @@
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from "./supabaseHistory"
+import {
+  withHistoryStoreOrThrow as withHistoryStore,
+  ensureInitialized,
+  ANALYSES_SELECT_COLUMNS,
+} from "./supabaseHistory"
 import type { DashboardAnalysis } from "./supabaseHistory"
 import {
   EVENT_STATUSES,
@@ -6,7 +10,7 @@ import {
   REPORT_TYPES,
   STUDENT_STATUSES,
 } from "./orgEnums"
-import type { AttendanceStatus } from "./orgEnums"
+import type { AttendanceStatus, ReportType } from "./orgEnums"
 export type {
   AttendanceStatus,
   EventStatus,
@@ -496,28 +500,7 @@ export const getStudentAnalyses = async (
     (await withHistoryStore(async (db) => {
       await ensureInitialized()
       const rows = await db<DashboardAnalysis[]>`
-        select
-          a.server_job_id,
-          a.engine_job_id,
-          a.session_token,
-          a.player_index,
-          a.model,
-          a.stage,
-          a.stage_name,
-          a.progress,
-          a.complete,
-          a.video_ready,
-          a.summary_json,
-          a.error_code,
-          a.error_message,
-          a.requested_at,
-          a.completed_at,
-          a.download_count,
-          a.display_name,
-          a.student_id,
-          v.file_name,
-          v.file_size_bytes,
-          v.player_count
+        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
         left join video_conversations v on a.session_token = v.session_token
         where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}
@@ -531,7 +514,7 @@ export const getStudentAnalyses = async (
 
 export type ReportInput = {
   student_id?: string | null
-  report_type: string
+  report_type: ReportType
   title: string
   period_start?: string | null
   period_end?: string | null
@@ -618,28 +601,7 @@ export const listRecentAnalysisScores = async (
     (await withHistoryStore(async (db) => {
       await ensureInitialized()
       const rows = await db<DashboardAnalysis[]>`
-        select
-          a.server_job_id,
-          a.engine_job_id,
-          a.session_token,
-          a.player_index,
-          a.model,
-          a.stage,
-          a.stage_name,
-          a.progress,
-          a.complete,
-          a.video_ready,
-          a.summary_json,
-          a.error_code,
-          a.error_message,
-          a.requested_at,
-          a.completed_at,
-          a.download_count,
-          a.display_name,
-          a.student_id,
-          v.file_name,
-          v.file_size_bytes,
-          v.player_count
+        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
         left join video_conversations v on a.session_token = v.session_token
         where a.auth0_id = ${auth0Id}
@@ -655,10 +617,9 @@ export const listRecentAnalysisScores = async (
 }
 
 function buildPeriodLabel(
-  reportType: string | null | undefined,
-  from: string | null | undefined,
-  to: string | null | undefined,
+  opts: { reportType?: ReportType | null; from?: string | null; to?: string | null },
 ): string {
+  const { reportType, from, to } = opts
   const fmt = (iso: string) =>
     new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
       month: "short",
@@ -681,7 +642,7 @@ export const buildReportContent = async (
     student_id?: string | null
     from?: string | null
     to?: string | null
-    report_type?: string | null
+    report_type?: ReportType | null
   } = {},
 ): Promise<Record<string, unknown>> => {
   const { student_id, from, to, report_type } = opts
@@ -789,7 +750,7 @@ export const buildReportContent = async (
           status: student.status,
         }
       : null,
-    period: { start: from ?? null, end: to ?? null, label: buildPeriodLabel(report_type, from, to) },
+    period: { start: from ?? null, end: to ?? null, label: buildPeriodLabel({ reportType: report_type, from, to }) },
     attendance: attendanceBlock,
     performance: performanceBlock,
     analyses: analysesBlock,

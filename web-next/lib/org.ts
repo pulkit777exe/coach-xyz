@@ -476,9 +476,9 @@ export const linkAnalysisToStudent = async (
   studentId: string | null,
 ): Promise<{ analysis: DashboardAnalysis }> => {
   return apiFetch<{ analysis: DashboardAnalysis }>(
-    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
+    org(auth0Id, `/analyses/${encodeURIComponent(jobId)}/student`),
     {
-      method: "PATCH",
+      method: "PUT",
       body: JSON.stringify({ student_id: studentId }),
     },
   )
