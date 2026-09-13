@@ -1,0 +1,28 @@
+name: keepalive
+
+# Render free-tier web services spin down after 15 min without inbound traffic,
+# and the queue worker lives inside the server process — so a cold server stalls
+# job processing. The engine runs on a paid (starter) plan and never spins down;
+# the server is the only free Render service, so keeping it warm costs ~720 of the
+# 750 free instance-hours per month — the worker stays continuous.
+#
+# Requires a repo secret: SERVER_URL (e.g. https://coachai-server.onrender.com)
+on:
+  schedule:
+    - cron: "*/9 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping-server:
+    name: Wake free-tier server + worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+        run: |
+          if [ -n "$SERVER_URL" ]; then
+            curl -sf --max-time 20 "$SERVER_URL/health" >/dev/null || echo "wake attempted (spin-up expected to exceed max-time)"
+          else
+            echo "Skipping: SERVER_URL secret not configured"
+          fi

@@ -1,0 +1,96 @@
+# CI — runs lint/type-check/tests/build for all three deployable services
+# on every pull request and on pushes to main/master.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  engine:
+    name: engine (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: engine/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          # Test/lint tooling is not part of the runtime requirements
+          pip install pytest ruff
+
+      - name: Ruff lint
+        working-directory: engine
+        run: ruff check .
+
+      - name: Pytest
+        working-directory: engine
+        run: pytest tests -q
+
+  server:
+    name: server (Bun)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: server
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        working-directory: server
+        run: bun run type-check
+
+      - name: Lint
+        working-directory: server
+        run: bun run lint
+
+      - name: Test
+        working-directory: server
+        run: bun test
+
+  web-next:
+    name: web-next (Next.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web-next/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-next
+        run: npm ci
+
+      - name: Type check
+        working-directory: web-next
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: web-next
+        run: npm run lint
+
+      - name: Unit tests (vitest)
+        working-directory: web-next
+        run: npm test
+
+      - name: Build
+        working-directory: web-next
+        run: npx next build
