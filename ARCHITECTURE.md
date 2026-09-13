@@ -148,7 +148,7 @@ coach-xyz/
 │   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
-│   │   ├── queue.ts           # BullMQ queue + worker + keep-alive + shutdown
+│   │   ├── queue.ts           # BullMQ queue + worker + shutdown
 │   │   ├── redis.ts           # Redis client (Upstash REST or local ioredis)
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
@@ -188,7 +188,7 @@ coach-xyz/
 │   │   ├── player_tracker.py  # Player tracking (CLI only — engine/cli/frame_selector.py)
 │   │   ├── chunker.py         # Video chunking (CLI only)
 │   │   └── baseline.py        # Sport baseline metrics (dead code — unused by API pipeline)
-│   ├── tests/                 # pytest: test_state_machine.py + conftest.py (46 tests)
+│   ├── tests/                 # pytest suite (103 tests in test_state_machine/test_errors/test_analysis_contract/test_storage/test_chunker/test_config/test_dedup/test_validator)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -589,7 +589,7 @@ Previously documented as dead and since **deleted** from the repo — `pipeline.
 
 ### Missing Features
 
-1. **No CI/CD** — No `.github/` directory, no GitHub Actions workflows.
+**CI/CD is active** — `.github/workflows/ci.yml` (tests), `deploy.yml` (Render deploys), `keepalive.yml` (GitHub Actions cron).
 
 ### Technical Debt
 
@@ -616,13 +616,15 @@ Previously documented as dead and since **deleted** from the repo — `pipeline.
 | Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:88` |
 | Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
 | Pipeline states | `engine/core/jobs.py` |
-| Test suite: 46 tests pass | `cd engine && python -m pytest tests/` |
+| Test suite: 103 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
+| Test suite: 49 tests pass | `cd server && bun test` |
+| Test suite: 32 tests pass | `cd web-next && npx vitest run` |
 | Dead code: baseline.py | `grep -rn "baseline" engine/core/*.py engine/main.py` only self-references |
 | Dead code: player_tracker.py/chunker.py | only imported by `engine/cli/` |
 | Dead code: InlineRename.tsx | `grep -rn "InlineRename" web-next/` only matches its own file |
 | Auth0 auth (beta gate removed) | `grep -rn "BETA_CODES" server/src/` returns nothing |
-| Keep-alive: 10 min | `server/src/lib/queue.ts:93` |
-| Frontend keep-alive: 8 min | `web-next/lib/usePipeline.ts:80` |
+| Keep-alive: 9 min (external cron only) | `.github/workflows/keepalive.yml` → `GET /health` |
+| Frontend status poll: 8 min | `web-next/lib/usePipeline.ts:80` |
 
 ---
 

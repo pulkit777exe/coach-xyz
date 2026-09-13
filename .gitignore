@@ -38,3 +38,7 @@ mediapipe
 engine/json/
 todo.md
 .playwright-mcp
+.vercel
+
+# Runtime logs
+.logs/

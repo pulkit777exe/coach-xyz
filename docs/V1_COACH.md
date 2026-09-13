@@ -162,10 +162,8 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 | `POST /scan` | Upload video, detect players, create session, return video_key |
 | `GET /scan-progress/{session_token}` | SSE stream for live scan progress |
 | `POST /analyze` | Run full analysis pipeline (sync, called by BullMQ) |
-| `POST /analyze-async` | Fire-and-forget analysis (returns job ID immediately) |
 | `GET /status/:jobId` | Read job status from Redis |
 | `GET /download/:jobId` | Stream video from local storage (inline) |
-| `GET /analyze-progress/:jobId` | SSE stream for live progress |
 | `POST /chat` | Chat with AI coach about an analysis (non-streaming) |
 | `POST /chat/stream` | SSE streaming chat |
 | `POST /fail/:jobId` | Mark a job as failed (called by server on BullMQ exhaustion) |
@@ -318,23 +316,28 @@ type CoachAIError = {
 |---|---|---|
 | Frontend | Vercel | coach-xyz.vercel.app |
 | Server | Render (free tier) | coach-xyz-server.onrender.com |
-| Engine | Render (free tier) | coach-xyz-engine.onrender.com |
+| Engine | Render (starter, paid) | coach-xyz-engine.onrender.com |
 | Database | Supabase (free tier) | tocfriargasmbpufmxzg.supabase.co |
 | Queue | Upstash Redis (free tier) | — |
 
 ### 8.2 Free-Tier Constraints
 
-- **Render free tier:** Services spin down after 15min inactivity. Keep-alive pings every 8–10min.
+- **Render server (free):** Spins down after 15 min inactivity. Kept warm by the keepalive workflow
+  (`.github/workflows/keepalive.yml` pings `/health` every 9 min) so the BullMQ worker never stalls —
+  the engine is on a paid plan, so the server can use the full ~720 h/mo of the 750 h free budget.
+  If the keep-alive is removed, expect ~1 min cold starts and stalled queued jobs until the next request.
+- **Render engine (starter):** Paid plan required — free tier's 15min spin-down kills in-flight background analyses and wipes `/tmp/storage`. Engine storage is local-only, so videos are still lost on deploy/restart.
 - **Upstash free tier:** 10,000 commands/day, 256MB storage
 - **Supabase free tier:** 500MB database, pausing after inactivity
 - **Vercel free tier:** 100GB bandwidth/month
 
 ### 8.3 Keep-Alive Strategy
 
+Only the **server** is kept alive (it hosts the queue worker); the engine is paid and stays up on its own.
+
 | Component | Interval | Target |
 |---|---|---|
-| Frontend → Server | 8 min | `GET /health` |
-| Server → Engine | 10 min | `GET /health` |
+| keepalive → Server | 9 min | `GET /health` (GitHub Actions cron) |
 | Engine session eviction | 5 min | In-memory cleanup (`_evict_old_sessions`) |
 | BullMQ stuck recovery | 10 min | Jobs active > 13 min → `moveToFailed` (1 min buffer over 12-min timeout) |
 

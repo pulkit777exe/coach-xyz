@@ -34,7 +34,7 @@
     {
       "label": "Engine: Start Dev Server",
       "type": "shell",
-      "command": "cd engine && python3 -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload",
+      "command": "cd engine && ./.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload",
       "group": "none",
       "presentation": {
         "reveal": "always",
@@ -45,7 +45,7 @@
     {
       "label": "Engine: Install Dependencies",
       "type": "shell",
-      "command": "cd engine && pip install -r requirements.txt",
+      "command": "cd engine && python3 -m venv .venv && ./.venv/bin/pip install --upgrade pip && ./.venv/bin/pip install -r requirements.txt",
       "group": "none",
       "presentation": {
         "reveal": "always",

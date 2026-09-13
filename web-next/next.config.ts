@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+const API_PROXY = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+const isDev = process.env.NODE_ENV !== "production";
+const connectSrc = ["'self'", "https://*.sentry.io", "https://*.upstash.io", API_PROXY];
+if (isDev) connectSrc.push("http://localhost:*");
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
@@ -15,13 +21,11 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
-      "connect-src 'self' http://localhost:* https://*.sentry.io https://*.upstash.io https://coachai-server.onrender.com",
+      `connect-src ${connectSrc.join(" ")}`,
       "worker-src 'self' blob:",
     ].join("; "),
   },
 ];
-
-const API_PROXY = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   async headers() {
