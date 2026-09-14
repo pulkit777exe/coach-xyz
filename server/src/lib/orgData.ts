@@ -37,6 +37,7 @@ export type Student = {
   notes: string | null
   status: (typeof STUDENT_STATUSES)[number]
   joined_on: string | null
+  account_auth0_id: string | null
   created_at: string
   updated_at: string
 }
@@ -156,6 +157,29 @@ export const getStudent = async (auth0Id: string, id: string): Promise<Student |
       select * from students where auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
     return rows?.[0] ?? null
+  })
+}
+
+export type LinkedPlayer = {
+  student: Student
+  coachAuth0Id: string
+}
+
+/**
+ * Resolves the student a player account is linked to (via their Auth0 id).
+ * Returns the student row plus the owning coach's auth0_id so the player
+ * routes can scope every query to the correct org.
+ */
+export const getLinkedPlayer = async (
+  accountAuth0Id: string,
+): Promise<LinkedPlayer | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Student[]>`
+      select * from students where account_auth0_id = ${accountAuth0Id} limit 1;
+    `
+    if (!rows?.[0]) return null
+    return { student: rows[0], coachAuth0Id: rows[0].auth0_id }
   })
 }
 

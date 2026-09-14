@@ -148,6 +148,9 @@ export default function StudentFormDialog({
                 value={values.email ?? ""}
                 onChange={(e) => set("email", e.target.value)}
               />
+              <p className="text-muted-foreground text-xs">
+                Use the student’s login email to auto-link their player account.
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone</Label>

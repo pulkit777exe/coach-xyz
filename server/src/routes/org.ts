@@ -33,6 +33,7 @@ import {
   type AttendanceStatus,
 } from "../lib/orgData"
 import { buildError } from "../lib/errors"
+import { serviceGuard } from "../lib/serviceGuard"
 import { isDate, isIsoDate, defaultReportTitle } from "../lib/orgValidate"
 import { linkAnalysisToStudent } from "../lib/supabaseHistory"
 import {
@@ -83,6 +84,7 @@ const parseScheduleInput = (body: Record<string, unknown>) => {
 }
 
 export default new Elysia()
+  .use(serviceGuard)
   // ── Students ───────────────────────────────────────────────────────────────
   .get("/api/org/:auth0Id/students", async ({ params, request, set }) => {
     const { auth0Id } = params

@@ -1,10 +1,8 @@
-import { apiFetch } from "./api"
+import { apiFetch, IDENTITY_BASE } from "./api"
 import type { DashboardAnalysis } from "./api"
 
-const BASE = process.env.NEXT_PUBLIC_API_URL
-
 const org = (auth0Id: string, path: string) =>
-  `${BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
+  `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +75,7 @@ export type Student = {
   notes: string | null
   status: StudentStatus
   joined_on: string | null
+  account_auth0_id: string | null
   created_at: string
   updated_at: string
 }

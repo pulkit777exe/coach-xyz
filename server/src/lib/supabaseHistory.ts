@@ -9,6 +9,7 @@ import {
   REPORT_TYPES,
   STUDENT_STATUSES,
 } from "./orgEnums"
+import { USER_ROLES } from "./userRoles"
 
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
@@ -239,6 +240,8 @@ export const ensureInitialized = async () => {
           picture text,
           email_verified boolean default false,
           linked_auth0_ids text[] default '{}',
+          role text not null default 'coach'
+            constraint users_role_check check (role in ${inList(USER_ROLES)}),
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -250,6 +253,20 @@ export const ensureInitialized = async () => {
       await sql`
         create index if not exists idx_users_email
         on users (email);
+      `
+      // User roles (two faces): add role to existing DBs idempotently, then
+      // attach the CHECK constraint if it isn't already there.
+      await sql`alter table users add column if not exists role text not null default 'coach';`
+      await sql`
+        do $$
+        begin
+          if not exists (
+            select 1 from pg_constraint where conname = 'users_role_check'
+          ) then
+            alter table users add constraint users_role_check
+              check (role in (${USER_ROLES.map((r) => `'${r}'`).join(", ")}));
+          end if;
+        end $$;
       `
 
       // Add auth0_id columns to existing tables (idempotent)
@@ -305,6 +322,7 @@ export const ensureInitialized = async () => {
           status text not null default 'active'
             check (status in ${inList(STUDENT_STATUSES)}),
           joined_on date,
+          account_auth0_id text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
@@ -312,6 +330,11 @@ export const ensureInitialized = async () => {
       await sql`
         create index if not exists idx_students_auth0_id
         on students (auth0_id);
+      `
+      await sql`alter table students add column if not exists account_auth0_id text;`
+      await sql`
+        create index if not exists idx_students_account_auth0_id
+        on students (account_auth0_id);
       `
 
       await sql`
@@ -669,8 +692,39 @@ export type UserRecord = {
   picture: string | null
   email_verified: boolean
   linked_auth0_ids: string[]
+  role: "coach" | "player"
   created_at: string
   updated_at: string
+}
+
+/**
+ * Links a user to the student row matching their email (two-faces player flow).
+ * Called when a brand-new user logs in with an email that a coach registered on
+ * a student record. Marks the student as linked to this account and flips the
+ * user's role to `player`.
+ */
+const linkPlayerToStudent = async (
+  db: SQL,
+  sub: string,
+  email: string,
+): Promise<boolean> => {
+  const matches = await db<{ id: string }[]>`
+    select id from students
+    where email = ${email}
+      and (account_auth0_id is null or account_auth0_id = ${sub})
+    limit 1;
+  `
+  if (!matches?.[0]) return false
+
+  await db`
+    update students set account_auth0_id = ${sub}, updated_at = now()
+    where id = ${matches[0].id};
+  `
+  await db`
+    update users set role = 'player', updated_at = now()
+    where auth0_id = ${sub};
+  `
+  return true
 }
 
 export const upsertUser = async (user: {
@@ -732,13 +786,25 @@ export const upsertUser = async (user: {
       }
     }
 
-    // New user — create record
+    // New user — create record. Defaults to 'coach'; if this email belongs to a
+    // student a coach enrolled, the account is linked and flipped to 'player'.
     const rows = await db<UserRecord[]>`
       insert into users (auth0_id, email, name, nickname, picture, email_verified)
       values (${user.sub}, ${user.email || null}, ${user.name || null}, ${user.nickname || null}, ${user.picture || null}, ${user.email_verified || false})
       returning *;
     `
-    return rows?.[0] ?? null
+    const created = rows?.[0] ?? null
+
+    if (created && user.email) {
+      const linked = await linkPlayerToStudent(db, user.sub, user.email)
+      if (linked) {
+        const fresh = await db<UserRecord[]>`
+          select * from users where auth0_id = ${user.sub} limit 1;
+        `
+        return fresh?.[0] ?? created
+      }
+    }
+    return created
   })
 }
 

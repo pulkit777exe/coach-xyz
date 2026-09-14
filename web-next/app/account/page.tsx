@@ -4,6 +4,7 @@ import { auth0 } from "@/lib/auth0";
 import { syncUser } from "@/lib/api";
 import { redirect } from "next/navigation";
 import UserAvatar from "@/components/UserAvatar";
+import { USER_ROLE_LABELS } from "@/lib/userRoles";
 
 export const metadata: Metadata = {
   title: "Account | CoachXYZ",
@@ -126,6 +127,14 @@ export default async function AccountPage() {
               Database Record
             </p>
             <div className="space-y-0">
+              <div className="flex justify-between items-baseline py-3 border-b border-(--cream-05)">
+                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
+                  Role
+                </span>
+                <span className="text-sm text-(--fg)">
+                  {user.role ? USER_ROLE_LABELS[user.role] ?? user.role : "—"}
+                </span>
+              </div>
               <div className="flex justify-between items-baseline py-3 border-b border-(--cream-05)">
                 <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
                   Created

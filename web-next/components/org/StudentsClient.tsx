@@ -338,6 +338,11 @@ export default function StudentsClient({
                       <div className="min-w-0">
                         <p className="text-foreground truncate font-medium">{s.full_name}</p>
                         <p className="text-muted-foreground truncate text-xs">{s.email || s.phone || "—"}</p>
+                        {s.account_auth0_id && (
+                          <p className="text-muted-foreground mt-0.5 text-[0.6rem] uppercase tracking-[0.15em]">
+                            • linked to player account
+                          </p>
+                        )}
                       </div>
                     </Link>
                   </td>

@@ -1,0 +1,88 @@
+import { apiFetch, IDENTITY_BASE, type UserRecord } from "./api"
+import type {
+  AttendanceWithStudent,
+  AttendanceSummary,
+  PerformanceSeriesPoint,
+  ReportRecord,
+  ScheduleEvent,
+  Student,
+} from "./org"
+
+// ── Player Hub API ──────────────────────────────────────────────────────────
+// Self-scoped ("/api/me/*") read-only endpoints for the player/student face.
+// Identity is guaranteed by the browser session (client) or service headers
+// (server) — never by a caller-supplied auth0Id.
+
+export type MyProfile = {
+  user: UserRecord | null
+  student: Student | null
+  coach_auth0_id: string | null
+}
+
+export type MyAttendance = {
+  records: AttendanceWithStudent[]
+  summary: AttendanceSummary | null
+  linked: boolean
+}
+
+export type MySchedule = {
+  events: ScheduleEvent[]
+  linked: boolean
+}
+
+export type MyPerformance = {
+  points: PerformanceSeriesPoint[]
+  linked: boolean
+}
+
+export type MyAnalyses = {
+  analyses: DashboardPlayerAnalysis[]
+  linked: boolean
+}
+
+export type DashboardPlayerAnalysis = {
+  server_job_id: string
+  engine_job_id: string
+  model: string
+  complete: boolean
+  video_ready: boolean
+  summary_json: unknown
+  display_name: string | null
+  requested_at: string
+  completed_at: string | null
+}
+
+export type MyReports = {
+  reports: Array<ReportRecord & { full_name: string | null }>
+  linked: boolean
+}
+
+const me = (path: string) => `${IDENTITY_BASE}/api/me${path}`
+
+export async function getMyProfile(): Promise<MyProfile> {
+  return apiFetch<MyProfile>(me("/profile"))
+}
+
+export async function getMyAttendance(): Promise<MyAttendance> {
+  return apiFetch<MyAttendance>(me("/attendance"))
+}
+
+export async function getMySchedule(): Promise<MySchedule> {
+  return apiFetch<MySchedule>(me("/schedule"))
+}
+
+export async function getMyPerformance(): Promise<MyPerformance> {
+  return apiFetch<MyPerformance>(me("/performance"))
+}
+
+export async function getMyAnalyses(): Promise<MyAnalyses> {
+  return apiFetch<MyAnalyses>(me("/analyses"))
+}
+
+export async function getMyReports(): Promise<MyReports> {
+  return apiFetch<MyReports>(me("/reports"))
+}
+
+export async function getMyReport(id: string): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
+  return apiFetch(me(`/reports/${encodeURIComponent(id)}`))
+}

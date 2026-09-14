@@ -99,7 +99,11 @@ coach-xyz/
 ├── web-next/                  # Frontend (Next.js + React)
 │   ├── app/page.tsx           # Home — renders AppClient (SPA pipeline)
 │   ├── app/account/page.tsx   # Account / profile page (Auth0 session)
-│   ├── app/dashboard/         # Dashboard (requires Auth0 session)
+│   ├── app/api/service/[[...path]]/route.ts  # Identity proxy (org/auth/me/sync)
+│   ├── app/player/           # Player Hub (read-only face)
+│   │   ├── layout.tsx         # Player shell (session required)
+│   │   └── page.tsx           # Role gate → PlayerHub
+│   ├── app/dashboard/         # Dashboard (requires Auth0 session; role gate → /player)
 │   │   ├── layout.tsx         # Sidebar layout with DashboardNav
 │   │   ├── page.tsx           # Overview — stats + recent analyses
 │   │   ├── history/page.tsx   # Paginated analysis history
@@ -151,7 +155,9 @@ coach-xyz/
 │   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
 │   │   ├── download.ts        # GET /api/download/:jobId — stream result video
 │   │   ├── chat.ts            # POST /api/chat — V2 chat proxy to engine
-│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history
+│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history (guarded)
+│   │   ├── org.ts             # /api/org/:auth0Id/* — coach org CRUD (guarded)
+│   │   ├── me.ts              # /api/me/* — player read-only hub (guarded, self-scoped)
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
 │   │   ├── queue.ts           # BullMQ queue + worker + shutdown
@@ -159,6 +165,10 @@ coach-xyz/
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
 │   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
+│   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
+│   │   ├── orgEnums.ts        # Shared org vocab (values/order contract w/ web lib/org.ts)
+│   │   ├── orgData.ts         # Student/attendance/schedule/reports/performance queries
+│   │   ├── userRoles.ts       # coach/player role vocab (contract w/ web lib/userRoles.ts)
 │   │   ├── supabaseHistory.ts # PostgreSQL history + user + chat persistence
 │   │   ├── conversation.ts    # Redis-backed conversation storage (V2)
 │   │   └── errors.ts          # Error types and builders
@@ -255,8 +265,15 @@ coach-xyz/
 **users**
 - Primary key: `id` (UUID)
 - Unique: `auth0_id`
-- Fields: auth0_id, email, name, nickname, picture, email_verified, created_at, updated_at
-- Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`
+- Fields: auth0_id, email, name, nickname, picture, email_verified, `linked_auth0_ids` (text[]), `role` (text, 'coach' | 'player', default 'coach', CHECK constraint), created_at, updated_at
+- Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`. `role` defaults to `coach` (first account is a coach); a player's role is flipped to `player` when their login email auto-links to a student row. `linked_auth0_ids` merges multiple providers on one account.
+
+**students** (org — scoped by owning coach `auth0_id`)
+- Fields (in `server/src/lib/orgData.ts`): full_name, email, phone, sport, position, jersey_number, date_of_birth, gender, guardian_name, guardian_phone, notes, status (CHECK: STUDENT_STATUSES), joined_on, `account_auth0_id` (player login link, indexed), created_at, updated_at
+- Purpose: the coach's roster. A player's account is linked to their student row by email on first player login (`account_auth0_id` set, user `role` → 'player').
+
+**attendance** / **schedule_events** / **reports** / **performance_metrics** (org)
+- All scoped by owning coach `auth0_id`; attendance/performance also reference `student_id`. Player read-only views query these with the coach scope + the linked student. (CHECK constraints pin the shared vocab in `server/src/lib/orgEnums.ts`, mirrored contractually in `web-next/lib/org.ts`.)
 
 **chat_messages**
 - Primary key: `id` (UUID)
@@ -410,10 +427,41 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - **Session check:** `auth0.getSession()` called in every protected server component
 - **Protected routes:** `/dashboard/*`, `/account` — redirect to `/auth/login` when session absent
 - **User identity:** `session.user.sub` (Auth0 subject claim, e.g. `google-oauth2|123` or `github|456`)
-- **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table
+- **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table. New accounts default to `role = 'coach'` (first account is a coach); when the login email matches a student row, the account is auto-linked (`students.account_auth0_id` set) and its role flips to `player`.
 - **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
 - **Logout:** `/auth/logout` (Auth0 SDK route)
 - **`auth0_id` propagation:** Frontend sends `x-auth0-id` header on scan and analyze requests; server stores it in `video_conversations.auth0_id` and `analysis_history.auth0_id`
+
+### Identity Boundary (service-to-service, two-faces)
+
+The backend never trusts a client-supplied auth0Id. The Next app is the identity boundary for user-scoped data:
+
+- **Guard** (`server/src/lib/serviceGuard.ts`): an Elysia `onBeforeHandle` plugin applied to `auth.ts`/`org.ts`/`me.ts`. When `SERVICE_TOKEN` is set on the server it requires `x-service-token` to match and `x-verified-auth0-id` to equal the path `:auth0Id` (or `body.sub` for `/api/auth/sync`, or be present for self-scoped `/api/me/*`). Returns 403 otherwise. When `SERVICE_TOKEN` is unset the guard is inert (local dev back-compat) and logs a one-time warning.
+- **Proxy** (`web-next/app/api/service/[[...path]]/route.ts`): same-origin handler for identity-bearing routes only (`/api/org/*`, `/api/auth/user/*`, `/api/auth/sync`, `/api/me/*`). Reads the Auth0 session, rejects a verified sub that doesn't match the path resource owner, then injects `x-service-token` + `x-verified-auth0-id` before forwarding. Requires `auth0.getSession()` (401 otherwise).
+- **Client routing** (`web-next/lib/api.ts` `IDENTITY_BASE`, `web-next/lib/org.ts`): identity-bearing calls use `/api/service` when running in the browser (proxy) and the backend directly with service headers when running server-side (server components).
+- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite.
+
+### Roles (two-faces)
+
+- **Vocabulary:** `server/src/lib/userRoles.ts` ↔ `web-next/lib/userRoles.ts`; values/order pinned by the `userRolesContract` tests on both sides.
+- **Enforcement server-side:** `users.role` CHECK `('coach','player')`; sync logic flips to `player` on email-linked first login.
+- **Enforcement client-side:** `app/dashboard/layout.tsx` redirects `role === 'player'` → `/player`; `app/player/page.tsx` redirects coaches → `/dashboard`. Pure enforcement lives in the server guard; the UI gates are UX layer only.
+
+### Player (read-only Hub) Routes (CONFIRMED — `server/src/routes/me.ts`)
+
+Self-scoped — identity is the verified `x-verified-auth0-id` header, never a caller-supplied id.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/me/profile` | Own user record + linked student + coach auth0_id |
+| `GET /api/me/attendance` | Own attendance records + summary |
+| `GET /api/me/schedule` | Team schedule (owning coach's org) |
+| `GET /api/me/performance` | Own performance trend (analysis + manual points) |
+| `GET /api/me/analyses` | Analyses linked to player's student row |
+| `GET /api/me/reports` | Reports mentioning the player |
+| `GET /api/me/reports/:id` | Single report (must belong to the linked student) |
+
+All resolve the linked student via `students.account_auth0_id` and scope queries by the owning coach's `auth0_id` + `student_id`. UI: `app/player/*` (server shell + role gate) + `components/player/PlayerHub.tsx` (client fetch via `web-next/lib/meApi.ts`).
 
 ### Auth Routes (CONFIRMED — `server/src/routes/auth.ts`)
 
@@ -623,8 +671,8 @@ Previously documented as dead and since **deleted** from the repo — `pipeline.
 | Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
 | Pipeline states | `engine/core/jobs.py` |
 | Test suite: 103 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 49 tests pass | `cd server && bun test` |
-| Test suite: 32 tests pass | `cd web-next && npx vitest run` |
+| Test suite: 72 tests pass | `cd server && bun test` |
+| Test suite: 82 tests pass | `cd web-next && npx vitest run` |
 | Dead code: baseline.py | `grep -rn "baseline" engine/core/*.py engine/main.py` only self-references |
 | Dead code: player_tracker.py/chunker.py | only imported by `engine/cli/` |
 | Dead code: InlineRename.tsx | `grep -rn "InlineRename" web-next/` only matches its own file |

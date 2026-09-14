@@ -11,6 +11,7 @@ import {
   getChatMessages,
 } from "../lib/supabaseHistory"
 import { buildError } from "../lib/errors"
+import { serviceGuard } from "../lib/serviceGuard"
 
 function generateSimpleResponse(question: string, summary: Record<string, unknown> | null): string {
   if (!summary) {
@@ -51,6 +52,7 @@ function generateSimpleResponse(question: string, summary: Record<string, unknow
 }
 
 export default new Elysia()
+  .use(serviceGuard)
   .post("/api/auth/sync", async ({ body, set }) => {
     const { sub, email, name, nickname, picture, email_verified } = body as {
       sub: string

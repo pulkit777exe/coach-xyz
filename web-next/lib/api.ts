@@ -7,6 +7,39 @@ if (!BASE) {
   console.error('Missing NEXT_PUBLIC_API_URL environment variable. API calls will fail.')
 }
 
+// Identity-bearing routes (org + auth/user) always go through the verified
+// identity boundary:
+//  - server-side (server components): backend directly, with service headers
+//    injected in apiFetch
+//  - client-side: the same-origin Next proxy (/api/service), which verifies
+//    the session and injects those headers
+export const IDENTITY_BASE =
+  typeof window === 'undefined'
+    ? process.env.NEXT_PUBLIC_API_URL
+    : '/api/service'
+
+function identityFromRequest(url: string, body?: BodyInit | null): string | undefined {
+  let path = url
+  try {
+    path = new URL(url).pathname
+  } catch {
+    // relative url — keep as-is
+  }
+
+  const scoped = path.match(/\/api\/(?:org|auth\/user)\/([^/]+)/)
+  if (scoped) return decodeURIComponent(scoped[1])
+
+  if (path.endsWith('/api/auth/sync') && typeof body === 'string') {
+    try {
+      const parsed = JSON.parse(body) as { sub?: unknown }
+      if (typeof parsed.sub === 'string') return parsed.sub
+    } catch {
+      // not JSON — the backend will reject it
+    }
+  }
+  return undefined
+}
+
 export type { CoachAIError }
 
 // ── API Client ───────────────────────────────────────────────────────────────
@@ -19,6 +52,17 @@ export async function apiFetch<T>(
   const headers: Record<string, string> = {
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string> ?? {}),
+  }
+
+  // Server-side calls to identity-bearing routes go directly to the backend
+  // and carry the service token + verified identity. (Client-side calls reach
+  // the backend through the /api/service proxy, which injects these.)
+  if (typeof window === 'undefined') {
+    const identity = identityFromRequest(url, options.body)
+    if (identity) {
+      if (process.env.SERVICE_TOKEN) headers['x-service-token'] = process.env.SERVICE_TOKEN
+      headers['x-verified-auth0-id'] = identity
+    }
   }
 
   let res: Response
@@ -299,6 +343,7 @@ export type UserRecord = {
   nickname: string | null
   picture: string | null
   email_verified: boolean
+  role: 'coach' | 'player'
   created_at: string
   updated_at: string
 }
@@ -311,7 +356,7 @@ export async function syncUser(user: {
   picture?: string
   email_verified?: boolean
 }): Promise<{ user: UserRecord }> {
-  return apiFetch<{ user: UserRecord }>(`${BASE}/api/auth/sync`, {
+  return apiFetch<{ user: UserRecord }>(`${IDENTITY_BASE}/api/auth/sync`, {
     method: 'POST',
     body: JSON.stringify(user),
   })
@@ -357,7 +402,7 @@ export async function getDashboardAnalyses(
   offset = 0,
 ): Promise<{ analyses: DashboardAnalysis[] }> {
   return apiFetch<{ analyses: DashboardAnalysis[] }>(
-    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?limit=${limit}&offset=${offset}`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?limit=${limit}&offset=${offset}`,
   )
 }
 
@@ -366,7 +411,7 @@ export async function getDashboardAnalysisDetail(
   jobId: string,
 ): Promise<{ analysis: DashboardAnalysis }> {
   return apiFetch<{ analysis: DashboardAnalysis }>(
-    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
   )
 }
 
@@ -374,7 +419,15 @@ export async function getDashboardStats(
   auth0Id: string,
 ): Promise<{ stats: DashboardStats }> {
   return apiFetch<{ stats: DashboardStats }>(
-    `${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/stats`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/stats`,
+  )
+}
+
+export async function getUserProfile(
+  auth0Id: string,
+): Promise<{ user: UserRecord }> {
+  return apiFetch<{ user: UserRecord }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}`,
   )
 }
 
@@ -383,7 +436,7 @@ export const renameAnalysis = async (
   jobId: string,
   displayName: string,
 ): Promise<{ analysis: DashboardAnalysis }> => {
-  return apiFetch<{ analysis: DashboardAnalysis }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
+  return apiFetch<{ analysis: DashboardAnalysis }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ display_name: displayName }),
@@ -394,7 +447,7 @@ export const getHistoryChatMessages = async (
   auth0Id: string,
   jobId: string,
 ): Promise<{ messages: ChatMessage[] }> => {
-  return apiFetch<{ messages: ChatMessage[] }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`)
+  return apiFetch<{ messages: ChatMessage[] }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`)
 }
 
 export const sendHistoryChatMessage = async (
@@ -402,7 +455,7 @@ export const sendHistoryChatMessage = async (
   jobId: string,
   message: string,
 ): Promise<{ message: string; role: string }> => {
-  return apiFetch<{ message: string; role: string }>(`${BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`, {
+  return apiFetch<{ message: string; role: string }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),

@@ -1,4 +1,5 @@
 import { auth0 } from "@/lib/auth0";
+import { getUserProfile } from "@/lib/api";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UserAvatar from "@/components/UserAvatar";
@@ -19,6 +20,14 @@ export default async function DashboardLayout({
 
   if (!session) {
     redirect("/auth/login");
+  }
+
+  // Player accounts belong on /player, not the coach dashboard.
+  try {
+    const { user } = await getUserProfile(session.user.sub);
+    if (user?.role === "player") redirect("/player");
+  } catch (error) {
+    console.error("Failed to resolve dashboard role:", error);
   }
 
   return (
