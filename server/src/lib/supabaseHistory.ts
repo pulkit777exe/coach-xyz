@@ -264,7 +264,7 @@ export const ensureInitialized = async () => {
             select 1 from pg_constraint where conname = 'users_role_check'
           ) then
             alter table users add constraint users_role_check
-              check (role in (${USER_ROLES.map((r) => `'${r}'`).join(", ")}));
+              check (role in ${inList(USER_ROLES)});
           end if;
         end $$;
       `

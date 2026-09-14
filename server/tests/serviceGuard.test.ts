@@ -18,6 +18,7 @@ afterEach(() => {
 
 describe("verifyServiceIdentity", () => {
   test("allows requests when the guard is disabled (no SERVICE_TOKEN)", () => {
+    setToken(undefined)
     expect(verifyServiceIdentity(null, null, "auth0|someone")).toEqual({ ok: true })
   })
 
