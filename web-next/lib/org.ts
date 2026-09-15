@@ -505,6 +505,67 @@ export const orgOverview = async (
   return apiFetch<{ overview: OrgOverview }>(org(auth0Id, "/overview"))
 }
 
+// ── Global search ────────────────────────────────────────────────────────────
+
+export type SearchItem = {
+  id: string
+  label: string
+  subtitle: string | null
+}
+
+export type OrgSearchResult = {
+  students: SearchItem[]
+  schedule: SearchItem[]
+  reports: SearchItem[]
+  analyses: SearchItem[]
+}
+
+export const orgSearch = async (
+  auth0Id: string,
+  query: string,
+): Promise<OrgSearchResult> => {
+  return apiFetch<OrgSearchResult>(
+    org(auth0Id, `/search?q=${encodeURIComponent(query)}`),
+  )
+}
+
+// ── Email (Resend) ───────────────────────────────────────────────────────────
+
+export type EmailSendOutcome = {
+  to: string
+  ok: boolean
+}
+
+export const orgSendInvites = async (
+  auth0Id: string,
+  input: { emails: string[]; student_ids?: string[] },
+): Promise<{ sent: EmailSendOutcome[]; total: number; failed: number }> => {
+  return apiFetch(org(auth0Id, "/email/invite"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export const orgEmailReport = async (
+  auth0Id: string,
+  input: { report_id: string; to?: string },
+): Promise<{ sent: { id: string | null; to: string; subject: string } }> => {
+  return apiFetch(org(auth0Id, "/email/report"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export const orgEmailAttendance = async (
+  auth0Id: string,
+  input: { student_id?: string; from?: string; to?: string; recipient?: string },
+): Promise<{ sent: unknown; records: number }> => {
+  return apiFetch(org(auth0Id, "/email/attendance"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
 export const linkAnalysisToStudent = async (
   auth0Id: string,
   jobId: string,

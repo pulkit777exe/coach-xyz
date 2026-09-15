@@ -63,6 +63,17 @@ export async function getMyProfile(): Promise<MyProfile> {
   return apiFetch<MyProfile>(me("/profile"))
 }
 
+export async function updateMyProfile(input: {
+  name?: string | null
+  nickname?: string | null
+  picture?: string | null
+}): Promise<{ user: UserRecord }> {
+  return apiFetch<{ user: UserRecord }>(me("/profile"), {
+    method: "PUT",
+    body: JSON.stringify(input),
+  })
+}
+
 export async function getMyAttendance(): Promise<MyAttendance> {
   return apiFetch<MyAttendance>(me("/attendance"))
 }

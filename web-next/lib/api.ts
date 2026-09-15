@@ -26,7 +26,7 @@ function identityFromRequest(url: string, body?: BodyInit | null): string | unde
     // relative url — keep as-is
   }
 
-  const scoped = path.match(/\/api\/(?:org|auth\/user)\/([^/]+)/)
+  const scoped = path.match(/\/api\/(?:org|email|auth\/user)\/([^/]+)/)
   if (scoped) return decodeURIComponent(scoped[1])
 
   if (path.endsWith('/api/auth/sync') && typeof body === 'string') {

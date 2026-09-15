@@ -4,9 +4,11 @@
 /**
  * /api/org/:auth0Id/...   → ["api", "org", :auth0Id, ...]
  * /api/auth/user/:auth0Id/... → ["api", "auth", "user", :auth0Id, ...]
+ * /api/email/:auth0Id/... → ["api", "email", :auth0Id, ...]
  */
 export function resourceAuth0Id(path: string[]): string | undefined {
   if (path.length >= 3 && path[0] === "api" && path[1] === "org") return path[2]
+  if (path.length >= 3 && path[0] === "api" && path[1] === "email") return path[2]
   if (path.length >= 4 && path[0] === "api" && path[1] === "auth" && path[2] === "user") {
     return path[3]
   }
