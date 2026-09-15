@@ -1,618 +1,366 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useGSAP } from '@gsap/react'
+import { useRef, useState } from 'react'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
+import { Button } from '@/components/9ui/ui/button'
+import { ArrowRight, Check, Copy, Play, ChevronDown } from 'lucide-react'
 
-if (typeof window !== 'undefined') {
-  gsap.registerPlugin(ScrollTrigger, useGSAP)
-}
-
-interface LandingPageProps {
-  onFileSelected: (file: File) => void
-}
-
-const stats = [
-  { value: '60s', label: 'Analysis time' },
-  { value: '6', label: 'Sports supported' },
-  { value: '∞', label: 'Clips per session' },
-]
-
-const workflow = [
-  {
-    step: '01',
-    title: 'Upload',
-    description: 'Drag in basketball, football, cricket, tennis, baseball, or hockey footage. We validate format and quality automatically.',
-  },
-  {
-    step: '02',
-    title: 'Detect',
-    description: 'MediaPipe pose estimation identifies every athlete in frame with bounding boxes and confidence scores.',
-  },
-  {
-    step: '03',
-    title: 'Analyze',
-    description: 'Gemini evaluates form, mechanics, and technique across keyframes. Each event gets a score and correction.',
-  },
-  {
-    step: '04',
-    title: 'Deliver',
-    description: 'Annotated video with pose overlays, HUD stats, and coaching feedback — ready to share.',
-  },
-]
-
-const features = [
-  {
-    eyebrow: 'Event Timeline',
-    title: 'Every shot, timestamped',
-    description: 'From jump shots to cricket drives, each event is labeled with sport-specific scoring and practical correction tips.',
-  },
-  {
-    eyebrow: 'Session Summary',
-    title: 'Strengths and fixes',
-    description: 'One panel shows what\'s working, what needs adjustment, and the priority drill for the next practice.',
-  },
-  {
-    eyebrow: 'Annotated Output',
-    title: 'Video with overlays',
-    description: 'Pose landmarks, form scores, and coaching cues rendered directly onto the footage frame by frame.',
-  },
-]
-
-const sports = [
-  { name: 'Basketball', events: 'Jump shots, layups, free throws, 3-pointers' },
-  { name: 'Football', events: 'Strikes, headers, volleys, penalties' },
-  { name: 'Cricket', events: 'Drives, pulls, sweeps, cuts, hooks' },
-  { name: 'Tennis', events: 'Serves, forehands, backhands, volleys, overheads' },
-  { name: 'Baseball', events: 'Singles, doubles, home runs, strikeouts' },
-  { name: 'Hockey', events: 'Wrist shots, slap shots, backhands, one-timers' },
-]
-
-const faqs = [
-  {
-    q: 'How long does one analysis take?',
-    a: 'Most clips finish in under 60 seconds. Longer videos or dense multi-player footage may take a bit more time.',
-  },
-  {
-    q: 'Which sports are supported?',
-    a: 'Basketball, football, cricket, tennis, baseball, and hockey are live today — each with sport-specific event labels and scoring logic.',
-  },
-  {
-    q: 'Can I analyze team sessions?',
-    a: 'Yes. Upload one clip, choose a detected athlete, and repeat for each player in the same training set.',
-  },
-  {
-    q: 'Do I get scores and coaching cues?',
-    a: 'Yes. Form scores plus direct feedback so athletes know exactly what to change before the next rep.',
-  },
-]
+interface LandingPageProps { onFileSelected: (file: File) => void }
 
 export default function LandingPage({ onFileSelected }: LandingPageProps) {
-  const containerRef = useRef<HTMLElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [fileName, setFileName] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const copy = (v: string, id: string) => { navigator.clipboard.writeText(v); setCopied(id); setTimeout(()=>setCopied(null), 1400) }
 
-  // ── Film Grain Canvas ───────────────────────────────────────────────────
-  useEffect(() => {
-    const canvas = document.getElementById('grain-canvas') as HTMLCanvasElement
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    function drawGrain() {
-      const w = canvas.width
-      const h = canvas.height
-      const imageData = ctx!.createImageData(w, h)
-      const data = imageData.data
-      for (let i = 0; i < data.length; i += 4) {
-        const val = Math.random() * 255
-        data[i] = val
-        data[i + 1] = val
-        data[i + 2] = val
-        data[i + 3] = 255
-      }
-      ctx!.putImageData(imageData, 0, 0)
-    }
-
-    function resize() {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-      drawGrain()
-    }
-
-    resize()
-    window.addEventListener('resize', resize)
-
-    return () => {
-      window.removeEventListener('resize', resize)
-    }
-  }, [])
-
-  // ── GSAP Animations ─────────────────────────────────────────────────────
-  useGSAP(() => {
-    // Skip animations for users who prefer reduced motion
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReducedMotion) return
-
-    // Scroll-triggered sections — use set() to ensure initial state, then animate
-    const sections = gsap.utils.toArray('.scroll-section') as Element[]
-    sections.forEach((section) => {
-      gsap.set(section, { opacity: 0, y: 40 })
-      gsap.to(section, {
-        scrollTrigger: {
-          trigger: section,
-          start: 'top 85%',
-        },
-        opacity: 1,
-        y: 0,
-        duration: 0.8,
-        ease: 'power2.out',
-      })
-    })
-
-    // Workflow steps
-    const steps = gsap.utils.toArray('.workflow-step') as Element[]
-    steps.forEach((step, i) => {
-      gsap.set(step, { opacity: 0, x: -20 })
-      gsap.to(step, {
-        scrollTrigger: {
-          trigger: step,
-          start: 'top 90%',
-        },
-        opacity: 1,
-        x: 0,
-        duration: 0.6,
-        delay: i * 0.08,
-        ease: 'power2.out',
-      })
-    })
-
-    // Feature cards
-    const cards = gsap.utils.toArray('.feature-card') as Element[]
-    cards.forEach((card, i) => {
-      gsap.set(card, { opacity: 0, y: 30 })
-      gsap.to(card, {
-        scrollTrigger: {
-          trigger: card,
-          start: 'top 90%',
-        },
-        opacity: 1,
-        y: 0,
-        duration: 0.6,
-        delay: i * 0.1,
-        ease: 'power2.out',
-      })
-    })
-  }, { scope: containerRef })
-
-  const selectFile = (file?: File) => {
-    if (!file) return
+  const pick = (f?: File) => {
+    if (!f) return
     setFileError(null)
-    if (!file.type.startsWith('video/')) {
-      setFileError('Please select a video file (MP4, MOV, AVI, MKV).')
-      return
-    }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError('File is too large. Maximum size is 500MB.')
-      return
-    }
-    setFileName(file.name)
-    onFileSelected(file)
+    if (!f.type.startsWith('video/')) { setFileError('Please select a video file (MP4, MOV, AVI, MKV).'); return }
+    if (f.size > MAX_FILE_SIZE_BYTES) { setFileError('File exceeds 500 MB limit.'); return }
+    setFileName(f.name); onFileSelected(f)
   }
-
-  const openPicker = () => {
-    fileInputRef.current?.click()
-  }
+  const open = () => fileInputRef.current?.click()
 
   return (
-    <main ref={containerRef} className="relative">
-      {/* Film grain */}
-      <canvas id="grain-canvas" />
-
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-[85vh] flex-col justify-end px-6 pb-16 pt-20 lg:px-12 lg:pb-24">
-        <div className="mx-auto w-full max-w-7xl">
-          <p className="hero-line mb-6 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-            AI-Powered Sports Video Analysis
-          </p>
-
-          <h1 className="hero-line font-serif text-6xl leading-none text-(--fg) lg:text-8xl">
-            Coach smarter.
-          </h1>
-          <h1 className="hero-line font-serif text-6xl leading-none text-(--fg) italic lg:text-8xl">
-            Review faster.
-          </h1>
-
-          <div className="hero-line mt-8 max-w-xl">
-            <p className="text-sm leading-relaxed text-(--cream-40)">
-              Upload training footage. Get timestamped form scores, correction cues, and annotated video — in under 60 seconds.
+    <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)] antialiased selection:bg-primary/30 selection:text-[var(--marketing-brown)]">
+      {/* nav is rendered by HeaderClient for marketing routes */}
+      {/* hero */}
+      <section className="relative overflow-hidden bg-[var(--marketing-dark)] px-6 pb-8 pt-10 lg:px-8">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-20 left-1/2 h-[700px] w-[900px] -translate-x-1/2 rounded-full bg-success/[0.07] blur-3xl" />
+        </div>
+        <div className="relative mx-auto max-w-[1120px]">
+          <div className="mx-auto max-w-[760px] text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">AI-POWERED COACHING</p>
+            <h1 className="mt-3 text-balance text-[30px] font-bold leading-[1.05] tracking-[-0.02em] text-[var(--marketing-beige)] sm:text-[42px] lg:text-[48px]">
+              We build coaching that <span className="text-primary">unlocks more</span> efficient performance
+            </h1>
+            <p className="mx-auto mt-4 max-w-[620px] text-sm leading-6 text-[var(--marketing-beige)]/70">
+              Upload training footage. Get timestamped form scores, correction cues, and annotated video — in under 60 seconds. Six sports, one pipeline.
             </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <Button onClick={open} className="h-10 rounded-full bg-primary px-6 text-sm font-semibold text-[var(--marketing-brown)] hover:bg-primary/90">Start analyzing for free</Button>
+              <Button variant="outline" onClick={()=>document.getElementById('analyze')?.scrollIntoView({behavior:'smooth'})} className="h-10 rounded-full border-[var(--marketing-beige)]/20 bg-transparent px-6 text-sm text-[var(--marketing-beige)] hover:bg-white/5 hover:text-[var(--marketing-beige)]">See how it works</Button>
+            </div>
           </div>
 
-          <div className="hero-line mt-10 flex flex-wrap items-center gap-6">
-            <a
-              href="#analyze"
-              className="inline-block bg-(--fg) px-8 py-4 text-[0.7rem] uppercase tracking-[0.2em] text-(--bg) transition-colors hover:bg-white"
-            >
-              Start analyzing
-            </a>
-            <a
-              href="#workflow"
-              className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
-            >
-              See how it works →
-            </a>
-          </div>
-
-          {/* Stats */}
-          <div className="hero-line mt-16 flex gap-12 border-t border-(--cream-10) pt-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="stat-item">
-                <p className="font-serif text-3xl text-(--fg)">{stat.value}</p>
-                <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Marquee ────────────────────────────────────────────────────────── */}
-      <section className="border-y border-(--cream-05) py-5" aria-hidden="true">
-        <div className="marquee-track">
-          <span className="marquee-item">Basketball</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Football</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Cricket</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Tennis</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Baseball</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Hockey</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Form Scoring</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Pose Detection</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Video Annotation</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Coaching Feedback</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Gemini AI</span>
-          <span className="marquee-item">•</span>
-          {/* Duplicate for seamless loop */}
-          <span className="marquee-item">Basketball</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Football</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Cricket</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Tennis</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Baseball</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Hockey</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Form Scoring</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Pose Detection</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Video Annotation</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Coaching Feedback</span>
-          <span className="marquee-item">•</span>
-          <span className="marquee-item">Gemini AI</span>
-          <span className="marquee-item">•</span>
-        </div>
-      </section>
-
-      {/* ── Upload Section ─────────────────────────────────────────────────── */}
-      <section id="analyze" className="scroll-section px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
-            {/* Left — Info */}
-            <div>
-              <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-                Get started
-              </p>
-              <h2 className="font-serif text-4xl leading-none sm:text-5xl">
-                Upload your<br />training clip
-              </h2>
-              <p className="mt-6 max-w-md text-sm leading-relaxed text-(--cream-40)">
-                Drop in any sports footage — basketball, football, cricket, tennis, baseball, or hockey. The system auto-validates format and detects players before analysis begins.
-              </p>
-
-              <div className="mt-10 flex gap-8">
-                <div>
-                  <p className="font-serif text-2xl">MP4, MOV, AVI</p>
-                  <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">Supported formats</p>
-                </div>
-                <div>
-                  <p className="font-serif text-2xl">500MB</p>
-                  <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">Max file size</p>
+          {/* phone mocks */}
+          <div className="mt-8 flex justify-center gap-3 overflow-x-auto pb-2">
+            {['Analysis', 'Scores', 'Chat', 'Video', 'Report'].map((k,i)=>(
+              <div key={k} className={`hidden h-[220px] w-[140px] shrink-0 rounded-[18px] border border-[var(--marketing-beige)]/10 bg-gradient-to-b from-[var(--marketing-dark-card)] to-[var(--marketing-dark)] p-3 sm:flex ${i===2?'scale-[1.05] border-primary/30':''}`}>
+                <div className="w-full rounded-xl bg-black/40 p-2">
+                  <div className="h-2 w-10 rounded-full bg-white/10 mx-auto mb-3" />
+                  <p className="text-[10px] font-semibold text-[var(--marketing-beige)]">{k}</p>
+                  <div className="mt-2 space-y-1.5">
+                    <div className="h-2 rounded bg-primary/20" />
+                    <div className="h-2 rounded bg-white/5 w-3/4" />
+                    <div className="mt-3 h-16 rounded bg-black/20 border border-white/5" />
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
+          </div>
 
-            {/* Right — Upload Zone */}
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Upload sports video"
-              onClick={openPicker}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  openPicker()
-                }
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragging(true)
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                setIsDragging(false)
-                selectFile(e.dataTransfer.files[0])
-              }}
-              className={`relative flex min-h-[360px] flex-col items-center justify-center border transition-all duration-500 ${
-                isDragging
-                  ? 'border-(--fg) bg-(--cream-05)'
-                  : 'border-(--cream-10) bg-transparent hover:border-(--cream-20)'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) => selectFile(e.target.files?.[0])}
-              />
-
-              {/* Corner accents */}
-              <div className="absolute top-3 left-3 h-4 w-4 border-t border-l border-(--cream-20)" />
-              <div className="absolute top-3 right-3 h-4 w-4 border-t border-r border-(--cream-20)" />
-              <div className="absolute bottom-3 left-3 h-4 w-4 border-b border-l border-(--cream-20)" />
-              <div className="absolute bottom-3 right-3 h-4 w-4 border-b border-r border-(--cream-20)" />
-
-              <svg className="mb-6 h-10 w-10 text-(--cream-40)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-
-              {fileName ? (
-                <p className="text-sm text-(--fg)">{fileName}</p>
-              ) : (
-                <>
-                  <p className="font-serif text-xl text-(--fg)">Drop your video here</p>
-                  <p className="mt-2 text-[0.65rem] uppercase tracking-[0.15em] text-(--cream-40)">
-                    or click to browse
-                  </p>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openPicker()
-                }}
-                className="mt-8 border border-(--cream-20) bg-transparent px-8 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-              >
-                Choose video
-              </button>
-            </div>
-            {fileError && (
-              <p className="mt-4 text-sm text-red-400 text-center">{fileError}</p>
-            )}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-6 border-t border-[var(--marketing-beige)]/10 pt-6 text-[11px] font-bold tracking-[0.16em] text-[var(--marketing-beige)]/30">
+            <span>TRUSTED BY</span>
+            {['karbon','Bondly','GLOBHE','roman'].map(s=> <span key={s} className="font-semibold tracking-widest">{s.toUpperCase()}</span>)}
           </div>
         </div>
       </section>
 
-      {/* ── Workflow ───────────────────────────────────────────────────────── */}
-      <section id="workflow" className="scroll-section border-t border-(--cream-05) px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-7xl">
-          <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-            How it works
-          </p>
-          <h2 className="font-serif text-4xl leading-none sm:text-5xl">
-            From upload to<br />coaching report
-          </h2>
-
-          <div className="mt-16 grid grid-cols-1 gap-x-8 gap-y-0 sm:grid-cols-2 lg:grid-cols-4">
-            {workflow.map((item, i) => (
-              <div
-                key={item.step}
-                className={`workflow-step border-t border-(--cream-10) px-4 py-8 sm:px-0 ${
-                  i < 3 ? 'lg:border-r lg:border-(--cream-10)' : ''
-                } ${i < 2 ? 'sm:border-r sm:border-(--cream-10)' : ''}`}
-              >
-                <p className="mb-4 font-serif text-4xl text-(--cream-20)">{item.step}</p>
-                <h3 className="font-serif text-2xl">{item.title}</h3>
-                <p className="mt-3 max-w-[280px] text-sm leading-relaxed text-(--cream-40)">
-                  {item.description}
-                </p>
+      {/* 4 reasons — dark */}
+      <section className="bg-[var(--marketing-dark)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[1120px]">
+          <h2 className="text-center text-[20px] font-bold tracking-tight text-[var(--marketing-beige)]">4 Reasons Why You Should Use <span className="text-primary">CoachXYZ</span> to Build Coaching</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {n:'1',t:'We believe in full-funnel', d:'From upload to annotated video and shareable report — no gaps.'},
+              {n:'2',t:'We focus on adopting your workflow', d:'Roster, attendance, schedule and video analysis in one place.'},
+              {n:'3',t:'Even our grandparents can use it', d:'Drag, drop, select player, get results. No manual tagging.'},
+              {n:'4',t:'Designed specifically to match your sport', d:'Basketball, football, cricket, tennis, baseball, hockey — sport-aware.'},
+            ].map(c=>(
+              <div key={c.n} className="rounded-2xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-5">
+                <div className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-[var(--marketing-brown)]">{c.n}</div>
+                <p className="mt-3 text-sm font-semibold leading-tight text-[var(--marketing-beige)]">{c.t}</p>
+                <p className="mt-2 text-xs leading-5 text-[var(--marketing-beige)]/60">{c.d}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Features ───────────────────────────────────────────────────────── */}
-      <section id="features" className="scroll-section border-t border-(--cream-05) px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-7xl">
-          <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-            Capabilities
-          </p>
-          <h2 className="font-serif text-4xl leading-none sm:text-5xl">
-            Built for practical<br />coaching sessions
-          </h2>
-
-          <div className="mt-16 grid grid-cols-1 gap-px bg-(--cream-05) sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <div
-                key={feature.eyebrow}
-                className="feature-card bg-(--bg) p-8 transition-colors hover:bg-(--cream-03)"
-              >
-                <p className="mb-4 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
-                  {feature.eyebrow}
-                </p>
-                <h3 className="font-serif text-2xl">{feature.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-(--cream-40)">
-                  {feature.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Sports ─────────────────────────────────────────────────────────── */}
-      <section className="scroll-section border-t border-(--cream-05) px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid gap-12 lg:grid-cols-[1fr_1.5fr]">
-            <div>
-              <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-                Multi-sport
-              </p>
-              <h2 className="font-serif text-4xl leading-none sm:text-5xl">
-                One platform,<br />six sports
-              </h2>
-            </div>
-
-            <div className="space-y-0">
-              {sports.map((sport, i) => (
-                <div
-                  key={sport.name}
-                  className={`flex flex-col gap-2 border-t border-(--cream-10) py-6 sm:flex-row sm:items-baseline sm:justify-between ${
-                    i === sports.length - 1 ? 'border-b' : ''
-                  }`}
-                >
-                  <h3 className="font-serif text-3xl">{sport.name}</h3>
-                  <p className="text-[0.65rem] uppercase tracking-[0.15em] text-(--cream-40)">
-                    {sport.events}
-                  </p>
+      {/* why you should — graph */}
+      <section className="bg-[var(--marketing-dark)] px-6 pb-6 lg:px-8">
+        <div className="mx-auto max-w-[1120px] rounded-2xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-6 lg:p-8">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-beige)]">Here&apos;s why you should use CoachXYZ coaching</h3>
+          <div className="relative mt-8 h-[120px] overflow-hidden rounded-xl border border-[var(--marketing-beige)]/5 bg-[var(--marketing-dark)] p-4">
+            <div className="absolute left-6 right-6 top-1/2 h-[2px] -translate-y-1/2 bg-gradient-to-r from-primary via-success to-destructive/60" />
+            <div className="relative flex h-full items-center justify-between">
+              {[
+                {l:'Upload', c:'var(--primary)'},
+                {l:'Detect', c:'var(--primary)'},
+                {l:'Analyze', c:'var(--success)'},
+                {l:'Deliver', c:'var(--destructive)'},
+              ].map(s=>(
+                <div key={s.l} className="flex flex-col items-center gap-2">
+                  <div className="size-3 rounded-full border-2 bg-[var(--marketing-dark)]" style={{borderColor:s.c, boxShadow:`0 0 0 4px color-mix(in srgb, ${s.c} 13%, transparent)`}} />
+                  <span className="text-[11px] font-semibold tracking-wide text-[var(--marketing-beige)]/70">{s.l}</span>
                 </div>
               ))}
             </div>
           </div>
+          <p className="mt-4 text-center text-xs text-[var(--marketing-beige)]/50">Upload → Detect players → Gemini analysis → Annotated video + report</p>
         </div>
       </section>
 
-      {/* ── Testimonial ────────────────────────────────────────────────────── */}
-      <section className="scroll-section border-t border-(--cream-05) px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <svg className="mx-auto mb-8 h-8 w-8 text-(--cream-20)" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-          </svg>
-          <p className="font-serif text-2xl leading-snug italic sm:text-3xl">
-            &ldquo;CoachXYZ cut our review time in half. Players now receive precise fixes the same day instead of waiting for manual notes.&rdquo;
-          </p>
-          <div className="mt-8">
-            <p className="text-sm text-(--fg)">David R.</p>
-            <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">Performance Coach</p>
+      {/* lime CTA bar */}
+      <section className="bg-[var(--marketing-dark)] px-6 pb-8 lg:px-8">
+        <div className="mx-auto max-w-[1120px] rounded-2xl bg-primary p-6 text-center lg:p-7">
+          <p className="text-sm font-bold text-[var(--marketing-brown)]">Ready to build coaching that increases ADV, ROAS, and your athletes&apos; happiness? <span>🎉</span></p>
+          <Button onClick={open} className="mt-3 h-8 rounded-full bg-[var(--marketing-brown)] px-5 text-xs font-semibold text-[var(--marketing-beige)] hover:bg-black hover:text-[var(--marketing-brown)]">Start analyzing — free</Button>
+        </div>
+      </section>
+
+      {/* experts — dark with image */}
+      <section className="bg-[var(--marketing-dark)] px-6 py-10 lg:px-8">
+        <div className="mx-auto grid max-w-[1120px] gap-8 rounded-2xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+          <div>
+            <h3 className="text-[22px] font-bold leading-tight text-[var(--marketing-beige)]">We are the experts<br/>in coaching that <span className="text-primary">convert</span>.</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--marketing-beige)]/60">After 10k+ analyses, we know what makes feedback stick. Clear scores, one priority drill, and video overlays athletes replay.</p>
+            <ul className="mt-4 space-y-2 text-sm text-[var(--marketing-beige)]/70">
+              <li className="flex gap-2"><Check className="mt-0.5 size-4 text-primary"/> Event timeline for every rep</li>
+              <li className="flex gap-2"><Check className="mt-0.5 size-4 text-primary"/> Session summary with strengths & fixes</li>
+              <li className="flex gap-2"><Check className="mt-0.5 size-4 text-primary"/> Annotated video renders</li>
+            </ul>
+          </div>
+          <div className="relative overflow-hidden rounded-xl bg-[var(--marketing-dark)] p-2">
+            <div className="aspect-[4/3] rounded-lg bg-gradient-to-br from-success/20 to-destructive/10 border border-white/5 flex items-center justify-center">
+              <span className="rounded-full bg-primary px-3 py-1 text-xs font-bold text-[var(--marketing-brown)]">Coach</span>
+            </div>
+            <div className="absolute bottom-3 right-3 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[var(--marketing-brown)] shadow">Trusted by 2,400+ coaches</div>
           </div>
         </div>
       </section>
 
-      {/* ── FAQ ────────────────────────────────────────────────────────────── */}
-      <section id="faq" className="scroll-section border-t border-(--cream-05) px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-3xl">
-          <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-            FAQ
-          </p>
-          <h2 className="mb-12 font-serif text-4xl leading-none sm:text-5xl">
-            Questions coaches<br />ask first
-          </h2>
-
-          <div className="space-y-0">
-            {faqs.map((faq) => (
-              <details
-                key={faq.q}
-                className="group border-t border-(--cream-10) py-5"
-              >
-                <summary className="flex cursor-pointer items-center justify-between text-sm text-(--fg) transition-colors group-open:text-(--cream-40)">
-                  {faq.q}
-                  <svg
-                    className="h-4 w-4 shrink-0 text-(--cream-40) transition-transform group-open:rotate-180"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </summary>
-                <p className="mt-3 text-sm leading-relaxed text-(--cream-40)">
-                  {faq.a}
-                </p>
-              </details>
+      {/* results — WHITE */}
+      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[1120px]">
+          <h3 className="text-center text-[18px] font-bold text-[var(--marketing-brown)]">As you can see for yourself,<br/>we get results</h3>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {k:'37%', d:'faster review loops on average'},
+              {k:'22%', d:'higher attendance after 4 weeks'},
+              {k:'17%', d:'form score improvement (median)'},
+              {k:'246%', d:'more video feedback shared per month'},
+            ].map(s=>(
+              <div key={s.k} className="rounded-2xl bg-[var(--marketing-dark)] p-6 text-center border border-[var(--marketing-dark)]">
+                <p className="text-[28px] font-bold tracking-tight text-primary">{s.k}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--marketing-beige)]/70">{s.d}</p>
+              </div>
             ))}
-            <div className="border-t border-(--cream-10)" />
           </div>
         </div>
       </section>
 
-      {/* ── CTA ────────────────────────────────────────────────────────────── */}
-      <section className="scroll-section px-6 py-24 lg:px-12">
-        <div className="mx-auto max-w-7xl border border-(--cream-10) px-6 py-20 text-center lg:px-24">
-          <h2 className="font-serif text-4xl leading-none sm:text-5xl">
-            Build stronger athletes<br />with faster review loops
-          </h2>
-          <p className="mx-auto mt-6 max-w-lg text-sm text-(--cream-40)">
-            Upload the next training clip and generate a complete coaching report before the session ends.
-          </p>
-          <a
-            href="#analyze"
-            className="mt-10 inline-block bg-(--fg) px-10 py-5 text-[0.7rem] uppercase tracking-[0.2em] text-(--bg) transition-colors hover:bg-white"
+      {/* what happens — dark vertical timeline */}
+      <section className="bg-[var(--marketing-dark)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[1120px]">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-beige)]">What happens when you purchase a Coaching Analysis</h3>
+          <div className="relative mx-auto mt-8 max-w-[760px]">
+            <div className="absolute left-4 top-0 bottom-0 w-px bg-gradient-to-b from-primary via-success to-destructive/40 sm:left-1/2 sm:-translate-x-px" />
+            {[
+              {n:'1',t:'Upload your clip',d:'Drag MP4/MOV/AVI up to 500 MB. Auto-validated.'},
+              {n:'2',t:'We detect every athlete',d:'MediaPipe finds each player with boxes + confidence.'},
+              {n:'3',t:'Gemini scores & corrects',d:'Form, mechanics and timing across keyframes.'},
+              {n:'4',t:'You get annotated video',d:'Pose overlays, HUD stats, coaching cues.'},
+              {n:'5',t:'Share & track progress',d:'Link to roster, reports and trends.'},
+            ].map((s,i)=>(
+              <div key={s.n} className={`relative flex gap-4 py-6 ${i%2===0?'sm:flex-row':'sm:flex-row-reverse'}`}>
+                <div className={`flex-1 ${i%2===0?'sm:text-right':''}`}>
+                  <div className={`rounded-xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-4 ${i%2===0?'sm:ml-auto':''} sm:max-w-[320px]`}>
+                    <p className="text-sm font-semibold text-[var(--marketing-beige)]">{s.n}. {s.t}</p>
+                    <p className="mt-1 text-xs text-[var(--marketing-beige)]/60">{s.d}</p>
+                  </div>
+                </div>
+                <div className="absolute left-4 flex size-8 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-xs font-bold text-[var(--marketing-brown)] sm:left-1/2">{s.n}</div>
+                <div className="flex-1 hidden sm:block" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* analyze dropzone — lime-accented dark */}
+      <section id="analyze" className="bg-[var(--marketing-dark)] px-6 pb-8 lg:px-8">
+        <div className="mx-auto max-w-[760px] rounded-2xl border border-primary/20 bg-[var(--marketing-dark-card)] p-6">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-beige)]">Drop your training video here</h3>
+          <p className="text-center text-sm text-[var(--marketing-beige)]/60">Six sports • Auto player detection • 60s analysis</p>
+          <div
+            role="button" tabIndex={0} onClick={open} onKeyDown={e=>{ if(e.key==='Enter'||e.key===' ') {e.preventDefault(); open()}}}
+            onDragOver={e=>{e.preventDefault(); setIsDragging(true)}} onDragLeave={e=>{e.preventDefault(); setIsDragging(false)}} onDrop={e=>{e.preventDefault(); setIsDragging(false); pick(e.dataTransfer.files[0])}}
+            className={`mt-5 flex min-h-[200px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center ${isDragging?'border-primary bg-primary/10':'border-[var(--marketing-beige)]/15 bg-[var(--marketing-dark)] hover:border-primary/30'}`}
           >
-            Start analyzing for free
-          </a>
+            <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={e=>pick(e.target.files?.[0])} />
+            <div className="grid size-12 place-items-center rounded-full bg-primary text-[var(--marketing-brown)]"><Play className="size-5 translate-x-[1px]" /></div>
+            <p className="mt-3 text-sm font-semibold text-[var(--marketing-beige)]">{fileName || 'Drop video or click to browse'}</p>
+            <p className="text-xs text-[var(--marketing-beige)]/50">MP4, MOV, AVI • 500 MB max</p>
+            <Button size="sm" className="mt-4 rounded-full bg-primary px-6 text-xs font-semibold text-[var(--marketing-brown)] hover:bg-primary/90">Choose video</Button>
+            {fileError && <p className="mt-2 text-xs text-destructive">{fileError}</p>}
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-(--cream-05) px-6 py-16 lg:px-12">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col justify-between gap-12 md:flex-row">
-            <div>
-              <p className="font-serif text-lg">coach.xyz</p>
-              <p className="mt-3 max-w-sm text-sm leading-relaxed text-(--cream-40)">
-                AI-powered sports video analysis for coaches who want faster feedback and measurable athlete progress.
-              </p>
-            </div>
-            <div className="flex gap-16">
-              <div>
-                <p className="mb-4 text-[0.6rem] uppercase tracking-[0.2em] text-(--fg)">Platform</p>
-                <div className="space-y-3">
-                  <a href="#workflow" className="block text-sm text-(--cream-40) transition-colors hover:text-(--fg)">Workflow</a>
-                  <a href="#features" className="block text-sm text-(--cream-40) transition-colors hover:text-(--fg)">Features</a>
-                  <a href="#faq" className="block text-sm text-(--cream-40) transition-colors hover:text-(--fg)">FAQ</a>
-                </div>
-              </div>
-              <div>
-                <p className="mb-4 text-[0.6rem] uppercase tracking-[0.2em] text-(--fg)">Sports</p>
-                <div className="space-y-3">
-                  <p className="text-sm text-(--cream-40)">Basketball</p>
-                  <p className="text-sm text-(--cream-40)">Football</p>
-                  <p className="text-sm text-(--cream-40)">Cricket</p>
-                  <p className="text-sm text-(--cream-40)">Tennis</p>
-                  <p className="text-sm text-(--cream-40)">Baseball</p>
-                  <p className="text-sm text-(--cream-40)">Hockey</p>
-                </div>
+      {/* case studies — white */}
+      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[1120px]">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-brown)]">Case studies</h3>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-[var(--marketing-beige)] bg-white">
+              <div className="h-40 bg-[var(--marketing-beige)] border-b border-[var(--marketing-beige)]" />
+              <div className="p-5">
+                <p className="text-sm font-semibold text-[var(--marketing-brown)]">Academy sprint analysis</p>
+                <p className="mt-1 text-xs text-[var(--marketing-brown)]/60">How a U16 squad cut review time by 37% in 3 weeks.</p>
+                <div className="mt-3 flex gap-6 text-xs"><span><strong className="text-success">74%</strong> faster feedback</span><span><strong className="text-success">32%</strong> attendance up</span></div>
               </div>
             </div>
+            <div className="rounded-2xl border border-[var(--marketing-beige)] bg-white p-5">
+              <p className="text-sm font-semibold text-[var(--marketing-brown)]">Hockey wrist-shot correction</p>
+              <p className="mt-1 text-xs text-[var(--marketing-brown)]/60">From 4.2 → 7.8 form score after targeted drills.</p>
+              <Button size="sm" className="mt-4 rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90">Read case study <ArrowRight className="ml-1 size-3"/></Button>
+            </div>
           </div>
-          <div className="mt-16 border-t border-(--cream-05) pt-8 text-[0.6rem] text-(--cream-40)">
-            © {new Date().getFullYear()} CoachXYZ. All rights reserved.
+        </div>
+      </section>
+
+      {/* our solution — dark */}
+      <section className="bg-[var(--marketing-dark)] px-6 py-10 lg:px-8">
+        <div className="mx-auto grid max-w-[1120px] gap-6 rounded-2xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+          <div>
+            <h3 className="text-[18px] font-bold leading-tight text-[var(--marketing-beige)]">Our coaching<br/>page solution</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--marketing-beige)]/60">We build digital coaching through data — roster, attendance, schedule and analysis in one stack. Privacy-first, shareable, and exportable.</p>
+            <ul className="mt-4 space-y-2 text-sm text-[var(--marketing-beige)]/70">
+              <li className="flex gap-2"><Check className="size-4 text-primary"/> Role-based player portals</li>
+              <li className="flex gap-2"><Check className="size-4 text-primary"/> One-click reports</li>
+              <li className="flex gap-2"><Check className="size-4 text-primary"/> Video overlays & HUD</li>
+            </ul>
           </div>
+          <div className="rounded-xl bg-primary p-5 text-[var(--marketing-brown)]">
+            <p className="text-xs font-bold uppercase tracking-widest">What&apos;s included</p>
+            <ul className="mt-3 space-y-2 text-sm font-medium">
+              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--marketing-brown)]"/> Roster & attendance</li>
+              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--marketing-brown)]"/> Schedule & events</li>
+              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--marketing-brown)]"/> 6-sport analysis</li>
+              <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--marketing-brown)]"/> Player hub & chat</li>
+            </ul>
+            <div className="mt-4 flex gap-2">
+              <Button size="sm" className="rounded-full bg-[var(--marketing-brown)] text-[var(--marketing-beige)] hover:bg-black">Explore <ArrowRight className="ml-1 size-3"/></Button>
+              <button onClick={()=>copy('npm i @coachxyz/sdk','sdk2')} className="inline-flex h-8 items-center gap-1 rounded-full border border-[var(--marketing-brown)]/20 px-3 text-xs font-medium">{copied? 'Copied':'Copy'} <Copy className="size-3"/></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* tech stack — white */}
+      <section className="bg-[var(--marketing-light)] px-6 py-8 lg:px-8">
+        <div className="mx-auto max-w-[1120px] text-center">
+          <h3 className="text-sm font-bold tracking-tight text-[var(--marketing-brown)]">We plug into your tech stack</h3>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 text-[11px] font-semibold tracking-widest text-[var(--marketing-brown)]/50">
+            {['webflow','hubspot','zapier','slack','intercom','notion','google','segment'].map(s=> <span key={s} className="rounded-full border border-[var(--marketing-beige)] bg-white px-3 py-1">{s}</span>)}
+          </div>
+        </div>
+      </section>
+
+      {/* compare — white */}
+      <section className="bg-[var(--marketing-light)] px-6 pb-8 lg:px-8">
+        <div className="mx-auto max-w-[760px] overflow-hidden rounded-2xl border border-[var(--marketing-beige)] bg-white">
+          <div className="grid grid-cols-3 text-xs">
+            <div className="p-4 font-semibold text-[var(--marketing-brown)]">How we compare</div>
+            <div className="bg-primary p-4 text-center font-bold text-[var(--marketing-brown)]">CoachXYZ</div>
+            <div className="p-4 text-center font-medium text-[var(--marketing-brown)]/60">Others</div>
+            {[
+              ['Setup time','< 1 day','2-4 weeks'],
+              ['Sports supported','6 native','1-2 generic'],
+              ['Player linking','Email auto','Manual'],
+            ].map(row=>(
+              <div key={row[0]} className="contents">
+                <div className="border-t border-[var(--marketing-beige)]/60 p-3 text-xs text-[var(--marketing-brown)]/70">{row[0]}</div>
+                <div className="border-t border-[var(--marketing-beige)]/60 bg-primary/20 p-3 text-center text-xs font-semibold text-[var(--marketing-brown)]">{row[1]}</div>
+                <div className="border-t border-[var(--marketing-beige)]/60 p-3 text-center text-xs text-[var(--marketing-brown)]/50">{row[2]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* testimonials — dark */}
+      <section className="bg-[var(--marketing-dark)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[1120px]">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-beige)]">What others have to say about working with CoachXYZ</h3>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {[
+              {q:'CoachXYZ cut our review time in half. Players get precise fixes same day.',a:'David R., Performance Coach'},
+              {q:'The parent feedback loop is now async — we share reports, they see progress.',a:'Ana M., Academy Director'},
+              {q:'Attendance + video in one place. No more spreadsheets.',a:'James L., Head Coach'},
+            ].map(c=>(
+              <div key={c.q} className="rounded-2xl border border-[var(--marketing-beige)]/10 bg-[var(--marketing-dark-card)] p-5">
+                <p className="text-sm leading-6 text-[var(--marketing-beige)]/80">“{c.q}”</p>
+                <p className="mt-3 text-xs text-[var(--marketing-beige)]/40">— {c.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ — white */}
+      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8">
+        <div className="mx-auto max-w-[760px]">
+          <h3 className="text-center text-lg font-bold text-[var(--marketing-brown)]">Frequently Asked Questions</h3>
+          <div className="mt-6 divide-y divide-[var(--marketing-beige)]">
+            {[
+              {q:'Why is AI analysis your personal platform to develop coaching?',a:'Every rep is scored, timestamped and explained — no manual tagging.'},
+              {q:'How do I use the embedded analytics dashboard?',a:'Connect roster, schedule sessions, and generate reports in one click.'},
+              {q:'How is feedback personal for the student?',a:'Linked player hub shows only that athlete’s video, scores and reports.'},
+            ].map((f,i)=>(
+              <div key={f.q} className="py-4">
+                <button onClick={()=>setOpenFaq(openFaq===i?null:i)} className="flex w-full items-center justify-between text-left">
+                  <span className="text-sm font-medium text-[var(--marketing-brown)]">{f.q}</span>
+                  <ChevronDown className={`size-4 text-success transition ${openFaq===i?'rotate-180':''}`} />
+                </button>
+                {openFaq===i && <p className="mt-2 text-sm leading-6 text-[var(--marketing-brown)]/60">{f.a}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* final split CTA */}
+      <section className="bg-[var(--marketing-light)] px-6 pb-8 lg:px-8">
+        <div className="mx-auto grid max-w-[1120px] gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl bg-primary p-6">
+            <h3 className="text-lg font-bold leading-tight text-[var(--marketing-brown)]">Ready to make your<br/>training more efficient?</h3>
+            <Button onClick={open} className="mt-4 rounded-full bg-[var(--marketing-brown)] px-5 text-xs font-semibold text-[var(--marketing-beige)] hover:bg-black">Start for free</Button>
+          </div>
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-[var(--marketing-dark-card)] p-6 text-center border border-[var(--marketing-dark-card)]">
+            <p className="text-sm font-semibold text-[var(--marketing-beige)]">Not ready to buy yet?</p>
+            <p className="text-xs text-[var(--marketing-beige)]/60">Book a call with our coaching specialist</p>
+            <Button variant="outline" className="mt-3 rounded-full border-[var(--marketing-beige)]/20 text-[var(--marketing-beige)] hover:bg-white/5">Book a call</Button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="bg-[var(--marketing-dark)] px-6 py-8 lg:px-8 border-t border-[var(--marketing-dark-card)]">
+        <div className="mx-auto grid max-w-[1120px] gap-8 md:grid-cols-4">
+          <div><p className="text-sm font-bold text-[var(--marketing-beige)]">coach.xyz</p><p className="mt-2 max-w-[280px] text-xs leading-5 text-[var(--marketing-beige)]/40">AI-powered sports video analysis for coaches who want faster feedback.</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Platform</p><div className="mt-3 space-y-2 text-xs text-[var(--marketing-beige)]/50"><a href="/features" className="block hover:text-[var(--marketing-beige)]">Workflow</a><a href="/features" className="block hover:text-[var(--marketing-beige)]">Features</a><a href="/pricing" className="block hover:text-[var(--marketing-beige)]">Pricing</a></div></div>
+          <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Company</p><div className="mt-3 space-y-2 text-xs text-[var(--marketing-beige)]/50"><a href="/about" className="block hover:text-[var(--marketing-beige)]">About</a><a href="/blog" className="block hover:text-[var(--marketing-beige)]">Blog</a><a href="/contact" className="block hover:text-[var(--marketing-beige)]">Contact</a></div></div>
+          <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Get updates</p><div className="mt-3 flex gap-2"><input placeholder="you@academy.com" className="h-8 flex-1 rounded-full border border-[var(--marketing-beige)]/15 bg-transparent px-3 text-xs text-[var(--marketing-beige)] placeholder:text-[var(--marketing-beige)]/30" /><Button size="sm" className="h-8 rounded-full bg-primary px-4 text-xs font-semibold text-[var(--marketing-brown)]">Subscribe</Button></div></div>
+        </div>
+        <div className="mx-auto mt-8 flex max-w-[1120px] items-center justify-between border-t border-[var(--marketing-dark-card)] pt-6 text-xs text-[var(--marketing-beige)]/30">
+          <span>© {new Date().getFullYear()} CoachXYZ</span><a href="/privacy" className="hover:text-[var(--marketing-beige)]">Privacy</a><span>•</span><a href="/terms" className="hover:text-[var(--marketing-beige)]">Terms</a>
         </div>
       </footer>
     </main>

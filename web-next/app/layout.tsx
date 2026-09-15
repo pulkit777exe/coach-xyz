@@ -28,19 +28,19 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen antialiased pt-14">
-        <AuthHeader />
-        <a
-          href="#analyze"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-teal-600 focus:text-white focus:outline-none"
-        >
-          Skip to upload
-        </a>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <body className="min-h-screen antialiased bg-[var(--background)] text-foreground">
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <AuthHeader />
+          <a
+            href="#analyze"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+          >
+            Skip to upload
+          </a>
           <div className="root">{children}</div>
         </ThemeProvider>
         <SentryProvider>
-          <Toaster position="bottom-right" richColors theme="dark" />
+          <Toaster position="bottom-right" richColors />
         </SentryProvider>
       </body>
     </html>

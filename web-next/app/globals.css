@@ -1,20 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── CoachXYZ Palette ────────────────────────────────────────────────────
+   #CC5728 rust      → destructive / accent
+   var(--ring) deep green → success / ring
+   #BCF56C lime      → PRIMARY (button bg)  — lime → black text
+   var(--success) mid green → muted-foreground / secondary accent
+   #433B34 dark brown→ foreground / primary-foreground (button text)
+   #CECBCA warm beige→ border / muted / card tint
+   Inter + JetBrains Mono
+─────────────────────────────────────────────────────────────────────────── */
 
 @layer theme {
   :root {
-    --bg: #0d0d0d;
-    --fg: #f0ebe1;
-    --cream-40: rgba(240, 235, 225, 0.4);
-    --cream-20: rgba(240, 235, 225, 0.2);
-    --cream-10: rgba(240, 235, 225, 0.1);
-    --cream-05: rgba(240, 235, 225, 0.05);
-    --cream-03: rgba(240, 235, 225, 0.03);
-    --red: #c8003c;
-
-    --font-mono: 'DM Mono', monospace;
-    --font-serif: 'Instrument Serif', serif;
-
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --font-serif: 'Inter', sans-serif;
     --icon-swap-dur: 200ms;
     --icon-swap-blur: 2px;
     --icon-swap-start-scale: 0.25;
@@ -24,72 +27,142 @@
 
 @layer base {
   body {
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
   }
-
-  ::selection {
-    background: rgba(200, 0, 60, 0.3);
-    color: var(--fg);
-  }
-
-  .font-serif {
-    font-family: var(--font-serif);
-  }
-
-  .font-mono {
-    font-family: var(--font-mono);
-  }
-
+  .font-serif { font-family: var(--font-sans); }
+  .font-mono  { font-family: var(--font-mono); }
+  ::selection { background: rgba(188, 245, 108, 0.35); }
 }
 
-/* ── 9ui / shadcn theme tokens ────────────────────────────────────────────── */
-:root,
-.root {
-  --background: #0d0d0d;
-  --foreground: #f0ebe1;
-  --card: #141414;
-  --card-foreground: #f0ebe1;
-  --popover: #151515;
-  --popover-foreground: #f0ebe1;
-  --primary: #f0ebe1;
-  --primary-foreground: #0d0d0d;
-  --secondary: #1d1d1d;
-  --secondary-foreground: #f0ebe1;
-  --muted: #1a1a1a;
-  --muted-foreground: rgba(240, 235, 225, 0.5);
-  --accent: rgba(240, 235, 225, 0.08);
-  --accent-foreground: #f0ebe1;
-  --destructive: #c8003c;
+/* ── Light — warm off-white paper, brown ink, lime CTAs ─────────────── */
+:root, .root {
+  --background: #faf8f4;
+  --foreground: #433B34;
+  --card: #ffffff;
+  --card-foreground: #433B34;
+  --popover: #ffffff;
+  --popover-foreground: #433B34;
+  --primary: #BCF56C;
+  --primary-foreground: #1a1c18; /* near-black for AA on lime (~15.8:1) */
+  --secondary: #CECBCA;
+  --secondary-foreground: #433B34;
+  --muted: #f2ede6;
+  --muted-foreground: #7a6e62;
+  --accent: #eef6d8;
+  --accent-foreground: #2b3a12;
+  --destructive: #CC5728;
   --destructive-foreground: #ffffff;
-  --border: rgba(240, 235, 225, 0.12);
-  --input: rgba(240, 235, 225, 0.15);
-  --ring: rgba(240, 235, 225, 0.3);
+  --border: #e8e0d5;
+  --input: #e8e0d5;
+  --ring: var(--ring);
 
-  --chart-1: #f0ebe1;
-  --chart-2: #c8003c;
-  --chart-3: #8ab08a;
-  --chart-4: #d4a76a;
-  --chart-5: #7d9ec0;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #433B34;
+  --sidebar-border: #e8e0d5;
+  --topbar: #ffffff;
+  --topbar-foreground: #433B34;
+  --topbar-border: #e8e0d5;
 
-  --danger: #c8003c;
+  --chart-1: var(--ring);
+  --chart-2: var(--success);
+  --chart-3: #CC5728;
+  --chart-4: #433B34;
+  --chart-5: #CECBCA;
+
+  --danger: #CC5728;
   --danger-foreground: #ffffff;
-  --danger-border: rgba(200, 0, 60, 0.4);
-  --warning: #e0b341;
-  --warning-foreground: #1a1a1a;
-  --warning-border: rgba(224, 179, 65, 0.4);
-  --info: #6b93c9;
+  --danger-border: rgba(204, 87, 40, 0.25);
+  --warning: #c49a2b;
+  --warning-foreground: #433B34;
+  --warning-border: rgba(196, 154, 43, 0.25);
+  --info: #4a6fa5;
   --info-foreground: #ffffff;
-  --info-border: rgba(107, 147, 201, 0.4);
-  --success: #6fbf91;
-  --success-foreground: #0d0d0d;
-  --success-border: rgba(111, 191, 145, 0.4);
+  --info-border: rgba(74, 111, 165, 0.20);
+  --success: var(--ring);
+  --success-foreground: #ffffff;
+  --success-border: rgba(4, 108, 12, 0.20);
+  --score: var(--ring);
 
-  --score: #d4a76a;
+  --bg: var(--background);
+  --fg: var(--foreground);
+  --cream-40: var(--muted-foreground);
+  --cream-20: var(--border);
+  --cream-10: var(--border);
+  --cream-05: var(--muted);
+  --cream-03: #fdfcfa;
+  --red: var(--destructive);
+
+  /* marketing — fixed (not theme-dependent) for landing alternating sections */
+  --marketing-dark: #16120f;
+  --marketing-dark-card: #201c18;
+  --marketing-light: #faf8f4;
+  --marketing-beige: #CECBCA;
+  --marketing-brown: #433B34;
+  --marketing-lime: #BCF56C;
+  --marketing-green: var(--success);
+  --marketing-rust: #CC5728;
+}
+
+/* ── Dark — deep brown ink, beige text, same lime CTA ───────────────── */
+.dark {
+  --background: #16120f;
+  --foreground: #CECBCA;
+  --card: #201c18;
+  --card-foreground: #CECBCA;
+  --popover: #25211d;
+  --popover-foreground: #CECBCA;
+  --primary: #BCF56C;
+  --primary-foreground: #13160f;
+  --secondary: #2a2520;
+  --secondary-foreground: #CECBCA;
+  --muted: #25211d;
+  --muted-foreground: #9a8d7f;
+  --accent: #2a3320;
+  --accent-foreground: #c8e6a0;
+  --destructive: #CC5728;
+  --destructive-foreground: #fff7ed;
+  --border: #2e2823;
+  --input: #2e2823;
+  --ring: var(--success);
+
+  --sidebar: #14110e;
+  --sidebar-foreground: #CECBCA;
+  --sidebar-border: #2a2520;
+  --topbar: #14110e;
+  --topbar-foreground: #CECBCA;
+  --topbar-border: #2a2520;
+
+  --chart-1: #BCF56C;
+  --chart-2: var(--success);
+  --chart-3: #CC5728;
+  --chart-4: #CECBCA;
+  --chart-5: var(--ring);
+
+  --danger: #CC5728;
+  --danger-foreground: #fff7ed;
+  --danger-border: rgba(204, 87, 40, 0.35);
+  --warning: #c49a2b;
+  --warning-foreground: #1a1611;
+  --warning-border: rgba(196, 154, 43, 0.30);
+  --info: #7aa0c9;
+  --info-foreground: #0f1720;
+  --info-border: rgba(122, 160, 201, 0.25);
+  --success: var(--success);
+  --success-foreground: #13160f;
+  --success-border: rgba(139, 179, 87, 0.30);
+  --score: #BCF56C;
+
+  --marketing-dark: #16120f;
+  --marketing-dark-card: #201c18;
+  --marketing-light: #faf8f4;
+  --marketing-beige: #CECBCA;
+  --marketing-brown: #433B34;
+  --marketing-lime: #BCF56C;
+  --marketing-green: var(--success);
+  --marketing-rust: #CC5728;
 }
 
 @theme inline {
@@ -129,146 +202,32 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-border: var(--success-border);
-
   --color-score: var(--score);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-topbar: var(--topbar);
 }
 
-/* ── Button Accent ─────────────────────────────────────────────────────────── */
+.auth0-card { border-radius: 12px; border: 1px solid var(--border); background: var(--card); box-shadow: 0 1px 2px rgba(67, 59, 52, 0.06); }
+.auth0-card-hover:hover { border-color: color-mix(in srgb, var(--border), var(--background)); box-shadow: 0 4px 12px rgba(67, 59, 52, 0.08); }
+.dark .auth0-card-hover:hover { border-color: color-mix(in srgb, var(--border), var(--background)); box-shadow: 0 4px 16px rgba(0,0,0,0.45); }
 
-.button-accent {
-  background: var(--fg);
-  color: var(--bg);
-  font-weight: 700;
-  transition: all 0.2s ease-out;
-}
+.button-accent { background: var(--primary); color: var(--primary-foreground); font-weight: 600; transition: all 0.15s ease; }
+.button-accent:hover { background: color-mix(in srgb, var(--primary), white 12%); }
+.button-accent:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.button-accent:hover {
-  background: rgba(240, 235, 225, 0.9);
-  box-shadow: 0 0 25px rgba(240, 235, 225, 0.3);
-}
+@keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee-track { display: flex; width: max-content; animation: marqueeScroll 40s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+.marquee-item { display:flex; align-items:center; gap:0.6rem; padding:0 2.5rem; white-space:nowrap; font-size:0.65rem; letter-spacing:0.2em; text-transform:uppercase; color: var(--muted-foreground); }
 
-.button-accent:disabled {
-  background: rgba(240, 235, 225, 0.2);
-  color: rgba(240, 235, 225, 0.4);
-  cursor: not-allowed;
-  box-shadow: none;
-}
+.t-icon-swap { position: relative; display: inline-grid; }
+.t-icon-swap .t-icon { grid-area: 1 / 1; transition: opacity var(--icon-swap-dur) var(--icon-swap-ease), filter var(--icon-swap-dur) var(--icon-swap-ease), transform var(--icon-swap-dur) var(--icon-swap-ease); will-change: opacity, filter, transform; }
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"], .t-icon-swap[data-state="b"] .t-icon[data-icon="b"] { opacity: 1; filter: blur(0); transform: scale(1); }
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"], .t-icon-swap[data-state="b"] .t-icon[data-icon="a"] { opacity: 0; filter: blur(var(--icon-swap-blur)); transform: scale(var(--icon-swap-start-scale)); }
+@media (prefers-reduced-motion: reduce) { .t-icon-swap .t-icon { transition: none !important; } .marquee-track { animation: none; } }
 
-/* ── Film Grain ─────────────────────────────────────────────────────────────── */
-
-#grain-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.06;
-}
-
-/* ── Utility ────────────────────────────────────────────────────────────────── */
-
-
-
-/* ── Marquee ────────────────────────────────────────────────────────────────── */
-
-@keyframes marqueeScroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-.marquee-track {
-  display: flex;
-  width: max-content;
-  animation: marqueeScroll 40s linear infinite;
-}
-
-.marquee-track:hover {
-  animation-play-state: paused;
-}
-
-.marquee-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0 2.5rem;
-  white-space: nowrap;
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--cream-40);
-}
-
-
-
-/* ── Icon Swap (transitions-dev) ─────────────────────────────────────────── */
-
-.t-icon-swap {
-  position: relative;
-  display: inline-grid;
-}
-.t-icon-swap .t-icon {
-  grid-area: 1 / 1;
-  transition:
-    opacity   var(--icon-swap-dur) var(--icon-swap-ease),
-    filter    var(--icon-swap-dur) var(--icon-swap-ease),
-    transform var(--icon-swap-dur) var(--icon-swap-ease);
-  will-change: opacity, filter, transform;
-}
-.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
-  opacity: 1;
-  filter: blur(0);
-  transform: scale(1);
-}
-.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
-  opacity: 0;
-  filter: blur(var(--icon-swap-blur));
-  transform: scale(var(--icon-swap-start-scale));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .t-icon-swap .t-icon { transition: none !important; }
-  .marquee-track { animation: none; }
-}
-
-/* ── Chat Animations ─────────────────────────────────────────────────────── */
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
