@@ -819,6 +819,34 @@ export const getUserByAuth0Id = async (auth0Id: string): Promise<UserRecord | nu
 }
 
 /**
+ * Updates editable profile fields for the primary user record (resolving linked
+ * accounts to the primary auth0_id first). Returns the freshest record.
+ */
+export const updateUserProfile = async (
+  auth0Id: string,
+  input: { name?: string | null; nickname?: string | null; picture?: string | null },
+): Promise<UserRecord | null> => {
+  const primary = (await resolveAuth0Id(auth0Id)) ?? auth0Id
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const existing = await db<UserRecord[]>`
+      select * from users where auth0_id = ${primary} limit 1;
+    `
+    if (!existing?.[0]) return null
+    const rows = await db<UserRecord[]>`
+      update users set
+        name = ${input.name ?? existing[0].name},
+        nickname = ${input.nickname ?? existing[0].nickname},
+        picture = ${input.picture ?? existing[0].picture},
+        updated_at = now()
+      where auth0_id = ${primary}
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+/**
  * Resolves an auth0_id to the primary user record. Handles linked accounts:
  * if the given auth0_id is in another user's `linked_auth0_ids`, returns that
  * user's primary record so all historical data is accessible.

@@ -1010,3 +1010,88 @@ export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
     }
   )
 }
+
+// ── Global search ────────────────────────────────────────────────────────────
+
+export type SearchItem = {
+  id: string
+  label: string
+  subtitle: string | null
+}
+
+export type OrgSearchResult = {
+  students: SearchItem[]
+  schedule: SearchItem[]
+  reports: SearchItem[]
+  analyses: SearchItem[]
+}
+
+export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSearchResult> => {
+  const q = query.trim().slice(0, 100)
+  if (!q) return { students: [], schedule: [], reports: [], analyses: [] }
+  const like = `%${q}%`
+
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+
+    const [students, schedule, reports, analyses] = await Promise.all([
+      db<{ id: string; full_name: string; email: string | null; sport: string | null; position: string | null }[]>`
+        select id, full_name, email, sport, "position"
+        from students
+        where auth0_id = ${auth0Id}
+          and (full_name ilike ${like} or email ilike ${like} or sport ilike ${like} or "position" ilike ${like})
+        order by full_name asc
+        limit 8;
+      `,
+      db<{ id: string; title: string; event_type: string; starts_at: string; location: string | null }[]>`
+        select id, title, event_type, starts_at, location
+        from schedule_events
+        where auth0_id = ${auth0Id}
+          and (title ilike ${like} or location ilike ${like} or event_type ilike ${like} or description ilike ${like})
+        order by starts_at desc
+        limit 8;
+      `,
+      db<{ id: string; title: string; report_type: string; created_at: string; full_name: string | null }[]>`
+        select r.id, r.title, r.report_type, r.created_at, s.full_name
+        from reports r
+        left join students s on r.student_id = s.id
+        where r.auth0_id = ${auth0Id}
+          and (r.title ilike ${like} or r.report_type ilike ${like} or s.full_name ilike ${like})
+        order by r.created_at desc
+        limit 8;
+      `,
+      db<{ server_job_id: string; display_name: string | null; student_id: string | null; requested_at: string; file_name: string | null }[]>`
+        select a.server_job_id, a.display_name, a.student_id, a.requested_at, v.file_name
+        from analysis_history a
+        left join video_conversations v on a.session_token = v.session_token
+        where a.auth0_id = ${auth0Id}
+          and (a.display_name ilike ${like} or a.server_job_id ilike ${like} or v.file_name ilike ${like})
+        order by a.requested_at desc
+        limit 8;
+      `,
+    ])
+
+    return {
+      students: (students ?? []).map((s) => ({
+        id: s.id,
+        label: s.full_name,
+        subtitle: [s.email, s.sport, s.position].filter(Boolean).join(" · ") || null,
+      })),
+      schedule: (schedule ?? []).map((e) => ({
+        id: e.id,
+        label: e.title,
+        subtitle: `${e.event_type}${e.location ? ` · ${e.location}` : ""}`,
+      })),
+      reports: (reports ?? []).map((r) => ({
+        id: r.id,
+        label: r.title,
+        subtitle: `${r.report_type}${r.full_name ? ` · ${r.full_name}` : ""}`,
+      })),
+      analyses: (analyses ?? []).map((a) => ({
+        id: a.server_job_id,
+        label: a.display_name || a.file_name || a.server_job_id,
+        subtitle: a.student_id ? "Linked to a player" : "Unlinked",
+      })),
+    }
+  })
+}

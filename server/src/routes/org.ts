@@ -28,6 +28,7 @@ import {
   getStudentPerformanceSeries,
   getStudentAnalyses,
   getOrgOverview,
+  searchOrg,
   type StudentInput,
   type ScheduleInput,
   type AttendanceStatus,
@@ -639,4 +640,13 @@ export default new Elysia()
     const overview = await getOrgOverview(auth0Id)
     set.status = 200
     return { overview }
+  })
+  // ── Global search (students, schedule, reports, analyses) ──────────────────
+  .get("/api/org/:auth0Id/search", async ({ params, request, set }) => {
+    const { auth0Id } = params
+    const url = new URL(request.url)
+    const query = url.searchParams.get("q") ?? ""
+    const results = await searchOrg(auth0Id, query)
+    set.status = 200
+    return results
   })

@@ -3,6 +3,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import {
   getUserByAuth0Id,
+  updateUserProfile,
   resolveAuth0Id,
 } from "../lib/supabaseHistory"
 import {
@@ -48,6 +49,45 @@ export default new Elysia()
 
     set.status = 200
     return { user, student, coach_auth0_id: coachAuth0Id }
+  })
+
+  // Update own profile (name, nickname, picture)
+  .put("/api/me/profile", async ({ body, request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    if (!verified) {
+      set.status = 403
+      return buildError("FORBIDDEN", "Missing verified identity", false)
+    }
+
+    const { name, nickname, picture } = body as Record<string, unknown>
+    if (
+      name !== undefined && name !== null && typeof name !== "string"
+      || nickname !== undefined && nickname !== null && typeof nickname !== "string"
+      || picture !== undefined && picture !== null && typeof picture !== "string"
+    ) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "name, nickname and picture must be strings or null", false)
+    }
+    if (typeof name === "string" && name.length > 200) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "name is too long", false)
+    }
+    if (typeof picture === "string" && picture.length > 2000) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "picture URL is too long", false)
+    }
+
+    const user = await updateUserProfile(verified, {
+      name: name === undefined ? undefined : name as string | null,
+      nickname: nickname === undefined ? undefined : nickname as string | null,
+      picture: picture === undefined ? undefined : picture as string | null,
+    })
+    if (!user) {
+      set.status = 404
+      return buildError("NOT_FOUND", "User record not found", false)
+    }
+    set.status = 200
+    return { user }
   })
 
   // Own attendance history + summary (joined with the linked player scope)
