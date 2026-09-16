@@ -41,7 +41,7 @@ export default function InlineRename({
           if (e.key === 'Enter') save()
           if (e.key === 'Escape') { setDraft(value); setEditing(false) }
         }}
-        className={`bg-transparent border border-(--cream-20) px-2 py-0.5 text-inherit font-inherit focus:outline-none ${className}`}
+        className={`bg-transparent border border-border px-2 py-0.5 text-inherit font-inherit focus:outline-none ${className}`}
       />
     )
   }
