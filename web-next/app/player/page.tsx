@@ -23,5 +23,5 @@ export default async function PlayerPage() {
 
   if (role === "coach") redirect("/dashboard");
 
-  return <PlayerHub auth0Id={session.user.sub} />;
+  return <PlayerHub />;
 }

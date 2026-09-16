@@ -16,27 +16,42 @@ export default function GlobalError({
 
   return (
     <html>
-      <body>
+      <body style={{ margin: 0 }}>
         <div
           style={{
             minHeight: "100vh",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#0d0d0d",
+            backgroundColor: "#16120f",
             color: "#f0ebe1",
-            fontFamily: "'DM Mono', monospace",
           }}
         >
-          <div style={{ textAlign: "center", maxWidth: "28rem", padding: "1rem" }}>
-            <h1 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "1rem" }}>
+          <div style={{ textAlign: "center", maxWidth: "28rem", padding: "1.5rem" }}>
+            <div
+              style={{
+                display: "grid",
+                placeItems: "center",
+                width: "3rem",
+                height: "3rem",
+                borderRadius: "0.5rem",
+                backgroundColor: "rgba(188,245,108,0.1)",
+                color: "#BCF56C",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                margin: "0 auto 1rem",
+              }}
+            >
+              C
+            </div>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.75rem" }}>
               Something went wrong
             </h1>
-            <p style={{ color: "rgba(240, 235, 225, 0.4)", marginBottom: "0.5rem" }}>
+            <p style={{ fontSize: "0.875rem", color: "rgba(240,235,225,0.4)", marginBottom: "0.5rem" }}>
               {error.message || "An unexpected error occurred."}
             </p>
             {error.digest && (
-              <p style={{ color: "#71717a", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
+              <p style={{ color: "rgba(240,235,225,0.25)", fontSize: "0.75rem", marginBottom: "1.5rem" }}>
                 Error ID: {error.digest}
               </p>
             )}
@@ -44,14 +59,14 @@ export default function GlobalError({
               <button
                 onClick={reset}
                 style={{
-                  backgroundColor: "#f0ebe1",
-                  color: "#0d0d0d",
+                  backgroundColor: "#BCF56C",
+                  color: "#13160f",
                   padding: "0.75rem 1.5rem",
-                  borderRadius: "0.5rem",
-                  fontWeight: 700,
+                  borderRadius: "9999px",
+                  fontWeight: 600,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: "0.875rem",
+                  fontSize: "0.8125rem",
                 }}
               >
                 Try again
@@ -62,14 +77,14 @@ export default function GlobalError({
                   backgroundColor: "transparent",
                   color: "#f0ebe1",
                   padding: "0.75rem 1.5rem",
-                  borderRadius: "0.5rem",
+                  borderRadius: "9999px",
                   fontWeight: 500,
-                  border: "1px solid rgba(240, 235, 225, 0.1)",
+                  border: "1px solid rgba(240,235,225,0.15)",
                   cursor: "pointer",
-                  fontSize: "0.875rem",
+                  fontSize: "0.8125rem",
                 }}
               >
-                Go to Home
+                Go home
               </button>
             </div>
           </div>

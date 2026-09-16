@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CalendarIcon, TrendingUpIcon, ClipboardListIcon, ActivityIcon } from "lucide-react"
+import { CalendarIcon, TrendingUpIcon, ClipboardListIcon, ActivityIcon, SparklesIcon } from "lucide-react"
 
 import { Spinner } from "@/components/org/Spinner"
 import type { CoachAIError } from "@/lib/api"
@@ -42,7 +42,7 @@ type HubData = {
   reports: MyReports
 }
 
-export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
+export default function PlayerHub() {
   const [state, setState] = useState<LoadState>({ status: "loading" })
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="p-10 flex items-center gap-3 text-(--cream-40)">
+      <div className="flex items-center gap-3 p-8 text-muted-foreground">
         <Spinner /> Loading your hub…
       </div>
     )
@@ -82,28 +82,25 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
 
   if (state.status === "error") {
     return (
-      <div className="p-10">
-        <p className="text-sm text-(--red)">{state.message}</p>
+      <div className="p-8">
+        <p className="text-sm text-destructive">{state.message}</p>
       </div>
     )
   }
 
   const { profile, attendance, schedule, performance, analyses, reports } = state.data
-  void auth0Id
 
   if (!profile.student) {
     return (
-      <div className="max-w-2xl mx-auto p-10">
-        <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-          My Hub
-        </p>
-        <h1 className="font-serif text-4xl text-(--fg) leading-none mb-6">
+      <div className="mx-auto max-w-2xl p-8">
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">My Hub</p>
+        <h1 className="mb-6 text-[28px] font-bold tracking-tight text-foreground">
           Welcome{profile.user?.name ? `, ${profile.user.name.split(" ")[0]}` : ""}
         </h1>
-        <div className="border border-(--cream-10) p-8">
-          <p className="text-sm text-(--fg)">
-            Your coach hasn’t linked you to a team yet. Ask your coach to add your
-            email (<span className="text-(--fg) font-mono">{profile.user?.email ?? "your email"}</span>){" "}
+        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your
+            email (<span className="font-mono text-foreground">{profile.user?.email ?? "your email"}</span>){" "}
             to your student profile and log in again.
           </p>
         </div>
@@ -147,14 +144,14 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
   ]
 
   return (
-    <div className="p-10">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
+    <div className="max-w-5xl p-8 lg:p-12">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         My Hub
       </p>
-      <h1 className="font-serif text-4xl text-(--fg) leading-none mb-2">
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">
         {student.full_name}
       </h1>
-      <div className="flex items-center gap-4 mb-10 text-sm text-(--cream-40)">
+      <div className="mb-8 mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         {student.sport && <span>{student.sport}</span>}
         {student.jersey_number !== null && <span>#{student.jersey_number}</span>}
         {student.position && <span>{student.position}</span>}
@@ -162,14 +159,14 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="border border-(--cream-10) p-6">
-            <p className="text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40) mb-4">
+          <div key={kpi.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               {kpi.label}
             </p>
-            <p className="font-serif text-3xl text-(--fg) leading-none mb-2">{kpi.value}</p>
-            <p className="text-xs text-(--cream-40)">{kpi.detail}</p>
+            <p className="mb-1 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+            <p className="text-xs text-muted-foreground">{kpi.detail}</p>
           </div>
         ))}
       </div>
@@ -182,17 +179,17 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
         {schedule.events.length === 0 ? (
           <Empty>No upcoming events.</Empty>
         ) : (
-          <ul className="divide-y divide-(--cream-05)">
+          <ul className="divide-y divide-border">
             {schedule.events.slice(0, 8).map((event) => (
-              <li key={event.id} className="py-4 flex items-start justify-between gap-4">
+              <li key={event.id} className="flex items-start justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm text-(--fg)">{event.title}</p>
-                  <p className="text-xs text-(--cream-40) mt-0.5">
+                  <p className="text-sm font-medium text-foreground">{event.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {formatDateMed(event.starts_at)} · {EVENT_TYPE_LABELS[event.event_type]}
                     {event.location ? ` · ${event.location}` : ""}
                   </p>
                 </div>
-                <span className="text-xs border border-(--cream-10) px-2 py-1 text-(--cream-40)">
+                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
                   {EVENT_STATUS_LABELS[event.status]}
                 </span>
               </li>
@@ -209,15 +206,15 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
         {attendance.records.length === 0 ? (
           <Empty>No attendance recorded yet.</Empty>
         ) : (
-          <ul className="divide-y divide-(--cream-05)">
+          <ul className="divide-y divide-border">
             {attendance.records.slice(0, 8).map((record) => (
-              <li key={record.id} className="py-4 flex items-center justify-between gap-4">
+              <li key={record.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm text-(--fg)">{formatDateMed(record.session_date)}</p>
-                  {record.note && <p className="text-xs text-(--cream-40) mt-0.5">{record.note}</p>}
+                  <p className="text-sm font-medium text-foreground">{formatDateMed(record.session_date)}</p>
+                  {record.note && <p className="mt-0.5 text-xs text-muted-foreground">{record.note}</p>}
                 </div>
-                <span className="text-xs border border-(--cream-10) px-2 py-1">
-                  {ATTENDANCE_STATUS_LABELS[record.status]}
+                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs">
+                  {ATTENDANCE_STATUS_LABELS[record.status] ?? record.status}
                 </span>
               </li>
             ))}
@@ -233,24 +230,63 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
         {performance.points.length === 0 ? (
           <Empty>No performance data yet.</Empty>
         ) : (
-          <ul className="divide-y divide-(--cream-05)">
+          <ul className="divide-y divide-border">
             {[...performance.points]
               .sort((a, b) => b.measured_at.localeCompare(a.measured_at))
               .slice(0, 8)
               .map((point, index) => (
-                <li key={point.source_analysis_id ?? `${point.measured_at}-${index}`} className="py-4 flex items-center justify-between gap-4">
+                <li key={point.source_analysis_id ?? `${point.measured_at}-${index}`} className="flex items-center justify-between gap-4 py-4">
                   <div>
-                    <p className="text-sm text-(--fg)">{formatDateShort(point.measured_at)}</p>
-                    <p className="text-xs text-(--cream-40) mt-0.5">
+                    <p className="text-sm font-medium text-foreground">{formatDateShort(point.measured_at)}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {point.metric_key} · {point.source === "analysis" ? "from analysis" : "manual"}
                     </p>
                   </div>
-                  <span className="font-serif text-xl text-(--fg)">
+                  <span className="text-lg font-bold tracking-tight text-foreground">
                     {point.metric_value}
-                    {point.unit ? <span className="text-sm text-(--cream-40)"> {point.unit}</span> : ""}
+                    {point.unit ? <span className="text-sm font-normal text-muted-foreground"> {point.unit}</span> : ""}
                   </span>
                 </li>
               ))}
+          </ul>
+        )}
+      </Section>
+
+      {/* Analyses */}
+      <Section
+        icon={<SparklesIcon className="size-4" />}
+        title="Analyses"
+      >
+        {analyses.analyses.length === 0 ? (
+          <Empty>No analyses yet.</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {analyses.analyses.slice(0, 8).map((analysis) => (
+              <li key={analysis.server_job_id} className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {analysis.display_name || "Untitled video"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {formatDateShort(analysis.requested_at)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {analysisScore(analysis) !== null && (
+                    <span className="text-lg font-bold tracking-tight text-foreground">{analysisScore(analysis)}</span>
+                  )}
+                  <span
+                    className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${
+                      analysis.complete
+                        ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {analysis.complete ? "Done" : "Processing"}
+                  </span>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </Section>
@@ -263,16 +299,16 @@ export default function PlayerHub({ auth0Id }: { auth0Id: string }) {
         {reports.reports.length === 0 ? (
           <Empty>No reports yet.</Empty>
         ) : (
-          <ul className="divide-y divide-(--cream-05)">
+          <ul className="divide-y divide-border">
             {reports.reports.slice(0, 8).map((report) => (
-              <li key={report.id} className="py-4 flex items-center justify-between gap-4">
+              <li key={report.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm text-(--fg)">{report.title}</p>
-                  <p className="text-xs text-(--cream-40) mt-0.5">
-                    {REPORT_TYPE_LABELS[report.report_type]} · {formatDateShort(report.created_at)}
+                  <p className="text-sm font-medium text-foreground">{report.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} · {formatDateShort(report.created_at)}
                   </p>
                 </div>
-                <span className="text-xs border border-(--cream-10) px-2 py-1 text-(--cream-40)">
+                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
                   {periodLabel(report.period_start, report.period_end)}
                 </span>
               </li>
@@ -294,10 +330,10 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="border border-(--cream-10) p-8 mb-8">
-      <div className="flex items-center gap-2 mb-6">
-        <span className="text-(--cream-40)">{icon}</span>
-        <h2 className="text-[0.65rem] uppercase tracking-[0.25em] text-(--fg)">{title}</h2>
+    <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="text-muted-foreground">{icon}</span>
+        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-foreground">{title}</h2>
       </div>
       {children}
     </section>
@@ -305,10 +341,18 @@ function Section({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-(--cream-40)">{children}</p>
+  return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
 function periodLabel(from: string | null, to: string | null): string {
   if (!from && !to) return "—"
   return `${from ? formatDateShort(from) : ""}${from && to ? " – " : ""}${to ? formatDateShort(to) : ""}`
+}
+
+function analysisScore(analysis: MyAnalyses["analyses"][number]): number | null {
+  if (!analysis.summary_json || typeof analysis.summary_json !== "object" || !("form_score" in analysis.summary_json)) {
+    return null
+  }
+  const score = (analysis.summary_json as { form_score: unknown }).form_score
+  return typeof score === "number" ? score : null
 }

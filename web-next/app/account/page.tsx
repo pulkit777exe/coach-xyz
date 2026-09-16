@@ -52,121 +52,76 @@ export default async function AccountPage() {
   }
 
   return (
-    <div className="min-h-screen pb-12 px-6 lg:px-12">
-      <div className="max-w-2xl mx-auto pt-8">
-        <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-          Settings
-        </p>
-        <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-          Account
-        </h1>
+    <div className="min-h-screen bg-[var(--background)] pb-12">
+      <div className="mx-auto max-w-[720px] px-6 py-6 lg:px-8">
+        <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="text-muted-foreground">Settings</span>
+        </div>
+        <h1 className="text-[28px] font-bold tracking-tight text-foreground">Account</h1>
 
-        {/* Sync Error Banner */}
         {syncError && (
-          <div className="border border-(--red) p-4 mb-8">
-            <p className="text-sm text-(--red)">Failed to sync profile data. Some information may be outdated.</p>
+          <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+            Failed to sync profile data. Some information may be outdated.
           </div>
         )}
 
-        {/* Profile Card */}
-        <div className="border border-(--cream-10) p-8 mb-8">
-          <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
-            Profile
-          </p>
-
-          <div className="flex items-center gap-5 mb-8">
-            <UserAvatar
-              picture={session.user.picture}
-              name={session.user.name}
-              email={session.user.email}
-              size="lg"
-            />
-            <div>
-              <p className="font-serif text-2xl text-(--fg)">
-                {session.user.name || "No name"}
-              </p>
-              <p className="mt-1 text-sm text-(--cream-40)">{session.user.email}</p>
-            </div>
+        <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-6 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Profile</p>
           </div>
-
-          <div className="space-y-0">
-            {[
-              { label: "Email", value: session.user.email },
-              { label: "Name", value: session.user.name || "—" },
-              { label: "Nickname", value: session.user.nickname || "—" },
-              { label: "Signed in with", value: provider },
-              {
-                label: "Email Verified",
-                value: session.user.email_verified ? "Yes" : "No",
-              },
-              { label: "User ID", value: session.user.sub, mono: true },
-            ].map((row, i) => (
-              <div
-                key={row.label}
-                className={`flex justify-between items-baseline py-3 ${
-                  i < 5 ? "border-b border-(--cream-05)" : ""
-                }`}
-              >
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
-                  {row.label}
-                </span>
-                <span
-                  className={`text-sm text-(--fg) ${row.mono ? "font-mono" : ""}`}
-                >
-                  {row.value}
-                </span>
+          <div className="p-6">
+            <div className="flex items-center gap-4">
+              <UserAvatar picture={session.user.picture} name={session.user.name} email={session.user.email} size="lg" />
+              <div>
+                <p className="text-lg font-semibold text-foreground">{session.user.name || "No name"}</p>
+                <p className="text-sm text-muted-foreground">{session.user.email}</p>
               </div>
-            ))}
+            </div>
+            <div className="mt-6 divide-y divide-border rounded-lg border border-border overflow-hidden">
+              {[
+                { label: "Email", value: session.user.email },
+                { label: "Name", value: session.user.name || "—" },
+                { label: "Nickname", value: session.user.nickname || "—" },
+                { label: "Signed in with", value: provider },
+                { label: "Email Verified", value: session.user.email_verified ? "Yes" : "No" },
+                { label: "User ID", value: session.user.sub, mono: true },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-4 bg-card px-4 py-3">
+                  <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{row.label}</span>
+                  <span className={`text-sm text-foreground truncate max-w-[260px] text-right ${row.mono ? "font-mono text-xs" : ""}`}>{row.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Database Record */}
         {user && (
-          <div className="border border-(--cream-10) p-8 mb-8">
-            <p className="mb-6 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
-              Database Record
-            </p>
-            <div className="space-y-0">
-              <div className="flex justify-between items-baseline py-3 border-b border-(--cream-05)">
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
-                  Role
-                </span>
-                <span className="text-sm text-(--fg)">
-                  {user.role ? USER_ROLE_LABELS[user.role] ?? user.role : "—"}
-                </span>
+          <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Database Record</p>
+            </div>
+            <div className="divide-y divide-border">
+              <div className="flex items-center justify-between px-6 py-3.5">
+                <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Role</span>
+                <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary dark:bg-primary/20 dark:text-primary">{user.role ? USER_ROLE_LABELS[user.role] ?? user.role : "—"}</span>
               </div>
-              <div className="flex justify-between items-baseline py-3 border-b border-(--cream-05)">
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
-                  Created
-                </span>
-                <span className="text-sm text-(--fg)">
-                  {new Date(user.created_at).toLocaleString()}
-                </span>
+              <div className="flex items-center justify-between px-6 py-3.5">
+                <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Created</span>
+                <span className="text-sm text-foreground">{new Date(user.created_at).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between items-baseline py-3">
-                <span className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
-                  Last Updated
-                </span>
-                <span className="text-sm text-(--fg)">
-                  {new Date(user.updated_at).toLocaleString()}
-                </span>
+              <div className="flex items-center justify-between px-6 py-3.5">
+                <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Last Updated</span>
+                <span className="text-sm text-foreground">{new Date(user.updated_at).toLocaleString()}</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Link
-            href="/"
-            className="border border-(--cream-10) px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-          >
+        <div className="mt-6 flex gap-3">
+          <Link href="/" className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted">
             Back to Home
           </Link>
-          <a
-            href="/auth/logout"
-            className="px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--red) border border-(--red) transition-all hover:bg-(--red) hover:text-(--bg)"
-          >
+          <a href="/auth/logout" className="inline-flex h-9 items-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground hover:bg-destructive/90">
             Log Out
           </a>
         </div>
