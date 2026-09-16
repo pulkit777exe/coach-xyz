@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 import { Button } from '@/components/9ui/ui/button'
 import { ArrowRight, Check, Copy, Play, ChevronDown } from 'lucide-react'
@@ -14,7 +15,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
   const [fileError, setFileError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
+  const [subscribeEmail, setSubscribeEmail] = useState('')
   const copy = (v: string, id: string) => { navigator.clipboard.writeText(v); setCopied(id); setTimeout(()=>setCopied(null), 1400) }
+  const subscribe = (e: React.FormEvent) => {
+    e.preventDefault()
+    const query = new URLSearchParams({ subject: 'Newsletter signup', body: subscribeEmail.trim() })
+    window.location.href = `mailto:hello@coachxyz.app?${query.toString()}`
+  }
 
   const pick = (f?: File) => {
     if (!f) return
@@ -230,7 +237,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             <div className="rounded-2xl border border-[var(--marketing-beige)] bg-white p-5">
               <p className="text-sm font-semibold text-[var(--marketing-brown)]">Hockey wrist-shot correction</p>
               <p className="mt-1 text-xs text-[var(--marketing-brown)]/60">From 4.2 → 7.8 form score after targeted drills.</p>
-              <Button size="sm" className="mt-4 rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90">Read case study <ArrowRight className="ml-1 size-3"/></Button>
+              <Button size="sm" render={<Link href="/blog" />} className="mt-4 rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90">Read case study <ArrowRight className="ml-1 size-3"/></Button>
             </div>
           </div>
         </div>
@@ -257,7 +264,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <li className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--marketing-brown)]"/> Player hub & chat</li>
             </ul>
             <div className="mt-4 flex gap-2">
-              <Button size="sm" className="rounded-full bg-[var(--marketing-brown)] text-[var(--marketing-beige)] hover:bg-black">Explore <ArrowRight className="ml-1 size-3"/></Button>
+              <Button size="sm" render={<Link href="/features" />} className="rounded-full bg-[var(--marketing-brown)] text-[var(--marketing-beige)] hover:bg-black">Explore <ArrowRight className="ml-1 size-3"/></Button>
               <button onClick={()=>copy('npm i @coachxyz/sdk','sdk2')} className="inline-flex h-8 items-center gap-1 rounded-full border border-[var(--marketing-brown)]/20 px-3 text-xs font-medium">{copied? 'Copied':'Copy'} <Copy className="size-3"/></button>
             </div>
           </div>
@@ -347,7 +354,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           <div className="flex flex-col items-center justify-center rounded-2xl bg-[var(--marketing-dark-card)] p-6 text-center border border-[var(--marketing-dark-card)]">
             <p className="text-sm font-semibold text-[var(--marketing-beige)]">Not ready to buy yet?</p>
             <p className="text-xs text-[var(--marketing-beige)]/60">Book a call with our coaching specialist</p>
-            <Button variant="outline" className="mt-3 rounded-full border-[var(--marketing-beige)]/20 text-[var(--marketing-beige)] hover:bg-white/5">Book a call</Button>
+            <Button variant="outline" render={<Link href="/contact" />} className="mt-3 rounded-full border-[var(--marketing-beige)]/20 text-[var(--marketing-beige)] hover:bg-white/5">Book a call</Button>
           </div>
         </div>
       </section>
@@ -357,7 +364,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           <div><p className="text-sm font-bold text-[var(--marketing-beige)]">coach.xyz</p><p className="mt-2 max-w-[280px] text-xs leading-5 text-[var(--marketing-beige)]/40">AI-powered sports video analysis for coaches who want faster feedback.</p></div>
           <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Platform</p><div className="mt-3 space-y-2 text-xs text-[var(--marketing-beige)]/50"><a href="/features" className="block hover:text-[var(--marketing-beige)]">Workflow</a><a href="/features" className="block hover:text-[var(--marketing-beige)]">Features</a><a href="/pricing" className="block hover:text-[var(--marketing-beige)]">Pricing</a></div></div>
           <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Company</p><div className="mt-3 space-y-2 text-xs text-[var(--marketing-beige)]/50"><a href="/about" className="block hover:text-[var(--marketing-beige)]">About</a><a href="/blog" className="block hover:text-[var(--marketing-beige)]">Blog</a><a href="/contact" className="block hover:text-[var(--marketing-beige)]">Contact</a></div></div>
-          <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Get updates</p><div className="mt-3 flex gap-2"><input placeholder="you@academy.com" className="h-8 flex-1 rounded-full border border-[var(--marketing-beige)]/15 bg-transparent px-3 text-xs text-[var(--marketing-beige)] placeholder:text-[var(--marketing-beige)]/30" /><Button size="sm" className="h-8 rounded-full bg-primary px-4 text-xs font-semibold text-[var(--marketing-brown)]">Subscribe</Button></div></div>
+          <div><p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-beige)]">Get updates</p><form onSubmit={subscribe} className="mt-3 flex gap-2"><input value={subscribeEmail} onChange={e=>setSubscribeEmail(e.target.value)} type="email" required placeholder="you@academy.com" className="h-8 flex-1 rounded-full border border-[var(--marketing-beige)]/15 bg-transparent px-3 text-xs text-[var(--marketing-beige)] placeholder:text-[var(--marketing-beige)]/30" /><Button type="submit" size="sm" className="h-8 rounded-full bg-primary px-4 text-xs font-semibold text-[var(--marketing-brown)]">Subscribe</Button></form></div>
         </div>
         <div className="mx-auto mt-8 flex max-w-[1120px] items-center justify-between border-t border-[var(--marketing-dark-card)] pt-6 text-xs text-[var(--marketing-beige)]/30">
           <span>© {new Date().getFullYear()} CoachXYZ</span><a href="/privacy" className="hover:text-[var(--marketing-beige)]">Privacy</a><span>•</span><a href="/terms" className="hover:text-[var(--marketing-beige)]">Terms</a>

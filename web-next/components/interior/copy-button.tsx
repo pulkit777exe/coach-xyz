@@ -41,7 +41,7 @@ export function CopyButton({ value, label, children, className }: CopyButtonProp
       type="button"
       onClick={copy}
       className={cn(
-        'inline-flex cursor-pointer items-center gap-2 border border-(--cream-10) bg-transparent px-3 py-2 text-[0.65rem] uppercase tracking-[0.15em] text-(--cream-40) transition-colors hover:border-(--cream-20) hover:text-(--fg)',
+        'inline-flex cursor-pointer items-center gap-2 border border-border bg-transparent px-3 py-2 text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground',
         className,
       )}
     >

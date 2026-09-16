@@ -8,10 +8,10 @@ const variantClasses: Record<ButtonVariant, string> = {
   default:
     "bg-(--bg) text-(--fg) hover:bg-(--cream-10) shadow-[0_0_0_1px_rgba(255,255,255,0.15)]",
   secondary:
-    "bg-zinc-900 text-zinc-100 hover:bg-zinc-800 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]",
+    "bg-muted text-foreground hover:bg-muted/80 border border-border",
   outline:
-    "bg-transparent text-zinc-100 border border-zinc-700 hover:bg-zinc-900/70",
-  ghost: "bg-transparent text-zinc-300 hover:text-white hover:bg-zinc-900/60",
+    "bg-transparent text-foreground border border-border hover:bg-muted/70",
+  ghost: "bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -33,7 +33,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           variantClasses[variant],
           sizeClasses[size],
           className

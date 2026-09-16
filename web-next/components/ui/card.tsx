@@ -41,7 +41,7 @@ function CardDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-xs text-zinc-400", className)} {...props} />;
+  return       <p className={cn("text-xs text-muted-foreground", className)} {...props} />;
 }
 
 function CardContent({

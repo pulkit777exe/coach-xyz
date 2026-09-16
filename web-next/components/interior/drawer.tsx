@@ -53,19 +53,19 @@ export function Drawer({ open, onOpenChange, title, side = 'right', children, cl
         role="dialog"
         aria-modal="true"
         className={cn(
-          'absolute bg-(--bg) shadow-2xl transition-transform duration-300',
+          'absolute bg-background shadow-2xl transition-transform duration-300',
           panel,
           open ? 'translate-x-0 translate-y-0' : closed,
           className,
         )}
       >
-        <div className="flex items-center justify-between border-b border-(--cream-05) px-6 py-4">
-          <h2 className="text-sm text-(--fg)">{title}</h2>
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-sm font-medium text-foreground">{title}</h2>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
             aria-label="Close drawer"
-            className="cursor-pointer text-(--cream-40) hover:text-(--fg)"
+            className="cursor-pointer text-muted-foreground hover:text-foreground"
           >
             ✕
           </button>

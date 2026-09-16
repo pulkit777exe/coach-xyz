@@ -43,18 +43,18 @@ export function PollResults({ label, options, onVote, className }: PollResultsPr
             type="button"
             onClick={() => vote(option.id)}
             disabled={!!votedId}
-            className="relative block w-full overflow-hidden border border-(--cream-10) px-4 py-3 text-left disabled:cursor-default cursor-pointer"
+            className="relative block w-full overflow-hidden rounded-2xl border border-border px-4 py-3 text-left disabled:cursor-default cursor-pointer"
           >
             <span
-              className="absolute inset-y-0 left-0 bg-(--cream-05) transition-[width] duration-500"
+              className="absolute inset-y-0 left-0 bg-muted transition-[width] duration-500"
               style={{ width: `${pct}%` }}
             />
-            <span className="relative flex items-center justify-between gap-3 text-sm text-(--fg)">
+            <span className="relative flex items-center justify-between gap-3 text-sm text-foreground">
               <span>
                 {option.label}
                 {active && <span className="ml-2 text-green-400">✓</span>}
               </span>
-              <span className="shrink-0 text-(--cream-40)">
+              <span className="shrink-0 text-muted-foreground">
                 {count} ({pct.toFixed(0)}%)
               </span>
             </span>

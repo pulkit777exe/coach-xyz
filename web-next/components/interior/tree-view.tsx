@@ -26,11 +26,11 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         type="button"
         onClick={() => hasChildren && setOpen((v) => !v)}
         className={cn(
-          'flex w-full items-start gap-2 py-1 text-left text-sm text-(--fg)',
+          'flex w-full items-start gap-2 py-1 text-left text-sm text-foreground',
           hasChildren ? 'cursor-pointer' : 'cursor-default',
         )}
       >
-        <span className="w-3 shrink-0 text-(--cream-40)">
+        <span className="w-3 shrink-0 text-muted-foreground">
           {hasChildren ? (open ? '▾' : '▸') : '·'}
         </span>
         <span>{node.label}</span>

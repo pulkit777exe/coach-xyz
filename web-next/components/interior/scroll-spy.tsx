@@ -40,7 +40,7 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
   }
 
   return (
-    <nav className={cn('sticky top-14 z-30 flex flex-wrap items-center gap-x-6 gap-y-1 bg-(--bg) py-2', className)}>
+    <nav className={cn('sticky top-14 z-30 flex flex-wrap items-center gap-x-6 gap-y-1 bg-background py-2', className)}>
       {sections.map((s) => (
         <button
           key={s.id}
@@ -48,7 +48,7 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
           onClick={() => scrollTo(s.id)}
           className={cn(
             'cursor-pointer text-[0.6rem] uppercase tracking-[0.2em] transition-colors',
-            active === s.id ? 'text-(--fg)' : 'text-(--cream-40) hover:text-(--cream-20)',
+            active === s.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {s.label}

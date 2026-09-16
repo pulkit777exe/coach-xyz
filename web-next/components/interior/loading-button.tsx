@@ -46,7 +46,7 @@ export function LoadingButton({
     >
       {state === 'pending' ? (
         <>
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-(--cream-10) border-t-(--fg)" />
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-muted border-t-primary" />
           {pendingLabel}
         </>
       ) : state === 'success' ? (

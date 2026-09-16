@@ -45,8 +45,8 @@ export function HoldToConfirm({
       onPointerLeave={cancel}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'inline-flex cursor-pointer select-none items-center gap-2 border border-(--red) bg-transparent text-[0.65rem] uppercase tracking-[0.15em] text-(--red) transition-colors',
-        armed && 'bg-(--red) text-(--bg)',
+        'inline-flex cursor-pointer select-none items-center gap-2 border border-danger/30 bg-transparent text-[0.65rem] uppercase tracking-[0.15em] text-destructive transition-colors',
+        armed && 'bg-danger text-danger-foreground',
         className,
       )}
     >

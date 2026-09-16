@@ -17,7 +17,7 @@ interface SegmentedControlProps {
 
 export function SegmentedControl({ label, options, value, onValueChange, className }: SegmentedControlProps) {
   return (
-    <div className={cn('inline-flex items-center gap-1 border border-(--cream-10) p-1', className)}>
+    <div className={cn('inline-flex items-center gap-1 rounded-2xl border border-border p-1', className)}>
       <span className="sr-only">{label}</span>
       {options.map((option) => {
         const active = option.value === value
@@ -27,10 +27,10 @@ export function SegmentedControl({ label, options, value, onValueChange, classNa
             type="button"
             onClick={() => onValueChange(option.value)}
             className={cn(
-              'cursor-pointer px-4 py-2 text-[0.65rem] uppercase tracking-[0.15em] transition-colors',
+              'cursor-pointer rounded-lg px-4 py-2 text-[0.65rem] uppercase tracking-[0.15em] transition-colors',
               active
-                ? 'bg-(--fg) text-(--bg)'
-                : 'text-(--cream-40) hover:text-(--fg)',
+                ? 'bg-foreground text-background'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             {option.label}
