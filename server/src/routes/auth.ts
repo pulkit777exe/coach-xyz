@@ -116,8 +116,9 @@ export default new Elysia()
     const url = new URL(request.url)
     const limit = Math.min(Number(url.searchParams.get("limit") || 20), 100)
     const offset = Math.max(Number(url.searchParams.get("offset") || 0), 0)
+    const unlinked = url.searchParams.get("unlinked") === "1"
 
-    const analyses = await getUserAnalyses(auth0Id, limit, offset)
+    const analyses = await getUserAnalyses(auth0Id, limit, offset, { unlinked })
     set.status = 200
     return { analyses }
   })

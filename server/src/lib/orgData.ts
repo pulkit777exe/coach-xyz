@@ -230,8 +230,13 @@ export const updateStudent = async (
   return withHistoryStore(async (db) => {
     await ensureInitialized()
     const cols = Object.keys(studentInsertCols).filter((k) => k in input)
+    const colCasts = {
+      jersey_number: "::integer",
+      date_of_birth: "::date",
+      joined_on: "::date",
+    } as Record<string, string>
     const setClause =
-      cols.map((k, i) => `${k} = $${i + 1}::text`).join(", ") +
+      cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? ""}`).join(", ") +
       (cols.length ? ", " : "")
     const sql = `
       update students set
@@ -239,7 +244,7 @@ export const updateStudent = async (
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
     `
-    const values = cols.map((k) => {
+    const values = cols.map((k, i) => {
       const v = input[k]
       if (v === undefined || v === null) return null
       return typeof v === "number" ? v : String(v)
@@ -393,7 +398,7 @@ export const attendanceSummary = async (
           count(*) filter (where status = 'late')::int as late,
           count(*) filter (where status = 'excused')::int as excused,
           case when count(*) = 0 then null
-               else round((count(*) filter (where status in ('present', 'late')) * 100.0) / count(*), 1)
+               else round((count(*) filter (where status in ('present', 'late')) * 100.0) / count(*), 1)::float8
           end as attendance_rate
         from attendance
         where auth0_id = ${auth0Id}
@@ -518,7 +523,7 @@ export const deleteScheduleEvent = async (auth0Id: string, id: string): Promise<
 export const getStudentAnalyses = async (
   auth0Id: string,
   studentId: string,
-  limit = 50,
+  limit = 200,
 ): Promise<DashboardAnalysis[]> => {
   return (
     (await withHistoryStore(async (db) => {

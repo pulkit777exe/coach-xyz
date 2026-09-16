@@ -538,6 +538,15 @@ export default new Elysia()
 
     const { report_type, period_start, period_end, title } = body as Record<string, unknown>
 
+    const toYmd = (v: unknown): string | null =>
+      v === null || v === undefined
+        ? null
+        : typeof v === "string"
+          ? v
+          : v instanceof Date
+            ? v.toISOString().slice(0, 10)
+            : String(v)
+
     const nextType = (report_type === undefined ? existing.report_type : String(report_type)) as ReportType
     if (!REPORT_TYPE_SET.has(nextType)) {
       set.status = 400
@@ -552,8 +561,8 @@ export default new Elysia()
       return buildError("INVALID_REQUEST", "period_end must be YYYY-MM-DD", false)
     }
 
-    const from = period_start === undefined ? existing.period_start : isDate(period_start) ? period_start : null
-    const to = period_end === undefined ? existing.period_end : isDate(period_end) ? period_end : null
+    const from = period_start === undefined ? toYmd(existing.period_start) : isDate(period_start) ? period_start : null
+    const to = period_end === undefined ? toYmd(existing.period_end) : isDate(period_end) ? period_end : null
 
     const content = await buildReportContent(auth0Id, {
       student_id: existing.student_id,

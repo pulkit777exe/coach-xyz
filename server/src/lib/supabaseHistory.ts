@@ -835,9 +835,9 @@ export const updateUserProfile = async (
     if (!existing?.[0]) return null
     const rows = await db<UserRecord[]>`
       update users set
-        name = ${input.name ?? existing[0].name},
-        nickname = ${input.nickname ?? existing[0].nickname},
-        picture = ${input.picture ?? existing[0].picture},
+        name = ${input.name === undefined ? existing[0].name : input.name},
+        nickname = ${input.nickname === undefined ? existing[0].nickname : input.nickname},
+        picture = ${input.picture === undefined ? existing[0].picture : input.picture},
         updated_at = now()
       where auth0_id = ${primary}
       returning *;
@@ -903,14 +903,17 @@ export const getUserAnalyses = async (
   auth0Id: string,
   limit = 20,
   offset = 0,
+  opts: { unlinked?: boolean } = {},
 ): Promise<DashboardAnalysis[]> => {
   return (await withHistoryStore(async (db) => {
     await ensureInitialized()
+    const unlinkedFilter = opts.unlinked ? "and a.student_id is null" : ""
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id}
+        ${db.unsafe(unlinkedFilter)}
       order by a.requested_at desc
       limit ${limit} offset ${offset};
     `

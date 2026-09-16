@@ -104,6 +104,7 @@ const isSelfPath = (url: string): boolean => {
  * onboarding sync route it is `body.sub`.
  */
 export const serviceGuard = new Elysia({ name: "serviceGuard" }).onBeforeHandle(
+  { as: "global" },
   ({ request, params, body, set }) => {
     if (!serviceGuardEnabled()) {
       maybeLogDisabled()
