@@ -7,6 +7,9 @@ import {
   STUDENT_STATUSES,
   linkAnalysisToStudent,
   orgCreateStudent,
+  orgEmailAttendance,
+  orgEmailReport,
+  orgSendInvites,
   orgStudents,
 } from "../org"
 
@@ -109,5 +112,46 @@ describe("orgCreateStudent", () => {
       full_name: "Alex Rivera",
       status: "active",
     })
+  })
+})
+
+// Email routes live under /api/email/:auth0Id (NOT /api/org/:auth0Id/email)
+// — see server/src/routes/email.ts. These tests pin the correct URL shape so
+// a namespace regression fails loudly instead of 404-ing at runtime.
+describe("email helpers", () => {
+  it("orgSendInvites POSTs to /api/email/:auth0Id/invite", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sent: [], total: 0, failed: 0 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgSendInvites("auth|123", { emails: ["a@x.com", "b@x.com"] })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/email/auth%7C123/invite")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({ emails: ["a@x.com", "b@x.com"] })
+  })
+
+  it("orgEmailReport POSTs to /api/email/:auth0Id/report", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sent: { id: "r", to: "a@x.com", subject: "s" } }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgEmailReport("auth|123", { report_id: "rep-1" })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/email/auth%7C123/report")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({ report_id: "rep-1" })
+  })
+
+  it("orgEmailAttendance POSTs to /api/email/:auth0Id/attendance", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sent: null, records: 0 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgEmailAttendance("auth|123", { from: "2026-09-01", to: "2026-09-15" })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/email/auth%7C123/attendance")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({ from: "2026-09-01", to: "2026-09-15" })
   })
 })

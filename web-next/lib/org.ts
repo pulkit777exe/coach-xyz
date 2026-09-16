@@ -4,6 +4,11 @@ import type { DashboardAnalysis } from "./api"
 const org = (auth0Id: string, path: string) =>
   `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
 
+// Email routes live under /api/email/:auth0Id/* (see server/src/routes/email.ts),
+// NOT under /api/org/:auth0Id/email/* — keep them on the right namespace.
+const email = (auth0Id: string, path: string) =>
+  `${IDENTITY_BASE}/api/email/${encodeURIComponent(auth0Id)}${path}`
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 // Org vocabulary — single source of truth for the web app. The server mirrors
@@ -540,7 +545,7 @@ export const orgSendInvites = async (
   auth0Id: string,
   input: { emails: string[]; student_ids?: string[] },
 ): Promise<{ sent: EmailSendOutcome[]; total: number; failed: number }> => {
-  return apiFetch(org(auth0Id, "/email/invite"), {
+  return apiFetch(email(auth0Id, "/invite"), {
     method: "POST",
     body: JSON.stringify(input),
   })
@@ -550,7 +555,7 @@ export const orgEmailReport = async (
   auth0Id: string,
   input: { report_id: string; to?: string },
 ): Promise<{ sent: { id: string | null; to: string; subject: string } }> => {
-  return apiFetch(org(auth0Id, "/email/report"), {
+  return apiFetch(email(auth0Id, "/report"), {
     method: "POST",
     body: JSON.stringify(input),
   })
@@ -560,7 +565,7 @@ export const orgEmailAttendance = async (
   auth0Id: string,
   input: { student_id?: string; from?: string; to?: string; recipient?: string },
 ): Promise<{ sent: unknown; records: number }> => {
-  return apiFetch(org(auth0Id, "/email/attendance"), {
+  return apiFetch(email(auth0Id, "/attendance"), {
     method: "POST",
     body: JSON.stringify(input),
   })

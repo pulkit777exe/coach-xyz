@@ -400,9 +400,12 @@ export async function getDashboardAnalyses(
   auth0Id: string,
   limit = 20,
   offset = 0,
+  opts: { unlinked?: boolean } = {},
 ): Promise<{ analyses: DashboardAnalysis[] }> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (opts.unlinked) params.set("unlinked", "1")
   return apiFetch<{ analyses: DashboardAnalysis[] }>(
-    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?limit=${limit}&offset=${offset}`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?${params.toString()}`,
   )
 }
 
