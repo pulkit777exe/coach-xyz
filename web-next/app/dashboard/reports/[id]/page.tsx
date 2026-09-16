@@ -26,12 +26,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   if (!report) notFound()
 
   return (
-    <div className="p-8 lg:p-12 max-w-3xl">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">Reports</p>
-      <div className="mb-8 flex items-start justify-between gap-4">
+    <div className="mx-auto max-w-[800px] px-6 py-6 lg:px-8">
+      <p className="mb-1 text-sm text-muted-foreground">Reports / Detail</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-serif text-4xl leading-none text-(--fg) sm:text-5xl">{report.title}</h1>
-          <p className="text-muted-foreground mt-3 text-sm">
+          <h1 className="text-[28px] font-bold tracking-tight text-foreground">{report.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {report.full_name || "Organization"} · {REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type} ·{" "}
             {report.period_start ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}` : "All time"}
           </p>

@@ -227,9 +227,9 @@ export default function ScheduleClient({
             Today
           </Button>
         </div>
-        <p className="font-serif text-xl text-(--fg)">
+        <p className="font-semibold text-lg text-foreground">
           {monthLabel}
-          {loading && <Spinner className="ml-3 inline text-(--cream-40)" />}
+          {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
         <div className="flex items-center gap-2">
           <select
@@ -283,7 +283,7 @@ export default function ScheduleClient({
               >
                 <span
                   className={`mb-1 inline-flex size-5 items-center justify-center rounded text-xs ${
-                    isToday ? "bg-(--success) font-bold text-background" : "text-(--cream-40)"
+                    isToday ? "bg-(--success) font-bold text-background" : "text-muted-foreground"
                   }`}
                 >
                   {date.getDate()}
@@ -362,7 +362,7 @@ export default function ScheduleClient({
                   className="border-border hover:bg-accent/50 rounded-md border p-3 text-left"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-(--fg) font-medium">{ev.title}</span>
+                    <span className="text-foreground font-medium">{ev.title}</span>
                     <span
                       className={`rounded border px-1.5 py-0.5 text-[0.6rem] uppercase tracking-[0.1em] ${
                         STATUS_META[ev.status]?.className ?? "border-border"

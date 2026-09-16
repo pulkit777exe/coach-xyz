@@ -20,27 +20,27 @@ export default async function SchedulePage() {
   const today = new Date();
   const first = new Date(today.getFullYear(), today.getMonth(), 1);
   const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const from = new Date(`${toISODate(first)}T00:00:00`).toISOString();
-  const to = new Date(`${toISODate(lastDay)}T23:59:59`).toISOString();
+  // Widen the window by one day on each side so month-boundary events are
+  // captured regardless of the server timezone vs. the browser timezone.
+  const from = new Date(`${toISODate(first)}T00:00:00`);
+  from.setDate(from.getDate() - 1);
+  const to = new Date(`${toISODate(lastDay)}T23:59:59`);
+  to.setDate(to.getDate() + 1);
 
-  const res = await orgSchedule(auth0Id, { from, to }).catch(() => ({ events: [] }));
+  const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() }).catch(() => ({ events: [] }));
 
   return (
-    <div className="p-8 lg:p-12 max-w-full">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-        Organization
-      </p>
-      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-        Schedule
-      </h1>
-
-      {res.events.length === 0 && (
-        <p className="mb-6 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
-          No data connection yet — add events below.
-        </p>
-      )}
-
-      <ScheduleClient auth0Id={auth0Id} initialEvents={res.events} />
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <span>Organizations</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-foreground font-medium">Schedule</span>
+      </div>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Schedule</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Plan practices, matches, and events.</p>
+      <div className="mt-6">
+        <ScheduleClient auth0Id={auth0Id} initialEvents={res.events} />
+      </div>
     </div>
   );
 }

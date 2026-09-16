@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon, DownloadIcon, PencilIcon } from "lucide-react"
+import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon, DownloadIcon, PencilIcon, MailIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
@@ -19,6 +19,7 @@ import {
 } from "@/components/9ui/ui/dialog"
 import { Spinner } from "./Spinner"
 import ReportBody from "./ReportBody"
+import EmailReportDialog from "./EmailReportDialog"
 import { downloadCSV } from "@/lib/csv"
 import { formatDateMed } from "@/lib/date"
 
@@ -36,7 +37,7 @@ const TYPE_BADGE: Record<string, string> = {
   progress: "border-(--info-border) text-(--info)",
   attendance: "border-(--warning-border) text-(--warning)",
   performance: "border-(--success-border) text-(--success)",
-  monthly: "border-(--danger-border) text-(--danger)",
+  monthly: "border-(--danger-border) text-destructive",
 }
 
 function typeLabel(t: string) {
@@ -58,6 +59,7 @@ export default function ReportsClient({
   const [editing, setEditing] = useState<ReportRecord | null>(null)
   const [deleting, setDeleting] = useState<ReportRecord | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [emailing, setEmailing] = useState<ReportRecord | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     student_id: "all",
@@ -141,6 +143,12 @@ export default function ReportsClient({
     }
   }
 
+  const studentById = (id: string | null) => (id ? students.find((s) => s.id === id) : undefined)
+
+const openEmail = (r: ReportRecord) => {
+    setEmailing(r)
+  }
+
   const confirmDelete = async () => {
     if (!deleting) return
     setDeleteBusy(true)
@@ -180,7 +188,7 @@ export default function ReportsClient({
         <div className="border-border bg-card rounded-lg border p-16 text-center">
           <FileTextIcon className="text-muted-foreground mx-auto mb-4 size-8" />
           <p className="text-muted-foreground text-sm">No reports yet.</p>
-          <p className="text-(--cream-40) mt-1 text-xs">
+          <p className="text-muted-foreground mt-1 text-xs">
             Generate progress, attendance, or performance reports for your students.
           </p>
         </div>
@@ -212,7 +220,7 @@ export default function ReportsClient({
             <tbody>
               {reports.map((r) => (
                 <tr key={r.id} className="hover:bg-accent/50 border-border border-b last:border-0">
-                  <td className="px-4 py-3 font-medium text-(--fg)">
+                  <td className="px-4 py-3 font-medium text-foreground">
                     <Link href={`/dashboard/reports/${r.id}`} className="hover:underline">
                       {r.title}
                     </Link>
@@ -238,6 +246,15 @@ export default function ReportsClient({
                         variant="ghost"
                         size="icon-sm"
                         className="text-muted-foreground"
+                        onClick={() => openEmail(r)}
+                        aria-label="Email report"
+                      >
+                        <MailIcon className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground"
                         onClick={() => openEdit(r)}
                         aria-label="Edit report"
                       >
@@ -246,7 +263,7 @@ export default function ReportsClient({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="text-muted-foreground hover:text-(--danger)"
+                        className="text-muted-foreground hover:text-destructive"
                         onClick={() => setDeleting(r)}
                         aria-label="Delete report"
                       >
@@ -332,7 +349,7 @@ export default function ReportsClient({
                 placeholder="e.g. Q3 Mid-season Review"
               />
             </div>
-            {error && <p className="text-sm text-(--danger)">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerateOpen(false)}>
@@ -422,7 +439,7 @@ export default function ReportsClient({
                   />
                 </div>
               </div>
-              {editError && <p className="text-sm text-(--danger)">{editError}</p>}
+              {editError && <p className="text-sm text-destructive">{editError}</p>}
             </div>
           )}
           <DialogFooter>
@@ -435,6 +452,18 @@ export default function ReportsClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Email report */}
+      <EmailReportDialog
+        key={emailing?.id ?? "none"}
+        auth0Id={auth0Id}
+        report={emailing ?? ({} as ReportRecord)}
+        open={Boolean(emailing)}
+        onOpenChange={(open) => !open && setEmailing(null)}
+        defaultEmail={
+          emailing ? studentById(emailing.student_id)?.email ?? undefined : undefined
+        }
+      />
 
       {/* Delete confirm */}
       <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>

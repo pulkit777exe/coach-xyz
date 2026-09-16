@@ -105,6 +105,7 @@ export default function StudentProfile({
   const [series, setSeries] = useState<PerformanceSeriesPoint[]>(initialSeries)
   const [attendance, setAttendance] = useState<AttendanceSummary | null>(initialAttendance)
   const [reports, setReports] = useState<ReportRecord[]>(initialReports)
+  const [analyses, setAnalyses] = useState<DashboardAnalysis[]>(allAnalyses)
   const [editOpen, setEditOpen] = useState(false)
   const [confirm, setConfirm] = useState<{
     title: string
@@ -165,8 +166,8 @@ export default function StudentProfile({
     return config
   }, [series])
 
-  const linked = allAnalyses.filter((a) => a.student_id === student_.id)
-  const unlinked = allAnalyses.filter((a) => !a.student_id)
+  const linked = analyses.filter((a) => a.student_id === student_.id)
+  const unlinked = analyses.filter((a) => !a.student_id)
 
   const runConfirm = async () => {
     if (!confirm) return
@@ -239,8 +240,7 @@ export default function StudentProfile({
         ...analysis,
         student_id: res.analysis.student_id ?? null,
       }
-      allAnalyses.splice(allAnalyses.indexOf(analysis), 1, updated)
-      await refresh()
+      setAnalyses((prev) => prev.map((a) => (a.server_job_id === updated.server_job_id ? updated : a)))
     } catch (err) {
       toast.error((err as CoachAIError).message ?? "Failed to update link")
     }
@@ -269,13 +269,13 @@ export default function StudentProfile({
         <div className="flex items-center gap-4">
           <Avatar className="border-border size-16 border">
             <AvatarImage src={undefined} alt="" />
-            <AvatarFallback className="bg-secondary text-secondary-foreground font-serif text-xl">
+            <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold text-lg">
               {initials(student_.full_name)}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="font-serif text-2xl text-(--fg)">{student_.full_name}</h2>
+              <h2 className="font-bold text-xl text-foreground">{student_.full_name}</h2>
               <Badge
                 className={
                   (STATUS_STYLE[student_.status] ?? "border-border text-muted-foreground") + " border"
@@ -319,7 +319,7 @@ export default function StudentProfile({
           <Button
             variant="outline"
             size="sm"
-            className="text-muted-foreground hover:text-(--danger)"
+            className="text-muted-foreground hover:text-destructive"
             onClick={() =>
               setConfirm({
                 title: `Remove ${student_.full_name}?`,
@@ -341,7 +341,7 @@ export default function StudentProfile({
 
       {/* Profile details */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
           Profile Details
         </p>
         <div className="border-border bg-card grid gap-px rounded-lg border sm:grid-cols-2">
@@ -350,7 +350,7 @@ export default function StudentProfile({
           <DetailRow label="Guardian" value={student_.guardian_name || "—"} />
           <DetailRow label="Guardian phone" value={student_.guardian_phone || "—"} />
           <div className="border-border border-t p-4 sm:col-span-2">
-            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">Notes</p>
+            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">Notes</p>
             <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-sm">
               {student_.notes || "No notes recorded."}
             </p>
@@ -360,25 +360,25 @@ export default function StudentProfile({
 
       {/* Attendance summary */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
           Attendance Overview
         </p>
-        <div className="grid grid-cols-2 gap-px bg-(--cream-05) md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-px bg-muted md:grid-cols-4">
           {attStats.map((s) => (
-            <div key={s.label} className="bg-(--bg) p-5">
-              <p className="font-serif text-2xl" style={{ color: s.color }}>
+            <div key={s.label} className="bg-card p-5">
+              <p className="font-bold text-xl" style={{ color: s.color }}>
                 {s.value}
               </p>
-              <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+              <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
                 {s.label}
               </p>
             </div>
           ))}
-          <div className="bg-(--bg) p-5">
-            <p className="font-serif text-2xl text-(--fg)">
+          <div className="bg-card p-5">
+            <p className="font-bold text-xl text-foreground">
               {attendance?.attendance_rate === null ? "—" : `${attendance?.attendance_rate ?? 0}%`}
             </p>
-            <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+            <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
               Attendance Rate
             </p>
           </div>
@@ -388,7 +388,7 @@ export default function StudentProfile({
       {/* Performance chart */}
       <div className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
             Performance Trend
           </p>
           {keys.length > 1 && (
@@ -444,7 +444,7 @@ export default function StudentProfile({
             </ChartContainer>
           ) : (
             <div className="flex h-40 items-center justify-center">
-              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40)">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
                 No performance metrics yet — log one below
               </p>
             </div>
@@ -530,7 +530,7 @@ export default function StudentProfile({
                   key={p.id ?? `${p.metric_key}-${p.measured_at}`}
                   className="flex items-center justify-between gap-2 py-1 text-sm"
                 >
-                  <span className="text-(--fg)">
+                  <span className="text-foreground">
                     {formatKey(p.metric_key)}{" "}
                     <span className="text-muted-foreground">
                       {p.metric_value}
@@ -553,7 +553,7 @@ export default function StudentProfile({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="text-muted-foreground hover:text-(--danger)"
+                      className="text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         p.id &&
                         setConfirm({
@@ -581,7 +581,7 @@ export default function StudentProfile({
       {/* Linked analyses */}
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">
+          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
             Linked Analyses
           </p>
           {unlinked.length > 0 && (
@@ -597,7 +597,7 @@ export default function StudentProfile({
             <p className="text-muted-foreground text-sm">
               No analyses linked to {student_.full_name}.
             </p>
-            <p className="text-xs text-(--cream-40)">
+            <p className="text-xs text-muted-foreground">
               {unlinked.length
                 ? "Choose an analysis above to build this player's profile."
                 : "Run a video analysis first, then link it here."}
@@ -662,12 +662,12 @@ export default function StudentProfile({
 
       {/* Reports */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-(--cream-40)">Reports</p>
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">Reports</p>
         {reports.length === 0 ? (
           <div className="border-border bg-card flex flex-col items-center gap-2 rounded-lg border p-10 text-center">
             <FileTextIcon className="text-muted-foreground size-6" />
             <p className="text-muted-foreground text-sm">No reports generated for {student_.full_name} yet.</p>
-            <Link href="/dashboard/reports" className="text-(--fg) text-xs underline">
+            <Link href="/dashboard/reports" className="text-foreground text-xs underline">
               Go to Reports
             </Link>
           </div>
@@ -679,7 +679,7 @@ export default function StudentProfile({
                   key={r.id}
                   className="hover:bg-accent/50 border-b border-border last:border-0 flex items-center justify-between gap-3 px-4 py-3 text-sm"
                 >
-                  <Link href={`/dashboard/reports/${r.id}`} className="text-(--fg) hover:underline">
+                  <Link href={`/dashboard/reports/${r.id}`} className="text-foreground hover:underline">
                     {r.title}
                   </Link>
                   <span className="flex items-center gap-3">
@@ -693,7 +693,7 @@ export default function StudentProfile({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="text-muted-foreground hover:text-(--danger)"
+                      className="text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         setConfirm({
                           title: "Delete this report?",
@@ -755,8 +755,8 @@ export default function StudentProfile({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-border border-t p-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
-      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">{label}</p>
-      <p className="text-(--fg) mt-1 text-sm">{value}</p>
+      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+      <p className="text-foreground mt-1 text-sm">{value}</p>
     </div>
   )
 }
@@ -776,8 +776,8 @@ function MetricPill({
       onClick={onClick}
       className={`border px-2.5 py-1 text-[0.6rem] uppercase tracking-[0.15em] transition-colors ${
         active
-          ? "text-(--fg) border-(--cream-20) bg-(--cream-05)"
-          : "text-(--cream-40) border-(--cream-10) hover:text-(--fg)"
+          ? "text-foreground border-border bg-muted"
+          : "text-muted-foreground border-border hover:text-foreground"
       }`}
     >
       {children}

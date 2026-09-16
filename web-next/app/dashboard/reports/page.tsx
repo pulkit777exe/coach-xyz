@@ -22,25 +22,21 @@ export default async function ReportsPage() {
   ]);
 
   return (
-    <div className="p-8 lg:p-12 max-w-6xl">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-        Organization
-      </p>
-      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-        Reports
-      </h1>
-
-      {reportsRes.reports.length === 0 && (
-        <p className="mb-6 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
-          No data connection yet — generate reports below.
-        </p>
-      )}
-
-      <ReportsClient
-        auth0Id={auth0Id}
-        initialReports={reportsRes.reports}
-        students={studentsRes.students}
-      />
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <span>Organizations</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-foreground font-medium">Reports</span>
+      </div>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Reports</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Generate and browse progress, attendance, and performance reports.</p>
+      <div className="mt-6">
+        <ReportsClient
+          auth0Id={auth0Id}
+          initialReports={reportsRes.reports}
+          students={studentsRes.students}
+        />
+      </div>
     </div>
   );
 }

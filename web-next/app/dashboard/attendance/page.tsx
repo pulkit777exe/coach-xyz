@@ -29,16 +29,18 @@ export default async function AttendancePage() {
   const active = studentsRes.students.filter((s) => s.status === "active");
 
   return (
-    <div className="p-8 lg:p-12 max-w-full">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-        Organization
-      </p>
-      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-        Attendance
-      </h1>
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <span>Organizations</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-foreground font-medium">Attendance</span>
+      </div>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Attendance</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Track session attendance day by day.</p>
+      <div className="mt-6">
 
       {active.length === 0 && studentsRes.students.length > 0 && (
-        <p className="mb-6 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
           No active students — check the roster.
         </p>
       )}
@@ -53,6 +55,7 @@ export default async function AttendancePage() {
           note: r.note,
         }))}
       />
+      </div>
     </div>
   );
 }

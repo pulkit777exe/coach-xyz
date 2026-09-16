@@ -3,7 +3,7 @@ import Link from "next/link";
 import { auth0 } from "@/lib/auth0";
 import { redirect, notFound } from "next/navigation";
 import { getDashboardAnalyses } from "@/lib/api";
-import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports } from "@/lib/org";
+import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports, orgStudentAnalyses } from "@/lib/org";
 import StudentProfile from "@/components/org/StudentProfile";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -38,19 +38,20 @@ export default async function StudentDetailPage({
   if (!studentRes) notFound();
   const student = studentRes.student;
 
-  const [seriesRes, attRes, analysesRes, sportsRes, reportsRes] = await Promise.all([
+  const [seriesRes, attRes, linkedRes, unlinkedRes, sportsRes, reportsRes] = await Promise.all([
     orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
     orgAttendanceSummary(auth0Id, { studentId: id }).catch(() => null),
-    getDashboardAnalyses(auth0Id, 200, 0).catch(() => ({ analyses: [] })),
+    orgStudentAnalyses(auth0Id, id).catch(() => ({ analyses: [] })),
+    getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }).catch(() => ({ analyses: [] })),
     orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
     orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
   ]);
 
   return (
-    <div className="p-8 lg:p-12 max-w-6xl">
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <Link
         href="/dashboard/students"
-        className="mb-8 inline-block text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to roster
       </Link>
@@ -61,7 +62,7 @@ export default async function StudentDetailPage({
         initialSeries={seriesRes.series}
         initialAttendance={attRes?.summary ?? null}
         initialReports={reportsRes.reports}
-        allAnalyses={analysesRes.analyses}
+        allAnalyses={[...unlinkedRes.analyses, ...linkedRes.analyses]}
         sports={sportsRes.sports}
       />
     </div>

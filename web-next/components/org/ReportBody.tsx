@@ -77,7 +77,7 @@ function StatCells({ items }: { items: [string, string][] }) {
     <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="bg-card p-3">
-          <p className="font-serif text-lg text-(--fg)">{value}</p>
+          <p className="text-lg font-semibold text-foreground">{value}</p>
           <p className="text-muted-foreground text-[0.6rem] uppercase tracking-[0.15em]">{label}</p>
         </div>
       ))}
@@ -89,7 +89,7 @@ function SummaryBlock({ c }: { c: ReportContent }) {
   return (
     <div className="border-border bg-muted/30 rounded-md border p-4">
       <p className="text-muted-foreground mb-1 text-[0.6rem] uppercase tracking-[0.2em]">Summary</p>
-      <p className="text-(--fg)">{c.summary}</p>
+      <p className="text-foreground">{c.summary}</p>
     </div>
   )
 }
@@ -157,7 +157,7 @@ function AnalysesBlock({ c }: { c: ReportContent }) {
             key={a.server_job_id}
             className="flex justify-between border-b border-border/60 py-1.5 text-sm"
           >
-            <span className="text-(--fg)">{a.display_name || "Untitled video"}</span>
+            <span className="text-foreground">{a.display_name || "Untitled video"}</span>
             <span className="text-muted-foreground">
               {a.form_score === null ? "—" : `${a.form_score}/10`}
             </span>

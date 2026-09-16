@@ -22,25 +22,22 @@ export default async function StudentsPage() {
   ]);
 
   return (
-    <div className="p-8 lg:p-12 max-w-6xl">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-        Organization
-      </p>
-      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-        Students
-      </h1>
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <span>Organizations</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-foreground">Students</span>
+      </div>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Students</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Manage your roster, attendance, and notes.</p>
 
-      {studentsRes.students.length === 0 && (
-        <p className="mb-6 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
-          No data connection yet — add students below.
-        </p>
-      )}
-
-      <StudentsClient
-        auth0Id={auth0Id}
-        initialStudents={studentsRes.students}
-        sports={sportsRes.sports}
-      />
+      <div className="mt-6">
+        <StudentsClient
+          auth0Id={auth0Id}
+          initialStudents={studentsRes.students}
+          sports={sportsRes.sports}
+        />
+      </div>
     </div>
   );
 }

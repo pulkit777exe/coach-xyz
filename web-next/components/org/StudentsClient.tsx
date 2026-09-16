@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, MoreHorizontalIcon, DownloadIcon } from "lucide-react"
+import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, MoreHorizontalIcon, DownloadIcon, UserPlusIcon, MailIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
@@ -28,6 +28,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
 import { Input } from "@/components/9ui/ui/input"
 import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
+import InvitePlayersDialog from "./InvitePlayersDialog"
 
 import type { Student } from "@/lib/org"
 import { orgDeleteStudent, orgUpdateStudent, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from "@/lib/org"
@@ -67,6 +68,8 @@ export default function StudentsClient({
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteForBulk, setInviteForBulk] = useState(false)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -168,6 +171,12 @@ export default function StudentsClient({
     setDialogOpen(true)
   }
 
+  const selectedStudents = filtered.filter((s) => selected.has(s.id))
+  const openInvite = (fromBulk: boolean) => {
+    setInviteForBulk(fromBulk)
+    setInviteOpen(true)
+  }
+
   const onCreated = (s: Student) => {
     setStudents((prev) => [s, ...prev])
   }
@@ -239,6 +248,10 @@ export default function StudentsClient({
               <DownloadIcon /> Export
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
+            <UserPlusIcon />
+            Invite
+          </Button>
           <Button size="sm" onClick={openCreate}>
             <PlusIcon />
             Add student
@@ -261,6 +274,14 @@ export default function StudentsClient({
             </Button>
             <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("transferred")}>
               Mark transferred
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => openInvite(true)}
+            >
+              <MailIcon /> Invite
             </Button>
             <Button
               variant="destructive"
@@ -442,6 +463,19 @@ export default function StudentsClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Invite players */}
+      <InvitePlayersDialog
+        auth0Id={auth0Id}
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        selectedEmails={
+          inviteForBulk ? selectedStudents.map((s) => s.email).filter((e): e is string => Boolean(e)) : undefined
+        }
+        selectedStudentIds={
+          inviteForBulk ? selectedStudents.map((s) => s.id) : undefined
+        }
+      />
     </div>
   )
 }

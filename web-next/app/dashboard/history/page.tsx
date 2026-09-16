@@ -20,7 +20,8 @@ export default async function HistoryPage({
   }
   const auth0Id = session.user.sub;
   const params = await searchParams;
-  const page = Math.max(Number(params.page || 1), 1);
+  const rawPage = Number(params.page);
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
   const perPage = 20;
   const offset = (page - 1) * perPage;
 
@@ -39,46 +40,46 @@ export default async function HistoryPage({
   }
 
   return (
-    <div className="p-8 lg:p-12 max-w-5xl">
-      <p className="mb-4 text-[0.65rem] uppercase tracking-[0.25em] text-(--cream-40)">
-        History
-      </p>
-      <h1 className="font-serif text-4xl leading-none text-(--fg) mb-12 sm:text-5xl">
-        All Analyses
-      </h1>
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+        <span>Analysis</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="text-foreground font-medium">History</span>
+      </div>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">All Analyses</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Browse all your past video analyses.</p>
 
-      {/* Error Banner */}
       {error && (
-        <div className="border border-(--red) p-4 mb-8">
-          <p className="text-sm text-(--red)">Failed to load history. Please try again later.</p>
+        <div className="mt-6 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          Failed to load history. Please try again later.
         </div>
       )}
 
       {analyses.length === 0 ? (
-        <div className="border border-(--cream-10) p-12 text-center">
-          <p className="text-(--cream-40) mb-4">No analyses found</p>
+        <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center shadow-sm">
+          <p className="text-muted-foreground mb-4 text-sm">No analyses found</p>
           <Link
             href="/"
-            className="border border-(--cream-10) px-6 py-3 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
+            className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Start Your First Analysis
           </Link>
         </div>
       ) : (
         <>
-          <div className="border border-(--cream-10) divide-y divide-(--cream-05)">
+          <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm divide-y divide-border">
             {analyses.map((a) => (
               <Link
                 key={a.server_job_id}
                 href={`/dashboard/analysis/${a.server_job_id}`}
-                className="flex items-center justify-between p-6 transition-colors hover:bg-(--cream-03)"
+                className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-(--fg) truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {a.display_name || a.file_name || "Untitled"}
                     {a.player_index !== null && ` — Player ${a.player_index}`}
                   </p>
-                  <div className="mt-2 flex items-center gap-4 text-[0.6rem] text-(--cream-40)">
+                  <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                     <span>
                       {new Date(a.requested_at).toLocaleDateString("en-US", {
                         month: "short",
@@ -93,56 +94,53 @@ export default async function HistoryPage({
                     {a.download_count > 0 && (
                       <span>{a.download_count} download{a.download_count > 1 ? "s" : ""}</span>
                     )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 ml-4">
-                  {a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json ? (
-                    <div className="text-right">
-                      <p className="font-serif text-2xl text-(--fg)">
-                        {(a.summary_json as { form_score: number }).form_score}
-                      </p>
-                      <p className="text-[0.55rem] uppercase tracking-[0.15em] text-(--cream-40)">
-                        Score
-                      </p>
                     </div>
-                  ) : null}
-                  <span
-                    className={`text-[0.6rem] uppercase tracking-[0.15em] px-3 py-1.5 border ${
-                      a.complete
-                        ? "border-(--cream-10) text-(--cream-40)"
-                        : a.error_code
-                          ? "border-(--red) text-(--red)"
-                          : "border-(--cream-20) text-(--cream-20)"
-                    }`}
-                  >
-                    {a.complete ? "Done" : a.error_code ? "Failed" : "Running"}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {(page > 1 || hasNextPage) && (
-            <div className="flex justify-center gap-4 mt-8">
-              {page > 1 && (
-                <Link
-                  href={`/dashboard/history?page=${page - 1}`}
-                  className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-                >
-                  Previous
+                  </div>
+                  <div className="flex items-center gap-3 ml-4">
+                    {a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json ? (
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-foreground">
+                          {(a.summary_json as { form_score: number }).form_score}
+                        </p>
+                        <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Score</p>
+                      </div>
+                    ) : null}
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
+                        a.complete
+                          ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
+                          : a.error_code
+                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+                            : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
+                      }`}
+                    >
+                      {a.complete ? "Done" : a.error_code ? "Failed" : "Running"}
+                    </span>
+                  </div>
                 </Link>
-              )}
-              {hasNextPage && (
-                <Link
-                  href={`/dashboard/history?page=${page + 1}`}
-                  className="border border-(--cream-10) px-4 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-                >
-                  Next
-                </Link>
-              )}
+              ))}
             </div>
-          )}
+
+            {(page > 1 || hasNextPage) && (
+              <div className="flex justify-center gap-3 mt-6">
+                {page > 1 && (
+                  <Link
+                    href={`/dashboard/history?page=${page - 1}`}
+                    className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+                  >
+                    Previous
+                  </Link>
+                )}
+                {hasNextPage && (
+                  <Link
+                    href={`/dashboard/history?page=${page + 1}`}
+                    className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+                  >
+                    Next
+                  </Link>
+                )}
+              </div>
+            )}
         </>
       )}
     </div>

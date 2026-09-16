@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, StickyNoteIcon } from "lucide-react"
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, StickyNoteIcon, MailIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Input } from "@/components/9ui/ui/input"
@@ -17,13 +17,13 @@ import {
 } from "@/components/9ui/ui/dialog"
 import { Spinner } from "./Spinner"
 import { downloadCSV } from "@/lib/csv"
+import EmailAttendanceDialog from "./EmailAttendanceDialog"
 
 import type { AttendanceStatus, Student } from "@/lib/org"
 import {
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
   orgAttendance,
-  orgStudents,
   orgUpsertAttendance,
   orgBatchAttendance,
   orgDeleteAttendance,
@@ -61,7 +61,7 @@ export default function AttendanceGrid({
 }) {
   const today = startOfLocalDay(new Date())
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
-  const [roster, setRoster] = useState<Student[]>(students)
+  const roster = students
   const [records, setRecords] = useState<Map<string, AttendanceStatus>>(
     () => makeMap(initialRecords),
   )
@@ -72,18 +72,7 @@ export default function AttendanceGrid({
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
   const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
   const [notesSaving, setNotesSaving] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    orgStudents(auth0Id)
-      .then((res) => {
-        if (!cancelled) setRoster(res.students.filter((s) => s.status === "active"))
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [auth0Id])
+  const [emailAttOpen, setEmailAttOpen] = useState(false)
 
   const year = month.getFullYear()
   const monthNum = month.getMonth()
@@ -341,7 +330,7 @@ export default function AttendanceGrid({
         </p>
         <Link
           href="/dashboard/students"
-          className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg)"
+          className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
         >
           Go to roster →
         </Link>
@@ -371,14 +360,14 @@ export default function AttendanceGrid({
             Today
           </Button>
         </div>
-        <p className="font-serif text-xl text-(--fg)">
+        <p className="font-semibold text-lg text-foreground">
           {monthLabel}
-          {loading && <Spinner className="ml-3 inline text-(--cream-40)" />}
+          {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-3 text-xs sm:flex">
             {STATUSES.map((s) => (
-              <span key={s} className="flex items-center gap-1.5 text-(--cream-40)">
+              <span key={s} className="flex items-center gap-1.5 text-muted-foreground">
                 <span
                   className="inline-block size-2.5 rounded-full"
                   style={{ background: STATUS_META[s].color }}
@@ -387,6 +376,9 @@ export default function AttendanceGrid({
               </span>
             ))}
           </div>
+          <Button variant="outline" size="sm" onClick={() => setEmailAttOpen(true)}>
+            <MailIcon /> Email sheet
+          </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <DownloadIcon /> Export
           </Button>
@@ -412,8 +404,8 @@ export default function AttendanceGrid({
                       type="button"
                       onClick={() => openDayDialog(d)}
                       title="Open day — mark present or add notes"
-                      className={`relative flex h-9 w-8 flex-col items-center justify-center rounded border border-transparent transition-colors hover:border-(--cream-20) ${
-                        isToday(d) ? "bg-(--success) text-background" : "text-(--cream-40)"
+                      className={`relative flex h-9 w-8 flex-col items-center justify-center rounded border border-transparent transition-colors hover:border-border ${
+                        isToday(d) ? "bg-(--success) text-background" : "text-muted-foreground"
                       }`}
                     >
                       <span className="text-xs leading-none">{d.getDate()}</span>
@@ -434,7 +426,7 @@ export default function AttendanceGrid({
                         </span>
                       )}
                       {noteCount > 0 && (
-                        <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-(--cream-40)" />
+                        <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-muted-foreground" />
                       )}
                     </button>
                   </th>
@@ -452,7 +444,7 @@ export default function AttendanceGrid({
                 <tr key={s.id} className="border-border hover:bg-accent/40 border-b last:border-0">
                   <td className="sticky left-0 z-10 bg-background/95 max-w-44 px-4 py-1.5">
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
-                      <span className="truncate font-medium text-(--fg)">{s.full_name}</span>
+                      <span className="truncate font-medium text-foreground">{s.full_name}</span>
                       {s.sport ? (
                         <span className="text-muted-foreground ml-1 truncate text-xs">
                           {s.sport}
@@ -492,14 +484,14 @@ export default function AttendanceGrid({
                         >
                           {meta ? meta.letter : isToday(d) ? "•" : ""}
                           {hasNote && (
-                            <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-(--fg)" />
+                            <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
                           )}
                         </button>
                       </td>
                     )
                   })}
                   <td className="px-3 py-1.5 text-right">
-                    <span className="text-xs text-(--cream-40)" title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}>
+                    <span className="text-xs text-muted-foreground" title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}>
                       {counts.present}/{daysInMonth}
                     </span>
                   </td>
@@ -577,7 +569,7 @@ export default function AttendanceGrid({
                           </option>
                         ))}
                       </select>
-                      <span className="text-(--fg)">{s.full_name}</span>
+                      <span className="text-foreground">{s.full_name}</span>
                       {!st && <span className="text-muted-foreground text-xs">not yet marked</span>}
                     </div>
                     <Input
@@ -602,6 +594,15 @@ export default function AttendanceGrid({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Email attendance */}
+      <EmailAttendanceDialog
+        auth0Id={auth0Id}
+        open={emailAttOpen}
+        onOpenChange={setEmailAttOpen}
+        from={toISODate(new Date(year, monthNum, 1))}
+        to={toISODate(new Date(year, monthNum + 1, 0))}
+      />
     </div>
   )
 }

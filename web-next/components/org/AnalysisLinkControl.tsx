@@ -80,10 +80,10 @@ export default function AnalysisLinkControl({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 px-4 py-2 border text-[0.65rem] uppercase tracking-[0.15em] transition-colors ${
+        className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[0.65rem] uppercase tracking-[0.15em] transition-colors ${
           linkedStudent
-            ? "border-(--success-border) text-(--success)"
-            : "border-(--cream-10) text-(--cream-40) hover:text-(--fg) hover:border-(--cream-20)"
+            ? "border-success/30 bg-success/10 text-success"
+            : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
         }`}
         title="Attach this analysis to a student for tracking"
       >
@@ -116,8 +116,8 @@ export default function AnalysisLinkControl({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 border border-(--cream-10) bg-(--bg) shadow-xl">
-          <div className="border-b border-(--cream-05) px-4 py-2 text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+        <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-border bg-card shadow-xl">
+          <div className="border-b border-border px-4 py-2 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
             {linkedStudent ? "Linked to" : "Choose a student"}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
@@ -125,7 +125,7 @@ export default function AnalysisLinkControl({
               <button
                 type="button"
                 onClick={() => applyLink(null)}
-                className="flex w-full items-center justify-between px-4 py-2 text-left text-xs text-(--red) hover:bg-(--cream-03)"
+                className="flex w-full items-center justify-between px-4 py-2 text-left text-xs text-destructive hover:bg-accent"
               >
                 Unlink {linkedStudent.full_name}
               </button>
@@ -138,10 +138,10 @@ export default function AnalysisLinkControl({
                   type="button"
                   disabled={isLinked}
                   onClick={() => applyLink(s.id)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-(--fg) hover:bg-(--cream-03) disabled:cursor-default disabled:opacity-50"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm text-foreground hover:bg-accent disabled:cursor-default disabled:opacity-50"
                 >
                   <span className="truncate">{s.full_name}</span>
-                  <span className="text-[0.6rem] uppercase tracking-[0.15em] text-(--cream-40)">
+                  <span className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
                     {s.sport || ""}
                     {isLinked ? " · linked" : ""}
                   </span>
