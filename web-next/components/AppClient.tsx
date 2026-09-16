@@ -55,12 +55,12 @@ function RotatingMessage({
   return (
     <div className="flex flex-col items-center gap-2">
       <p
-        className="text-(--fg) text-lg transition-opacity duration-300 ease-in-out"
+        className="text-foreground text-lg transition-opacity duration-300 ease-in-out"
         style={{ opacity }}
       >
         {messages[index]}
       </p>
-      <span className="text-(--cream-40) text-sm tabular-nums">
+      <span className="text-muted-foreground text-sm tabular-nums">
         {Math.round(percent)}%
       </span>
     </div>
@@ -92,8 +92,8 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
     case 'uploading':
     case 'scanning':
       return (
-        <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-(--cream-10) border-t-(--fg) rounded-full animate-spin mb-6" />
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-4 border-muted border-t-primary rounded-full animate-spin mb-6" />
           <RotatingMessage
             messages={
               pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES

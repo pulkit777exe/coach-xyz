@@ -42,7 +42,7 @@ export default function AnalysisTitle({
           if (e.key === 'Enter') save()
           if (e.key === 'Escape') { setDraft(name); setEditing(false) }
         }}
-        className="font-serif text-4xl leading-none text-(--fg) bg-transparent border-b border-(--cream-20) w-full focus:outline-none sm:text-5xl"
+        className="text-4xl font-bold tracking-tight leading-none text-foreground bg-transparent border-b border-border w-full focus:outline-none sm:text-5xl"
       />
     )
   }
@@ -50,7 +50,7 @@ export default function AnalysisTitle({
   return (
     <h1
       onClick={() => { setDraft(name); setEditing(true) }}
-      className="font-serif text-4xl leading-none text-(--fg) cursor-pointer hover:opacity-70 group sm:text-5xl"
+      className="text-4xl font-bold tracking-tight leading-none text-foreground cursor-pointer hover:opacity-70 group sm:text-5xl"
       title="Click to rename"
     >
       {name}

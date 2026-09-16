@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
 
 interface ErrorScreenProps {
@@ -225,10 +225,10 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
 
   return (
     <>
-      <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center p-6 pt-20">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 pt-20">
         <div className="max-w-md w-full text-center">
           <svg
-            className="w-16 h-16 mx-auto mb-6 text-red-400"
+            className="w-16 h-16 mx-auto mb-6 text-destructive"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -241,22 +241,22 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
             />
           </svg>
 
-          <h1 className="text-2xl font-semibold text-(--fg) mb-3">
+          <h1 className="text-2xl font-semibold text-foreground mb-3">
             {details.title}
           </h1>
 
-          <p className="text-(--cream-40) mb-2">{details.description}</p>
+          <p className="text-muted-foreground mb-2">{details.description}</p>
 
           {details.action && (
-            <p className="text-sm text-(--cream-40) mb-2">{details.action}</p>
+            <p className="text-sm text-muted-foreground mb-2">{details.action}</p>
           )}
 
-          <p className="text-xs text-(--cream-20) mb-8">
+          <p className="text-xs text-muted-foreground/60 mb-8">
             Error: {error.code} | Layer: {error.layer}
           </p>
 
           {countdown !== null && (
-            <p className="text-sm text-(--fg) mb-4 animate-pulse">
+            <p className="text-sm text-foreground mb-4 animate-pulse">
               Retrying in {countdown} seconds...
             </p>
           )}
@@ -270,9 +270,9 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
               {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
             </Button>
           ) : (
-            <p className="text-sm text-(--cream-40)">
+            <p className="text-sm text-muted-foreground">
               This error cannot be retried. Please{' '}
-              <a href="mailto:support@coachai.dev" className="text-(--fg) underline">
+              <a href="mailto:help@coachxyz.app" className="text-foreground underline">
                 contact support
               </a>
               .

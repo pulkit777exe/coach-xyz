@@ -35,15 +35,15 @@ export default async function ChatPage({
       <div className="mb-6 flex items-center gap-4">
         <Link
           href={`/dashboard/analysis/${id}`}
-          className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
+          className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
         >
           &larr; Back to Analysis
         </Link>
-        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40)">
+        <span           className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
           Chat
         </span>
       </div>
-      <div className="border border-(--cream-10)" style={{ height: "calc(100% - 3rem)" }}>
+      <div className="rounded-xl border border-border" style={{ height: "calc(100% - 3rem)" }}>
         <HistoryChat auth0Id={auth0Id} jobId={id} summary={summary} />
       </div>
     </div>
