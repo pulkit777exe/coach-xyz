@@ -5,6 +5,7 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
+  importStudents,
   listStudentSports,
   listAttendance,
   upsertAttendance,
@@ -26,6 +27,8 @@ import {
   updatePerformanceMetric,
   deletePerformanceMetric,
   getStudentPerformanceSeries,
+  getStudentTrends,
+  compareStudents,
   getStudentAnalyses,
   getOrgOverview,
   searchOrg,
@@ -35,7 +38,15 @@ import {
 } from "../lib/orgData"
 import { buildError } from "../lib/errors"
 import { serviceGuard } from "../lib/serviceGuard"
-import { isDate, isIsoDate, defaultReportTitle } from "../lib/orgValidate"
+import {
+  isDate,
+  isIsoDate,
+  defaultReportTitle,
+  validateStudentRow,
+  MAX_IMPORT_ROWS,
+  DEFAULT_COMPARISON_METRIC_KEY,
+} from "../lib/orgValidate"
+import type { ImportRow } from "../lib/orgValidate"
 import { linkAnalysisToStudent } from "../lib/supabaseHistory"
 import {
   ATTENDANCE_STATUSES,
@@ -206,6 +217,47 @@ export default new Elysia()
     }
     set.status = 200
     return { deleted: true }
+  })
+  .post("/api/org/:auth0Id/students/import", async ({ params, body, set }) => {
+    const { auth0Id } = params
+    const { rows } = body as { rows?: unknown[] }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "rows must be a non-empty array", false)
+    }
+    if (rows.length > MAX_IMPORT_ROWS) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", `Maximum ${MAX_IMPORT_ROWS} rows per import`, false)
+    }
+
+    const validated: Array<{ cleaned: Record<string, unknown> }> = []
+    const failed: Array<{ row_index: number; reason: string }> = []
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] as ImportRow
+      const result = validateStudentRow(row)
+      if (result.ok) {
+        validated.push({ cleaned: result.cleaned })
+      } else {
+        failed.push({ row_index: i, reason: result.reason })
+      }
+    }
+
+    if (validated.length === 0) {
+      set.status = 400
+      return { imported: 0, failed, duplicates_skipped: 0 }
+    }
+
+    const importResult = await importStudents(auth0Id, validated)
+    // Merge pre-validation failures with data-layer failures
+    importResult.failed = [...failed, ...importResult.failed]
+
+    set.status = 200
+    return {
+      imported: importResult.imported,
+      failed: importResult.failed,
+      duplicates_skipped: importResult.duplicates_skipped,
+    }
   })
   // ── Student detail: attendance, performance, analyses ─────────────────────
   .get("/api/org/:auth0Id/students/:id/performance", async ({ params, request, set }) => {
@@ -642,6 +694,50 @@ export default new Elysia()
     }
     set.status = 200
     return { metric }
+  })
+  // ── Student trends ────────────────────────────────────────────────────────
+  .get("/api/org/:auth0Id/students/:id/trends", async ({ params, request, set }) => {
+    const { auth0Id, id } = params
+    if (!auth0Id || !id) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+    }
+    const student = await getStudent(auth0Id, id)
+    if (!student) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Student not found", false)
+    }
+    const url = new URL(request.url)
+    const trends = await getStudentTrends(auth0Id, id, {
+      metricKey: url.searchParams.get("metricKey") ?? undefined,
+      from: url.searchParams.get("from") ?? undefined,
+      to: url.searchParams.get("to") ?? undefined,
+    })
+    set.status = 200
+    return { trends }
+  })
+  // ── Student comparison ────────────────────────────────────────────────────
+  .get("/api/org/:auth0Id/students/comparison", async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing auth0Id", false)
+    }
+    const url = new URL(request.url)
+    const idsParam = url.searchParams.get("ids")
+    if (!idsParam) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing ids query parameter", false)
+    }
+    const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean)
+    if (ids.length === 0 || ids.length > 10) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Provide 1-10 student ids", false)
+    }
+    const metricKey = url.searchParams.get("metricKey") ?? DEFAULT_COMPARISON_METRIC_KEY
+    const comparison = await compareStudents(auth0Id, ids, metricKey)
+    set.status = 200
+    return { comparison }
   })
   // ── Overview ───────────────────────────────────────────────────────────────
   .get("/api/org/:auth0Id/overview", async ({ params, set }) => {

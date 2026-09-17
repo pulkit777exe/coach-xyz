@@ -15,6 +15,10 @@ import authRoute from "./routes/auth"
 import orgRoute from "./routes/org"
 import meRoute from "./routes/me"
 import emailRoute from "./routes/email"
+import membersRoute from "./routes/members"
+import notificationsRoute from "./routes/notifications"
+import aiReportsRoute from "./routes/aiReports"
+import shareRoute from "./routes/share"
 import { healthRoute } from "./routes/health"
 import { historyStoreEnabled, initializeHistoryStore } from "./lib/supabaseHistory"
 import { buildError, isCoachAIError } from "./lib/errors"
@@ -117,6 +121,10 @@ const app = new Elysia({
   .use(orgRoute)
   .use(meRoute)
   .use(emailRoute)
+  .use(membersRoute)
+  .use(notificationsRoute)
+  .use(aiReportsRoute)
+  .use(shareRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────
   .onError(({ error, set, request }) => {

@@ -4,14 +4,12 @@ import { buildError } from "../lib/errors"
 import { emailConfigured, sendEmail, inviteEmail, reportEmail, attendanceEmail, escapeHtml } from "../lib/mailer"
 import { getUserByAuth0Id } from "../lib/supabaseHistory"
 import { listStudents, getStudent, getReport, listAttendance } from "../lib/orgData"
-import { SERVICE_HEADERS, serviceGuard } from "../lib/serviceGuard"
+import { serviceGuard } from "../lib/serviceGuard"
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000"
 
 // Resend onboarding domain is forced for unverified accounts; the app domain
-// is used once a domain is verified in the dashboard.
-const fromDomain = process.env.RESEND_FROM_DOMAIN ?? "onboarding@resend.dev"
-
+// is used once a domain is verified in the dashboard (see src/lib/mailer.ts).
 const statusColor = (status: string): string => {
   switch (status) {
     case "present": return "#046C0C"
@@ -27,13 +25,7 @@ export default new Elysia()
   // body: { emails: string[], student_ids?: string[] }
   // Creates missing student rows (arm-band email only, no account link),
   // then emails each address an invitation with a signup link.
-  .post("/api/email/:auth0Id/invite", async ({ params, body, request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified || verified !== params.auth0Id) {
-      set.status = 403
-      return buildError("FORBIDDEN", "Authenticated identity does not match the requested account.", false)
-    }
-
+  .post("/api/email/:auth0Id/invite", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
     const { emails, student_ids } = body as { emails?: unknown; student_ids?: unknown }
 
@@ -70,7 +62,6 @@ export default new Elysia()
       }
     }
 
-    const from = `${process.env.RESEND_FROM_NAME ?? "CoachXYZ"} <${fromDomain}>`
     const inviteUrl = `${FRONTEND_URL}/signup`
 
     const sent: { to: string; ok: boolean }[] = []
@@ -100,13 +91,7 @@ export default new Elysia()
 
   // ── Email a report to a recipient ───────────────────────────────────────
   // body: { report_id: string, to?: string }  — `to` defaults to the student's email
-  .post("/api/email/:auth0Id/report", async ({ params, body, request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified || verified !== params.auth0Id) {
-      set.status = 403
-      return buildError("FORBIDDEN", "Authenticated identity does not match the requested account.", false)
-    }
-
+  .post("/api/email/:auth0Id/report", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
     const { report_id, to } = body as { report_id?: unknown; to?: unknown }
 
@@ -163,13 +148,7 @@ export default new Elysia()
 
   // ── Email an attendance sheet ───────────────────────────────────────────
   // body: { student_id?: string, from?: string, to?: string, to?: string }
-  .post("/api/email/:auth0Id/attendance", async ({ params, body, request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified || verified !== params.auth0Id) {
-      set.status = 403
-      return buildError("FORBIDDEN", "Authenticated identity does not match the requested account.", false)
-    }
-
+  .post("/api/email/:auth0Id/attendance", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
     const { student_id, from, to, recipient } = body as { student_id?: unknown; from?: unknown; to?: unknown; recipient?: unknown }
     if (!emailConfigured()) {

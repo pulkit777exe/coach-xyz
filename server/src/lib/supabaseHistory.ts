@@ -29,6 +29,10 @@ type AnalysisStartRecord = RequestMeta & {
   playerIndex: number | null
   model: string
   auth0Id?: string | null
+  /** Auth0 id of whoever kicked off the job (e.g. a linked player). */
+  requestedBy?: string | null
+  /** Linked student row — scopes the job to a player's record. */
+  studentId?: string | null
 }
 
 type AnalysisStatusRecord = {
@@ -37,6 +41,7 @@ type AnalysisStatusRecord = {
   sessionToken: string | null
   playerIndex: number | null
   model: string
+  requestedBy?: string | null
   status: {
     stage: number
     stage_name: string
@@ -70,6 +75,7 @@ export const ANALYSES_SELECT_COLUMNS = `
   a.completed_at,
   a.download_count,
   a.display_name,
+  a.requested_by,
   a.student_id,
   v.file_name,
   v.file_size_bytes,
@@ -213,6 +219,7 @@ export const ensureInitialized = async () => {
           last_downloaded_at timestamptz,
           download_count integer not null default 0,
           display_name text,
+          requested_by text,
           updated_at timestamptz not null default now()
         );
       `
@@ -276,6 +283,7 @@ export const ensureInitialized = async () => {
       await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
 
       await sql`alter table analysis_history add column if not exists display_name text;`
+      await sql`alter table analysis_history add column if not exists requested_by text;`
 
       // Account linking: add linked_auth0_ids column to users (idempotent)
       await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`
@@ -528,6 +536,8 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         supabase_project_url,
         supabase_publishable_key,
         auth0_id,
+        requested_by,
+        student_id,
         updated_at
       ) values (
         ${record.serverJobId},
@@ -540,6 +550,8 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         ${supabaseProjectUrl},
         ${supabasePublishableKey},
         ${record.auth0Id || null},
+        ${record.requestedBy || null},
+        ${record.studentId ?? null}::uuid,
         now()
       )
       on conflict (server_job_id) do update set
@@ -552,6 +564,8 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
         supabase_project_url = excluded.supabase_project_url,
         supabase_publishable_key = excluded.supabase_publishable_key,
         auth0_id = coalesce(excluded.auth0_id, analysis_history.auth0_id),
+        requested_by = coalesce(analysis_history.requested_by, excluded.requested_by),
+        student_id = coalesce(analysis_history.student_id, excluded.student_id),
         updated_at = now();
     `
   })
@@ -582,6 +596,7 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
         status_json,
         error_code,
         error_message,
+        requested_by,
         last_polled_at,
         completed_at,
         updated_at
@@ -600,6 +615,7 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
         ${JSON.stringify(record.status)}::jsonb,
         ${errorCode},
         ${record.status.error},
+        ${record.requestedBy || null},
         now(),
         ${completedAt},
         now()
@@ -618,6 +634,7 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
         status_json = excluded.status_json,
         error_code = excluded.error_code,
         error_message = excluded.error_message,
+        requested_by = coalesce(analysis_history.requested_by, excluded.requested_by),
         last_polled_at = now(),
         completed_at = coalesce(analysis_history.completed_at, excluded.completed_at),
         updated_at = now();
@@ -869,6 +886,7 @@ export const resolveAuth0Id = async (auth0Id: string): Promise<string> => {
 
 export type DashboardAnalysis = {
   server_job_id: string
+  auth0_id: string
   engine_job_id: string
   session_token: string | null
   player_index: number | null
@@ -885,6 +903,7 @@ export type DashboardAnalysis = {
   completed_at: string | null
   download_count: number
   display_name: string | null
+  requested_by: string | null
   file_name: string | null
   file_size_bytes: number | null
   player_count: number | null

@@ -81,4 +81,39 @@ describe("verifyServiceIdentity", () => {
     expect(SERVICE_HEADERS.token).toBe("x-service-token")
     expect(SERVICE_HEADERS.verifiedAuth0Id).toBe("x-verified-auth0-id")
   })
+
+  test("allows a non-owner with an active org membership (memberRole given)", () => {
+    setToken(TOKEN)
+    expect(
+      verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
+        memberRole: "coach",
+      }),
+    ).toEqual({ ok: true })
+  })
+
+  test("rejects a non-owner with a null memberRole", () => {
+    setToken(TOKEN)
+    const outcome = verifyServiceIdentity(TOKEN, "auth0|outsider", "auth0|owner-1", {
+      memberRole: null,
+    })
+    expect(outcome.ok).toBe(false)
+    if (outcome.ok) throw new Error("unreachable")
+    expect(outcome.body.code).toBe("FORBIDDEN")
+  })
+
+  test("still requires valid token even when memberRole is provided", () => {
+    setToken(TOKEN)
+    const outcome = verifyServiceIdentity("wrong-token", "auth0|member-1", "auth0|owner-1", {
+      memberRole: "coach",
+    })
+    expect(outcome.ok).toBe(false)
+  })
+
+  test("still requires a verified id even when memberRole is provided", () => {
+    setToken(TOKEN)
+    const outcome = verifyServiceIdentity(TOKEN, null, "auth0|owner-1", {
+      memberRole: "coach",
+    })
+    expect(outcome.ok).toBe(false)
+  })
 })

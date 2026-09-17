@@ -11,6 +11,8 @@ import {
   STUDENT_STATUSES,
 } from "./orgEnums"
 import type { AttendanceStatus, ReportType } from "./orgEnums"
+import { computeMetricTrends as computeTrends } from "./orgValidate"
+import type { MetricTrend } from "./orgValidate"
 export type {
   AttendanceStatus,
   EventStatus,
@@ -18,6 +20,8 @@ export type {
   ReportType,
   StudentStatus,
 } from "./orgEnums"
+export { computeMetricTrends } from "./orgValidate"
+export type { MetricTrend, TrendPoint } from "./orgValidate"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -244,7 +248,7 @@ export const updateStudent = async (
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
     `
-    const values = cols.map((k, i) => {
+    const values = cols.map((k) => {
       const v = input[k]
       if (v === undefined || v === null) return null
       return typeof v === "number" ? v : String(v)
@@ -967,6 +971,149 @@ export const getStudentPerformanceSeries = async (
       return points
     })) ?? []
   )
+}
+
+// ── Bulk import ────────────────────────────────────────────────────────────
+
+export type ImportResult = {
+  imported: number
+  failed: Array<{ row_index: number; reason: string }>
+  duplicates_skipped: number
+}
+
+/**
+ * Insert multiple student rows in a single transactional call.
+ * Duplicates are detected by email (case-insensitive) within the org.
+ * Rows that fail validation are reported in the failed array.
+ */
+export const importStudents = async (
+  auth0Id: string,
+  rows: Array<{ cleaned: Record<string, unknown> }>,
+): Promise<ImportResult> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+
+    const result: ImportResult = { imported: 0, failed: [], duplicates_skipped: 0 }
+
+    if (rows.length === 0) return result
+
+    // Fetch existing emails for duplicate detection
+    const existingEmails = await db<{ email: string | null }[]>`
+      select lower(email) as email from students
+      where auth0_id = ${auth0Id} and email is not null;
+    `
+    const emailSet = new Set((existingEmails ?? []).map((r) => r.email))
+
+    // Process each row individually (best-effort within the transaction)
+    for (let i = 0; i < rows.length; i++) {
+      const { cleaned } = rows[i]
+
+      // Duplicate check by email
+      const email = typeof cleaned.email === "string" ? cleaned.email.toLowerCase() : null
+      if (email && emailSet.has(email)) {
+        result.duplicates_skipped++
+        continue
+      }
+
+      // Build insert
+      const cols = Object.keys(cleaned).filter(
+        (k) => cleaned[k] !== undefined && cleaned[k] !== null && cleaned[k] !== "",
+      )
+      if (cols.length === 0) {
+        result.failed.push({ row_index: i, reason: "No valid fields after cleaning" })
+        continue
+      }
+
+      try {
+        const placeholders = ["$1", ...cols.map((_, j) => `$${j + 2}`)].join(", ")
+        const sql = `
+          insert into students (auth0_id, ${cols.join(", ")})
+          values (${placeholders})
+          returning id;
+        `
+        const values = cols.map((k) => cleaned[k])
+        const rowsInserted = await db.unsafe<{ id: string }[]>(sql, [auth0Id, ...values])
+        if (rowsInserted?.[0]) {
+          result.imported++
+          if (email) emailSet.add(email)
+        } else {
+          result.failed.push({ row_index: i, reason: "Insert returned no rows" })
+        }
+      } catch (err) {
+        result.failed.push({
+          row_index: i,
+          reason: err instanceof Error ? err.message : "Database error",
+        })
+      }
+    }
+
+    return result
+  })
+}
+
+// ── Trends ─────────────────────────────────────────────────────────────────
+
+/**
+ * Group the student's performance series into per-metric trends with slope
+ * info (latest, avg, change). Pure computation lives in orgValidate.computeMetricTrends.
+ */
+export const getStudentTrends = async (
+  auth0Id: string,
+  studentId: string,
+  opts: { metricKey?: string; from?: string; to?: string } = {},
+): Promise<MetricTrend[]> => {
+  const series = await getStudentPerformanceSeries(auth0Id, studentId, opts)
+  return computeTrends(series)
+}
+
+// ── Comparison ─────────────────────────────────────────────────────────────
+
+export type ComparisonStudent = {
+  student_id: string
+  full_name: string
+  latest: number | null
+  avg: number | null
+  points: Array<{ measured_at: string; metric_value: number }>
+}
+
+/**
+ * Compare multiple students on a single metric key.
+ * Returns per-student latest, avg, and full points array.
+ */
+export const compareStudents = async (
+  auth0Id: string,
+  studentIds: string[],
+  metricKey = "form_score",
+): Promise<ComparisonStudent[]> => {
+  if (studentIds.length === 0) return []
+
+  return withHistoryStore(async (_db) => {
+    await ensureInitialized()
+
+    const result: ComparisonStudent[] = []
+
+    for (const sid of studentIds) {
+      const series = await getStudentPerformanceSeries(auth0Id, sid, {})
+      const filtered = series.filter((s) => s.metric_key === metricKey)
+      const values = filtered.map((s) => s.metric_value)
+
+      const student = await getStudent(auth0Id, sid)
+      result.push({
+        student_id: sid,
+        full_name: student?.full_name ?? "Unknown",
+        latest: values.length > 0 ? values[values.length - 1] : null,
+        avg: values.length > 0
+          ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100
+          : null,
+        points: filtered.map((s) => ({
+          measured_at: s.measured_at,
+          metric_value: s.metric_value,
+        })),
+      })
+    }
+
+    return result
+  })
 }
 
 // ── Org Overview ─────────────────────────────────────────────────────────────

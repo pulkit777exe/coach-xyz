@@ -1,13 +1,21 @@
 import { Queue, Worker, QueueEvents, UnrecoverableError } from "bullmq"
+import { randomUUID } from "crypto"
+import type { Redis } from "ioredis"
 import { markJobFailed, getJob } from "./jobs"
 import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
 import { wrapEngineError, isQueueRetryable, isCoachAIError } from "./errors"
 import { analyzeVideo } from "./engine"
+import {
+  initAiReportJob,
+  updateAiReportJob,
+  persistAiReportRecord,
+  generateAiReport,
+} from "./aiReportData"
 
 // Derive Redis protocol URL from Upstash REST URL and token
 // REST URL format: https://<endpoint>.upstash.io
 // Redis protocol format: rediss://default:<token>@<endpoint>.upstash.io:6379
-function getRedisConnection() {
+function getRedisConnection(): Redis | null {
   const restUrl = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
 
@@ -22,7 +30,7 @@ function getRedisConnection() {
 
   // Connect to Redis at module load time
   try {
-    const IORedis = require("ioredis")
+    const IORedis = require("ioredis") as typeof import("ioredis").default
     const client = new IORedis(redisUrl, {
       maxRetriesPerRequest: null,
       tls: {},
@@ -54,7 +62,7 @@ const redisAvailable = !!connection
 
 export const analysisQueue = redisAvailable
   ? new Queue("coachai-analysis", {
-      connection: connection as any,
+      connection: connection!,
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: "exponential", delay: 5000 },
@@ -156,7 +164,7 @@ const worker = redisAvailable
         return { ok: true }
       },
       {
-        connection: connection as any,
+        connection: connection!,
         // Single concurrency for 512MB RAM free tier (configurable via WORKER_CONCURRENCY)
         concurrency: Number(process.env.WORKER_CONCURRENCY) || 1,
       },
@@ -184,7 +192,7 @@ if (worker) {
 // Handle job exhausting all retries
 let queueEvents: QueueEvents | null = null
 if (redisAvailable && analysisQueue) {
-  queueEvents = new QueueEvents("coachai-analysis", { connection: connection as any })
+  queueEvents = new QueueEvents("coachai-analysis", { connection: connection! })
 
   queueEvents.on("failed", async ({ jobId, failedReason }) => {
     try {
@@ -305,6 +313,172 @@ if (redisAvailable && analysisQueue) {
   setTimeout(recoverStuckJobs, 30_000)
 }
 
+// ── AI Report Queue ─────────────────────────────────────────────────────────
+// One-click AI reports: the route enqueues a job that calls engine /report
+// synchronously, persists the report row, and marks the Redis job record done
+// so the polling route can return the report.
+
+export interface AiReportPayload {
+  report_job_id: string
+  auth0_id: string
+  report_type: string
+  period_start?: string | null
+  period_end?: string | null
+  title?: string | null
+  student_id?: string | null
+  sport?: string | null
+  student_name?: string | null
+  report_context: Record<string, unknown>
+}
+
+export const aiReportQueue = redisAvailable
+  ? new Queue("coachai-report", {
+      connection: connection!,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5000 },
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
+    })
+  : null
+
+/**
+ * Create a queued report job record and enqueue the BullMQ job. Returns the
+ * report_job_id, or null when the queue is not configured.
+ */
+export const enqueueAiReport = async (
+  payload: Omit<AiReportPayload, "report_job_id">,
+): Promise<string | null> => {
+  if (!aiReportQueue) return null
+  const reportJobId = randomUUID()
+  await initAiReportJob({ report_job_id: reportJobId, auth0_id: payload.auth0_id })
+  await aiReportQueue.add("ai-report", { ...payload, report_job_id: reportJobId })
+  return reportJobId
+}
+
+const aiReportWorker = redisAvailable
+  ? new Worker<AiReportPayload>(
+      "coachai-report",
+      async (job) => {
+        const {
+          report_job_id,
+          auth0_id,
+          report_type,
+          period_start,
+          period_end,
+          title,
+          student_id,
+          sport,
+          student_name,
+          report_context,
+        } = job.data
+
+        // Idempotency check: skip if already terminal (race with status poll)
+        const existingJob = await job.getState()
+        if (existingJob === "completed" || existingJob === "failed") {
+          return { ok: true, skipped: "already_terminal" }
+        }
+
+        try {
+          await updateAiReportJob(report_job_id, { status: "running", progress: 10 })
+          const { report, raw } = await generateAiReport({
+            report_context,
+            report_type,
+            sport,
+            student_name,
+          })
+          const persisted = await persistAiReportRecord({
+            auth0_id,
+            report_type: report_type as Parameters<typeof persistAiReportRecord>[0]["report_type"],
+            title: title ?? "AI Report",
+            period_start: period_start ?? null,
+            period_end: period_end ?? null,
+            student_id: student_id ?? null,
+            report,
+            raw,
+          })
+          await updateAiReportJob(report_job_id, {
+            status: "done",
+            progress: 100,
+            report_id: persisted.id,
+          })
+          return { ok: true }
+        } catch (error) {
+          const engineError = isCoachAIError(error)
+            ? error
+            : wrapEngineError({ message: error instanceof Error ? error.message : "Unknown AI report error." })
+
+          if (!isQueueRetryable(engineError)) {
+            await updateAiReportJob(report_job_id, {
+              status: "failed",
+              error: `${engineError.code}: ${engineError.message}`,
+            })
+            throw new UnrecoverableError(`${engineError.code}: ${engineError.message}`)
+          }
+
+          await updateAiReportJob(report_job_id, {
+            status: "failed",
+            error: `${engineError.code}: ${engineError.message}`,
+          })
+          throw engineError
+        }
+      },
+      {
+        connection: connection!,
+        // Reports are LLM-bound, not video-bound; stay serialized like analysis.
+        concurrency: Number(process.env.REPORT_WORKER_CONCURRENCY) || 1,
+      },
+    )
+  : null
+
+if (aiReportWorker) {
+  aiReportWorker.on("error", (err) => {
+    console.error(JSON.stringify({
+      type: "ai_report_worker_error",
+      message: err.message,
+      timestamp: new Date().toISOString(),
+    }))
+  })
+}
+
+// Handle report jobs exhausting all retries — mark the Redis record failed.
+let reportQueueEvents: QueueEvents | null = null
+if (redisAvailable && aiReportQueue) {
+  reportQueueEvents = new QueueEvents("coachai-report", { connection: connection! })
+
+  reportQueueEvents.on("failed", async ({ jobId, failedReason }) => {
+    try {
+      const bullJob = await aiReportQueue!.getJob(jobId)
+      const reportJobId = bullJob?.data?.report_job_id
+      if (!reportJobId) return
+
+      const retriesExhausted = (bullJob.attemptsMade ?? 0) >= (bullJob.opts?.attempts ?? 3)
+      if (retriesExhausted) {
+        await updateAiReportJob(reportJobId, {
+          status: "failed",
+          error: failedReason ?? "AI report failed after retries.",
+        })
+      }
+    } catch (err) {
+      console.error(JSON.stringify({
+        type: "ai_report_failed_event_error",
+        jobId,
+        error: err instanceof Error ? err.message : "unknown",
+        timestamp: new Date().toISOString(),
+      }))
+    }
+  })
+
+  aiReportQueue.on("error", (err) => {
+    console.error(JSON.stringify({
+      type: "ai_report_queue_error",
+      message: err.message,
+      timestamp: new Date().toISOString(),
+    }))
+  })
+}
+
 // ── Graceful Shutdown ──────────────────────────────────────────────────────
 // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
 const SHUTDOWN_TIMEOUT_MS = 10_000
@@ -320,8 +494,11 @@ const gracefulShutdown = async (signal: string) => {
 
   try {
     if (queueEvents) await queueEvents.close()
+    if (reportQueueEvents) await reportQueueEvents.close()
     if (worker) await worker.close()
+    if (aiReportWorker) await aiReportWorker.close()
     if (analysisQueue) await analysisQueue.close()
+    if (aiReportQueue) await aiReportQueue.close()
     if (connection) await connection.quit()
     await shutdownHistoryStore()
     console.log(JSON.stringify({ type: "shutdown_complete", signal, timestamp: new Date().toISOString() }))
@@ -334,4 +511,4 @@ const gracefulShutdown = async (signal: string) => {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"))
 process.on("SIGINT", () => gracefulShutdown("SIGINT"))
 
-export { worker }
+export { worker, aiReportWorker }

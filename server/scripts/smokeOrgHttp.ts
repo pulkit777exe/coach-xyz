@@ -60,7 +60,7 @@ async function call(
   method: string,
   path: string,
   opts: { identity?: string; body?: unknown; rawToken?: string } = {},
-): Promise<{ status: number; json: any }> {
+): Promise<{ status: number; json: Record<string, unknown> | null }> {
   const pathResource = path.match(/\/api\/(?:org|email)\/([^/?]+)/)?.[1]
   const pathUser = path.match(/\/api\/auth\/user\/([^/?]+)/)?.[1]
   const bodySub = opts.body && typeof opts.body === "object" && "sub" in opts.body ? (opts.body as { sub: string }).sub : ""
@@ -76,7 +76,7 @@ async function call(
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     }),
   )
-  let json: any
+  let json: Record<string, unknown> | null
   try {
     json = await res.json()
   } catch {

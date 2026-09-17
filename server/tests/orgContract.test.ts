@@ -6,7 +6,11 @@ import {
   REPORT_TYPES,
   STUDENT_STATUSES,
 } from "../src/lib/orgEnums"
-import { REPORT_TYPE_LABELS } from "../src/lib/orgValidate"
+import {
+  REPORT_TYPE_LABELS,
+  MAX_IMPORT_ROWS,
+  DEFAULT_COMPARISON_METRIC_KEY,
+} from "../src/lib/orgValidate"
 
 // Canonical org vocabulary — values AND order must match web-next/lib/org.ts
 // (pinned there by web-next/lib/__tests__/orgContract.test.ts). Single-sided
@@ -59,5 +63,21 @@ describe("server org enum contract (mirrors web-next/lib/org.ts)", () => {
     ["report types", REPORT_TYPES],
   ] as const)("%s contain no duplicates", (_label, members) => {
     expect(new Set(members).size).toBe(members.length)
+  })
+})
+
+describe("bulk import + comparison route contract (shares orgValidate tokens)", () => {
+  test("import cap is a positive number the route enforces", () => {
+    expect(MAX_IMPORT_ROWS).toBe(500)
+    expect(Number.isSafeInteger(MAX_IMPORT_ROWS)).toBe(true)
+    expect(MAX_IMPORT_ROWS).toBeGreaterThan(0)
+  })
+
+  test("comparison default metric key is the canonical form_score key", () => {
+    expect(DEFAULT_COMPARISON_METRIC_KEY).toBe("form_score")
+  })
+
+  test("comparison default key is a snake_case metric token", () => {
+    expect(DEFAULT_COMPARISON_METRIC_KEY).toMatch(/^[a-z][a-z0-9_]*$/)
   })
 })
