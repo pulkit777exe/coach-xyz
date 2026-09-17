@@ -69,9 +69,9 @@ history/chat persistence degrades gracefully when absent. Rate limits are config
 
 ```bash
 cd web-next
-bun install
-cp .env.example .env.local     # set NEXT_PUBLIC_API_URL, Auth0 vars, NEXT_PUBLIC_SENTRY_DSN
-bun run dev
+npm install
+cp .env.example .env.local     # set NEXT_PUBLIC_API_URL, Auth0 vars, NEXT_PUBLIC_SENTRY_DSN, SERVICE_TOKEN
+npm run dev
 ```
 
 Frontend: http://localhost:3000
@@ -79,6 +79,26 @@ Frontend: http://localhost:3000
 Auth0 is required for `/dashboard/*`, `/account`, and authenticated uploads. Minimal vars:
 `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` (64-hex),
 `APP_BASE_URL=http://localhost:3000`.
+
+`SERVICE_TOKEN` must match the server's value — it authenticates the identity-bearing
+proxy (`web-next/app/api/service/[[...path]]/route.ts`) to the server. Unset only in local dev,
+where the server guard is inert and logs a warning on startup. See ARCHITECTURE.md §6.
+
+## Root orchestration
+
+The repo-root `package.json` drives both TypeScript apps (the engine stays separate):
+
+```bash
+npm run dev          # parallel: server (:8000) + web (:3000)
+npm run check        # typecheck + lint + tests (both TS apps)
+npm run typecheck    # server tsc + web tsc
+npm run lint         # server eslint + web eslint
+npm run test         # server bun test + web vitest
+npm run build        # web next build
+npm run smoke        # server live HTTP smoke (needs .env + running server + Neon DB)
+```
+
+Per-app: `npm run dev:server`, `npm run dev:web`. Server uses `bun`, web-next uses `npm`.
 
 ## Environment variables
 
@@ -93,6 +113,8 @@ Auth0 is required for `/dashboard/*`, `/account`, and authenticated uploads. Min
 | `SCAN_RATE_LIMIT` | server | `10` (per minute) | no |
 | `ANALYSIS_RATE_LIMIT` | server | `5` (per hour) | no |
 | `DATABASE_URL` | server | — | no (graceful degradation) |
+| `SERVICE_TOKEN` | server + web-next | — | recommended (identity boundary; inert if unset) |
+| `RESEND_API_KEY` | server | — | no (email routes return 501 `EMAIL_NOT_CONFIGURED` when unset) |
 | `SENTRY_DSN` | engine + server + web | — | no |
 | `NEXT_PUBLIC_API_URL` | web-next | `http://localhost:8000` | yes |
 | Auth0 vars (`AUTH0_*`, `APP_BASE_URL`) | web-next | — | yes (for auth) |
@@ -112,6 +134,25 @@ Open the Command Palette (`Ctrl+Shift+P`) → "Tasks: Run Task" to use them.
    single-player clips or asks you to pick a player.
 3. Wait for analysis (30–120s), then view results and chat with the AI coach.
 4. Download the annotated video from the results or dashboard detail page.
+
+## Coach dashboard & player hub
+
+Accounts have a `role` (`coach` | `player`), defaulting to `coach` on first login:
+
+- **Coach** — `/dashboard/*`: Overview, Students (roster CRUD, invites, attendance), Attendance grid + batch entry, Schedule calendar, Reports (print/email), Analyses history + detail + chat, Search, Settings (profile, members).
+- **Player** — `/player`: read-only self view. A player's login email auto-links to their `students` row on first login (`students.account_auth0_id`), flipping the role to `player`; the dashboard then redirects them to `/player`.
+
+Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.tsx`, `app/player/page.tsx`) are UX-layer only.
+
+## Test suites
+
+```bash
+cd engine   && python -m pytest tests/ -q   # 103 tests
+cd server   && bun test                      # 72 tests / 8 files
+cd web-next && npm test                      # 107 tests / 14 files (vitest)
+```
+
+Or run both TypeScript suites at once with `npm run check` from the repo root.
 
 ## Supported sports
 

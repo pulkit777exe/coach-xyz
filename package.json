@@ -1,0 +1,16 @@
+{
+  "name": "coach-xyz",
+  "private": true,
+  "description": "Multi-sport AI video analyzer — engine (Python), server (Bun/Elysia), web (Next.js)",
+  "scripts": {
+    "dev": "node ./.scripts/dev.mjs",
+    "dev:server": "cd server && bun run dev",
+    "dev:web": "cd web-next && npm run dev",
+    "typecheck": "cd server && bun run type-check && cd ../web-next && npx tsc --noEmit",
+    "lint": "cd server && bun run lint && cd ../web-next && npm run lint",
+    "test": "cd server && bun test && cd ../web-next && npm test",
+    "build": "cd web-next && npm run build",
+    "smoke": "cd server && bun run smoke",
+    "check": "npm run typecheck && npm run lint && npm run test"
+  }
+}
