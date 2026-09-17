@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, forwardRef, useImperativeHandle, useState, useCallback } from 'react'
+import { useRef, useEffect, forwardRef, useImperativeHandle, useState, useCallback, useMemo } from 'react'
 import { getDownloadUrl } from '@/lib/api'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
@@ -47,7 +47,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const lastCalloutIndex = useRef<number>(-1)
     const animFrameRef = useRef<number>(0)
 
-    const shotEvents = summary?.shot_events || []
+    const shotEvents = useMemo(() => summary?.shot_events ?? [], [summary])
 
     useImperativeHandle(ref, () => ({
       seekTo: (time: number) => {

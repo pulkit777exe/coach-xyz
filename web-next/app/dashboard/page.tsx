@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
-import { getDashboardStats, getDashboardAnalyses } from "@/lib/api";
-import { orgSchedule, orgReports, orgOverview } from "@/lib/org";
+import { getSession } from "@/lib/session";
+import { getOrgContext, getDashboardStats, getDashboardAnalyses } from "@/lib/serverData";
+import { orgSchedule, orgReports, orgOverview } from "@/lib/serverData";
 import type { ScheduleEvent, ReportRecord, OrgOverview } from "@/lib/org";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -15,6 +15,15 @@ import {
   CalendarDays,
   History,
   Gauge,
+  Trophy,
+  Video,
+  BookOpen,
+  Code2,
+  Database,
+  Layers,
+  ShieldCheck,
+  Zap,
+  Info,
 } from "lucide-react";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -45,9 +54,9 @@ function overviewTiles(overview: OrgOverview) {
 
 export default async function DashboardPage() {
   noStore();
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   let stats = null;
   let analyses = null;
@@ -93,46 +102,82 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Organizations</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground font-medium">Overview</span>
+      {/* Getting Started header — Auth0 style */}
+      <h1 className="text-[24px] font-bold tracking-tight text-foreground">Getting Started</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Your coaching organization at a glance. Set up your roster, run your first analysis, and invite your team.</p>
+
+      {/* Banner — New to CoachXYZ */}
+      <div className="mt-6 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+        <span className="grid size-6 place-items-center rounded-full bg-info/10 text-info"><Info className="size-4" /></span>
+        <p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">New to CoachXYZ?</span> Try our onboarding guide to get started. <Link href="/features" className="text-info underline decoration-info/30 hover:text-foreground">Start the guide.</Link></p>
       </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Overview</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Your organization at a glance.</p>
 
       {error && (
-        <div className="mt-6 rounded-md border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mt-6 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
           Failed to load dashboard data. Please try again later.
         </div>
       )}
 
+      {/* Start Building — large card */}
+      <h2 className="mt-8 text-[15px] font-semibold text-foreground">Start Building</h2>
+      <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="grid lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="p-6 lg:p-7">
+            <h3 className="text-[16px] font-semibold text-foreground">Analyze your first video</h3>
+            <p className="mt-2 max-w-[420px] text-sm leading-5 text-muted-foreground">
+              Integrate video analysis into your workflow or use one of our samples to get started in minutes. Six sports, one pipeline.
+            </p>
+            <div className="mt-5 flex items-center gap-3">
+              <Button render={<Link href="/#analyze" />} className="h-8 rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Upload Video</Button>
+              <Link href="/features" className="text-xs font-medium text-info hover:text-foreground">Learn More</Link>
+            </div>
+          </div>
+          <div className="relative flex items-center justify-center bg-muted p-6 border-t lg:border-t-0 lg:border-l border-border">
+            {/* sport icons cluster */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                {l:'BB', bg:'bg-orange-500'}, {l:'FB', bg:'bg-emerald-500'}, {l:'CR', bg:'bg-sky-500'}, {l:'TN', bg:'bg-yellow-500'},
+                {l:'BB', bg:'bg-red-500'}, {l:'HK', bg:'bg-violet-500'}, {l:'PY', bg:'bg-amber-500'}, {l:'GO', bg:'bg-teal-500'},
+              ].map(s=>(
+                <span key={s.l+s.bg} className={`grid size-9 place-items-center rounded-full text-xs font-bold text-foreground ${s.bg}`}>{s.l}</span>
+              ))}
+            </div>
+            <div className="absolute bottom-3 right-3 rounded-md border border-border bg-card px-2 py-1 text-[10px] font-medium text-muted-foreground">6 sports • 60s</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Organization overview — Next Steps 2x2 */}
       {tiles.length > 0 && (
         <>
-          <p className="mt-8 mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">Organization</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {tiles.map((t) => (
-              <Link
-                key={t.label}
-                href={t.href}
-                className="group rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted"
-              >
-                <t.icon className="size-5 text-muted-foreground" />
-                <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{t.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{t.label}</p>
-              </Link>
+          <h2 className="mt-8 text-[15px] font-semibold text-foreground">Next Steps</h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {tiles.slice(0,4).map((t) => (
+              <div key={t.label} className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-8 place-items-center rounded-lg bg-muted text-info"><t.icon className="size-4" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground">{t.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{t.value} {t.label.toLowerCase()} — {t.label === 'Students' ? 'add athletes to your roster' : t.label === 'Active Students' ? 'track active roster' : t.label === 'Sessions This Month' ? 'sessions recorded' : 'events scheduled'}</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <Button variant="outline" size="sm" render={<Link href={t.href} />} className="h-7 rounded-md border-border bg-transparent px-3 text-xs text-foreground hover:bg-muted">{t.value} view</Button>
+                  <Link href={t.href} className="text-xs font-medium text-info hover:text-foreground">Learn More</Link>
+                </div>
+              </div>
             ))}
           </div>
         </>
       )}
       {!overview && !error && (
-        <p className="text-muted-foreground mt-6 text-sm">No organization data yet — add students to get started.</p>
+        <p className="mt-6 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">No organization data yet — add students to get started.</p>
       )}
 
       {statCards.length > 0 && (
         <>
-          <p className="mt-8 mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">Analyses</p>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <h2 className="mt-8 text-[15px] font-semibold text-foreground">Analyses</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {statCards.map((stat) => (
               <div key={stat.label} className="rounded-xl border border-border bg-card p-5">
                 <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
@@ -146,11 +191,11 @@ export default async function DashboardPage() {
       )}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card className="rounded-xl">
+        <Card className="rounded-xl border-border bg-card">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Upcoming Events</CardTitle>
+            <CardTitle className="text-sm font-semibold text-foreground">Upcoming Events</CardTitle>
             <CardAction>
-              <Button variant="link" size="sm" render={<Link href="/dashboard/schedule" />}>
+              <Button variant="link" size="sm" render={<Link href="/dashboard/schedule" />} className="text-info">
                 Schedule
               </Button>
             </CardAction>
@@ -159,7 +204,7 @@ export default async function DashboardPage() {
             {!upcomingEvents || upcomingEvents.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No upcoming events in the next 30 days.</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-[#23232e]">
                 {upcomingEvents.map((e) => (
                   <li key={e.id} className="flex items-start justify-between gap-3 py-3">
                     <div className="min-w-0">
@@ -185,11 +230,11 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-xl">
+        <Card className="rounded-xl border-border bg-card">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Recent Reports</CardTitle>
+            <CardTitle className="text-sm font-semibold text-foreground">Recent Reports</CardTitle>
             <CardAction>
-              <Button variant="link" size="sm" render={<Link href="/dashboard/reports" />}>
+              <Button variant="link" size="sm" render={<Link href="/dashboard/reports" />} className="text-info">
                 All Reports
               </Button>
             </CardAction>
@@ -198,12 +243,12 @@ export default async function DashboardPage() {
             {!recentReports || recentReports.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No reports generated yet.</p>
             ) : (
-              <ul className="divide-y divide-border">
+              <ul className="divide-y divide-[#23232e]">
                 {recentReports.map((r) => (
                   <li key={r.id}>
                     <Link
                       href={`/dashboard/reports/${r.id}`}
-                      className="flex items-center gap-2 -mx-2 rounded-md px-2 py-3 text-sm transition-colors hover:bg-muted/50"
+                      className="flex items-center gap-2 -mx-2 rounded-md px-2 py-3 text-sm transition-colors hover:bg-muted"
                     >
                       <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate font-medium text-foreground">{r.title}</span>
@@ -217,11 +262,11 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="mt-4 rounded-xl">
+      <Card className="mt-4 rounded-xl border-border bg-card">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
+          <CardTitle className="text-sm font-semibold text-foreground">Recent Activity</CardTitle>
           <CardAction>
-            <Button variant="link" size="sm" render={<Link href="/dashboard/history" />}>
+            <Button variant="link" size="sm" render={<Link href="/dashboard/history" />} className="text-info">
               View All
             </Button>
           </CardAction>
@@ -230,12 +275,12 @@ export default async function DashboardPage() {
           {!analyses || analyses.length === 0 ? (
             <div className="py-8 text-center">
               <p className="mb-4 text-sm text-muted-foreground">No analyses yet</p>
-              <Button variant="outline" render={<Link href="/" />}>
+              <Button variant="outline" render={<Link href="/" />} className="border-border text-foreground hover:bg-muted">
                 Start Your First Analysis
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-[#23232e]">
               {analyses.slice(0, 5).map((a) => {
                 const score =
                   a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json
@@ -276,6 +321,29 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Developer Tools — small icons grid like Auth0 */}
+      <h2 className="mt-8 text-[15px] font-semibold text-foreground">Developer Tools</h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {[
+          {icon: Video, title:"Player Hub", desc:"Athlete video and report portal"},
+          {icon: Code2, title:"API Reference", desc:"Integrate analysis pipeline"},
+          {icon: Database, title:"Bulk Import", desc:"Roster CSV and sync"},
+          {icon: Layers, title:"Pipeline Status", desc:"Engine health and queue"},
+          {icon: ShieldCheck, title:"Share Links", desc:"Time-boxed video shares"},
+          {icon: Zap, title:"Webhooks", desc:"Notify on completion"},
+          {icon: BookOpen, title:"Docs", desc:"Guides and sport configs"},
+          {icon: Trophy, title:"Leaderboard", desc:"Top form scores"},
+        ].map(c=>(
+          <div key={c.title} className="flex gap-3 rounded-xl border border-border bg-card p-4">
+            <span className="grid size-8 place-items-center rounded-lg bg-muted text-muted-foreground"><c.icon className="size-4" /></span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{c.title}</p>
+              <p className="text-xs text-muted-foreground">{c.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

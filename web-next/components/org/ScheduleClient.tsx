@@ -19,7 +19,7 @@ import { downloadCSV } from "@/lib/csv"
 
 import type { EventStatus, ScheduleEvent } from "@/lib/org"
 import { orgSchedule, orgDeleteEvent, EVENT_STATUSES, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from "@/lib/org"
-import { toISODate } from "@/lib/date"
+import { toISODate, scheduleMonthWindow } from "@/lib/date"
 import type { CoachAIError } from "@/lib/api"
 
 const TYPE_META: Record<
@@ -122,16 +122,11 @@ export default function ScheduleClient({
   const fetchMonth = async (target: Date) => {
     setLoading(true)
     try {
-      const from = new Date(target.getFullYear(), target.getMonth(), 1)
-      const to = new Date(target.getFullYear(), target.getMonth() + 1, 0)
       // Widen by one day on each side so midnight (local) month-boundary
       // events survive the UTC-truncated filter. byDay only places events on
       // matching local-day cells, so out-of-month buffer rows are dropped.
-      const fromBuf = new Date(`${from.getFullYear()}-${from.getMonth() + 1}-01T00:00:00`)
-      fromBuf.setDate(fromBuf.getDate() - 1)
-      const toBuf = new Date(`${to.getFullYear()}-${to.getMonth() + 1}-${to.getDate()}T23:59:59`)
-      toBuf.setDate(toBuf.getDate() + 1)
-      const res = await orgSchedule(auth0Id, { from: fromBuf.toISOString(), to: toBuf.toISOString() })
+      const { from, to } = scheduleMonthWindow(target)
+      const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
       setEvents(res.events)
     } catch (err) {
       toast.error((err as CoachAIError).message ?? "Failed to load schedule")

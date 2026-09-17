@@ -13,6 +13,16 @@ import type {
 // Identity is guaranteed by the browser session (client) or service headers
 // (server) — never by a caller-supplied auth0Id.
 
+export type MyOrg = {
+  org_auth0_id: string
+  role: "owner" | "admin" | "coach" | "player"
+  display_name: string | null
+}
+
+export type MyOrgs = {
+  orgs: MyOrg[]
+}
+
 export type MyProfile = {
   user: UserRecord | null
   student: Student | null
@@ -58,6 +68,10 @@ export type MyReports = {
 }
 
 const me = (path: string) => `${IDENTITY_BASE}/api/me${path}`
+
+export async function getMyOrgs(): Promise<MyOrgs> {
+  return apiFetch<MyOrgs>(me("/orgs"))
+}
 
 export async function getMyProfile(): Promise<MyProfile> {
   return apiFetch<MyProfile>(me("/profile"))

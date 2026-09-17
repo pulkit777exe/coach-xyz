@@ -57,7 +57,7 @@
   --destructive-foreground: #ffffff;
   --border: #e8e0d5;
   --input: #e8e0d5;
-  --ring: var(--ring);
+  --ring: #046C0C;
 
   --sidebar: #ffffff;
   --sidebar-foreground: #433B34;
@@ -95,45 +95,48 @@
   --cream-03: #fdfcfa;
   --red: var(--destructive);
 
-  /* marketing — fixed (not theme-dependent) for landing alternating sections */
-  --marketing-dark: #16120f;
-  --marketing-dark-card: #201c18;
+  /* marketing — fixed purple Auth0-style, not theme-dependent */
+  --marketing-dark: #0f0a1f;
+  --marketing-dark-card: rgba(255,255,255,0.06);
   --marketing-light: #faf8f4;
-  --marketing-beige: #CECBCA;
-  --marketing-brown: #433B34;
+  --marketing-beige: #e4e4e7;
+  --marketing-brown: #0a0a0f;
   --marketing-lime: #BCF56C;
-  --marketing-green: var(--success);
+  --marketing-green: #4ade80;
   --marketing-rust: #CC5728;
+  --marketing-hero: radial-gradient(1200px 600px at 50% -15%, #7c3aed 0%, #5b21b6 30%, #2e1065 55%, #0f0a1f 78%);
+  --marketing-glow-lime: rgba(188,245,108,0.15);
+  --marketing-glow-purple: rgba(124,58,237,0.18);
 }
 
-/* ── Dark — deep brown ink, beige text, same lime CTA ───────────────── */
+/* ── Dark — Auth0-inspired near-black, glass cards, lime CTA ──────────── */
 .dark {
-  --background: #16120f;
-  --foreground: #CECBCA;
-  --card: #201c18;
-  --card-foreground: #CECBCA;
-  --popover: #25211d;
-  --popover-foreground: #CECBCA;
+  --background: #0a0a0f;
+  --foreground: #fafafa;
+  --card: #14141c;
+  --card-foreground: #fafafa;
+  --popover: #1a1a22;
+  --popover-foreground: #fafafa;
   --primary: #BCF56C;
-  --primary-foreground: #13160f;
-  --secondary: #2a2520;
-  --secondary-foreground: #CECBCA;
-  --muted: #25211d;
-  --muted-foreground: #9a8d7f;
-  --accent: #2a3320;
-  --accent-foreground: #c8e6a0;
+  --primary-foreground: #0a0a0f;
+  --secondary: #1e1e28;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1a1a22;
+  --muted-foreground: #a1a1aa;
+  --accent: #1e1e28;
+  --accent-foreground: #fafafa;
   --destructive: #CC5728;
   --destructive-foreground: #fff7ed;
-  --border: #2e2823;
-  --input: #2e2823;
-  --ring: var(--success);
+  --border: #23232e;
+  --input: #23232e;
+  --ring: #4ade80;
 
-  --sidebar: #14110e;
-  --sidebar-foreground: #CECBCA;
-  --sidebar-border: #2a2520;
-  --topbar: #14110e;
-  --topbar-foreground: #CECBCA;
-  --topbar-border: #2a2520;
+  --sidebar: #0f0f14;
+  --sidebar-foreground: #e4e4e7;
+  --sidebar-border: #1e1e28;
+  --topbar: #0f0f14;
+  --topbar-foreground: #e4e4e7;
+  --topbar-border: #1e1e28;
 
   --chart-1: #BCF56C;
   --chart-2: var(--success);
@@ -150,19 +153,20 @@
   --info: #7aa0c9;
   --info-foreground: #0f1720;
   --info-border: rgba(122, 160, 201, 0.25);
-  --success: var(--success);
+  --success: #4ade80;
   --success-foreground: #13160f;
-  --success-border: rgba(139, 179, 87, 0.30);
+  --success-border: rgba(74, 222, 128, 0.30);
   --score: #BCF56C;
 
-  --marketing-dark: #16120f;
-  --marketing-dark-card: #201c18;
+  --marketing-dark: #0f0a1f;
+  --marketing-dark-card: rgba(255,255,255,0.06);
   --marketing-light: #faf8f4;
-  --marketing-beige: #CECBCA;
-  --marketing-brown: #433B34;
+  --marketing-beige: #e4e4e7;
+  --marketing-brown: #0a0a0f;
   --marketing-lime: #BCF56C;
-  --marketing-green: var(--success);
+  --marketing-green: #4ade80;
   --marketing-rust: #CC5728;
+  --marketing-hero: radial-gradient(1200px 600px at 50% -15%, #7c3aed 0%, #5b21b6 30%, #2e1065 55%, #0f0a1f 78%);
 }
 
 @theme inline {
@@ -208,9 +212,16 @@
   --color-topbar: var(--topbar);
 }
 
-.auth0-card { border-radius: 12px; border: 1px solid var(--border); background: var(--card); box-shadow: 0 1px 2px rgba(67, 59, 52, 0.06); }
-.auth0-card-hover:hover { border-color: color-mix(in srgb, var(--border), var(--background)); box-shadow: 0 4px 12px rgba(67, 59, 52, 0.08); }
-.dark .auth0-card-hover:hover { border-color: color-mix(in srgb, var(--border), var(--background)); box-shadow: 0 4px 16px rgba(0,0,0,0.45); }
+.auth0-card { border-radius: 12px; border: 1px solid var(--border); background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+.auth0-card-hover:hover { border-color: color-mix(in srgb, var(--border), transparent 20%); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.dark .auth0-card-hover:hover { border-color: rgba(255,255,255,0.08); box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
+
+/* Auth0-modern: purple hero + glass cards */
+.marketing-hero { background: var(--marketing-hero); }
+.glass-card { background: rgba(255,255,255,0.06); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.08); }
+.glass-card-strong { background: rgba(255,255,255,0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.10); }
+.dark-card { background: #14141c; border: 1px solid #23232e; }
+.dark-card-hover:hover { background: #1a1a24; border-color: #2a2a36; }
 
 .button-accent { background: var(--primary); color: var(--primary-foreground); font-weight: 600; transition: all 0.15s ease; }
 .button-accent:hover { background: color-mix(in srgb, var(--primary), white 12%); }

@@ -1,9 +1,11 @@
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { getUserProfile } from "@/lib/api";
+import { getMyOrgsCached, getOrgContext } from "@/lib/serverData";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UserAvatar from "@/components/UserAvatar";
 import DashboardNav from "@/components/DashboardNav";
+import OrgSwitcher from "@/components/org/OrgSwitcher";
 
 export default async function DashboardLayout({
   children,
@@ -12,7 +14,7 @@ export default async function DashboardLayout({
 }) {
   let session;
   try {
-    session = await auth0.getSession();
+    session = await getSession();
   } catch (error) {
     console.error("Failed to get auth session:", error);
     redirect("/auth/login");
@@ -30,17 +32,34 @@ export default async function DashboardLayout({
     console.error("Failed to resolve dashboard role:", error);
   }
 
+  // Org switcher data — per-request cached via React.cache (getMyOrgsCached /
+  // getOrgContext share the same deduped fetch). Failures fall back to no
+  // switcher so a single-coach never regresses.
+  let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>["orgs"] = [];
+  let switcherCurrent = session.user.sub;
+  try {
+    const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()]);
+    switcherCurrent = ctx.auth0Id;
+    switcherOrgs = myOrgs.orgs;
+  } catch (error) {
+    console.error("Failed to resolve org switcher:", error);
+  }
+
   return (
-    <div className="min-h-screen flex bg-[var(--background)]">
-      {/* Sidebar — Auth0 style: white in light, near-black in dark, grouped nav */}
+    <div className="min-h-screen flex bg-background">
+      {/* Sidebar — theme-aware (light: white, dark: near-black) */}
       <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)]">
         <div className="flex-1 overflow-y-auto px-3 py-4">
           <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-            <span className="inline-flex size-6 items-center justify-center rounded bg-foreground text-background text-xs font-bold dark:bg-background dark:text-foreground">
+            <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
               C
             </span>
             <span className="text-sm font-semibold tracking-tight text-foreground">coach.xyz</span>
           </Link>
+
+          {switcherOrgs.length > 0 && (
+            <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
+          )}
 
           <DashboardNav />
         </div>
@@ -72,7 +91,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 overflow-auto bg-[var(--background)]">{children}</main>
+      <main className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
     </div>
   );
 }

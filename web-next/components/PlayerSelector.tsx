@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import type { Player } from '@/types'
@@ -34,7 +35,9 @@ function PlayerImage({ player }: { player: Player }) {
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
         </div>
       )}
-      <img
+      <Image
+        unoptimized
+        fill
         src={`data:image/jpeg;base64,${player.crop_base64.trim()}`}
         alt={`Subject ${player.player_index}`}
         className={`w-full h-full object-cover transition-all duration-700 ease-in-out ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}

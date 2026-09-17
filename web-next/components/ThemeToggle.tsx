@@ -7,7 +7,10 @@ import { useEffect, useState } from 'react'
 export default function ThemeToggle({ variant = 'default' }: { variant?: 'default' | 'landing' }) {
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   if (!mounted) {
     return <span className="size-8" />

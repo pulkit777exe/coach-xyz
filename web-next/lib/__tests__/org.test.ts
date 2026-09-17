@@ -11,6 +11,9 @@ import {
   orgEmailReport,
   orgSendInvites,
   orgStudents,
+  orgImportStudents,
+  orgStudentTrends,
+  orgCompareStudents,
 } from "../org"
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -112,6 +115,86 @@ describe("orgCreateStudent", () => {
       full_name: "Alex Rivera",
       status: "active",
     })
+  })
+})
+
+describe("orgImportStudents", () => {
+  it("POSTs rows to /students/import", async () => {
+    const result = { imported: 1, failed: [], duplicates_skipped: 0 }
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(result))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const res = await orgImportStudents("auth|123", [
+      { full_name: "Al", status: "active" },
+      { full_name: "Bo" },
+    ])
+
+    expect(res).toEqual(result)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("http://localhost:3000/api/org/auth%7C123/students/import")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body as string)).toEqual({
+      rows: [
+        { full_name: "Al", status: "active" },
+        { full_name: "Bo" },
+      ],
+    })
+  })
+})
+
+describe("orgStudentTrends", () => {
+  it("GETs the trends endpoint, encoding the student id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ trends: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgStudentTrends("auth|123", "stu/1")
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C123/students/stu%2F1/trends",
+    )
+  })
+
+  it("appends metricKey/from/to filters when provided", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ trends: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgStudentTrends("auth|123", "stu-1", {
+      metricKey: "form_score",
+      from: "2026-01-01",
+      to: "2026-02-01",
+    })
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C123/students/stu-1/trends?metricKey=form_score&from=2026-01-01&to=2026-02-01",
+    )
+  })
+})
+
+describe("orgCompareStudents", () => {
+  it("GETs the comparison endpoint with comma-joined ids", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ comparison: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgCompareStudents("auth|123", ["s1", "s2"])
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C123/students/comparison?ids=s1,s2",
+    )
+  })
+
+  it("defaults metricKey to form_score and honors an override", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ comparison: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgCompareStudents("auth|123", ["s1"], "sprint_speed")
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C123/students/comparison?ids=s1&metricKey=sprint_speed",
+    )
   })
 })
 

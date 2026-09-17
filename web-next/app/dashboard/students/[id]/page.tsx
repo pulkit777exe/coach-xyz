@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { redirect, notFound } from "next/navigation";
-import { getDashboardAnalyses } from "@/lib/api";
-import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports, orgStudentAnalyses } from "@/lib/org";
+import { getOrgContext, getDashboardAnalyses } from "@/lib/serverData";
+import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports, orgStudentAnalyses } from "@/lib/serverData";
 import StudentProfile from "@/components/org/StudentProfile";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -13,10 +13,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) return { title: "Student | CoachXYZ" };
   try {
-    const res = await orgStudent(session.user.sub, id);
+    const { auth0Id } = await getOrgContext();
+    const res = await orgStudent(auth0Id, id);
     return { title: `${res.student.full_name} | CoachXYZ` };
   } catch {
     return { title: "Student | CoachXYZ" };
@@ -30,9 +31,9 @@ export default async function StudentDetailPage({
 }) {
   noStore();
   const { id } = await params;
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   const studentRes = await orgStudent(auth0Id, id).catch(() => null);
   if (!studentRes) notFound();

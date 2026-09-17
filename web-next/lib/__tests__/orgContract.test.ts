@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
@@ -10,7 +10,20 @@ import {
   REPORT_TYPE_LABELS,
   STUDENT_STATUSES,
   STUDENT_STATUS_LABELS,
+  orgCompareStudents,
+  orgStudentTrends,
 } from "@/lib/org"
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 // Canonical org vocabulary — values AND order must match server/src/lib/orgEnums.ts
 // (pinned there by server/tests/orgContract.test.ts). Single-sided edits break
@@ -77,5 +90,36 @@ describe("web org enum contract (mirrors server/src/lib/orgEnums.ts)", () => {
 
   test("report type labels match the shared display vocabulary", () => {
     expect(REPORT_TYPE_LABELS).toEqual(CANONICAL_REPORT_TYPE_LABELS)
+  })
+})
+
+describe("web trend/comparison contract (mirrors server route tokens)", () => {
+  test("comparison and trends are plain-fetch fns on the org module", () => {
+    expect(typeof orgCompareStudents).toBe("function")
+    expect(typeof orgStudentTrends).toBe("function")
+  })
+
+  test("comparison ids are comma-joined under the students/comparison token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ comparison: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgCompareStudents("auth|1", ["s1", "s2"])
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C1/students/comparison?ids=s1,s2",
+    )
+  })
+
+  test("trends endpoint lives under the student detail namespace", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ trends: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await orgStudentTrends("auth|1", "stu-1")
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(
+      "http://localhost:3000/api/org/auth%7C1/students/stu-1/trends",
+    )
   })
 })

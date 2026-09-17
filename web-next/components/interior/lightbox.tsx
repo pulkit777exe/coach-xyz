@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Image from 'next/image'
 
 interface LightboxProps {
   open: boolean
@@ -40,7 +41,9 @@ export function Lightbox({ open, onClose, src, alt }: LightboxProps) {
         {isVideo ? (
           <video src={src} controls autoPlay className="max-h-[85vh] max-w-full" />
         ) : (
-          <img src={src} alt={alt} className="max-h-[85vh] max-w-full object-contain" />
+          <div className="relative h-[85vh] w-[85vw]">
+            <Image unoptimized fill sizes="85vw" src={src} alt={alt} className="object-contain" />
+          </div>
         )}
         <figcaption className="sr-only">{alt}</figcaption>
       </figure>

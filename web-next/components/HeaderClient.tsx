@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, PanelLeft, CircleHelp, Bell } from 'lucide-react'
+import { LayoutGrid, PanelLeft, CircleHelp } from 'lucide-react'
 import UserAvatar from './UserAvatar'
 import ThemeToggle from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
+import NotificationBell from './notifications/NotificationBell'
 
 type HeaderUser = { picture?: string | null; name?: string | null; email?: string | null; sub?: string | null } | null
 
@@ -16,14 +17,14 @@ function MarketingNav({ user }: { user: HeaderUser }) {
   return (
     <nav className="sticky top-0 z-40 border-b border-white/5 bg-[var(--marketing-dark)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--marketing-dark)]/70">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between gap-4 px-6 lg:px-8">
-        <a href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-md bg-primary text-xs font-bold text-[var(--marketing-brown)]">C</span>
           <span className="text-sm font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
-        </a>
+        </Link>
         <div className="hidden items-center gap-6 text-sm md:flex">
           <a href="/features" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">Features</a>
           <a href="/pricing" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">Pricing</a>
-          <a href="/blog" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">Blog</a>
+          <Link href="/blog" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">Blog</Link>
           <a href="/about" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">About</a>
           <a href="/contact" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)]">Contact</a>
         </div>
@@ -77,10 +78,10 @@ export default function HeaderClient({ user }: { user: HeaderUser }) {
           <button aria-label="Apps" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"><LayoutGrid className="size-4" /></button>
           <ThemeToggle />
           <button aria-label="Help" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"><CircleHelp className="size-4" /></button>
-          <button aria-label="Notifications" className="relative inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground"><Bell className="size-4" /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500 ring-2 ring-[var(--topbar)]" /></button>
         </div>
         {user ? (
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <Link href="/dashboard" className="hidden sm:inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90">Dashboard</Link>
             <Link href="/account"><UserAvatar picture={user.picture} name={user.name} email={user.email} size="sm" /></Link>
           </div>

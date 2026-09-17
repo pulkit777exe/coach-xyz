@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
-import { getUserProfile } from "@/lib/api";
+import { getSession } from "@/lib/session";
+import { getUserProfile } from "@/lib/serverData";
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import PlayerHub from "@/components/player/PlayerHub";
 
 export const metadata: Metadata = {
@@ -10,7 +11,8 @@ export const metadata: Metadata = {
 };
 
 export default async function PlayerPage() {
-  const session = await auth0.getSession();
+  noStore();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
 
   let role: "coach" | "player" | null = null;

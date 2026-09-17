@@ -13,13 +13,15 @@ import {
   Check,
 } from "lucide-react";
 
-import { auth0 } from "@/lib/auth0";
-import { getUserProfile } from "@/lib/api";
-import { orgStudents, orgOverview } from "@/lib/org";
+import { getSession } from "@/lib/session";
+import { unstable_noStore as noStore } from "next/cache";
+import { getOrgContext, getUserProfile, orgStudents, orgOverview, orgMembers } from "@/lib/serverData";
 import type { Student, OrgOverview } from "@/lib/org";
+import type { OrgMembersResponse } from "@/lib/members";
 import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/9ui/ui/button";
 import ProfileForm from "@/components/org/ProfileForm";
+import MembersSection from "@/components/org/MembersSection";
 
 export const metadata: Metadata = {
   title: "Settings | CoachXYZ",
@@ -48,24 +50,29 @@ function changePasswordUrl(): string | null {
 }
 
 export default async function SettingsPage() {
-  const session = await auth0.getSession();
+  noStore();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const ownAuth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   let profile = null;
   let students: Student[] | null = null;
   let overview: OrgOverview | null = null;
+  let membersData: OrgMembersResponse | null = null;
   let error: string | null = null;
 
   try {
-    const [profileRes, studentsRes, overviewRes] = await Promise.all([
-      getUserProfile(auth0Id),
+    const [profileRes, studentsRes, overviewRes, membersRes] = await Promise.all([
+      getUserProfile(ownAuth0Id),
       orgStudents(auth0Id),
       orgOverview(auth0Id),
+      orgMembers(auth0Id),
     ]);
     profile = profileRes.user;
     students = studentsRes.students;
     overview = overviewRes.overview;
+    membersData = membersRes;
   } catch (err) {
     console.error("Failed to load settings data:", err);
     error = err instanceof Error ? err.message : "Failed to load settings data";
@@ -166,6 +173,8 @@ export default async function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <MembersSection auth0Id={auth0Id} initialData={membersData} />
 
       <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">

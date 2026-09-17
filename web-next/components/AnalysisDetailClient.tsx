@@ -2,12 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import AnalysisTitle from '@/components/AnalysisTitle'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
 import { getJobStatus, getDownloadUrl } from '@/lib/api'
+import type { CoachAIError } from '@/lib/api'
+import { createShareToken } from '@/lib/aiReports'
+import { getShotEvents } from '@/lib/analysis'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
@@ -44,6 +48,7 @@ export default function AnalysisDetailClient({
   jobId,
   initialData,
 }: AnalysisDetailClientProps) {
+  const router = useRouter()
   const [status, setStatus] = useState<JobStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [expiredMessage, setExpiredMessage] = useState<string | null>(null)
@@ -53,13 +58,16 @@ export default function AnalysisDetailClient({
   const pollControllerRef = useRef<JobPollingController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const shotEvents = initialData?.summary_json && typeof initialData.summary_json === 'object' && 'shot_events' in (initialData.summary_json as Record<string, unknown>)
-    ? ((initialData.summary_json as Record<string, unknown>).shot_events as Array<Record<string, unknown>>)
-    : []
+  const shotEvents = getShotEvents(initialData)
   const [showAllEvents, setShowAllEvents] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showMetadataDrawer, setShowMetadataDrawer] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [shareExpires, setShareExpires] = useState<string | null>(null)
+  const shareLoadIdRef = useRef(0)
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
 
   useEffect(() => {
@@ -118,6 +126,27 @@ export default function AnalysisDetailClient({
       controller.stop()
     }
   }, [jobId, initialData])
+
+  // Create the share token once the share modal opens; the link is minted per
+  // analysis and expires after a fixed window (72h on the server).
+  useEffect(() => {
+    if (!showShareModal || !initialData) return
+    const loadId = ++shareLoadIdRef.current
+    createShareToken(auth0Id, initialData.server_job_id)
+      .then((res) => {
+        if (loadId !== shareLoadIdRef.current) return
+        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+        setShareUrl(`${origin}${res.url}`)
+        setShareExpires(res.expires_at)
+      })
+      .catch((err) => {
+        if (loadId !== shareLoadIdRef.current) return
+        setShareError((err as CoachAIError).message ?? 'Failed to create share link')
+      })
+      .finally(() => {
+        if (loadId === shareLoadIdRef.current) setShareLoading(false)
+      })
+  }, [showShareModal, auth0Id, initialData])
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -198,7 +227,7 @@ export default function AnalysisDetailClient({
           layer: 'engine',
           retryable: status.retryable,
         }}
-        onRetry={() => window.location.assign('/')}
+        onRetry={() => router.push('/')}
       />
     )
   }
@@ -208,7 +237,7 @@ export default function AnalysisDetailClient({
       <ResultsSummary
         status={status}
         jobId={jobId}
-        onReset={() => window.location.assign('/')}
+        onReset={() => router.push('/')}
       />
     )
   }
@@ -245,7 +274,7 @@ export default function AnalysisDetailClient({
   const drill: string | null = summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
 
   return (
-    <div ref={containerRef} className="p-8 lg:p-12 max-w-5xl">
+    <div ref={containerRef} className="p-8 lg:p-12 max-w-[1080px] mx-auto">
       {/* Reading Progress */}
       <ReadingProgress
         scroller={containerRef}
@@ -266,16 +295,16 @@ export default function AnalysisDetailClient({
       />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-8 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <div className="flex items-center gap-2 mb-8 text-sm text-muted-foreground">
         <Link href="/dashboard" className="hover:text-foreground transition-colors">
           Dashboard
         </Link>
-        <span>/</span>
+        <span className="text-muted-foreground/50">/</span>
         <Link href="/dashboard/history" className="hover:text-foreground transition-colors">
           History
         </Link>
-        <span>/</span>
-        <span className="text-foreground">{data.engine_job_id.slice(0, 8)}</span>
+        <span className="text-muted-foreground/50">/</span>
+        <span className="font-medium text-foreground">{data.engine_job_id.slice(0, 8)}</span>
       </div>
 
       {/* Header */}
@@ -296,13 +325,15 @@ export default function AnalysisDetailClient({
               })}
             </span>
             {data.model && <span>{data.model}</span>}
-            {data.player_count && (
-              <span>{data.player_count} player{data.player_count > 1 ? 's' : ''}</span>
-            )}
+            {data.player_count
+              ? (
+                <span>{data.player_count} player{data.player_count > 1 ? 's' : ''}</span>
+              )
+              : null}
           </div>
         </div>
         <span
-          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1.5 border rounded-2xl ${
+          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1.5 border rounded-full ${
             data.complete
               ? 'border-border text-muted-foreground'
               : ec
@@ -358,7 +389,13 @@ export default function AnalysisDetailClient({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setShowShareModal(true)}
+          onClick={() => {
+            setShareUrl(null)
+            setShareError(null)
+            setShareExpires(null)
+            setShareLoading(true)
+            setShowShareModal(true)
+          }}
           className="rounded-xl text-[0.65rem] uppercase tracking-[0.15em]"
         >
           Share
@@ -383,27 +420,45 @@ export default function AnalysisDetailClient({
         >
           <div className="p-6 space-y-4">
             <h3 className="text-lg font-bold tracking-tight text-foreground">Share Analysis</h3>
-            <p className="text-sm text-muted-foreground">Share this analysis with your team or coach.</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={`${window.location.origin}/dashboard/analysis/${data.server_job_id}`}
-                readOnly
-                className="flex-1 bg-transparent border border-border px-3 py-2 text-sm text-foreground"
-              />
-              <CopyButton
-                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard/analysis/${data.server_job_id}`}
-                label="Copy link"
-                className="!border !border-border !bg-transparent !px-4 !py-2 !text-sm"
-              />
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Anyone with this link can view the analysis — no login required.
+            </p>
+            {shareLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="size-4 border-border border-t-current inline-block animate-spin rounded-full border-2" />
+                Creating share link…
+              </div>
+            ) : shareError ? (
+              <p className="text-sm text-destructive">{shareError}</p>
+            ) : shareUrl ? (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={shareUrl}
+                    readOnly
+                    className="flex-1 bg-transparent border border-border px-3 py-2 text-sm text-foreground"
+                  />
+                  <CopyButton
+                    value={shareUrl}
+                    label="Copy link"
+                    className="!border !border-border !bg-transparent !px-4 !py-2 !text-sm"
+                  />
+                </div>
+                {shareExpires && (
+                  <p className="text-xs text-muted-foreground">
+                    Expires {new Date(shareExpires).toLocaleString()}
+                  </p>
+                )}
+              </>
+            ) : null}
           </div>
         </Modal>
       </div>
 
       {/* Error */}
       {ec && (
-        <div className="rounded-2xl border border-danger/30 bg-danger/10 p-6 mb-8">
+        <div className="rounded-xl border border-danger/30 bg-danger/10 p-6 mb-8">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-destructive">
             Error — {ec}
           </p>
@@ -453,7 +508,7 @@ export default function AnalysisDetailClient({
                 : '—',
             },
           ].map(card => (
-            <div key={card.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <div key={card.label} className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <p className="font-semibold text-3xl text-foreground">{card.value}</p>
               <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {card.label}
@@ -474,7 +529,7 @@ export default function AnalysisDetailClient({
 
       {/* Shot Events with Reorder */}
       {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && shotEvents.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm mb-8">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Event Priority (drag to reorder)
           </p>
@@ -511,7 +566,7 @@ export default function AnalysisDetailClient({
 
       {/* Shot Events with Show More */}
       {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm mb-8">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
           <p className="mb-6 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Shot Events {shotEvents.length > visibleEventCount && `(${visibleEventCount} of ${shotEvents.length})`}
           </p>
@@ -571,7 +626,7 @@ export default function AnalysisDetailClient({
       {summary && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
           {'top_tips' in summary && Array.isArray(summary.top_tips) && (summary.top_tips as string[]).length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Priority Focus</p>
               <ShowMore lines={3} className="[&_*]:!text-foreground">
                 <ul className="space-y-2">
@@ -587,7 +642,7 @@ export default function AnalysisDetailClient({
           )}
 
           {'strengths' in summary && Array.isArray(summary.strengths) && (summary.strengths as string[]).length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Strengths</p>
               <ul className="space-y-2">
                 {(summary.strengths as string[]).map((s, i) => (
@@ -604,7 +659,7 @@ export default function AnalysisDetailClient({
 
       {/* Drill */}
       {drill && (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm mb-8">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Recommended Drill</p>
           <p className="text-sm text-foreground">{drill}</p>
         </div>
@@ -612,7 +667,7 @@ export default function AnalysisDetailClient({
 
       {/* Analysis Structure Tree */}
       {summary && (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm mb-8">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Analysis Structure
           </p>
@@ -642,7 +697,7 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Metadata */}
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           Metadata
         </p>
@@ -688,7 +743,7 @@ export default function AnalysisDetailClient({
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Chat with AI
           </p>
-          <div className="rounded-2xl border border-border bg-card overflow-hidden" style={{ height: 'min(500px, 60vh)' }}>
+          <div className="rounded-xl border border-border bg-card overflow-hidden" style={{ height: 'min(500px, 60vh)' }}>
             <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
           </div>
         </div>
@@ -696,7 +751,7 @@ export default function AnalysisDetailClient({
 
       {/* Feedback Poll Results */}
       {summary && (
-        <div className="mt-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm">
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Community Feedback
           </p>

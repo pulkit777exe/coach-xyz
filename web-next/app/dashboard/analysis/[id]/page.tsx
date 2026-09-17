@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
-import { getDashboardAnalysisDetail } from "@/lib/api";
+import { getSession } from "@/lib/session";
+import { getOrgContext, getDashboardAnalysisDetail } from "@/lib/serverData";
 import { redirect } from "next/navigation";
+import { unstable_noStore as noStore } from "next/cache";
 import AnalysisDetailClient from "@/components/AnalysisDetailClient";
 
 export async function generateMetadata({
@@ -10,11 +11,12 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) return { title: "Analysis | CoachXYZ" };
 
   try {
-    const res = await getDashboardAnalysisDetail(session.user.sub, id);
+    const { auth0Id } = await getOrgContext();
+    const res = await getDashboardAnalysisDetail(auth0Id, id);
     const a = res.analysis;
     const label = a.display_name || a.file_name || id.slice(0, 8);
     const score =
@@ -39,12 +41,13 @@ export default async function AnalysisDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  noStore();
   const { id } = await params;
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) {
     redirect("/auth/login");
   }
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   let data = null;
   try {

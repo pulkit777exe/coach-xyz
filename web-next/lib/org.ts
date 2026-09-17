@@ -152,6 +152,53 @@ export type PerformanceSeriesPoint = {
   source_analysis_id: string | null
 }
 
+// A row parsed from a CSV roster import. The client parses the CSV; the
+// server re-validates each row and reports partial failures.
+export type StudentImportRow = {
+  full_name?: string
+  email?: string
+  phone?: string
+  sport?: string
+  position?: string
+  jersey_number?: string | number
+  date_of_birth?: string
+  gender?: string
+  guardian_name?: string
+  guardian_phone?: string
+  notes?: string
+  status?: string
+  joined_on?: string
+}
+
+export type StudentImportResult = {
+  imported: number
+  failed: Array<{ row_index: number; reason: string }>
+  duplicates_skipped: number
+}
+
+export type TrendPoint = {
+  measured_at: string
+  metric_value: number
+  unit: string | null
+  source: "analysis" | "manual"
+}
+
+export type MetricTrend = {
+  metric_key: string
+  points: TrendPoint[]
+  latest: number | null
+  avg: number | null
+  change: number | null
+}
+
+export type ComparisonStudent = {
+  student_id: string
+  full_name: string
+  latest: number | null
+  avg: number | null
+  points: Array<{ measured_at: string; metric_value: number }>
+}
+
 export type ReportContent = {
   generated_at: string
   student: {
@@ -270,6 +317,43 @@ export const orgDeleteStudent = async (
   return apiFetch<{ deleted: boolean }>(
     org(auth0Id, `/students/${encodeURIComponent(id)}`),
     { method: "DELETE" },
+  )
+}
+
+export const orgImportStudents = async (
+  auth0Id: string,
+  rows: StudentImportRow[],
+): Promise<StudentImportResult> => {
+  return apiFetch<StudentImportResult>(org(auth0Id, "/students/import"), {
+    method: "POST",
+    body: JSON.stringify({ rows }),
+  })
+}
+
+export const orgStudentTrends = async (
+  auth0Id: string,
+  studentId: string,
+  opts: { metricKey?: string; from?: string; to?: string } = {},
+): Promise<{ trends: MetricTrend[] }> => {
+  const params = new URLSearchParams()
+  if (opts.metricKey) params.set("metricKey", opts.metricKey)
+  if (opts.from) params.set("from", opts.from)
+  if (opts.to) params.set("to", opts.to)
+  const qs = params.toString()
+  return apiFetch<{ trends: MetricTrend[] }>(
+    org(auth0Id, `/students/${encodeURIComponent(studentId)}/trends${qs ? `?${qs}` : ""}`),
+  )
+}
+
+export const orgCompareStudents = async (
+  auth0Id: string,
+  ids: string[],
+  metricKey?: string,
+): Promise<{ comparison: ComparisonStudent[] }> => {
+  const qsParts = [`ids=${ids.map(encodeURIComponent).join(",")}`]
+  if (metricKey) qsParts.push(`metricKey=${encodeURIComponent(metricKey)}`)
+  return apiFetch<{ comparison: ComparisonStudent[] }>(
+    org(auth0Id, `/students/comparison?${qsParts.join("&")}`),
   )
 }
 

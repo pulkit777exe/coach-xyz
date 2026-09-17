@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { syncUser } from "@/lib/api";
 import { redirect } from "next/navigation";
 import UserAvatar from "@/components/UserAvatar";
@@ -26,7 +26,7 @@ function parseProvider(sub: string): string {
 }
 
 export default async function AccountPage() {
-  const session = await auth0.getSession();
+  const session = await getSession();
 
   if (!session) {
     redirect("/auth/login");

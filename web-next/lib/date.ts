@@ -39,3 +39,17 @@ export function formatDateShort(iso: string): string {
   const d = iso.length === 10 ? localDay(iso) : new Date(iso)
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
+
+/**
+ * Local-calendar window for a month's schedule, widened by `bufferDays` on
+ * each side so month-boundary events survive timezone skew between the server
+ * and the browser. `from` is midnight of the day before the 1st, `to` is
+ * 23:59:59 of the day after the last day.
+ */
+export function scheduleMonthWindow(date: Date, bufferDays = 1): { from: Date; to: Date } {
+  const from = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0)
+  from.setDate(from.getDate() - bufferDays)
+  const to = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59)
+  to.setDate(to.getDate() + bufferDays)
+  return { from, to }
+}

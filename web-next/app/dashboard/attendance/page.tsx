@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { orgStudents, orgAttendance } from "@/lib/org";
+import { getOrgContext, orgStudents, orgAttendance } from "@/lib/serverData";
 import { toISODate } from "@/lib/date";
 import AttendanceGrid from "@/components/org/AttendanceGrid";
 import { unstable_noStore as noStore } from "next/cache";
@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 
 export default async function AttendancePage() {
   noStore();
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   const today = new Date();
   const first = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -40,7 +40,7 @@ export default async function AttendancePage() {
       <div className="mt-6">
 
       {active.length === 0 && studentsRes.students.length > 0 && (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p className="mt-4 rounded-lg border border-warning-border bg-warning/10 px-4 py-3 text-sm text-foreground">
           No active students — check the roster.
         </p>
       )}

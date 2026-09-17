@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   House,
-  LayoutDashboard,
   Users,
   ClipboardCheck,
   CalendarDays,
@@ -13,7 +12,6 @@ import {
   Sparkles,
   Settings,
   User,
-  ShieldCheck,
 } from 'lucide-react'
 
 type NavItem = { href: string; label: string; icon: React.ElementType; exact?: boolean; badge?: string }
@@ -54,12 +52,14 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard/settings', label: 'Settings', icon: Settings, exact: true },
     ],
   },
-  {
-    label: 'Security & Monitoring',
-    items: [
-      { href: '/account', label: 'Audit Log', icon: ShieldCheck },
-    ],
-  },
+  // Audit Log is planned but has no route yet — keep the group hidden
+  // until /dashboard/audit ships to avoid duplicate /account hrefs.
+  // {
+  //   label: 'Security & Monitoring',
+  //   items: [
+  //     { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
+  //   ],
+  // },
 ]
 
 export default function DashboardNav() {
@@ -77,7 +77,6 @@ export default function DashboardNav() {
           <div className="flex flex-col gap-0.5">
             {group.items.map(({ href, label, icon: Icon, exact, badge }) => {
               const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
-              // special: for dashboard Home, treat exact
               const active = isActive
               return (
                 <Link
@@ -85,14 +84,14 @@ export default function DashboardNav() {
                   href={href}
                   className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
                     active
-                      ? 'bg-success/15 text-success dark:bg-success/15 dark:text-primary font-medium'
+                      ? 'bg-accent text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  <Icon className={`size-4 shrink-0 ${active ? 'text-success dark:text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                  <Icon className={`size-4 shrink-0 ${active ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`} />
                   <span className="truncate">{label}</span>
                   {badge && (
-                    <span className="ml-auto rounded bg-success/15 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-success dark:bg-success/15 dark:text-primary">
+                    <span className="ml-auto rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-muted-foreground">
                       {badge}
                     </span>
                   )}

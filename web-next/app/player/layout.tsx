@@ -1,4 +1,4 @@
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import UserAvatar from "@/components/UserAvatar";
@@ -10,7 +10,7 @@ export default async function PlayerLayout({
 }) {
   let session;
   try {
-    session = await auth0.getSession();
+    session = await getSession();
   } catch (error) {
     console.error("Failed to get auth session:", error);
     redirect("/auth/login");

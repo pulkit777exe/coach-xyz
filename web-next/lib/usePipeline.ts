@@ -329,7 +329,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
       setErrorStatus(null)
       setUploadProgress(null)
     }
-  }, [scanResult, selectedPlayerIndex, errorStatus, stopPolling, startPolling, auth0Id])
+  }, [scanResult, selectedPlayerIndex, errorStatus, stopPolling, startPolling, auth0Id, router, pathname])
 
   const handleReset = useCallback(() => {
     stopPolling()

@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon, DownloadIcon, PencilIcon, MailIcon } from "lucide-react"
+import { PlusIcon, EyeIcon, TrashIcon, FileTextIcon, DownloadIcon, PencilIcon, MailIcon, SparklesIcon } from "lucide-react"
 
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
@@ -31,6 +31,8 @@ import {
   REPORT_TYPES,
   REPORT_TYPE_LABELS,
 } from "@/lib/org"
+import { orgGenerateAiReport, orgAiReportStatus } from "@/lib/aiReports"
+import type { AiReportJobPoll } from "@/lib/aiReports"
 import type { CoachAIError } from "@/lib/api"
 
 const TYPE_BADGE: Record<string, string> = {
@@ -71,6 +73,84 @@ export default function ReportsClient({
   const [editForm, setEditForm] = useState({ report_type: "progress", period_start: "", period_end: "", title: "" })
   const [error, setError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+
+  // ── One-click AI report generation state ─────────────────────────────────
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiPending, setAiPending] = useState<{ report_job_id: string } | null>(null)
+  const [aiJob, setAiJob] = useState<AiReportJobPoll | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiForm, setAiForm] = useState({
+    student_id: "all",
+    report_type: "progress",
+    period_start: "",
+    period_end: "",
+    title: "",
+  })
+
+  const resetAiForm = () => {
+    setAiForm({ student_id: "all", report_type: "progress", period_start: "", period_end: "", title: "" })
+  }
+
+  const closeAi = () => {
+    setAiOpen(false)
+    setAiPending(null)
+    setAiJob(null)
+    setAiError(null)
+    setAiBusy(false)
+  }
+
+  useEffect(() => {
+    if (!aiPending) return
+    let cancelled = false
+
+    const poll = async () => {
+      try {
+        const res = await orgAiReportStatus(auth0Id, aiPending.report_job_id)
+        if (cancelled) return
+        setAiJob(res)
+        if (res.status === "done" && res.report) {
+          setReports((prev) => (prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev]))
+          toast.success("AI report generated")
+          setAiPending(null)
+          setAiOpen(false)
+          resetAiForm()
+        } else if (res.status === "failed") {
+          setAiPending(null)
+          setAiError("AI report generation failed. Please try again.")
+        }
+      } catch (err) {
+        if (cancelled) return
+        setAiPending(null)
+        setAiError((err as CoachAIError).message ?? "Failed to check AI report status")
+      }
+    }
+
+    const interval = setInterval(poll, 2500)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [auth0Id, aiPending])
+
+  const generateAi = async () => {
+    setAiBusy(true)
+    setAiError(null)
+    try {
+      const res = await orgGenerateAiReport(auth0Id, {
+        student_id: aiForm.student_id !== "all" ? aiForm.student_id : undefined,
+        report_type: aiForm.report_type,
+        period_start: aiForm.period_start || undefined,
+        period_end: aiForm.period_end || undefined,
+        title: aiForm.title || undefined,
+      })
+      setAiPending({ report_job_id: res.report_job_id })
+    } catch (err) {
+      setAiError((err as CoachAIError).message ?? "Failed to start AI report")
+    } finally {
+      setAiBusy(false)
+    }
+  }
 
   const exportCSV = () => {
     downloadCSV(
@@ -177,6 +257,9 @@ const openEmail = (r: ReportRecord) => {
               <DownloadIcon /> Export
             </Button>
           )}
+          <Button size="sm" variant="outline" onClick={() => setAiOpen(true)} disabled={Boolean(aiPending)}>
+            <SparklesIcon /> Generate with AI
+          </Button>
           <Button size="sm" onClick={() => setGenerateOpen(true)}>
             <PlusIcon /> Generate report
           </Button>
@@ -219,7 +302,7 @@ const openEmail = (r: ReportRecord) => {
             </thead>
             <tbody>
               {reports.map((r) => (
-                <tr key={r.id} className="hover:bg-accent/50 border-border border-b last:border-0">
+                <tr key={r.id} className="hover:bg-accent/50 border-border border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]">
                   <td className="px-4 py-3 font-medium text-foreground">
                     <Link href={`/dashboard/reports/${r.id}`} className="hover:underline">
                       {r.title}
@@ -277,6 +360,132 @@ const openEmail = (r: ReportRecord) => {
           </table>
         </div>
       )}
+
+      {/* AI Generate dialog */}
+      <Dialog open={aiOpen} onOpenChange={(open) => (open ? setAiOpen(true) : closeAi())}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{aiPending ? "Generating AI report" : "Generate with AI"}</DialogTitle>
+            <DialogDescription>
+              {aiPending
+                ? "CoachXYZ is analyzing your data and writing the report — usually under a minute."
+                : "CoachXYZ reads your sessions and writes the report automatically."}
+            </DialogDescription>
+          </DialogHeader>
+          {aiPending ? (
+            <div className="grid gap-4">
+              <div className="border-border bg-muted/30 flex items-center gap-3 rounded-md border px-4 py-3">
+                <Spinner className="text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">
+                    Generating {aiForm.title ? `“${aiForm.title}”` : (aiForm.student_id !== "all" ? "student report" : "organization report")}…
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    {aiJob?.status === "running"
+                      ? "Writing the report"
+                      : aiJob?.status === "queued"
+                        ? "Waiting for a worker"
+                        : "Starting up"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Keep this dialog open — the finished report lands in your list automatically.
+              </p>
+              {aiError && <p className="text-sm text-destructive">{aiError}</p>}
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="ai_report_student">Student</Label>
+                <select
+                  id="ai_report_student"
+                  value={aiForm.student_id}
+                  onChange={(e) => setAiForm((f) => ({ ...f, student_id: e.target.value }))}
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                >
+                  <option value="all">Entire organization</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.full_name}
+                      {s.sport ? ` — ${s.sport}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-muted-foreground text-xs">
+                  {aiForm.student_id === "all" ? "Covers the whole organization." : "Scoped to a single student."}
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ai_report_type">Report type</Label>
+                <select
+                  id="ai_report_type"
+                  value={aiForm.report_type}
+                  onChange={(e) => setAiForm((f) => ({ ...f, report_type: e.target.value }))}
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                >
+                  {REPORT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {REPORT_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="ai_period_start">Period start</Label>
+                  <Input
+                    id="ai_period_start"
+                    type="date"
+                    value={aiForm.period_start}
+                    onChange={(e) => setAiForm((f) => ({ ...f, period_start: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ai_period_end">Period end</Label>
+                  <Input
+                    id="ai_period_end"
+                    type="date"
+                    value={aiForm.period_end}
+                    onChange={(e) => setAiForm((f) => ({ ...f, period_end: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ai_report_title">Custom title (optional)</Label>
+                <Input
+                  id="ai_report_title"
+                  value={aiForm.title}
+                  onChange={(e) => setAiForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="e.g. Q3 Mid-season Review"
+                />
+              </div>
+              {aiError && <p className="text-sm text-destructive">{aiError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            {aiPending ? (
+              <>
+                <Button variant="outline" onClick={closeAi}>
+                  Stop
+                </Button>
+                <Button disabled>
+                  <Spinner /> Working…
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={closeAi}>
+                  Cancel
+                </Button>
+                <Button onClick={generateAi} disabled={aiBusy}>
+                  {aiBusy ? <Spinner /> : "Generate"}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Generate dialog */}
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>

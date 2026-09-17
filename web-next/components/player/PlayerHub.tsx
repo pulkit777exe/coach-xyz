@@ -1,10 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { CalendarIcon, TrendingUpIcon, ClipboardListIcon, ActivityIcon, SparklesIcon } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { CalendarIcon, TrendingUpIcon, ClipboardListIcon, ActivityIcon, SparklesIcon, VideoIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { Spinner } from "@/components/org/Spinner"
+import { Button } from "@/components/9ui/ui/button"
 import type { CoachAIError } from "@/lib/api"
+import { scanVideoWithProgress, streamScanProgress, getJobStatus } from "@/lib/api"
+import { meStartAnalysis } from "@/lib/playerUpload"
+import { startJobPolling, type JobPollingController } from "@/lib/jobPolling"
+import { toCoachAIError } from "@/lib/errors"
+import { MAX_FILE_SIZE_BYTES, type JobStatus, type ScanResult } from "@/types"
 import {
   getMyProfile,
   getMyAttendance,
@@ -27,6 +34,7 @@ import {
   STUDENT_STATUS_LABELS,
 } from "@/lib/org"
 import { formatDateMed, formatDateShort } from "@/lib/date"
+import { analysisScore } from "@/lib/analysis"
 
 type LoadState =
   | { status: "loading" }
@@ -44,6 +52,19 @@ type HubData = {
 
 export default function PlayerHub() {
   const [state, setState] = useState<LoadState>({ status: "loading" })
+
+  // Refresh only the analyses slice after a player-initiated upload completes,
+  // so the Analyses section picks up the new job without a full page reload.
+  const refreshAnalyses = useCallback(async () => {
+    try {
+      const analyses = await getMyAnalyses()
+      setState((prev) =>
+        prev.status === "ready" ? { status: "ready", data: { ...prev.data, analyses } } : prev
+      )
+    } catch {
+      toast.error("Failed to refresh your analyses.")
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -170,6 +191,17 @@ export default function PlayerHub() {
           </div>
         ))}
       </div>
+
+      {/* Analyze my video */}
+      <Section
+        icon={<VideoIcon className="size-4" />}
+        title="Analyze My Video"
+      >
+        <AnalyzeVideoCard
+          auth0Id={profile.user?.auth0_id}
+          onCompleted={refreshAnalyses}
+        />
+      </Section>
 
       {/* Schedule */}
       <Section
@@ -344,15 +376,311 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
+type AnalyzeStage = "idle" | "uploading" | "scanning" | "selecting" | "analyzing" | "finished"
+
+const STAGE_LABELS: Partial<Record<AnalyzeStage, string>> = {
+  uploading: "Uploading video…",
+  scanning: "Scanning for players…",
+  analyzing: "Analyzing your video…",
+}
+
+/**
+ * Player-side upload + analysis kickoff. Reuses the coach flow's primitives
+ * (scanVideoWithProgress → meStartAnalysis → startJobPolling) but scopes the
+ * analysis through /api/me/analyze so the server attributes it to this player
+ * (requested_by) while keeping it visible to the coach in their history.
+ */
+function AnalyzeVideoCard({
+  auth0Id,
+  onCompleted,
+}: {
+  auth0Id?: string | null
+  onCompleted: () => void
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const scanAbortRef = useRef<AbortController | null>(null)
+  const pollRef = useRef<JobPollingController | null>(null)
+  const liveRef = useRef(true)
+
+  const [stage, setStage] = useState<AnalyzeStage>("idle")
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [percent, setPercent] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [scanToken, setScanToken] = useState<string | null>(null)
+  const [videoKey, setVideoKey] = useState<string | null>(null)
+  const [scanPlayers, setScanPlayers] = useState<ScanResult["players"]>([])
+
+  useEffect(() => {
+    return () => {
+      liveRef.current = false
+      scanAbortRef.current?.abort()
+      pollRef.current?.stop()
+    }
+  }, [])
+
+  const reset = useCallback(() => {
+    pollRef.current?.stop()
+    pollRef.current = null
+    setStage("idle")
+    setFileName(null)
+    setPercent(0)
+    setError(null)
+    setScanToken(null)
+    setVideoKey(null)
+    setScanPlayers([])
+  }, [])
+
+  const runAnalysis = useCallback(
+    (sessionToken: string, key: string | null, playerIndex: number) => {
+      setStage("analyzing")
+      setPercent(0)
+      setError(null)
+
+      const kickoff = async () => {
+        try {
+          const { job_id } = await meStartAnalysis({
+            session_token: sessionToken,
+            player_index: playerIndex,
+            video_key: key,
+          })
+          if (!liveRef.current) return
+          pollRef.current?.stop()
+          pollRef.current = startJobPolling<JobStatus>({
+            jobId: job_id,
+            fetchStatus: getJobStatus,
+            isComplete: (status) => status.complete,
+            intervalMs: 2000,
+            timeoutMs: 12 * 60 * 1000,
+            maxFailures: 5,
+            onStatus: (status) => setPercent(Math.min(status.progress, 99)),
+            onComplete: (status) => {
+              if (status.error) {
+                setError(status.error)
+                setStage("idle")
+                toast.error(status.error)
+              } else {
+                setStage("finished")
+                toast.success("Analysis complete — check your analyses below.")
+                onCompleted()
+              }
+            },
+            onError: (failure) => {
+              setError(failure.error.message)
+              setStage("idle")
+              toast.error(failure.error.message)
+            },
+          })
+        } catch (e: unknown) {
+          const err = toCoachAIError(e)
+          if (!liveRef.current) return
+          setError(err.message)
+          setStage("idle")
+          toast.error(err.message)
+        }
+      }
+      void kickoff()
+    },
+    [onCompleted],
+  )
+
+  const pick = useCallback(
+    (file?: File) => {
+      if (!file) return
+      setError(null)
+      if (!file.type.startsWith("video/")) {
+        setError("Please select a valid video file.")
+        return
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setError("File size must be less than 500MB.")
+        return
+      }
+
+      pollRef.current?.stop()
+      pollRef.current = null
+      setFileName(file.name)
+      setStage("uploading")
+      setPercent(0)
+      setScanToken(null)
+      setVideoKey(null)
+      setScanPlayers([])
+
+      const scanAbort = new AbortController()
+      scanAbortRef.current = scanAbort
+
+      const start = async () => {
+        try {
+          const result = await scanVideoWithProgress(
+            file,
+            (progress) => setPercent(progress.percent),
+            auth0Id ?? null,
+          )
+          if (!liveRef.current) return
+          setStage("scanning")
+          setPercent(0)
+          try {
+            for await (const event of streamScanProgress(result.session_token, scanAbort.signal)) {
+              if (event.total > 0) {
+                setPercent(Math.round((event.current / event.total) * 100))
+              }
+              if (event.complete) {
+                if (event.error) {
+                  throw {
+                    code: "SCAN_FAILED",
+                    message: event.error,
+                    layer: "engine",
+                    retryable: true,
+                  } as CoachAIError
+                }
+                break
+              }
+            }
+          } catch (scanErr: unknown) {
+            if (scanErr instanceof DOMException && scanErr.name === "AbortError") return
+            throw scanErr
+          }
+          if (!liveRef.current) return
+          setScanToken(result.session_token)
+          setVideoKey(result.video_key)
+          if (result.player_count === 1) {
+            const playerIdx = result.players[0]?.player_index ?? 1
+            runAnalysis(result.session_token, result.video_key, playerIdx)
+          } else {
+            setScanPlayers(result.players)
+            setStage("selecting")
+            setPercent(0)
+          }
+        } catch (e: unknown) {
+          if (!liveRef.current) return
+          const err = toCoachAIError(e)
+          setError(err.message)
+          setStage("idle")
+          toast.error(err.message)
+        }
+      }
+      void start()
+    },
+    [auth0Id, runAnalysis],
+  )
+
+  const open = useCallback(() => fileInputRef.current?.click(), [])
+
+  if (stage === "uploading" || stage === "scanning" || stage === "analyzing") {
+    return (
+      <div className="flex items-center gap-3">
+        <Spinner />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground">{STAGE_LABELS[stage]}</p>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary/20">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${Math.max(2, Math.min(percent, 99))}%` }}
+            />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {stage === "analyzing"
+              ? "This usually takes under a minute. The result will appear under Analyses."
+              : `${Math.round(percent)}%`}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (stage === "selecting") {
+    return (
+      <div>
+        <p className="mb-3 text-sm font-medium text-foreground">
+          Multiple players detected — who should we analyze?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {scanPlayers.map((player) => (
+            <Button
+              key={player.player_index}
+              variant="outline"
+              size="sm"
+              onClick={() => runAnalysis(scanToken ?? "", videoKey, player.player_index)}
+            >
+              Player {player.player_index} · {Math.round(player.confidence * 100)}%
+            </Button>
+          ))}
+        </div>
+        <div className="mt-4">
+          <Button variant="ghost" size="sm" onClick={reset}>
+            Start over
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {stage === "finished" && (
+        <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
+          Analysis complete — it&apos;s in your Analyses list below and in your coach&apos;s history.
+        </p>
+      )}
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={open}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            open()
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragging(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+          pick(e.dataTransfer.files[0])
+        }}
+        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
+          isDragging ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+        <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
+          <VideoIcon className="size-5" />
+        </div>
+        <p className="mt-3 text-sm font-medium text-foreground">{fileName || "Drop video or click to browse"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
+        <Button
+          size="sm"
+          className="mt-3"
+          onClick={(e) => {
+            e.stopPropagation()
+            open()
+          }}
+        >
+          Choose video
+        </Button>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Your coach will see the result in their dashboard history, attributed to you.
+      </p>
+    </div>
+  )
+}
+
 function periodLabel(from: string | null, to: string | null): string {
   if (!from && !to) return "—"
   return `${from ? formatDateShort(from) : ""}${from && to ? " – " : ""}${to ? formatDateShort(to) : ""}`
-}
-
-function analysisScore(analysis: MyAnalyses["analyses"][number]): number | null {
-  if (!analysis.summary_json || typeof analysis.summary_json !== "object" || !("form_score" in analysis.summary_json)) {
-    return null
-  }
-  const score = (analysis.summary_json as { form_score: unknown }).form_score
-  return typeof score === "number" ? score : null
 }

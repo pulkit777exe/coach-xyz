@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -15,13 +15,19 @@ import {
   CalendarIcon,
   FileTextIcon,
 } from "lucide-react"
-import { Line, LineChart, XAxis, YAxis, CartesianGrid } from "recharts"
-
 import { Button } from "@/components/9ui/ui/button"
 import { Badge } from "@/components/9ui/ui/badge"
 import { Input } from "@/components/9ui/ui/input"
 import { Label } from "@/components/9ui/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/9ui/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
+import dynamic from "next/dynamic"
 import {
   Dialog,
   DialogContent,
@@ -36,16 +42,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/9ui/ui/dropdown-menu"
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/9ui/ui/chart"
+import type { ChartConfig } from "@/components/9ui/ui/chart"
 import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
 
-import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord } from "@/lib/org"
+import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord, MetricTrend, ComparisonStudent } from "@/lib/org"
 import type { DashboardAnalysis, CoachAIError } from "@/lib/api"
 import {
   orgStudentPerformance,
@@ -56,6 +57,9 @@ import {
   orgDeleteReport,
   linkAnalysisToStudent,
   orgAttendanceSummary,
+  orgStudents,
+  orgStudentTrends,
+  orgCompareStudents,
 } from "@/lib/org"
 import { formatDateLong, formatDateShort } from "@/lib/date"
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/org"
@@ -66,6 +70,11 @@ const STATUS_STYLE: Record<string, string> = {
   inactive: "border-(--warning-border) text-(--warning)",
   transferred: "border-border text-muted-foreground",
 }
+
+const PerformanceChart = dynamic(() => import("./PerformanceChart"), {
+  ssr: false,
+  loading: () => <div className="aspect-[16/7] w-full animate-pulse rounded-lg bg-muted" />,
+})
 
 const METRIC_COLORS = [
   "var(--color-chart-1)",
@@ -119,6 +128,31 @@ export default function StudentProfile({
   const [editingMetric, setEditingMetric] = useState<PerformanceSeriesPoint | null>(null)
   const [metricForm, setMetricForm] = useState({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
 
+  const [trends, setTrends] = useState<MetricTrend[]>([])
+  const [roster, setRoster] = useState<Student[]>([])
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [compareMetric, setCompareMetric] = useState("form_score")
+  const [comparison, setComparison] = useState<ComparisonStudent[]>([])
+  const [compareBusy, setCompareBusy] = useState(false)
+
+  // Client-side fetches for the trends + comparison sections. Both are
+  // low-priority extras on top of the RSC streamed data, so failures fall
+  // back to empty state rather than blocking the profile.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      orgStudentTrends(auth0Id, student_.id).catch(() => ({ trends: [] })),
+      orgStudents(auth0Id).catch(() => ({ students: [] })),
+    ]).then(([trendsRes, rosterRes]) => {
+      if (cancelled) return
+      setTrends(trendsRes.trends)
+      setRoster(rosterRes.students.filter((s) => s.id !== student_.id))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [auth0Id, student_.id])
+
   const keys = useMemo(() => [...new Set(series.map((s) => s.metric_key))].sort(), [series])
 
   const chartData = useMemo(() => {
@@ -166,8 +200,76 @@ export default function StudentProfile({
     return config
   }, [series])
 
+  const compareMetricOptions = useMemo(() => {
+    const opts = new Set<string>(keys)
+    opts.add("form_score")
+    return [...opts].sort()
+  }, [keys])
+
+  const comparisonData = useMemo(() => {
+    const rows: Record<string, string | number>[] = []
+    const byDate = new Map<string, Record<string, string | number>>()
+    for (const c of comparison) {
+      for (const p of c.points) {
+        const date = p.measured_at.slice(0, 10)
+        let row = byDate.get(date)
+        if (!row) {
+          row = { date }
+          byDate.set(date, row)
+          rows.push(row)
+        }
+        row[c.full_name] = p.metric_value
+      }
+    }
+    return rows
+  }, [comparison])
+
+  const comparisonKeys = useMemo(
+    () => comparison.map((c) => c.full_name),
+    [comparison],
+  )
+
+  const comparisonConfig: ChartConfig = useMemo(() => {
+    const config: ChartConfig = {}
+    comparison.forEach((c, i) => {
+      config[c.full_name] = {
+        label: c.full_name,
+        color: METRIC_COLORS[i % METRIC_COLORS.length],
+      }
+    })
+    return config
+  }, [comparison])
+
   const linked = analyses.filter((a) => a.student_id === student_.id)
   const unlinked = analyses.filter((a) => !a.student_id)
+
+  const toggleCompare = (id: string) => {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (prev.length >= 9) return prev
+      return [...prev, id]
+    })
+  }
+
+  const loadComparison = async () => {
+    if (!compareIds.length) {
+      setComparison([])
+      return
+    }
+    setCompareBusy(true)
+    try {
+      const res = await orgCompareStudents(
+        auth0Id,
+        [student_.id, ...compareIds],
+        compareMetric,
+      )
+      setComparison(res.comparison)
+    } catch (err) {
+      toast.error((err as CoachAIError).message ?? "Failed to load comparison")
+    } finally {
+      setCompareBusy(false)
+    }
+  }
 
   const runConfirm = async () => {
     if (!confirm) return
@@ -411,37 +513,7 @@ export default function StudentProfile({
 
         <div className="border-border bg-card rounded-lg border p-4">
           {chartData.length ? (
-            <ChartContainer config={chartConfig} className="aspect-[16/7]">
-              <LineChart data={chartData} margin={{ left: -14, right: 8 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  minTickGap={24}
-                  tickFormatter={(v: string) => formatDateShort(v)}
-                />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} width={44} domain={["auto", "auto"]} />
-                <ChartTooltip
-                  content={<ChartTooltipContent style={{ background: "var(--color-popover)" }} />}
-                  cursor={{ stroke: "var(--color-border)", strokeDasharray: "3 3" }}
-                />
-                {shownKeys.map((key) => (
-                  <Line
-                    key={key}
-                    dataKey={key}
-                    name={key}
-                    type="monotone"
-                    stroke={chartConfig[key]?.color}
-                    strokeWidth={2}
-                    dot={{ r: 3, strokeWidth: 0, fill: chartConfig[key]?.color }}
-                    activeDot={{ r: 5 }}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ChartContainer>
+            <PerformanceChart data={chartData} config={chartConfig} keys={shownKeys} />
           ) : (
             <div className="flex h-40 items-center justify-center">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
@@ -575,6 +647,115 @@ export default function StudentProfile({
               ))}
             </ul>
           )}
+        </div>
+      </div>
+
+      {/* Trends summary */}
+      <div className="mt-8">
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+          Performance Trends
+        </p>
+        {trends.length === 0 ? (
+          <div className="border-border bg-card flex h-20 items-center justify-center rounded-lg border">
+            <p className="text-muted-foreground text-xs">
+              No trend data yet — metrics appear as they are logged or analyzed.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-px bg-muted sm:grid-cols-2 lg:grid-cols-3">
+            {trends.map((t) => (
+              <div key={t.metric_key} className="bg-card p-5">
+                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+                  {formatKey(t.metric_key)}
+                </p>
+                <p className="text-foreground mt-1 font-bold text-2xl">
+                  {t.latest ?? "—"}
+                  {t.points[0]?.unit ? (
+                    <span className="text-muted-foreground text-xs font-normal"> {t.points[0].unit}</span>
+                  ) : null}
+                </p>
+                <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
+                  <span>avg {t.avg ?? "—"}</span>
+                  <TrendDelta change={t.change} />
+                </div>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {t.points.length} point(s)
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Compare with teammates */}
+      <div className="mt-8">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+            Compare with Teammates
+          </p>
+          <div className="flex items-center gap-2">
+            <Select
+              value={compareMetric}
+              onValueChange={(v) => setCompareMetric(typeof v === "string" ? v : "form_score")}
+            >
+              <SelectTrigger className="h-8 w-auto" data-size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {compareMetricOptions.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {formatKey(m)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={loadComparison} disabled={compareBusy || compareIds.length === 0}>
+              {compareBusy ? <Spinner /> : null} Compare
+            </Button>
+          </div>
+        </div>
+
+        <div className="border-border bg-card rounded-lg border p-4">
+          {roster.length === 0 ? (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No other students on the roster to compare against yet.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {roster.map((s) => {
+                const selected = compareIds.includes(s.id)
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleCompare(s.id)}
+                    className={`border px-2.5 py-1 text-xs transition-colors ${
+                      selected
+                        ? "bg-muted text-foreground border-border"
+                        : "text-muted-foreground border-border hover:text-foreground"
+                    }`}
+                  >
+                    {s.full_name}
+                    {selected ? " ✓" : ""}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {compareIds.length >= 9 ? (
+            <p className="text-muted-foreground mt-2 text-xs">Limit of 9 teammates per comparison.</p>
+          ) : null}
+
+          {comparisonData.length > 0 ? (
+            <div className="mt-4">
+              <PerformanceChart data={comparisonData} config={comparisonConfig} keys={comparisonKeys} />
+            </div>
+          ) : compareIds.length > 0 ? (
+            <p className="text-muted-foreground py-6 text-center text-sm">
+              No {formatKey(compareMetric)} data for the selected students yet.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -782,6 +963,18 @@ function MetricPill({
     >
       {children}
     </button>
+  )
+}
+
+function TrendDelta({ change }: { change: number | null }) {
+  if (change === null) return <span>no trend</span>
+  if (change === 0) return <span>flat</span>
+  const isUp = change > 0
+  return (
+    <span style={{ color: isUp ? "var(--color-success)" : "var(--color-destructive)" }}>
+      {isUp ? "▲ +" : "▼ "}
+      {Math.abs(change)}
+    </span>
   )
 }
 

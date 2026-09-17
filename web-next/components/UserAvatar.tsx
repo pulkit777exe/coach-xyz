@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 
 interface UserAvatarProps {
   picture?: string | null
@@ -36,11 +37,13 @@ export default function UserAvatar({ picture, name, email, size = 'md', classNam
 
   return (
     <div
-      className={`rounded-full border border-border flex items-center justify-center bg-muted text-muted-foreground font-medium ${sizeClasses[size]} ${className}`}
+      className={`relative rounded-full border border-border flex items-center justify-center bg-muted text-muted-foreground font-medium ${sizeClasses[size]} ${className}`}
     >
       {showImage ? (
-        <img
-          src={picture}
+        <Image
+          fill
+          sizes="56px"
+          src={picture!}
           alt={name || email || 'Profile'}
           className="w-full h-full rounded-full object-cover"
           onError={() => setImgError(true)}

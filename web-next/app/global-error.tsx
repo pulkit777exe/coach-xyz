@@ -72,7 +72,7 @@ export default function GlobalError({
                 Try again
               </button>
               <button
-                onClick={() => { window.location.href = "/"; }}
+                onClick={() => { window.location.href = window.location.origin + "/"; }}
                 style={{
                   backgroundColor: "transparent",
                   color: "#f0ebe1",

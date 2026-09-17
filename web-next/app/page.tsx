@@ -1,4 +1,4 @@
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import AppClient from "@/components/AppClient";
 
 export const metadata = {
@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 export default async function Home() {
-  const session = await auth0.getSession();
+  const session = await getSession();
   const auth0Id = session?.user?.sub ?? null;
 
   return <AppClient auth0Id={auth0Id} />;

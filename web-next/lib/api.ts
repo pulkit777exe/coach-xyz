@@ -40,6 +40,38 @@ function identityFromRequest(url: string, body?: BodyInit | null): string | unde
   return undefined
 }
 
+/**
+ * Server-side identity for identity-bearing calls. Never trust a path-scoped id
+ * here: the backend authorizes the REAL caller, so the header must be the
+ * session sub (the actual user), not the org id in the URL. Falls back to the
+ * path-derived id only when no session is available (e.g. auth/sync during
+ * onboarding, or non-request contexts).
+ */
+async function serverIdentity(url: string, body?: BodyInit | null): Promise<string | undefined> {
+  let path = url
+  try {
+    path = new URL(url).pathname
+  } catch {
+    // relative url — keep as-is
+  }
+
+  const isIdentityBearing =
+    path.match(/\/api\/(?:org|email|auth\/user)\/[^/]+/) !== null ||
+    path.startsWith('/api/me/') ||
+    path.endsWith('/api/auth/sync')
+  if (!isIdentityBearing) return undefined
+
+  try {
+    const { getSession } = await import('./session')
+    const session = await getSession()
+    const sub = session?.user?.sub
+    if (sub) return sub
+  } catch {
+    // Not in a request context (tests, build-time) — fall through.
+  }
+  return identityFromRequest(url, body)
+}
+
 export type { CoachAIError }
 
 // ── API Client ───────────────────────────────────────────────────────────────
@@ -55,10 +87,12 @@ export async function apiFetch<T>(
   }
 
   // Server-side calls to identity-bearing routes go directly to the backend
-  // and carry the service token + verified identity. (Client-side calls reach
-  // the backend through the /api/service proxy, which injects these.)
+  // and carry the service token + the session sub (the REAL caller). The org id
+  // in the URL is purely a data-scope — membership is authorized backend-side.
+  // Client-side calls reach the backend through the /api/service proxy, which
+  // injects the session sub from auth0 itself.
   if (typeof window === 'undefined') {
-    const identity = identityFromRequest(url, options.body)
+    const identity = await serverIdentity(url, options.body)
     if (identity) {
       if (process.env.SERVICE_TOKEN) headers['x-service-token'] = process.env.SERVICE_TOKEN
       headers['x-verified-auth0-id'] = identity

@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { auth0 } from "@/lib/auth0"
+import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
-import { orgReport, REPORT_TYPE_LABELS } from "@/lib/org"
+import { getOrgContext, orgReport } from "@/lib/serverData";
+import { REPORT_TYPE_LABELS } from "@/lib/org"
 import type { ReportType } from "@/lib/org"
 import { formatDateMed } from "@/lib/date"
 import { unstable_noStore as noStore } from "next/cache"
@@ -17,9 +18,9 @@ export function generateMetadata(): Metadata {
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
-  const session = await auth0.getSession()
+  const session = await getSession()
   if (!session) redirect("/auth/login")
-  const auth0Id = session.user.sub
+  const { auth0Id } = await getOrgContext()
   const { id } = await params
 
   const { report } = await orgReport(auth0Id, id).catch(() => ({ report: null }))

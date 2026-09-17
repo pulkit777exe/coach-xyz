@@ -1,11 +1,12 @@
 import { auth0 } from "@/lib/auth0";
-import { decodePathSegment, isIdentityPath, isSelfPath, resourceAuth0Id } from "@/lib/serviceProxy";
+import { isIdentityPath } from "@/lib/serviceProxy";
 import { NextRequest, NextResponse } from "next/server";
 
 // ── Service proxy for identity-bearing backend routes ──────────────────────
 // The browser only talks to these through this same-origin handler. It reads
 // the verified Auth0 session, then injects x-service-token + x-verified-auth0-id
-// before forwarding to the backend (which enforces the same check again).
+// (the session's sub) before forwarding to the backend (which authorizes both
+// the owner and active org members via serviceGuard's membership check).
 //
 // Only identity-bearing routes are proxied. Capability-token routes
 // (scan/analyze/job-status/download/chat) stay direct-browser→backend so
@@ -44,30 +45,14 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   let body: ArrayBuffer | undefined;
-  let bodySub: string | undefined;
   if (hasBody) {
     body = await request.arrayBuffer();
-    if (!resourceAuth0Id(path)) {
-      try {
-        const parsed = JSON.parse(Buffer.from(body).toString("utf-8")) as { sub?: unknown };
-        bodySub = typeof parsed.sub === "string" ? parsed.sub : undefined;
-      } catch {
-        // Not JSON — the backend will reject it.
-      }
-    }
   }
 
-  const scopedResource = resourceAuth0Id(path);
-  const resourceId = scopedResource
-    ? decodePathSegment(scopedResource)
-    : bodySub ?? (isSelfPath(path) ? verifiedSub : undefined);
-  if (!resourceId || resourceId !== verifiedSub) {
-    return NextResponse.json(
-      { message: "Authenticated identity does not match the requested account." },
-      { status: 403 },
-    );
-  }
-
+  // The backend is the authorizer: it accepts the org owner OR any active
+  // org_members row for the org named by the path. Path-scoped ids are no
+  // longer compared against the session sub here — the session sub is the
+  // caller's true identity and membership is resolved server-side.
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);

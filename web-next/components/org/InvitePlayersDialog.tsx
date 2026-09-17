@@ -4,7 +4,6 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
 import { Label } from "@/components/9ui/ui/label"
 import {
   Dialog,
@@ -19,8 +18,9 @@ import { Spinner } from "./Spinner"
 import { orgSendInvites } from "@/lib/org"
 import type { CoachAIError } from "@/lib/api"
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function parseEmails(raw: string): string[] {
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const parts = raw
     .split(/[\n,]+/)
     .map((e) => e.trim().toLowerCase())

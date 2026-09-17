@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { orgSchedule } from "@/lib/org";
-import { toISODate } from "@/lib/date";
+import { getOrgContext, orgSchedule } from "@/lib/serverData";
+import { scheduleMonthWindow } from "@/lib/date";
 import ScheduleClient from "@/components/org/ScheduleClient";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -13,19 +13,13 @@ export const metadata: Metadata = {
 
 export default async function SchedulePage() {
   noStore();
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
-  const today = new Date();
-  const first = new Date(today.getFullYear(), today.getMonth(), 1);
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   // Widen the window by one day on each side so month-boundary events are
   // captured regardless of the server timezone vs. the browser timezone.
-  const from = new Date(`${toISODate(first)}T00:00:00`);
-  from.setDate(from.getDate() - 1);
-  const to = new Date(`${toISODate(lastDay)}T23:59:59`);
-  to.setDate(to.getDate() + 1);
+  const { from, to } = scheduleMonthWindow(new Date());
 
   const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() }).catch(() => ({ events: [] }));
 

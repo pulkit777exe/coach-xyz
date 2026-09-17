@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { orgStudents, orgStudentsSports } from "@/lib/org";
+import { getOrgContext, orgStudents, orgStudentsSports } from "@/lib/serverData";
 import StudentsClient from "@/components/org/StudentsClient";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -12,9 +12,9 @@ export const metadata: Metadata = {
 
 export default async function StudentsPage() {
   noStore();
-  const session = await auth0.getSession();
+  const session = await getSession();
   if (!session) redirect("/auth/login");
-  const auth0Id = session.user.sub;
+  const { auth0Id } = await getOrgContext();
 
   const [studentsRes, sportsRes] = await Promise.all([
     orgStudents(auth0Id),

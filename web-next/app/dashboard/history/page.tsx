@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { auth0 } from "@/lib/auth0";
-import { getDashboardAnalyses } from "@/lib/api";
+import { getSession } from "@/lib/session";
+import { getDashboardAnalyses } from "@/lib/serverData";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Badge } from "@/components/9ui/ui/badge";
+import { unstable_noStore as noStore } from "next/cache";
 
 export const metadata: Metadata = {
   title: "History | CoachXYZ",
@@ -14,7 +16,8 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const session = await auth0.getSession();
+  noStore();
+  const session = await getSession();
   if (!session) {
     redirect("/auth/login");
   }
@@ -72,7 +75,7 @@ export default async function HistoryPage({
               <Link
                 key={a.server_job_id}
                 href={`/dashboard/analysis/${a.server_job_id}`}
-                className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50"
+                className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground truncate">
@@ -105,17 +108,12 @@ export default async function HistoryPage({
                         <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Score</p>
                       </div>
                     ) : null}
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
-                        a.complete
-                          ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300"
-                          : a.error_code
-                            ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
-                            : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300"
-                      }`}
+                    <Badge
+                      variant={a.complete ? "success" : a.error_code ? "danger" : "warning"}
+                      className="rounded-full px-2.5 py-1"
                     >
                       {a.complete ? "Done" : a.error_code ? "Failed" : "Running"}
-                    </span>
+                    </Badge>
                   </div>
                 </Link>
               ))}

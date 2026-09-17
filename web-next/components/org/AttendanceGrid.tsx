@@ -441,7 +441,7 @@ export default function AttendanceGrid({
             {roster.map((s) => {
               const counts = rowCounts(s.id)
               return (
-                <tr key={s.id} className="border-border hover:bg-accent/40 border-b last:border-0">
+                <tr key={s.id} className="border-border hover:bg-accent/40 border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]">
                   <td className="sticky left-0 z-10 bg-background/95 max-w-44 px-4 py-1.5">
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
                       <span className="truncate font-medium text-foreground">{s.full_name}</span>
