@@ -35,7 +35,7 @@ Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (Reac
 
 ## Skills
 
-Installed project skills in `.opencode/skills/` (restart opencode to load):
+Consulted skill guidance (installed locally, not vendored in the repo):
 
 - `vercel-react-best-practices` — 70 perf rules, priority 1→8 (waterfalls, bundle size, server perf, client fetching, re-render, rendering, JS perf, advanced). Consult `SKILL.md` for the priority table and per-rule files under `rules/` when writing/refactoring React code.
 - `nextjs-react-typescript` — TS/Next conventions (RSC bias, mobile-first, Suspense, images).
