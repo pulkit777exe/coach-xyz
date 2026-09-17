@@ -7,6 +7,7 @@ import logging
 import os
 import tempfile
 import time
+from datetime import datetime, timezone
 import traceback
 import threading
 import uuid
@@ -45,6 +46,8 @@ from core.config import CHUNK_SIZE, MAX_FILE_SIZE_BYTES
 SESSION_TTL = 7200  # 2 hours (aligned with job TTL)
 MAX_SESSIONS = 10  # Max concurrent sessions
 SESSION_EVICTION_INTERVAL = 300  # Run eviction every 5 minutes
+SCAN_PROGRESS_TTL = SESSION_TTL  # scan-progress dict entries expire with the session
+COMPLETE_SCAN_PROGRESS_RETENTION = 300  # drop completed entries after 5 minutes
 
 # ── Validate Required Environment Variables ──────────────────────────────────
 _required_env_vars = ["GEMINI_API_KEY"]
@@ -268,6 +271,21 @@ def _evict_old_sessions() -> None:
     """Thread-safe eviction of old sessions."""
     with sessions_lock:
         _evict_old_sessions_unlocked()
+    _evict_old_scan_progress()
+
+
+def _evict_old_scan_progress() -> None:
+    """Prune scan-progress dict so finished/stale scans do not accumulate in memory."""
+    now = time.time()
+    with scan_progress_lock:
+        stale = [
+            sid
+            for sid, p in scan_progress.items()
+            if now - p.get("started_at", 0) > SCAN_PROGRESS_TTL
+            or (p.get("complete") and now - p.get("started_at", 0) > COMPLETE_SCAN_PROGRESS_RETENTION)
+        ]
+        for sid in stale:
+            scan_progress.pop(sid, None)
 
 
 def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None]) -> Optional[JSONResponse]:
@@ -413,6 +431,7 @@ async def scan(video: UploadFile) -> JSONResponse:
             "total": 0,
             "complete": False,
             "error": None,
+            "started_at": time.time(),
         }
 
     def _report_scan_progress(current: int, total: int) -> None:
@@ -902,6 +921,156 @@ async def chat_stream(request: Request):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── AI Report Support ────────────────────────────────────────────────────────
+
+
+def _report_config() -> Any:
+    """GenerateContentConfig for structured JSON report output.
+
+    Builds a genai Schema from the plain REPORT_JSON_SCHEMA dict when the
+    google-genai package is available; otherwise falls back to a plain dict
+    (only reachable in environments where the client is also unavailable).
+    """
+    from core.report_prompt import REPORT_JSON_SCHEMA
+
+    if genai_types is None:
+        return {
+            "temperature": 0.4,
+            "responseMimeType": "application/json",
+            "responseSchema": REPORT_JSON_SCHEMA,
+        }
+
+    def _to_schema(node: Dict[str, Any]) -> Any:
+        kwargs: Dict[str, Any] = {}
+        for key, value in node.items():
+            if key == "type":
+                kwargs["type"] = genai_types.Type(str(value))
+            elif key == "properties":
+                kwargs["properties"] = {k: _to_schema(v) for k, v in value.items()}
+            elif key == "items":
+                kwargs["items"] = _to_schema(value)
+            else:
+                kwargs[key] = value
+        return genai_types.Schema(**kwargs)
+
+    return genai_types.GenerateContentConfig(
+        temperature=0.4,
+        response_mime_type="application/json",
+        response_schema=_to_schema(REPORT_JSON_SCHEMA),
+    )
+
+
+def _normalize_report(parsed: Dict[str, Any], report_context: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce the parsed report to its contract, best-effort.
+
+    Guarantees each schema field exists with the right shape so the server can
+    persist the report without re-validating.
+    """
+    def _string_list(value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+    text = lambda v: v if isinstance(v, str) else ""
+    trend = text(parsed.get("form_score_trend")).lower()
+    if trend not in ("improving", "steady", "declining", "mixed"):
+        trend = "steady"
+    generated_at = (
+        text(parsed.get("generated_at"))
+        or (report_context.get("generated_at") if isinstance(report_context.get("generated_at"), str) else "")
+        or datetime.now(timezone.utc).isoformat()
+    )
+    return {
+        "narrative": text(parsed.get("narrative")),
+        "summary": text(parsed.get("summary")),
+        "strengths": _string_list(parsed.get("strengths")),
+        "areas_to_improve": _string_list(parsed.get("areas_to_improve")),
+        "recommendations": _string_list(parsed.get("recommendations")),
+        "form_score_trend": trend,
+        "highlight_max": _string_list(parsed.get("highlight_max"))[:3],
+        "generated_at": generated_at,
+    }
+
+
+@app.post("/report")
+async def report(request: Request) -> JSONResponse:
+    """One-click AI report generation (called by the BullMQ worker).
+
+    Grounded only in `report_context` (org data assembled server-side); returns
+    a structured JSON report plus the raw Gemini text so the server can persist
+    both and keep a source of truth for re-generation.
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("application/json"):
+        return _error_response(415, "INVALID_REQUEST", "JSON required")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    report_context = payload.get("report_context")
+    report_type = (payload.get("report_type") or "").strip()
+
+    if not isinstance(report_context, dict) or not report_context:
+        return _error_response(400, "INVALID_REQUEST", "report_context (object) required")
+    if not report_type:
+        return _error_response(400, "INVALID_REQUEST", "report_type required")
+
+    from core.config import GEMINI_MODEL
+    from core.gemini_common import parse_json_response
+    from core.report_prompt import get_report_prompt
+
+    messages = get_report_prompt(
+        report_context=report_context,
+        report_type=report_type,
+        sport=payload.get("sport"),
+        student_name=payload.get("student_name"),
+    )
+
+    if _gemini_client is None:
+        return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+
+    # Call Gemini in a thread to avoid blocking the event loop
+    try:
+        def _call_gemini():
+            return _gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=messages[0]["content"],
+                config=_report_config(),
+            )
+
+        response = await asyncio.to_thread(_call_gemini)
+        raw_text = getattr(response, "text", None) or ""
+    except Exception as exc:
+        status_code = getattr(exc, "status_code", None)
+        message = str(exc)
+        is_quota = (
+            status_code == 429
+            or "RESOURCE_EXHAUSTED" in message
+            or "quota" in message.lower()
+        )
+        if is_quota:
+            return _error_response(429, "GEMINI_QUOTA_EXCEEDED", "AI quota exceeded. Please try again later.")
+        logging.error(f"Report Gemini error: {exc}")
+        return _error_response(500, "GEMINI_ERROR", "AI service error. Please try again.")
+
+    if not raw_text:
+        return _error_response(500, "GEMINI_EMPTY_RESPONSE", "AI returned an empty response. Please try again.")
+
+    try:
+        parsed = parse_json_response(raw_text)
+    except Exception as exc:
+        logging.error(f"Report parse failed: {exc}")
+        return _error_response(500, "GEMINI_PARSE_FAILED", "AI returned an unexpected response. Please try again.")
+
+    if not isinstance(parsed, dict):
+        return _error_response(500, "GEMINI_PARSE_FAILED", "AI returned an unexpected response. Please try again.")
+
+    report_data = _normalize_report(parsed, report_context)
+    return JSONResponse(content={"report": report_data, "raw": raw_text})
 
 
 @app.get("/download/{job_id}")
