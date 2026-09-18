@@ -302,7 +302,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     }
 
     return (
-      <div ref={containerRef} className="relative flex h-full w-full items-center justify-center bg-black">
+      <div ref={containerRef} className="relative flex h-full w-full items-center justify-center bg-[var(--marketing-dark)]">
         {hasError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <svg className="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">

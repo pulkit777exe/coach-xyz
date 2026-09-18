@@ -21,10 +21,10 @@ function setOrgCookie(orgId: string) {
 }
 
 const ROLE_DOT: Record<MyOrg["role"], string> = {
-  owner: "bg-emerald-500",
-  admin: "bg-sky-500",
-  coach: "bg-amber-500",
-  player: "bg-zinc-400",
+  owner: "bg-success",
+  admin: "bg-info",
+  coach: "bg-warning",
+  player: "bg-muted-foreground/60",
 };
 
 export default function OrgSwitcher({

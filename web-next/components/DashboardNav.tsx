@@ -70,7 +70,7 @@ export default function DashboardNav() {
       {NAV_GROUPS.map((group) => (
         <div key={group.label ?? 'home'}>
           {group.label && (
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
               {group.label}
             </p>
           )}
@@ -82,7 +82,8 @@ export default function DashboardNav() {
                 <Link
                   key={href + label}
                   href={href}
-                  className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
+                  aria-current={active ? "page" : undefined}
+                  className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                     active
                       ? 'bg-accent text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'

@@ -27,36 +27,36 @@ const TYPE_META: Record<
   { color: string; bg: string; border: string }
 > = {
   practice: {
-    color: "var(--color-info)",
-    bg: "rgba(107, 147, 201, 0.12)",
-    border: "var(--color-info-border)",
+    color: "var(--info)",
+    bg: "color-mix(in srgb, var(--info) 12%, transparent)",
+    border: "var(--info-border)",
   },
   match: {
-    color: "var(--color-danger)",
-    bg: "rgba(200, 0, 60, 0.12)",
-    border: "var(--color-danger-border)",
+    color: "var(--destructive)",
+    bg: "color-mix(in srgb, var(--destructive) 12%, transparent)",
+    border: "var(--danger-border)",
   },
   tournament: {
-    color: "var(--color-warning)",
-    bg: "rgba(224, 179, 65, 0.12)",
-    border: "var(--color-warning-border)",
+    color: "var(--warning)",
+    bg: "color-mix(in srgb, var(--warning) 12%, transparent)",
+    border: "var(--warning-border)",
   },
   meeting: {
-    color: "var(--color-success)",
-    bg: "rgba(111, 191, 145, 0.12)",
-    border: "var(--color-success-border)",
+    color: "var(--success)",
+    bg: "color-mix(in srgb, var(--success) 12%, transparent)",
+    border: "var(--success-border)",
   },
   other: {
-    color: "var(--color-muted-foreground)",
-    bg: "rgba(240, 235, 225, 0.06)",
-    border: "var(--color-border)",
+    color: "var(--muted-foreground)",
+    bg: "color-mix(in srgb, var(--muted) 60%, transparent)",
+    border: "var(--border)",
   },
 }
 
 const STATUS_META: Record<EventStatus, { className: string }> = {
-  scheduled: { className: "border-(--info-border) text-(--info)" },
-  completed: { className: "border-(--success-border) text-(--success)" },
-  cancelled: { className: "border-(--danger-border) text-(--danger)" },
+  scheduled: { className: "border-info-border text-info" },
+  completed: { className: "border-success-border text-success" },
+  cancelled: { className: "border-danger-border text-danger" },
 }
 
 function localDateTimeKey(iso: string) {
@@ -279,13 +279,13 @@ export default function ScheduleClient({
                 key={key}
                 type="button"
                 onClick={() => setDayView(date)}
-                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 ${
-                  isToday ? "bg-(--success)/5 border-(--success-border)" : ""
+                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                  isToday ? "bg-success/5 border-success-border" : ""
                 }`}
               >
                 <span
                   className={`mb-1 inline-flex size-5 items-center justify-center rounded text-xs ${
-                    isToday ? "bg-(--success) font-bold text-background" : "text-muted-foreground"
+                    isToday ? "bg-success font-bold text-primary-foreground" : "text-muted-foreground"
                   }`}
                 >
                   {date.getDate()}

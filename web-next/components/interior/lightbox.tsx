@@ -30,7 +30,7 @@ export function Lightbox({ open, onClose, src, alt }: LightboxProps) {
   const isVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src) || src.includes('/download')
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-6">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/90 p-6">
       <button
         type="button"
         aria-label="Close"

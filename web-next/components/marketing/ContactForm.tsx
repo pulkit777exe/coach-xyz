@@ -23,7 +23,7 @@ export default function ContactForm() {
     window.location.href = `mailto:${CONTACT_EMAIL}?${query.toString()}`
   }
 
-  const inputClass = "w-full border-[var(--marketing-beige)] bg-white"
+  const inputClass = "w-full border-[var(--marketing-beige)] bg-[var(--marketing-white)]"
 
   return (
     <form onSubmit={submit} className="grid gap-4">
@@ -50,7 +50,7 @@ export default function ContactForm() {
           placeholder="Tell us what you’re building and how we can help."
           rows={5}
           required
-          className="w-full rounded-lg border border-[var(--marketing-beige)] bg-white px-3 py-2 text-sm text-[var(--marketing-brown)] placeholder:text-[var(--marketing-brown)]/40 outline-none focus:border-[var(--marketing-brown)]/40 focus:ring-2 focus:ring-primary/30"
+          className="w-full rounded-lg border border-[var(--marketing-beige)] bg-[var(--marketing-white)] px-3 py-2 text-sm text-[var(--marketing-brown)] placeholder:text-[var(--marketing-brown)]/40 outline-none focus:border-[var(--marketing-brown)]/40 focus:ring-2 focus:ring-primary/30"
         />
       </div>
       <div>

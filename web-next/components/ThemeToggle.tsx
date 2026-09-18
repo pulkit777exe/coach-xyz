@@ -23,7 +23,7 @@ export default function ThemeToggle({ variant = 'default' }: { variant?: 'defaul
       <button
         aria-label="Toggle theme"
         onClick={() => setTheme(isDark ? 'light' : 'dark')}
-        className="inline-flex size-8 items-center justify-center rounded-md border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+        className="inline-flex size-8 items-center justify-center rounded-md border border-border/10 bg-card/5 text-card-foreground/70 hover:bg-card/10 hover:text-card-foreground"
       >
         {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
       </button>
