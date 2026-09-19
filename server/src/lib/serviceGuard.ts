@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 import { buildError } from "./errors"
 import { getMemberRole, listOrgMembers } from "./orgMembers"
 import type { OrgMemberRole } from "./orgMembers"
+import { timingSafeEqual } from "node:crypto"
 
 // ── Service-to-service identity guard ────────────────────────────────────────
 // The web app (Next.js) sits between the browser and this server. The proxy
@@ -65,10 +66,21 @@ export function verifyServiceIdentity(
   }
 
   if (!token || !process.env.SERVICE_TOKEN || token !== process.env.SERVICE_TOKEN) {
-    return {
-      ok: false,
-      status: 403,
-      body: buildError("FORBIDDEN", "Invalid service credentials", false),
+    let tokenOk = false
+    try {
+      tokenOk =
+        token !== null &&
+        process.env.SERVICE_TOKEN !== undefined &&
+        timingSafeEqual(Buffer.from(token), Buffer.from(process.env.SERVICE_TOKEN))
+    } catch {
+      tokenOk = false
+    }
+    if (!tokenOk) {
+      return {
+        ok: false,
+        status: 403,
+        body: buildError("FORBIDDEN", "Invalid service credentials", false),
+      }
     }
   }
 

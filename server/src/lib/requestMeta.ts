@@ -12,8 +12,10 @@ const normalize = (value: string | null): string | null => {
 const getClientIp = (request: Request): string | null => {
   const forwarded = request.headers.get("x-forwarded-for")
   if (forwarded) {
-    const first = forwarded.split(",")[0]
-    return normalize(first)
+    // Take the right-most (last proxy) entry — that is the immediate
+    // sender of this request and cannot be spoofed by earlier XFF entries.
+    const parts = forwarded.split(",").map((s) => s.trim())
+    return normalize(parts[parts.length - 1] ?? parts[0])
   }
 
   return normalize(request.headers.get("x-real-ip"))

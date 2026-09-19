@@ -89,7 +89,7 @@ ${colorConfig
 		const color =
 			itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
 			itemConfig.color
-		return color ? `  --color-${key}: ${color};` : null
+		return color ? `  --color-${key.replace(/[^a-zA-Z0-9_-]/g, "_")}: ${color.replace(/[^a-zA-Z0-9#(),.\s%]/g, "")};` : null
 	})
 	.join("\n")}
 }

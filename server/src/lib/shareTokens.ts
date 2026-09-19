@@ -37,6 +37,8 @@ export type ShareTokenStore = {
   getShareToken(token: string): Promise<ShareTokenRecord | null>
   /** Honours expiry — expired tokens resolve to null. */
   resolveShareToken(token: string): Promise<ShareTokenRecord | null>
+  /** Revoke (delete) a token by its value — used by the revocation endpoint. */
+  deleteShareToken(token: string): Promise<void>
 }
 
 const KEY_PREFIX = "coachai:share:"
@@ -87,6 +89,10 @@ export function createShareTokenStore(client: RedisLike = redis): ShareTokenStor
       if (!record) return null
       if (Date.parse(record.expires_at) <= Date.now()) return null
       return record
+    },
+
+    async deleteShareToken(token) {
+      await client.del(keyFor(token))
     },
   }
 }
