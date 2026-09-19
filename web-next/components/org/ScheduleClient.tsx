@@ -6,6 +6,13 @@ import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, ClockIcon, M
 
 import { Button } from "@/components/9ui/ui/button"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/9ui/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -234,19 +241,22 @@ export default function ScheduleClient({
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
         <div className="flex items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-input text-foreground border-input focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
-            aria-label="Filter by status"
+          <Select
+            value={statusFilter || "all"}
+            onValueChange={(v) => setStatusFilter(v === "all" ? "" : (v as string))}
           >
-            <option value="">All statuses</option>
-            {EVENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {EVENT_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm" aria-label="Filter by status" className="w-[8.5rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {EVENT_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {EVENT_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <DownloadIcon /> Export
           </Button>

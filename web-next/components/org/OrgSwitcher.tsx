@@ -17,7 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 
 function setOrgCookie(orgId: string) {
-  document.cookie = `${ORG_COOKIE}=${encodeURIComponent(orgId)}; path=/; max-age=31536000; samesite=lax`;
+  const isLocal = typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(window.location.hostname)
+  document.cookie = `${ORG_COOKIE}=${encodeURIComponent(orgId)}; path=/; max-age=31536000; samesite=lax${isLocal ? "" : "; Secure"}`
 }
 
 const ROLE_DOT: Record<MyOrg["role"], string> = {
@@ -46,7 +47,7 @@ export default function OrgSwitcher({
   // Single-org: show static org context (no dropdown) — keep the sidebar tidy.
   if (orgs.length === 1) {
     return (
-      <div className="mb-4 rounded-md border border-[var(--sidebar-border)] bg-card/50 px-2.5 py-2">
+      <div className="mb-4 rounded-md border border-sidebar-border bg-card/50 px-2.5 py-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex size-7 items-center justify-center rounded-md bg-muted">
             <Building2 className="size-3.5 text-muted-foreground" />
@@ -77,7 +78,7 @@ export default function OrgSwitcher({
         <DropdownMenuTrigger
           aria-label="Switch organization"
           className={cn(
-            "flex w-full items-center gap-2 rounded-md border border-[var(--sidebar-border)] bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted",
+            "flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted",
             isPending && "opacity-60",
           )}
         >

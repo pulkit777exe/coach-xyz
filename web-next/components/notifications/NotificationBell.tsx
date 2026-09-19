@@ -92,7 +92,7 @@ export default function NotificationBell() {
       <DropdownMenuTrigger aria-label="Notifications" className="relative inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground">
         <BellIcon className="size-4" />
         {unreadCount > 0 ? (
-          <Badge className="absolute -right-1 -top-1 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-card-foreground ring-2 ring-[var(--topbar)]">
+          <Badge className="absolute -right-1 -top-1 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none text-destructive-foreground ring-2 ring-topbar">
             {unreadCount > 9 ? "9+" : unreadCount}
           </Badge>
         ) : null}

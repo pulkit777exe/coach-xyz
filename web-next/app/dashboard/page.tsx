@@ -113,7 +113,7 @@ export default async function DashboardPage() {
       </div>
 
       {error && (
-        <div className="mt-6 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+        <div className="mt-6 rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
           Failed to load dashboard data. Please try again later.
         </div>
       )}
@@ -136,8 +136,8 @@ export default async function DashboardPage() {
             {/* sport icons cluster */}
             <div className="grid grid-cols-4 gap-2">
               {[
-                {l:'BB', bg:'bg-orange-500'}, {l:'FB', bg:'bg-emerald-500'}, {l:'CR', bg:'bg-sky-500'}, {l:'TN', bg:'bg-yellow-500'},
-                {l:'BB', bg:'bg-red-500'}, {l:'HK', bg:'bg-violet-500'}, {l:'PY', bg:'bg-amber-500'}, {l:'GO', bg:'bg-teal-500'},
+                {l:'BB', bg:'bg-chart-3'}, {l:'FB', bg:'bg-success'}, {l:'CR', bg:'bg-info'}, {l:'TN', bg:'bg-warning'},
+                {l:'BB', bg:'bg-destructive'}, {l:'HK', bg:'bg-[var(--marketing-purple)]'}, {l:'PY', bg:'bg-warning'}, {l:'GO', bg:'bg-chart-5'},
               ].map(s=>(
                 <span key={s.l+s.bg} className={`grid size-9 place-items-center rounded-full text-xs font-bold text-foreground ${s.bg}`}>{s.l}</span>
               ))}
@@ -204,7 +204,7 @@ export default async function DashboardPage() {
             {!upcomingEvents || upcomingEvents.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No upcoming events in the next 30 days.</p>
             ) : (
-              <ul className="divide-y divide-[#23232e]">
+              <ul className="divide-y divide-border">
                 {upcomingEvents.map((e) => (
                   <li key={e.id} className="flex items-start justify-between gap-3 py-3">
                     <div className="min-w-0">
@@ -243,7 +243,7 @@ export default async function DashboardPage() {
             {!recentReports || recentReports.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">No reports generated yet.</p>
             ) : (
-              <ul className="divide-y divide-[#23232e]">
+              <ul className="divide-y divide-border">
                 {recentReports.map((r) => (
                   <li key={r.id}>
                     <Link
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
               </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-[#23232e]">
+            <ul className="divide-y divide-border">
               {analyses.slice(0, 5).map((a) => {
                 const score =
                   a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json

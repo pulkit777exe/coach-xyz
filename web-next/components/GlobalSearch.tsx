@@ -153,7 +153,7 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
         type="button"
         aria-label="Search"
         onClick={() => setOpen(true)}
-        className="hidden sm:flex h-8 w-[240px] lg:w-[320px] items-center gap-2 rounded-md border border-[var(--topbar-border)] bg-muted/60 pl-2.5 pr-1.5 text-sm text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-ring"
+        className="hidden sm:flex h-8 w-[240px] lg:w-[320px] items-center gap-2 rounded-md border border-topbar-border bg-muted/60 pl-2.5 pr-1.5 text-sm text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-ring"
       >
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="flex-1 text-left">Search...</span>

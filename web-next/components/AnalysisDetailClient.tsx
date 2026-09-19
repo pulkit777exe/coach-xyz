@@ -361,7 +361,6 @@ export default function AnalysisDetailClient({
           variant="outline"
           size="sm"
           onClick={() => setShowMetadataDrawer(true)}
-          className="rounded-xl text-[0.65rem] uppercase tracking-[0.15em]"
         >
           View Metadata
         </Button>
@@ -369,7 +368,6 @@ export default function AnalysisDetailClient({
           variant="outline"
           size="sm"
           onClick={() => setLightboxOpen(true)}
-          className="rounded-xl text-[0.65rem] uppercase tracking-[0.15em]"
         >
           Preview
         </Button>
@@ -396,7 +394,6 @@ export default function AnalysisDetailClient({
             setShareLoading(true)
             setShowShareModal(true)
           }}
-          className="rounded-xl text-[0.65rem] uppercase tracking-[0.15em]"
         >
           Share
         </Button>

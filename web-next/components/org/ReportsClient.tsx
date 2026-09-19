@@ -276,7 +276,74 @@ const openEmail = (r: ReportRecord) => {
           </p>
         </div>
       ) : (
-        <div className="border-border overflow-hidden rounded-lg border">
+        <>
+          {/* Mobile cards (md and up use the table below) */}
+          <ul className="space-y-3 md:hidden">
+            {reports.map((r) => (
+              <li key={r.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/dashboard/reports/${r.id}`}
+                      className="text-sm font-medium text-foreground hover:underline"
+                    >
+                      {r.title}
+                    </Link>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {r.full_name || "Organization"} ·{" "}
+                      {r.period_start
+                        ? `${formatDateMed(r.period_start)} → ${formatDateMed(r.period_end ?? r.period_start)}`
+                        : "All time"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {new Date(r.created_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <Badge className={(TYPE_BADGE[r.report_type] ?? "border-border") + " shrink-0 border"}>
+                    {typeLabel(r.report_type)}
+                  </Badge>
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon-sm" onClick={() => setViewing(r)} aria-label="View report">
+                    <EyeIcon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    onClick={() => openEmail(r)}
+                    aria-label="Email report"
+                  >
+                    <MailIcon className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                    onClick={() => openEdit(r)}
+                    aria-label="Edit report"
+                  >
+                    <PencilIcon className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleting(r)}
+                    aria-label="Delete report"
+                  >
+                    <TrashIcon className="size-3.5" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden border-border overflow-hidden rounded-lg border md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
@@ -359,6 +426,7 @@ const openEmail = (r: ReportRecord) => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {/* AI Generate dialog */}
