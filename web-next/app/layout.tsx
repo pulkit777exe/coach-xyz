@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { SentryProvider } from "./sentry-provider";
 import AuthHeader from "@/components/AuthHeader";
@@ -16,32 +17,44 @@ export const metadata: Metadata = {
   },
 };
 
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-jetbrains",
+  display: "swap",
+});
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen antialiased bg-[var(--background)] text-foreground">
+      <body className="min-h-screen antialiased bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthHeader />
-          <a
-            href="#analyze"
-            className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
-          >
-            Skip to upload
-          </a>
-          <div className="root">{children}</div>
+          <SentryProvider>
+            <AuthHeader />
+            <a
+              href="#analyze"
+              className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+            >
+              Skip to upload
+            </a>
+            <div className="root">{children}</div>
+            <Toaster position="bottom-right" richColors />
+          </SentryProvider>
         </ThemeProvider>
-        <SentryProvider>
-          <Toaster position="bottom-right" richColors />
-        </SentryProvider>
       </body>
     </html>
   );
