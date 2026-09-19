@@ -6,7 +6,7 @@ export const metadata = { title: 'Sign up | CoachXYZ' }
 export default function SignupPage(){
   return (
     <main className="grid min-h-[calc(100vh-56px)] place-items-center bg-[var(--marketing-dark)] px-6 py-10">
-      <div className="w-full max-w-[480px] rounded-2xl border border-white/10 bg-[var(--marketing-dark-card)] p-6">
+      <div className="w-full max-w-[480px] rounded-2xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-6">
         <span className="inline-flex rounded-full bg-primary px-3 py-1 text-xs font-bold text-[var(--marketing-brown)]">New</span>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--marketing-beige)]">Create your coaching workspace</h1>
         <p className="mt-1 text-sm text-[var(--marketing-beige)]/60">Free for up to 5 athletes. No credit card required.</p>

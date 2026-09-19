@@ -67,7 +67,7 @@ const sections = [
 export default function TermsPage() {
   return (
     <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
-      <section className="border-b border-white/5 px-6 py-10 lg:px-8">
+      <section className="border-b border-[var(--marketing-white)]/5 px-6 py-10 lg:px-8">
         <div className="mx-auto max-w-[720px]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">Legal</p>
           <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">Terms of Service</h1>
@@ -92,7 +92,7 @@ export default function TermsPage() {
               </section>
             ))}
           </div>
-          <div className="mt-12 rounded-2xl border border-[var(--marketing-beige)] bg-white p-6">
+          <div className="mt-12 rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)] p-6">
             <h2 className="text-base font-bold">Contact</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--marketing-brown)]/70">
               Questions about these terms? Email <span className="font-medium text-[var(--marketing-brown)]">help@coachxyz.app</span>.

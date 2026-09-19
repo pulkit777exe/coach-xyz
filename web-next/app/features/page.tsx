@@ -23,7 +23,7 @@ export default function FeaturesPage(){
           <p className="mx-auto mt-3 max-w-[560px] text-sm text-[var(--marketing-beige)]/60">A complete toolkit — from capture to feedback — without stitching tools together.</p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {feats.map(f=>(
-              <div key={f.title} className="rounded-2xl border border-white/10 bg-[var(--marketing-dark-card)] p-6 text-left">
+              <div key={f.title} className="rounded-2xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-6 text-left">
                 <div className="grid size-10 place-items-center rounded-xl bg-primary text-[var(--marketing-brown)]"><f.icon className="size-5"/></div>
                 <h3 className="mt-3 text-sm font-semibold">{f.title}</h3>
                 <p className="mt-1 text-sm leading-6 text-[var(--marketing-beige)]/60">{f.desc}</p>
@@ -35,7 +35,7 @@ export default function FeaturesPage(){
       </section>
       <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
         <div className="mx-auto max-w-[1120px] grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl bg-white border border-[var(--marketing-beige)] p-6">
+          <div className="rounded-2xl bg-[var(--marketing-white)] border border-[var(--marketing-beige)] p-6">
             <h3 className="font-bold">For coaches</h3>
             <ul className="mt-3 space-y-2 text-sm text-[var(--marketing-brown)]/70">
               <li className="flex gap-2"><Check className="size-4 text-success"/> Unlimited roster</li>

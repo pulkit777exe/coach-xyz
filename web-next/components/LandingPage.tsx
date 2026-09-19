@@ -64,7 +64,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               {k:'Video', d:'Pose overlays'},
               {k:'Report', d:'Share link'},
             ].map((x,i)=>(
-              <div key={x.k} className={`hidden h-[200px] w-[144px] shrink-0 rounded-[20px] border bg-[var(--marketing-white)]/[0.06] p-3 backdrop-blur-xl sm:flex ${i===2?'scale-[1.06] border-[var(--marketing-white)]/15 bg-[var(--marketing-white)]/[0.08] shadow-[0_8px_32px_rgba(124,58,237,0.25)]': 'border-[var(--marketing-white)]/10'}`}>
+              <div key={x.k} className={`flex h-[200px] w-[144px] shrink-0 snap-center rounded-[20px] border bg-[var(--marketing-white)]/[0.06] p-3 backdrop-blur-xl ${i===2?'scale-[1.06] border-[var(--marketing-white)]/15 bg-[var(--marketing-white)]/[0.08] shadow-[0_8px_32px_rgba(124,58,237,0.25)]': 'border-[var(--marketing-white)]/10'}`}>
                 <div className="w-full rounded-xl bg-[var(--marketing-dark)]/60 p-2.5 border border-[var(--marketing-white)]/5">
                   <div className="mx-auto mb-3 h-1.5 w-8 rounded-full bg-[var(--marketing-white)]/10" />
                   <p className="text-[11px] font-semibold text-[var(--marketing-white)]">{x.k}</p>
@@ -72,7 +72,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   <div className="mt-3 space-y-1.5">
                     <div className="h-1.5 rounded bg-primary/30" />
                     <div className="h-1.5 rounded bg-[var(--marketing-white)]/5 w-3/4" />
-                    <div className="mt-3 h-14 rounded-lg bg-foreground/30 border border-[var(--marketing-white)]/5" />
+                    <div className="mt-3 h-14 rounded-lg bg-[var(--marketing-white)]/10 border border-[var(--marketing-white)]/5" />
                   </div>
                 </div>
               </div>
@@ -298,16 +298,15 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           <h3 className="text-center text-lg font-bold text-[var(--marketing-white)]">Drop your training video here</h3>
           <p className="text-center text-sm text-[var(--marketing-white)]/50">Six sports • Auto player detection • 60s analysis</p>
           <div
-            role="button" tabIndex={0} onClick={open} onKeyDown={e=>{ if(e.key==='Enter'||e.key===' ') {e.preventDefault(); open()}}}
             onDragOver={e=>{e.preventDefault(); setIsDragging(true)}} onDragLeave={e=>{e.preventDefault(); setIsDragging(false)}} onDrop={e=>{e.preventDefault(); setIsDragging(false); pick(e.dataTransfer.files[0])}}
             className={`mt-5 flex min-h-[200px] flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center ${isDragging?'border-primary bg-primary/10':'border-[var(--marketing-white)]/10 bg-[var(--marketing-dark)] hover:border-primary/30'}`}
           >
-            <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={e=>pick(e.target.files?.[0])} />
+            <input ref={fileInputRef} id="analyze-file" type="file" accept="video/*" className="sr-only" onChange={e=>pick(e.target.files?.[0])} />
             <div className="grid size-12 place-items-center rounded-full bg-primary text-[var(--marketing-dark)]"><Play className="size-5 translate-x-[1px]" /></div>
             <p className="mt-3 text-sm font-semibold text-[var(--marketing-white)]">{fileName || 'Drop video or click to browse'}</p>
             <p className="text-xs text-[var(--marketing-white)]/40">MP4, MOV, AVI • 500 MB max</p>
-            <Button size="sm" className="mt-4 rounded-full bg-primary px-6 text-xs font-semibold text-[var(--marketing-dark)] hover:bg-primary/90">Choose video</Button>
-            {fileError && <p className="mt-2 text-xs text-red-400">{fileError}</p>}
+            <Button size="sm" onClick={open} className="mt-4 rounded-full bg-primary px-6 text-xs font-semibold text-[var(--marketing-dark)] hover:bg-primary/90">Choose video</Button>
+            {fileError && <p role="alert" className="mt-2 text-xs text-red-400">{fileError}</p>}
           </div>
         </div>
       </section>
@@ -342,11 +341,16 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               {q:'How is feedback personal for the student?',a:'Linked player hub shows only that athlete’s video, scores and reports.'},
             ].map((f,i)=>(
               <div key={f.q} className="py-4">
-                <button onClick={()=>setOpenFaq(openFaq===i?null:i)} className="flex w-full items-center justify-between text-left">
+                <button
+                  onClick={()=>setOpenFaq(openFaq===i?null:i)}
+                  aria-expanded={openFaq===i}
+                  aria-controls={`faq-${i}`}
+                  className="flex w-full items-center justify-between text-left"
+                >
                   <span className="text-sm font-medium text-[var(--marketing-dark)]">{f.q}</span>
                   <ChevronDown className={`size-4 text-[var(--marketing-purple)] transition ${openFaq===i?'rotate-180':''}`} />
                 </button>
-                {openFaq===i && <p className="mt-2 text-sm leading-6 text-[var(--marketing-dark)]/60">{f.a}</p>}
+                {openFaq===i && <p id={`faq-${i}`} className="mt-2 text-sm leading-6 text-[var(--marketing-dark)]/60">{f.a}</p>}
               </div>
             ))}
           </div>

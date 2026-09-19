@@ -20,7 +20,7 @@ export default function BlogPage(){
       <section className="mx-auto max-w-[1120px] px-6 py-8 lg:px-8">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map(p=>(
-            <Link key={p.slug} href={`/blog/${p.slug}`} className="group overflow-hidden rounded-2xl border border-[var(--marketing-beige)] bg-white hover:border-[var(--marketing-brown)]/20">
+            <Link key={p.slug} href={`/blog/${p.slug}`} className="group overflow-hidden rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)] hover:border-[var(--marketing-brown)]/20">
               <div className="h-40 bg-gradient-to-br from-[var(--marketing-lime)]/30 via-success/10 to-[var(--marketing-beige)]/30" />
               <div className="p-5">
                 <p className="text-xs font-semibold uppercase tracking-widest text-success">{p.tag} • {p.date}</p>
