@@ -22,7 +22,7 @@ export default async function PlayerLayout({
 
   return (
     <div className="min-h-screen flex bg-[var(--background)]">
-      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)]">
+      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex-1 overflow-y-auto px-3 py-4">
           <Link href="/player" className="mb-6 flex items-center gap-2 px-2">
             <span className="inline-flex size-6 items-center justify-center rounded bg-foreground text-background text-xs font-bold dark:bg-background dark:text-foreground">
@@ -39,7 +39,7 @@ export default async function PlayerLayout({
             </Link>
           </nav>
         </div>
-        <div className="border-t border-[var(--sidebar-border)] p-3">
+        <div className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
             <UserAvatar picture={session.user.picture} name={session.user.name} email={session.user.email} size="sm" />
             <div className="min-w-0 flex-1">

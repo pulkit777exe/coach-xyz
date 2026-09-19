@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, PanelLeft, CircleHelp } from 'lucide-react'
+import { LayoutGrid, PanelLeft, CircleHelp, Menu, X } from 'lucide-react'
 import UserAvatar from './UserAvatar'
 import ThemeToggle from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
@@ -13,7 +14,16 @@ type HeaderUser = { picture?: string | null; name?: string | null; email?: strin
 const MARKETING_ROUTES = ['/', '/pricing', '/features', '/about', '/contact', '/login', '/signup', '/privacy', '/terms', '/blog']
 const isMarketing = (p: string) => MARKETING_ROUTES.some(r => p === r || p.startsWith(r + '/'))
 
+const MARKETING_LINKS = [
+  { href: '/features', label: 'Features' },
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+] as const
+
 function MarketingNav({ user }: { user: HeaderUser }) {
+  const [open, setOpen] = useState(false)
   return (
     <nav className="sticky top-0 z-40 border-b border-[var(--marketing-white)]/5 bg-[var(--marketing-dark)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--marketing-dark)]/70">
       <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between gap-4 px-6 lg:px-8">
@@ -22,11 +32,9 @@ function MarketingNav({ user }: { user: HeaderUser }) {
           <span className="text-sm font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
         </Link>
         <div className="hidden items-center gap-6 text-sm md:flex">
-          <Link href="/features" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">Features</Link>
-          <Link href="/pricing" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">Pricing</Link>
-          <Link href="/blog" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">Blog</Link>
-          <Link href="/about" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">About</Link>
-          <Link href="/contact" className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">Contact</Link>
+          {MARKETING_LINKS.map((l) => (
+            <Link key={l.href} href={l.href} className="text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] rounded-sm">{l.label}</Link>
+          ))}
         </div>
         <div className="flex items-center gap-2">
           {user ? (
@@ -40,8 +48,32 @@ function MarketingNav({ user }: { user: HeaderUser }) {
               <Link href="/signup" className="inline-flex h-8 items-center rounded-full bg-primary px-4 text-sm font-semibold text-[var(--marketing-brown)] hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)]">Sign up</Link>
             </>
           )}
+          <button
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex size-8 items-center justify-center rounded-md text-[var(--marketing-beige)]/70 hover:bg-[var(--marketing-white)]/5 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)] md:hidden"
+          >
+            {open ? <X className="size-4" /> : <Menu className="size-4" />}
+          </button>
         </div>
       </div>
+      {open && (
+        <div className="border-t border-[var(--marketing-white)]/5 bg-[var(--marketing-dark)]/95 md:hidden">
+          <div className="mx-auto flex max-w-[1120px] flex-col px-6 py-3">
+            {MARKETING_LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-2 py-2.5 text-sm font-medium text-[var(--marketing-beige)]/70 hover:bg-[var(--marketing-white)]/5 hover:text-[var(--marketing-beige)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)]"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   )
 }
@@ -55,9 +87,9 @@ export default function HeaderClient({ user }: { user: HeaderUser }) {
   // Dashboard / app — theme-aware (light/dark) with spacer so body doesn't need pt
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between gap-4 bg-[var(--topbar)] border-b border-[var(--topbar-border)] px-3 sm:px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between gap-4 bg-topbar border-b border-topbar-border px-3 sm:px-4">
       <div className="flex items-center gap-3 min-w-0">
-        <button aria-label="Toggle sidebar" className="hidden sm:inline-flex size-8 items-center justify-center rounded-md border border-[var(--topbar-border)] bg-[var(--topbar)] text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        <button aria-label="Toggle sidebar" className="hidden sm:inline-flex size-8 items-center justify-center rounded-md border border-topbar-border bg-topbar text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
           <PanelLeft className="size-4" />
         </button>
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
