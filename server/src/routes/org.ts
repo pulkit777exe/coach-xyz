@@ -286,7 +286,11 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "measured_at must be a valid ISO datetime", false)
     }
-
+    const student = await getStudent(auth0Id, id)
+    if (!student) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Student not found in this organization", false)
+    }
     const metric = await createPerformanceMetric(auth0Id, {
       student_id: id,
       metric_key: metric_key as string,

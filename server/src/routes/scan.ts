@@ -106,10 +106,16 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
     }
 
-    // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes)
+    // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes or messages)
     const code = "INTERNAL_ERROR"
+    console.error(JSON.stringify({
+      type: "scan_unknown_error",
+      code: String(routeError?.code ?? "UNKNOWN"),
+      message: String(routeError?.message ?? "unknown"),
+      timestamp: new Date().toISOString(),
+    }))
     set.status = 500
-    return buildError(code, routeError?.message)
+    return buildError(code, "Video scan failed. Please try again.")
   }
 })
   .get("/api/scan-progress/:sessionToken", async ({ params, set }) => {

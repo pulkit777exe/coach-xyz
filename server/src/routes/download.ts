@@ -47,7 +47,13 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, set }) 
     }
 
     const routeError = error as { code?: string; message?: string }
+    console.error(JSON.stringify({
+      type: "download_error",
+      code: routeError?.code ?? "UNKNOWN",
+      message: routeError?.message ?? "unknown",
+      timestamp: new Date().toISOString(),
+    }))
     set.status = 503
-    return buildError("ENGINE_UNAVAILABLE", routeError?.message ?? "Failed to download video.", true)
+    return buildError("ENGINE_UNAVAILABLE", "Could not download video. Please try again.", true)
   }
 })
