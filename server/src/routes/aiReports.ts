@@ -9,6 +9,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import type { CoachAIError } from "../types"
 import { serviceGuard } from "../lib/serviceGuard"
+import { checkAiReportLimit } from "../lib/ratelimit"
 import { REPORT_TYPES } from "../lib/orgEnums"
 import type { ReportType } from "../lib/orgEnums"
 import { isDate, defaultReportTitle } from "../lib/orgValidate"
@@ -91,6 +92,11 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
       if (!auth0Id) {
         set.status = 400
         return buildError("INVALID_REQUEST", "Missing auth0Id parameter", false)
+      }
+      const { allowed } = await checkAiReportLimit(auth0Id)
+      if (!allowed) {
+        set.status = 429
+        return buildError("RATE_LIMITED", "Hourly AI report limit reached for this organization.", true)
       }
 
       const validated = validateAiReportBody(body)

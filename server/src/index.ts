@@ -22,6 +22,7 @@ import shareRoute from "./routes/share"
 import { healthRoute } from "./routes/health"
 import { historyStoreEnabled, initializeHistoryStore } from "./lib/supabaseHistory"
 import { buildError, isCoachAIError } from "./lib/errors"
+import { orgRoleGuard } from "./lib/serviceGuard"
 import { MAX_FILE_SIZE_BYTES } from "./types"
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
@@ -66,6 +67,20 @@ try {
   // Continue — history is non-critical
 }
 
+// Swagger docs are dev-only — don't expose the route surface in production.
+const swaggerPlugin =
+  process.env.NODE_ENV === "production"
+    ? new Elysia({ name: "swagger-disabled" })
+    : swagger({
+        path: "/swagger",
+        documentation: {
+          info: {
+            title: "CoachAI Middleware API",
+            version: "2.0.0",
+          },
+        },
+      })
+
 const app = new Elysia({
   serve: {
     // Required for large multipart uploads; keep higher than route-level file cap.
@@ -76,7 +91,7 @@ const app = new Elysia({
     origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
     credentials: true,
   }))
-  // ── Security Headers ───────────────────────────────────────────────────
+  // ── Security Headers ───────────────────────────────────────────
   .onAfterHandle(({ set, request }) => {
     set.headers["X-Content-Type-Options"] = "nosniff"
     set.headers["X-Frame-Options"] = "DENY"
@@ -100,17 +115,7 @@ const app = new Elysia({
       "worker-src 'self' blob:",
     ].join("; ")
   })
-  .use(
-    swagger({
-      path: "/swagger",
-      documentation: {
-        info: {
-          title: "CoachAI Middleware API",
-          version: "2.0.0",
-        },
-      },
-    }),
-  )
+  .use(swaggerPlugin)
   .use(healthRoute)
   .use(scanRoute)
   .use(analyzeRoute)
@@ -118,12 +123,12 @@ const app = new Elysia({
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)
-  .use(orgRoute)
+  .use(orgRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
   .use(meRoute)
-  .use(emailRoute)
+  .use(emailRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
   .use(membersRoute)
   .use(notificationsRoute)
-  .use(aiReportsRoute)
+  .use(aiReportsRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
   .use(shareRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────

@@ -167,6 +167,25 @@ app.add_middleware(
 )
 
 
+# ── Service-token auth ───────────────────────────────────────────────────────
+# When SERVICE_TOKEN is set (production), every route except /health requires
+# the shared x-service-token header. Inert when unset so local dev keeps working
+# — mirrors the server-side serviceGuard identity boundary.
+
+import hmac
+
+
+@app.middleware("http")
+async def service_token_middleware(request: Request, call_next):
+    expected = os.environ.get("SERVICE_TOKEN")
+    if not expected or request.url.path == "/health":
+        return await call_next(request)
+    token = request.headers.get("x-service-token", "")
+    if not hmac.compare_digest(token, expected):
+        return _error_response(403, "FORBIDDEN", "Invalid service credentials")
+    return await call_next(request)
+
+
 # ── Request Timing Middleware ────────────────────────────────────────────────
 
 
@@ -442,7 +461,7 @@ async def scan(video: UploadFile) -> JSONResponse:
 
     try:
         from core.detector import detect_players
-        players = detect_players(local_path, on_progress=_report_scan_progress)
+        players = await asyncio.to_thread(detect_players, local_path, on_progress=_report_scan_progress)
     except NoPlayersDetectedError as e:
         with scan_progress_lock:
             if session_token in scan_progress:
@@ -1080,7 +1099,7 @@ def download(job_id: str):
     except JobNotFoundError:
         return _error_response(404, "JOB_NOT_FOUND", "Job not found")
 
-    if not job.complete or not job.video_key:
+    if job.state != "completed" or not job.video_key:
         return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
 
     if storage.is_local_backend():

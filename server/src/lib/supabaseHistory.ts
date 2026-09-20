@@ -781,12 +781,16 @@ export const upsertUser = async (user: {
         select * from users where email = ${user.email} limit 1;
       `
       if (existingByEmail?.[0]) {
-        // Found existing account by email — keep original auth0_id as primary,
-        // add the new provider's sub to linked list so future logins resolve correctly.
-        const mergedLinked = [
-          ...(existingByEmail[0].linked_auth0_ids || []),
-          user.sub,
-        ]
+        // Found existing account by email — link the new provider
+        // only when this login was email-verified. Unverified emails
+        // can't takeover an existing account. Never downgrade a
+        // verified flag to unverified.
+        const mergedLinked = user.email_verified
+          ? [
+              ...(existingByEmail[0].linked_auth0_ids || []),
+              user.sub,
+            ]
+          : existingByEmail[0].linked_auth0_ids
         const uniqueLinked = [...new Set(mergedLinked)]
         const rows = await db<UserRecord[]>`
           update users set
@@ -794,7 +798,7 @@ export const upsertUser = async (user: {
             name = ${user.name || existingByEmail[0].name},
             nickname = ${user.nickname || existingByEmail[0].nickname},
             picture = ${user.picture || existingByEmail[0].picture},
-            email_verified = ${user.email_verified ?? existingByEmail[0].email_verified},
+            email_verified = ${user.email_verified === true || existingByEmail[0].email_verified === true},
             updated_at = now()
           where id = ${existingByEmail[0].id}
           returning *;
@@ -805,14 +809,15 @@ export const upsertUser = async (user: {
 
     // New user — create record. Defaults to 'coach'; if this email belongs to a
     // student a coach enrolled, the account is linked and flipped to 'player'.
+    // The link-to-player step only happens when the new account is verified.
     const rows = await db<UserRecord[]>`
       insert into users (auth0_id, email, name, nickname, picture, email_verified)
-      values (${user.sub}, ${user.email || null}, ${user.name || null}, ${user.nickname || null}, ${user.picture || null}, ${user.email_verified || false})
+      values (${user.sub}, ${user.email || null}, ${user.name || null}, ${user.nickname || null}, ${user.picture || null}, ${user.email_verified === true})
       returning *;
     `
     const created = rows?.[0] ?? null
 
-    if (created && user.email) {
+    if (created && user.email && user.email_verified === true) {
       const linked = await linkPlayerToStudent(db, user.sub, user.email)
       if (linked) {
         const fresh = await db<UserRecord[]>`

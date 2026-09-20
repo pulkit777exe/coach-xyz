@@ -1,5 +1,5 @@
 import { auth0 } from "@/lib/auth0";
-import { isIdentityPath } from "@/lib/serviceProxy";
+import { isIdentityPath, sanitizeServicePath } from "@/lib/serviceProxy";
 import { NextRequest, NextResponse } from "next/server";
 
 // ── Service proxy for identity-bearing backend routes ──────────────────────
@@ -37,6 +37,12 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ message: "Not found." }, { status: 404 });
   }
 
+  // Reject traversal: decoded segments must be plain names, no ../ or slashes.
+  const safePath = sanitizeServicePath(path);
+  if (!safePath) {
+    return NextResponse.json({ message: "Not found." }, { status: 404 });
+  }
+
   const session = await auth0.getSession();
   const verifiedSub = session?.user?.sub;
   if (!verifiedSub) {
@@ -61,7 +67,9 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
 
   let backendRes: Response;
   try {
-    backendRes = await fetch(`${BACKEND}/${path.join("/")}`, {
+    // Forward the query string — pagination/filter params live there.
+    const search = request.nextUrl.search ?? "";
+    backendRes = await fetch(`${BACKEND}/${safePath.join("/")}${search}`, {
       method: request.method,
       headers,
       body: hasBody ? body : undefined,

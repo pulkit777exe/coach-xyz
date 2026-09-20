@@ -65,22 +65,22 @@ export function verifyServiceIdentity(
     return { ok: true }
   }
 
-  if (!token || !process.env.SERVICE_TOKEN || token !== process.env.SERVICE_TOKEN) {
-    let tokenOk = false
+  // Constant-time token compare — never short-circuit on a mismatch.
+  const expected = process.env.SERVICE_TOKEN
+  let tokenOk = false
+  if (token && expected) {
     try {
-      tokenOk =
-        token !== null &&
-        process.env.SERVICE_TOKEN !== undefined &&
-        timingSafeEqual(Buffer.from(token), Buffer.from(process.env.SERVICE_TOKEN))
+      tokenOk = timingSafeEqual(Buffer.from(token), Buffer.from(expected))
     } catch {
+      // Buffer length mismatch throws — treat as non-match.
       tokenOk = false
     }
-    if (!tokenOk) {
-      return {
-        ok: false,
-        status: 403,
-        body: buildError("FORBIDDEN", "Invalid service credentials", false),
-      }
+  }
+  if (!tokenOk) {
+    return {
+      ok: false,
+      status: 403,
+      body: buildError("FORBIDDEN", "Invalid service credentials", false),
     }
   }
 
@@ -219,6 +219,11 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
         return buildError("INVALID_REQUEST", "Missing auth0Id parameter", false)
       }
       const verifiedAuth0Id = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+      // Owner fast-path: the org owner always holds the owner role (rows are
+      // lazily seeded), so skip the member-list DB round-trip entirely.
+      if (verifiedAuth0Id === auth0Id && requiredRoles.includes("owner")) {
+        return
+      }
       let members: OrgRoleMember[] | null = null
       try {
         members = await listOrgMembers(auth0Id)

@@ -3,6 +3,10 @@ import type { EngineJobStatus } from "./jobs" // type-only: no runtime cycle
 
 export const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
 
+/** Shared-secret header the engine enforces when SERVICE_TOKEN is set. */
+export const engineServiceHeaders = (): Record<string, string> =>
+  process.env.SERVICE_TOKEN ? { "x-service-token": process.env.SERVICE_TOKEN } : {}
+
 function engineError(code: string, message: string, retryable = true): CoachAIError {
   return { code, message, layer: "engine", retryable }
 }
@@ -47,6 +51,7 @@ export const scanVideo = async (videoFile: File): Promise<ScanResult> => {
   try {
     const res = await withTimeout(`${ENGINE_URL}/scan`, {
       method: "POST",
+      headers: engineServiceHeaders(),
       body: form,
     }, 180_000)
 
@@ -68,6 +73,7 @@ export const getDownloadStream = async (engineJobId: string): Promise<Response> 
   try {
     const res = await withTimeout(`${ENGINE_URL}/download/${engineJobId}`, {
       method: "GET",
+      headers: engineServiceHeaders(),
     }, 60_000)
 
     if (!res.ok) {
@@ -95,7 +101,7 @@ export const analyzeVideo = async (payload: AnalyzePayload): Promise<void> => {
   try {
     const res = await withTimeout(`${ENGINE_URL}/analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
       body: JSON.stringify(payload),
     }, 12 * 60 * 1000) // 12 min max — longest single analysis span
 
@@ -120,6 +126,7 @@ export const getEngineJobStatus = async (engineJobId: string): Promise<EngineSta
   try {
     const res = await withTimeout(`${ENGINE_URL}/status/${engineJobId}`, {
       method: "GET",
+      headers: engineServiceHeaders(),
     }, 15_000) // 15s — free-tier Render instances can take 10–30s to respond after spin-up
 
     if (!res.ok) {
@@ -145,7 +152,7 @@ export const markEngineJobFailed = async (
   try {
     const res = await withTimeout(`${ENGINE_URL}/fail/${engineJobId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
       body: JSON.stringify({ message, code, retryable }),
     }, 10_000)
 
@@ -173,7 +180,7 @@ export const getScanProgressStream = async (
 ): Promise<Response> => {
   try {
     const res = await fetch(`${ENGINE_URL}/scan-progress/${sessionToken}`, {
-      headers: { Accept: "text/event-stream" },
+      headers: { Accept: "text/event-stream", ...engineServiceHeaders() },
     })
 
     if (!res.ok) {

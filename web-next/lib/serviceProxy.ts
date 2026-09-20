@@ -38,3 +38,27 @@ export function decodePathSegment(value: string): string {
     return value
   }
 }
+
+/**
+ * Decode + validate catch-all path segments for the identity proxy.
+ * Returns null when any segment decodes to something unsafe — dot segments,
+ * embedded slashes (%2F in raw segments is what URL-decoding produces), or
+ * backslashes — so the backend can never see a reconstituted traversal path.
+ */
+export function sanitizeServicePath(path: string[]): string[] | null {
+  const out: string[] = []
+  for (const raw of path) {
+    const decoded = decodePathSegment(raw)
+    if (
+      decoded.length === 0 ||
+      decoded === "." ||
+      decoded === ".." ||
+      decoded.includes("/") ||
+      decoded.includes("\\")
+    ) {
+      return null
+    }
+    out.push(decoded)
+  }
+  return out
+}

@@ -16,6 +16,7 @@ export type RedisLike = {
     value: string | number | Record<string, unknown>,
     opts?: { ex?: number },
   ): Promise<void>
+  del(key: string): Promise<number>
 }
 
 export type ShareTokenRecord = {

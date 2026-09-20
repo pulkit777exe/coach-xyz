@@ -89,6 +89,18 @@ export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
   return checkLimit({ key: `rl:analysis:${ip}`, limit, windowSec: 3600 })
 }
 
+/** Per-org daily cap on outbound email (invites + reports + attendance). */
+export async function checkEmailLimit(orgId: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.EMAIL_RATE_LIMIT || "20")
+  return checkLimit({ key: `rl:email:${orgId}`, limit, windowSec: 86400 })
+}
+
+/** Per-org hourly cap on AI report generation (paid Gemini calls). */
+export async function checkAiReportLimit(orgId: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.AI_REPORT_RATE_LIMIT || "10")
+  return checkLimit({ key: `rl:aireport:${orgId}`, limit, windowSec: 3600 })
+}
+
 export function getIP(request: Request): string {
   const meta = readRequestMeta(request)
   return meta.clientIp ?? "anonymous"

@@ -4,7 +4,7 @@
 // in queue.ts imports persistAiReportRecord; routes import the job record
 // helpers and the engine adapter below.
 
-import { withTimeout, ENGINE_URL, isConnectivityError } from "./engine"
+import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from "./engine"
 import { buildReportContent, createReportRecord } from "./orgData"
 import type { ReportType } from "./orgEnums"
 import type { CoachAIError } from "../types"
@@ -105,7 +105,7 @@ export const generateAiReport = async (
   try {
     const res = await withTimeout(`${ENGINE_URL}/report`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
       body: JSON.stringify(payload),
     }, 120_000) // 2 min — long prompt, single Gemini round-trip
 

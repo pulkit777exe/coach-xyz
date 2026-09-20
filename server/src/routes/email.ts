@@ -5,6 +5,7 @@ import { emailConfigured, sendEmail, inviteEmail, reportEmail, attendanceEmail, 
 import { getUserByAuth0Id } from "../lib/supabaseHistory"
 import { listStudents, getStudent, getReport, listAttendance } from "../lib/orgData"
 import { serviceGuard } from "../lib/serviceGuard"
+import { checkEmailLimit } from "../lib/ratelimit"
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? "http://localhost:3000"
 
@@ -27,6 +28,12 @@ export default new Elysia()
   // then emails each address an invitation with a signup link.
   .post("/api/email/:auth0Id/invite", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
+    const { allowed: emailOk, remaining } = await checkEmailLimit(auth0Id)
+    set.headers["X-RateLimit-Remaining"] = String(remaining)
+    if (!emailOk) {
+      set.status = 429
+      return buildError("RATE_LIMITED", "Daily email limit reached for this organization. Try again tomorrow.", true)
+    }
     const { emails, student_ids } = body as { emails?: unknown; student_ids?: unknown }
 
     if (!Array.isArray(emails) || emails.length === 0) {
@@ -43,8 +50,8 @@ export default new Elysia()
     }
 
     const owner = await getUserByAuth0Id(auth0Id)
-    const coachName = owner?.name ?? "Your coach"
-    const teamName = `${owner?.nickname || owner?.name || "Your"} Team`.replace(/\.\s*$/, "") + "'s Team"
+    const coachName = escapeHtml(owner?.name ?? "Your coach")
+    const teamName = escapeHtml(`${owner?.nickname || owner?.name || "Your"} Team`.replace(/\.\s*$/, "") + "'s Team")
 
     if (!emailConfigured()) {
       set.status = 501
@@ -93,6 +100,11 @@ export default new Elysia()
   // body: { report_id: string, to?: string }  — `to` defaults to the student's email
   .post("/api/email/:auth0Id/report", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
+    const { allowed: emailOk } = await checkEmailLimit(auth0Id)
+    if (!emailOk) {
+      set.status = 429
+      return buildError("RATE_LIMITED", "Daily email limit reached for this organization. Try again tomorrow.", true)
+    }
     const { report_id, to } = body as { report_id?: unknown; to?: unknown }
 
     if (typeof report_id !== "string") {
@@ -115,7 +127,7 @@ export default new Elysia()
     if (report.student_id) {
       const student = await getStudent(auth0Id, report.student_id)
       if (student) {
-        studentName = student.full_name
+        studentName = escapeHtml(student.full_name)
         if (!recipient && student.email) recipient = student.email
       }
     }
@@ -131,7 +143,7 @@ export default new Elysia()
 
     const reportUrl = `${FRONTEND_URL}/dashboard/reports/${report_id}`
     try {
-      const { subject, html, text } = reportEmail(studentName, report.title, summary, reportUrl)
+      const { subject, html, text } = reportEmail(studentName, escapeHtml(report.title), summary, reportUrl)
       const sent = await sendEmail({ to: recipient, subject, html, text })
       set.status = 200
       return { sent }
@@ -150,6 +162,11 @@ export default new Elysia()
   // body: { student_id?: string, from?: string, to?: string, to?: string }
   .post("/api/email/:auth0Id/attendance", async ({ params, body, set }) => {
     const auth0Id = params.auth0Id as string
+    const { allowed: emailOk } = await checkEmailLimit(auth0Id)
+    if (!emailOk) {
+      set.status = 429
+      return buildError("RATE_LIMITED", "Daily email limit reached for this organization. Try again tomorrow.", true)
+    }
     const { student_id, from, to, recipient } = body as { student_id?: unknown; from?: unknown; to?: unknown; recipient?: unknown }
     if (!emailConfigured()) {
       set.status = 501
@@ -172,8 +189,8 @@ export default new Elysia()
     }
 
     const owner = await getUserByAuth0Id(auth0Id)
-    const teamName = `${owner?.nickname || owner?.name || "Your"} Team`.replace(/\.\s*$/, "") + "'s Team"
-    const periodLabel = [from ? `from ${from}` : "", to ? `to ${to}` : ""].filter(Boolean).join(" ") || "all time"
+    const teamName = escapeHtml(`${owner?.nickname || owner?.name || "Your"} Team`.replace(/\.\s*$/, "") + "'s Team")
+    const periodLabel = escapeHtml([from ? `from ${from}` : "", to ? `to ${to}` : ""].filter(Boolean).join(" ") || "all time")
 
     const rowsHtml = records
       .map(

@@ -3,7 +3,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
 import { getConversation, saveMessage } from "../lib/conversation"
-import { ENGINE_URL, withTimeout } from "../lib/engine"
+import { ENGINE_URL, engineServiceHeaders, withTimeout } from "../lib/engine"
 
 /**
  * Resolve the engine job ID and conversation history for a given server job.
@@ -42,7 +42,7 @@ export default new Elysia()
     try {
       const res = await withTimeout(`${ENGINE_URL}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
         body: JSON.stringify({
           job_id: engineJobId,
           message: message.trim(),
@@ -117,7 +117,7 @@ export default new Elysia()
     try {
       const engineRes = await withTimeout(`${ENGINE_URL}/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
         body: JSON.stringify({
           job_id: engineJobId,
           message: message.trim(),

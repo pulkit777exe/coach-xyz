@@ -23,6 +23,9 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
       `connect-src ${connectSrc.join(" ")}`,
       "worker-src 'self' blob:",
+      "base-uri 'self'",
+      "form-action 'self' 'mailto:'",
+      "frame-ancestors 'none'",
     ].join("; "),
   },
 ];

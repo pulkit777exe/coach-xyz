@@ -4,6 +4,7 @@ import {
   isIdentityPath,
   isSelfPath,
   resourceAuth0Id,
+  sanitizeServicePath,
 } from "../serviceProxy"
 
 describe("resourceAuth0Id", () => {
@@ -72,5 +73,40 @@ describe("decodePathSegment", () => {
 
   test("falls back to the raw value on malformed input", () => {
     expect(decodePathSegment("%zz")).toBe("%zz")
+  })
+})
+
+describe("sanitizeServicePath", () => {
+  test("passes through clean segments unchanged", () => {
+    expect(sanitizeServicePath(["api", "org", "auth0|abc", "students"])).toEqual([
+      "api",
+      "org",
+      "auth0|abc",
+      "students",
+    ])
+  })
+
+  test("decodes percent-encoded segments", () => {
+    expect(sanitizeServicePath(["api", "org", "auth0%7Cabc"])).toEqual(["api", "org", "auth0|abc"])
+  })
+
+  test("rejects dot segments", () => {
+    expect(sanitizeServicePath(["api", "org", ".."])).toBeNull()
+    expect(sanitizeServicePath(["..", "api"])).toBeNull()
+    expect(sanitizeServicePath(["api", ".", "me"])).toBeNull()
+  })
+
+  test("rejects encoded slashes that would reconstitute traversal", () => {
+    expect(sanitizeServicePath(["api", "org", "..%2F..%2Fadmin"])).toBeNull()
+    expect(sanitizeServicePath(["a%2Fb"])).toBeNull()
+  })
+
+  test("rejects backslashes and empty segments", () => {
+    expect(sanitizeServicePath(["api", "org", "..\\.."])).toBeNull()
+    expect(sanitizeServicePath(["api", "", "me"])).toBeNull()
+  })
+
+  test("returns empty array for empty path", () => {
+    expect(sanitizeServicePath([])).toEqual([])
   })
 })

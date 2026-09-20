@@ -364,6 +364,11 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "Missing or invalid attendance fields", false)
     }
+    const student = await getStudent(auth0Id, student_id as string)
+    if (!student) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Student not found in this organization", false)
+    }
     const record = await upsertAttendance(
       auth0Id,
       student_id as string,
@@ -398,6 +403,15 @@ export default new Elysia()
     if (invalid) {
       set.status = 400
       return buildError("INVALID_REQUEST", "Entry requires a valid student_id, session_date (YYYY-MM-DD) and status", false)
+    }
+
+    // Verify every student belongs to this org before any write.
+    for (const entry of entries) {
+      const exists = await getStudent(auth0Id, (entry as Record<string, unknown>).student_id as string)
+      if (!exists) {
+        set.status = 404
+        return buildError("NOT_FOUND", `Student ${(entry as Record<string, unknown>).student_id} not found in this organization`, false)
+      }
     }
 
     const parsed = entries.map((entry) => {

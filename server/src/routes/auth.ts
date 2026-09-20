@@ -258,10 +258,10 @@ export default new Elysia()
 
     let assistantMessage = ""
     try {
-      const { ENGINE_URL } = await import("../lib/engine")
+      const { ENGINE_URL, engineServiceHeaders } = await import("../lib/engine")
       const engineRes = await fetch(`${ENGINE_URL}/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
         body: JSON.stringify({
           job_id: analysis.engine_job_id,
           message,

@@ -230,4 +230,8 @@ def fail_job(job_id: str, error: EngineError) -> None:
         job.error = error.message
         job.error_code = error.code
         job.retryable = error.retryable
+        # Clear the video reference so a failed job can no longer serve
+        # (or leak) the rendered/raw video via the download route.
+        job.video_key = None
+        job.video_path = None
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)

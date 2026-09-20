@@ -28,6 +28,10 @@ function memoryClient(seed: Record<string, ShareTokenRecord> = {}): RedisLike & 
     async set(key, value) {
       map.set(key, value as ShareTokenRecord)
     },
+    async del(key) {
+      map.delete(key)
+      return 1
+    },
   }
 }
 
@@ -162,6 +166,59 @@ describe("POST /api/org/:auth0Id/analyses/:jobId/share-token", () => {
     expect((await res.json()).code).toBe("NOT_FOUND")
   })
 
+  test("403s when the analysis belongs to a different account", async () => {
+    const foreign = { ...FAKE_ANALYSIS, auth0_id: "auth-victim" }
+    const app = new Elysia().use(
+      orgShareRoute({ store: createShareTokenStore(memoryClient()), getAnalysis: async () => foreign }),
+    )
+    const res = await app.handle(
+      new Request("http://localhost/api/org/auth-coach-1/analyses/job-1/share-token", {
+        method: "POST",
+        headers: headersFor("auth-coach-1"),
+      }),
+    )
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe("FORBIDDEN")
+  })
+
+  test("DELETE revokes an owned token and 403s for foreign tokens", async () => {
+    const store = createShareTokenStore(memoryClient())
+    const { token } = await store.createShareToken({ auth0_id: "auth-coach-1", server_job_id: "job-1" })
+    const app = new Elysia().use(orgShareRoute({ store, getAnalysis: async () => FAKE_ANALYSIS }))
+
+    const ok = await app.handle(
+      new Request(`http://localhost/api/org/auth-coach-1/share-tokens/${token}`, {
+        method: "DELETE",
+        headers: headersFor("auth-coach-1"),
+      }),
+    )
+    expect(ok.status).toBe(200)
+    expect(await store.getShareToken(token)).toBeNull()
+
+    const { token: other } = await store.createShareToken({ auth0_id: "auth-victim", server_job_id: "job-2" })
+    const foreign = await app.handle(
+      new Request(`http://localhost/api/org/auth-coach-1/share-tokens/${other}`, {
+        method: "DELETE",
+        headers: headersFor("auth-coach-1"),
+      }),
+    )
+    expect(foreign.status).toBe(403)
+    expect(await store.getShareToken(other)).not.toBeNull()
+  })
+
+  test("DELETE 404s for an unknown token", async () => {
+    const app = new Elysia().use(
+      orgShareRoute({ store: createShareTokenStore(memoryClient()), getAnalysis: async () => FAKE_ANALYSIS }),
+    )
+    const res = await app.handle(
+      new Request("http://localhost/api/org/auth-coach-1/share-tokens/nope", {
+        method: "DELETE",
+        headers: headersFor("auth-coach-1"),
+      }),
+    )
+    expect(res.status).toBe(404)
+  })
+
   test("enforces service identity: wrong or missing headers are rejected", async () => {
     const app = new Elysia().use(orgShareRoute({ store: createShareTokenStore(memoryClient()), getAnalysis: async () => FAKE_ANALYSIS }))
 
@@ -208,7 +265,7 @@ describe("GET /api/share/:token", () => {
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.server_job_id).toBe("job-1")
-    expect(body.auth0_id).toBe("auth-coach-1")
+    expect(body.auth0_id).toBeUndefined()
     expect(body.analysis.display_name).toBe("Serve practice")
     expect(body.analysis.summary_json.form_score).toBe(7.5)
     expect(body.analysis.video_ready).toBe(true)
