@@ -307,22 +307,6 @@ export const listAttendance = async (
   )
 }
 
-export const getAttendance = async (
-  auth0Id: string,
-  studentId: string,
-  sessionDate: string,
-): Promise<AttendanceRecord | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<AttendanceRecord[]>`
-      select * from attendance
-      where auth0_id = ${auth0Id} and student_id = ${studentId} and session_date = ${sessionDate}::date
-      limit 1;
-    `
-    return rows?.[0] ?? null
-  })
-}
-
 export const upsertAttendance = async (
   auth0Id: string,
   studentId: string,
@@ -349,25 +333,12 @@ export const setAttendanceBatch = async (
   auth0Id: string,
   entries: { studentId: string; sessionDate: string; status: AttendanceStatus; note?: string | null }[],
 ): Promise<AttendanceRecord[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const results: AttendanceRecord[] = []
-      for (const entry of entries) {
-        const rows = await db<AttendanceRecord[]>`
-          insert into attendance (auth0_id, student_id, session_date, status, note)
-          values (${auth0Id}, ${entry.studentId}, ${entry.sessionDate}::date, ${entry.status}, ${entry.note || null})
-          on conflict (auth0_id, student_id, session_date) do update set
-            status = excluded.status,
-            note = excluded.note,
-            updated_at = now()
-          returning *;
-        `
-        if (rows?.[0]) results.push(rows[0])
-      }
-      return results
-    })) ?? []
-  )
+  const results: AttendanceRecord[] = []
+  for (const entry of entries) {
+    const record = await upsertAttendance(auth0Id, entry.studentId, entry.sessionDate, entry.status, entry.note)
+    if (record) results.push(record)
+  }
+  return results
 }
 
 export const deleteAttendance = async (

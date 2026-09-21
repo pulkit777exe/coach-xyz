@@ -1,7 +1,12 @@
-import type { CoachAIError, ScanResult } from "../types"
-import type { EngineJobStatus } from "./jobs" // type-only: no runtime cycle
+import type { CoachAIError, JobStatus, ScanResult } from "../types"
 
 export const ENGINE_URL = process.env.ENGINE_URL ?? "http://localhost:8001"
+
+/**
+ * Raw engine status payload. Same wire shape as JobStatus (the response type)
+ * plus created_at, which Batch 3 of the engine job payload carries.
+ */
+export type EngineJobStatus = JobStatus & { created_at: string | null }
 
 /** Shared-secret header the engine enforces when SERVICE_TOKEN is set. */
 export const engineServiceHeaders = (): Record<string, string> =>

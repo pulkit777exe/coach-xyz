@@ -51,29 +51,13 @@ interface RateLimitConfig {
 export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResult> {
   const { key, limit, windowSec } = config
   try {
-    // Try atomic increment first
-    if (redis.rateLimitIncrement) {
-      const result = await redis.rateLimitIncrement(key, limit, windowSec)
-      return {
-        allowed: result.allowed,
-        remaining: Math.max(0, limit - result.current),
-        reset: result.reset,
-      }
+    // Atomic increment fails over to the in-memory limiter below when Redis is down
+    const result = await redis.rateLimitIncrement(key, limit, windowSec)
+    return {
+      allowed: result.allowed,
+      remaining: Math.max(0, limit - result.current),
+      reset: result.reset,
     }
-
-    // Fallback to non-atomic (Upstash REST)
-    // Use INCR + EXPIRE for atomicity instead of GET/SET
-    const count = await redis.incr(key)
-    if (count === 1) {
-      // First request in this window — set expiry
-      await redis.expire(key, windowSec)
-    }
-    const reset = Date.now() + windowSec * 1000
-
-    if (count > limit) {
-      return { allowed: false, remaining: 0, reset }
-    }
-    return { allowed: true, remaining: limit - count, reset }
   } catch {
     return memoryLimit(key, limit, windowSec * 1000)
   }

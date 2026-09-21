@@ -8,7 +8,6 @@ import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } fr
 import { buildReportContent, createReportRecord } from "./orgData"
 import type { ReportType } from "./orgEnums"
 import type { CoachAIError } from "../types"
-import type { RedisLike } from "./shareTokens"
 import { redis } from "./redis"
 
 function engineError(code: string, message: string, retryable = true): CoachAIError {
@@ -33,57 +32,39 @@ const JOB_TTL = 7200 // 2h — aligned with server job TTL
 
 export const reportJobKey = (reportJobId: string) => `${KEY_PREFIX}${reportJobId}`
 
-export function createInitAiReportJob(
-  client: RedisLike = redis,
-  now: () => number = Date.now,
-) {
-  return async (input: { report_job_id: string; auth0_id: string }): Promise<AiReportJob> => {
-    const ts = now()
-    const record: AiReportJob = {
-      report_job_id: input.report_job_id,
-      auth0_id: input.auth0_id,
-      status: "queued",
-      report_id: null,
-      error: null,
-      progress: 0,
-      created_at: ts,
-      updated_at: ts,
-    }
-    await client.set(reportJobKey(input.report_job_id), record, { ex: JOB_TTL })
-    return record
+export async function initAiReportJob(input: { report_job_id: string; auth0_id: string }): Promise<AiReportJob> {
+  const ts = Date.now()
+  const record: AiReportJob = {
+    report_job_id: input.report_job_id,
+    auth0_id: input.auth0_id,
+    status: "queued",
+    report_id: null,
+    error: null,
+    progress: 0,
+    created_at: ts,
+    updated_at: ts,
   }
+  await redis.set(reportJobKey(input.report_job_id), record, { ex: JOB_TTL })
+  return record
 }
 
-export const initAiReportJob = createInitAiReportJob()
-
-export function createUpdateAiReportJob(
-  client: RedisLike = redis,
-  now: () => number = Date.now,
-) {
-  return async (
-    reportJobId: string,
-    patch: Partial<Pick<AiReportJob, "status" | "report_id" | "error" | "progress">>,
-  ): Promise<AiReportJob | null> => {
-    const raw = await client.get(reportJobKey(reportJobId))
-    if (!raw) return null
-    const record = raw as AiReportJob
-    const next: AiReportJob = { ...record, ...patch, updated_at: now() }
-    await client.set(reportJobKey(reportJobId), next, { ex: JOB_TTL })
-    return next
-  }
+export async function updateAiReportJob(
+  reportJobId: string,
+  patch: Partial<Pick<AiReportJob, "status" | "report_id" | "error" | "progress">>,
+): Promise<AiReportJob | null> {
+  const raw = await redis.get(reportJobKey(reportJobId))
+  if (!raw) return null
+  const record = raw as AiReportJob
+  const next: AiReportJob = { ...record, ...patch, updated_at: Date.now() }
+  await redis.set(reportJobKey(reportJobId), next, { ex: JOB_TTL })
+  return next
 }
 
-export const updateAiReportJob = createUpdateAiReportJob()
-
-export function createGetAiReportJob(client: RedisLike = redis) {
-  return async (reportJobId: string): Promise<AiReportJob | null> => {
-    const raw = await client.get(reportJobKey(reportJobId))
-    if (!raw) return null
-    return raw as AiReportJob
-  }
+export async function getAiReportJob(reportJobId: string): Promise<AiReportJob | null> {
+  const raw = await redis.get(reportJobKey(reportJobId))
+  if (!raw) return null
+  return raw as AiReportJob
 }
-
-export const getAiReportJob = createGetAiReportJob()
 
 // ── Engine adapter ───────────────────────────────────────────────────────────
 

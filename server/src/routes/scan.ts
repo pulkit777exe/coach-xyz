@@ -95,19 +95,8 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       return error
     }
 
-    // If it's a network/connectivity error (Bun throws raw errors, not TypeErrors)
-    const routeError = error as { code?: string; message?: string }
-    const errCode = String(routeError?.code ?? "")
-    const errMsg = String(routeError?.message ?? "")
-    if (
-      routeError?.code === "ENGINE_UNAVAILABLE" ||
-      /ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|fetch failed/i.test(`${errMsg} ${errCode}`)
-    ) {
-      set.status = 503
-      return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
-    }
-
     // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes or messages)
+    const routeError = error as { code?: string; message?: string }
     const code = "INTERNAL_ERROR"
     console.error(JSON.stringify({
       type: "scan_unknown_error",
@@ -143,17 +132,6 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       if (isCoachAIError(error)) {
         set.status = error.retryable ? 503 : 500
         return error
-      }
-
-      const routeError = error as { code?: string; message?: string }
-      const errMsg = String(routeError?.message ?? "")
-      const errCode = String(routeError?.code ?? "")
-      if (
-        routeError?.code === "ENGINE_UNAVAILABLE" ||
-        /ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|fetch failed/i.test(`${errMsg} ${errCode}`)
-      ) {
-        set.status = 503
-        return buildError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.", true)
       }
 
       set.status = 500

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, PanelLeft, CircleHelp, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import UserAvatar from './UserAvatar'
 import ThemeToggle from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
@@ -89,9 +89,6 @@ export default function HeaderClient({ user }: { user: HeaderUser }) {
     <>
       <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between gap-4 bg-topbar border-b border-topbar-border px-3 sm:px-4">
       <div className="flex items-center gap-3 min-w-0">
-        <button aria-label="Toggle sidebar" className="hidden sm:inline-flex size-8 items-center justify-center rounded-md border border-topbar-border bg-topbar text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-          <PanelLeft className="size-4" />
-        </button>
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
           <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">C</span>
           <span className="hidden sm:inline text-sm font-semibold text-foreground">CoachXYZ</span>
@@ -107,9 +104,7 @@ export default function HeaderClient({ user }: { user: HeaderUser }) {
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <GlobalSearch sub={user?.sub ?? null} />
         <div className="hidden sm:flex items-center gap-1 text-muted-foreground">
-          <button aria-label="Apps" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><LayoutGrid className="size-4" /></button>
           <ThemeToggle />
-          <button aria-label="Help" className="inline-flex size-8 items-center justify-center rounded-md hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"><CircleHelp className="size-4" /></button>
         </div>
         {user ? (
           <div className="flex items-center gap-2">

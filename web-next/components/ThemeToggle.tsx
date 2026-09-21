@@ -4,7 +4,7 @@ import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-export default function ThemeToggle({ variant = 'default' }: { variant?: 'default' | 'landing' }) {
+export default function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -17,18 +17,6 @@ export default function ThemeToggle({ variant = 'default' }: { variant?: 'defaul
   }
 
   const isDark = resolvedTheme === 'dark'
-
-  if (variant === 'landing') {
-    return (
-      <button
-        aria-label="Toggle theme"
-        onClick={() => setTheme(isDark ? 'light' : 'dark')}
-        className="inline-flex size-8 items-center justify-center rounded-md border border-border/10 bg-card/5 text-card-foreground/70 hover:bg-card/10 hover:text-card-foreground"
-      >
-        {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-      </button>
-    )
-  }
 
   return (
     <button

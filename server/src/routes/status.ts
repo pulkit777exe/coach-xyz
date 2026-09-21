@@ -1,8 +1,38 @@
 import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
-import { getJob, fetchEngineJobStatus, type EngineJobStatus } from "../lib/jobs"
+import { getJob } from "../lib/jobs"
+import { getEngineJobStatus } from "../lib/engine"
 import { persistAnalysisStatus, getAnalysisByServerJobId } from "../lib/supabaseHistory"
+
+type StatusResponse = {
+  job_id: string
+  state: string
+  stage: number
+  stage_name: string
+  progress: number
+  complete: boolean
+  summary: unknown
+  video_ready: boolean
+  error: string | null
+  error_code: string | null
+  retryable: boolean
+}
+
+const statusResponse = (jobId: string, overrides: Partial<StatusResponse>): StatusResponse => ({
+  job_id: jobId,
+  state: "scanning",
+  stage: 0,
+  stage_name: "Queued",
+  progress: 0,
+  complete: false,
+  summary: null,
+  video_ready: false,
+  error: null,
+  error_code: null,
+  retryable: true,
+  ...overrides,
+})
 
 export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }) => {
   const serverJob = await getJob(params.jobId)
@@ -12,8 +42,7 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
     const persisted = await getAnalysisByServerJobId(params.jobId)
     if (persisted) {
       set.status = 200
-      return {
-        job_id: persisted.server_job_id,
+      return statusResponse(params.jobId, {
         state: persisted.complete ? "completed" : "failed",
         stage: persisted.stage ?? -1,
         stage_name: persisted.stage_name ?? (persisted.complete ? "Complete" : "Failed"),
@@ -24,7 +53,7 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
         error: persisted.error_message,
         error_code: persisted.error_code,
         retryable: false,
-      }
+      })
     }
 
     set.status = 404
@@ -32,25 +61,17 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
   }
 
   // Read engine job status via HTTP (engine computes stage_name and video_ready)
-  const result = await fetchEngineJobStatus(serverJob.engine_job_id)
+  const result = await getEngineJobStatus(serverJob.engine_job_id)
 
   // Handle transient engine connectivity errors — don't permanently fail the job
   if (result.status === "transient_error") {
     // Return last known state or a "retrying" state, don't persist as failed
     set.status = 200
-    return {
-      job_id: serverJob.server_job_id,
+    return statusResponse(serverJob.server_job_id, {
       state: "scanning",  // Assume still processing
       stage: 1,
       stage_name: "Retrying...",
-      progress: 0,
-      complete: false,
-      summary: null,
-      video_ready: false,
-      error: null,
-      error_code: null,
-      retryable: true,
-    }
+    })
   }
 
   // Handle truly not found — the job expired or was never created
@@ -76,23 +97,18 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
     })
 
     set.status = 200
-    return {
-      job_id: serverJob.server_job_id,
+    return statusResponse(serverJob.server_job_id, {
       state: "failed",
       stage: -1,
       stage_name: "Failed",
-      progress: 0,
       complete: true,
-      summary: null,
-      video_ready: false,
       error: "Analysis job expired or was not found in the engine.",
       error_code: "JOB_NOT_FOUND",
-      retryable: true,
-    }
+    })
   }
 
   // Success case — engine returned status
-  const engineStatus: EngineJobStatus = result.data
+  const engineStatus = result.data
 
   // Engine returns stage_name and video_ready as computed fields
   const stageName = engineStatus.stage_name ?? engineStatus.state
@@ -117,11 +133,10 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
     },
   })
 
-  // Whitelist safe fields for client
-  const safeStatus = {
-    job_id: serverJob.server_job_id,
+  set.status = 200
+  return statusResponse(serverJob.server_job_id, {
     state: engineStatus.state,
-    stage: engineStatus.stage,
+    stage: engineStatus.stage ?? -1,
     stage_name: stageName,
     progress: engineStatus.progress,
     complete: engineStatus.complete,
@@ -130,7 +145,5 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
     error: engineStatus.error,
     error_code: engineStatus.error_code,
     retryable: engineStatus.retryable,
-  }
-  set.status = 200
-  return safeStatus
+  })
 })

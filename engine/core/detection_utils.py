@@ -168,3 +168,13 @@ def deduplicate_by_iou(
             kept.append(cand)
 
     return kept
+
+
+def landmark_angle(a: dict, b: dict, c: dict) -> float:
+    """Interior angle at vertex b formed by points a-b-c in degrees."""
+    v1 = (a["x"] - b["x"], a["y"] - b["y"])
+    v2 = (c["x"] - b["x"], c["y"] - b["y"])
+    dot = v1[0] * v2[0] + v1[1] * v2[1]
+    norm = np.sqrt(v1[0] ** 2 + v1[1] ** 2) * np.sqrt(v2[0] ** 2 + v2[1] ** 2) + 1e-6
+    cos_angle = np.clip(dot / norm, -1.0, 1.0)
+    return float(np.degrees(np.arccos(cos_angle)))

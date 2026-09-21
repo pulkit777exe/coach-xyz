@@ -21,8 +21,7 @@ import { SERVICE_HEADERS, serviceGuard } from "../lib/serviceGuard"
 import { listMembershipsForUser } from "../lib/orgMembers"
 import { readRequestMeta } from "../lib/requestMeta"
 import { mintAttributionToken } from "../lib/attribution"
-import { saveJob } from "../lib/jobs"
-import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
+import { enqueueAnalysis } from "../lib/queue"
 import { DEFAULT_MODEL } from "../types"
 
 /**
@@ -344,35 +343,18 @@ export default new Elysia()
       return decision.error
     }
 
-    const model = DEFAULT_MODEL
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
 
     try {
-      await saveJob({
+      // Save the server job mapping to Redis BEFORE enqueuing
+      await enqueueAnalysis({
         server_job_id,
         engine_job_id,
         session_token: sessionToken,
         player_index: playerIndex,
-        model,
-        created_at: Date.now(),
+        video_key: videoKey,
       })
-
-      if (!analysisQueue) {
-        set.status = 503
-        return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)
-      }
-      await analysisQueue.add(
-        server_job_id,
-        {
-          server_job_id,
-          engine_job_id,
-          session_token: sessionToken,
-          player_index: playerIndex,
-          video_key: videoKey,
-        } satisfies AnalysisPayload,
-        { priority: JOB_PRIORITIES.free },
-      )
 
       await persistAnalysisStart({
         ...readRequestMeta(request),
@@ -380,7 +362,7 @@ export default new Elysia()
         engineJobId: engine_job_id,
         sessionToken,
         playerIndex,
-        model,
+        model: DEFAULT_MODEL,
         auth0Id: decision.coachAuth0Id,
         requestedBy: decision.requestedBy,
         studentId: decision.studentId,
@@ -389,6 +371,10 @@ export default new Elysia()
       set.status = 200
       return { job_id: server_job_id }
     } catch (error) {
+      if (error instanceof Error && error.message === "QUEUE_UNAVAILABLE") {
+        set.status = 503
+        return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)
+      }
       console.error(
         JSON.stringify({
           type: "me_analyze_enqueue_error",

@@ -1,10 +1,12 @@
 import { Queue, Worker, QueueEvents, UnrecoverableError } from "bullmq"
 import { randomUUID } from "crypto"
 import type { Redis } from "ioredis"
-import { markJobFailed, getJob } from "./jobs"
+import { markEngineJobFailed, getEngineJobStatus } from "./engine"
+import { saveJob, getJob } from "./jobs"
 import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
 import { wrapEngineError, isQueueRetryable, isCoachAIError } from "./errors"
 import { analyzeVideo } from "./engine"
+import { DEFAULT_MODEL } from "../types"
 import {
   initAiReportJob,
   updateAiReportJob,
@@ -72,14 +74,8 @@ export const analysisQueue = redisAvailable
     })
   : null
 
-// Job priority configuration
-// Higher number = higher priority
-export const JOB_PRIORITIES = {
-  paid: 5,       // Paid users (future)
-  free: 0,       // Free users (default)
-} as const
-
-export type JobPriority = keyof typeof JOB_PRIORITIES
+// Job priority (BullMQ: higher number = higher priority)
+export const JOB_PRIORITY = 0
 
 export interface AnalysisPayload {
   server_job_id: string
@@ -87,6 +83,27 @@ export interface AnalysisPayload {
   session_token: string | null
   player_index: number | null
   video_key: string | null
+}
+
+/** Shared enqueue path for analyze-video and me/analyze-video. */
+export async function enqueueAnalysis(job: AnalysisPayload): Promise<void> {
+  await saveJob({
+    server_job_id: job.server_job_id,
+    engine_job_id: job.engine_job_id,
+    session_token: job.session_token,
+    player_index: job.player_index,
+    model: DEFAULT_MODEL,
+    created_at: Date.now(),
+  })
+
+  if (!analysisQueue) {
+    throw new Error("QUEUE_UNAVAILABLE")
+  }
+  await analysisQueue.add(
+    job.server_job_id,
+    job,
+    { priority: JOB_PRIORITY },
+  )
 }
 
 // The worker calls the engine synchronously.
@@ -127,7 +144,6 @@ const worker = redisAvailable
         // Persist completed status immediately so history is accurate even if
         // the client never polls again (browser closed, network drop, etc.)
         try {
-          const { getEngineJobStatus } = await import("./engine")
           const statusResult = await getEngineJobStatus(engine_job_id)
           if (statusResult.status === "found") {
             const engineStatus = statusResult.data
@@ -137,7 +153,7 @@ const worker = redisAvailable
               engineJobId: engine_job_id,
               sessionToken: job.data.session_token,
               playerIndex: job.data.player_index,
-              model: serverJob?.model ?? "gemini-2.5-flash",
+              model: serverJob?.model ?? DEFAULT_MODEL,
               status: {
                 stage: engineStatus.stage ?? 6,
                 stage_name: engineStatus.stage_name ?? "Complete",
@@ -215,7 +231,7 @@ if (redisAvailable && analysisQueue) {
           }
         }
 
-        await markJobFailed(
+        await markEngineJobFailed(
           bullJob.data.engine_job_id,
           isUnrecoverable ? failedReason : "Analysis failed after retries. Please try again.",
           errorCode,
@@ -230,7 +246,7 @@ if (redisAvailable && analysisQueue) {
             engineJobId: bullJob.data.engine_job_id,
             sessionToken: bullJob.data.session_token,
             playerIndex: bullJob.data.player_index,
-            model: serverJob?.model ?? "gemini-2.5-flash",
+            model: serverJob?.model ?? DEFAULT_MODEL,
             status: {
               stage: -1,
               stage_name: "Failed",

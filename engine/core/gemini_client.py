@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 from core.config import GEMINI_MODEL, parse_timestamp
+from core.detection_utils import landmark_angle
 from core.errors import GeminiParseError, GeminiQuotaError
 from core.gemini_common import parse_json_response
 from core.validator import validate_analysis
@@ -46,7 +47,7 @@ def _get_client() -> "genai.Client":  # type: ignore[name-defined]
     return _gemini_client
 
 
-def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int = 0, motion_score: float = 0.0, player_count: int = 0) -> str:
+def build_frame_metadata(track: dict[str, Any], sequence_index: int = 0, motion_score: float = 0.0, player_count: int = 0) -> str:
     """
     Build a text metadata string for a frame to send alongside the image.
     Includes bounding box position, key pose landmark angles, joint angles, and motion info.
@@ -68,16 +69,10 @@ def build_frame_metadata(track: dict[str, Any], fps: float, sequence_index: int 
     landmarks = track.get("landmarks")
     if landmarks and len(landmarks) >= 25:
         try:
-            def angle(a, b, c):
-                ba = np.array([a["x"] - b["x"], a["y"] - b["y"]])
-                bc = np.array([c["x"] - b["x"], c["y"] - b["y"]])
-                cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
-                return float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0))))
-
-            left_knee_angle = angle(landmarks[23], landmarks[25], landmarks[27])
-            right_knee_angle = angle(landmarks[24], landmarks[26], landmarks[28])
-            left_elbow_angle = angle(landmarks[11], landmarks[13], landmarks[15])
-            right_elbow_angle = angle(landmarks[12], landmarks[14], landmarks[16])
+            left_knee_angle = landmark_angle(landmarks[23], landmarks[25], landmarks[27])
+            right_knee_angle = landmark_angle(landmarks[24], landmarks[26], landmarks[28])
+            left_elbow_angle = landmark_angle(landmarks[11], landmarks[13], landmarks[15])
+            right_elbow_angle = landmark_angle(landmarks[12], landmarks[14], landmarks[16])
 
             hip = ((landmarks[23]["x"] + landmarks[24]["x"]) / 2,
                    (landmarks[23]["y"] + landmarks[24]["y"]) / 2)
@@ -168,7 +163,7 @@ def call_gemini(
             continue
         motion_score = item.get("motion_score", 0.0)
         player_count = item.get("player_count", 0)
-        metadata_str = build_frame_metadata(item, video_fps, sequence_index=seq_idx, motion_score=motion_score, player_count=player_count)
+        metadata_str = build_frame_metadata(item, sequence_index=seq_idx, motion_score=motion_score, player_count=player_count)
         parts.append(metadata_str)
         parts.append(genai_types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"))
 

@@ -18,8 +18,9 @@ from core.detection_utils import (
     iou,
     bbox_from_landmarks,
     transform_landmarks_to_global,
+    PoseCandidate,
 )
-from core.detector import PoseCandidate, detect_players
+from core.detector import detect_players
 from core.errors import NoPlayersDetectedError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.video_io import read_frame_by_index

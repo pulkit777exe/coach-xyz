@@ -2,8 +2,7 @@ import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
-import { saveJob } from "../lib/jobs"
-import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
+import { enqueueAnalysis } from "../lib/queue"
 import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
 import { verifyAttributionToken } from "../lib/attribution"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
@@ -13,8 +12,6 @@ type AnalyzeBody = {
   session_token: string | null
   player_index: number | null
   video_key?: string | null
-  model?: string
-  priority?: keyof typeof JOB_PRIORITIES
 }
 
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
@@ -48,10 +45,6 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   const sessionToken = body.session_token
   const playerIndex = body.player_index
   const videoKey = body.video_key ?? null
-  const model = body.model ?? DEFAULT_MODEL
-
-  // Server-side priority determination
-  const priority = "free"
 
   // Validate session_token format (must be UUID if provided)
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -61,13 +54,6 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   ) {
     set.status = 400
     return buildError("INVALID_SESSION_TOKEN", "Session token must be a valid UUID.", false)
-  }
-
-  // Whitelist allowed models
-  const ALLOWED_MODELS = [DEFAULT_MODEL]
-  if (body.model && !ALLOWED_MODELS.includes(body.model)) {
-    set.status = 400
-    return buildError("INVALID_REQUEST", `Unsupported model: ${body.model}.`, false)
   }
 
   if (
@@ -83,34 +69,14 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
 
-    // 1. Save the server job mapping to Redis BEFORE enqueuing
-    await saveJob({
+    // Save the server job mapping to Redis BEFORE enqueuing
+    await enqueueAnalysis({
       server_job_id,
       engine_job_id,
       session_token: sessionToken,
       player_index: playerIndex,
-      model,
-      created_at: Date.now(),
+      video_key: videoKey,
     })
-
-    // 2. Enqueue — BullMQ worker calls engine /analyze which creates the engine job
-    if (!analysisQueue) {
-      set.status = 503
-      return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)
-    }
-    await analysisQueue.add(
-      server_job_id,
-      {
-        server_job_id,
-        engine_job_id,
-        session_token: sessionToken,
-        player_index: playerIndex,
-        video_key: videoKey,
-      } satisfies AnalysisPayload,
-      {
-        priority: JOB_PRIORITIES[priority] ?? JOB_PRIORITIES.free,
-      },
-    )
 
     await persistAnalysisStart({
       ...requestMeta,
@@ -118,13 +84,17 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       engineJobId: engine_job_id,
       sessionToken,
       playerIndex,
-      model,
+      model: DEFAULT_MODEL,
       auth0Id: verifyAttributionToken(request.headers.get("x-attribution")),
     })
 
     set.status = 200
     return { job_id: server_job_id }
   } catch (error) {
+    if (error instanceof Error && error.message === "QUEUE_UNAVAILABLE") {
+      set.status = 503
+      return buildError("QUEUE_UNAVAILABLE", "Job queue is not configured.", true)
+    }
     console.error(
       JSON.stringify({
         type: "analyze_enqueue_error",

@@ -1,18 +1,12 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { postsBySlug } from '@/lib/blog'
 
-const posts: Record<string,{title:string; date:string; body:string[]}> = {
-  'ai-coaching-2025': { title:'The AI-ready coaching stack for 2025', date:'Sep 10, 2025', body:['Academies are moving from scattered tools to one coaching OS.','We break down the pieces: roster, attendance, schedule, video analysis and player hub — and how we wired them with one auth, one DB, and one design system.','Takeaway: fewer integrations, faster feedback loops.'] },
-  'pose-to-progress': { title:'From pose to progress: how we score form', date:'Aug 22, 2025', body:['MediaPipe extracts pose, Gemini scores mechanics against sport-specific rubrics.','Each event gets a 0-10 score and a one-line correction.','The result is an annotated video you can share before the next drill.'] },
-  'attendance-that-sticks': { title:'Attendance that sticks (without spreadsheets)', date:'Aug 05, 2025', body:['The grid is the interface. Click to cycle present → late → absent → excused.','Bulk mark, add notes per student per day, export CSV.','Coaches actually use it because it feels like a roster, not a form.'] },
-  'scaling-to-6-sports': { title:'Scaling to 6 sports without 6 pipelines', date:'Jul 18, 2025', body:['One pipeline, sport-aware prompts. Basketball reads jump shots, cricket reads drives.','Same upload, same UX, different rubric.','Less to maintain, more to learn.'] },
-}
-
-export function generateStaticParams(){ return Object.keys(posts).map(slug=>({slug})) }
+export function generateStaticParams(){ return Object.keys(postsBySlug).map(slug=>({slug})) }
 
 export default async function Post({ params }: { params: Promise<{slug:string}> }){
   const { slug } = await params
-  const p = posts[slug]
+  const p = postsBySlug[slug]
   if(!p) notFound()
   return (
     <main className="bg-[var(--marketing-light)] text-[var(--marketing-brown)]">

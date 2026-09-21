@@ -91,20 +91,6 @@ function createRedisClient() {
           return 0
         }
       },
-      async incr(key: string): Promise<number> {
-        try {
-          return await client.incr(key)
-        } catch {
-          return 1
-        }
-      },
-      async expire(key: string, seconds: number): Promise<number> {
-        try {
-          return await client.expire(key, seconds)
-        } catch {
-          return 1
-        }
-      },
     }
   } catch {
     console.error(JSON.stringify({ type: "redis_unavailable", message: "ioredis module not available, using noop client" }))
@@ -129,12 +115,6 @@ function createNoopClient() {
     },
     async eval(_script: string, _numKeys: number, ..._args: (string | number)[]): Promise<number> {
       return 0
-    },
-    async incr(_key: string): Promise<number> {
-      return 1
-    },
-    async expire(_key: string, _seconds: number): Promise<number> {
-      return 1
     },
   }
 }

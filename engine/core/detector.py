@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import logging
-from dataclasses import dataclass
 from typing import Callable
 
 import cv2
@@ -14,16 +13,10 @@ from core.detection_utils import (
     iou,
     bbox_from_landmarks,
     transform_landmarks_to_global,
+    PoseCandidate,
 )
 from core.errors import NoPlayersDetectedError, VideoDecodeError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
-
-
-@dataclass
-class PoseCandidate:
-    landmarks: list[dict[str, float]]
-    bbox: tuple[int, int, int, int]
-    visibility: float
 
 
 def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:

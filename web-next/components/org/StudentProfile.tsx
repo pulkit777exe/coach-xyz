@@ -62,6 +62,7 @@ import {
   orgCompareStudents,
 } from "@/lib/org"
 import { formatDateLong, formatDateShort } from "@/lib/date"
+import { analysisScore } from "@/lib/analysis"
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/org"
 import { capitalize } from "@/lib/utils"
 
@@ -819,9 +820,7 @@ export default function StudentProfile({
                       })}
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
-                      {a.summary_json && typeof a.summary_json === "object" && "form_score" in a.summary_json
-                        ? (a.summary_json as { form_score: number }).form_score
-                        : "—"}
+                      {analysisScore(a) ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <Button

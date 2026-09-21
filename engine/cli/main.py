@@ -862,6 +862,8 @@ def _run_api(args):
 def main():
     import argparse
 
+    from core.config import GEMINI_MODEL
+
     parser = argparse.ArgumentParser(
         prog="coachai",
         description="CoachAI — Multi-sport AI video analyzer",
@@ -880,7 +882,7 @@ def main():
     p.add_argument("video",             help="Path to the video file.")
     p.add_argument("-o", "--output",    default=None,
                    help="Output .mp4 path (default: ~/Downloads/<name>_analyzed.mp4).")
-    p.add_argument("-m", "--model",     default="gemini-3.5-flash",
+    p.add_argument("-m", "--model",     default=GEMINI_MODEL,
                    help="Gemini model ID.")
     p.add_argument("--api-url",         default=None,
                    help="Route through a running backend (e.g. http://localhost:8000).")

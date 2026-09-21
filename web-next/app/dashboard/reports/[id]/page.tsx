@@ -10,8 +10,6 @@ import { unstable_noStore as noStore } from "next/cache"
 import ReportBody from "@/components/org/ReportBody"
 import PrintReportButton from "@/components/org/PrintReportButton"
 
-export const dynamic = "force-dynamic";
-
 export function generateMetadata(): Metadata {
   return { title: "Report | CoachXYZ", description: "Generated coach report." }
 }

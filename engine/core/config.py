@@ -19,7 +19,6 @@ CHUNK_SIZE = 8 * 1024 * 1024  # 8MB streaming chunk size
 # ── Timeouts ────────────────────────────────────────────────────────────────
 
 FFMPEG_TIMEOUT_S = int(os.environ.get("FFMPEG_TIMEOUT_S", "300"))
-ANALYSIS_TIMEOUT_S = int(os.environ.get("ANALYSIS_TIMEOUT_S", "600"))
 
 # ── Shared Utilities ────────────────────────────────────────────────────────
 

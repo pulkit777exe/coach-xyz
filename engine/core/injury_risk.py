@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.detection_utils import landmark_angle
+
 
 # MediaPipe landmark indices used across indicators
 LEFT_SHOULDER = 11
@@ -32,17 +34,6 @@ LEFT_ANKLE = 27
 RIGHT_ANKLE = 28
 LEFT_FOOT_INDEX = 29
 RIGHT_FOOT_INDEX = 30
-
-
-def _angle(a: dict, b: dict, c: dict) -> float:
-    """Interior angle at vertex b formed by points a-b-c in degrees."""
-    import numpy as np
-
-    ba = np.array([a["x"] - b["x"], a["y"] - b["y"]])
-    bc = np.array([c["x"] - b["x"], c["y"] - b["y"]])
-    cos_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc) + 1e-6)
-    cos_angle = np.clip(cos_angle, -1.0, 1.0)
-    return float(np.degrees(np.arccos(cos_angle)))
 
 
 def _vector(p1: dict, p2: dict) -> tuple[float, float]:
@@ -119,7 +110,7 @@ def spine_flexion_angle(landmarks: list[dict]) -> float | None:
             "y": (left_shoulder["y"] + right_shoulder["y"]) / 2.0,
         }
 
-        return _angle(left_hip, spine, shoulder)
+        return landmark_angle(left_hip, spine, shoulder)
     except (IndexError, KeyError, ZeroDivisionError):
         return None
 
@@ -143,7 +134,7 @@ def arm_slot_drift(landmarks: list[dict]) -> dict[str, Any] | None:
         elbow = landmarks[RIGHT_ELBOW]
         wrist = landmarks[RIGHT_WRIST]
 
-        slot_angle = _angle(shoulder, elbow, wrist)
+        slot_angle = landmark_angle(shoulder, elbow, wrist)
         elbow_below = elbow["y"] > shoulder["y"]
         height_diff = elbow["y"] - shoulder["y"]
 
@@ -174,7 +165,7 @@ def landing_knee_flexion(landmarks: list[dict]) -> dict[str, Any] | None:
         knee = landmarks[RIGHT_KNEE]
         ankle = landmarks[RIGHT_ANKLE]
 
-        flexion = _angle(hip, knee, ankle)
+        flexion = landmark_angle(hip, knee, ankle)
         # Flexion > 30° is protective; < 15° is high risk
         risk_level = (
             "low"

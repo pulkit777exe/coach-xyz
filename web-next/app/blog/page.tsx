@@ -1,13 +1,7 @@
 import Link from 'next/link'
+import { posts } from '@/lib/blog'
 
 export const metadata = { title: 'Blog | CoachXYZ' }
-
-const posts = [
-  { slug:'ai-coaching-2025', title:'The AI-ready coaching stack for 2025', excerpt:'How academies stitch roster, video and reports into one flow.', date:'Sep 10, 2025', tag:'Engineering' },
-  { slug:'pose-to-progress', title:'From pose to progress: how we score form', excerpt:'Inside our Gemini + MediaPipe pipeline and what 60s really means.', date:'Aug 22, 2025', tag:'Product' },
-  { slug:'attendance-that-sticks', title:'Attendance that sticks (without spreadsheets)', excerpt:'A simple grid that coaches actually use.', date:'Aug 05, 2025', tag:'Design' },
-  { slug:'scaling-to-6-sports', title:'Scaling to 6 sports without 6 pipelines', excerpt:'One model, sport-aware prompts, consistent UX.', date:'Jul 18, 2025', tag:'Research' },
-]
 
 export default function BlogPage(){
   return (
