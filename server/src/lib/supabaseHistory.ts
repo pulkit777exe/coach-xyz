@@ -356,7 +356,8 @@ export const ensureInitialized = async () => {
           note text,
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now(),
-          unique (student_id, session_date)
+          constraint attendance_auth0_student_session_unique
+            unique (auth0_id, student_id, session_date)
         );
       `
       await sql`
@@ -429,7 +430,8 @@ export const ensureInitialized = async () => {
           source_analysis_id text,
           measured_at timestamptz not null default now(),
           created_at timestamptz not null default now(),
-          unique (student_id, metric_key, measured_at)
+          constraint performance_auth0_student_metric_unique
+            unique (auth0_id, student_id, metric_key, measured_at)
         );
       `
       await sql`
@@ -439,6 +441,40 @@ export const ensureInitialized = async () => {
       await sql`
         create index if not exists idx_perf_student
         on performance_metrics (student_id, metric_key, measured_at desc);
+      `
+
+      // ── Org-scoped uniqueness migration ───────────────────────────────────────
+      // Legacy databases created attendance/performance_metrics with uniqueness
+      // scoped only on (student_id, ...) — fine while students.id was globally
+      // unique, but students are now org-scoped (auth0_id), so the uniqueness
+      // key must include auth0_id. Add the new constraint FIRST (existing rows
+      // satisfy it since the legacy key was stricter), then drop the legacy
+      // auto-named one, so a unique constraint always exists.
+      await sql`
+        do $$
+        begin
+          if not exists (
+            select 1 from pg_constraint
+            where conname = 'attendance_auth0_student_session_unique'
+          ) then
+            alter table attendance add constraint attendance_auth0_student_session_unique
+              unique (auth0_id, student_id, session_date);
+          end if;
+          alter table attendance drop constraint if exists attendance_student_id_session_date_key;
+        end $$
+      `
+      await sql`
+        do $$
+        begin
+          if not exists (
+            select 1 from pg_constraint
+            where conname = 'performance_auth0_student_metric_unique'
+          ) then
+            alter table performance_metrics add constraint performance_auth0_student_metric_unique
+              unique (auth0_id, student_id, metric_key, measured_at);
+          end if;
+          alter table performance_metrics drop constraint if exists performance_metrics_student_id_metric_key_measured_at_key;
+        end $$
       `
 
       await sql`

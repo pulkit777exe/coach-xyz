@@ -20,6 +20,7 @@ import {
 import { SERVICE_HEADERS, serviceGuard } from "../lib/serviceGuard"
 import { listMembershipsForUser } from "../lib/orgMembers"
 import { readRequestMeta } from "../lib/requestMeta"
+import { mintAttributionToken } from "../lib/attribution"
 import { saveJob } from "../lib/jobs"
 import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
 import { DEFAULT_MODEL } from "../types"
@@ -398,4 +399,24 @@ export default new Elysia()
       set.status = 500
       return buildError("INTERNAL_ERROR", "Failed to enqueue analysis job. Please try again.", true)
     }
+  })
+
+  // Mint a short-lived attribution token binding the verified session sub.
+  // Browser-direct capability routes (scan/analyze) receive it as `x-attribution`
+  // and the server resolves the caller from the signed sub — never from a raw
+  // client header. Requires the identity boundary (x-verified-auth0-id), so an
+  // attacker cannot mint tokens for a sub they are not signed in as.
+  .get("/api/me/attribution/mint", async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    if (!verified) {
+      set.status = 403
+      return buildError("FORBIDDEN", "Missing verified identity", false)
+    }
+    const minted = mintAttributionToken(verified)
+    if (!minted) {
+      set.status = 503
+      return buildError("SERVICE_NOT_CONFIGURED", "Attribution signing is not configured.", true)
+    }
+    set.status = 200
+    return minted
   })

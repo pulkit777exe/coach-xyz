@@ -335,7 +335,7 @@ export const upsertAttendance = async (
     const rows = await db<AttendanceRecord[]>`
       insert into attendance (auth0_id, student_id, session_date, status, note)
       values (${auth0Id}, ${studentId}, ${sessionDate}::date, ${status}, ${note || null})
-      on conflict (student_id, session_date) do update set
+      on conflict (auth0_id, student_id, session_date) do update set
         status = excluded.status,
         note = excluded.note,
         updated_at = now()
@@ -357,7 +357,7 @@ export const setAttendanceBatch = async (
         const rows = await db<AttendanceRecord[]>`
           insert into attendance (auth0_id, student_id, session_date, status, note)
           values (${auth0Id}, ${entry.studentId}, ${entry.sessionDate}::date, ${entry.status}, ${entry.note || null})
-          on conflict (student_id, session_date) do update set
+          on conflict (auth0_id, student_id, session_date) do update set
             status = excluded.status,
             note = excluded.note,
             updated_at = now()
@@ -873,7 +873,7 @@ export const createPerformanceMetric = async (
         ${input.source_analysis_id ?? null},
         ${input.measured_at ?? null}::timestamptz
       )
-      on conflict (student_id, metric_key, measured_at) do nothing
+      on conflict (auth0_id, student_id, metric_key, measured_at) do nothing
       returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
         unit, source_analysis_id, measured_at, created_at;
     `

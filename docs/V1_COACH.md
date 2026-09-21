@@ -345,7 +345,7 @@ Only the **server** is kept alive (it hosts the queue worker); the engine is pai
 
 ## 9. Security
 
-- **Auth:** Auth0 (Google + GitHub social login) via `@auth0/nextjs-auth0`. `/dashboard/*` and `/account` redirect to `/auth/login` when unauthenticated. APIs are identified by the `x-auth0-id` header or `:auth0Id` path params (no server-side session check on API routes).
+- **Auth:** Auth0 (Google + GitHub social login) via `@auth0/nextjs-auth0`. `/dashboard/*` and `/account` redirect to `/auth/login` when unauthenticated. APIs are identified by the `:auth0Id` path params and identity-bearing routes sit behind the verified identity boundary (`x-service-token` + `x-verified-auth0-id`); browser-direct scan/analyze attribution uses a signed `x-attribution` token minted at `/api/me/attribution/mint` — a raw `x-auth0-id` header is never trusted (see ARCHITECTURE.md §6).
 - **CORS:** Configured for `FRONTEND_URL` origin only (server) and `SERVER_URL` origin (engine)
 - **CSP:** Strict Content-Security-Policy header on both Next.js and Elysia
 - **HSTS:** Strict-Transport-Security enabled (Next.js always; Elysia when serving over HTTPS)

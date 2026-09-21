@@ -5,6 +5,7 @@ import { readRequestMeta } from "../lib/requestMeta"
 import { saveJob } from "../lib/jobs"
 import { analysisQueue, type AnalysisPayload, JOB_PRIORITIES } from "../lib/queue"
 import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
+import { verifyAttributionToken } from "../lib/attribution"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 import { DEFAULT_MODEL } from "../types"
 
@@ -118,7 +119,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       sessionToken,
       playerIndex,
       model,
-      auth0Id: request.headers.get("x-auth0-id"),
+      auth0Id: verifyAttributionToken(request.headers.get("x-attribution")),
     })
 
     set.status = 200

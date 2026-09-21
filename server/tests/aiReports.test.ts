@@ -117,9 +117,14 @@ const defaultContext: Record<string, unknown> = {
 describe("POST /api/org/:auth0Id/reports/ai", () => {
   beforeEach(() => {
     process.env.SERVICE_TOKEN = TEST_SERVICE_TOKEN
+    // A live Redis (auto-loaded server/.env) persists the per-org ai-report
+    // rate-limit counter across suite runs within the hour, which flakes the
+    // repeated POSTs in this file at the default 10/hr. Pin a high limit.
+    process.env.AI_REPORT_RATE_LIMIT = "1000"
   })
   afterEach(() => {
     process.env.SERVICE_TOKEN = TEST_SERVICE_TOKEN
+    process.env.AI_REPORT_RATE_LIMIT = "1000"
   })
 
   test("enqueues a report and returns 201 with report_job_id", async () => {

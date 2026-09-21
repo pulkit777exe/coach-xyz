@@ -29,7 +29,7 @@ npm run smoke        # server live HTTP smoke (needs .env + running server + Neo
 
 Per-app: server uses `bun`, engine uses `pip`/`python`, web-next uses `npm` (CI also uses npm).
 
-Test baselines (keep green): server `bun test` = 166 pass / 13 files (3 notification DB-integration tests skip unless `DATABASE_URL` reaches a live DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 138 tests / 15 files; engine `pytest tests -q` = 129 tests; `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 43 checks.
+Test baselines (keep green): server `bun test` = 179 pass / 15 files (3 notification DB-integration tests skip unless `DATABASE_URL` reaches a live DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 138 tests / 15 files; engine `pytest tests -q` = 129 tests; `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 43 checks.
 
 Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (React.cache-wrapped) and the session via `lib/session.ts` (`getSession`, React.cache) — never call `lib/org`/`lib/api` fetchers or `auth0.getSession()` directly from pages. `lib/api`/`lib/org` stay for client components, middleware (`proxy.ts`), and route handlers. Heavy client visuals (recharts) load via `next/dynamic` with `ssr: false`.
 
@@ -54,6 +54,8 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 ## Server/API conventions
 
 - Identity boundary: Elysia `onBeforeHandle` `as: "global"` in `src/lib/serviceGuard.ts`. Headers `x-service-token` + `x-verified-auth0-id`; missing/wrong/account mismatch → 403. Keep new org/email/auth/me routes under this guard.
+- Browser-direct capability routes (`scan.ts`, `analyze.ts`, `chat.ts`, `download.ts`, `status.ts`) never trust a raw `x-auth0-id`. For attribution, the web mints a signed token via `/api/me/attribution/mint` (`src/lib/attribution.ts`, HMAC-SHA256 over `sub.exp`, SERVICE_TOKEN keyed) and sends it as `x-attribution`; the server `verifyAttributionToken()`s it. Add endpoints for minting only under serviceGuard.
+- Row uniqueness for org tables is org-scoped: `attendance UNIQUE (auth0_id, student_id, session_date)` and `performance_metrics UNIQUE (auth0_id, student_id, metric_key, measured_at)`. Keep `ON CONFLICT (…)` targets in `orgData.ts` in sync with these constraint column lists (idempotent migration lives in `ensureInitialized` in `supabaseHistory.ts`).
 - Supabase helpers live in `src/lib/` (`orgData.ts`, `supabaseHistory.ts`). Data-layer functions take optional filter opts (e.g., `getUserAnalyses(…, { unlinked })`) rather than adding query params at the route layer.
 - Email: `src/lib/mailer.ts`. `RESEND_API_KEY` unset → routes return 501 `EMAIL_NOT_CONFIGURED` by design; smoke asserts it.
 - Env: documented in `server/.env.example` and `web-next/.env.example`; keep them in sync with `process.env` reads.

@@ -154,17 +154,47 @@ export async function apiFetch<T>(
 
 // ── API Functions ────────────────────────────────────────────────────────────
 
-export function scanVideoWithProgress(
+/**
+ * Fetch a short-lived attribution token binding the verified session sub.
+ * Browser-direct capability routes (scan/analyze) receive it as `x-attribution`
+ * so the backend can attribute uploads to the signed-in caller without trusting
+ * a raw client header. Cache it until expiry to avoid an extra round-trip per
+ * scan/analyze pair.
+ */
+let attributionTokenCache: { token: string; exp: number } | null = null
+export async function getAttributionToken(): Promise<string | null> {
+  if (attributionTokenCache && attributionTokenCache.exp > Date.now()) {
+    return attributionTokenCache.token
+  }
+  attributionTokenCache = null
+  try {
+    const res = await apiFetch<{ token: string; exp: number }>(
+      `${IDENTITY_BASE}/api/me/attribution/mint`,
+      { method: 'GET' },
+    )
+    attributionTokenCache = res
+    return res.token
+  } catch {
+    return null
+  }
+}
+
+export async function scanVideoWithProgress(
   file: File,
   onProgress: (progress: UploadProgress) => void,
   auth0Id?: string | null,
 ): Promise<ScanResult> {
+  // Best-effort attribution: only set the header when a signed token is
+  // available. The token method returns a GET through the identity proxy so it
+  // is never blocked by upload size limits; the server ignores it otherwise.
+  const token = auth0Id ? await getAttributionToken() : null
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${BASE}/api/scan-video`)
 
-    if (auth0Id) {
-      xhr.setRequestHeader('x-auth0-id', auth0Id)
+    if (token) {
+      xhr.setRequestHeader('x-attribution', token)
     }
 
     xhr.upload.addEventListener('progress', (e) => {
@@ -284,6 +314,7 @@ export async function startAnalysis(params: {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30_000) // 30s for enqueue
   try {
+    const attribution = auth0Id ? await getAttributionToken() : null
     return await apiFetch<{ job_id: string }>(`${BASE}/api/analyze-video`, {
       method: 'POST',
       body: JSON.stringify({
@@ -291,7 +322,7 @@ export async function startAnalysis(params: {
         model: 'gemini-2.5-flash',
       }),
       signal: controller.signal,
-      headers: auth0Id ? { 'x-auth0-id': auth0Id } : {},
+      headers: attribution ? { 'x-attribution': attribution } : {},
     })
   } finally {
     clearTimeout(timeout)

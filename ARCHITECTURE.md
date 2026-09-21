@@ -166,7 +166,7 @@ coach-xyz/
 │   │   ├── email.ts           # POST /api/email/:auth0Id/{invite|report|attendance} (Resend, guarded)
 │   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history (guarded)
 │   │   ├── org.ts             # /api/org/:auth0Id/* — coach org CRUD (guarded)
-│   │   ├── me.ts              # /api/me/* — player read-only hub (guarded, self-scoped)
+│   │   ├── me.ts              # /api/me/* — player read-only hub (guarded, self-scoped) + mint endpoint
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
 │   │   ├── queue.ts           # BullMQ queue + worker + shutdown
@@ -174,6 +174,7 @@ coach-xyz/
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
 │   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
+│   │   ├── attribution.ts     # Mint/verify signed attribution tokens (sub.exp.HMAC, SERVICE_TOKEN)
 │   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
 │   │   ├── orgEnums.ts        # Shared org vocab (values/order contract w/ web lib/org.ts)
 │   │   ├── orgData.ts         # Student/attendance/schedule/reports/performance queries
@@ -283,6 +284,7 @@ coach-xyz/
 
 **attendance** / **schedule_events** / **reports** / **performance_metrics** (org)
 - All scoped by owning coach `auth0_id`; attendance/performance also reference `student_id`. Player read-only views query these with the coach scope + the linked student. (CHECK constraints pin the shared vocab in `server/src/lib/orgEnums.ts`, mirrored contractually in `web-next/lib/org.ts`.)
+- **Uniqueness is org-scoped** (migrated 2026-09-21): `attendance` has a `UNIQUE (auth0_id, student_id, session_date)` constraint (`attendance_auth0_student_session_unique`) and `performance_metrics` a `UNIQUE (auth0_id, student_id, metric_key, measured_at)` (`performance_auth0_student_metric_unique`) — the legacy `UNIQUE (student_id, …)` keys were auto-dropped/migrated idempotently in `ensureInitialized` (`supabaseHistory.ts`), and the upsert `ON CONFLICT` targets in `orgData.ts` match. This stops one org's rows from colliding with another org's same-id student rows.
 
 **chat_messages**
 - Primary key: `id` (UUID)
@@ -439,7 +441,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table. New accounts default to `role = 'coach'` (first account is a coach); when the login email matches a student row, the account is auto-linked (`students.account_auth0_id` set) and its role flips to `player`.
 - **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
 - **Logout:** `/auth/logout` (Auth0 SDK route)
-- **`auth0_id` propagation:** Frontend sends `x-auth0-id` header on scan and analyze requests; server stores it in `video_conversations.auth0_id` and `analysis_history.auth0_id`
+- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`) and analyze (`POST /api/analyze-video`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
 
 ### Identity Boundary (service-to-service, two-faces)
 
@@ -448,7 +450,7 @@ The backend never trusts a client-supplied auth0Id. The Next app is the identity
 - **Guard** (`server/src/lib/serviceGuard.ts`): an Elysia `onBeforeHandle` plugin applied to `auth.ts`/`org.ts`/`me.ts`. When `SERVICE_TOKEN` is set on the server it requires `x-service-token` to match and `x-verified-auth0-id` to equal the path `:auth0Id` (or `body.sub` for `/api/auth/sync`, or be present for self-scoped `/api/me/*`). Returns 403 otherwise. When `SERVICE_TOKEN` is unset the guard is inert (local dev back-compat) and logs a one-time warning.
 - **Proxy** (`web-next/app/api/service/[[...path]]/route.ts`): same-origin handler for identity-bearing routes only (`/api/org/*`, `/api/auth/user/*`, `/api/auth/sync`, `/api/me/*`). Reads the Auth0 session, rejects a verified sub that doesn't match the path resource owner, then injects `x-service-token` + `x-verified-auth0-id` before forwarding. Requires `auth0.getSession()` (401 otherwise).
 - **Client routing** (`web-next/lib/api.ts` `IDENTITY_BASE`, `web-next/lib/org.ts`, `web-next/lib/serverData.ts`): client components call the proxy via `lib/api`/`lib/org`; RSC pages call React.cache'd fetchers in `lib/serverData.ts` (which use `lib/api` internally with service headers when called server-side). Middleware (`proxy.ts`) and route handlers keep using raw `auth0`/`lib/api`.
-- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite.
+- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite. These routes never trust a raw `auth0_id` — attribution comes from the signed `x-attribution` token minted at `/api/me/attribution/mint` (see §6 Auth0).
 
 ### Roles (two-faces)
 
@@ -469,6 +471,7 @@ Self-scoped — identity is the verified `x-verified-auth0-id` header, never a c
 | `GET /api/me/analyses` | Analyses linked to player's student row |
 | `GET /api/me/reports` | Reports mentioning the player |
 | `GET /api/me/reports/:id` | Single report (must belong to the linked student) |
+| `GET /api/me/attribution/mint` | Short-lived signed attribution token (HMAC over verified sub + expiry, `SERVICE_TOKEN` keyed) for browser-direct scan/analyze routes |
 
 All resolve the linked student via `students.account_auth0_id` and scope queries by the owning coach's `auth0_id` + `student_id`. UI: `app/player/*` (server shell + role gate) + `components/player/PlayerHub.tsx` (client fetch via `web-next/lib/meApi.ts`).
 
@@ -640,7 +643,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 107 tests / 14 files (`vitest run`); server 86 pass / 10 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt).
+- Web test suite: 138 tests / 15 files (`vitest run`); server 179 pass / 15 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt).
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -708,8 +711,8 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 | Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
 | Pipeline states | `engine/core/jobs.py` |
 | Test suite: 103 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 86 pass / 10 files | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
-| Test suite: 107 tests pass (14 files) | `cd web-next && npx vitest run` |
+| Test suite: 179 pass / 15 files | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 138 tests pass (15 files) | `cd web-next && npx vitest run` |
 | Dead code deleted: baseline.py, InlineRename.tsx | `git rm`; `rg "baseline" engine/core engine/main.py` and `rg "InlineRename" web-next/` return nothing |
 | player_tracker.py/chunker.py are CLI-only (kept) | imported by `engine/cli/`; `tests/test_chunker.py` exists |
 | scan_progress pruned | `engine/main.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, `_evict_old_scan_progress()` called alongside `_evict_old_sessions()` |
@@ -726,4 +729,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-09-17 (working tree — productionization + known-gaps pass: React.cache per-request dedup, lazy recharts chunk, content-visibility rows, +22 web unit tests, scan_progress pruning, Redis consolidated to ioredis, dead code deleted)*
+*Last verified: 2026-09-21 (attribution + org-scoped uniqueness pass: signed `x-attribution` tokens on browser-direct scan/analyze, `/api/me/attribution/mint`, org-scoped `UNIQUE` keys on attendance/performance_metrics with idempotent migration)*
