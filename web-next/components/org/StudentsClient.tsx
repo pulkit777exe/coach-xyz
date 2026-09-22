@@ -1,16 +1,26 @@
-"use client"
+'use client'
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
-import { toast } from "sonner"
-import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, MoreHorizontalIcon, DownloadIcon, UserPlusIcon, MailIcon, UploadIcon } from "lucide-react"
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { toast } from 'sonner'
+import {
+  PlusIcon,
+  SearchIcon,
+  PencilIcon,
+  TrashIcon,
+  MoreHorizontalIcon,
+  DownloadIcon,
+  UserPlusIcon,
+  MailIcon,
+  UploadIcon,
+} from 'lucide-react'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Badge } from "@/components/9ui/ui/badge"
-import { Checkbox } from "@/components/9ui/ui/checkbox"
-import { Label } from "@/components/9ui/ui/label"
-import { Textarea } from "@/components/9ui/ui/textarea"
-import { downloadCSV, parseCSV } from "@/lib/csv"
+import { Button } from '@/components/9ui/ui/button'
+import { Badge } from '@/components/9ui/ui/badge'
+import { Checkbox } from '@/components/9ui/ui/checkbox'
+import { Label } from '@/components/9ui/ui/label'
+import { Textarea } from '@/components/9ui/ui/textarea'
+import { downloadCSV, parseCSV } from '@/lib/csv'
 import {
   Dialog,
   DialogContent,
@@ -18,28 +28,28 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
+} from '@/components/9ui/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "@/components/9ui/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
-import { Input } from "@/components/9ui/ui/input"
+} from '@/components/9ui/ui/dropdown-menu'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
+import { Input } from '@/components/9ui/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/9ui/ui/select"
-import { Spinner } from "./Spinner"
-import StudentFormDialog from "./StudentFormDialog"
-import InvitePlayersDialog from "./InvitePlayersDialog"
+} from '@/components/9ui/ui/select'
+import { Spinner } from './Spinner'
+import StudentFormDialog from './StudentFormDialog'
+import InvitePlayersDialog from './InvitePlayersDialog'
 
-import type { Student, StudentImportResult, StudentImportRow } from "@/lib/org"
+import type { Student, StudentImportResult, StudentImportRow } from '@/lib/org'
 import {
   orgDeleteStudent,
   orgUpdateStudent,
@@ -47,14 +57,14 @@ import {
   orgImportStudents,
   STUDENT_STATUSES,
   STUDENT_STATUS_LABELS,
-} from "@/lib/org"
-import { formatDateMed } from "@/lib/date"
-import type { CoachAIError } from "@/lib/api"
+} from '@/lib/org'
+import { formatDateMed } from '@/lib/date'
+import type { CoachAIError } from '@/lib/api'
 
 const STATUS_STYLE: Record<string, string> = {
-  active: "border-(--success-border) text-(--success) bg-(--success)",
-  inactive: "border-(--warning-border) text-(--warning)",
-  transferred: "border-border text-muted-foreground",
+  active: 'border-(--success-border) text-(--success) bg-(--success)',
+  inactive: 'border-(--warning-border) text-(--warning)',
+  transferred: 'border-border text-muted-foreground',
 }
 
 function initials(name: string) {
@@ -62,50 +72,50 @@ function initials(name: string) {
     .split(/\s+/)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
-    .join("")
+    .join('')
 }
 
 const IMPORT_COLUMN_FIELDS = [
-  "full_name",
-  "email",
-  "phone",
-  "sport",
-  "position",
-  "jersey_number",
-  "date_of_birth",
-  "gender",
-  "guardian_name",
-  "guardian_phone",
-  "notes",
-  "status",
-  "joined_on",
+  'full_name',
+  'email',
+  'phone',
+  'sport',
+  'position',
+  'jersey_number',
+  'date_of_birth',
+  'gender',
+  'guardian_name',
+  'guardian_phone',
+  'notes',
+  'status',
+  'joined_on',
 ] as const
 
 const IMPORT_COLUMN_ALIASES: Record<string, string> = {
-  "full name": "full_name",
-  name: "full_name",
-  student: "full_name",
-  "student name": "full_name",
-  email: "email",
-  phone: "phone",
-  "phone number": "phone",
-  sport: "sport",
-  position: "position",
-  jersey: "jersey_number",
-  "jersey number": "jersey_number",
-  "jersey #": "jersey_number",
-  dob: "date_of_birth",
-  "date of birth": "date_of_birth",
-  gender: "gender",
-  "guardian name": "guardian_name",
-  "guardian phone": "guardian_phone",
-  notes: "notes",
-  status: "status",
-  joined: "joined_on",
-  "joined on": "joined_on",
+  'full name': 'full_name',
+  name: 'full_name',
+  student: 'full_name',
+  'student name': 'full_name',
+  email: 'email',
+  phone: 'phone',
+  'phone number': 'phone',
+  sport: 'sport',
+  position: 'position',
+  jersey: 'jersey_number',
+  'jersey number': 'jersey_number',
+  'jersey #': 'jersey_number',
+  dob: 'date_of_birth',
+  'date of birth': 'date_of_birth',
+  gender: 'gender',
+  'guardian name': 'guardian_name',
+  'guardian phone': 'guardian_phone',
+  notes: 'notes',
+  status: 'status',
+  joined: 'joined_on',
+  'joined on': 'joined_on',
 }
 
-const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, " ")
+const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, ' ')
 
 const toJerseyNumber = (value: string): string | number =>
   /^\d+(\.\d+)?$/.test(value) ? Number(value) : value
@@ -130,9 +140,9 @@ function csvToImportRows(csv: string): StudentImportRow[] {
         const field = hasHeader ? mapping[idx] : IMPORT_COLUMN_FIELDS[idx]
         if (!field) return
         const value = cell.trim()
-        if (value === "") return
+        if (value === '') return
         ;(row as Record<string, string | number>)[field] =
-          field === "jersey_number" ? toJerseyNumber(value) : value
+          field === 'jersey_number' ? toJerseyNumber(value) : value
       })
       return row
     })
@@ -150,7 +160,7 @@ function StudentImportDialog({
   auth0Id: string
   onImported: () => void
 }) {
-  const [text, setText] = useState("")
+  const [text, setText] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
   const [rows, setRows] = useState<StudentImportRow[]>([])
   const [busy, setBusy] = useState(false)
@@ -158,7 +168,7 @@ function StudentImportDialog({
   const [error, setError] = useState<string | null>(null)
 
   const reset = () => {
-    setText("")
+    setText('')
     setFileName(null)
     setRows([])
     setResult(null)
@@ -170,12 +180,12 @@ function StudentImportDialog({
     const parsed = csvToImportRows(value)
     setRows(parsed)
     setResult(null)
-    setError(parsed.length ? null : "No rows found — paste CSV text or pick a .csv file.")
+    setError(parsed.length ? null : 'No rows found — paste CSV text or pick a .csv file.')
   }
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    e.target.value = ""
+    e.target.value = ''
     if (!file) return
     setFileName(file.name)
     applyText(await file.text())
@@ -190,10 +200,10 @@ function StudentImportDialog({
       setResult(res)
       if (res.imported > 0) onImported()
       if (res.imported === 0 && res.failed.length > 0) {
-        toast.error("No rows imported — review the errors below")
+        toast.error('No rows imported — review the errors below')
       }
     } catch (err) {
-      setError((err as CoachAIError).message ?? "Import failed")
+      setError((err as CoachAIError).message ?? 'Import failed')
     } finally {
       setBusy(false)
     }
@@ -211,9 +221,9 @@ function StudentImportDialog({
         <DialogHeader>
           <DialogTitle>Import students from CSV</DialogTitle>
           <DialogDescription>
-            Upload a .csv or paste rows. The first row is matched against known column
-            headers (Full name, Email, Status, &hellip;); otherwise columns are read in
-            roster export order. Bad rows are skipped individually &mdash; the rest still import.
+            Upload a .csv or paste rows. The first row is matched against known column headers (Full
+            name, Email, Status, &hellip;); otherwise columns are read in roster export order. Bad
+            rows are skipped individually &mdash; the rest still import.
           </DialogDescription>
         </DialogHeader>
 
@@ -248,7 +258,7 @@ function StudentImportDialog({
               onChange={(e) => applyText(e.target.value)}
               rows={6}
               className="font-mono text-xs"
-              placeholder={"full_name,email,status\nAlex Rivera,a@x.com,active"}
+              placeholder={'full_name,email,status\nAlex Rivera,a@x.com,active'}
             />
           </div>
 
@@ -270,10 +280,10 @@ function StudentImportDialog({
                   <tbody>
                     {rows.slice(0, 8).map((r, i) => (
                       <tr key={i} className="border-b border-border last:border-0">
-                        <td className="text-foreground px-3 py-1.5">{r.full_name ?? "—"}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.email ?? "—"}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.sport ?? "—"}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.status ?? "—"}</td>
+                        <td className="text-foreground px-3 py-1.5">{r.full_name ?? '—'}</td>
+                        <td className="text-muted-foreground px-3 py-1.5">{r.email ?? '—'}</td>
+                        <td className="text-muted-foreground px-3 py-1.5">{r.sport ?? '—'}</td>
+                        <td className="text-muted-foreground px-3 py-1.5">{r.status ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -316,7 +326,8 @@ function StudentImportDialog({
             Cancel
           </Button>
           <Button onClick={runImport} disabled={busy || rows.length === 0}>
-            {busy ? <Spinner /> : <UploadIcon />} Import {rows.length > 0 ? `${rows.length} student(s)` : ""}
+            {busy ? <Spinner /> : <UploadIcon />} Import{' '}
+            {rows.length > 0 ? `${rows.length} student(s)` : ''}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -336,10 +347,10 @@ export default function StudentsClient({
   teams: { id: string; name: string }[]
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
-  const [search, setSearch] = useState("")
-  const [sport, setSport] = useState("")
-  const [status, setStatus] = useState("")
-  const [teamId, setTeamId] = useState("")
+  const [search, setSearch] = useState('')
+  const [sport, setSport] = useState('')
+  const [status, setStatus] = useState('')
+  const [teamId, setTeamId] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
@@ -353,10 +364,11 @@ export default function StudentsClient({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter((s) => {
-      if (q && !`${s.full_name} ${s.email ?? ""} ${s.sport ?? ""}`.toLowerCase().includes(q)) return false
+      if (q && !`${s.full_name} ${s.email ?? ''} ${s.sport ?? ''}`.toLowerCase().includes(q))
+        return false
       if (sport && s.sport !== sport) return false
       if (status && s.status !== status) return false
-      if (teamId && (s.team_id ?? "") !== teamId) return false
+      if (teamId && (s.team_id ?? '') !== teamId) return false
       return true
     })
   }, [students, search, sport, status, teamId])
@@ -382,18 +394,16 @@ export default function StudentsClient({
     })
   }
 
-  const applyBulkStatus = async (nextStatus: Student["status"]) => {
+  const applyBulkStatus = async (nextStatus: Student['status']) => {
     if (!selectedIds.length) return
     setBulkBusy(true)
     try {
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgUpdateStudent(auth0Id, id, { status: nextStatus })),
       )
-      const ok = results.filter((r) => r.status === "fulfilled").length
+      const ok = results.filter((r) => r.status === 'fulfilled').length
       setStudents((prev) =>
-        prev.map((p) =>
-          selected.has(p.id) ? { ...p, status: nextStatus } : p,
-        ),
+        prev.map((p) => (selected.has(p.id) ? { ...p, status: nextStatus } : p)),
       )
       toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
       setSelected(new Set())
@@ -406,11 +416,14 @@ export default function StudentsClient({
     if (!selectedIds.length) return
     setBulkBusy(true)
     try {
-      const results = await Promise.allSettled(selectedIds.map((id) => orgDeleteStudent(auth0Id, id)))
-      const ok = results.filter((r) => r.status === "fulfilled").length
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => orgDeleteStudent(auth0Id, id)),
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
       setStudents((prev) => prev.filter((p) => !selected.has(p.id)))
       if (ok > 0) toast.success(`Removed ${ok} student(s)`)
-      if (ok < selectedIds.length) toast.error(`${selectedIds.length - ok} student(s) could not be removed`)
+      if (ok < selectedIds.length)
+        toast.error(`${selectedIds.length - ok} student(s) could not be removed`)
       setSelected(new Set())
     } finally {
       setBulkBusy(false)
@@ -418,27 +431,38 @@ export default function StudentsClient({
   }
 
   const exportCSV = () => {
-    downloadCSV(
-      `roster-${new Date().toISOString().slice(0, 10)}.csv`,
+    downloadCSV(`roster-${new Date().toISOString().slice(0, 10)}.csv`, [
       [
-        ["Full name", "Email", "Phone", "Sport", "Position", "Jersey #", "Status", "Joined", "Date of birth", "Gender", "Guardian name", "Guardian phone", "Notes"],
-        ...filtered.map((s) => [
-          s.full_name,
-          s.email,
-          s.phone,
-          s.sport,
-          s.position,
-          s.jersey_number,
-          s.status,
-          s.joined_on,
-          s.date_of_birth,
-          s.gender,
-          s.guardian_name,
-          s.guardian_phone,
-          s.notes,
-        ]),
+        'Full name',
+        'Email',
+        'Phone',
+        'Sport',
+        'Position',
+        'Jersey #',
+        'Status',
+        'Joined',
+        'Date of birth',
+        'Gender',
+        'Guardian name',
+        'Guardian phone',
+        'Notes',
       ],
-    )
+      ...filtered.map((s) => [
+        s.full_name,
+        s.email,
+        s.phone,
+        s.sport,
+        s.position,
+        s.jersey_number,
+        s.status,
+        s.joined_on,
+        s.date_of_birth,
+        s.gender,
+        s.guardian_name,
+        s.guardian_phone,
+        s.notes,
+      ]),
+    ])
   }
 
   const openCreate = () => {
@@ -479,13 +503,15 @@ export default function StudentsClient({
       toast.success(`${deleting.full_name} removed`)
       setDeleting(null)
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to delete student")
+      toast.error((err as CoachAIError).message ?? 'Failed to delete student')
     } finally {
       setDeleteBusy(false)
     }
   }
 
-  const sportsForForm = sports.length ? sports : ["Academy", "Tennis", "Cricket", "Football", "Basketball"]
+  const sportsForForm = sports.length
+    ? sports
+    : ['Academy', 'Tennis', 'Cricket', 'Football', 'Basketball']
 
   return (
     <div>
@@ -502,9 +528,9 @@ export default function StudentsClient({
             />
           </div>
           <Select
-            items={{ "": "All sports", ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
+            items={{ '': 'All sports', ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
             value={sport}
-            onValueChange={(v) => setSport(typeof v === "string" ? v : "")}
+            onValueChange={(v) => setSport(typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by sport" className="w-36">
               <SelectValue placeholder="All sports" />
@@ -519,9 +545,12 @@ export default function StudentsClient({
             </SelectContent>
           </Select>
           <Select
-            items={{ "": "All statuses", ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])) }}
+            items={{
+              '': 'All statuses',
+              ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])),
+            }}
             value={status}
-            onValueChange={(v) => setStatus(typeof v === "string" ? v : "")}
+            onValueChange={(v) => setStatus(typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by status" className="w-36">
               <SelectValue placeholder="All statuses" />
@@ -536,9 +565,9 @@ export default function StudentsClient({
             </SelectContent>
           </Select>
           <Select
-            items={{ "": "All teams", ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
+            items={{ '': 'All teams', ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
             value={teamId}
-            onValueChange={(v) => setTeamId(typeof v === "string" ? v : "")}
+            onValueChange={(v) => setTeamId(typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by team" className="w-36">
               <SelectValue placeholder="All teams" />
@@ -578,17 +607,30 @@ export default function StudentsClient({
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
         <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
-          <span className="text-muted-foreground text-sm">
-            {selectedIds.length} selected
-          </span>
+          <span className="text-muted-foreground text-sm">{selectedIds.length} selected</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("active")}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => applyBulkStatus('active')}
+            >
               Mark active
             </Button>
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("inactive")}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => applyBulkStatus('inactive')}
+            >
               Mark inactive
             </Button>
-            <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => applyBulkStatus("transferred")}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={bulkBusy}
+              onClick={() => applyBulkStatus('transferred')}
+            >
               Mark transferred
             </Button>
             <Button
@@ -604,7 +646,11 @@ export default function StudentsClient({
               size="sm"
               disabled={bulkBusy}
               onClick={() => {
-                if (window.confirm(`Remove ${selectedIds.length} selected student(s)? This cannot be undone.`)) {
+                if (
+                  window.confirm(
+                    `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
+                  )
+                ) {
                   confirmBulkDelete()
                 }
               }}
@@ -628,15 +674,20 @@ export default function StudentsClient({
         {filtered.length === 0 ? (
           <div className="text-muted-foreground bg-card p-16 text-center text-sm">
             {students.length === 0
-              ? "No students yet. Add your first student to get started."
-              : "No students match your filters."}
+              ? 'No students yet. Add your first student to get started.'
+              : 'No students match your filters.'}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
                 <th className="px-4 py-3">
-                  <Checkbox checked={allFilteredSelected} indeterminate={selectedIds.length > 0 && !allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Select all students" />
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    indeterminate={selectedIds.length > 0 && !allFilteredSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all students"
+                  />
                 </th>
                 <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
                   Student
@@ -663,9 +714,16 @@ export default function StudentsClient({
             </thead>
             <tbody className="bg-card">
               {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-accent/50 border-b border-border last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]">
+                <tr
+                  key={s.id}
+                  className="hover:bg-accent/50 border-b border-border last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                >
                   <td className="px-4 py-3">
-                    <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggleSelect(s.id)} aria-label={`Select ${s.full_name}`} />
+                    <Checkbox
+                      checked={selected.has(s.id)}
+                      onCheckedChange={() => toggleSelect(s.id)}
+                      aria-label={`Select ${s.full_name}`}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
@@ -677,7 +735,9 @@ export default function StudentsClient({
                       </Avatar>
                       <div className="min-w-0">
                         <p className="text-foreground truncate font-medium">{s.full_name}</p>
-                        <p className="text-muted-foreground truncate text-xs">{s.email || s.phone || "—"}</p>
+                        <p className="text-muted-foreground truncate text-xs">
+                          {s.email || s.phone || '—'}
+                        </p>
                         {s.account_auth0_id && (
                           <p className="text-muted-foreground mt-0.5 text-[0.6rem] uppercase tracking-[0.15em]">
                             • linked to player account
@@ -694,7 +754,9 @@ export default function StudentsClient({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
-                    {s.jersey_number ? <span className="text-muted-foreground ml-1 text-xs">#{s.jersey_number}</span> : null}
+                    {s.jersey_number ? (
+                      <span className="text-muted-foreground ml-1 text-xs">#{s.jersey_number}</span>
+                    ) : null}
                   </td>
                   <td className="hidden px-4 py-3 md:table-cell">
                     {(() => {
@@ -709,15 +771,16 @@ export default function StudentsClient({
                     })()}
                   </td>
                   <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
-                    {s.position || "—"}
+                    {s.position || '—'}
                   </td>
                   <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
-                    {s.joined_on ? formatDateMed(s.joined_on) : "—"}
+                    {s.joined_on ? formatDateMed(s.joined_on) : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <Badge
                       className={
-                        (STATUS_STYLE[s.status] ?? "border-border text-muted-foreground") + " border"
+                        (STATUS_STYLE[s.status] ?? 'border-border text-muted-foreground') +
+                        ' border'
                       }
                     >
                       {s.status}
@@ -764,7 +827,7 @@ export default function StudentsClient({
 
       {/* Create / edit dialog (keyed so the form resets per student) */}
       <StudentFormDialog
-        key={editingStudent?.id ?? "new"}
+        key={editingStudent?.id ?? 'new'}
         auth0Id={auth0Id}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -781,8 +844,8 @@ export default function StudentsClient({
           <DialogHeader>
             <DialogTitle>Remove {deleting?.full_name}?</DialogTitle>
             <DialogDescription>
-              This will permanently delete the student and their attendance records. Past reports keep
-              a snapshot. This cannot be undone.
+              This will permanently delete the student and their attendance records. Past reports
+              keep a snapshot. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -790,7 +853,7 @@ export default function StudentsClient({
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDelete} disabled={deleteBusy}>
-              {deleteBusy ? <Spinner /> : "Delete student"}
+              {deleteBusy ? <Spinner /> : 'Delete student'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -802,11 +865,11 @@ export default function StudentsClient({
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         selectedEmails={
-          inviteForBulk ? selectedStudents.map((s) => s.email).filter((e): e is string => Boolean(e)) : undefined
+          inviteForBulk
+            ? selectedStudents.map((s) => s.email).filter((e): e is string => Boolean(e))
+            : undefined
         }
-        selectedStudentIds={
-          inviteForBulk ? selectedStudents.map((s) => s.id) : undefined
-        }
+        selectedStudentIds={inviteForBulk ? selectedStudents.map((s) => s.id) : undefined}
       />
 
       {/* Import students */}
@@ -816,7 +879,7 @@ export default function StudentsClient({
         auth0Id={auth0Id}
         onImported={() => {
           refreshStudents()
-          toast.success("Roster updated")
+          toast.success('Roster updated')
         }}
       />
     </div>

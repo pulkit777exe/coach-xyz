@@ -31,7 +31,9 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    return () => { abortRef.current?.abort() }
+    return () => {
+      abortRef.current?.abort()
+    }
   }, [])
 
   const scrollToBottom = useCallback(() => {
@@ -62,86 +64,95 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     scrollToBottom()
   }, [messages, isTyping, streamingText, scrollToBottom])
 
-  const handleSend = useCallback(async (text: string) => {
-    if (!text.trim() || isTyping) return
+  const handleSend = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isTyping) return
 
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
 
-    const userMsg: ChatMessage = {
-      id: `temp-${Date.now()}`,
-      role: 'user',
-      content: text.trim(),
-      created_at: Date.now(),
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setIsTyping(true)
-    setStreamingText('')
+      const userMsg: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        content: text.trim(),
+        created_at: Date.now(),
+      }
+      setMessages((prev) => [...prev, userMsg])
+      setIsTyping(true)
+      setStreamingText('')
 
-    try {
-      let finalText = ''
-      let finalTimestampRefs: number[] = []
-      let finalEventRefs: number[] = []
+      try {
+        let finalText = ''
+        let finalTimestampRefs: number[] = []
+        let finalEventRefs: number[] = []
 
-      for await (const event of sendChatMessageStream(jobId, text, controller.signal)) {
-        if (event.type === 'token') {
-          finalText += event.text
-          setStreamingText(finalText)
-        } else if (event.type === 'done') {
-          finalText = event.text
-          finalTimestampRefs = event.timestamp_refs
-          finalEventRefs = event.event_refs
-        } else if (event.type === 'error') {
-          const errorMsg: ChatMessage = {
-            id: `err-${Date.now()}`,
-            role: 'system',
-            content: event.message,
-            created_at: Date.now(),
+        for await (const event of sendChatMessageStream(jobId, text, controller.signal)) {
+          if (event.type === 'token') {
+            finalText += event.text
+            setStreamingText(finalText)
+          } else if (event.type === 'done') {
+            finalText = event.text
+            finalTimestampRefs = event.timestamp_refs
+            finalEventRefs = event.event_refs
+          } else if (event.type === 'error') {
+            const errorMsg: ChatMessage = {
+              id: `err-${Date.now()}`,
+              role: 'system',
+              content: event.message,
+              created_at: Date.now(),
+            }
+            setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
+            setStreamingText('')
+            setIsTyping(false)
+            return
           }
-          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
-          setStreamingText('')
-          setIsTyping(false)
-          return
         }
-      }
 
-      const assistantMsg: ChatMessage = {
-        id: `resp-${Date.now()}`,
-        role: 'assistant',
-        content: finalText,
-        timestamp_refs: finalTimestampRefs,
-        event_refs: finalEventRefs,
-        created_at: Date.now(),
+        const assistantMsg: ChatMessage = {
+          id: `resp-${Date.now()}`,
+          role: 'assistant',
+          content: finalText,
+          timestamp_refs: finalTimestampRefs,
+          event_refs: finalEventRefs,
+          created_at: Date.now(),
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
+        setStreamingText('')
+      } catch {
+        const errorMsg: ChatMessage = {
+          id: `err-${Date.now()}`,
+          role: 'system',
+          content: 'Failed to get response. Please try again.',
+          created_at: Date.now(),
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
+        setStreamingText('')
+      } finally {
+        setIsTyping(false)
       }
-      setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
-      setStreamingText('')
-    } catch {
-      const errorMsg: ChatMessage = {
-        id: `err-${Date.now()}`,
-        role: 'system',
-        content: 'Failed to get response. Please try again.',
-        created_at: Date.now(),
-      }
-      setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
-      setStreamingText('')
-    } finally {
-      setIsTyping(false)
-    }
-  }, [jobId, isTyping])
+    },
+    [jobId, isTyping],
+  )
 
-  const handleQuickAction = useCallback((prompt: string) => {
-    handleSend(prompt)
-  }, [handleSend])
+  const handleQuickAction = useCallback(
+    (prompt: string) => {
+      handleSend(prompt)
+    },
+    [handleSend],
+  )
 
   const summary = jobStatus?.summary
 
-  const welcomeMessage = useMemo<ChatMessage>(() => ({
-    id: 'welcome',
-    role: 'assistant',
-    content: `Analysis complete! I found **${summary?.total_events ?? 0} events** in your ${summary?.sport ?? 'sports'} video with an overall form score of **${summary?.form_score ?? 0}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
-    created_at: WELCOME_MESSAGE_AT,
-  }), [summary])
+  const welcomeMessage = useMemo<ChatMessage>(
+    () => ({
+      id: 'welcome',
+      role: 'assistant',
+      content: `Analysis complete! I found **${summary?.total_events ?? 0} events** in your ${summary?.sport ?? 'sports'} video with an overall form score of **${summary?.form_score ?? 0}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
+      created_at: WELCOME_MESSAGE_AT,
+    }),
+    [summary],
+  )
 
   return (
     <div className="flex h-full flex-col bg-transparent">
@@ -163,9 +174,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
             <div className="space-y-6">
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                 <div className="flex items-center gap-3 mb-4">
-                  <span className="text-2xl">
-                    {SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}
-                  </span>
+                  <span className="text-2xl">{SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}</span>
                   <div>
                     <h3 className="text-2xl font-bold tracking-tight text-foreground capitalize">
                       {summary.sport} Analysis Complete
@@ -178,23 +187,28 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="font-bold text-3xl text-foreground">{summary.form_score}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">Form Score</p>
+                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                      Form Score
+                    </p>
                   </div>
                   <div>
                     <p className="font-bold text-lg text-foreground">{summary.overall_rating}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">Rating</p>
+                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                      Rating
+                    </p>
                   </div>
                   <div>
-                    <p className="font-bold text-lg text-foreground">{summary.success_rate_percent ?? 0}%</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">Success Rate</p>
+                    <p className="font-bold text-lg text-foreground">
+                      {summary.success_rate_percent ?? 0}%
+                    </p>
+                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                      Success Rate
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <ChatMessageBubble
-                message={welcomeMessage}
-                onSeekTo={onSeekTo}
-              />
+              <ChatMessageBubble message={welcomeMessage} onSeekTo={onSeekTo} />
 
               <QuickActions
                 onAction={handleQuickAction}
@@ -205,11 +219,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
           )}
 
           {messages.map((msg) => (
-            <ChatMessageBubble
-              key={msg.id}
-              message={msg}
-              onSeekTo={onSeekTo}
-            />
+            <ChatMessageBubble key={msg.id} message={msg} onSeekTo={onSeekTo} />
           ))}
 
           {streamingText && (

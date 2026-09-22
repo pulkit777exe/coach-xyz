@@ -81,7 +81,7 @@ export function subscribeNotifications(
 
   // Tie external abort to our controller
   const onAbort = () => controller.abort()
-  outerSignal.addEventListener("abort", onAbort)
+  outerSignal.addEventListener('abort', onAbort)
 
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -94,15 +94,15 @@ export function subscribeNotifications(
     try {
       const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/sse`, {
         signal: controller.signal,
-        credentials: "include",
+        credentials: 'include',
       })
 
       if (!res.ok || !res.body) return
 
       for await (const event of parseEventStream<NotificationEvent>(res)) {
         // Skip connected handshake
-        if ("connected" in event && (event as { connected?: boolean }).connected) continue
-        if (!("id" in event)) continue
+        if ('connected' in event && (event as { connected?: boolean }).connected) continue
+        if (!('id' in event)) continue
 
         const n = event as AppNotification
         if (rememberDelivered(n.id)) continue
@@ -118,7 +118,7 @@ export function subscribeNotifications(
 
   return () => {
     if (reconnectTimer) clearTimeout(reconnectTimer)
-    outerSignal.removeEventListener("abort", onAbort)
+    outerSignal.removeEventListener('abort', onAbort)
     controller.abort()
   }
 }

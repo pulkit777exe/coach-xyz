@@ -175,7 +175,6 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
   },
 }
 
-
 export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -193,7 +192,7 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
     setCountdown(
       error.code === 'RATE_LIMITED' && error.retry_after && error.retry_after > 0
         ? error.retry_after
-        : null
+        : null,
     )
   }
 
@@ -241,15 +240,11 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
             />
           </svg>
 
-          <h1 className="text-2xl font-semibold text-foreground mb-3">
-            {details.title}
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground mb-3">{details.title}</h1>
 
           <p className="text-muted-foreground mb-2">{details.description}</p>
 
-          {details.action && (
-            <p className="text-sm text-muted-foreground mb-2">{details.action}</p>
-          )}
+          {details.action && <p className="text-sm text-muted-foreground mb-2">{details.action}</p>}
 
           <p className="text-xs text-muted-foreground/60 mb-8">
             Error: {error.code} | Layer: {error.layer}
@@ -262,11 +257,7 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
           )}
 
           {error.retryable ? (
-            <Button
-              size="lg"
-              onClick={onRetry}
-              disabled={countdown !== null}
-            >
+            <Button size="lg" onClick={onRetry} disabled={countdown !== null}>
               {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
             </Button>
           ) : (

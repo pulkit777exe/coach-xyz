@@ -1,43 +1,46 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { redirect, notFound } from "next/navigation";
-import { getOrgContext, getDashboardAnalyses } from "@/lib/serverData";
-import { orgStudent, orgStudentPerformance, orgAttendanceSummary, orgStudentsSports, orgReports, orgStudentAnalyses } from "@/lib/serverData";
-import StudentProfile from "@/components/org/StudentProfile";
-import { unstable_noStore as noStore } from "next/cache";
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { getSession } from '@/lib/session'
+import { redirect, notFound } from 'next/navigation'
+import { getOrgContext, getDashboardAnalyses } from '@/lib/serverData'
+import {
+  orgStudent,
+  orgStudentPerformance,
+  orgAttendanceSummary,
+  orgStudentsSports,
+  orgReports,
+  orgStudentAnalyses,
+} from '@/lib/serverData'
+import StudentProfile from '@/components/org/StudentProfile'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }): Promise<Metadata> {
-  const { id } = await params;
-  const session = await getSession();
-  if (!session) return { title: "Student | CoachXYZ" };
+  const { id } = await params
+  const session = await getSession()
+  if (!session) return { title: 'Student | CoachXYZ' }
   try {
-    const { auth0Id } = await getOrgContext();
-    const res = await orgStudent(auth0Id, id);
-    return { title: `${res.student.full_name} | CoachXYZ` };
+    const { auth0Id } = await getOrgContext()
+    const res = await orgStudent(auth0Id, id)
+    return { title: `${res.student.full_name} | CoachXYZ` }
   } catch {
-    return { title: "Student | CoachXYZ" };
+    return { title: 'Student | CoachXYZ' }
   }
 }
 
-export default async function StudentDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  noStore();
-  const { id } = await params;
-  const session = await getSession();
-  if (!session) redirect("/auth/login");
-  const { auth0Id } = await getOrgContext();
+export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  noStore()
+  const { id } = await params
+  const session = await getSession()
+  if (!session) redirect('/auth/login')
+  const { auth0Id } = await getOrgContext()
 
-  const studentRes = await orgStudent(auth0Id, id).catch(() => null);
-  if (!studentRes) notFound();
-  const student = studentRes.student;
+  const studentRes = await orgStudent(auth0Id, id).catch(() => null)
+  if (!studentRes) notFound()
+  const student = studentRes.student
 
   const [seriesRes, attRes, linkedRes, unlinkedRes, sportsRes, reportsRes] = await Promise.all([
     orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
@@ -46,7 +49,7 @@ export default async function StudentDetailPage({
     getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }).catch(() => ({ analyses: [] })),
     orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
     orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
-  ]);
+  ])
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -67,5 +70,5 @@ export default async function StudentDetailPage({
         sports={sportsRes.sports}
       />
     </div>
-  );
+  )
 }

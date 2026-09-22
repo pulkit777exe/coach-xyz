@@ -8,32 +8,30 @@ interface AnalysisProgressProps {
 }
 
 const STAGES = [
-  { name: "Queued", label: "01" },
-  { name: "Detecting Players", label: "02" },
-  { name: "Analyzing Technique", label: "03" },
-  { name: "Rendering Video", label: "04" },
-  { name: "Complete", label: "05" },
+  { name: 'Queued', label: '01' },
+  { name: 'Detecting Players', label: '02' },
+  { name: 'Analyzing Technique', label: '03' },
+  { name: 'Rendering Video', label: '04' },
+  { name: 'Complete', label: '05' },
 ]
 
 export default function AnalysisProgress({ status }: AnalysisProgressProps) {
   const progress = status?.progress ?? 0
-  const stageName = status?.stage_name ?? "Queued"
+  const stageName = status?.stage_name ?? 'Queued'
   const maxProgress = status?.complete ? 100 : 99
   const boundedProgress = Math.max(0, Math.min(maxProgress, progress))
   const lastProgressRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
 
   const currentStageIndex = useMemo(() => {
-    const idx = STAGES.findIndex(
-      s => stageName.toLowerCase().startsWith(s.name.toLowerCase())
-    )
+    const idx = STAGES.findIndex((s) => stageName.toLowerCase().startsWith(s.name.toLowerCase()))
     if (idx >= 0) return idx
-    if (stageName.toLowerCase().includes("queue")) return 0
-    if (stageName.toLowerCase().includes("detect")) return 1
-    if (stageName.toLowerCase().includes("analy")) return 2
-    if (stageName.toLowerCase().includes("render")) return 3
-    if (stageName.toLowerCase().includes("complete")) return 4
-    return Math.min((status?.stage ?? 0), STAGES.length - 1)
+    if (stageName.toLowerCase().includes('queue')) return 0
+    if (stageName.toLowerCase().includes('detect')) return 1
+    if (stageName.toLowerCase().includes('analy')) return 2
+    if (stageName.toLowerCase().includes('render')) return 3
+    if (stageName.toLowerCase().includes('complete')) return 4
+    return Math.min(status?.stage ?? 0, STAGES.length - 1)
   }, [stageName, status?.stage])
 
   const [startMark, setStartMark] = useState<{ progress: number; time: number } | null>(null)
@@ -69,7 +67,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     return Math.min(etaSec, 900)
   }, [boundedProgress, startMark, now])
 
-  const isWaitingForQuota = stageName.toLowerCase().includes("waiting for ai quota")
+  const isWaitingForQuota = stageName.toLowerCase().includes('waiting for ai quota')
 
   return (
     <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center pt-20">
@@ -88,7 +86,9 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
         {currentStageIndex === 0 && (
           <div className="mb-5 border border-border bg-muted p-4 rounded-2xl">
-            <p className="text-sm text-muted-foreground">Queued and waiting for analysis capacity.</p>
+            <p className="text-sm text-muted-foreground">
+              Queued and waiting for analysis capacity.
+            </p>
           </div>
         )}
 
@@ -100,16 +100,30 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
         <div className="flex flex-col gap-8 border border-border bg-card p-6 sm:p-8 rounded-2xl shadow-sm">
           <div className="flex flex-col gap-5 border border-border bg-muted p-5 sm:p-6 rounded-2xl">
-            <div className="flex min-h-10 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between" aria-live="polite">
+            <div
+              className="flex min-h-10 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
+              aria-live="polite"
+            >
               {boundedProgress === 100 ? (
                 <span className="inline-flex items-center gap-2 text-foreground">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-6">
-                    <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="size-6"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                   <span>Analysis complete</span>
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Current stage</span>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Current stage
+                </span>
               )}
               <span className="font-semibold text-3xl tabular-nums text-foreground">
                 {Math.trunc(boundedProgress)}%
@@ -127,9 +141,14 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
               ></div>
             </div>
 
-            <div className="flex flex-col gap-2 text-xs uppercase text-muted-foreground sm:flex-row sm:items-center sm:justify-between" aria-live="polite">
+            <div
+              className="flex flex-col gap-2 text-xs uppercase text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+              aria-live="polite"
+            >
               <span>{stageName}</span>
-              <span>{estimatedSeconds > 0 ? `ETA ${estimatedSeconds}s` : 'Timing estimate pending'}</span>
+              <span>
+                {estimatedSeconds > 0 ? `ETA ${estimatedSeconds}s` : 'Timing estimate pending'}
+              </span>
             </div>
           </div>
 
@@ -149,19 +168,26 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
                         : 'bg-transparent border border-border opacity-60'
                   }`}
                 >
-                  <div className={`shrink-0 w-10 h-10 flex items-center justify-center border rounded-lg text-xs tabular-nums transition-colors ${
-                    isActive
-                      ? 'bg-foreground text-background border-foreground'
-                      : isCompleted
-                        ? 'bg-muted text-foreground border-border'
-                        : 'bg-transparent text-muted-foreground border-border'
-                  }`}>
+                  <div
+                    className={`shrink-0 w-10 h-10 flex items-center justify-center border rounded-lg text-xs tabular-nums transition-colors ${
+                      isActive
+                        ? 'bg-foreground text-background border-foreground'
+                        : isCompleted
+                          ? 'bg-muted text-foreground border-border'
+                          : 'bg-transparent text-muted-foreground border-border'
+                    }`}
+                  >
                     {isCompleted ? 'OK' : stage.label}
                   </div>
-                  <span className={`text-sm tracking-wide ${
-                    isActive ? 'text-foreground font-semibold' :
-                    isCompleted ? 'text-muted-foreground' : 'text-muted-foreground font-medium'
-                  }`}>
+                  <span
+                    className={`text-sm tracking-wide ${
+                      isActive
+                        ? 'text-foreground font-semibold'
+                        : isCompleted
+                          ? 'text-muted-foreground'
+                          : 'text-muted-foreground font-medium'
+                    }`}
+                  >
                     {stage.name}
                   </span>
                 </div>

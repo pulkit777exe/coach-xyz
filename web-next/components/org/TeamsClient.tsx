@@ -163,7 +163,9 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
               }`}
             >
               <p className="text-sm font-semibold text-foreground">{team.name}</p>
-              {team.sport && <p className="text-xs text-muted-foreground capitalize">{team.sport}</p>}
+              {team.sport && (
+                <p className="text-xs text-muted-foreground capitalize">{team.sport}</p>
+              )}
             </button>
           ))}
           {teams.length === 0 && (
@@ -246,7 +248,9 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {member.member_auth0_id ?? students.find((s) => s.id === member.student_id)?.full_name ?? 'Unknown'}
+                        {member.member_auth0_id ??
+                          students.find((s) => s.id === member.student_id)?.full_name ??
+                          'Unknown'}
                       </p>
                       <Badge variant="outline" className="mt-1 capitalize">
                         {member.role}

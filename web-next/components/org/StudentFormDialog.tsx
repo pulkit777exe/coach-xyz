@@ -1,29 +1,35 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { toast } from "sonner"
+import { useState } from 'react'
+import { toast } from 'sonner'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/9ui/ui/dialog"
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/9ui/ui/dialog'
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/9ui/ui/select"
-import { Textarea } from "@/components/9ui/ui/textarea"
-import { Spinner } from "./Spinner"
-import { NativeSelect } from "./EventFormDialog"
+} from '@/components/9ui/ui/select'
+import { Textarea } from '@/components/9ui/ui/textarea'
+import { Spinner } from './Spinner'
+import { NativeSelect } from './EventFormDialog'
 
-import type { Student, StudentFormValues } from "@/lib/org"
-import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from "@/lib/org"
-import type { CoachAIError } from "@/lib/api"
+import type { Student, StudentFormValues } from '@/lib/org'
+import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from '@/lib/org'
+import type { CoachAIError } from '@/lib/api'
 
 const STATUSES = STUDENT_STATUSES
-const GENDERS = ["female", "male", "other"] as const
+const GENDERS = ['female', 'male', 'other'] as const
 
 export type StudentFormDialogProps = {
   auth0Id: string
@@ -37,9 +43,9 @@ export type StudentFormDialogProps = {
 }
 
 const emptyForm = (sports: string[]): Partial<StudentFormValues> => ({
-  full_name: "",
-  sport: sports[0] ?? "",
-  status: "active",
+  full_name: '',
+  sport: sports[0] ?? '',
+  status: 'active',
 })
 
 export default function StudentFormDialog({
@@ -60,9 +66,10 @@ export default function StudentFormDialog({
   const [error, setError] = useState<string | null>(null)
 
   const values: Partial<StudentFormValues> =
-    form ?? (editing && student ? ({ ...student } as Partial<StudentFormValues>) : emptyForm(sports))
+    form ??
+    (editing && student ? ({ ...student } as Partial<StudentFormValues>) : emptyForm(sports))
 
-  const set = <K extends keyof StudentFormValues>(key: K, value: StudentFormValues[K] | "") => {
+  const set = <K extends keyof StudentFormValues>(key: K, value: StudentFormValues[K] | '') => {
     setForm((f) => ({ ...(f ?? emptyForm(sports)), [key]: value }))
     setError(null)
   }
@@ -77,19 +84,19 @@ export default function StudentFormDialog({
 
   const submit = async () => {
     if (!values.full_name?.trim()) {
-      setError("Full name is required")
+      setError('Full name is required')
       return
     }
     setSubmitting(true)
     setError(null)
     try {
       const payload: Record<string, unknown> = {}
-      const numbered = ["jersey_number"] as const
-      const dates = ["date_of_birth", "joined_on"] as const
+      const numbered = ['jersey_number'] as const
+      const dates = ['date_of_birth', 'joined_on'] as const
       for (const [key, value] of Object.entries(values)) {
         if (value === undefined) continue
         if ((numbered as readonly string[]).includes(key)) {
-          if (value === "" || value === null) {
+          if (value === '' || value === null) {
             if (editing) payload[key] = null
             continue
           }
@@ -98,7 +105,7 @@ export default function StudentFormDialog({
           continue
         }
         if ((dates as readonly string[]).includes(key)) {
-          if (value === "" || value === null) {
+          if (value === '' || value === null) {
             if (editing) payload[key] = null
             continue
           }
@@ -106,25 +113,29 @@ export default function StudentFormDialog({
           continue
         }
         if (value === null) continue
-        if (value === "") {
+        if (value === '') {
           if (editing) payload[key] = null
           continue
         }
         payload[key] = value
       }
       if (editing && student) {
-        const res = await orgUpdateStudent(auth0Id, student.id, payload as Partial<StudentFormValues>)
-        toast.success("Student updated")
+        const res = await orgUpdateStudent(
+          auth0Id,
+          student.id,
+          payload as Partial<StudentFormValues>,
+        )
+        toast.success('Student updated')
         onUpdated(res.student)
       } else {
         const res = await orgCreateStudent(auth0Id, payload as Partial<StudentFormValues>)
-        toast.success("Student added")
+        toast.success('Student added')
         onCreated(res.student)
       }
       handleOpenChange(false)
     } catch (err) {
       const e = err as CoachAIError
-      setError(e.message ?? "Something went wrong")
+      setError(e.message ?? 'Something went wrong')
     } finally {
       setSubmitting(false)
     }
@@ -134,7 +145,7 @@ export default function StudentFormDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit Student" : "Add Student"}</DialogTitle>
+          <DialogTitle>{editing ? 'Edit Student' : 'Add Student'}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4">
@@ -142,8 +153,8 @@ export default function StudentFormDialog({
             <Label htmlFor="full_name">Full name *</Label>
             <Input
               id="full_name"
-              value={values.full_name ?? ""}
-              onChange={(e) => set("full_name", e.target.value)}
+              value={values.full_name ?? ''}
+              onChange={(e) => set('full_name', e.target.value)}
               placeholder="e.g. Alex Rivera"
             />
           </div>
@@ -154,8 +165,8 @@ export default function StudentFormDialog({
               <Input
                 id="email"
                 type="email"
-                value={values.email ?? ""}
-                onChange={(e) => set("email", e.target.value)}
+                value={values.email ?? ''}
+                onChange={(e) => set('email', e.target.value)}
               />
               <p className="text-muted-foreground text-xs">
                 Use the student’s login email to auto-link their player account.
@@ -165,8 +176,8 @@ export default function StudentFormDialog({
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
-                value={values.phone ?? ""}
-                onChange={(e) => set("phone", e.target.value)}
+                value={values.phone ?? ''}
+                onChange={(e) => set('phone', e.target.value)}
               />
             </div>
           </div>
@@ -176,9 +187,13 @@ export default function StudentFormDialog({
               <Label htmlFor="sport">Sport</Label>
               <NativeSelect
                 id="sport"
-                value={values.sport ?? ""}
-                onChange={(v) => set("sport", v)}
-                options={sports.length ? sports : ["Academy", "Tennis", "Cricket", "Football", "Basketball"]}
+                value={values.sport ?? ''}
+                onChange={(v) => set('sport', v)}
+                options={
+                  sports.length
+                    ? sports
+                    : ['Academy', 'Tennis', 'Cricket', 'Football', 'Basketball']
+                }
                 placeholder="Select sport"
               />
             </div>
@@ -186,8 +201,8 @@ export default function StudentFormDialog({
               <Label htmlFor="position">Position</Label>
               <Input
                 id="position"
-                value={values.position ?? ""}
-                onChange={(e) => set("position", e.target.value)}
+                value={values.position ?? ''}
+                onChange={(e) => set('position', e.target.value)}
                 placeholder="e.g. Goalkeeper"
               />
             </div>
@@ -196,8 +211,8 @@ export default function StudentFormDialog({
               <Input
                 id="jersey_number"
                 type="number"
-                value={values.jersey_number ?? ""}
-                onChange={(e) => set("jersey_number", e.target.value as never)}
+                value={values.jersey_number ?? ''}
+                onChange={(e) => set('jersey_number', e.target.value as never)}
               />
             </div>
           </div>
@@ -208,16 +223,16 @@ export default function StudentFormDialog({
               <Input
                 id="date_of_birth"
                 type="date"
-                value={values.date_of_birth ?? ""}
-                onChange={(e) => set("date_of_birth", e.target.value)}
+                value={values.date_of_birth ?? ''}
+                onChange={(e) => set('date_of_birth', e.target.value)}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="gender">Gender</Label>
               <NativeSelect
                 id="gender"
-                value={values.gender ?? ""}
-                onChange={(v) => set("gender", v)}
+                value={values.gender ?? ''}
+                onChange={(v) => set('gender', v)}
                 options={[...GENDERS]}
                 placeholder="—"
               />
@@ -226,8 +241,8 @@ export default function StudentFormDialog({
               <Label htmlFor="status">Status</Label>
               <NativeSelect
                 id="status"
-                value={values.status ?? "active"}
-                onChange={(v) => set("status", v as StudentFormValues["status"])}
+                value={values.status ?? 'active'}
+                onChange={(v) => set('status', v as StudentFormValues['status'])}
                 options={[...STATUSES]}
               />
             </div>
@@ -239,19 +254,19 @@ export default function StudentFormDialog({
               <Input
                 id="joined_on"
                 type="date"
-                value={values.joined_on ?? ""}
-                onChange={(e) => set("joined_on", e.target.value)}
+                value={values.joined_on ?? ''}
+                onChange={(e) => set('joined_on', e.target.value)}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="team">Team</Label>
               <Select
                 items={{
-                  "": "No team",
+                  '': 'No team',
                   ...Object.fromEntries(teams.map((t) => [t.id, t.name])),
                 }}
-                value={values.team_id ?? ""}
-                onValueChange={(v) => set("team_id", typeof v === "string" ? v : "")}
+                value={values.team_id ?? ''}
+                onValueChange={(v) => set('team_id', typeof v === 'string' ? v : '')}
               >
                 <SelectTrigger id="team">
                   <SelectValue placeholder="No team" />
@@ -273,16 +288,16 @@ export default function StudentFormDialog({
               <Label htmlFor="guardian_name">Guardian name</Label>
               <Input
                 id="guardian_name"
-                value={values.guardian_name ?? ""}
-                onChange={(e) => set("guardian_name", e.target.value)}
+                value={values.guardian_name ?? ''}
+                onChange={(e) => set('guardian_name', e.target.value)}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="guardian_phone">Guardian phone</Label>
               <Input
                 id="guardian_phone"
-                value={values.guardian_phone ?? ""}
-                onChange={(e) => set("guardian_phone", e.target.value)}
+                value={values.guardian_phone ?? ''}
+                onChange={(e) => set('guardian_phone', e.target.value)}
               />
             </div>
           </div>
@@ -291,8 +306,8 @@ export default function StudentFormDialog({
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
-              value={values.notes ?? ""}
-              onChange={(e) => set("notes", e.target.value)}
+              value={values.notes ?? ''}
+              onChange={(e) => set('notes', e.target.value)}
               rows={2}
               placeholder="Medical notes, strengths, focus areas…"
             />
@@ -306,7 +321,7 @@ export default function StudentFormDialog({
             Cancel
           </Button>
           <Button onClick={submit} disabled={submitting}>
-            {submitting ? <Spinner /> : editing ? "Save changes" : "Add student"}
+            {submitting ? <Spinner /> : editing ? 'Save changes' : 'Add student'}
           </Button>
         </DialogFooter>
       </DialogContent>

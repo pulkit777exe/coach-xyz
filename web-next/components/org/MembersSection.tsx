@@ -1,11 +1,11 @@
-"use client"
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
-import { PlusIcon, Trash2Icon } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { PlusIcon, Trash2Icon } from 'lucide-react'
 
-import { Badge } from "@/components/9ui/ui/badge"
-import { Button } from "@/components/9ui/ui/button"
+import { Badge } from '@/components/9ui/ui/badge'
+import { Button } from '@/components/9ui/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -13,17 +13,17 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
+} from '@/components/9ui/ui/dialog'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/9ui/ui/select"
-import { Spinner } from "./Spinner"
+} from '@/components/9ui/ui/select'
+import { Spinner } from './Spinner'
 
 import {
   ORG_MEMBER_INVITE_ROLES,
@@ -37,8 +37,8 @@ import {
   type OrgMemberInviteRole,
   type OrgMemberRole,
   type OrgMembersResponse,
-} from "@/lib/members"
-import type { CoachAIError } from "@/lib/api"
+} from '@/lib/members'
+import type { CoachAIError } from '@/lib/api'
 
 // role → label map for the base-ui Select `items` prop (renders the current
 // value's label inside the trigger).
@@ -49,16 +49,13 @@ const INVITE_ROLE_ITEMS: Record<string, string> = Object.fromEntries(
   ORG_MEMBER_INVITE_ROLES.map((r) => [r, ORG_MEMBER_ROLE_LABELS[r]]),
 )
 
-const ROLE_BADGE_VARIANT: Record<
-  OrgMemberRole,
-  "default" | "secondary" | "success" | "info"
-> = {
-  owner: "default",
-  admin: "info",
-  coach: "success",
-  analyst: "info",
-  medical: "secondary",
-  player: "secondary",
+const ROLE_BADGE_VARIANT: Record<OrgMemberRole, 'default' | 'secondary' | 'success' | 'info'> = {
+  owner: 'default',
+  admin: 'info',
+  coach: 'success',
+  analyst: 'info',
+  medical: 'secondary',
+  player: 'secondary',
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -72,7 +69,12 @@ function initials(name: string): string {
 }
 
 function messageOf(err: unknown, fallback: string): string {
-  if (err && typeof err === "object" && "message" in err && typeof (err as CoachAIError).message === "string") {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'message' in err &&
+    typeof (err as CoachAIError).message === 'string'
+  ) {
     return (err as CoachAIError).message
   }
   return fallback
@@ -104,7 +106,7 @@ export default function MembersSection({
       }
     } catch (err) {
       if (requestSeq.current === seq) {
-        setError(messageOf(err, "Failed to load staff"))
+        setError(messageOf(err, 'Failed to load staff'))
       }
     } finally {
       if (requestSeq.current === seq) setLoading(false)
@@ -118,11 +120,11 @@ export default function MembersSection({
   }, [refresh])
 
   const currentUserRole = data?.current_user_role ?? null
-  const canInvite = currentUserRole === "owner" || currentUserRole === "admin"
-  const canManageRoles = currentUserRole === "owner"
+  const canInvite = currentUserRole === 'owner' || currentUserRole === 'admin'
+  const canManageRoles = currentUserRole === 'owner'
   const members = data?.members ?? []
-  const owner = members.find((m) => m.role === "owner")
-  const ownerCount = members.filter((m) => m.role === "owner").length
+  const owner = members.find((m) => m.role === 'owner')
+  const ownerCount = members.filter((m) => m.role === 'owner').length
 
   const handleRoleChange = async (member: OrgMember, rawRole: string | null) => {
     if (!rawRole || rawRole === member.role) return
@@ -137,7 +139,7 @@ export default function MembersSection({
         }
       })
     } catch (err) {
-      toast.error(messageOf(err, "Failed to update role"))
+      toast.error(messageOf(err, 'Failed to update role'))
     } finally {
       setBusyId(null)
     }
@@ -152,17 +154,19 @@ export default function MembersSection({
         if (!prev) return prev
         return { ...prev, members: prev.members.filter((m) => m.id !== pendingRemove.id) }
       })
-      toast.success(`${pendingRemove.display_name ?? pendingRemove.member_email ?? "Member"} removed`)
+      toast.success(
+        `${pendingRemove.display_name ?? pendingRemove.member_email ?? 'Member'} removed`,
+      )
       setPendingRemove(null)
     } catch (err) {
-      toast.error(messageOf(err, "Failed to remove member"))
+      toast.error(messageOf(err, 'Failed to remove member'))
     } finally {
       setBusyId(null)
     }
   }
 
   const ownerRowCannotBeRemoved = (member: OrgMember): boolean =>
-    member.role === "owner" && ownerCount <= 1
+    member.role === 'owner' && ownerCount <= 1
 
   return (
     <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
@@ -179,9 +183,7 @@ export default function MembersSection({
       </div>
 
       {error ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-          {error}
-        </p>
+        <p className="px-6 py-8 text-center text-sm text-muted-foreground">{error}</p>
       ) : loading ? (
         <div className="flex items-center justify-center px-6 py-10">
           <Spinner className="text-muted-foreground" />
@@ -193,17 +195,19 @@ export default function MembersSection({
       ) : (
         <ul className="divide-y divide-border">
           {members.map((member) => {
-            const name = member.display_name ?? member.member_email ?? "No name"
-            const isOwner = member.role === "owner"
+            const name = member.display_name ?? member.member_email ?? 'No name'
+            const isOwner = member.role === 'owner'
             return (
               <li key={member.id} className="flex items-center gap-4 px-6 py-3.5">
                 <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
-                  {name === "No name" ? "?" : initials(name)}
+                  {name === 'No name' ? '?' : initials(name)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">{name}</p>
                   {member.member_email && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{member.member_email}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {member.member_email}
+                    </p>
                   )}
                 </div>
                 <Badge variant={ROLE_BADGE_VARIANT[member.role]}>
@@ -225,7 +229,7 @@ export default function MembersSection({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {ORG_MEMBER_ROLES.filter((r) => r !== "owner").map((r) => (
+                          {ORG_MEMBER_ROLES.filter((r) => r !== 'owner').map((r) => (
                             <SelectItem key={r} value={r}>
                               {ORG_MEMBER_ROLE_LABELS[r]}
                             </SelectItem>
@@ -254,27 +258,33 @@ export default function MembersSection({
 
       {owner && (
         <p className="border-t border-border px-6 py-3 text-xs text-muted-foreground">
-          Staff with a Coach or Admin role gain access to this organization when they
-          sign in with their email. {canManageRoles ? "Only the owner" : "The owner"} can
-          change roles or remove staff.
+          Staff with a Coach or Admin role gain access to this organization when they sign in with
+          their email. {canManageRoles ? 'Only the owner' : 'The owner'} can change roles or remove
+          staff.
         </p>
       )}
 
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent className="sm:max-w-md">
-          <InviteMemberForm auth0Id={auth0Id} onInvited={refresh} onClose={() => setInviteOpen(false)} />
+          <InviteMemberForm
+            auth0Id={auth0Id}
+            onInvited={refresh}
+            onClose={() => setInviteOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(pendingRemove)} onOpenChange={(open) => !open && setPendingRemove(null)}>
+      <Dialog
+        open={Boolean(pendingRemove)}
+        onOpenChange={(open) => !open && setPendingRemove(null)}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Remove {pendingRemove?.display_name ?? pendingRemove?.member_email ?? "member"}?
+              Remove {pendingRemove?.display_name ?? pendingRemove?.member_email ?? 'member'}?
             </DialogTitle>
             <DialogDescription>
-              This revokes their access to this organization&apos;s data. This cannot be
-              undone.
+              This revokes their access to this organization&apos;s data. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -282,7 +292,7 @@ export default function MembersSection({
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleRemove} disabled={busyId !== null}>
-              {busyId === pendingRemove?.id ? <Spinner /> : "Remove"}
+              {busyId === pendingRemove?.id ? <Spinner /> : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -300,7 +310,7 @@ function InviteMemberForm({
   onInvited: () => void
   onClose: () => void
 }) {
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState('')
   const [role, setRole] = useState<string>(ORG_MEMBER_INVITE_ROLES[1])
   const [busy, setBusy] = useState(false)
 
@@ -311,12 +321,12 @@ function InviteMemberForm({
     setBusy(true)
     try {
       await orgInviteMember(auth0Id, { email: email.trim(), role: role as OrgMemberInviteRole })
-      toast.success("Staff member invited")
+      toast.success('Staff member invited')
       onInvited()
-      setEmail("")
+      setEmail('')
       onClose()
     } catch (err) {
-      toast.error(messageOf(err, "Failed to invite member"))
+      toast.error(messageOf(err, 'Failed to invite member'))
     } finally {
       setBusy(false)
     }
@@ -327,8 +337,8 @@ function InviteMemberForm({
       <DialogHeader>
         <DialogTitle>Invite staff</DialogTitle>
         <DialogDescription>
-          Invite a Coach or Admin by email. They gain access to this organization
-          when they sign in with that email.
+          Invite a Coach or Admin by email. They gain access to this organization when they sign in
+          with that email.
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4">
@@ -350,7 +360,7 @@ function InviteMemberForm({
             items={INVITE_ROLE_ITEMS}
             value={role}
             onValueChange={(value) => {
-              if (typeof value === "string" && value) setRole(value)
+              if (typeof value === 'string' && value) setRole(value)
             }}
           >
             <SelectTrigger aria-label="Role">
@@ -371,7 +381,7 @@ function InviteMemberForm({
           Cancel
         </Button>
         <Button onClick={submit} disabled={busy || !emailValid}>
-          {busy ? <Spinner /> : "Send invite"}
+          {busy ? <Spinner /> : 'Send invite'}
         </Button>
       </DialogFooter>
     </>

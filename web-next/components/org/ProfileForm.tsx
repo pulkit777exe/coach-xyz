@@ -1,15 +1,15 @@
-"use client"
+'use client'
 
-import { useState, type FormEvent } from "react"
-import { toast } from "sonner"
+import { useState, type FormEvent } from 'react'
+import { toast } from 'sonner'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
-import { Spinner } from "@/components/org/Spinner"
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
+import { Spinner } from '@/components/org/Spinner'
 
-import { updateMyProfile } from "@/lib/meApi"
-import type { CoachAIError } from "@/lib/api"
+import { updateMyProfile } from '@/lib/meApi'
+import type { CoachAIError } from '@/lib/api'
 
 export default function ProfileForm({
   initialName,
@@ -20,9 +20,9 @@ export default function ProfileForm({
   initialNickname: string | null
   initialPicture: string | null
 }) {
-  const [name, setName] = useState(initialName ?? "")
-  const [nickname, setNickname] = useState(initialNickname ?? "")
-  const [picture, setPicture] = useState(initialPicture ?? "")
+  const [name, setName] = useState(initialName ?? '')
+  const [nickname, setNickname] = useState(initialNickname ?? '')
+  const [picture, setPicture] = useState(initialPicture ?? '')
   const [saving, setSaving] = useState(false)
 
   const submit = async (e: FormEvent) => {
@@ -34,9 +34,9 @@ export default function ProfileForm({
         nickname: nickname.trim() || null,
         picture: picture.trim() || null,
       })
-      toast.success("Profile updated")
+      toast.success('Profile updated')
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to update profile")
+      toast.error((err as CoachAIError).message ?? 'Failed to update profile')
     } finally {
       setSaving(false)
     }
@@ -79,7 +79,7 @@ export default function ProfileForm({
       </div>
       <div>
         <Button type="submit" disabled={saving}>
-          {saving ? <Spinner /> : "Save"}
+          {saving ? <Spinner /> : 'Save'}
         </Button>
       </div>
     </form>

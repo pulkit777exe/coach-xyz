@@ -63,7 +63,12 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         className="shrink-0 rounded-xl border border-border bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M5 12h14M12 5l7 7-7 7"
+          />
         </svg>
       </button>
     </div>

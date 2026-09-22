@@ -144,7 +144,10 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
 
   const isEmptyQuery = query.trim().length === 0
   const totalItems = results
-    ? results.students.length + results.schedule.length + results.reports.length + results.analyses.length
+    ? results.students.length +
+      results.schedule.length +
+      results.reports.length +
+      results.analyses.length
     : 0
 
   return (
@@ -208,7 +211,9 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                 <Spinner />
               </div>
             ) : totalItems === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">No results for &apos;{query.trim()}&apos;</p>
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                No results for &apos;{query.trim()}&apos;
+              </p>
             ) : (
               results &&
               CATEGORIES.map(({ key, label, icon: Icon, href }) => {
@@ -227,9 +232,13 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                         >
                           <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0">
-                            <span className="block truncate text-sm text-foreground">{item.label}</span>
+                            <span className="block truncate text-sm text-foreground">
+                              {item.label}
+                            </span>
                             {item.subtitle && (
-                              <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {item.subtitle}
+                              </span>
                             )}
                           </span>
                         </button>

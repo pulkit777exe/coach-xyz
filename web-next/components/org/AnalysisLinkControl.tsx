@@ -1,13 +1,13 @@
-"use client"
+'use client'
 
-import { useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
-import type { Student } from "@/lib/org"
-import { orgStudents, linkAnalysisToStudent } from "@/lib/org"
-import type { CoachAIError } from "@/lib/api"
+import type { Student } from '@/lib/org'
+import { orgStudents, linkAnalysisToStudent } from '@/lib/org'
+import type { CoachAIError } from '@/lib/api'
 
-const UNLINKED_LABEL = "Link to Student"
+const UNLINKED_LABEL = 'Link to Student'
 
 /**
  * Analysis ↔ Student linking from the analysis detail view.
@@ -47,8 +47,8 @@ export default function AnalysisLinkControl({
     const onDocClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener("mousedown", onDocClick)
-    return () => document.removeEventListener("mousedown", onDocClick)
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
   }, [])
 
   if (students === null) {
@@ -67,9 +67,9 @@ export default function AnalysisLinkControl({
       await linkAnalysisToStudent(auth0Id, jobId, studentId)
       setLinkedId(studentId)
       setOpen(false)
-      toast.success(studentId ? "Analysis linked to student" : "Analysis unlinked")
+      toast.success(studentId ? 'Analysis linked to student' : 'Analysis unlinked')
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to update student link")
+      toast.error((err as CoachAIError).message ?? 'Failed to update student link')
     } finally {
       setBusy(false)
     }
@@ -82,8 +82,8 @@ export default function AnalysisLinkControl({
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[0.65rem] uppercase tracking-[0.15em] transition-colors ${
           linkedStudent
-            ? "border-success/30 bg-success/10 text-success"
-            : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-border"
+            ? 'border-success/30 bg-success/10 text-success'
+            : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-border'
         }`}
         title="Attach this analysis to a student for tracking"
       >
@@ -118,7 +118,7 @@ export default function AnalysisLinkControl({
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-72 rounded-2xl border border-border bg-card shadow-xl">
           <div className="border-b border-border px-4 py-2 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
-            {linkedStudent ? "Linked to" : "Choose a student"}
+            {linkedStudent ? 'Linked to' : 'Choose a student'}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
             {linkedStudent && (
@@ -142,8 +142,8 @@ export default function AnalysisLinkControl({
                 >
                   <span className="truncate">{s.full_name}</span>
                   <span className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
-                    {s.sport || ""}
-                    {isLinked ? " · linked" : ""}
+                    {s.sport || ''}
+                    {isLinked ? ' · linked' : ''}
                   </span>
                 </button>
               )

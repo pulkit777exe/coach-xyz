@@ -1,59 +1,59 @@
-import { SQL } from "bun";
+import { SQL } from 'bun'
 
-import type { Player } from "../types";
-import type { RequestMeta } from "./requestMeta";
+import type { Player } from '../types'
+import type { RequestMeta } from './requestMeta'
 import {
   ATTENDANCE_STATUSES,
   EVENT_STATUSES,
   EVENT_TYPES,
   REPORT_TYPES,
   STUDENT_STATUSES,
-} from "./orgEnums";
-import { USER_ROLES } from "./userRoles";
+} from './orgEnums'
+import { USER_ROLES } from './userRoles'
 
 type VideoConversationRecord = RequestMeta & {
-  sessionToken: string;
-  fileName: string;
-  fileMimeType: string;
-  fileSizeBytes: number;
-  playerCount: number;
-  players: Player[];
-  scanResponse: Record<string, unknown>;
-  auth0Id?: string | null;
-};
+  sessionToken: string
+  fileName: string
+  fileMimeType: string
+  fileSizeBytes: number
+  playerCount: number
+  players: Player[]
+  scanResponse: Record<string, unknown>
+  auth0Id?: string | null
+}
 
 type AnalysisStartRecord = RequestMeta & {
-  serverJobId: string;
-  engineJobId: string;
-  sessionToken: string | null;
-  playerIndex: number | null;
-  model: string;
-  auth0Id?: string | null;
+  serverJobId: string
+  engineJobId: string
+  sessionToken: string | null
+  playerIndex: number | null
+  model: string
+  auth0Id?: string | null
   /** Auth0 id of whoever kicked off the job (e.g. a linked player). */
-  requestedBy?: string | null;
+  requestedBy?: string | null
   /** Linked student row — scopes the job to a player's record. */
-  studentId?: string | null;
-};
+  studentId?: string | null
+}
 
 type AnalysisStatusRecord = {
-  serverJobId: string;
-  engineJobId: string;
-  sessionToken: string | null;
-  playerIndex: number | null;
-  model: string;
-  requestedBy?: string | null;
+  serverJobId: string
+  engineJobId: string
+  sessionToken: string | null
+  playerIndex: number | null
+  model: string
+  requestedBy?: string | null
   status: {
-    stage: number;
-    stage_name: string;
-    progress: number;
-    complete: boolean;
-    video_ready: boolean;
-    summary: unknown;
-    error: string | null;
-    error_code: string | null;
-    retryable: boolean;
-  };
-};
+    stage: number
+    stage_name: string
+    progress: number
+    complete: boolean
+    video_ready: boolean
+    summary: unknown
+    error: string | null
+    error_code: string | null
+    retryable: boolean
+  }
+}
 
 /** Shared column list for the analysis_history + video_conversations dashboard
  *  query. Used via `db.unsafe(ANALYSES_SELECT_COLUMNS)` inside a select. */
@@ -81,137 +81,125 @@ export const ANALYSES_SELECT_COLUMNS = `
   v.file_name,
   v.file_size_bytes,
   v.player_count
-`;
+`
 
-const databaseUrl = (process.env.DATABASE_URL ?? "").trim();
-const supabaseProjectUrl =
-  (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() || null;
+const databaseUrl = (process.env.DATABASE_URL ?? '').trim()
+const supabaseProjectUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim() || null
 const supabasePublishableKey =
-  (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? "").trim() ||
-  null;
+  (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? '').trim() || null
 
 const sql = databaseUrl
   ? new SQL(databaseUrl, {
       idleTimeout: 300,
       max: 5,
     })
-  : null;
+  : null
 
-let initPromise: Promise<void> | null = null;
-let warnedDisabled = false;
+let initPromise: Promise<void> | null = null
+let warnedDisabled = false
 
-const isEnabled = (): boolean => sql !== null;
+const isEnabled = (): boolean => sql !== null
 
 const warnDisabled = () => {
-  if (warnedDisabled) return;
-  warnedDisabled = true;
+  if (warnedDisabled) return
+  warnedDisabled = true
   console.warn(
     JSON.stringify({
-      type: "history_store_disabled",
-      message: "DATABASE_URL not set",
+      type: 'history_store_disabled',
+      message: 'DATABASE_URL not set',
     }),
-  );
-};
+  )
+}
 
-export const withHistoryStore = async <T>(
-  fn: (db: SQL) => Promise<T>,
-): Promise<T | null> => {
+export const withHistoryStore = async <T>(fn: (db: SQL) => Promise<T>): Promise<T | null> => {
   if (!sql) {
-    warnDisabled();
-    return null;
+    warnDisabled()
+    return null
   }
 
   try {
-    return await fn(sql);
+    return await fn(sql)
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown database error";
+    const message = error instanceof Error ? error.message : 'Unknown database error'
 
-    if (message.includes("Connection closed")) {
-      console.warn(JSON.stringify({ type: "history_store_reconnecting" }));
-      initPromise = null;
+    if (message.includes('Connection closed')) {
+      console.warn(JSON.stringify({ type: 'history_store_reconnecting' }))
+      initPromise = null
       try {
-        await ensureInitialized();
-        return await fn(sql);
+        await ensureInitialized()
+        return await fn(sql)
       } catch (retryError) {
         const retryMessage =
-          retryError instanceof Error
-            ? retryError.message
-            : "Unknown database error";
+          retryError instanceof Error ? retryError.message : 'Unknown database error'
         console.error(
           JSON.stringify({
-            type: "history_store_retry_failed",
+            type: 'history_store_retry_failed',
             error: retryMessage,
           }),
-        );
-        return null;
+        )
+        return null
       }
     }
 
     console.error(
       JSON.stringify({
-        type: "history_store_operation_failed",
+        type: 'history_store_operation_failed',
         error: message,
       }),
-    );
-    return null;
+    )
+    return null
   }
-};
+}
 
-export const withHistoryStoreOrThrow = async <T>(
-  fn: (db: SQL) => Promise<T>,
-): Promise<T> => {
+export const withHistoryStoreOrThrow = async <T>(fn: (db: SQL) => Promise<T>): Promise<T> => {
   if (!sql) {
-    warnDisabled();
-    throw new Error("History store is not configured (DATABASE_URL not set)");
+    warnDisabled()
+    throw new Error('History store is not configured (DATABASE_URL not set)')
   }
 
   try {
-    return await fn(sql);
+    return await fn(sql)
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown database error";
+    const message = error instanceof Error ? error.message : 'Unknown database error'
 
-    if (message.includes("Connection closed")) {
-      console.warn(JSON.stringify({ type: "history_store_reconnecting" }));
-      initPromise = null;
+    if (message.includes('Connection closed')) {
+      console.warn(JSON.stringify({ type: 'history_store_reconnecting' }))
+      initPromise = null
       try {
-        await ensureInitialized();
-        return await fn(sql);
+        await ensureInitialized()
+        return await fn(sql)
       } catch (retryError) {
         const retryMessage =
-          retryError instanceof Error
-            ? retryError.message
-            : "Unknown database error";
+          retryError instanceof Error ? retryError.message : 'Unknown database error'
         console.error(
           JSON.stringify({
-            type: "history_store_retry_failed",
+            type: 'history_store_retry_failed',
             error: retryMessage,
           }),
-        );
-        throw retryError;
+        )
+        throw retryError
       }
     }
 
     console.error(
       JSON.stringify({
-        type: "history_store_operation_failed",
+        type: 'history_store_operation_failed',
         error: message,
       }),
-    );
-    throw error;
+    )
+    throw error
   }
-};
+}
 
 export const ensureInitialized = async () => {
-  if (!sql) return;
+  if (!sql) return
 
   if (!initPromise) {
     initPromise = (async () => {
       try {
-        await sql.connect();
+        await sql.connect()
         const inList = (vals: readonly string[]) =>
-          sql.unsafe(`(${vals.map((v) => `'${v}'`).join(",")})`);
+          sql.unsafe(`(${vals.map((v) => `'${v}'`).join(',')})`)
         await sql`
         create table if not exists video_conversations (
           session_token text primary key,
@@ -228,7 +216,7 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
-      `;
+      `
 
         await sql`
         create table if not exists analysis_history (
@@ -260,20 +248,20 @@ export const ensureInitialized = async () => {
           requested_by text,
           updated_at timestamptz not null default now()
         );
-      `;
+      `
 
         await sql`
         create index if not exists idx_video_conversations_created_at
         on video_conversations (created_at desc);
-      `;
+      `
         await sql`
         create index if not exists idx_analysis_history_requested_at
         on analysis_history (requested_at desc);
-      `;
+      `
         await sql`
         create index if not exists idx_analysis_history_session_token
         on analysis_history (session_token);
-      `;
+      `
 
         // Findings (§19): click-traceable evidence objects derived from scored
         // events. Scoped to the owning account via analysis_history (join on
@@ -298,15 +286,41 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           constraint findings_unique unique (server_job_id, id)
         );
-      `;
+      `
         await sql`
         create index if not exists idx_findings_server_job_id
         on findings (server_job_id);
-      `;
+      `
         await sql`
         create index if not exists idx_findings_created_at
         on findings (created_at desc);
-      `;
+      `
+
+      // Training objectives (§26 loop): finding → objective → training →
+      // measurement. Owned by the org, optionally tied to a student, team,
+      // or the finding that motivated it.
+      await sql`
+        create table if not exists training_objectives (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          student_id uuid,
+          team_id uuid,
+          finding_id text,
+          analysis_job_id text,
+          title text not null,
+          description text,
+          status text not null default 'active'
+            check (status in ('active', 'done', 'archived')),
+          due_on date,
+          created_by text,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_objectives_org_student
+        on training_objectives (org_auth0_id, student_id);
+      `
 
         await sql`
         create table if not exists users (
@@ -323,18 +337,18 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
-      `;
+      `
         await sql`
         create index if not exists idx_users_auth0_id
         on users (auth0_id);
-      `;
+      `
         await sql`
         create index if not exists idx_users_email
         on users (email);
-      `;
+      `
         // User roles (two faces): add role to existing DBs idempotently, then
         // attach the CHECK constraint if it isn't already there.
-        await sql`alter table users add column if not exists role text not null default 'coach';`;
+        await sql`alter table users add column if not exists role text not null default 'coach';`
         await sql`
         do $$
         begin
@@ -345,19 +359,19 @@ export const ensureInitialized = async () => {
               check (role in ${inList(USER_ROLES)});
           end if;
         end $$;
-      `;
+      `
 
         // Add auth0_id columns to existing tables (idempotent)
-        await sql`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`;
-        await sql`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`;
-        await sql`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`;
-        await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`;
+        await sql`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`
+        await sql`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
+        await sql`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`
+        await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
 
-        await sql`alter table analysis_history add column if not exists display_name text;`;
-        await sql`alter table analysis_history add column if not exists requested_by text;`;
+        await sql`alter table analysis_history add column if not exists display_name text;`
+        await sql`alter table analysis_history add column if not exists requested_by text;`
 
         // Account linking: add linked_auth0_ids column to users (idempotent)
-        await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`;
+        await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`
 
         await sql`
         create table if not exists chat_messages (
@@ -370,17 +384,17 @@ export const ensureInitialized = async () => {
           event_refs jsonb,
           created_at timestamptz not null default now()
         );
-      `;
+      `
 
         await sql`
         create index if not exists idx_chat_messages_server_job_id
         on chat_messages (server_job_id);
-      `;
+      `
 
         await sql`
         create index if not exists idx_chat_messages_auth0_id
         on chat_messages (auth0_id);
-      `;
+      `
 
         // ── Coach / Organization tables ──────────────────────────────────────────
         await sql`
@@ -405,16 +419,16 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
-      `;
+      `
         await sql`
         create index if not exists idx_students_auth0_id
         on students (auth0_id);
-      `;
-        await sql`alter table students add column if not exists account_auth0_id text;`;
+      `
+        await sql`alter table students add column if not exists account_auth0_id text;`
         await sql`
         create index if not exists idx_students_account_auth0_id
         on students (account_auth0_id);
-      `;
+      `
 
         await sql`
         create table if not exists attendance (
@@ -430,15 +444,15 @@ export const ensureInitialized = async () => {
           constraint attendance_auth0_student_session_unique
             unique (auth0_id, student_id, session_date)
         );
-      `;
+      `
         await sql`
         create index if not exists idx_attendance_auth0_id
         on attendance (auth0_id);
-      `;
+      `
         await sql`
         create index if not exists idx_attendance_session_date
         on attendance (session_date);
-      `;
+      `
 
         await sql`
         create table if not exists schedule_events (
@@ -456,15 +470,15 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
-      `;
+      `
         await sql`
         create index if not exists idx_schedule_auth0_id
         on schedule_events (auth0_id);
-      `;
+      `
         await sql`
         create index if not exists idx_schedule_starts_at
         on schedule_events (starts_at);
-      `;
+      `
 
         await sql`
         create table if not exists reports (
@@ -480,15 +494,15 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now(),
           updated_at timestamptz not null default now()
         );
-      `;
+      `
         await sql`
         create index if not exists idx_reports_auth0_id
         on reports (auth0_id);
-      `;
+      `
         await sql`
         create index if not exists idx_reports_student_id
         on reports (student_id);
-      `;
+      `
 
         await sql`
         create table if not exists performance_metrics (
@@ -504,15 +518,15 @@ export const ensureInitialized = async () => {
           constraint performance_auth0_student_metric_unique
             unique (auth0_id, student_id, metric_key, measured_at)
         );
-      `;
+      `
         await sql`
         create index if not exists idx_perf_auth0_id
         on performance_metrics (auth0_id);
-      `;
+      `
         await sql`
         create index if not exists idx_perf_student
         on performance_metrics (student_id, metric_key, measured_at desc);
-      `;
+      `
 
         // ── Org-scoped uniqueness migration ───────────────────────────────────────
         // Legacy databases created attendance/performance_metrics with uniqueness
@@ -533,7 +547,7 @@ export const ensureInitialized = async () => {
           end if;
           alter table attendance drop constraint if exists attendance_student_id_session_date_key;
         end $$
-      `;
+      `
         await sql`
         do $$
         begin
@@ -546,44 +560,42 @@ export const ensureInitialized = async () => {
           end if;
           alter table performance_metrics drop constraint if exists performance_metrics_student_id_metric_key_measured_at_key;
         end $$
-      `;
+      `
 
         await sql`
         alter table analysis_history add column if not exists student_id uuid;
-      `;
+      `
         console.info(
           JSON.stringify({
-            type: "analysis_history_student_link_ensured",
+            type: 'analysis_history_student_link_ensured',
             message:
-              "analysis_history.student_id ensured (idempotent). Existing rows stay NULL until an analysis is linked to a student.",
+              'analysis_history.student_id ensured (idempotent). Existing rows stay NULL until an analysis is linked to a student.',
           }),
-        );
+        )
         await sql`
         create index if not exists idx_analysis_history_student_id
         on analysis_history (student_id);
-      `;
+      `
       } catch (err) {
         // Reset so next call retries initialization
-        initPromise = null;
-        throw err;
+        initPromise = null
+        throw err
       }
-    })();
+    })()
   }
 
-  await initPromise;
-};
+  await initPromise
+}
 
 export const initializeHistoryStore = async (): Promise<void> => {
   await withHistoryStore(async () => {
-    await ensureInitialized();
-  });
-};
+    await ensureInitialized()
+  })
+}
 
-export const persistVideoConversation = async (
-  record: VideoConversationRecord,
-): Promise<void> => {
+export const persistVideoConversation = async (record: VideoConversationRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     await db`
       insert into video_conversations (
         session_token,
@@ -624,15 +636,13 @@ export const persistVideoConversation = async (
         supabase_project_url = excluded.supabase_project_url,
         auth0_id = coalesce(excluded.auth0_id, video_conversations.auth0_id),
         updated_at = now();
-    `;
-  });
-};
+    `
+  })
+}
 
-export const persistAnalysisStart = async (
-  record: AnalysisStartRecord,
-): Promise<void> => {
+export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     await db`
       insert into analysis_history (
         server_job_id,
@@ -676,41 +686,30 @@ export const persistAnalysisStart = async (
         requested_by = coalesce(analysis_history.requested_by, excluded.requested_by),
         student_id = coalesce(analysis_history.student_id, excluded.student_id),
         updated_at = now();
-    `;
-  });
-};
+    `
+  })
+}
 
-export const persistAnalysisStatus = async (
-  record: AnalysisStatusRecord,
-): Promise<void> => {
-  const summaryJson = record.status.summary
-    ? JSON.stringify(record.status.summary)
-    : null;
-  const errorCode =
-    record.status.error_code ??
-    (record.status.error ? "ANALYSIS_FAILED" : null);
-  const completedAt = record.status.complete ? new Date().toISOString() : null;
+export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promise<void> => {
+  const summaryJson = record.status.summary ? JSON.stringify(record.status.summary) : null
+  const errorCode = record.status.error_code ?? (record.status.error ? 'ANALYSIS_FAILED' : null)
+  const completedAt = record.status.complete ? new Date().toISOString() : null
 
   await withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     // A cancelled analysis stays cancelled: late worker completions must not
     // resurrect it (cancellation is an explicit terminal state).
-    const existing = await db<
-      { complete: boolean; error_code: string | null }[]
-    >`
+    const existing = await db<{ complete: boolean; error_code: string | null }[]>`
       select complete, error_code from analysis_history
       where server_job_id = ${record.serverJobId}
       limit 1;
-    `;
-    if (
-      existing?.[0]?.complete &&
-      existing[0].error_code === "ANALYSIS_CANCELLED"
-    ) {
+    `
+    if (existing?.[0]?.complete && existing[0].error_code === 'ANALYSIS_CANCELLED') {
       await db`
         update analysis_history set last_polled_at = now()
         where server_job_id = ${record.serverJobId};
-      `;
-      return;
+      `
+      return
     }
     await db`
       insert into analysis_history (
@@ -770,62 +769,53 @@ export const persistAnalysisStatus = async (
         last_polled_at = now(),
         completed_at = coalesce(analysis_history.completed_at, excluded.completed_at),
         updated_at = now();
-    `;
-  });
+    `
+  })
 
   // Findings are final only on completion — persist them once (replace any
   // prior rows for idempotency across the worker + poll double-persist).
-  const summary = record.status.summary as { findings?: unknown } | null;
+  const summary = record.status.summary as { findings?: unknown } | null
   if (record.status.complete && Array.isArray(summary?.findings)) {
-    await persistFindings(
-      record.serverJobId,
-      summary.findings as FindingRecord[],
-    );
+    await persistFindings(record.serverJobId, summary.findings as FindingRecord[])
   }
-};
+}
 
 export type FindingRecord = {
-  id: string;
-  category?: string | null;
-  start_ms?: number | null;
-  end_ms?: number | null;
-  confidence?: number | null;
-  confidence_band?: string | null;
-  severity?: string | null;
-  observation?: string | null;
-  feedback?: string | null;
-  form_score?: number | null;
-  evidence_frames?: unknown;
-  measured_at_timestamp?: number | null;
-  model_versions?: unknown;
-  review_state?: string | null;
-};
+  id: string
+  category?: string | null
+  start_ms?: number | null
+  end_ms?: number | null
+  confidence?: number | null
+  confidence_band?: string | null
+  severity?: string | null
+  observation?: string | null
+  feedback?: string | null
+  form_score?: number | null
+  evidence_frames?: unknown
+  measured_at_timestamp?: number | null
+  model_versions?: unknown
+  review_state?: string | null
+}
 
 const findingText = (value: unknown, max = 2000): string | null => {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, max) : null;
-};
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, max) : null
+}
 
 const findingNumber = (value: unknown): number | null => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value;
-};
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return value
+}
 
 /** Replace an analysis's findings (idempotent; safe to call per persist). */ export const persistFindings =
   async (serverJobId: string, findings: FindingRecord[]): Promise<void> => {
     const rows = (Array.isArray(findings) ? findings : [])
-      .filter(
-        (f) =>
-          f &&
-          typeof f.id === "string" &&
-          f.id.length > 0 &&
-          f.id.length <= 200,
-      )
-      .slice(0, 500);
+      .filter((f) => f && typeof f.id === 'string' && f.id.length > 0 && f.id.length <= 200)
+      .slice(0, 500)
     await withHistoryStore(async (db) => {
-      await ensureInitialized();
-      await db`delete from findings where server_job_id = ${serverJobId};`;
+      await ensureInitialized()
+      await db`delete from findings where server_job_id = ${serverJobId};`
       for (const f of rows) {
         await db`
         insert into findings (
@@ -835,7 +825,7 @@ const findingNumber = (value: unknown): number | null => {
         ) values (
           ${f.id},
           ${serverJobId},
-          ${findingText(f.category, 120) ?? "technique"},
+          ${findingText(f.category, 120) ?? 'technique'},
           ${findingNumber(f.start_ms)},
           ${findingNumber(f.end_ms)},
           ${findingNumber(f.confidence)},
@@ -846,24 +836,67 @@ const findingNumber = (value: unknown): number | null => {
           ${findingNumber(f.form_score)},
           ${JSON.stringify(Array.isArray(f.evidence_frames) ? f.evidence_frames.slice(0, 50) : [])}::jsonb,
           ${findingNumber(f.measured_at_timestamp)},
-          ${JSON.stringify(f.model_versions && typeof f.model_versions === "object" ? f.model_versions : {})}::jsonb,
-          ${findingText(f.review_state, 20) ?? "auto"}
+          ${JSON.stringify(f.model_versions && typeof f.model_versions === 'object' ? f.model_versions : {})}::jsonb,
+          ${findingText(f.review_state, 20) ?? 'auto'}
         )
         on conflict (server_job_id, id) do nothing;
-      `;
+      `
       }
-    });
-  };
+    })
+  }
 
 export type FindingsTrendPoint = {
-  day: string;
-  category: string;
-  count: number;
-  needs_review: number;
-};
+  day: string
+  category: string
+  count: number
+  needs_review: number
+}
 
-export const REVIEW_STATES = ["auto", "approved", "flagged"] as const;
-export type ReviewState = (typeof REVIEW_STATES)[number];
+export type StoredFinding = {
+  id: string
+  server_job_id: string
+  category: string | null
+  start_ms: number | null
+  end_ms: number | null
+  confidence: number | null
+  confidence_band: string | null
+  severity: string | null
+  observation: string | null
+  feedback: string | null
+  form_score: number | null
+  evidence_frames: unknown
+  measured_at_timestamp: number | null
+  model_versions: unknown
+  review_state: string
+  created_at: string
+}
+
+/** Recent findings for one student's analyses (objective linking, §26). */
+export const getStudentFindings = async (
+  auth0Id: string,
+  studentId: string,
+  limit = 50,
+): Promise<StoredFinding[]> => {
+  const capped = Math.min(Math.max(limit, 1), 200)
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<StoredFinding[]>`
+      select f.id, f.server_job_id, f.category, f.start_ms, f.end_ms,
+        f.confidence, f.confidence_band, f.severity, f.observation,
+        f.feedback, f.form_score, f.evidence_frames, f.measured_at_timestamp,
+        f.model_versions, f.review_state, f.created_at
+      from findings f
+      join analysis_history a on a.server_job_id = f.server_job_id
+      where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}::uuid
+      order by f.created_at desc
+      limit ${capped};
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
+export type ReviewState = (typeof REVIEW_STATES)[number]
 
 /** Human review transition (approve/flag). Only from auto/needs_review. */
 export const reviewFinding = async (
@@ -873,7 +906,7 @@ export const reviewFinding = async (
 ): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       update findings set review_state = ${reviewState}
       where id = ${findingId}
@@ -882,27 +915,27 @@ export const reviewFinding = async (
           select server_job_id from analysis_history where auth0_id = ${auth0Id}
         )
       returning id;
-    `;
-      return Boolean(rows?.[0]);
+    `
+      return Boolean(rows?.[0])
     })) ?? false
-  );
-};
+  )
+}
 
 /** Per-day finding counts for an account's analyses (longitudinal §26). */
 export const getFindingsTrend = async (
   auth0Id: string,
   opts: {
-    days?: number;
-    category?: string | null;
-    severity?: string | null;
-    studentId?: string | null;
-    teamId?: string | null;
+    days?: number
+    category?: string | null
+    severity?: string | null
+    studentId?: string | null
+    teamId?: string | null
   } = {},
 ): Promise<FindingsTrendPoint[]> => {
-  const days = Math.min(Math.max(opts.days ?? 30, 1), 365);
+  const days = Math.min(Math.max(opts.days ?? 30, 1), 365)
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const rows = await db<FindingsTrendPoint[]>`
       select
         to_char(date_trunc('day', f.created_at), 'YYYY-MM-DD') as day,
@@ -920,87 +953,78 @@ export const getFindingsTrend = async (
         and (${opts.teamId ?? null}::uuid is null or s.team_id = ${opts.teamId ?? null}::uuid)
       group by 1, 2
       order by 1 asc, 2 asc;
-    `;
-      return rows ?? [];
+    `
+      return rows ?? []
     })) ?? []
-  );
-};
+  )
+}
 
 /** Delete an analysis and its derived rows (retention §30).
  * Removes history, findings, and chat messages. Engine artifacts expire via
  * job TTL; the rendered video 404s once the engine job is failed/expired. */
-export const deleteAnalysis = async (
-  auth0Id: string,
-  serverJobId: string,
-): Promise<boolean> => {
+export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const owned = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
       limit 1;
-    `;
-      if (!owned?.[0]) return false;
-      await db`delete from findings where server_job_id = ${serverJobId};`;
-      await db`delete from chat_messages where server_job_id = ${serverJobId};`;
-      await db`delete from analysis_history where server_job_id = ${serverJobId};`;
-      return true;
+    `
+      if (!owned?.[0]) return false
+      await db`delete from findings where server_job_id = ${serverJobId};`
+      await db`delete from chat_messages where server_job_id = ${serverJobId};`
+      await db`delete from analysis_history where server_job_id = ${serverJobId};`
+      return true
     })) ?? false
-  );
-};
+  )
+}
 
 /** Daily per-org analysis cap (§17 precursor). */
 export const orgDailyAnalysisLimit = (): number => {
-  const raw = Number(process.env.ORG_DAILY_ANALYSIS_LIMIT ?? 50);
-  return Number.isFinite(raw)
-    ? Math.min(Math.max(Math.floor(raw), 1), 10000)
-    : 50;
-};
+  const raw = Number(process.env.ORG_DAILY_ANALYSIS_LIMIT ?? 50)
+  return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 1), 10000) : 50
+}
 
 /** Analyses started by this org since midnight UTC. Fail-open without a DB. */
-export const countTodayOrgAnalyses = async (
-  orgAuth0Id: string,
-): Promise<number | null> => {
+export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<{ count: number }[]>`
       select count(*)::int as count from analysis_history
       where auth0_id = ${orgAuth0Id}
         and requested_at >= date_trunc('day', now());
-    `;
-    return rows?.[0]?.count ?? 0;
-  });
-};
+    `
+    return rows?.[0]?.count ?? 0
+  })
+}
 
 /** Daily per-org quota verdict. Fail-open without org identity or DB. */
 export const checkOrgDailyQuota = async (
   orgAuth0Id: string | null,
 ): Promise<{ allowed: boolean; retryAfterSec: number }> => {
-  if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 };
-  const count = await countTodayOrgAnalyses(orgAuth0Id);
+  if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 }
+  const count = await countTodayOrgAnalyses(orgAuth0Id)
   if (count === null || count < orgDailyAnalysisLimit()) {
-    return { allowed: true, retryAfterSec: 0 };
+    return { allowed: true, retryAfterSec: 0 }
   }
-  const now = Date.now();
+  const now = Date.now()
   const midnightUtc = Date.UTC(
     new Date(now).getUTCFullYear(),
     new Date(now).getUTCMonth(),
     new Date(now).getUTCDate() + 1,
-  );
+  )
   return {
     allowed: false,
     retryAfterSec: Math.max(1, Math.ceil((midnightUtc - now) / 1000)),
-  };
-};
+  }
+}
 
 /** Retention window for analysis artifacts (days). */
 export const retentionDays = (): number => {
-  const raw = Number(process.env.RETENTION_DAYS ?? 365);
-  return Number.isFinite(raw)
-    ? Math.min(Math.max(Math.floor(raw), 30), 3650)
-    : 365;
-};
+  const raw = Number(process.env.RETENTION_DAYS ?? 365)
+  return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 30), 3650) : 365
+}
 
 /**
  * Delete analyses (plus findings + chat) older than the retention window.
@@ -1008,29 +1032,27 @@ export const retentionDays = (): number => {
  * the number of analyses pruned.
  */
 export const pruneRetention = async (): Promise<number> => {
-  const days = retentionDays();
+  const days = retentionDays()
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const stale = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where requested_at < now() - (${days} || ' days')::interval;
-    `;
-      if (!stale?.length) return 0;
-      const ids = stale.map((r) => r.server_job_id);
-      await db`delete from findings where server_job_id = any(${ids});`;
-      await db`delete from chat_messages where server_job_id = any(${ids});`;
-      await db`delete from analysis_history where server_job_id = any(${ids});`;
-      return ids.length;
+    `
+      if (!stale?.length) return 0
+      const ids = stale.map((r) => r.server_job_id)
+      await db`delete from findings where server_job_id = any(${ids});`
+      await db`delete from chat_messages where server_job_id = any(${ids});`
+      await db`delete from analysis_history where server_job_id = any(${ids});`
+      return ids.length
     })) ?? 0
-  );
-};
+  )
+}
 
-export const markAnalysisDownloaded = async (
-  serverJobId: string,
-): Promise<void> => {
+export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     await db`
       update analysis_history
       set
@@ -1038,9 +1060,9 @@ export const markAnalysisDownloaded = async (
         last_downloaded_at = now(),
         updated_at = now()
       where server_job_id = ${serverJobId};
-    `;
-  });
-};
+    `
+  })
+}
 
 export const updateAnalysisDisplayName = async (
   auth0Id: string,
@@ -1048,17 +1070,17 @@ export const updateAnalysisDisplayName = async (
   displayName: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set display_name = ${displayName || null}, updated_at = now()
       where server_job_id = ${serverJobId}
         and auth0_id = ${auth0Id}
       returning *;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
 export const linkAnalysisToStudent = async (
   auth0Id: string,
@@ -1066,39 +1088,39 @@ export const linkAnalysisToStudent = async (
   studentId: string | null,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set student_id = ${studentId ?? null}, updated_at = now()
       where server_job_id = ${serverJobId}
         and auth0_id = ${auth0Id}
       returning *;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
-export const historyStoreEnabled = isEnabled;
+export const historyStoreEnabled = isEnabled
 
 export const shutdownHistoryStore = async (): Promise<void> => {
-  if (sql) await sql.close();
-};
+  if (sql) await sql.close()
+}
 
 // ── User Management ─────────────────────────────────────────────────────────
 
 export type UserRecord = {
-  id: string;
-  auth0_id: string;
-  email: string | null;
-  name: string | null;
-  nickname: string | null;
-  picture: string | null;
-  email_verified: boolean;
-  linked_auth0_ids: string[];
-  role: "coach" | "player";
-  created_at: string;
-  updated_at: string;
-};
+  id: string
+  auth0_id: string
+  email: string | null
+  name: string | null
+  nickname: string | null
+  picture: string | null
+  email_verified: boolean
+  linked_auth0_ids: string[]
+  role: 'coach' | 'player'
+  created_at: string
+  updated_at: string
+}
 
 /**
  * Links a user to the student row matching their email (two-faces player flow).
@@ -1106,45 +1128,41 @@ export type UserRecord = {
  * a student record. Marks the student as linked to this account and flips the
  * user's role to `player`.
  */
-const linkPlayerToStudent = async (
-  db: SQL,
-  sub: string,
-  email: string,
-): Promise<boolean> => {
+const linkPlayerToStudent = async (db: SQL, sub: string, email: string): Promise<boolean> => {
   const matches = await db<{ id: string }[]>`
     select id from students
     where email = ${email}
       and (account_auth0_id is null or account_auth0_id = ${sub})
     limit 1;
-  `;
-  if (!matches?.[0]) return false;
+  `
+  if (!matches?.[0]) return false
 
   await db`
     update students set account_auth0_id = ${sub}, updated_at = now()
     where id = ${matches[0].id};
-  `;
+  `
   await db`
     update users set role = 'player', updated_at = now()
     where auth0_id = ${sub};
-  `;
-  return true;
-};
+  `
+  return true
+}
 
 export const upsertUser = async (user: {
-  sub: string;
-  email?: string;
-  name?: string;
-  nickname?: string;
-  picture?: string;
-  email_verified?: boolean;
+  sub: string
+  email?: string
+  name?: string
+  nickname?: string
+  picture?: string
+  email_verified?: boolean
 }): Promise<UserRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
 
     // Check if a user with this auth0_id already exists
     const existingById = await db<UserRecord[]>`
       select * from users where auth0_id = ${user.sub} limit 1;
-    `;
+    `
     if (existingById?.[0]) {
       // Existing user — update profile fields
       const rows = await db<UserRecord[]>`
@@ -1157,15 +1175,15 @@ export const upsertUser = async (user: {
           updated_at = now()
         where auth0_id = ${user.sub}
         returning *;
-      `;
-      return rows?.[0] ?? null;
+      `
+      return rows?.[0] ?? null
     }
 
     // No existing user with this auth0_id — check if email matches an existing account
     if (user.email) {
       const existingByEmail = await db<UserRecord[]>`
         select * from users where email = ${user.email} limit 1;
-      `;
+      `
       if (existingByEmail?.[0]) {
         // Found existing account by email — link the new provider
         // only when this login was email-verified. Unverified emails
@@ -1173,8 +1191,8 @@ export const upsertUser = async (user: {
         // verified flag to unverified.
         const mergedLinked = user.email_verified
           ? [...(existingByEmail[0].linked_auth0_ids || []), user.sub]
-          : existingByEmail[0].linked_auth0_ids;
-        const uniqueLinked = [...new Set(mergedLinked)];
+          : existingByEmail[0].linked_auth0_ids
+        const uniqueLinked = [...new Set(mergedLinked)]
         const rows = await db<UserRecord[]>`
           update users set
             linked_auth0_ids = ${uniqueLinked},
@@ -1185,8 +1203,8 @@ export const upsertUser = async (user: {
             updated_at = now()
           where id = ${existingByEmail[0].id}
           returning *;
-        `;
-        return rows?.[0] ?? null;
+        `
+        return rows?.[0] ?? null
       }
     }
 
@@ -1197,33 +1215,31 @@ export const upsertUser = async (user: {
       insert into users (auth0_id, email, name, nickname, picture, email_verified)
       values (${user.sub}, ${user.email || null}, ${user.name || null}, ${user.nickname || null}, ${user.picture || null}, ${user.email_verified === true})
       returning *;
-    `;
-    const created = rows?.[0] ?? null;
+    `
+    const created = rows?.[0] ?? null
 
     if (created && user.email && user.email_verified === true) {
-      const linked = await linkPlayerToStudent(db, user.sub, user.email);
+      const linked = await linkPlayerToStudent(db, user.sub, user.email)
       if (linked) {
         const fresh = await db<UserRecord[]>`
           select * from users where auth0_id = ${user.sub} limit 1;
-        `;
-        return fresh?.[0] ?? created;
+        `
+        return fresh?.[0] ?? created
       }
     }
-    return created;
-  });
-};
+    return created
+  })
+}
 
-export const getUserByAuth0Id = async (
-  auth0Id: string,
-): Promise<UserRecord | null> => {
+export const getUserByAuth0Id = async (auth0Id: string): Promise<UserRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<UserRecord[]>`
       select * from users where auth0_id = ${auth0Id} limit 1;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
 /**
  * Updates editable profile fields for the primary user record (resolving linked
@@ -1232,18 +1248,18 @@ export const getUserByAuth0Id = async (
 export const updateUserProfile = async (
   auth0Id: string,
   input: {
-    name?: string | null;
-    nickname?: string | null;
-    picture?: string | null;
+    name?: string | null
+    nickname?: string | null
+    picture?: string | null
   },
 ): Promise<UserRecord | null> => {
-  const primary = (await resolveAuth0Id(auth0Id)) ?? auth0Id;
+  const primary = (await resolveAuth0Id(auth0Id)) ?? auth0Id
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const existing = await db<UserRecord[]>`
       select * from users where auth0_id = ${primary} limit 1;
-    `;
-    if (!existing?.[0]) return null;
+    `
+    if (!existing?.[0]) return null
     const rows = await db<UserRecord[]>`
       update users set
         name = ${input.name === undefined ? existing[0].name : input.name},
@@ -1252,10 +1268,10 @@ export const updateUserProfile = async (
         updated_at = now()
       where auth0_id = ${primary}
       returning *;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
 /**
  * Resolves an auth0_id to the primary user record. Handles linked accounts:
@@ -1264,53 +1280,53 @@ export const updateUserProfile = async (
  */
 export const resolveAuth0Id = async (auth0Id: string): Promise<string> => {
   const result = await withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<{ auth0_id: string }[]>`
       select auth0_id from users
       where auth0_id = ${auth0Id}
          or ${auth0Id} = any(linked_auth0_ids)
       limit 1;
-    `;
-    return rows?.[0]?.auth0_id ?? auth0Id;
-  });
-  return result ?? auth0Id;
-};
+    `
+    return rows?.[0]?.auth0_id ?? auth0Id
+  })
+  return result ?? auth0Id
+}
 
 // ── Dashboard Queries ───────────────────────────────────────────────────────
 
 export type DashboardAnalysis = {
-  server_job_id: string;
-  auth0_id: string;
-  engine_job_id: string;
-  session_token: string | null;
-  player_index: number | null;
-  model: string;
-  stage: number | null;
-  stage_name: string | null;
-  progress: number | null;
-  complete: boolean;
-  video_ready: boolean;
-  summary_json: Record<string, unknown> | null;
-  error_code: string | null;
-  error_message: string | null;
-  requested_at: string;
-  completed_at: string | null;
-  download_count: number;
-  display_name: string | null;
-  requested_by: string | null;
-  file_name: string | null;
-  file_size_bytes: number | null;
-  player_count: number | null;
-  student_id: string | null;
-};
+  server_job_id: string
+  auth0_id: string
+  engine_job_id: string
+  session_token: string | null
+  player_index: number | null
+  model: string
+  stage: number | null
+  stage_name: string | null
+  progress: number | null
+  complete: boolean
+  video_ready: boolean
+  summary_json: Record<string, unknown> | null
+  error_code: string | null
+  error_message: string | null
+  requested_at: string
+  completed_at: string | null
+  download_count: number
+  display_name: string | null
+  requested_by: string | null
+  file_name: string | null
+  file_size_bytes: number | null
+  player_count: number | null
+  student_id: string | null
+}
 
 export type DashboardStats = {
-  total_analyses: number;
-  completed_analyses: number;
-  in_progress_analyses: number;
-  failed_analyses: number;
-  total_downloads: number;
-};
+  total_analyses: number
+  completed_analyses: number
+  in_progress_analyses: number
+  failed_analyses: number
+  total_downloads: number
+}
 
 export const getUserAnalyses = async (
   auth0Id: string,
@@ -1320,8 +1336,8 @@ export const getUserAnalyses = async (
 ): Promise<DashboardAnalysis[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
-      const unlinkedFilter = opts.unlinked ? "and a.student_id is null" : "";
+      await ensureInitialized()
+      const unlinkedFilter = opts.unlinked ? 'and a.student_id is null' : ''
       const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
@@ -1330,51 +1346,49 @@ export const getUserAnalyses = async (
         ${db.unsafe(unlinkedFilter)}
       order by a.requested_at desc
       limit ${limit} offset ${offset};
-    `;
-      return rows ?? [];
+    `
+      return rows ?? []
     })) ?? []
-  );
-};
+  )
+}
 
 export const getUserAnalysisById = async (
   auth0Id: string,
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id} and a.server_job_id = ${serverJobId}
       limit 1;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
 export const getAnalysisByServerJobId = async (
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.server_job_id = ${serverJobId}
       limit 1;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
-export const getUserStats = async (
-  auth0Id: string,
-): Promise<DashboardStats> => {
+export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const rows = await db<DashboardStats[]>`
       select
         count(*)::int as total_analyses,
@@ -1384,7 +1398,7 @@ export const getUserStats = async (
         coalesce(sum(download_count), 0)::int as total_downloads
       from analysis_history
       where auth0_id = ${auth0Id};
-    `;
+    `
       return (
         rows?.[0] ?? {
           total_analyses: 0,
@@ -1393,7 +1407,7 @@ export const getUserStats = async (
           failed_analyses: 0,
           total_downloads: 0,
         }
-      );
+      )
     })) ?? {
       total_analyses: 0,
       completed_analyses: 0,
@@ -1401,32 +1415,32 @@ export const getUserStats = async (
       failed_analyses: 0,
       total_downloads: 0,
     }
-  );
-};
+  )
+}
 
 // ── Chat Messages ────────────────────────────────────────────────────────────
 
 export type ChatMessageRecord = {
-  id: string;
-  server_job_id: string;
-  auth0_id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp_refs: number[] | null;
-  event_refs: number[] | null;
-  created_at: string;
-};
+  id: string
+  server_job_id: string
+  auth0_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp_refs: number[] | null
+  event_refs: number[] | null
+  created_at: string
+}
 
 export const saveChatMessage = async (msg: {
-  serverJobId: string;
-  auth0Id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestampRefs?: number[];
-  eventRefs?: number[];
+  serverJobId: string
+  auth0Id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestampRefs?: number[]
+  eventRefs?: number[]
 }): Promise<ChatMessageRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized();
+    await ensureInitialized()
     const rows = await db<ChatMessageRecord[]>`
       insert into chat_messages (server_job_id, auth0_id, role, content, timestamp_refs, event_refs)
       values (
@@ -1438,10 +1452,10 @@ export const saveChatMessage = async (msg: {
         ${msg.eventRefs ? JSON.stringify(msg.eventRefs) : null}::jsonb
       )
       returning *;
-    `;
-    return rows?.[0] ?? null;
-  });
-};
+    `
+    return rows?.[0] ?? null
+  })
+}
 
 export const getChatMessages = async (
   serverJobId: string,
@@ -1449,14 +1463,14 @@ export const getChatMessages = async (
 ): Promise<ChatMessageRecord[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized();
+      await ensureInitialized()
       const rows = await db<ChatMessageRecord[]>`
       select * from chat_messages
       where server_job_id = ${serverJobId}
         and auth0_id = ${auth0Id}
       order by created_at asc;
-    `;
-      return rows ?? [];
+    `
+      return rows ?? []
     })) ?? []
-  );
-};
+  )
+}

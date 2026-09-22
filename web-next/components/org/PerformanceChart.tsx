@@ -1,13 +1,13 @@
-"use client"
+'use client'
 
-import { Line, LineChart, XAxis, YAxis, CartesianGrid } from "recharts"
+import { Line, LineChart, XAxis, YAxis, CartesianGrid } from 'recharts'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/9ui/ui/chart"
-import { formatDateShort } from "@/lib/date"
+} from '@/components/9ui/ui/chart'
+import { formatDateShort } from '@/lib/date'
 
 export default function PerformanceChart({
   data,
@@ -30,10 +30,16 @@ export default function PerformanceChart({
           minTickGap={24}
           tickFormatter={(v: string) => formatDateShort(v)}
         />
-        <YAxis tickLine={false} axisLine={false} tickMargin={8} width={44} domain={["auto", "auto"]} />
+        <YAxis
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          width={44}
+          domain={['auto', 'auto']}
+        />
         <ChartTooltip
-          content={<ChartTooltipContent style={{ background: "var(--color-popover)" }} />}
-          cursor={{ stroke: "var(--color-border)", strokeDasharray: "3 3" }}
+          content={<ChartTooltipContent style={{ background: 'var(--color-popover)' }} />}
+          cursor={{ stroke: 'var(--color-border)', strokeDasharray: '3 3' }}
         />
         {keys.map((key) => (
           <Line

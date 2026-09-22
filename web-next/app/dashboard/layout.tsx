@@ -1,48 +1,44 @@
-import { getSession } from "@/lib/session";
-import { getUserProfile } from "@/lib/api";
-import { getMyOrgsCached, getOrgContext } from "@/lib/serverData";
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import UserAvatar from "@/components/UserAvatar";
-import DashboardNav from "@/components/DashboardNav";
-import OrgSwitcher from "@/components/org/OrgSwitcher";
+import { getSession } from '@/lib/session'
+import { getUserProfile } from '@/lib/api'
+import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import UserAvatar from '@/components/UserAvatar'
+import DashboardNav from '@/components/DashboardNav'
+import OrgSwitcher from '@/components/org/OrgSwitcher'
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  let session;
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  let session
   try {
-    session = await getSession();
+    session = await getSession()
   } catch (error) {
-    console.error("Failed to get auth session:", error);
-    redirect("/auth/login");
+    console.error('Failed to get auth session:', error)
+    redirect('/auth/login')
   }
 
   if (!session) {
-    redirect("/auth/login");
+    redirect('/auth/login')
   }
 
   // Player accounts belong on /player, not the coach dashboard.
   try {
-    const { user } = await getUserProfile(session.user.sub);
-    if (user?.role === "player") redirect("/player");
+    const { user } = await getUserProfile(session.user.sub)
+    if (user?.role === 'player') redirect('/player')
   } catch (error) {
-    console.error("Failed to resolve dashboard role:", error);
+    console.error('Failed to resolve dashboard role:', error)
   }
 
   // Org switcher data — per-request cached via React.cache (getMyOrgsCached /
   // getOrgContext share the same deduped fetch). Failures fall back to no
   // switcher so a single-coach never regresses.
-  let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>["orgs"] = [];
-  let switcherCurrent = session.user.sub;
+  let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>['orgs'] = []
+  let switcherCurrent = session.user.sub
   try {
-    const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()]);
-    switcherCurrent = ctx.auth0Id;
-    switcherOrgs = myOrgs.orgs;
+    const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
+    switcherCurrent = ctx.auth0Id
+    switcherOrgs = myOrgs.orgs
   } catch (error) {
-    console.error("Failed to resolve org switcher:", error);
+    console.error('Failed to resolve org switcher:', error)
   }
 
   return (
@@ -76,9 +72,7 @@ export default async function DashboardLayout({
               <p className="truncate text-sm font-medium text-foreground leading-none">
                 {session.user.name || session.user.email}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {session.user.email}
-              </p>
+              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
             </div>
           </div>
           <a
@@ -93,5 +87,5 @@ export default async function DashboardLayout({
       {/* Main content */}
       <main className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
     </div>
-  );
+  )
 }

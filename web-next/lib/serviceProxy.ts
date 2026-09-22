@@ -7,9 +7,9 @@
  * /api/email/:auth0Id/... → ["api", "email", :auth0Id, ...]
  */
 export function resourceAuth0Id(path: string[]): string | undefined {
-  if (path.length >= 3 && path[0] === "api" && path[1] === "org") return path[2]
-  if (path.length >= 3 && path[0] === "api" && path[1] === "email") return path[2]
-  if (path.length >= 4 && path[0] === "api" && path[1] === "auth" && path[2] === "user") {
+  if (path.length >= 3 && path[0] === 'api' && path[1] === 'org') return path[2]
+  if (path.length >= 3 && path[0] === 'api' && path[1] === 'email') return path[2]
+  if (path.length >= 4 && path[0] === 'api' && path[1] === 'auth' && path[2] === 'user') {
     return path[3]
   }
   return undefined
@@ -20,13 +20,13 @@ export function resourceAuth0Id(path: string[]): string | undefined {
  * session identity is the resource owner by definition.
  */
 export function isSelfPath(path: string[]): boolean {
-  return path.length >= 2 && path[0] === "api" && path[1] === "me"
+  return path.length >= 2 && path[0] === 'api' && path[1] === 'me'
 }
 
 /** /api/auth/sync has no path-scoped id — identity comes from body.sub. */
 export function isIdentityPath(path: string[]): boolean {
   const syncMatch =
-    path.length === 3 && path[0] === "api" && path[1] === "auth" && path[2] === "sync"
+    path.length === 3 && path[0] === 'api' && path[1] === 'auth' && path[2] === 'sync'
   return syncMatch || resourceAuth0Id(path) !== undefined || isSelfPath(path)
 }
 
@@ -51,10 +51,10 @@ export function sanitizeServicePath(path: string[]): string[] | null {
     const decoded = decodePathSegment(raw)
     if (
       decoded.length === 0 ||
-      decoded === "." ||
-      decoded === ".." ||
-      decoded.includes("/") ||
-      decoded.includes("\\")
+      decoded === '.' ||
+      decoded === '..' ||
+      decoded.includes('/') ||
+      decoded.includes('\\')
     ) {
       return null
     }

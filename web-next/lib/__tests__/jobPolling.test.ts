@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { startJobPolling } from "../jobPolling"
-import type { JobStatus } from "@/types"
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { startJobPolling } from '../jobPolling'
+import type { JobStatus } from '@/types'
 
 const mkStatus = (complete: boolean): JobStatus => ({
-  job_id: "j1",
-  state: "analyzing",
+  job_id: 'j1',
+  state: 'analyzing',
   stage: 1,
-  stage_name: "Analyzing",
+  stage_name: 'Analyzing',
   progress: complete ? 100 : 20,
   complete,
   summary: null,
@@ -17,16 +17,16 @@ const mkStatus = (complete: boolean): JobStatus => ({
 })
 
 const NETWORK_ERROR = {
-  code: "NETWORK_ERROR",
-  message: "Cannot connect to server.",
-  layer: "client",
+  code: 'NETWORK_ERROR',
+  message: 'Cannot connect to server.',
+  layer: 'client',
   retryable: true,
 } as const
 
 const FATAL_ERROR = {
-  code: "VIDEO_EXPIRED",
-  message: "Expired.",
-  layer: "engine",
+  code: 'VIDEO_EXPIRED',
+  message: 'Expired.',
+  layer: 'engine',
   retryable: false,
 } as const
 
@@ -43,13 +43,13 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("startJobPolling", () => {
-  it("polls immediately and reports each status", async () => {
+describe('startJobPolling', () => {
+  it('polls immediately and reports each status', async () => {
     fetchStatus.mockResolvedValue(mkStatus(false))
     const onStatus = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       onStatus,
@@ -66,15 +66,13 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("completes once isComplete becomes true and stops polling", async () => {
-    fetchStatus
-      .mockResolvedValueOnce(mkStatus(false))
-      .mockResolvedValueOnce(mkStatus(true))
+  it('completes once isComplete becomes true and stops polling', async () => {
+    fetchStatus.mockResolvedValueOnce(mkStatus(false)).mockResolvedValueOnce(mkStatus(true))
     const onStatus = vi.fn()
     const onComplete = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       onStatus,
@@ -92,7 +90,7 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("retries transient errors with backoff, then reports success", async () => {
+  it('retries transient errors with backoff, then reports success', async () => {
     fetchStatus
       .mockRejectedValueOnce(NETWORK_ERROR)
       .mockRejectedValueOnce(NETWORK_ERROR)
@@ -104,7 +102,7 @@ describe("startJobPolling", () => {
     const onComplete = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       intervalMs: 2000,
@@ -136,13 +134,13 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("gives up permanently after maxFailures consecutive transient errors", async () => {
+  it('gives up permanently after maxFailures consecutive transient errors', async () => {
     fetchStatus.mockRejectedValue(NETWORK_ERROR)
     const onTransient = vi.fn()
     const onError = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       intervalMs: 1000,
@@ -161,8 +159,8 @@ describe("startJobPolling", () => {
 
     await vi.advanceTimersByTimeAsync(1000)
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError.mock.calls[0][0].kind).toBe("permanent")
-    expect(onError.mock.calls[0][0].error.code).toBe("NETWORK_ERROR")
+    expect(onError.mock.calls[0][0].kind).toBe('permanent')
+    expect(onError.mock.calls[0][0].error.code).toBe('NETWORK_ERROR')
     expect(onError.mock.calls[0][0].hadSucceeded).toBe(false)
 
     await vi.advanceTimersByTimeAsync(10 * 1000)
@@ -171,12 +169,12 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("gives up immediately on a non-retryable error", async () => {
+  it('gives up immediately on a non-retryable error', async () => {
     fetchStatus.mockRejectedValue(FATAL_ERROR)
     const onError = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       onTransient: () => {},
@@ -185,18 +183,18 @@ describe("startJobPolling", () => {
     await flush()
 
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError.mock.calls[0][0].kind).toBe("permanent")
+    expect(onError.mock.calls[0][0].kind).toBe('permanent')
     expect(onError.mock.calls[0][0].error.retryable).toBe(false)
 
     c.stop()
   })
 
-  it("gives up on the first failure when giveUpOnFirstFailure is set", async () => {
+  it('gives up on the first failure when giveUpOnFirstFailure is set', async () => {
     fetchStatus.mockRejectedValue(NETWORK_ERROR)
     const onError = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       giveUpOnFirstFailure: true,
@@ -211,13 +209,13 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("fires a timeout error after timeoutMs elapses", async () => {
+  it('fires a timeout error after timeoutMs elapses', async () => {
     fetchStatus.mockResolvedValue(mkStatus(false))
     const onError = vi.fn()
     const onComplete = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       intervalMs: 1000,
@@ -230,8 +228,8 @@ describe("startJobPolling", () => {
 
     await vi.advanceTimersByTimeAsync(6000)
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError.mock.calls[0][0].kind).toBe("timeout")
-    expect(onError.mock.calls[0][0].error.code).toBe("ANALYSIS_TIMEOUT")
+    expect(onError.mock.calls[0][0].kind).toBe('timeout')
+    expect(onError.mock.calls[0][0].error.code).toBe('ANALYSIS_TIMEOUT')
     expect(onComplete).not.toHaveBeenCalled()
 
     const callsAtTimeout = fetchStatus.mock.calls.length
@@ -241,12 +239,12 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("fires the stuck warning once warnAfterMs elapses", async () => {
+  it('fires the stuck warning once warnAfterMs elapses', async () => {
     fetchStatus.mockResolvedValue(mkStatus(false))
     const onWarn = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       intervalMs: 2000,
@@ -265,14 +263,19 @@ describe("startJobPolling", () => {
     c.stop()
   })
 
-  it("stop() halts polling and drops in-flight results", async () => {
+  it('stop() halts polling and drops in-flight results', async () => {
     let resolveStatus: (s: JobStatus) => void
-    fetchStatus.mockImplementation(() => new Promise<JobStatus>((res) => { resolveStatus = res }))
+    fetchStatus.mockImplementation(
+      () =>
+        new Promise<JobStatus>((res) => {
+          resolveStatus = res
+        }),
+    )
     const onStatus = vi.fn()
     const onError = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       onStatus,
@@ -291,13 +294,13 @@ describe("startJobPolling", () => {
     expect(fetchStatus).toHaveBeenCalledTimes(1)
   })
 
-  it("refresh() re-polls immediately and resets the timeout clock", async () => {
+  it('refresh() re-polls immediately and resets the timeout clock', async () => {
     fetchStatus.mockResolvedValue(mkStatus(false))
     const onStatus = vi.fn()
     const onError = vi.fn()
 
     const c = startJobPolling({
-      jobId: "j1",
+      jobId: 'j1',
       fetchStatus,
       isComplete: (s) => s.complete,
       intervalMs: 2000,

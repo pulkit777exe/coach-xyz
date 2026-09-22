@@ -1,4 +1,4 @@
-const pad = (n: number) => String(n).padStart(2, "0")
+const pad = (n: number) => String(n).padStart(2, '0')
 
 /** Local `YYYY-MM-DD` for a Date (calendar day in the user's timezone). */
 export function toISODate(d: Date): string {
@@ -18,26 +18,26 @@ function localDay(iso: string): Date {
 
 /** "Sep 13, 2026" — accepts `YYYY-MM-DD` or a full ISO datetime. */
 export function formatDateMed(iso: string): string {
-  return localDay(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  return localDay(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   })
 }
 
 /** "September 13, 2026" — accepts `YYYY-MM-DD` or a full ISO datetime. */
 export function formatDateLong(iso: string): string {
-  return localDay(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
+  return localDay(iso).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
   })
 }
 
 /** "Sep 13" — accepts `YYYY-MM-DD` or a full ISO datetime. */
 export function formatDateShort(iso: string): string {
   const d = iso.length === 10 ? localDay(iso) : new Date(iso)
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 /**

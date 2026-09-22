@@ -15,7 +15,12 @@ interface ChatLayoutProps {
   onBackToResults: () => void
 }
 
-export default function ChatLayout({ auth0Id, jobId, jobStatus, onBackToResults }: ChatLayoutProps) {
+export default function ChatLayout({
+  auth0Id,
+  jobId,
+  jobStatus,
+  onBackToResults,
+}: ChatLayoutProps) {
   const videoRef = useRef<VideoPlayerHandle>(null)
 
   const handleSeekTo = (timestamp: number) => {
@@ -27,7 +32,9 @@ export default function ChatLayout({ auth0Id, jobId, jobStatus, onBackToResults 
       {/* Header */}
       <header className="shrink-0 border-b border-border bg-background/80 backdrop-blur-md z-50">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 lg:px-6">
-          <Link href="/" className="font-semibold text-lg text-foreground">coach.xyz</Link>
+          <Link href="/" className="font-semibold text-lg text-foreground">
+            coach.xyz
+          </Link>
           <div className="flex items-center gap-4">
             <button
               onClick={onBackToResults}
@@ -60,17 +67,23 @@ export default function ChatLayout({ auth0Id, jobId, jobStatus, onBackToResults 
               <div className="flex items-center gap-6 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground uppercase tracking-wider">Score</span>
-                  <span className="font-semibold text-lg text-foreground">{jobStatus.summary.form_score}/10</span>
+                  <span className="font-semibold text-lg text-foreground">
+                    {jobStatus.summary.form_score}/10
+                  </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground uppercase tracking-wider">Events</span>
-                  <span className="font-semibold text-lg text-foreground">{jobStatus.summary.total_events}</span>
+                  <span className="font-semibold text-lg text-foreground">
+                    {jobStatus.summary.total_events}
+                  </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground uppercase tracking-wider">Rating</span>
-                  <span className="font-semibold text-lg text-foreground capitalize">{jobStatus.summary.overall_rating}</span>
+                  <span className="font-semibold text-lg text-foreground capitalize">
+                    {jobStatus.summary.overall_rating}
+                  </span>
                 </div>
               </div>
             </div>
@@ -84,8 +97,7 @@ export default function ChatLayout({ auth0Id, jobId, jobStatus, onBackToResults 
                 onSeek={handleSeekTo}
                 onReview={
                   auth0Id
-                    ? (findingId, state) =>
-                        reviewFinding(auth0Id, findingId, state).then(() => {})
+                    ? (findingId, state) => reviewFinding(auth0Id, findingId, state).then(() => {})
                     : undefined
                 }
               />

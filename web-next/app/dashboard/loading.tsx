@@ -21,7 +21,10 @@ export default function DashboardLoading() {
           </div>
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between border-b border-border py-4">
+              <div
+                key={i}
+                className="flex items-center justify-between border-b border-border py-4"
+              >
                 <div className="flex-1">
                   <div className="mb-2 h-4 w-48 bg-muted" />
                   <div className="h-3 w-32 bg-muted" />

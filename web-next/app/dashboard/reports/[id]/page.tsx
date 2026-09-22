@@ -1,23 +1,23 @@
-import type { Metadata } from "next"
-import { notFound } from "next/navigation"
-import { getSession } from "@/lib/session"
-import { redirect } from "next/navigation"
-import { getOrgContext, orgReport } from "@/lib/serverData";
-import { REPORT_TYPE_LABELS } from "@/lib/org"
-import type { ReportType } from "@/lib/org"
-import { formatDateMed } from "@/lib/date"
-import { unstable_noStore as noStore } from "next/cache"
-import ReportBody from "@/components/org/ReportBody"
-import PrintReportButton from "@/components/org/PrintReportButton"
+import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+import { getSession } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import { getOrgContext, orgReport } from '@/lib/serverData'
+import { REPORT_TYPE_LABELS } from '@/lib/org'
+import type { ReportType } from '@/lib/org'
+import { formatDateMed } from '@/lib/date'
+import { unstable_noStore as noStore } from 'next/cache'
+import ReportBody from '@/components/org/ReportBody'
+import PrintReportButton from '@/components/org/PrintReportButton'
 
 export function generateMetadata(): Metadata {
-  return { title: "Report | CoachXYZ", description: "Generated coach report." }
+  return { title: 'Report | CoachXYZ', description: 'Generated coach report.' }
 }
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
   const session = await getSession()
-  if (!session) redirect("/auth/login")
+  if (!session) redirect('/auth/login')
   const { auth0Id } = await getOrgContext()
   const { id } = await params
 
@@ -31,8 +31,11 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         <div>
           <h1 className="text-[28px] font-bold tracking-tight text-foreground">{report.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {report.full_name || "Organization"} · {REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type} ·{" "}
-            {report.period_start ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}` : "All time"}
+            {report.full_name || 'Organization'} ·{' '}
+            {REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type} ·{' '}
+            {report.period_start
+              ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}`
+              : 'All time'}
           </p>
         </div>
         <PrintReportButton />

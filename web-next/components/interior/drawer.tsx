@@ -21,7 +21,14 @@ const sideStyles: Record<DrawerSide, { panel: string; closed: string }> = {
   bottom: { panel: 'bottom-0 left-0 w-full max-h-[60vh]', closed: 'translate-y-full' },
 }
 
-export function Drawer({ open, onOpenChange, title, side = 'right', children, className }: DrawerProps) {
+export function Drawer({
+  open,
+  onOpenChange,
+  title,
+  side = 'right',
+  children,
+  className,
+}: DrawerProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {

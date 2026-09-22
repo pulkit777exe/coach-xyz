@@ -40,7 +40,12 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
   }
 
   return (
-    <nav className={cn('sticky top-14 z-30 flex flex-wrap items-center gap-x-6 gap-y-1 bg-background py-2', className)}>
+    <nav
+      className={cn(
+        'sticky top-14 z-30 flex flex-wrap items-center gap-x-6 gap-y-1 bg-background py-2',
+        className,
+      )}
+    >
       {sections.map((s) => (
         <button
           key={s.id}

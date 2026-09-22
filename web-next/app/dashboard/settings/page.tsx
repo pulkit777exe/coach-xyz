@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { redirect } from "next/navigation";
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import {
   Users,
   UserCheck,
@@ -11,56 +11,62 @@ import {
   KeyRound,
   LogOut,
   Check,
-} from "lucide-react";
+} from 'lucide-react'
 
-import { getSession } from "@/lib/session";
-import { unstable_noStore as noStore } from "next/cache";
-import { getOrgContext, getUserProfile, orgStudents, orgOverview, orgMembers } from "@/lib/serverData";
-import type { Student, OrgOverview } from "@/lib/org";
-import type { OrgMembersResponse } from "@/lib/members";
-import UserAvatar from "@/components/UserAvatar";
-import { Button } from "@/components/9ui/ui/button";
-import ProfileForm from "@/components/org/ProfileForm";
-import MembersSection from "@/components/org/MembersSection";
+import { getSession } from '@/lib/session'
+import { unstable_noStore as noStore } from 'next/cache'
+import {
+  getOrgContext,
+  getUserProfile,
+  orgStudents,
+  orgOverview,
+  orgMembers,
+} from '@/lib/serverData'
+import type { Student, OrgOverview } from '@/lib/org'
+import type { OrgMembersResponse } from '@/lib/members'
+import UserAvatar from '@/components/UserAvatar'
+import { Button } from '@/components/9ui/ui/button'
+import ProfileForm from '@/components/org/ProfileForm'
+import MembersSection from '@/components/org/MembersSection'
 
 export const metadata: Metadata = {
-  title: "Settings | CoachXYZ",
-  description: "Manage your profile, security, members, and records.",
-};
+  title: 'Settings | CoachXYZ',
+  description: 'Manage your profile, security, members, and records.',
+}
 
 function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
+  const parts = name.trim().split(/\s+/)
   if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
   }
-  return parts[0].substring(0, 2).toUpperCase();
+  return parts[0].substring(0, 2).toUpperCase()
 }
 
 function changePasswordUrl(): string | null {
-  const { AUTH0_DOMAIN, AUTH0_CLIENT_ID, APP_BASE_URL } = process.env;
-  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID || !APP_BASE_URL) return null;
+  const { AUTH0_DOMAIN, AUTH0_CLIENT_ID, APP_BASE_URL } = process.env
+  if (!AUTH0_DOMAIN || !AUTH0_CLIENT_ID || !APP_BASE_URL) return null
   const params = new URLSearchParams({
-    response_type: "code",
+    response_type: 'code',
     client_id: AUTH0_CLIENT_ID,
     redirect_uri: `${APP_BASE_URL}/auth/callback`,
-    prompt: "change-password",
-    scope: "openid profile email",
-  });
-  return `https://${AUTH0_DOMAIN}/authorize?${params.toString()}`;
+    prompt: 'change-password',
+    scope: 'openid profile email',
+  })
+  return `https://${AUTH0_DOMAIN}/authorize?${params.toString()}`
 }
 
 export default async function SettingsPage() {
-  noStore();
-  const session = await getSession();
-  if (!session) redirect("/auth/login");
-  const ownAuth0Id = session.user.sub;
-  const { auth0Id } = await getOrgContext();
+  noStore()
+  const session = await getSession()
+  if (!session) redirect('/auth/login')
+  const ownAuth0Id = session.user.sub
+  const { auth0Id } = await getOrgContext()
 
-  let profile = null;
-  let students: Student[] | null = null;
-  let overview: OrgOverview | null = null;
-  let membersData: OrgMembersResponse | null = null;
-  let error: string | null = null;
+  let profile = null
+  let students: Student[] | null = null
+  let overview: OrgOverview | null = null
+  let membersData: OrgMembersResponse | null = null
+  let error: string | null = null
 
   try {
     const [profileRes, studentsRes, overviewRes, membersRes] = await Promise.all([
@@ -68,34 +74,59 @@ export default async function SettingsPage() {
       orgStudents(auth0Id),
       orgOverview(auth0Id),
       orgMembers(auth0Id),
-    ]);
-    profile = profileRes.user;
-    students = studentsRes.students;
-    overview = overviewRes.overview;
-    membersData = membersRes;
+    ])
+    profile = profileRes.user
+    students = studentsRes.students
+    overview = overviewRes.overview
+    membersData = membersRes
   } catch (err) {
-    console.error("Failed to load settings data:", err);
-    error = err instanceof Error ? err.message : "Failed to load settings data";
+    console.error('Failed to load settings data:', err)
+    error = err instanceof Error ? err.message : 'Failed to load settings data'
   }
 
-  const emailVerified = profile?.email_verified ?? Boolean(session.user.email_verified);
-  const passwordUrl = changePasswordUrl();
+  const emailVerified = profile?.email_verified ?? Boolean(session.user.email_verified)
+  const passwordUrl = changePasswordUrl()
 
   const tiles = overview
     ? [
-        { icon: Users, label: "Students", value: overview.student_count, href: "/dashboard/students" },
-        { icon: UserCheck, label: "Active Students", value: overview.active_students, href: "/dashboard/students" },
-        { icon: ClipboardCheck, label: "Sessions This Month", value: overview.sessions_this_month, href: "/dashboard/attendance" },
-        { icon: CalendarDays, label: "Upcoming Events", value: overview.upcoming_events, href: "/dashboard/schedule" },
-        { icon: History, label: "Analyses Linked", value: overview.analyses_linked, href: "/dashboard/history" },
+        {
+          icon: Users,
+          label: 'Students',
+          value: overview.student_count,
+          href: '/dashboard/students',
+        },
+        {
+          icon: UserCheck,
+          label: 'Active Students',
+          value: overview.active_students,
+          href: '/dashboard/students',
+        },
+        {
+          icon: ClipboardCheck,
+          label: 'Sessions This Month',
+          value: overview.sessions_this_month,
+          href: '/dashboard/attendance',
+        },
+        {
+          icon: CalendarDays,
+          label: 'Upcoming Events',
+          value: overview.upcoming_events,
+          href: '/dashboard/schedule',
+        },
+        {
+          icon: History,
+          label: 'Analyses Linked',
+          value: overview.analyses_linked,
+          href: '/dashboard/history',
+        },
         {
           icon: Gauge,
-          label: "Avg Attendance Rate",
-          value: overview.avg_attendance_rate !== null ? `${overview.avg_attendance_rate}%` : "—",
-          href: "/dashboard/reports",
+          label: 'Avg Attendance Rate',
+          value: overview.avg_attendance_rate !== null ? `${overview.avg_attendance_rate}%` : '—',
+          href: '/dashboard/reports',
         },
       ]
-    : [];
+    : []
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -112,7 +143,9 @@ export default async function SettingsPage() {
 
       <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Profile</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Profile
+          </p>
         </div>
         <div className="p-6">
           <div className="flex items-center gap-4">
@@ -123,8 +156,12 @@ export default async function SettingsPage() {
               size="lg"
             />
             <div>
-              <p className="text-lg font-semibold text-foreground">{profile?.name ?? session.user.name ?? "No name"}</p>
-              <p className="text-sm text-muted-foreground">{profile?.email ?? session.user.email}</p>
+              <p className="text-lg font-semibold text-foreground">
+                {profile?.name ?? session.user.name ?? 'No name'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {profile?.email ?? session.user.email}
+              </p>
             </div>
           </div>
           <div className="mt-6 max-w-xl">
@@ -139,11 +176,15 @@ export default async function SettingsPage() {
 
       <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Security</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Security
+          </p>
         </div>
         <div className="divide-y divide-border">
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Email Verified</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Email Verified
+            </span>
             {emailVerified ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                 <Check className="size-3" />
@@ -154,18 +195,24 @@ export default async function SettingsPage() {
             )}
           </div>
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Password</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Password
+            </span>
             {passwordUrl ? (
               <Button variant="outline" size="sm" render={<a href={passwordUrl} />}>
                 <KeyRound className="size-3.5" />
                 Change Password
               </Button>
             ) : (
-              <span className="text-sm text-muted-foreground">Ask your administrator to reset your password.</span>
+              <span className="text-sm text-muted-foreground">
+                Ask your administrator to reset your password.
+              </span>
             )}
           </div>
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Session</span>
+            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Session
+            </span>
             <Button variant="destructive" size="sm" render={<a href="/auth/logout" />}>
               <LogOut className="size-3.5" />
               Log Out
@@ -178,13 +225,15 @@ export default async function SettingsPage() {
 
       <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Members</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Members
+          </p>
         </div>
         {students && students.length > 0 ? (
           <ul className="divide-y divide-border overflow-hidden">
             {students.map((s) => {
-              const linked = Boolean(s.account_auth0_id);
-              const contact = s.email || s.phone || "No contact on file";
+              const linked = Boolean(s.account_auth0_id)
+              const contact = s.email || s.phone || 'No contact on file'
               return (
                 <li key={s.id} className="flex items-center gap-4 bg-card px-6 py-3.5">
                   <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
@@ -194,7 +243,7 @@ export default async function SettingsPage() {
                     <p className="truncate text-sm font-medium text-foreground">{s.full_name}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {contact}
-                      {s.sport ? ` · ${s.sport}` : ""}
+                      {s.sport ? ` · ${s.sport}` : ''}
                     </p>
                   </div>
                   {linked ? (
@@ -205,12 +254,12 @@ export default async function SettingsPage() {
                     <span className="shrink-0 text-xs text-muted-foreground">Not linked yet</span>
                   )}
                 </li>
-              );
+              )
             })}
           </ul>
         ) : (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-            {students === null ? "Members failed to load." : "No players on the roster yet."}
+            {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
           </p>
         )}
       </div>
@@ -218,7 +267,9 @@ export default async function SettingsPage() {
       {tiles.length > 0 && (
         <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
           <div className="border-b border-border px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Records</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Records
+            </p>
           </div>
           <div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">
             {tiles.map((t) => (
@@ -229,12 +280,14 @@ export default async function SettingsPage() {
               >
                 <t.icon className="size-5 text-muted-foreground" />
                 <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{t.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{t.label}</p>
+                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                  {t.label}
+                </p>
               </Link>
             ))}
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

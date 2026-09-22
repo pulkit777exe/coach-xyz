@@ -1,35 +1,33 @@
-import { redis } from "./redis";
+import { redis } from './redis'
 
-const KEY = "coachai:conv:";
-const CONV_TTL = 7200; // 2 hours, aligned with job TTL
+const KEY = 'coachai:conv:'
+const CONV_TTL = 7200 // 2 hours, aligned with job TTL
 
 export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp_refs?: number[];
-  event_refs?: number[];
-  created_at: number;
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+  created_at: number
 }
 
 interface Conversation {
-  messages: ChatMessage[];
-  created_at: number;
-  updated_at: number;
+  messages: ChatMessage[]
+  created_at: number
+  updated_at: number
 }
 
 function generateId(): string {
-  return crypto.randomUUID().slice(0, 8);
+  return crypto.randomUUID().slice(0, 8)
 }
 
-export async function getConversation(
-  serverJobId: string,
-): Promise<ChatMessage[]> {
-  const raw = await redis.get(`${KEY}${serverJobId}`);
-  if (!raw) return [];
+export async function getConversation(serverJobId: string): Promise<ChatMessage[]> {
+  const raw = await redis.get(`${KEY}${serverJobId}`)
+  if (!raw) return []
 
-  const conv = raw as Conversation;
-  return conv.messages ?? [];
+  const conv = raw as Conversation
+  return conv.messages ?? []
 }
 
 /**
@@ -60,17 +58,17 @@ end
 
 redis.call('SET', key, cjson.encode(conv), 'EX', ttl)
 return #conv.messages
-`;
+`
 
 export async function saveMessage(
   serverJobId: string,
-  message: Omit<ChatMessage, "id" | "created_at">,
+  message: Omit<ChatMessage, 'id' | 'created_at'>,
 ): Promise<ChatMessage> {
   const msg: ChatMessage = {
     ...message,
     id: generateId(),
     created_at: Date.now(),
-  };
+  }
 
   await redis.eval(
     APPEND_MSG_SCRIPT,
@@ -79,7 +77,7 @@ export async function saveMessage(
     JSON.stringify(msg),
     String(CONV_TTL),
     String(Date.now()),
-  );
+  )
 
-  return msg;
+  return msg
 }

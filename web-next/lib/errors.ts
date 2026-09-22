@@ -18,7 +18,12 @@ export function isCoachAIError(err: unknown): err is CoachAIError {
 export function toCoachAIError(err: unknown): CoachAIError {
   // AbortError from AbortSignal.timeout()
   if (err instanceof DOMException && err.name === 'AbortError') {
-    return { code: 'REQUEST_TIMEOUT', message: 'Request timed out.', layer: 'client', retryable: true }
+    return {
+      code: 'REQUEST_TIMEOUT',
+      message: 'Request timed out.',
+      layer: 'client',
+      retryable: true,
+    }
   }
   // Already a canonical CoachAIError (with code, message, retryable)
   if (isCoachAIError(err)) {

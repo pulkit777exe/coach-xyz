@@ -33,8 +33,18 @@ function PlayerImage({ player }: { player: Player }) {
   if (!hasBase64 || imgError) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-        <svg className="w-12 h-12 mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        <svg
+          className="w-12 h-12 mb-2 opacity-40"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+            d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+          />
         </svg>
         <span className="text-xs">No preview</span>
       </div>
@@ -91,20 +101,31 @@ export default function PlayerSelector({
       <div className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-24 pb-20">
         <div className="max-w-5xl w-full">
           <div className="text-center mb-12 animate-[fadeInDown_0.8s_ease-out]">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-4 leading-tight">
-                Who do you want to <span className="text-foreground">analyze?</span>
-              </h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-4 leading-tight">
+              Who do you want to <span className="text-foreground">analyze?</span>
+            </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Our vision models detected <span className="text-foreground font-bold">{players.length}</span> potential subjects
+              Our vision models detected{' '}
+              <span className="text-foreground font-bold">{players.length}</span> potential subjects
               {angles.length > 1 ? (
-                <> in the <span className="text-foreground font-bold capitalize">{activeAngle}</span> view</>
+                <>
+                  {' '}
+                  in the <span className="text-foreground font-bold capitalize">
+                    {activeAngle}
+                  </span>{' '}
+                  view
+                </>
               ) : null}
               . Select the primary athlete to continue the pipeline.
             </p>
           </div>
 
           {angles.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-8" role="tablist" aria-label="Camera angles">
+            <div
+              className="flex flex-wrap items-center justify-center gap-2 mb-8"
+              role="tablist"
+              aria-label="Camera angles"
+            >
               {angles.map((angle) => (
                 <button
                   key={angle}
@@ -143,43 +164,64 @@ export default function PlayerSelector({
                     }
                   }}
                 >
-                  <div className={`relative h-full w-full rounded-2xl overflow-hidden transition-all border-0 p-5 flex flex-col items-center text-center bg-card ${isSelected ? 'bg-card' : ''}`}>
-                      <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-5 bg-muted border border-border shadow-inner">
-                        <PlayerImage player={player} />
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-border mix-blend-overlay"></div>
-                        )}
-                        {isSelected && (
-                          <div className="absolute top-3 right-3 w-8 h-8 bg-foreground rounded-full flex items-center justify-center text-background">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                          </div>
-                        )}
-                      </div>
+                  <div
+                    className={`relative h-full w-full rounded-2xl overflow-hidden transition-all border-0 p-5 flex flex-col items-center text-center bg-card ${isSelected ? 'bg-card' : ''}`}
+                  >
+                    <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-5 bg-muted border border-border shadow-inner">
+                      <PlayerImage player={player} />
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-border mix-blend-overlay"></div>
+                      )}
+                      {isSelected && (
+                        <div className="absolute top-3 right-3 w-8 h-8 bg-foreground rounded-full flex items-center justify-center text-background">
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
 
-                      <h3 className={`text-xl font-bold mb-3 transition-colors tracking-tight ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
-                        Subject {player.player_index}
-                      </h3>
+                    <h3
+                      className={`text-xl font-bold mb-3 transition-colors tracking-tight ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
+                    >
+                      Subject {player.player_index}
+                    </h3>
 
-                      <div className="w-full flex justify-center">
-                        <Badge variant="outline" className={`font-mono text-[0.65rem] uppercase tracking-widest px-3 py-1 rounded-xl transition-colors ${
-                          player.confidence >= 0.8 ? 'text-primary bg-primary/10 border border-primary/30' :
-                          player.confidence >= 0.6 ? 'text-warning bg-warning/10 border border-warning/30' :
-                          'text-destructive bg-danger/10 border border-danger/30'
-                        }`}>
-                          Confidence: {(player.confidence * 100).toFixed(0)}%
-                        </Badge>
-                      </div>
+                    <div className="w-full flex justify-center">
+                      <Badge
+                        variant="outline"
+                        className={`font-mono text-[0.65rem] uppercase tracking-widest px-3 py-1 rounded-xl transition-colors ${
+                          player.confidence >= 0.8
+                            ? 'text-primary bg-primary/10 border border-primary/30'
+                            : player.confidence >= 0.6
+                              ? 'text-warning bg-warning/10 border border-warning/30'
+                              : 'text-destructive bg-danger/10 border border-danger/30'
+                        }`}
+                      >
+                        Confidence: {(player.confidence * 100).toFixed(0)}%
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
 
-              <div className="animate-[fadeInUp_0.45s_ease-out_0.6s_both] max-w-sm mx-auto">
-                <Button
-                  className={`w-full h-16 rounded-2xl text-base font-bold transition-colors duration-200 ${
-                    selectedIndex !== null
-                      ? 'bg-primary text-primary-foreground'
+          <div className="animate-[fadeInUp_0.45s_ease-out_0.6s_both] max-w-sm mx-auto">
+            <Button
+              className={`w-full h-16 rounded-2xl text-base font-bold transition-colors duration-200 ${
+                selectedIndex !== null
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-muted border border-border text-muted-foreground cursor-not-allowed shadow-none'
               }`}
               size="lg"
@@ -189,16 +231,26 @@ export default function PlayerSelector({
               {selectedIndex !== null ? (
                 <span className="flex items-center gap-2 text-background">
                   Confirm Selection
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
+                  </svg>
                 </span>
-              ) : 'Select a subject to continue'}
+              ) : (
+                'Select a subject to continue'
+              )}
             </Button>
           </div>
 
           <div className="max-w-sm mx-auto mt-8 rounded-2xl border border-border bg-card p-5">
             <p className="text-sm font-semibold text-foreground mb-1">Add another camera angle</p>
             <p className="text-xs text-muted-foreground mb-4">
-              Film the same drill from a second perspective (e.g. side + front) for a more complete read.
+              Film the same drill from a second perspective (e.g. side + front) for a more complete
+              read.
             </p>
             <div className="flex gap-2">
               <Select
@@ -215,7 +267,8 @@ export default function PlayerSelector({
                   {ANGLE_SUGGESTIONS.map((a) => (
                     <SelectItem key={a} value={a} disabled={existingAngles.has(a)}>
                       <span className="capitalize">
-                        {a}{existingAngles.has(a) ? ' (added)' : ''}
+                        {a}
+                        {existingAngles.has(a) ? ' (added)' : ''}
                       </span>
                     </SelectItem>
                   ))}

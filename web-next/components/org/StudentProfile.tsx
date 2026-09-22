@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import {
   PlusIcon,
   PencilIcon,
@@ -14,20 +14,20 @@ import {
   PhoneIcon,
   CalendarIcon,
   FileTextIcon,
-} from "lucide-react"
-import { Button } from "@/components/9ui/ui/button"
-import { Badge } from "@/components/9ui/ui/badge"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
+} from 'lucide-react'
+import { Button } from '@/components/9ui/ui/button'
+import { Badge } from '@/components/9ui/ui/badge'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/9ui/ui/select"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
-import dynamic from "next/dynamic"
+} from '@/components/9ui/ui/select'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
+import dynamic from 'next/dynamic'
 import {
   Dialog,
   DialogContent,
@@ -35,19 +35,27 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
+} from '@/components/9ui/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@/components/9ui/ui/dropdown-menu"
-import type { ChartConfig } from "@/components/9ui/ui/chart"
-import { Spinner } from "./Spinner"
-import StudentFormDialog from "./StudentFormDialog"
+} from '@/components/9ui/ui/dropdown-menu'
+import type { ChartConfig } from '@/components/9ui/ui/chart'
+import { Spinner } from './Spinner'
+import StudentFormDialog from './StudentFormDialog'
+import ObjectivesSection from './ObjectivesSection'
 
-import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord, MetricTrend, ComparisonStudent } from "@/lib/org"
-import type { DashboardAnalysis, CoachAIError } from "@/lib/api"
+import type {
+  Student,
+  PerformanceSeriesPoint,
+  AttendanceSummary,
+  ReportRecord,
+  MetricTrend,
+  ComparisonStudent,
+} from '@/lib/org'
+import type { DashboardAnalysis, CoachAIError } from '@/lib/api'
 import {
   orgStudentPerformance,
   orgAddPerformanceMetric,
@@ -60,29 +68,29 @@ import {
   orgStudents,
   orgStudentTrends,
   orgCompareStudents,
-} from "@/lib/org"
-import { formatDateLong, formatDateShort } from "@/lib/date"
-import { analysisScore } from "@/lib/analysis"
-import { ATTENDANCE_STATUS_LABELS } from "@/lib/org"
-import { capitalize } from "@/lib/utils"
+} from '@/lib/org'
+import { formatDateLong, formatDateShort } from '@/lib/date'
+import { analysisScore } from '@/lib/analysis'
+import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
+import { capitalize } from '@/lib/utils'
 
 const STATUS_STYLE: Record<string, string> = {
-  active: "border-(--success-border) text-(--success) bg-(--success)",
-  inactive: "border-(--warning-border) text-(--warning)",
-  transferred: "border-border text-muted-foreground",
+  active: 'border-(--success-border) text-(--success) bg-(--success)',
+  inactive: 'border-(--warning-border) text-(--warning)',
+  transferred: 'border-border text-muted-foreground',
 }
 
-const PerformanceChart = dynamic(() => import("./PerformanceChart"), {
+const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
   loading: () => <div className="aspect-[16/7] w-full animate-pulse rounded-lg bg-muted" />,
 })
 
 const METRIC_COLORS = [
-  "var(--color-chart-1)",
-  "var(--color-chart-2)",
-  "var(--color-chart-3)",
-  "var(--color-chart-4)",
-  "var(--color-chart-5)",
+  'var(--color-chart-1)',
+  'var(--color-chart-2)',
+  'var(--color-chart-3)',
+  'var(--color-chart-4)',
+  'var(--color-chart-5)',
 ]
 
 function initials(name: string) {
@@ -90,7 +98,7 @@ function initials(name: string) {
     .split(/\s+/)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
-    .join("")
+    .join('')
 }
 
 export default function StudentProfile({
@@ -142,15 +150,20 @@ export default function StudentProfile({
   } | null>(null)
   const [confirmBusy, setConfirmBusy] = useState(false)
 
-  const [selectedKey, setSelectedKey] = useState<string>("all")
+  const [selectedKey, setSelectedKey] = useState<string>('all')
   const [isMetricSubmitting, setMetricSubmitting] = useState(false)
   const [editingMetric, setEditingMetric] = useState<PerformanceSeriesPoint | null>(null)
-  const [metricForm, setMetricForm] = useState({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
+  const [metricForm, setMetricForm] = useState({
+    metric_key: '',
+    metric_value: '',
+    unit: '',
+    measured_at: '',
+  })
 
   const [trends, setTrends] = useState<MetricTrend[]>([])
   const [roster, setRoster] = useState<Student[]>([])
   const [compareIds, setCompareIds] = useState<string[]>([])
-  const [compareMetric, setCompareMetric] = useState("form_score")
+  const [compareMetric, setCompareMetric] = useState('form_score')
   const [comparison, setComparison] = useState<ComparisonStudent[]>([])
   const [compareBusy, setCompareBusy] = useState(false)
 
@@ -175,7 +188,7 @@ export default function StudentProfile({
   const keys = useMemo(() => [...new Set(series.map((s) => s.metric_key))].sort(), [series])
 
   const chartData = useMemo(() => {
-    const includeAll = selectedKey === "all"
+    const includeAll = selectedKey === 'all'
     const rows: Record<string, string | number>[] = []
     const byDate = new Map<string, Record<string, string | number>>()
     for (const s of series) {
@@ -193,14 +206,14 @@ export default function StudentProfile({
   }, [series, selectedKey])
 
   const shownKeys = useMemo(
-    () => (selectedKey === "all" ? keys : [selectedKey]),
+    () => (selectedKey === 'all' ? keys : [selectedKey]),
     [selectedKey, keys],
   )
 
   const manualPoints = useMemo(
     () =>
       series
-        .filter((s) => s.source === "manual")
+        .filter((s) => s.source === 'manual')
         .slice()
         .sort((a, b) => b.measured_at.localeCompare(a.measured_at)),
     [series],
@@ -221,7 +234,7 @@ export default function StudentProfile({
 
   const compareMetricOptions = useMemo(() => {
     const opts = new Set<string>(keys)
-    opts.add("form_score")
+    opts.add('form_score')
     return [...opts].sort()
   }, [keys])
 
@@ -243,10 +256,7 @@ export default function StudentProfile({
     return rows
   }, [comparison])
 
-  const comparisonKeys = useMemo(
-    () => comparison.map((c) => c.full_name),
-    [comparison],
-  )
+  const comparisonKeys = useMemo(() => comparison.map((c) => c.full_name), [comparison])
 
   const comparisonConfig: ChartConfig = useMemo(() => {
     const config: ChartConfig = {}
@@ -277,14 +287,10 @@ export default function StudentProfile({
     }
     setCompareBusy(true)
     try {
-      const res = await orgCompareStudents(
-        auth0Id,
-        [student_.id, ...compareIds],
-        compareMetric,
-      )
+      const res = await orgCompareStudents(auth0Id, [student_.id, ...compareIds], compareMetric)
       setComparison(res.comparison)
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to load comparison")
+      toast.error((err as CoachAIError).message ?? 'Failed to load comparison')
     } finally {
       setCompareBusy(false)
     }
@@ -304,7 +310,7 @@ export default function StudentProfile({
   const addMouseMetric = async () => {
     const raw = Number(metricForm.metric_value)
     if (!Number.isFinite(raw)) {
-      toast.error("Enter a numeric metric value")
+      toast.error('Enter a numeric metric value')
       return
     }
     const payload: {
@@ -313,7 +319,7 @@ export default function StudentProfile({
       unit?: string | null
       measured_at?: string
     } = {
-      metric_key: metricForm.metric_key.trim() || "form_score",
+      metric_key: metricForm.metric_key.trim() || 'form_score',
       metric_value: raw,
     }
     if (metricForm.unit.trim()) payload.unit = metricForm.unit.trim()
@@ -332,12 +338,12 @@ export default function StudentProfile({
       } else {
         await orgAddPerformanceMetric(auth0Id, student_.id, payload)
       }
-      toast.success(editingMetric ? "Metric updated" : "Metric logged")
+      toast.success(editingMetric ? 'Metric updated' : 'Metric logged')
       setEditingMetric(null)
-      setMetricForm({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
+      setMetricForm({ metric_key: '', metric_value: '', unit: '', measured_at: '' })
       await refresh()
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to log metric")
+      toast.error((err as CoachAIError).message ?? 'Failed to log metric')
     } finally {
       setMetricSubmitting(false)
     }
@@ -348,7 +354,7 @@ export default function StudentProfile({
     setMetricForm({
       metric_key: p.metric_key,
       metric_value: String(p.metric_value),
-      unit: p.unit ?? "",
+      unit: p.unit ?? '',
       measured_at: p.measured_at.slice(0, 10),
     })
   }
@@ -356,14 +362,16 @@ export default function StudentProfile({
   const setAnalysisLink = async (analysis: DashboardAnalysis, studentId: string | null) => {
     try {
       const res = await linkAnalysisToStudent(auth0Id, analysis.server_job_id, studentId)
-      toast.success(studentId ? "Analysis linked" : "Analysis unlinked")
+      toast.success(studentId ? 'Analysis linked' : 'Analysis unlinked')
       const updated: DashboardAnalysis = {
         ...analysis,
         student_id: res.analysis.student_id ?? null,
       }
-      setAnalyses((prev) => prev.map((a) => (a.server_job_id === updated.server_job_id ? updated : a)))
+      setAnalyses((prev) =>
+        prev.map((a) => (a.server_job_id === updated.server_job_id ? updated : a)),
+      )
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to update link")
+      toast.error((err as CoachAIError).message ?? 'Failed to update link')
     }
   }
 
@@ -377,10 +385,26 @@ export default function StudentProfile({
   }
 
   const attStats = [
-    { label: ATTENDANCE_STATUS_LABELS.present, value: attendance?.present ?? 0, color: "var(--color-success)" },
-    { label: ATTENDANCE_STATUS_LABELS.late, value: attendance?.late ?? 0, color: "var(--color-warning)" },
-    { label: ATTENDANCE_STATUS_LABELS.absent, value: attendance?.absent ?? 0, color: "var(--color-destructive)" },
-    { label: ATTENDANCE_STATUS_LABELS.excused, value: attendance?.excused ?? 0, color: "var(--color-info)" },
+    {
+      label: ATTENDANCE_STATUS_LABELS.present,
+      value: attendance?.present ?? 0,
+      color: 'var(--color-success)',
+    },
+    {
+      label: ATTENDANCE_STATUS_LABELS.late,
+      value: attendance?.late ?? 0,
+      color: 'var(--color-warning)',
+    },
+    {
+      label: ATTENDANCE_STATUS_LABELS.absent,
+      value: attendance?.absent ?? 0,
+      color: 'var(--color-destructive)',
+    },
+    {
+      label: ATTENDANCE_STATUS_LABELS.excused,
+      value: attendance?.excused ?? 0,
+      color: 'var(--color-info)',
+    },
   ]
 
   return (
@@ -399,7 +423,8 @@ export default function StudentProfile({
               <h2 className="font-bold text-xl text-foreground">{student_.full_name}</h2>
               <Badge
                 className={
-                  (STATUS_STYLE[student_.status] ?? "border-border text-muted-foreground") + " border"
+                  (STATUS_STYLE[student_.status] ?? 'border-border text-muted-foreground') +
+                  ' border'
                 }
               >
                 {student_.status}
@@ -424,8 +449,7 @@ export default function StudentProfile({
               )}
               {student_.joined_on && (
                 <span className="flex items-center gap-1.5">
-                  <CalendarIcon className="size-3" /> Joined{" "}
-                  {formatDateLong(student_.joined_on)}
+                  <CalendarIcon className="size-3" /> Joined {formatDateLong(student_.joined_on)}
                 </span>
               )}
             </div>
@@ -445,11 +469,11 @@ export default function StudentProfile({
               setConfirm({
                 title: `Remove ${student_.full_name}?`,
                 description:
-                  "This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.",
+                  'This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.',
                 action: async () => {
                   await orgDeleteStudent(auth0Id, student_.id)
                   toast.success(`${student_.full_name} removed`)
-                  router.push("/dashboard/students")
+                  router.push('/dashboard/students')
                 },
               })
             }
@@ -466,14 +490,17 @@ export default function StudentProfile({
           Profile Details
         </p>
         <div className="border-border bg-card grid gap-px rounded-lg border sm:grid-cols-2">
-          <DetailRow label="Date of birth" value={student_.date_of_birth ? formatDateLong(student_.date_of_birth) : "—"} />
-          <DetailRow label="Gender" value={student_.gender ? capitalize(student_.gender) : "—"} />
-          <DetailRow label="Guardian" value={student_.guardian_name || "—"} />
-          <DetailRow label="Guardian phone" value={student_.guardian_phone || "—"} />
+          <DetailRow
+            label="Date of birth"
+            value={student_.date_of_birth ? formatDateLong(student_.date_of_birth) : '—'}
+          />
+          <DetailRow label="Gender" value={student_.gender ? capitalize(student_.gender) : '—'} />
+          <DetailRow label="Guardian" value={student_.guardian_name || '—'} />
+          <DetailRow label="Guardian phone" value={student_.guardian_phone || '—'} />
           <div className="border-border border-t p-4 sm:col-span-2">
             <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">Notes</p>
             <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-sm">
-              {student_.notes || "No notes recorded."}
+              {student_.notes || 'No notes recorded.'}
             </p>
           </div>
         </div>
@@ -497,7 +524,7 @@ export default function StudentProfile({
           ))}
           <div className="bg-card p-5">
             <p className="font-bold text-xl text-foreground">
-              {attendance?.attendance_rate === null ? "—" : `${attendance?.attendance_rate ?? 0}%`}
+              {attendance?.attendance_rate === null ? '—' : `${attendance?.attendance_rate ?? 0}%`}
             </p>
             <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
               Attendance Rate
@@ -514,15 +541,11 @@ export default function StudentProfile({
           </p>
           {keys.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
-              <MetricPill active={selectedKey === "all"} onClick={() => setSelectedKey("all")}>
+              <MetricPill active={selectedKey === 'all'} onClick={() => setSelectedKey('all')}>
                 All
               </MetricPill>
               {keys.map((k) => (
-                <MetricPill
-                  key={k}
-                  active={selectedKey === k}
-                  onClick={() => setSelectedKey(k)}
-                >
+                <MetricPill key={k} active={selectedKey === k} onClick={() => setSelectedKey(k)}>
                   {formatKey(k)}
                 </MetricPill>
               ))}
@@ -540,6 +563,11 @@ export default function StudentProfile({
               </p>
             </div>
           )}
+        </div>
+
+        {/* Training objectives + finding trends (§26 loop) */}
+        <div className="mt-8">
+          <ObjectivesSection auth0Id={auth0Id} studentId={student_.id} />
         </div>
 
         {/* Log metric */}
@@ -597,8 +625,8 @@ export default function StudentProfile({
               />
             </div>
             <Button size="sm" onClick={addMouseMetric} disabled={isMetricSubmitting}>
-              {isMetricSubmitting ? <Spinner /> : editingMetric ? <PencilIcon /> : <PlusIcon />}{" "}
-              {editingMetric ? "Update metric" : "Log metric"}
+              {isMetricSubmitting ? <Spinner /> : editingMetric ? <PencilIcon /> : <PlusIcon />}{' '}
+              {editingMetric ? 'Update metric' : 'Log metric'}
             </Button>
             {editingMetric && (
               <Button
@@ -606,7 +634,7 @@ export default function StudentProfile({
                 variant="ghost"
                 onClick={() => {
                   setEditingMetric(null)
-                  setMetricForm({ metric_key: "", metric_value: "", unit: "", measured_at: "" })
+                  setMetricForm({ metric_key: '', metric_value: '', unit: '', measured_at: '' })
                 }}
               >
                 Cancel
@@ -622,14 +650,16 @@ export default function StudentProfile({
                   className="flex items-center justify-between gap-2 py-1 text-sm"
                 >
                   <span className="text-foreground">
-                    {formatKey(p.metric_key)}{" "}
+                    {formatKey(p.metric_key)}{' '}
                     <span className="text-muted-foreground">
                       {p.metric_value}
-                      {p.unit ? ` ${p.unit}` : ""}
+                      {p.unit ? ` ${p.unit}` : ''}
                     </span>
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="text-muted-foreground text-xs">{formatDateShort(p.measured_at)}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {formatDateShort(p.measured_at)}
+                    </span>
                     {p.id && (
                       <Button
                         variant="ghost"
@@ -648,11 +678,11 @@ export default function StudentProfile({
                       onClick={() =>
                         p.id &&
                         setConfirm({
-                          title: "Delete this metric?",
-                          description: `${formatKey(p.metric_key)} · ${p.metric_value}${p.unit ? ` ${p.unit}` : ""} on ${formatDateShort(p.measured_at)}.`,
+                          title: 'Delete this metric?',
+                          description: `${formatKey(p.metric_key)} · ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}.`,
                           action: async () => {
                             await orgDeletePerformanceMetric(auth0Id, p.id as string)
-                            toast.success("Metric deleted")
+                            toast.success('Metric deleted')
                             await refresh()
                           },
                         })
@@ -688,18 +718,19 @@ export default function StudentProfile({
                   {formatKey(t.metric_key)}
                 </p>
                 <p className="text-foreground mt-1 font-bold text-2xl">
-                  {t.latest ?? "—"}
+                  {t.latest ?? '—'}
                   {t.points[0]?.unit ? (
-                    <span className="text-muted-foreground text-xs font-normal"> {t.points[0].unit}</span>
+                    <span className="text-muted-foreground text-xs font-normal">
+                      {' '}
+                      {t.points[0].unit}
+                    </span>
                   ) : null}
                 </p>
                 <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
-                  <span>avg {t.avg ?? "—"}</span>
+                  <span>avg {t.avg ?? '—'}</span>
                   <TrendDelta change={t.change} />
                 </div>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  {t.points.length} point(s)
-                </p>
+                <p className="text-muted-foreground mt-1 text-xs">{t.points.length} point(s)</p>
               </div>
             ))}
           </div>
@@ -715,7 +746,7 @@ export default function StudentProfile({
           <div className="flex items-center gap-2">
             <Select
               value={compareMetric}
-              onValueChange={(v) => setCompareMetric(typeof v === "string" ? v : "form_score")}
+              onValueChange={(v) => setCompareMetric(typeof v === 'string' ? v : 'form_score')}
             >
               <SelectTrigger className="h-8 w-auto" data-size="sm">
                 <SelectValue />
@@ -728,7 +759,12 @@ export default function StudentProfile({
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={loadComparison} disabled={compareBusy || compareIds.length === 0}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadComparison}
+              disabled={compareBusy || compareIds.length === 0}
+            >
               {compareBusy ? <Spinner /> : null} Compare
             </Button>
           </div>
@@ -750,12 +786,12 @@ export default function StudentProfile({
                     onClick={() => toggleCompare(s.id)}
                     className={`border px-2.5 py-1 text-xs transition-colors ${
                       selected
-                        ? "bg-muted text-foreground border-border"
-                        : "text-muted-foreground border-border hover:text-foreground"
+                        ? 'bg-muted text-foreground border-border'
+                        : 'text-muted-foreground border-border hover:text-foreground'
                     }`}
                   >
                     {s.full_name}
-                    {selected ? " ✓" : ""}
+                    {selected ? ' ✓' : ''}
                   </button>
                 )
               })}
@@ -763,12 +799,18 @@ export default function StudentProfile({
           )}
 
           {compareIds.length >= 9 ? (
-            <p className="text-muted-foreground mt-2 text-xs">Limit of 9 teammates per comparison.</p>
+            <p className="text-muted-foreground mt-2 text-xs">
+              Limit of 9 teammates per comparison.
+            </p>
           ) : null}
 
           {comparisonData.length > 0 ? (
             <div className="mt-4">
-              <PerformanceChart data={comparisonData} config={comparisonConfig} keys={comparisonKeys} />
+              <PerformanceChart
+                data={comparisonData}
+                config={comparisonConfig}
+                keys={comparisonKeys}
+              />
             </div>
           ) : compareIds.length > 0 ? (
             <p className="text-muted-foreground py-6 text-center text-sm">
@@ -800,7 +842,7 @@ export default function StudentProfile({
             <p className="text-xs text-muted-foreground">
               {unlinked.length
                 ? "Choose an analysis above to build this player's profile."
-                : "Run a video analysis first, then link it here."}
+                : 'Run a video analysis first, then link it here.'}
             </p>
           </div>
         ) : (
@@ -824,22 +866,26 @@ export default function StudentProfile({
               </thead>
               <tbody>
                 {linked.map((a) => (
-                  <tr key={a.server_job_id} className="hover:bg-accent/50 border-b border-border last:border-0">
+                  <tr
+                    key={a.server_job_id}
+                    className="hover:bg-accent/50 border-b border-border last:border-0"
+                  >
                     <td className="px-4 py-3">
-                      <Link href={`/dashboard/analysis/${a.server_job_id}`} className="hover:underline">
-                        {a.display_name || a.file_name || "Untitled video"}
+                      <Link
+                        href={`/dashboard/analysis/${a.server_job_id}`}
+                        className="hover:underline"
+                      >
+                        {a.display_name || a.file_name || 'Untitled video'}
                       </Link>
                     </td>
                     <td className="text-muted-foreground px-4 py-3">
-                      {new Date(a.requested_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
+                      {new Date(a.requested_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
                       })}
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      {analysisScore(a) ?? "—"}
-                    </td>
+                    <td className="hidden px-4 py-3 md:table-cell">{analysisScore(a) ?? '—'}</td>
                     <td className="px-4 py-3 text-right">
                       <Button
                         variant="ghost"
@@ -860,11 +906,15 @@ export default function StudentProfile({
 
       {/* Reports */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">Reports</p>
+        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+          Reports
+        </p>
         {reports.length === 0 ? (
           <div className="border-border bg-card flex flex-col items-center gap-2 rounded-lg border p-10 text-center">
             <FileTextIcon className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">No reports generated for {student_.full_name} yet.</p>
+            <p className="text-muted-foreground text-sm">
+              No reports generated for {student_.full_name} yet.
+            </p>
             <Link href="/dashboard/reports" className="text-foreground text-xs underline">
               Go to Reports
             </Link>
@@ -877,15 +927,18 @@ export default function StudentProfile({
                   key={r.id}
                   className="hover:bg-accent/50 border-b border-border last:border-0 flex items-center justify-between gap-3 px-4 py-3 text-sm"
                 >
-                  <Link href={`/dashboard/reports/${r.id}`} className="text-foreground hover:underline">
+                  <Link
+                    href={`/dashboard/reports/${r.id}`}
+                    className="text-foreground hover:underline"
+                  >
                     {r.title}
                   </Link>
                   <span className="flex items-center gap-3">
                     <span className="text-muted-foreground text-xs">
-                      {new Date(r.created_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
+                      {new Date(r.created_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
                       })}
                     </span>
                     <Button
@@ -894,12 +947,13 @@ export default function StudentProfile({
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         setConfirm({
-                          title: "Delete this report?",
-                          description: "This permanently removes the generated report. This cannot be undone.",
+                          title: 'Delete this report?',
+                          description:
+                            'This permanently removes the generated report. This cannot be undone.',
                           action: async () => {
                             await orgDeleteReport(auth0Id, r.id)
                             setReports((prev) => prev.filter((x) => x.id !== r.id))
-                            toast.success("Report deleted")
+                            toast.success('Report deleted')
                           },
                         })
                       }
@@ -942,7 +996,7 @@ export default function StudentProfile({
               Cancel
             </Button>
             <Button variant="destructive" onClick={runConfirm} disabled={confirmBusy}>
-              {confirmBusy ? <Spinner /> : "Confirm"}
+              {confirmBusy ? <Spinner /> : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -975,8 +1029,8 @@ function MetricPill({
       onClick={onClick}
       className={`border px-2.5 py-1 text-[0.6rem] uppercase tracking-[0.15em] transition-colors ${
         active
-          ? "text-foreground border-border bg-muted"
-          : "text-muted-foreground border-border hover:text-foreground"
+          ? 'text-foreground border-border bg-muted'
+          : 'text-muted-foreground border-border hover:text-foreground'
       }`}
     >
       {children}
@@ -989,8 +1043,8 @@ function TrendDelta({ change }: { change: number | null }) {
   if (change === 0) return <span>flat</span>
   const isUp = change > 0
   return (
-    <span style={{ color: isUp ? "var(--color-success)" : "var(--color-destructive)" }}>
-      {isUp ? "▲ +" : "▼ "}
+    <span style={{ color: isUp ? 'var(--color-success)' : 'var(--color-destructive)' }}>
+      {isUp ? '▲ +' : '▼ '}
       {Math.abs(change)}
     </span>
   )
@@ -1015,7 +1069,9 @@ function LinkAnalysisSelect({
       <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
         {unlinked.map((a) => (
           <DropdownMenuItem key={a.server_job_id} onClick={() => onPick(a)}>
-            <span className="max-w-56 truncate">{a.display_name || a.file_name || "Untitled video"}</span>
+            <span className="max-w-56 truncate">
+              {a.display_name || a.file_name || 'Untitled video'}
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -1025,7 +1081,7 @@ function LinkAnalysisSelect({
 
 function formatKey(key: string) {
   return key
-    .split("_")
+    .split('_')
     .map((p) => p[0]?.toUpperCase() + p.slice(1))
-    .join(" ")
+    .join(' ')
 }

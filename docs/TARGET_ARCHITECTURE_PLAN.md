@@ -82,9 +82,11 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
    read-only in results; chat prompts cite finding ids + timestamps (§25).
 4. `GET /api/auth/user/:auth0Id/findings/trends` — per-day counts by
    category with needs-review split (§26 precursor).
-Open: finding→training-objective link (§26 loop), per-player trend views
-now served by team/student filters on the trends endpoint (UI on team
-pages; student-profile trends still open).
+Open: finding→training-objective link (§26 loop) — SHIPPED: objectives
+table + routes (student/team scoped, finding+analysis links), recent
+findings with make-objective on student profiles, per-student trend
+counts; remaining: objective completion feeding back into measured
+improvement views.
 
 ### Phase 2 — Org hardening (§3, §4, §7, §29, §5) — SHIPPED (core)
 1. `teams` + `team_memberships` tables; `students.team_id` with cross-org

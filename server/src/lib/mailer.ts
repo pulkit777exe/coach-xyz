@@ -3,41 +3,38 @@
 // gracefully: if RESEND_API_KEY is missing, the caller gets a 501-style error
 // and no external request is made.
 
-const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM_DOMAIN = process.env.RESEND_FROM_DOMAIN ?? "onboarding@resend.dev";
-const FROM_NAME = process.env.RESEND_FROM_NAME ?? "CoachXYZ";
+const RESEND_API_URL = 'https://api.resend.com/emails'
+const FROM_DOMAIN = process.env.RESEND_FROM_DOMAIN ?? 'onboarding@resend.dev'
+const FROM_NAME = process.env.RESEND_FROM_NAME ?? 'CoachXYZ'
 
-export const emailConfigured = (): boolean => !!process.env.RESEND_API_KEY;
+export const emailConfigured = (): boolean => !!process.env.RESEND_API_KEY
 
 type SendEmailArgs = {
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-};
+  to: string
+  subject: string
+  html: string
+  text: string
+}
 
 export type MailResult = {
-  id: string | null;
-  to: string;
-  subject: string;
-};
+  id: string | null
+  to: string
+  subject: string
+}
 
 export async function sendEmail(args: SendEmailArgs): Promise<MailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
-    throw Object.assign(
-      new Error("Email sending is not configured (RESEND_API_KEY missing)."),
-      {
-        code: "EMAIL_NOT_CONFIGURED",
-      },
-    );
+    throw Object.assign(new Error('Email sending is not configured (RESEND_API_KEY missing).'), {
+      code: 'EMAIL_NOT_CONFIGURED',
+    })
   }
 
   const res = await fetch(RESEND_API_URL, {
-    method: "POST",
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       from: `${FROM_NAME} <${FROM_DOMAIN}>`,
@@ -46,18 +43,18 @@ export async function sendEmail(args: SendEmailArgs): Promise<MailResult> {
       html: args.html,
       text: args.text,
     }),
-  });
+  })
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    throw Object.assign(
-      new Error(body.message ?? `Resend request failed (${res.status})`),
-      { code: "EMAIL_SEND_FAILED", status: res.status },
-    );
+    const body = (await res.json().catch(() => ({}))) as { message?: string }
+    throw Object.assign(new Error(body.message ?? `Resend request failed (${res.status})`), {
+      code: 'EMAIL_SEND_FAILED',
+      status: res.status,
+    })
   }
 
-  const data = (await res.json()) as { id?: string };
-  return { id: data.id ?? null, to: args.to, subject: args.subject };
+  const data = (await res.json()) as { id?: string }
+  return { id: data.id ?? null, to: args.to, subject: args.subject }
 }
 
 // ── Template helpers ────────────────────────────────────────────────────────
@@ -81,14 +78,10 @@ const wrap = (title: string, inner: string) => `
     </div>
   </body>
 </html>
-`;
+`
 
-export const inviteEmail = (
-  coachName: string,
-  teamName: string,
-  inviteUrl: string,
-) => {
-  const subject = `${coachName} invited you to ${teamName} on CoachXYZ`;
+export const inviteEmail = (coachName: string, teamName: string, inviteUrl: string) => {
+  const subject = `${coachName} invited you to ${teamName} on CoachXYZ`
   const inner = `
     <p>You've been invited to join <strong>${teamName}</strong> on CoachXYZ.</p>
     <p>Create your account to view your profile, video analyses, attendance and reports.</p>
@@ -97,13 +90,13 @@ export const inviteEmail = (
       Accept invite
     </a>
     <p style="color:#7a6e62;font-size:13px;margin-top:20px;">Or paste this link: ${inviteUrl}</p>
-  `;
+  `
   return {
     subject,
     html: wrap(subject, inner),
     text: `${coachName} invited you to ${teamName} on CoachXYZ. Create your account here: ${inviteUrl}`,
-  };
-};
+  }
+}
 
 export const reportEmail = (
   studentName: string,
@@ -111,21 +104,21 @@ export const reportEmail = (
   summary: string,
   reportUrl: string,
 ) => {
-  const subject = `Your report: ${reportTitle}`;
+  const subject = `Your report: ${reportTitle}`
   const inner = `
     <p><strong>${studentName}</strong>, a new report is ready for you.</p>
-    ${summary ? `<div style="background:#f2ede6;border-radius:10px;padding:14px 16px;margin:14px 0;font-size:14px;line-height:1.6;">${summary}</div>` : ""}
+    ${summary ? `<div style="background:#f2ede6;border-radius:10px;padding:14px 16px;margin:14px 0;font-size:14px;line-height:1.6;">${summary}</div>` : ''}
     <a href="${reportUrl}"
        style="display:inline-block;background:#BCF56C;color:#433B34;font-weight:600;font-size:14px;padding:10px 18px;border-radius:999px;text-decoration:none;">
       View report
     </a>
-  `;
+  `
   return {
     subject,
     html: wrap(subject, inner),
     text: `Your report "${reportTitle}" is ready. ${reportUrl}`,
-  };
-};
+  }
+}
 
 export const attendanceEmail = (
   teamName: string,
@@ -134,7 +127,7 @@ export const attendanceEmail = (
   present: number,
   total: number,
 ) => {
-  const subject = `Attendance sheet — ${teamName} (${periodLabel})`;
+  const subject = `Attendance sheet — ${teamName} (${periodLabel})`
   const inner = `
     <p>Attendance for <strong>${teamName}</strong> — ${periodLabel}.</p>
     <p><strong>${present}</strong> of <strong>${total}</strong> recorded sessions attended.</p>
@@ -150,17 +143,17 @@ export const attendanceEmail = (
         ${rowsHtml}
       </tbody>
     </table>
-  `;
+  `
   return {
     subject,
     html: wrap(subject, inner),
     text: `Attendance for ${teamName}: ${present}/${total} sessions attended.`,
-  };
-};
+  }
+}
 
 export const escapeHtml = (value: string | null | undefined): string =>
-  (value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  (value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')

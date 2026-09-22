@@ -1,40 +1,43 @@
-import { getSession } from "@/lib/session";
-import { getOrgContext, getDashboardAnalysisDetail } from "@/lib/serverData";
-import type { DashboardAnalysis } from "@/lib/api";
-import { notFound, redirect } from "next/navigation";
-import { unstable_noStore as noStore } from "next/cache";
-import Link from "next/link";
-import HistoryChat from "@/components/HistoryChat";
+import { getSession } from '@/lib/session'
+import { getOrgContext, getDashboardAnalysisDetail } from '@/lib/serverData'
+import type { DashboardAnalysis } from '@/lib/api'
+import { notFound, redirect } from 'next/navigation'
+import { unstable_noStore as noStore } from 'next/cache'
+import Link from 'next/link'
+import HistoryChat from '@/components/HistoryChat'
 
-export default async function ChatPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  noStore();
-  const session = await getSession();
+export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  noStore()
+  const session = await getSession()
   if (!session) {
-    redirect("/auth/login");
+    redirect('/auth/login')
   }
-  const { auth0Id } = await getOrgContext();
+  const { auth0Id } = await getOrgContext()
 
-  const result = await getDashboardAnalysisDetail(auth0Id, id).catch(() => null);
+  const result = await getDashboardAnalysisDetail(auth0Id, id).catch(() => null)
   if (!result?.analysis) {
-    notFound();
+    notFound()
   }
 
-  const data: DashboardAnalysis = result!.analysis;
+  const data: DashboardAnalysis = result!.analysis
 
-  const summaryRaw = data.summary_json;
-  const summary = summaryRaw && typeof summaryRaw === "object" && !Array.isArray(summaryRaw)
-    ? (summaryRaw as Record<string, unknown>)
-    : typeof summaryRaw === "string"
-      ? (() => { try { return JSON.parse(summaryRaw) as Record<string, unknown> } catch { return null } })()
-      : null;
+  const summaryRaw = data.summary_json
+  const summary =
+    summaryRaw && typeof summaryRaw === 'object' && !Array.isArray(summaryRaw)
+      ? (summaryRaw as Record<string, unknown>)
+      : typeof summaryRaw === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(summaryRaw) as Record<string, unknown>
+            } catch {
+              return null
+            }
+          })()
+        : null
 
   return (
-    <div className="p-8 lg:p-12 max-w-3xl" style={{ height: "calc(100dvh - 4rem)" }}>
+    <div className="p-8 lg:p-12 max-w-3xl" style={{ height: 'calc(100dvh - 4rem)' }}>
       <div className="mb-6 flex items-center gap-4">
         <Link
           href={`/dashboard/analysis/${id}`}
@@ -42,13 +45,11 @@ export default async function ChatPage({
         >
           &larr; Back to Analysis
         </Link>
-        <span           className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
-          Chat
-        </span>
+        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
       </div>
-      <div className="rounded-xl border border-border" style={{ height: "calc(100% - 3rem)" }}>
+      <div className="rounded-xl border border-border" style={{ height: 'calc(100% - 3rem)' }}>
         <HistoryChat auth0Id={auth0Id} jobId={id} summary={summary} />
       </div>
     </div>
-  );
+  )
 }

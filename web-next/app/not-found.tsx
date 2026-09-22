@@ -18,7 +18,9 @@ export default function NotFound() {
           The page you are looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="mt-6">
-          <Button size="lg" render={<Link href="/" />}>Go home</Button>
+          <Button size="lg" render={<Link href="/" />}>
+            Go home
+          </Button>
         </div>
       </div>
     </main>

@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { scanVideoWithProgress, streamScanProgress, startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
+import {
+  scanVideoWithProgress,
+  streamScanProgress,
+  startAnalysis,
+  getJobStatus,
+  type CoachAIError,
+} from '@/lib/api'
 import { toCoachAIError } from '@/lib/errors'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import { mapEngineStateToPipeline } from '@/lib/pipelineState'
@@ -38,7 +44,10 @@ export interface Pipeline extends PipelineActions {
   uploadProgress: UploadProgress | null
 }
 
-export function usePipeline(auth0Id: string | null = null, initialJobId: string | null = null): Pipeline {
+export function usePipeline(
+  auth0Id: string | null = null,
+  initialJobId: string | null = null,
+): Pipeline {
   const router = useRouter()
   const pathname = usePathname()
   const [pipelineState, setPipelineState] = useState<PipelineState>('idle')
@@ -55,12 +64,15 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   const retryGenerationRef = useRef(0)
 
   // Keep ref in sync with state for use in callbacks without stale closures
-  useEffect(() => { pipelineStateRef.current = pipelineState }, [pipelineState])
+  useEffect(() => {
+    pipelineStateRef.current = pipelineState
+  }, [pipelineState])
 
   // ── Keep-alive ping ────────────────────────────────────────────────────
   useEffect(() => {
     if (!BASE) return
-    const ping = () => fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {})
+    const ping = () =>
+      fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {})
     ping()
     const t = setInterval(ping, 8 * 60 * 1000)
     return () => clearInterval(t)
@@ -88,9 +100,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
         // Cap the displayed progress at 99 while the job is not yet
         // complete, so the bar never reaches 100% on the loading screen.
         onStatus: (status) => {
-          const displayStatus = status.progress >= 100
-            ? { ...status, progress: 99 }
-            : status
+          const displayStatus = status.progress >= 100 ? { ...status, progress: 99 } : status
           setJobStatus(displayStatus)
           if (status.state) {
             setPipelineState(mapEngineStateToPipeline(status.state))
@@ -175,7 +185,9 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
     }
 
     resume()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [initialJobId, startPolling])
 
   // ── Handlers ───────────────────────────────────────────────────────────
@@ -184,185 +196,196 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
    * event-driven progress: XHR upload events, then the engine SSE feed. No
    * polling — every state push arrives as an event.
    */
-  const runScan = useCallback(async (
-    file: File,
-    append?: { sessionToken: string; angle: string },
-  ): Promise<ScanResult> => {
-    setPipelineState(append ? 'scanning' : 'uploading')
-    setUploadProgress({ phase: 'uploading', percent: 0 })
+  const runScan = useCallback(
+    async (file: File, append?: { sessionToken: string; angle: string }): Promise<ScanResult> => {
+      setPipelineState(append ? 'scanning' : 'uploading')
+      setUploadProgress({ phase: 'uploading', percent: 0 })
 
-    // AbortController for scan progress SSE stream
-    const scanAbort = new AbortController()
+      // AbortController for scan progress SSE stream
+      const scanAbort = new AbortController()
 
-    try {
-      const result = await scanVideoWithProgress(
-        file,
-        (progress) => setUploadProgress(progress),
-        auth0Id,
-        append ? { sessionToken: append.sessionToken, angle: append.angle } : {},
-      )
-
-      // Upload done — transition to scanning phase
-      setPipelineState('scanning')
-      setUploadProgress({ phase: 'scanning', percent: 0 })
-
-      // Stream real scan progress from engine via SSE (per-angle slot)
       try {
-        for await (const event of streamScanProgress(
-          result.session_token,
-          scanAbort.signal,
-          result.angle ?? append?.angle ?? null,
-        )) {
-          if (event.total > 0) {
-            const percent = Math.round((event.current / event.total) * 100)
-            setUploadProgress({ phase: 'scanning', percent })
-          }
-          if (event.complete) {
-            if (event.error) {
-              throw {
-                code: 'SCAN_FAILED',
-                message: event.error,
-                layer: 'engine',
-                retryable: true,
-              } as CoachAIError
-            }
-            break
-          }
-        }
-      } catch (err: unknown) {
-        // If aborted (e.g., unmount), don't throw
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          throw {
-            code: 'REQUEST_TIMEOUT',
-            message: 'Scan cancelled.',
-            layer: 'client',
-            retryable: false,
-          } as CoachAIError
-        }
-        throw err
-      }
+        const result = await scanVideoWithProgress(
+          file,
+          (progress) => setUploadProgress(progress),
+          auth0Id,
+          append ? { sessionToken: append.sessionToken, angle: append.angle } : {},
+        )
 
-      return result
-    } finally {
-      scanAbort.abort()
-    }
-  }, [auth0Id])
+        // Upload done — transition to scanning phase
+        setPipelineState('scanning')
+        setUploadProgress({ phase: 'scanning', percent: 0 })
+
+        // Stream real scan progress from engine via SSE (per-angle slot)
+        try {
+          for await (const event of streamScanProgress(
+            result.session_token,
+            scanAbort.signal,
+            result.angle ?? append?.angle ?? null,
+          )) {
+            if (event.total > 0) {
+              const percent = Math.round((event.current / event.total) * 100)
+              setUploadProgress({ phase: 'scanning', percent })
+            }
+            if (event.complete) {
+              if (event.error) {
+                throw {
+                  code: 'SCAN_FAILED',
+                  message: event.error,
+                  layer: 'engine',
+                  retryable: true,
+                } as CoachAIError
+              }
+              break
+            }
+          }
+        } catch (err: unknown) {
+          // If aborted (e.g., unmount), don't throw
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            throw {
+              code: 'REQUEST_TIMEOUT',
+              message: 'Scan cancelled.',
+              layer: 'client',
+              retryable: false,
+            } as CoachAIError
+          }
+          throw err
+        }
+
+        return result
+      } finally {
+        scanAbort.abort()
+      }
+    },
+    [auth0Id],
+  )
 
   /** Kick off analysis for one scanned perspective + player. */
-  const startAnalysisForScan = useCallback(async (scan: ScanResult, playerIndex: number) => {
-    setSelectedPlayerIndex(playerIndex)
-    setPipelineState('analyzing')
-    setUploadProgress(null)
-    const { job_id } = await startAnalysis({
-      session_token: scan.session_token,
-      player_index: playerIndex,
-      video_key: scan.video_key,
-      angle: scan.angle ?? null,
-      auth0Id,
-    })
-    setJobId(job_id)
-    startPolling(job_id)
-    if (pathname !== `/dashboard/analysis/${job_id}`) {
-      router.push(`/dashboard/analysis/${job_id}`)
-    }
-  }, [auth0Id, startPolling, router, pathname])
-
-  const handleFileSelected = useCallback(async (file: File) => {
-    if (!file.type.startsWith('video/')) {
-      setErrorStatus({
-        code: 'INVALID_TYPE',
-        message: 'Please select a valid video file.',
-        layer: 'client',
-        retryable: false,
-      })
-      setPipelineState('error')
-      return
-    }
-
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setErrorStatus({
-        code: 'FILE_TOO_LARGE',
-        message: 'File size must be less than 500MB.',
-        layer: 'client',
-        retryable: false,
-      })
-      setPipelineState('error')
-      return
-    }
-
-    try {
-      const result = await runScan(file)
-
-      setScanResult(result)
-      setAngleScans([result])
-      setActiveAngle(result.angle ?? 'primary')
+  const startAnalysisForScan = useCallback(
+    async (scan: ScanResult, playerIndex: number) => {
+      setSelectedPlayerIndex(playerIndex)
+      setPipelineState('analyzing')
       setUploadProgress(null)
-
-      if (result.player_count === 1) {
-        const playerIdx = result.players[0]?.player_index ?? 1
-        await startAnalysisForScan(result, playerIdx)
-      } else {
-        setPipelineState('selecting')
+      const { job_id } = await startAnalysis({
+        session_token: scan.session_token,
+        player_index: playerIndex,
+        video_key: scan.video_key,
+        angle: scan.angle ?? null,
+        auth0Id,
+      })
+      setJobId(job_id)
+      startPolling(job_id)
+      if (pathname !== `/dashboard/analysis/${job_id}`) {
+        router.push(`/dashboard/analysis/${job_id}`)
       }
-    } catch (e: unknown) {
-      setErrorStatus(toCoachAIError(e))
-      setPipelineState('error')
-      setUploadProgress(null)
-    }
-  }, [runScan, startAnalysisForScan])
+    },
+    [auth0Id, startPolling, router, pathname],
+  )
 
-  const handleAddAngle = useCallback(async (file: File, angle: string) => {
-    if (!scanResult) return
-    if (!file.type.startsWith('video/') || file.size > MAX_FILE_SIZE_BYTES) {
-      setErrorStatus({
-        code: file.type.startsWith('video/') ? 'FILE_TOO_LARGE' : 'INVALID_TYPE',
-        message: file.type.startsWith('video/')
-          ? 'File size must be less than 500MB.'
-          : 'Please select a valid video file.',
-        layer: 'client',
-        retryable: false,
-      })
-      setPipelineState('error')
-      return
-    }
+  const handleFileSelected = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('video/')) {
+        setErrorStatus({
+          code: 'INVALID_TYPE',
+          message: 'Please select a valid video file.',
+          layer: 'client',
+          retryable: false,
+        })
+        setPipelineState('error')
+        return
+      }
 
-    try {
-      const result = await runScan(file, {
-        sessionToken: scanResult.session_token,
-        angle,
-      })
-      const label = result.angle ?? angle
-      setAngleScans((prev) => {
-        const next = prev.filter((s) => (s.angle ?? 'primary') !== label)
-        return [...next, result]
-      })
-      setScanResult(result)
-      setActiveAngle(label)
-      setUploadProgress(null)
-      setPipelineState('selecting')
-    } catch (e: unknown) {
-      setErrorStatus(toCoachAIError(e))
-      setPipelineState('error')
-      setUploadProgress(null)
-    }
-  }, [scanResult, runScan])
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setErrorStatus({
+          code: 'FILE_TOO_LARGE',
+          message: 'File size must be less than 500MB.',
+          layer: 'client',
+          retryable: false,
+        })
+        setPipelineState('error')
+        return
+      }
+
+      try {
+        const result = await runScan(file)
+
+        setScanResult(result)
+        setAngleScans([result])
+        setActiveAngle(result.angle ?? 'primary')
+        setUploadProgress(null)
+
+        if (result.player_count === 1) {
+          const playerIdx = result.players[0]?.player_index ?? 1
+          await startAnalysisForScan(result, playerIdx)
+        } else {
+          setPipelineState('selecting')
+        }
+      } catch (e: unknown) {
+        setErrorStatus(toCoachAIError(e))
+        setPipelineState('error')
+        setUploadProgress(null)
+      }
+    },
+    [runScan, startAnalysisForScan],
+  )
+
+  const handleAddAngle = useCallback(
+    async (file: File, angle: string) => {
+      if (!scanResult) return
+      if (!file.type.startsWith('video/') || file.size > MAX_FILE_SIZE_BYTES) {
+        setErrorStatus({
+          code: file.type.startsWith('video/') ? 'FILE_TOO_LARGE' : 'INVALID_TYPE',
+          message: file.type.startsWith('video/')
+            ? 'File size must be less than 500MB.'
+            : 'Please select a valid video file.',
+          layer: 'client',
+          retryable: false,
+        })
+        setPipelineState('error')
+        return
+      }
+
+      try {
+        const result = await runScan(file, {
+          sessionToken: scanResult.session_token,
+          angle,
+        })
+        const label = result.angle ?? angle
+        setAngleScans((prev) => {
+          const next = prev.filter((s) => (s.angle ?? 'primary') !== label)
+          return [...next, result]
+        })
+        setScanResult(result)
+        setActiveAngle(label)
+        setUploadProgress(null)
+        setPipelineState('selecting')
+      } catch (e: unknown) {
+        setErrorStatus(toCoachAIError(e))
+        setPipelineState('error')
+        setUploadProgress(null)
+      }
+    },
+    [scanResult, runScan],
+  )
 
   const handleAngleChange = useCallback((angle: string) => {
     setActiveAngle(angle)
     setSelectedPlayerIndex(null)
   }, [])
 
-  const handlePlayerSelected = useCallback(async (playerIndex: number) => {
-    const active = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle)
-      ?? scanResult
-    if (!active) return
-    try {
-      await startAnalysisForScan(active, playerIndex)
-    } catch (e: unknown) {
-      setErrorStatus(toCoachAIError(e))
-      setPipelineState('error')
-    }
-  }, [angleScans, activeAngle, scanResult, startAnalysisForScan])
+  const handlePlayerSelected = useCallback(
+    async (playerIndex: number) => {
+      const active = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+      if (!active) return
+      try {
+        await startAnalysisForScan(active, playerIndex)
+      } catch (e: unknown) {
+        setErrorStatus(toCoachAIError(e))
+        setPipelineState('error')
+      }
+    },
+    [angleScans, activeAngle, scanResult, startAnalysisForScan],
+  )
 
   const handleRetry = useCallback(() => {
     stopPolling()
@@ -409,7 +432,16 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
       setErrorStatus(null)
       setUploadProgress(null)
     }
-  }, [scanResult, selectedPlayerIndex, errorStatus, stopPolling, startPolling, auth0Id, router, pathname])
+  }, [
+    scanResult,
+    selectedPlayerIndex,
+    errorStatus,
+    stopPolling,
+    startPolling,
+    auth0Id,
+    router,
+    pathname,
+  ])
 
   const handleReset = useCallback(() => {
     stopPolling()

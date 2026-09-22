@@ -52,7 +52,9 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
     setInvites(res.invites)
   }
 
-  const pending = invites.filter((i) => !i.accepted_at && !i.revoked_at && new Date(i.expires_at) > new Date())
+  const pending = invites.filter(
+    (i) => !i.accepted_at && !i.revoked_at && new Date(i.expires_at) > new Date(),
+  )
 
   const handleMint = async () => {
     if (!EMAIL_RE.test(email.trim())) {
@@ -62,7 +64,10 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
     setBusy(true)
     setError(null)
     try {
-      const res = await orgMintInvite(auth0Id, { email: email.trim(), role: role as OrgInvite['role'] })
+      const res = await orgMintInvite(auth0Id, {
+        email: email.trim(),
+        role: role as OrgInvite['role'],
+      })
       setLastToken(res.token)
       setEmail('')
       await refresh()
@@ -98,7 +103,13 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
               Single-use links, valid 7 days. {pending.length} pending.
             </CardDescription>
           </div>
-          <Button onClick={() => { setLastToken(null); setError(null); setOpen(true) }}>
+          <Button
+            onClick={() => {
+              setLastToken(null)
+              setError(null)
+              setOpen(true)
+            }}
+          >
             New invitation
           </Button>
         </div>
@@ -106,7 +117,9 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
       <CardContent className="space-y-2">
         {lastToken && inviteLink && (
           <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <p className="text-xs font-semibold text-foreground mb-1">Share this link (shown once)</p>
+            <p className="text-xs font-semibold text-foreground mb-1">
+              Share this link (shown once)
+            </p>
             <p className="text-xs text-muted-foreground break-all">{inviteLink}</p>
             <Button size="sm" variant="outline" className="mt-2 h-7" onClick={copyLink}>
               {copied ? 'Copied' : 'Copy link'}

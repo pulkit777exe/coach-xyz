@@ -59,11 +59,9 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
           const seconds = (finding.start_ms ?? 0) / 1000
           const override = reviewed[finding.id] as 'approved' | 'flagged' | undefined
           const state: string = override ?? finding.review_state ?? 'auto'
-          const severityClass =
-            SEVERITY_STYLE[finding.severity ?? ''] ?? SEVERITY_STYLE.medium
+          const severityClass = SEVERITY_STYLE[finding.severity ?? ''] ?? SEVERITY_STYLE.medium
           const isPending = pending.has(finding.id)
-          const showReview =
-            onReview && (state === 'auto' || state === 'needs_review')
+          const showReview = onReview && (state === 'auto' || state === 'needs_review')
           return (
             <li key={finding.id}>
               <div
@@ -82,7 +80,9 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <span className="text-xs font-mono font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
                       {seconds.toFixed(1)}s
                     </span>
-                    <span className={`text-[0.65rem] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${severityClass}`}>
+                    <span
+                      className={`text-[0.65rem] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${severityClass}`}
+                    >
                       {finding.severity ?? 'medium'}
                     </span>
                     <span className="text-[0.65rem] text-muted-foreground">

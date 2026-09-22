@@ -1,11 +1,11 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { toast } from "sonner"
+import { useState } from 'react'
+import { toast } from 'sonner'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -13,12 +13,12 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
-import { Spinner } from "./Spinner"
+} from '@/components/9ui/ui/dialog'
+import { Spinner } from './Spinner'
 
-import { orgEmailReport } from "@/lib/org"
-import type { ReportRecord } from "@/lib/org"
-import type { CoachAIError } from "@/lib/api"
+import { orgEmailReport } from '@/lib/org'
+import type { ReportRecord } from '@/lib/org'
+import type { CoachAIError } from '@/lib/api'
 
 export default function EmailReportDialog({
   auth0Id,
@@ -33,7 +33,7 @@ export default function EmailReportDialog({
   onOpenChange: (open: boolean) => void
   defaultEmail?: string
 }) {
-  const [to, setTo] = useState(defaultEmail ?? "")
+  const [to, setTo] = useState(defaultEmail ?? '')
   const [busy, setBusy] = useState(false)
 
   const handleSend = async () => {
@@ -42,14 +42,14 @@ export default function EmailReportDialog({
     try {
       await orgEmailReport(auth0Id, { report_id: report.id, to: to.trim() })
       toast.success(`Report emailed to ${to.trim()}`)
-      setTo("")
+      setTo('')
       onOpenChange(false)
     } catch (err) {
       const e = err as CoachAIError
-      if (e.code === "EMAIL_NOT_CONFIGURED") {
-        toast.error("Email sending is not configured on the server.")
+      if (e.code === 'EMAIL_NOT_CONFIGURED') {
+        toast.error('Email sending is not configured on the server.')
       } else {
-        toast.error(e.message ?? "Failed to email report")
+        toast.error(e.message ?? 'Failed to email report')
       }
     } finally {
       setBusy(false)
@@ -61,7 +61,7 @@ export default function EmailReportDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) {
-          setTo(defaultEmail ?? "")
+          setTo(defaultEmail ?? '')
           setBusy(false)
         }
         onOpenChange(o)
@@ -97,7 +97,7 @@ export default function EmailReportDialog({
             Cancel
           </Button>
           <Button onClick={handleSend} disabled={busy || !to.trim()}>
-            {busy ? <Spinner /> : "Send"}
+            {busy ? <Spinner /> : 'Send'}
           </Button>
         </DialogFooter>
       </DialogContent>

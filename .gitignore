@@ -42,3 +42,6 @@ todo.md
 
 # Runtime logs
 .logs/
+
+.opencode
+node_modules

@@ -8,7 +8,13 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
-import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl, deleteAnalysis, cancelAnalysis } from '@/lib/api'
+import {
+  getJobStatus,
+  getAuthorizedDownloadUrl,
+  getDownloadUrl,
+  deleteAnalysis,
+  cancelAnalysis,
+} from '@/lib/api'
 import type { CoachAIError } from '@/lib/api'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
@@ -31,7 +37,6 @@ import { LoadingButton } from '@/components/interior/loading-button'
 import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
-
 
 const POLL_INTERVAL = 2000
 const MAX_POLL_RETRIES = 3
@@ -81,7 +86,9 @@ export default function AnalysisDetailClient({
     void getAuthorizedDownloadUrl(jobId).then((url) => {
       if (!cancelled) setDownloadUrl(url)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [jobId])
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
 
@@ -178,8 +185,18 @@ export default function AnalysisDetailClient({
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-          <svg className="size-16 mx-auto mb-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="size-16 mx-auto mb-6 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <h1 className="text-2xl font-semibold text-foreground mb-3">Analysis Expired</h1>
           <p className="text-muted-foreground mb-6">{expiredMessage}</p>
@@ -199,7 +216,7 @@ export default function AnalysisDetailClient({
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-<div className="size-12 animate-spin rounded-full border-4 border-muted border-t-primary mb-4" />
+          <div className="size-12 animate-spin rounded-full border-4 border-muted border-t-primary mb-4" />
           <p className="text-muted-foreground text-sm mb-2">Loading analysis...</p>
           <p className="text-destructive text-xs">{pollError}</p>
         </div>
@@ -248,13 +265,7 @@ export default function AnalysisDetailClient({
   }
 
   if (!initialData && status?.complete && status.summary) {
-    return (
-      <ResultsSummary
-        status={status}
-        jobId={jobId}
-        onReset={() => router.push('/')}
-      />
-    )
+    return <ResultsSummary status={status} jobId={jobId} onReset={() => router.push('/')} />
   }
 
   if (!initialData) {
@@ -280,21 +291,26 @@ export default function AnalysisDetailClient({
   const em: string | null = data.error_message
 
   const summaryRaw = data.summary_json
-  const summary = summaryRaw && typeof summaryRaw === 'object' && !Array.isArray(summaryRaw)
-    ? summaryRaw as Record<string, unknown>
-    : typeof summaryRaw === 'string'
-      ? (() => { try { return JSON.parse(summaryRaw) as Record<string, unknown> } catch { return null } })()
-      : null
+  const summary =
+    summaryRaw && typeof summaryRaw === 'object' && !Array.isArray(summaryRaw)
+      ? (summaryRaw as Record<string, unknown>)
+      : typeof summaryRaw === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(summaryRaw) as Record<string, unknown>
+            } catch {
+              return null
+            }
+          })()
+        : null
 
-  const drill: string | null = summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
+  const drill: string | null =
+    summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
 
   return (
     <div ref={containerRef} className="p-8 lg:p-12 max-w-[1080px] mx-auto">
       {/* Reading Progress */}
-      <ReadingProgress
-        scroller={containerRef}
-        className="fixed top-14 left-0 right-0 z-40"
-      />
+      <ReadingProgress scroller={containerRef} className="fixed top-14 left-0 right-0 z-40" />
 
       {/* Scroll Spy Navigation */}
       <ScrollSpy
@@ -328,7 +344,12 @@ export default function AnalysisDetailClient({
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Analysis Detail
           </p>
-          <AnalysisTitle auth0Id={auth0Id} jobId={jobId} displayName={data.display_name} fileName={data.file_name} />
+          <AnalysisTitle
+            auth0Id={auth0Id}
+            jobId={jobId}
+            displayName={data.display_name}
+            fileName={data.file_name}
+          />
           <div className="mt-4 flex items-center gap-4 text-[0.65rem] text-muted-foreground">
             <span>
               {new Date(data.requested_at).toLocaleDateString('en-US', {
@@ -340,11 +361,11 @@ export default function AnalysisDetailClient({
               })}
             </span>
             {data.model && <span>{data.model}</span>}
-            {data.player_count
-              ? (
-                <span>{data.player_count} player{data.player_count > 1 ? 's' : ''}</span>
-              )
-              : null}
+            {data.player_count ? (
+              <span>
+                {data.player_count} player{data.player_count > 1 ? 's' : ''}
+              </span>
+            ) : null}
           </div>
         </div>
         <span
@@ -378,7 +399,9 @@ export default function AnalysisDetailClient({
         )}
         {data.complete && data.video_ready && (
           <LoadingButton
-            onAction={() => { window.location.href = downloadUrl }}
+            onAction={() => {
+              window.location.href = downloadUrl
+            }}
             pendingLabel="Downloading..."
             successLabel="Started!"
             className="!border !border-border !bg-transparent !px-4 !py-2 !text-[0.65rem] !uppercase tracking-[0.15em] !text-muted-foreground hover:!text-foreground"
@@ -386,18 +409,10 @@ export default function AnalysisDetailClient({
             Download Video
           </LoadingButton>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowMetadataDrawer(true)}
-        >
+        <Button variant="outline" size="sm" onClick={() => setShowMetadataDrawer(true)}>
           View Metadata
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setLightboxOpen(true)}
-        >
+        <Button variant="outline" size="sm" onClick={() => setLightboxOpen(true)}>
           Preview
         </Button>
 
@@ -426,7 +441,11 @@ export default function AnalysisDetailClient({
         >
           Share
         </Button>
-        <AnalysisLinkControl auth0Id={auth0Id} jobId={data.server_job_id} initialStudentId={data.student_id} />
+        <AnalysisLinkControl
+          auth0Id={auth0Id}
+          jobId={data.server_job_id}
+          initialStudentId={data.student_id}
+        />
         <HoldToConfirm
           onConfirm={async () => {
             await deleteAnalysis(auth0Id, data.server_job_id)
@@ -518,25 +537,25 @@ export default function AnalysisDetailClient({
           {[
             {
               label: 'Form Score',
-              value: 'form_score' in summary ? summary.form_score as number : '—',
+              value: 'form_score' in summary ? (summary.form_score as number) : '—',
             },
             {
               label: 'Confidence',
-              value: 'confidence' in summary
-                ? `${(summary.confidence as number * 100).toFixed(0)}%`
-                : '—',
+              value:
+                'confidence' in summary
+                  ? `${((summary.confidence as number) * 100).toFixed(0)}%`
+                  : '—',
             },
             {
               label: 'Total Events',
-              value: 'total_events' in summary ? summary.total_events as number : '—',
+              value: 'total_events' in summary ? (summary.total_events as number) : '—',
             },
             {
               label: 'Duration',
-              value: 'duration_sec' in summary
-                ? `${Math.round(summary.duration_sec as number)}s`
-                : '—',
+              value:
+                'duration_sec' in summary ? `${Math.round(summary.duration_sec as number)}s` : '—',
             },
-          ].map(card => (
+          ].map((card) => (
             <div key={card.label} className="rounded-xl border border-border bg-card p-6 shadow-sm">
               <p className="font-semibold text-3xl text-foreground">{card.value}</p>
               <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -548,7 +567,9 @@ export default function AnalysisDetailClient({
                   label="Form score is calculated by AI based on technique, mechanics, and body position across all keyframes."
                   className="[&_*]:!text-foreground"
                 >
-                  <span className="mt-2 inline-block cursor-help text-[11px] text-muted-foreground underline decoration-dotted">What is this?</span>
+                  <span className="mt-2 inline-block cursor-help text-[11px] text-muted-foreground underline decoration-dotted">
+                    What is this?
+                  </span>
                 </Popover>
               )}
             </div>
@@ -557,56 +578,63 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Shot Events with Reorder */}
-      {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && shotEvents.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Event Priority (drag to reorder)
-          </p>
-          <ReorderList
-            items={shotEvents.slice(0, 5)}
-            getId={(e) => typeof e.event_type === 'string' ? e.event_type : 'event'}
-            getLabel={(e) => typeof e.event_type === 'string' ? e.event_type : 'Event'}
-            onReorder={() => {}}
-            label="Shot events"
-            className="[&_*]:!text-foreground"
-          >
-            {(event) => (
-              <div className="flex items-center gap-3 py-2">
-                <span className="font-mono text-xs text-muted-foreground w-8">
-                  {typeof event.timestamp === 'number' ? `${event.timestamp.toFixed(1)}s` : '—'}
-                </span>
-                <span className="text-sm text-foreground">
-                  {typeof event.event_type === 'string' ? event.event_type : 'Event'}
-                </span>
-                {typeof event.form_score === 'number' && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded-lg ${
-                    event.form_score >= 8 ? 'text-foreground bg-muted' :
-                    event.form_score >= 5 ? 'text-warning bg-warning/10' :
-                    'text-destructive bg-destructive/10'
-                  }`}>
-                    {event.form_score}/10
+      {summary &&
+        'shot_events' in summary &&
+        Array.isArray(summary.shot_events) &&
+        shotEvents.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
+            <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Event Priority (drag to reorder)
+            </p>
+            <ReorderList
+              items={shotEvents.slice(0, 5)}
+              getId={(e) => (typeof e.event_type === 'string' ? e.event_type : 'event')}
+              getLabel={(e) => (typeof e.event_type === 'string' ? e.event_type : 'Event')}
+              onReorder={() => {}}
+              label="Shot events"
+              className="[&_*]:!text-foreground"
+            >
+              {(event) => (
+                <div className="flex items-center gap-3 py-2">
+                  <span className="font-mono text-xs text-muted-foreground w-8">
+                    {typeof event.timestamp === 'number' ? `${event.timestamp.toFixed(1)}s` : '—'}
                   </span>
-                )}
-              </div>
-            )}
-          </ReorderList>
-        </div>
-      )}
+                  <span className="text-sm text-foreground">
+                    {typeof event.event_type === 'string' ? event.event_type : 'Event'}
+                  </span>
+                  {typeof event.form_score === 'number' && (
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded-lg ${
+                        event.form_score >= 8
+                          ? 'text-foreground bg-muted'
+                          : event.form_score >= 5
+                            ? 'text-warning bg-warning/10'
+                            : 'text-destructive bg-destructive/10'
+                      }`}
+                    >
+                      {event.form_score}/10
+                    </span>
+                  )}
+                </div>
+              )}
+            </ReorderList>
+          </div>
+        )}
 
       {/* Shot Events with Show More */}
       {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && (
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
           <p className="mb-6 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Shot Events {shotEvents.length > visibleEventCount && `(${visibleEventCount} of ${shotEvents.length})`}
+            Shot Events{' '}
+            {shotEvents.length > visibleEventCount &&
+              `(${visibleEventCount} of ${shotEvents.length})`}
           </p>
           <div className="space-y-0">
             {shotEvents.slice(0, visibleEventCount).map((event, i) => (
               <div
                 key={i}
                 className={`flex items-start gap-4 py-3 ${
-                  i < shotEvents.length - 1
-                    ? 'border-b border-border'
-                    : ''
+                  i < shotEvents.length - 1 ? 'border-b border-border' : ''
                 }`}
               >
                 {typeof event.timestamp === 'number' && (
@@ -621,11 +649,15 @@ export default function AnalysisDetailClient({
                       {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                     </p>
                     {typeof event.form_score === 'number' && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-lg ${
-                        event.form_score >= 8 ? 'text-foreground bg-muted' :
-                        event.form_score >= 5 ? 'text-warning bg-warning/10' :
-                        'text-destructive bg-destructive/10'
-                      }`}>
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded-lg ${
+                          event.form_score >= 8
+                            ? 'text-foreground bg-muted'
+                            : event.form_score >= 5
+                              ? 'text-warning bg-warning/10'
+                              : 'text-destructive bg-destructive/10'
+                        }`}
+                      >
                         {event.form_score}/10
                       </span>
                     )}
@@ -654,42 +686,52 @@ export default function AnalysisDetailClient({
       {/* Tips & Strengths */}
       {summary && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          {'top_tips' in summary && Array.isArray(summary.top_tips) && (summary.top_tips as string[]).length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Priority Focus</p>
-              <ShowMore lines={3} className="[&_*]:!text-foreground">
+          {'top_tips' in summary &&
+            Array.isArray(summary.top_tips) &&
+            (summary.top_tips as string[]).length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Priority Focus
+                </p>
+                <ShowMore lines={3} className="[&_*]:!text-foreground">
+                  <ul className="space-y-2">
+                    {(summary.top_tips as string[]).map((tip, i) => (
+                      <li key={i} className="text-sm text-foreground flex items-start gap-2">
+                        <span className="text-muted-foreground shrink-0">{i + 1}.</span>
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </ShowMore>
+              </div>
+            )}
+
+          {'strengths' in summary &&
+            Array.isArray(summary.strengths) &&
+            (summary.strengths as string[]).length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Strengths
+                </p>
                 <ul className="space-y-2">
-                  {(summary.top_tips as string[]).map((tip, i) => (
+                  {(summary.strengths as string[]).map((s, i) => (
                     <li key={i} className="text-sm text-foreground flex items-start gap-2">
-                      <span className="text-muted-foreground shrink-0">{i + 1}.</span>
-                      {tip}
+                      <span className="text-success shrink-0">✓</span>
+                      {s}
                     </li>
                   ))}
                 </ul>
-              </ShowMore>
-            </div>
-          )}
-
-          {'strengths' in summary && Array.isArray(summary.strengths) && (summary.strengths as string[]).length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Strengths</p>
-              <ul className="space-y-2">
-                {(summary.strengths as string[]).map((s, i) => (
-                  <li key={i} className="text-sm text-foreground flex items-start gap-2">
-                    <span className="text-success shrink-0">✓</span>
-                    {s}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+              </div>
+            )}
         </div>
       )}
 
       {/* Drill */}
       {drill && (
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Recommended Drill</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Recommended Drill
+          </p>
           <p className="text-sm text-foreground">{drill}</p>
         </div>
       )}
@@ -750,9 +792,7 @@ export default function AnalysisDetailClient({
               <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 Completed
               </dt>
-              <dd className="text-foreground">
-                {new Date(data.completed_at).toLocaleString()}
-              </dd>
+              <dd className="text-foreground">{new Date(data.completed_at).toLocaleString()}</dd>
             </div>
           )}
           {data.download_count > 0 && (
@@ -772,7 +812,10 @@ export default function AnalysisDetailClient({
           <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
             Chat with AI
           </p>
-          <div className="rounded-xl border border-border bg-card overflow-hidden" style={{ height: 'min(500px, 60vh)' }}>
+          <div
+            className="rounded-xl border border-border bg-card overflow-hidden"
+            style={{ height: 'min(500px, 60vh)' }}
+          >
             <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
           </div>
         </div>
@@ -809,24 +852,38 @@ export default function AnalysisDetailClient({
           <h3 className="text-lg font-bold tracking-tight text-foreground">Metadata</h3>
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Job ID</dt>
-              <dd className="text-foreground font-mono text-xs break-all mt-1">{data.engine_job_id}</dd>
+              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Job ID
+              </dt>
+              <dd className="text-foreground font-mono text-xs break-all mt-1">
+                {data.engine_job_id}
+              </dd>
             </div>
             {data.session_token && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Session Token</dt>
-                <dd className="text-foreground font-mono text-xs break-all mt-1">{data.session_token}</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Session Token
+                </dt>
+                <dd className="text-foreground font-mono text-xs break-all mt-1">
+                  {data.session_token}
+                </dd>
               </div>
             )}
             {data.completed_at && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Completed</dt>
-                <dd className="text-foreground mt-1">{new Date(data.completed_at).toLocaleString()}</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Completed
+                </dt>
+                <dd className="text-foreground mt-1">
+                  {new Date(data.completed_at).toLocaleString()}
+                </dd>
               </div>
             )}
             {data.download_count > 0 && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Downloads</dt>
+                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Downloads
+                </dt>
                 <dd className="text-foreground mt-1">{data.download_count}</dd>
               </div>
             )}

@@ -1,8 +1,8 @@
-import { Elysia } from "elysia";
-import { buildError } from "./errors";
-import { getMemberRole, listOrgMembers } from "./orgMembers";
-import type { OrgMemberRole } from "./orgMembers";
-import { timingSafeEqual } from "node:crypto";
+import { Elysia } from 'elysia'
+import { buildError } from './errors'
+import { getMemberRole, listOrgMembers } from './orgMembers'
+import type { OrgMemberRole } from './orgMembers'
+import { timingSafeEqual } from 'node:crypto'
 
 // ── Service-to-service identity guard ────────────────────────────────────────
 // The web app (Next.js) sits between the browser and this server. The proxy
@@ -15,31 +15,30 @@ import { timingSafeEqual } from "node:crypto";
 // development (web pointed straight at the server) keeps working.
 
 export const SERVICE_HEADERS = {
-  token: "x-service-token",
-  verifiedAuth0Id: "x-verified-auth0-id",
-} as const;
+  token: 'x-service-token',
+  verifiedAuth0Id: 'x-verified-auth0-id',
+} as const
 
 export function serviceGuardEnabled(): boolean {
-  return Boolean(process.env.SERVICE_TOKEN);
+  return Boolean(process.env.SERVICE_TOKEN)
 }
 
-let warnedAboutDisabledGuard = false;
+let warnedAboutDisabledGuard = false
 function maybeLogDisabled() {
-  if (serviceGuardEnabled() || warnedAboutDisabledGuard) return;
-  warnedAboutDisabledGuard = true;
+  if (serviceGuardEnabled() || warnedAboutDisabledGuard) return
+  warnedAboutDisabledGuard = true
   console.warn(
     JSON.stringify({
-      type: "service_guard_disabled",
+      type: 'service_guard_disabled',
       message:
-        "SERVICE_TOKEN not set — browser is expected to call this server directly. Set it on both server and web app to enforce the identity boundary.",
+        'SERVICE_TOKEN not set — browser is expected to call this server directly. Set it on both server and web app to enforce the identity boundary.',
       timestamp: new Date().toISOString(),
     }),
-  );
+  )
 }
 
 export type ServiceIdentityCheck =
-  | { ok: true }
-  | { ok: false; status: 403; body: ReturnType<typeof buildError> };
+  { ok: true } | { ok: false; status: 403; body: ReturnType<typeof buildError> }
 
 /**
  * Verifies a request's service headers against the resource owner's auth0Id.
@@ -59,54 +58,54 @@ export function verifyServiceIdentity(
   verifiedAuth0Id: string | null,
   resourceAuth0Id: string | null | undefined,
   opts: {
-    self?: boolean;
-    memberRole?: OrgMemberRole | null;
-    allowedMemberRoles?: readonly OrgMemberRole[];
+    self?: boolean
+    memberRole?: OrgMemberRole | null
+    allowedMemberRoles?: readonly OrgMemberRole[]
   } = {},
 ): ServiceIdentityCheck {
   if (!serviceGuardEnabled()) {
-    maybeLogDisabled();
-    return { ok: true };
+    maybeLogDisabled()
+    return { ok: true }
   }
 
   // Constant-time token compare — never short-circuit on a mismatch.
-  const expected = process.env.SERVICE_TOKEN;
-  let tokenOk = false;
+  const expected = process.env.SERVICE_TOKEN
+  let tokenOk = false
   if (token && expected) {
     try {
-      tokenOk = timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+      tokenOk = timingSafeEqual(Buffer.from(token), Buffer.from(expected))
     } catch {
       // Buffer length mismatch throws — treat as non-match.
-      tokenOk = false;
+      tokenOk = false
     }
   }
   if (!tokenOk) {
     return {
       ok: false,
       status: 403,
-      body: buildError("FORBIDDEN", "Invalid service credentials", false),
-    };
+      body: buildError('FORBIDDEN', 'Invalid service credentials', false),
+    }
   }
 
   if (!verifiedAuth0Id) {
     return {
       ok: false,
       status: 403,
-      body: buildError("FORBIDDEN", "Missing verified identity", false),
-    };
+      body: buildError('FORBIDDEN', 'Missing verified identity', false),
+    }
   }
 
-  if (opts.self) return { ok: true };
+  if (opts.self) return { ok: true }
 
   if (!resourceAuth0Id) {
     return {
       ok: false,
       status: 403,
-      body: buildError("FORBIDDEN", "Missing requested account", false),
-    };
+      body: buildError('FORBIDDEN', 'Missing requested account', false),
+    }
   }
 
-  if (verifiedAuth0Id === resourceAuth0Id) return { ok: true };
+  if (verifiedAuth0Id === resourceAuth0Id) return { ok: true }
 
   // Cross-account access via org membership. Some trees (notably
   // /api/auth/user/*, where the resource id is the coach's own account and the
@@ -114,30 +113,29 @@ export function verifyServiceIdentity(
   // access to another account — restrict those trees via allowedMemberRoles.
   if (
     opts.memberRole &&
-    (!opts.allowedMemberRoles ||
-      opts.allowedMemberRoles.includes(opts.memberRole))
+    (!opts.allowedMemberRoles || opts.allowedMemberRoles.includes(opts.memberRole))
   ) {
-    return { ok: true };
+    return { ok: true }
   }
 
   return {
     ok: false,
     status: 403,
     body: buildError(
-      "FORBIDDEN",
-      "Authenticated identity does not match the requested account",
+      'FORBIDDEN',
+      'Authenticated identity does not match the requested account',
       false,
     ),
-  };
+  }
 }
 
 /** True for identity-bearing paths whose resource id names an ORG (not a self route). */
 function isOrgScopedPath(pathname: string): boolean {
   return (
-    pathname.startsWith("/api/org/") ||
-    pathname.startsWith("/api/email/") ||
-    pathname.startsWith("/api/auth/user/")
-  );
+    pathname.startsWith('/api/org/') ||
+    pathname.startsWith('/api/email/') ||
+    pathname.startsWith('/api/auth/user/')
+  )
 }
 
 export async function resolveMemberRoleForPath(
@@ -145,28 +143,22 @@ export async function resolveMemberRoleForPath(
   orgAuth0Id: string,
   verifiedAuth0Id: string,
 ): Promise<OrgMemberRole | null> {
-  if (
-    !isOrgScopedPath(pathname) ||
-    !orgAuth0Id ||
-    orgAuth0Id === verifiedAuth0Id
-  )
-    return null;
+  if (!isOrgScopedPath(pathname) || !orgAuth0Id || orgAuth0Id === verifiedAuth0Id) return null
   try {
-    return await getMemberRole(orgAuth0Id, verifiedAuth0Id);
+    return await getMemberRole(orgAuth0Id, verifiedAuth0Id)
   } catch {
     // DB unavailable — deny by treating the caller as a non-member.
-    return null;
+    return null
   }
 }
 
 export type OrgRoleCheck =
-  | { ok: true }
-  | { ok: false; status: 403; body: ReturnType<typeof buildError> };
+  { ok: true } | { ok: false; status: 403; body: ReturnType<typeof buildError> }
 
 export type OrgRoleMember = {
-  member_auth0_id: string | null;
-  role: OrgMemberRole;
-};
+  member_auth0_id: string | null
+  role: OrgMemberRole
+}
 
 /**
  * Pure decision rule for the org-membership role guard. `members` is the org's
@@ -181,44 +173,40 @@ export type OrgRoleMember = {
  * Everything else is denied with 403.
  */
 export function verifyOrgRole(opts: {
-  verifiedAuth0Id: string | null;
-  orgAuth0Id: string;
-  requiredRoles: readonly OrgMemberRole[];
-  members: OrgRoleMember[] | null;
+  verifiedAuth0Id: string | null
+  orgAuth0Id: string
+  requiredRoles: readonly OrgMemberRole[]
+  members: OrgRoleMember[] | null
 }): OrgRoleCheck {
-  const { verifiedAuth0Id, orgAuth0Id, requiredRoles, members } = opts;
+  const { verifiedAuth0Id, orgAuth0Id, requiredRoles, members } = opts
 
   if (!serviceGuardEnabled()) {
-    maybeLogDisabled();
-    return { ok: true };
+    maybeLogDisabled()
+    return { ok: true }
   }
 
   if (!verifiedAuth0Id) {
     return {
       ok: false,
       status: 403,
-      body: buildError("FORBIDDEN", "Missing verified identity", false),
-    };
+      body: buildError('FORBIDDEN', 'Missing verified identity', false),
+    }
   }
 
   const callerRole = members?.find(
     (m) => m.member_auth0_id && m.member_auth0_id === verifiedAuth0Id,
-  )?.role;
-  if (callerRole && requiredRoles.includes(callerRole)) return { ok: true };
+  )?.role
+  if (callerRole && requiredRoles.includes(callerRole)) return { ok: true }
 
-  if (verifiedAuth0Id === orgAuth0Id && requiredRoles.includes("owner")) {
-    return { ok: true };
+  if (verifiedAuth0Id === orgAuth0Id && requiredRoles.includes('owner')) {
+    return { ok: true }
   }
 
   return {
     ok: false,
     status: 403,
-    body: buildError(
-      "FORBIDDEN",
-      "Insufficient role for this organization",
-      false,
-    ),
-  };
+    body: buildError('FORBIDDEN', 'Insufficient role for this organization', false),
+  }
 }
 
 /**
@@ -229,31 +217,29 @@ export function verifyOrgRole(opts: {
  */
 export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
   new Elysia({
-    name: `orgRoleGuard:${requiredRoles.join("|")}`,
-  }).onBeforeHandle({ as: "scoped" }, async ({ request, params, set }) => {
+    name: `orgRoleGuard:${requiredRoles.join('|')}`,
+  }).onBeforeHandle({ as: 'scoped' }, async ({ request, params, set }) => {
     if (!serviceGuardEnabled()) {
-      maybeLogDisabled();
-      return;
+      maybeLogDisabled()
+      return
     }
     const auth0Id =
-      typeof (params as Record<string, unknown>)?.auth0Id === "string"
+      typeof (params as Record<string, unknown>)?.auth0Id === 'string'
         ? ((params as Record<string, unknown>).auth0Id as string)
-        : undefined;
+        : undefined
     if (!auth0Id) {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "Missing auth0Id parameter", false);
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verifiedAuth0Id = request.headers.get(
-      SERVICE_HEADERS.verifiedAuth0Id,
-    );
+    const verifiedAuth0Id = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     // Owner fast-path: the org owner always holds the owner role (rows are
     // lazily seeded), so skip the member-list DB round-trip entirely.
-    if (verifiedAuth0Id === auth0Id && requiredRoles.includes("owner")) {
-      return;
+    if (verifiedAuth0Id === auth0Id && requiredRoles.includes('owner')) {
+      return
     }
-    let members: OrgRoleMember[] | null = null;
+    let members: OrgRoleMember[] | null = null
     try {
-      members = await listOrgMembers(auth0Id);
+      members = await listOrgMembers(auth0Id)
     } catch {
       // DB unavailable — fail the check below on empty membership.
     }
@@ -262,12 +248,12 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
       orgAuth0Id: auth0Id,
       requiredRoles,
       members,
-    });
+    })
     if (!outcome.ok) {
-      set.status = outcome.status;
-      return outcome.body;
+      set.status = outcome.status
+      return outcome.body
     }
-  });
+  })
 
 /** Roles allowed cross-account access on /api/auth/user/* trees. The resource
  * id is the coach's own account (analyses carry full summary_json), so
@@ -275,65 +261,57 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
  * — players use self-scoped /api/me/* instead. Analysts are in: analysis is
  * their job. */
 export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
-  "owner",
-  "admin",
-  "coach",
-  "analyst",
-];
+  'owner',
+  'admin',
+  'coach',
+  'analyst',
+]
 
 const isAuthUserPath = (url: string): boolean => {
   try {
-    return new URL(url).pathname.startsWith("/api/auth/user/");
+    return new URL(url).pathname.startsWith('/api/auth/user/')
   } catch {
-    return false;
+    return false
   }
-};
+}
 
 const isSelfPath = (url: string): boolean => {
   try {
-    const pathname = new URL(url).pathname;
-    return pathname.startsWith("/api/me");
+    const pathname = new URL(url).pathname
+    return pathname.startsWith('/api/me')
   } catch {
-    return false;
+    return false
   }
-};
+}
 
 /**
  * Elysia plugin for identity-bearing route trees. For path-scoped routes the
  * resource owner is `params.auth0Id` (e.g. /api/org/:auth0Id/...); for the
  * onboarding sync route it is `body.sub`.
  */
-export const serviceGuard = new Elysia({ name: "serviceGuard" }).onBeforeHandle(
-  { as: "global" },
+export const serviceGuard = new Elysia({ name: 'serviceGuard' }).onBeforeHandle(
+  { as: 'global' },
   async ({ request, params, body, set }) => {
     if (!serviceGuardEnabled()) {
-      maybeLogDisabled();
-      return;
+      maybeLogDisabled()
+      return
     }
 
     const pathAuth0Id =
-      typeof (params as Record<string, unknown>)?.auth0Id === "string"
+      typeof (params as Record<string, unknown>)?.auth0Id === 'string'
         ? ((params as Record<string, unknown>).auth0Id as string)
-        : undefined;
+        : undefined
     const bodyAuth0Id =
-      body &&
-      typeof body === "object" &&
-      typeof (body as Record<string, unknown>).sub === "string"
+      body && typeof body === 'object' && typeof (body as Record<string, unknown>).sub === 'string'
         ? ((body as Record<string, unknown>).sub as string)
-        : undefined;
-    const resourceAuth0Id = pathAuth0Id ?? bodyAuth0Id;
+        : undefined
+    const resourceAuth0Id = pathAuth0Id ?? bodyAuth0Id
 
-    const verifiedAuth0Id = request.headers.get(
-      SERVICE_HEADERS.verifiedAuth0Id,
-    );
+    const verifiedAuth0Id = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     const memberRole =
       resourceAuth0Id && verifiedAuth0Id
-        ? await resolveMemberRoleForPath(
-            request.url,
-            resourceAuth0Id,
-            verifiedAuth0Id,
-          )
-        : null;
+        ? await resolveMemberRoleForPath(request.url, resourceAuth0Id, verifiedAuth0Id)
+        : null
 
     const outcome = verifyServiceIdentity(
       request.headers.get(SERVICE_HEADERS.token),
@@ -346,10 +324,10 @@ export const serviceGuard = new Elysia({ name: "serviceGuard" }).onBeforeHandle(
           ? AUTH_USER_ALLOWED_MEMBER_ROLES
           : undefined,
       },
-    );
+    )
     if (!outcome.ok) {
-      set.status = outcome.status;
-      return outcome.body;
+      set.status = outcome.status
+      return outcome.body
     }
   },
-);
+)

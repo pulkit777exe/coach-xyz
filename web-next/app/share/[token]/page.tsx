@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import { unstable_noStore as noStore } from "next/cache";
-import { ClockIcon, LinkIcon } from "lucide-react";
-import { resolveShareToken } from "@/lib/aiReports";
-import type { SharedAnalysis } from "@/lib/aiReports";
-import type { CoachAIError } from "@/lib/api";
-import { formatDateLong } from "@/lib/date";
+import type { Metadata } from 'next'
+import { unstable_noStore as noStore } from 'next/cache'
+import { ClockIcon, LinkIcon } from 'lucide-react'
+import { resolveShareToken } from '@/lib/aiReports'
+import type { SharedAnalysis } from '@/lib/aiReports'
+import type { CoachAIError } from '@/lib/api'
+import { formatDateLong } from '@/lib/date'
 
 // Public share page for players/coaches who receive a share link. No login is
 // required: the backend resolves the token out-of-band and returns a read-only
@@ -14,39 +14,35 @@ import { formatDateLong } from "@/lib/date";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ token: string }>;
+  params: Promise<{ token: string }>
 }): Promise<Metadata> {
-  const { token } = await params;
+  const { token } = await params
   try {
-    const res = await resolveShareToken(token);
-    const label = res.analysis.display_name || res.server_job_id.slice(0, 8);
+    const res = await resolveShareToken(token)
+    const label = res.analysis.display_name || res.server_job_id.slice(0, 8)
     return {
       title: `${label} | CoachXYZ`,
-      description: "Shared analysis from CoachXYZ.",
-    };
+      description: 'Shared analysis from CoachXYZ.',
+    }
   } catch {
-    return { title: "Shared analysis | CoachXYZ" };
+    return { title: 'Shared analysis | CoachXYZ' }
   }
 }
 
-export default async function SharePage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
-  noStore();
-  const { token } = await params;
+export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
+  noStore()
+  const { token } = await params
 
-  let data: SharedAnalysis | null = null;
-  let problem: { expired: boolean; message: string } | null = null;
+  let data: SharedAnalysis | null = null
+  let problem: { expired: boolean; message: string } | null = null
   try {
-    data = await resolveShareToken(token);
+    data = await resolveShareToken(token)
   } catch (err) {
-    const e = err as CoachAIError;
+    const e = err as CoachAIError
     problem = {
-      expired: e.code === "SHARE_EXPIRED",
-      message: e.message ?? "This share link is no longer available.",
-    };
+      expired: e.code === 'SHARE_EXPIRED',
+      message: e.message ?? 'This share link is no longer available.',
+    }
   }
 
   if (problem || !data) {
@@ -57,7 +53,7 @@ export default async function SharePage({
             {problem?.expired ? <ClockIcon className="size-6" /> : <LinkIcon className="size-6" />}
           </div>
           <h1 className="text-foreground mt-4 text-2xl font-semibold tracking-tight">
-            {problem?.expired ? "Share link expired" : "Link not found"}
+            {problem?.expired ? 'Share link expired' : 'Link not found'}
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">{problem?.message}</p>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -65,12 +61,12 @@ export default async function SharePage({
           </p>
         </div>
       </div>
-    );
+    )
   }
 
-  const summary = toRecord(data.analysis.summary_json);
-  const shotEvents = summary && isEvents(summary.shot_events) ? summary.shot_events : [];
-  const label = data.analysis.display_name || data.server_job_id.slice(0, 8);
+  const summary = toRecord(data.analysis.summary_json)
+  const shotEvents = summary && isEvents(summary.shot_events) ? summary.shot_events : []
+  const label = data.analysis.display_name || data.server_job_id.slice(0, 8)
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
@@ -90,18 +86,27 @@ export default async function SharePage({
       {summary && (
         <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Form Score", value: fmtStat(num(summary.form_score), "—") },
+            { label: 'Form Score', value: fmtStat(num(summary.form_score), '—') },
             {
-              label: "Confidence",
-              value: num(summary.confidence) === null ? "—" : `${Math.round(num(summary.confidence)! * 100)}%`,
+              label: 'Confidence',
+              value:
+                num(summary.confidence) === null
+                  ? '—'
+                  : `${Math.round(num(summary.confidence)! * 100)}%`,
             },
-            { label: "Total Events", value: fmtStat(num(summary.total_events), "—") },
+            { label: 'Total Events', value: fmtStat(num(summary.total_events), '—') },
             {
-              label: "Duration",
-              value: num(summary.duration_sec) === null ? "—" : `${Math.round(num(summary.duration_sec)!)}s`,
+              label: 'Duration',
+              value:
+                num(summary.duration_sec) === null
+                  ? '—'
+                  : `${Math.round(num(summary.duration_sec)!)}s`,
             },
           ].map((card) => (
-            <div key={card.label} className="border-border bg-card rounded-2xl border p-6 shadow-sm">
+            <div
+              key={card.label}
+              className="border-border bg-card rounded-2xl border p-6 shadow-sm"
+            >
               <p className="text-foreground text-3xl font-semibold">{card.value}</p>
               <p className="text-muted-foreground mt-2 text-[11px] font-semibold uppercase tracking-widest">
                 {card.label}
@@ -167,25 +172,25 @@ export default async function SharePage({
               <li
                 key={i}
                 className={`flex items-start gap-4 py-3 ${
-                  i < Math.min(10, shotEvents.length) - 1 ? "border-border border-b" : ""
+                  i < Math.min(10, shotEvents.length) - 1 ? 'border-border border-b' : ''
                 }`}
               >
-                {typeof event.timestamp === "number" && (
+                {typeof event.timestamp === 'number' && (
                   <span className="text-muted-foreground font-mono text-xs tabular-nums w-16 shrink-0">
                     {mmss(event.timestamp)}
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-foreground text-sm">{str(event.event_type) ?? "Event"}</p>
-                    {typeof event.form_score === "number" && (
+                    <p className="text-foreground text-sm">{str(event.event_type) ?? 'Event'}</p>
+                    {typeof event.form_score === 'number' && (
                       <span
                         className={`rounded-lg px-1.5 py-0.5 text-xs ${
                           event.form_score >= 8
-                            ? "text-foreground bg-muted"
+                            ? 'text-foreground bg-muted'
                             : event.form_score >= 5
-                              ? "text-warning bg-warning/10"
-                              : "text-destructive bg-destructive/10"
+                              ? 'text-warning bg-warning/10'
+                              : 'text-destructive bg-destructive/10'
                         }`}
                       >
                         {event.form_score}/10
@@ -196,7 +201,9 @@ export default async function SharePage({
                     <p className="text-muted-foreground mt-1 text-xs">{str(event.feedback)}</p>
                   )}
                   {str(event.key_observation) && (
-                    <p className="text-muted-foreground mt-0.5 text-xs">{str(event.key_observation)}</p>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                      {str(event.key_observation)}
+                    </p>
                   )}
                 </div>
               </li>
@@ -215,46 +222,44 @@ export default async function SharePage({
         Shared via CoachXYZ · expires {formatDateLong(data.expires_at)}
       </p>
     </div>
-  );
+  )
 }
 
 // ── Local helpers ────────────────────────────────────────────────────────────
 
 function toRecord(v: unknown): Record<string, unknown> | null {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
-  return v as Record<string, unknown>;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  return v as Record<string, unknown>
 }
 
 function num(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 function str(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
+  return typeof v === 'string' && v.length > 0 ? v : null
 }
 
 function strArray(v: unknown): string[] {
-  return Array.isArray(v)
-    ? v.filter((x): x is string => typeof x === "string" && x.length > 0)
-    : [];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
 }
 
 function fmtStat(v: number | null, fallback: string): string {
-  return v === null ? fallback : String(v);
+  return v === null ? fallback : String(v)
 }
 
 function isEvents(v: unknown): v is Array<{
-  timestamp?: unknown;
-  event_type?: unknown;
-  form_score?: unknown;
-  feedback?: unknown;
-  key_observation?: unknown;
+  timestamp?: unknown
+  event_type?: unknown
+  form_score?: unknown
+  feedback?: unknown
+  key_observation?: unknown
 }> {
-  return Array.isArray(v);
+  return Array.isArray(v)
 }
 
 function mmss(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = String(Math.round(seconds % 60)).padStart(2, "0");
-  return `${m}:${s}`;
+  const m = Math.floor(seconds / 60)
+  const s = String(Math.round(seconds % 60)).padStart(2, '0')
+  return `${m}:${s}`
 }

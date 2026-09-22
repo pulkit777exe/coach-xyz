@@ -1,10 +1,10 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { toast } from "sonner"
+import { useState } from 'react'
+import { toast } from 'sonner'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Label } from "@/components/9ui/ui/label"
+import { Button } from '@/components/9ui/ui/button'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -12,11 +12,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
-import { Spinner } from "./Spinner"
+} from '@/components/9ui/ui/dialog'
+import { Spinner } from './Spinner'
 
-import { orgSendInvites } from "@/lib/org"
-import type { CoachAIError } from "@/lib/api"
+import { orgSendInvites } from '@/lib/org'
+import type { CoachAIError } from '@/lib/api'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -41,11 +41,10 @@ export default function InvitePlayersDialog({
   selectedEmails?: string[]
   selectedStudentIds?: string[]
 }) {
-  const [raw, setRaw] = useState("")
+  const [raw, setRaw] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const prefilled =
-    selectedEmails && selectedEmails.length > 0 ? selectedEmails.join("\n") : ""
+  const prefilled = selectedEmails && selectedEmails.length > 0 ? selectedEmails.join('\n') : ''
   const display = raw || prefilled
 
   const emails = parseEmails(display)
@@ -63,14 +62,14 @@ export default function InvitePlayersDialog({
       } else {
         toast.success(`Invited ${res.total} player(s)`)
       }
-      setRaw("")
+      setRaw('')
       onOpenChange(false)
     } catch (err) {
       const e = err as CoachAIError
-      if (e.code === "EMAIL_NOT_CONFIGURED") {
-        toast.error("Email sending is not configured on the server.")
+      if (e.code === 'EMAIL_NOT_CONFIGURED') {
+        toast.error('Email sending is not configured on the server.')
       } else {
-        toast.error(e.message ?? "Failed to send invites")
+        toast.error(e.message ?? 'Failed to send invites')
       }
     } finally {
       setBusy(false)
@@ -82,7 +81,7 @@ export default function InvitePlayersDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) {
-          setRaw("")
+          setRaw('')
           setBusy(false)
         }
         onOpenChange(o)
@@ -92,8 +91,8 @@ export default function InvitePlayersDialog({
         <DialogHeader>
           <DialogTitle>Invite players</DialogTitle>
           <DialogDescription>
-            Enter email addresses below. Players will sign up via Auth0 and
-            automatically link to the roster by email.
+            Enter email addresses below. Players will sign up via Auth0 and automatically link to
+            the roster by email.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -103,13 +102,13 @@ export default function InvitePlayersDialog({
               id="invite_emails"
               value={display}
               onChange={(e) => setRaw(e.target.value)}
-              placeholder={"one@email.com\ntwo@email.com"}
+              placeholder={'one@email.com\ntwo@email.com'}
               rows={5}
               className="border-input bg-muted text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
             />
             {emails.length > 0 && (
               <p className="text-muted-foreground text-xs">
-                {emails.length} valid email{emails.length !== 1 && "s"} detected
+                {emails.length} valid email{emails.length !== 1 && 's'} detected
               </p>
             )}
           </div>
@@ -119,7 +118,7 @@ export default function InvitePlayersDialog({
             Cancel
           </Button>
           <Button onClick={handleSend} disabled={busy || emails.length === 0}>
-            {busy ? <Spinner /> : "Send invites"}
+            {busy ? <Spinner /> : 'Send invites'}
           </Button>
         </DialogFooter>
       </DialogContent>

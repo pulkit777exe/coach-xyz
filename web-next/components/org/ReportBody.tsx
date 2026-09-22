@@ -1,12 +1,12 @@
-import type { ReportContent, ReportRecord } from "@/lib/org"
-import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from "@/lib/org"
-import { formatDateMed } from "@/lib/date"
+import type { ReportContent, ReportRecord } from '@/lib/org'
+import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org'
+import { formatDateMed } from '@/lib/date'
 
 const TYPE_ORDER: Record<string, string[]> = {
-  attendance: ["summary", "org", "attendance", "performance", "analyses"],
-  performance: ["summary", "org", "performance", "attendance", "analyses"],
-  progress: ["summary", "org", "attendance", "performance", "analyses"],
-  monthly: ["summary", "org", "attendance", "performance", "analyses"],
+  attendance: ['summary', 'org', 'attendance', 'performance', 'analyses'],
+  performance: ['summary', 'org', 'performance', 'attendance', 'analyses'],
+  progress: ['summary', 'org', 'attendance', 'performance', 'analyses'],
+  monthly: ['summary', 'org', 'attendance', 'performance', 'analyses'],
 }
 
 export default function ReportBody({
@@ -19,11 +19,11 @@ export default function ReportBody({
   const c = report.content_json as ReportContent | null
   const has = (k: string) => {
     if (!c) return false
-    if (k === "org") return Boolean(c.org)
-    if (k === "summary") return typeof c.summary === "string" && c.summary.length > 0
-    if (k === "attendance") return Boolean(c.attendance)
-    if (k === "performance") return Boolean(c.performance)
-    if (k === "analyses") return (c.analyses ?? []).length > 0
+    if (k === 'org') return Boolean(c.org)
+    if (k === 'summary') return typeof c.summary === 'string' && c.summary.length > 0
+    if (k === 'attendance') return Boolean(c.attendance)
+    if (k === 'performance') return Boolean(c.performance)
+    if (k === 'analyses') return (c.analyses ?? []).length > 0
     return false
   }
 
@@ -41,22 +41,23 @@ export default function ReportBody({
           if (!gen) return null
           return (
             <p className="text-muted-foreground text-xs">
-              Generated {new Date(gen).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+              Generated{' '}
+              {new Date(gen).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
             </p>
           )
         })()}
 
-      {c.period?.label && c.period.label !== "All time" && (
+      {c.period?.label && c.period.label !== 'All time' && (
         <p className="text-muted-foreground text-xs">{c.period.label}</p>
       )}
 
       {order.map((k) => {
         if (!has(k)) return null
-        if (k === "org") return <OrgStatStrip key={k} c={c} />
-        if (k === "summary") return <SummaryBlock key={k} c={c} />
-        if (k === "attendance") return <AttendanceBlock key={k} c={c} />
-        if (k === "performance") return <PerformanceBlock key={k} c={c} />
-        if (k === "analyses") return <AnalysesBlock key={k} c={c} />
+        if (k === 'org') return <OrgStatStrip key={k} c={c} />
+        if (k === 'summary') return <SummaryBlock key={k} c={c} />
+        if (k === 'attendance') return <AttendanceBlock key={k} c={c} />
+        if (k === 'performance') return <PerformanceBlock key={k} c={c} />
+        if (k === 'analyses') return <AnalysesBlock key={k} c={c} />
         return null
       })}
     </div>
@@ -100,14 +101,16 @@ function OrgStatStrip({ c }: { c: ReportContent }) {
   return (
     <Section title="Organization">
       <StatCells
-        items={[
-          ["Students", String(o.student_count)],
-          [STUDENT_STATUS_LABELS.active, String(o.active_students)],
-          ["Sessions this month", String(o.sessions_this_month)],
-          ["Upcoming events", String(o.upcoming_events)],
-          ["Analyses linked", String(o.analyses_linked)],
-          ["Att rate (30d)", o.avg_attendance_rate === null ? "—" : `${o.avg_attendance_rate}%`],
-        ].slice(0, 6) as [string, string][]}
+        items={
+          [
+            ['Students', String(o.student_count)],
+            [STUDENT_STATUS_LABELS.active, String(o.active_students)],
+            ['Sessions this month', String(o.sessions_this_month)],
+            ['Upcoming events', String(o.upcoming_events)],
+            ['Analyses linked', String(o.analyses_linked)],
+            ['Att rate (30d)', o.avg_attendance_rate === null ? '—' : `${o.avg_attendance_rate}%`],
+          ].slice(0, 6) as [string, string][]
+        }
       />
     </Section>
   )
@@ -119,12 +122,12 @@ function AttendanceBlock({ c }: { c: ReportContent }) {
     <Section title="Attendance">
       <StatCells
         items={[
-          ["Records", String(a.total_records)],
+          ['Records', String(a.total_records)],
           [ATTENDANCE_STATUS_LABELS.present, String(a.present)],
           [ATTENDANCE_STATUS_LABELS.late, String(a.late)],
           [ATTENDANCE_STATUS_LABELS.absent, String(a.absent)],
           [ATTENDANCE_STATUS_LABELS.excused, String(a.excused)],
-          ["Rate", a.attendance_rate === null ? "—" : `${a.attendance_rate}%`],
+          ['Rate', a.attendance_rate === null ? '—' : `${a.attendance_rate}%`],
         ]}
       />
     </Section>
@@ -137,10 +140,13 @@ function PerformanceBlock({ c }: { c: ReportContent }) {
     <Section title="Performance">
       <StatCells
         items={[
-          ["Avg form", p.form_score_avg === null ? "—" : `${p.form_score_avg}/10`],
-          ["Latest form", p.form_score_latest === null ? "—" : `${p.form_score_latest}/10`],
-          ["Analyzed sessions", String(p.total_sessions)],
-          ["Last analysis", p.latest_analysis_at ? formatDateMed(p.latest_analysis_at.slice(0, 10)) : "—"],
+          ['Avg form', p.form_score_avg === null ? '—' : `${p.form_score_avg}/10`],
+          ['Latest form', p.form_score_latest === null ? '—' : `${p.form_score_latest}/10`],
+          ['Analyzed sessions', String(p.total_sessions)],
+          [
+            'Last analysis',
+            p.latest_analysis_at ? formatDateMed(p.latest_analysis_at.slice(0, 10)) : '—',
+          ],
         ]}
       />
     </Section>
@@ -157,9 +163,9 @@ function AnalysesBlock({ c }: { c: ReportContent }) {
             key={a.server_job_id}
             className="flex justify-between border-b border-border/60 py-1.5 text-sm"
           >
-            <span className="text-foreground">{a.display_name || "Untitled video"}</span>
+            <span className="text-foreground">{a.display_name || 'Untitled video'}</span>
             <span className="text-muted-foreground">
-              {a.form_score === null ? "—" : `${a.form_score}/10`}
+              {a.form_score === null ? '—' : `${a.form_score}/10`}
             </span>
           </li>
         ))}

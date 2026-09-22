@@ -43,7 +43,10 @@ export function ReadingProgress({ scroller, className }: ReadingProgressProps) {
       aria-valuenow={Math.round(progress * 100)}
       className={cn('pointer-events-none h-0.5 bg-muted', className)}
     >
-      <div className="h-full bg-primary transition-[width] duration-150" style={{ width: `${progress * 100}%` }} />
+      <div
+        className="h-full bg-primary transition-[width] duration-150"
+        style={{ width: `${progress * 100}%` }}
+      />
     </div>
   )
 }

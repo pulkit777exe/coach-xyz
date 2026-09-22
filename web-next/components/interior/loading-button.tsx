@@ -42,7 +42,10 @@ export function LoadingButton({
       type="button"
       onClick={handleClick}
       disabled={state === 'pending'}
-      className={cn('inline-flex cursor-pointer items-center gap-2 disabled:cursor-default disabled:opacity-60', className)}
+      className={cn(
+        'inline-flex cursor-pointer items-center gap-2 disabled:cursor-default disabled:opacity-60',
+        className,
+      )}
     >
       {state === 'pending' ? (
         <>

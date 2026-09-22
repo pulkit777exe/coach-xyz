@@ -10,7 +10,9 @@ import { acceptInvite } from '@/lib/meApi'
 export default function AcceptInviteClient() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token') ?? ''
-  const [state, setState] = useState<'idle' | 'working' | 'done' | 'error'>(token ? 'working' : 'idle')
+  const [state, setState] = useState<'idle' | 'working' | 'done' | 'error'>(
+    token ? 'working' : 'idle',
+  )
   const [message, setMessage] = useState<string | null>(null)
   const [role, setRole] = useState<string | null>(null)
 
@@ -53,16 +55,10 @@ export default function AcceptInviteClient() {
           {state === 'working' && (
             <p className="text-sm text-muted-foreground">Accepting invitation…</p>
           )}
-          {state === 'error' && (
-            <p className="text-sm text-destructive">{message}</p>
-          )}
-          {state === 'done' && (
-            <Button render={<Link href="/dashboard" />}>Open dashboard</Button>
-          )}
+          {state === 'error' && <p className="text-sm text-destructive">{message}</p>}
+          {state === 'done' && <Button render={<Link href="/dashboard" />}>Open dashboard</Button>}
           {state === 'error' && token && (
-            <Button onClick={() => setState('working')}>
-              Try again
-            </Button>
+            <Button onClick={() => setState('working')}>Try again</Button>
           )}
         </CardContent>
       </Card>

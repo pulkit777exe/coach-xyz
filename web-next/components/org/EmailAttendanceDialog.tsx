@@ -1,11 +1,11 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { toast } from "sonner"
+import { useState } from 'react'
+import { toast } from 'sonner'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -13,11 +13,11 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
-import { Spinner } from "./Spinner"
+} from '@/components/9ui/ui/dialog'
+import { Spinner } from './Spinner'
 
-import { orgEmailAttendance } from "@/lib/org"
-import type { CoachAIError } from "@/lib/api"
+import { orgEmailAttendance } from '@/lib/org'
+import type { CoachAIError } from '@/lib/api'
 
 export default function EmailAttendanceDialog({
   auth0Id,
@@ -32,7 +32,7 @@ export default function EmailAttendanceDialog({
   from?: string
   to?: string
 }) {
-  const [recipient, setRecipient] = useState("")
+  const [recipient, setRecipient] = useState('')
   const [busy, setBusy] = useState(false)
 
   const handleSend = async () => {
@@ -45,18 +45,18 @@ export default function EmailAttendanceDialog({
         recipient: recipient.trim(),
       })
       if (res.records === 0) {
-        toast.info("No attendance records in the selected range")
+        toast.info('No attendance records in the selected range')
       } else {
         toast.success(`Attendance emailed to ${recipient.trim()}`)
       }
-      setRecipient("")
+      setRecipient('')
       onOpenChange(false)
     } catch (err) {
       const e = err as CoachAIError
-      if (e.code === "EMAIL_NOT_CONFIGURED") {
-        toast.error("Email sending is not configured on the server.")
+      if (e.code === 'EMAIL_NOT_CONFIGURED') {
+        toast.error('Email sending is not configured on the server.')
       } else {
-        toast.error(e.message ?? "Failed to email attendance")
+        toast.error(e.message ?? 'Failed to email attendance')
       }
     } finally {
       setBusy(false)
@@ -68,7 +68,7 @@ export default function EmailAttendanceDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) {
-          setRecipient("")
+          setRecipient('')
           setBusy(false)
         }
         onOpenChange(o)
@@ -96,7 +96,7 @@ export default function EmailAttendanceDialog({
             <div className="grid gap-1.5">
               <Label>Date range</Label>
               <p className="text-muted-foreground bg-muted rounded-md border border-border px-3 py-2 text-sm">
-                {from ?? "—"} → {to ?? "—"}
+                {from ?? '—'} → {to ?? '—'}
               </p>
             </div>
           )}
@@ -106,7 +106,7 @@ export default function EmailAttendanceDialog({
             Cancel
           </Button>
           <Button onClick={handleSend} disabled={busy || !recipient.trim()}>
-            {busy ? <Spinner /> : "Send"}
+            {busy ? <Spinner /> : 'Send'}
           </Button>
         </DialogFooter>
       </DialogContent>

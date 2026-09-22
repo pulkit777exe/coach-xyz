@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Terms of Service | CoachXYZ', description: 'The terms that govern your use of CoachXYZ.' }
+export const metadata: Metadata = {
+  title: 'Terms of Service | CoachXYZ',
+  description: 'The terms that govern your use of CoachXYZ.',
+}
 
 const sections = [
   {
@@ -69,16 +72,23 @@ export default function TermsPage() {
     <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
       <section className="border-b border-[var(--marketing-white)]/5 px-6 py-10 lg:px-8">
         <div className="mx-auto max-w-[720px]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">Legal</p>
-          <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">Terms of Service</h1>
-          <p className="mt-2 text-sm text-[var(--marketing-beige)]/50">Last updated: September 15, 2026</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
+            Legal
+          </p>
+          <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">
+            Terms of Service
+          </h1>
+          <p className="mt-2 text-sm text-[var(--marketing-beige)]/50">
+            Last updated: September 15, 2026
+          </p>
         </div>
       </section>
       <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
         <div className="mx-auto max-w-[720px]">
           <p className="text-sm leading-6 text-[var(--marketing-brown)]/70">
-            These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of CoachXYZ. By creating an account or using
-            the service you agree to be bound by them. Please read them carefully.
+            These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of CoachXYZ.
+            By creating an account or using the service you agree to be bound by them. Please read
+            them carefully.
           </p>
           <div className="mt-10 space-y-8">
             {sections.map((s) => (
@@ -86,7 +96,12 @@ export default function TermsPage() {
                 <h2 className="text-base font-bold">{s.title}</h2>
                 <div className="mt-2 space-y-3">
                   {s.body.map((p) => (
-                    <p key={p.slice(0, 32)} className="text-sm leading-6 text-[var(--marketing-brown)]/70">{p}</p>
+                    <p
+                      key={p.slice(0, 32)}
+                      className="text-sm leading-6 text-[var(--marketing-brown)]/70"
+                    >
+                      {p}
+                    </p>
                   ))}
                 </div>
               </section>
@@ -95,7 +110,8 @@ export default function TermsPage() {
           <div className="mt-12 rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)] p-6">
             <h2 className="text-base font-bold">Contact</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--marketing-brown)]/70">
-              Questions about these terms? Email <span className="font-medium text-[var(--marketing-brown)]">help@coachxyz.app</span>.
+              Questions about these terms? Email{' '}
+              <span className="font-medium text-[var(--marketing-brown)]">help@coachxyz.app</span>.
             </p>
           </div>
         </div>

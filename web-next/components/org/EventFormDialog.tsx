@@ -1,19 +1,25 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { toast } from "sonner"
+import { useState } from 'react'
+import { toast } from 'sonner'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/9ui/ui/dialog"
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
-import { Label } from "@/components/9ui/ui/label"
-import { Textarea } from "@/components/9ui/ui/textarea"
-import { Spinner } from "./Spinner"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/9ui/ui/dialog'
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
+import { Label } from '@/components/9ui/ui/label'
+import { Textarea } from '@/components/9ui/ui/textarea'
+import { Spinner } from './Spinner'
 
-import type { ScheduleEvent } from "@/lib/org"
-import { orgCreateEvent, orgUpdateEvent, EVENT_STATUSES, EVENT_TYPES } from "@/lib/org"
-import { toISODate, toISOTime } from "@/lib/date"
-import type { CoachAIError } from "@/lib/api"
+import type { ScheduleEvent } from '@/lib/org'
+import { orgCreateEvent, orgUpdateEvent, EVENT_STATUSES, EVENT_TYPES } from '@/lib/org'
+import { toISODate, toISOTime } from '@/lib/date'
+import type { CoachAIError } from '@/lib/api'
 
 export type EventFormValues = {
   title: string
@@ -31,7 +37,7 @@ function toFormValues(event?: ScheduleEvent | null, initialDate?: string): Event
     const start = new Date(event.starts_at)
     const date = toISODate(start)
     const start_time = toISOTime(start)
-    let end_time = ""
+    let end_time = ''
     if (event.ends_at) {
       const end = new Date(event.ends_at)
       if (!Number.isNaN(end.getTime())) end_time = toISOTime(end)
@@ -42,20 +48,20 @@ function toFormValues(event?: ScheduleEvent | null, initialDate?: string): Event
       date,
       start_time,
       end_time,
-      location: event.location ?? "",
-      description: event.description ?? "",
+      location: event.location ?? '',
+      description: event.description ?? '',
       status: event.status,
     }
   }
   return {
-    title: "",
-    event_type: "practice",
-    date: initialDate ?? "",
-    start_time: "17:00",
-    end_time: "",
-    location: "",
-    description: "",
-    status: "scheduled",
+    title: '',
+    event_type: 'practice',
+    date: initialDate ?? '',
+    start_time: '17:00',
+    end_time: '',
+    location: '',
+    description: '',
+    status: 'scheduled',
   }
 }
 
@@ -94,11 +100,11 @@ export default function EventFormDialog({
 
   const submit = async () => {
     if (!values.title.trim()) {
-      setError("Title is required")
+      setError('Title is required')
       return
     }
     if (!values.date || !values.start_time) {
-      setError("Pick a date and start time")
+      setError('Pick a date and start time')
       return
     }
     setSubmitting(true)
@@ -109,31 +115,31 @@ export default function EventFormDialog({
       if (editing && event) {
         const res = await orgUpdateEvent(auth0Id, event.id, {
           title: values.title,
-          event_type: values.event_type as ScheduleEvent["event_type"],
+          event_type: values.event_type as ScheduleEvent['event_type'],
           starts_at,
           ends_at,
           location: values.location || null,
           description: values.description || null,
-          status: values.status as ScheduleEvent["status"],
+          status: values.status as ScheduleEvent['status'],
         })
-        toast.success("Event updated")
+        toast.success('Event updated')
         onSaved(res.event)
       } else {
         const res = await orgCreateEvent(auth0Id, {
           title: values.title,
-          event_type: values.event_type as ScheduleEvent["event_type"],
+          event_type: values.event_type as ScheduleEvent['event_type'],
           starts_at,
           ends_at,
           location: values.location || null,
           description: values.description || null,
-          status: values.status as ScheduleEvent["status"],
+          status: values.status as ScheduleEvent['status'],
         })
-        toast.success("Event added")
+        toast.success('Event added')
         onSaved(res.event)
       }
       onOpenChange(false)
     } catch (err) {
-      setError((err as CoachAIError).message ?? "Failed to save event")
+      setError((err as CoachAIError).message ?? 'Failed to save event')
     } finally {
       setSubmitting(false)
     }
@@ -143,7 +149,7 @@ export default function EventFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit Event" : "Add Event"}</DialogTitle>
+          <DialogTitle>{editing ? 'Edit Event' : 'Add Event'}</DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4">
@@ -152,7 +158,7 @@ export default function EventFormDialog({
             <Input
               id="title"
               value={values.title}
-              onChange={(e) => set("title", e.target.value)}
+              onChange={(e) => set('title', e.target.value)}
               placeholder="e.g. U-14 Tennis Practice"
             />
           </div>
@@ -163,7 +169,7 @@ export default function EventFormDialog({
               <NativeSelect
                 id="event_type"
                 value={values.event_type}
-                onChange={(v) => set("event_type", v)}
+                onChange={(v) => set('event_type', v)}
                 options={[...EVENT_TYPES]}
               />
             </div>
@@ -172,7 +178,7 @@ export default function EventFormDialog({
               <NativeSelect
                 id="status"
                 value={values.status}
-                onChange={(v) => set("status", v)}
+                onChange={(v) => set('status', v)}
                 options={[...EVENT_STATUSES]}
               />
             </div>
@@ -185,7 +191,7 @@ export default function EventFormDialog({
                 id="date"
                 type="date"
                 value={values.date}
-                onChange={(e) => set("date", e.target.value)}
+                onChange={(e) => set('date', e.target.value)}
               />
             </div>
             <div className="grid gap-2">
@@ -194,7 +200,7 @@ export default function EventFormDialog({
                 id="start_time"
                 type="time"
                 value={values.start_time}
-                onChange={(e) => set("start_time", e.target.value)}
+                onChange={(e) => set('start_time', e.target.value)}
               />
             </div>
             <div className="grid gap-2">
@@ -203,7 +209,7 @@ export default function EventFormDialog({
                 id="end_time"
                 type="time"
                 value={values.end_time}
-                onChange={(e) => set("end_time", e.target.value)}
+                onChange={(e) => set('end_time', e.target.value)}
               />
             </div>
           </div>
@@ -213,7 +219,7 @@ export default function EventFormDialog({
             <Input
               id="location"
               value={values.location}
-              onChange={(e) => set("location", e.target.value)}
+              onChange={(e) => set('location', e.target.value)}
               placeholder="e.g. Court 2, Riverside Club"
             />
           </div>
@@ -223,7 +229,7 @@ export default function EventFormDialog({
             <Textarea
               id="description"
               value={values.description}
-              onChange={(e) => set("description", e.target.value)}
+              onChange={(e) => set('description', e.target.value)}
               rows={2}
             />
           </div>
@@ -245,7 +251,7 @@ export default function EventFormDialog({
                 Cancel
               </Button>
               <Button onClick={submit} disabled={submitting}>
-                {submitting ? <Spinner /> : editing ? "Save changes" : "Add event"}
+                {submitting ? <Spinner /> : editing ? 'Save changes' : 'Add event'}
               </Button>
             </div>
           </div>

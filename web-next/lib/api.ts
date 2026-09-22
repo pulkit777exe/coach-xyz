@@ -14,9 +14,7 @@ if (!BASE) {
 //  - client-side: the same-origin Next proxy (/api/service), which verifies
 //    the session and injects those headers
 export const IDENTITY_BASE =
-  typeof window === 'undefined'
-    ? process.env.NEXT_PUBLIC_API_URL
-    : '/api/service'
+  typeof window === 'undefined' ? process.env.NEXT_PUBLIC_API_URL : '/api/service'
 
 function identityFromRequest(url: string, body?: BodyInit | null): string | undefined {
   let path = url
@@ -85,7 +83,7 @@ export async function apiFetch<T>(
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     // Per-call correlation id, forwarded server→engine for end-to-end traces.
     'x-request-id': crypto.randomUUID(),
-    ...(options.headers as Record<string, string> ?? {}),
+    ...((options.headers as Record<string, string>) ?? {}),
   }
 
   // Server-side calls to identity-bearing routes go directly to the backend
@@ -222,7 +220,11 @@ export async function scanVideoWithProgress(
         }
       } else if (xhr.status === 429) {
         let body: Record<string, unknown> = {}
-        try { body = JSON.parse(xhr.responseText) } catch { /* ignore */ }
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {
+          /* ignore */
+        }
         reject({
           code: 'RATE_LIMITED',
           message: (body.message as string) ?? 'Too many requests. Please wait.',
@@ -232,7 +234,11 @@ export async function scanVideoWithProgress(
         } as CoachAIError)
       } else {
         let body: Record<string, unknown> = {}
-        try { body = JSON.parse(xhr.responseText) } catch { /* ignore */ }
+        try {
+          body = JSON.parse(xhr.responseText)
+        } catch {
+          /* ignore */
+        }
         if (body.code && body.message) {
           reject({
             code: body.code as string,
@@ -305,7 +311,7 @@ export async function* streamScanProgress(
   })
 
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
+    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>
     throw {
       code: 'SCAN_PROGRESS_FAILED',
       message: (errBody.message as string) ?? 'Failed to get scan progress.',
@@ -407,7 +413,7 @@ export async function* sendChatMessageStream(
   })
 
   if (!res.ok) {
-    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>
+    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>
     throw {
       code: 'CHAT_FAILED',
       message: (errBody.message as string) ?? 'Chat request failed.',
@@ -419,20 +425,15 @@ export async function* sendChatMessageStream(
   yield* parseEventStream<StreamEvent>(res)
 }
 
-export async function getConversation(
-  jobId: string,
-): Promise<{ messages: ChatMessage[] }> {
+export async function getConversation(jobId: string): Promise<{ messages: ChatMessage[] }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
     const attribution = await getAttributionToken().catch(() => null)
-    return await apiFetch<{ messages: ChatMessage[] }>(
-      `${BASE}/api/conversation/${jobId}`,
-      {
-        signal: controller.signal,
-        headers: attribution ? { 'x-attribution': attribution } : {},
-      },
-    )
+    return await apiFetch<{ messages: ChatMessage[] }>(`${BASE}/api/conversation/${jobId}`, {
+      signal: controller.signal,
+      headers: attribution ? { 'x-attribution': attribution } : {},
+    })
   } finally {
     clearTimeout(timeout)
   }
@@ -508,7 +509,7 @@ export async function getDashboardAnalyses(
   opts: { unlinked?: boolean } = {},
 ): Promise<{ analyses: DashboardAnalysis[] }> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-  if (opts.unlinked) params.set("unlinked", "1")
+  if (opts.unlinked) params.set('unlinked', '1')
   return apiFetch<{ analyses: DashboardAnalysis[] }>(
     `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?${params.toString()}`,
   )
@@ -523,9 +524,7 @@ export async function getDashboardAnalysisDetail(
   )
 }
 
-export async function getDashboardStats(
-  auth0Id: string,
-): Promise<{ stats: DashboardStats }> {
+export async function getDashboardStats(auth0Id: string): Promise<{ stats: DashboardStats }> {
   return apiFetch<{ stats: DashboardStats }>(
     `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/stats`,
   )
@@ -574,9 +573,7 @@ export async function reviewFinding(
   )
 }
 
-export async function getUserProfile(
-  auth0Id: string,
-): Promise<{ user: UserRecord }> {
+export async function getUserProfile(auth0Id: string): Promise<{ user: UserRecord }> {
   return apiFetch<{ user: UserRecord }>(
     `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}`,
   )
@@ -586,36 +583,48 @@ export const cancelAnalysis = async (
   auth0Id: string,
   jobId: string,
 ): Promise<{ cancelled: boolean }> => {
-  return apiFetch<{ cancelled: boolean }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/cancel`, {
-    method: "POST",
-  })
+  return apiFetch<{ cancelled: boolean }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/cancel`,
+    {
+      method: 'POST',
+    },
+  )
 }
 
 export const deleteAnalysis = async (
   auth0Id: string,
   jobId: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
-    method: "DELETE",
-  })
+  return apiFetch<{ deleted: boolean }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
+    {
+      method: 'DELETE',
+    },
+  )
 }
 
-export const renameAnalysis = async (  auth0Id: string,
+export const renameAnalysis = async (
+  auth0Id: string,
   jobId: string,
   displayName: string,
 ): Promise<{ analysis: DashboardAnalysis }> => {
-  return apiFetch<{ analysis: DashboardAnalysis }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ display_name: displayName }),
-  })
+  return apiFetch<{ analysis: DashboardAnalysis }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: displayName }),
+    },
+  )
 }
 
 export const getHistoryChatMessages = async (
   auth0Id: string,
   jobId: string,
 ): Promise<{ messages: ChatMessage[] }> => {
-  return apiFetch<{ messages: ChatMessage[] }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`)
+  return apiFetch<{ messages: ChatMessage[] }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`,
+  )
 }
 
 export const sendHistoryChatMessage = async (
@@ -623,9 +632,12 @@ export const sendHistoryChatMessage = async (
   jobId: string,
   message: string,
 ): Promise<{ message: string; role: string }> => {
-  return apiFetch<{ message: string; role: string }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
-  })
+  return apiFetch<{ message: string; role: string }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    },
+  )
 }

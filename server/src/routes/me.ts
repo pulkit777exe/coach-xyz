@@ -1,13 +1,13 @@
-import { Elysia } from "elysia";
+import { Elysia } from 'elysia'
 
-import { buildError, type CoachAIError } from "../lib/errors";
+import { buildError, type CoachAIError } from '../lib/errors'
 import {
   getUserByAuth0Id,
   updateUserProfile,
   resolveAuth0Id,
   persistAnalysisStart,
   checkOrgDailyQuota,
-} from "../lib/supabaseHistory";
+} from '../lib/supabaseHistory'
 import {
   getLinkedPlayer,
   listAttendance,
@@ -17,16 +17,16 @@ import {
   getStudentAnalyses,
   listReports,
   getReport,
-} from "../lib/orgData";
-import { SERVICE_HEADERS, serviceGuard } from "../lib/serviceGuard";
-import { redactWellness } from "../lib/permissions";
-import { listMembershipsForUser } from "../lib/orgMembers";
-import { readRequestMeta } from "../lib/requestMeta";
-import { mintAttributionToken } from "../lib/attribution";
-import { acceptInvite } from "../lib/invites";
-import { audit } from "../lib/audit";
-import { enqueueAnalysis } from "../lib/queue";
-import { DEFAULT_MODEL } from "../types";
+} from '../lib/orgData'
+import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
+import { redactWellness } from '../lib/permissions'
+import { listMembershipsForUser } from '../lib/orgMembers'
+import { readRequestMeta } from '../lib/requestMeta'
+import { mintAttributionToken } from '../lib/attribution'
+import { acceptInvite } from '../lib/invites'
+import { audit } from '../lib/audit'
+import { enqueueAnalysis } from '../lib/queue'
+import { DEFAULT_MODEL } from '../types'
 
 /**
  * Resolves the verified caller (from the proxy-injected header) to their linked
@@ -34,20 +34,20 @@ import { DEFAULT_MODEL } from "../types";
  * when the account is not linked to any student yet.
  */
 const playerScope = async (verifiedAuth0Id: string) => {
-  const primary = (await resolveAuth0Id(verifiedAuth0Id)) ?? verifiedAuth0Id;
-  const linked = await getLinkedPlayer(primary);
+  const primary = (await resolveAuth0Id(verifiedAuth0Id)) ?? verifiedAuth0Id
+  const linked = await getLinkedPlayer(primary)
   return {
     accountAuth0Id: primary,
     student: linked?.student ?? null,
     coachAuth0Id: linked?.coachAuth0Id ?? null,
-  };
-};
+  }
+}
 
 export type PlayerScopeResult = {
-  accountAuth0Id: string;
-  student: { id: string } | null;
-  coachAuth0Id: string | null;
-};
+  accountAuth0Id: string
+  student: { id: string } | null
+  coachAuth0Id: string | null
+}
 
 /**
  * Pure "me-analyze" scoping decision. Turns the verified player identity +
@@ -57,34 +57,34 @@ export type PlayerScopeResult = {
  */
 export type PlayerAnalysisDecision =
   | { ok: true; coachAuth0Id: string; requestedBy: string; studentId: string }
-  | { ok: false; status: 403; error: CoachAIError };
+  | { ok: false; status: 403; error: CoachAIError }
 
 export const decidePlayerAnalysis = (input: {
-  verifiedAuth0Id: string | null;
-  playerScope: PlayerScopeResult;
+  verifiedAuth0Id: string | null
+  playerScope: PlayerScopeResult
 }): PlayerAnalysisDecision => {
-  const { verifiedAuth0Id, playerScope: scope } = input;
+  const { verifiedAuth0Id, playerScope: scope } = input
   if (!verifiedAuth0Id) {
     return {
       ok: false,
       status: 403,
-      error: buildError("FORBIDDEN", "Missing verified identity", false),
-    };
+      error: buildError('FORBIDDEN', 'Missing verified identity', false),
+    }
   }
   if (!scope.student || !scope.coachAuth0Id) {
     return {
       ok: false,
       status: 403,
-      error: buildError("FORBIDDEN", "No linked player account", false),
-    };
+      error: buildError('FORBIDDEN', 'No linked player account', false),
+    }
   }
   return {
     ok: true,
     coachAuth0Id: scope.coachAuth0Id,
     requestedBy: verifiedAuth0Id,
     studentId: scope.student.id,
-  };
-};
+  }
+}
 
 export default new Elysia()
   .use(serviceGuard)
@@ -93,221 +93,217 @@ export default new Elysia()
   // member)? The web app uses the primary one to scope every /api/org|email and
   // /api/auth/user call, so invited coaches see the org they belong to instead
   // of an empty org keyed by their own sub.
-  .get("/api/me/orgs", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/orgs', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
     // Linked accounts: the caller may sign in via a secondary provider, but
     // memberships are keyed by the primary auth0_id.
-    const primary = (await resolveAuth0Id(verified)) ?? verified;
-    const orgs = await listMembershipsForUser(primary);
-    set.status = 200;
-    return { orgs };
+    const primary = (await resolveAuth0Id(verified)) ?? verified
+    const orgs = await listMembershipsForUser(primary)
+    set.status = 200
+    return { orgs }
   })
 
   // Own profile: user record + linked student (if any)
-  .get("/api/me/profile", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/profile', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
 
-    const { accountAuth0Id, student, coachAuth0Id } =
-      await playerScope(verified);
-    const user = await getUserByAuth0Id(accountAuth0Id);
+    const { accountAuth0Id, student, coachAuth0Id } = await playerScope(verified)
+    const user = await getUserByAuth0Id(accountAuth0Id)
 
-    set.status = 200;
-    return { user, student, coach_auth0_id: coachAuth0Id };
+    set.status = 200
+    return { user, student, coach_auth0_id: coachAuth0Id }
   })
 
   // Update own profile (name, nickname, picture)
-  .put("/api/me/profile", async ({ body, request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .put('/api/me/profile', async ({ body, request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
 
-    const { name, nickname, picture } = body as Record<string, unknown>;
+    const { name, nickname, picture } = body as Record<string, unknown>
     if (
-      (name !== undefined && name !== null && typeof name !== "string") ||
-      (nickname !== undefined &&
-        nickname !== null &&
-        typeof nickname !== "string") ||
-      (picture !== undefined && picture !== null && typeof picture !== "string")
+      (name !== undefined && name !== null && typeof name !== 'string') ||
+      (nickname !== undefined && nickname !== null && typeof nickname !== 'string') ||
+      (picture !== undefined && picture !== null && typeof picture !== 'string')
     ) {
-      set.status = 400;
+      set.status = 400
       return buildError(
-        "INVALID_REQUEST",
-        "name, nickname and picture must be strings or null",
+        'INVALID_REQUEST',
+        'name, nickname and picture must be strings or null',
         false,
-      );
+      )
     }
-    if (typeof name === "string" && name.length > 200) {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "name is too long", false);
+    if (typeof name === 'string' && name.length > 200) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'name is too long', false)
     }
-    if (typeof picture === "string" && picture.length > 2000) {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "picture URL is too long", false);
+    if (typeof picture === 'string' && picture.length > 2000) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'picture URL is too long', false)
     }
 
     const user = await updateUserProfile(verified, {
       name: name === undefined ? undefined : (name as string | null),
-      nickname:
-        nickname === undefined ? undefined : (nickname as string | null),
+      nickname: nickname === undefined ? undefined : (nickname as string | null),
       picture: picture === undefined ? undefined : (picture as string | null),
-    });
+    })
     if (!user) {
-      set.status = 404;
-      return buildError("NOT_FOUND", "User record not found", false);
+      set.status = 404
+      return buildError('NOT_FOUND', 'User record not found', false)
     }
-    set.status = 200;
-    return { user };
+    set.status = 200
+    return { user }
   })
 
   // Own attendance history + summary (joined with the linked player scope)
-  .get("/api/me/attendance", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/attendance', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { student, coachAuth0Id } = await playerScope(verified);
+    const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
-      set.status = 200;
-      return { records: [], summary: null, linked: false };
+      set.status = 200
+      return { records: [], summary: null, linked: false }
     }
 
-    const url = new URL(request.url);
-    const from = url.searchParams.get("from") ?? undefined;
-    const to = url.searchParams.get("to") ?? undefined;
+    const url = new URL(request.url)
+    const from = url.searchParams.get('from') ?? undefined
+    const to = url.searchParams.get('to') ?? undefined
 
     const [records, summary] = await Promise.all([
       listAttendance(coachAuth0Id, { from, to, studentId: student.id }),
       attendanceSummary(coachAuth0Id, { from, to, studentId: student.id }),
-    ]);
+    ])
 
-    set.status = 200;
-    return { records, summary, linked: true };
+    set.status = 200
+    return { records, summary, linked: true }
   })
 
   // Team schedule (all events for the owning coach's org)
-  .get("/api/me/schedule", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/schedule', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { coachAuth0Id } = await playerScope(verified);
+    const { coachAuth0Id } = await playerScope(verified)
     if (!coachAuth0Id) {
-      set.status = 200;
-      return { events: [], linked: false };
+      set.status = 200
+      return { events: [], linked: false }
     }
 
-    const url = new URL(request.url);
-    const from = url.searchParams.get("from") ?? undefined;
-    const to = url.searchParams.get("to") ?? undefined;
+    const url = new URL(request.url)
+    const from = url.searchParams.get('from') ?? undefined
+    const to = url.searchParams.get('to') ?? undefined
 
-    const events = await listSchedule(coachAuth0Id, { from, to });
-    set.status = 200;
-    return { events, linked: true };
+    const events = await listSchedule(coachAuth0Id, { from, to })
+    set.status = 200
+    return { events, linked: true }
   })
 
   // Own performance trends (analysis form scores + any manual metrics)
-  .get("/api/me/performance", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/performance', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { student, coachAuth0Id } = await playerScope(verified);
+    const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
-      set.status = 200;
-      return { points: [], linked: false };
+      set.status = 200
+      return { points: [], linked: false }
     }
 
-    const url = new URL(request.url);
-    const from = url.searchParams.get("from") ?? undefined;
-    const to = url.searchParams.get("to") ?? undefined;
+    const url = new URL(request.url)
+    const from = url.searchParams.get('from') ?? undefined
+    const to = url.searchParams.get('to') ?? undefined
 
     const points = await getStudentPerformanceSeries(coachAuth0Id, student.id, {
       from,
       to,
-    });
-    set.status = 200;
-    return { points, linked: true };
+    })
+    set.status = 200
+    return { points, linked: true }
   })
 
   // Own analyses (analysis_history rows linked to the player's student row)
-  .get("/api/me/analyses", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/analyses', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { student, coachAuth0Id } = await playerScope(verified);
+    const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
-      set.status = 200;
-      return { analyses: [], linked: false };
+      set.status = 200
+      return { analyses: [], linked: false }
     }
 
-    const url = new URL(request.url);
-    const limit = Math.min(Number(url.searchParams.get("limit") || 50), 100);
+    const url = new URL(request.url)
+    const limit = Math.min(Number(url.searchParams.get('limit') || 50), 100)
 
-    const analyses = await getStudentAnalyses(coachAuth0Id, student.id, limit);
+    const analyses = await getStudentAnalyses(coachAuth0Id, student.id, limit)
     // Player scope never carries wellness signals (§5) — strip injury_risk.
-    set.status = 200;
+    set.status = 200
     return {
       analyses: analyses.map((a) => ({
         ...a,
         summary_json: redactWellness(a.summary_json),
       })),
       linked: true,
-    };
+    }
   })
 
   // Reports that mention me (student-scoped)
-  .get("/api/me/reports", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/reports', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { student, coachAuth0Id } = await playerScope(verified);
+    const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
-      set.status = 200;
-      return { reports: [], linked: false };
+      set.status = 200
+      return { reports: [], linked: false }
     }
 
-    const reports = await listReports(coachAuth0Id, { studentId: student.id });
-    set.status = 200;
-    return { reports, linked: true };
+    const reports = await listReports(coachAuth0Id, { studentId: student.id })
+    set.status = 200
+    return { reports, linked: true }
   })
 
-  .get("/api/me/reports/:id", async ({ request, params, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/reports/:id', async ({ request, params, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const { student, coachAuth0Id } = await playerScope(verified);
+    const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
-      set.status = 200;
-      return { report: null, linked: false };
+      set.status = 200
+      return { report: null, linked: false }
     }
 
-    const report = await getReport(coachAuth0Id, params.id);
+    const report = await getReport(coachAuth0Id, params.id)
     if (!report || report.student_id !== student.id) {
-      set.status = 404;
-      return buildError("NOT_FOUND", "Report not found", false);
+      set.status = 404
+      return buildError('NOT_FOUND', 'Report not found', false)
     }
 
-    set.status = 200;
-    return { report, linked: true };
+    set.status = 200
+    return { report, linked: true }
   })
 
   // Self-scoped analysis kickoff: the player uploads/scans a video through the
@@ -315,102 +311,83 @@ export default new Elysia()
   // persisted under the LINKED coach's auth0Id (so it appears in the coach's
   // dashboard history) with requested_by = the player, and is linked to the
   // player's student row so it shows up in /api/me/analyses.
-  .post("/api/me/analyze", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .post('/api/me/analyze', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
 
-    let body: Record<string, unknown>;
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, unknown>;
+      body = (await request.json()) as Record<string, unknown>
     } catch {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "Invalid JSON request body.", false);
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid JSON request body.', false)
     }
 
-    const sessionTokenRaw = body.session_token ?? null;
-    const playerIndexRaw = body.player_index ?? null;
-    const videoKeyRaw = body.video_key ?? null;
-    const angleRaw = body.angle ?? null;
-    const UUID_RE =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (sessionTokenRaw !== null && typeof sessionTokenRaw !== "string") {
-      set.status = 400;
-      return buildError(
-        "INVALID_SESSION_TOKEN",
-        "Session token must be a valid UUID.",
-        false,
-      );
+    const sessionTokenRaw = body.session_token ?? null
+    const playerIndexRaw = body.player_index ?? null
+    const videoKeyRaw = body.video_key ?? null
+    const angleRaw = body.angle ?? null
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (sessionTokenRaw !== null && typeof sessionTokenRaw !== 'string') {
+      set.status = 400
+      return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
     }
     if (sessionTokenRaw !== null && !UUID_RE.test(sessionTokenRaw)) {
-      set.status = 400;
-      return buildError(
-        "INVALID_SESSION_TOKEN",
-        "Session token must be a valid UUID.",
-        false,
-      );
+      set.status = 400
+      return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
     }
     if (
       playerIndexRaw !== null &&
-      (typeof playerIndexRaw !== "number" ||
+      (typeof playerIndexRaw !== 'number' ||
         !Number.isInteger(playerIndexRaw) ||
         playerIndexRaw < 1)
     ) {
-      set.status = 400;
-      return buildError("INVALID_PLAYER_INDEX", undefined, false);
+      set.status = 400
+      return buildError('INVALID_PLAYER_INDEX', undefined, false)
     }
-    if (videoKeyRaw !== null && typeof videoKeyRaw !== "string") {
-      set.status = 400;
-      return buildError(
-        "INVALID_REQUEST",
-        "video_key must be null or a string.",
-        false,
-      );
+    if (videoKeyRaw !== null && typeof videoKeyRaw !== 'string') {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'video_key must be null or a string.', false)
     }
-    if (angleRaw !== null && typeof angleRaw !== "string") {
-      set.status = 400;
-      return buildError(
-        "INVALID_REQUEST",
-        "angle must be null or a string.",
-        false,
-      );
+    if (angleRaw !== null && typeof angleRaw !== 'string') {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'angle must be null or a string.', false)
     }
 
-    const sessionToken =
-      typeof sessionTokenRaw === "string" ? sessionTokenRaw : null;
-    const playerIndex =
-      typeof playerIndexRaw === "number" ? playerIndexRaw : null;
-    const videoKey = typeof videoKeyRaw === "string" ? videoKeyRaw : null;
-    const angle = typeof angleRaw === "string" ? angleRaw : null;
+    const sessionToken = typeof sessionTokenRaw === 'string' ? sessionTokenRaw : null
+    const playerIndex = typeof playerIndexRaw === 'number' ? playerIndexRaw : null
+    const videoKey = typeof videoKeyRaw === 'string' ? videoKeyRaw : null
+    const angle = typeof angleRaw === 'string' ? angleRaw : null
 
-    const scope = await playerScope(verified);
+    const scope = await playerScope(verified)
     const decision = decidePlayerAnalysis({
       verifiedAuth0Id: verified,
       playerScope: scope,
-    });
+    })
     if (!decision.ok) {
-      set.status = decision.status;
-      return decision.error;
+      set.status = decision.status
+      return decision.error
     }
 
     // Per-org daily quota (§17) on the owning coach's org.
-    const quota = await checkOrgDailyQuota(decision.coachAuth0Id);
+    const quota = await checkOrgDailyQuota(decision.coachAuth0Id)
     if (!quota.allowed) {
-      set.status = 429;
+      set.status = 429
       return {
         ...buildError(
-          "RATE_LIMITED",
-          "Organization daily analysis limit reached. Try again tomorrow.",
+          'RATE_LIMITED',
+          'Organization daily analysis limit reached. Try again tomorrow.',
           true,
         ),
         retry_after: quota.retryAfterSec,
-      };
+      }
     }
 
-    const server_job_id = crypto.randomUUID();
-    const engine_job_id = crypto.randomUUID();
+    const server_job_id = crypto.randomUUID()
+    const engine_job_id = crypto.randomUUID()
 
     try {
       // Save the server job mapping to Redis BEFORE enqueuing
@@ -427,7 +404,7 @@ export default new Elysia()
         owner_ids: [decision.coachAuth0Id, decision.requestedBy].filter(
           (id, i, arr) => id && arr.indexOf(id) === i,
         ),
-      });
+      })
 
       await persistAnalysisStart({
         ...readRequestMeta(request),
@@ -439,71 +416,63 @@ export default new Elysia()
         auth0Id: decision.coachAuth0Id,
         requestedBy: decision.requestedBy,
         studentId: decision.studentId,
-      });
+      })
 
-      set.status = 200;
-      return { job_id: server_job_id };
+      set.status = 200
+      return { job_id: server_job_id }
     } catch (error) {
-      if (error instanceof Error && error.message === "QUEUE_UNAVAILABLE") {
-        set.status = 503;
-        return buildError(
-          "QUEUE_UNAVAILABLE",
-          "Job queue is not configured.",
-          true,
-        );
+      if (error instanceof Error && error.message === 'QUEUE_UNAVAILABLE') {
+        set.status = 503
+        return buildError('QUEUE_UNAVAILABLE', 'Job queue is not configured.', true)
       }
       console.error(
         JSON.stringify({
-          type: "me_analyze_enqueue_error",
+          type: 'me_analyze_enqueue_error',
           message: (error as Error)?.message,
           timestamp: new Date().toISOString(),
         }),
-      );
-      set.status = 500;
-      return buildError(
-        "INTERNAL_ERROR",
-        "Failed to enqueue analysis job. Please try again.",
-        true,
-      );
+      )
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to enqueue analysis job. Please try again.', true)
     }
   })
 
   // Accept an organization invitation: the verified caller redeems a
   // single-use token minted for their email. Links their account on success.
-  .post("/api/me/invites/accept", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .post('/api/me/invites/accept', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    let parsed: Record<string, unknown>;
+    let parsed: Record<string, unknown>
     try {
-      parsed = (await request.json()) as Record<string, unknown>;
+      parsed = (await request.json()) as Record<string, unknown>
     } catch {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "Invalid JSON request body.", false);
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid JSON request body.', false)
     }
-    const token = parsed.token;
-    if (typeof token !== "string" || !token) {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", "token is required.", false);
+    const token = parsed.token
+    if (typeof token !== 'string' || !token) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'token is required.', false)
     }
-    const result = await acceptInvite(token, verified);
+    const result = await acceptInvite(token, verified)
     if (!result.ok) {
-      set.status = 400;
-      return buildError("INVALID_REQUEST", result.error, false);
+      set.status = 400
+      return buildError('INVALID_REQUEST', result.error, false)
     }
-    const meta = readRequestMeta(request);
+    const meta = readRequestMeta(request)
     void audit({
       orgAuth0Id: result.orgAuth0Id,
       actorAuth0Id: verified,
-      action: "member.invite_accepted",
-      resourceType: "org_invite",
+      action: 'member.invite_accepted',
+      resourceType: 'org_invite',
       meta: { role: result.role },
       clientIp: meta.clientIp,
-    });
-    set.status = 200;
-    return { org_auth0_id: result.orgAuth0Id, role: result.role };
+    })
+    set.status = 200
+    return { org_auth0_id: result.orgAuth0Id, role: result.role }
   })
 
   // Mint a short-lived attribution token binding the verified session sub.
@@ -511,21 +480,17 @@ export default new Elysia()
   // and the server resolves the caller from the signed sub — never from a raw
   // client header. Requires the identity boundary (x-verified-auth0-id), so an
   // attacker cannot mint tokens for a sub they are not signed in as.
-  .get("/api/me/attribution/mint", async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id);
+  .get('/api/me/attribution/mint', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
     if (!verified) {
-      set.status = 403;
-      return buildError("FORBIDDEN", "Missing verified identity", false);
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const minted = mintAttributionToken(verified);
+    const minted = mintAttributionToken(verified)
     if (!minted) {
-      set.status = 503;
-      return buildError(
-        "SERVICE_NOT_CONFIGURED",
-        "Attribution signing is not configured.",
-        true,
-      );
+      set.status = 503
+      return buildError('SERVICE_NOT_CONFIGURED', 'Attribution signing is not configured.', true)
     }
-    set.status = 200;
-    return minted;
-  });
+    set.status = 200
+    return minted
+  })

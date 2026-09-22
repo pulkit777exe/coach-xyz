@@ -29,13 +29,13 @@ export type ScanResult = {
 // three layers. Keep it in sync with the engine's STATE_FLOW in engine/core/jobs.py.
 
 export const ENGINE_PIPELINE_STATES = [
-  "uploading",
-  "scanning",
-  "player_selection",
-  "analyzing",
-  "rendering",
-  "completed",
-  "failed",
+  'uploading',
+  'scanning',
+  'player_selection',
+  'analyzing',
+  'rendering',
+  'completed',
+  'failed',
 ] as const
 
 export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number]
@@ -44,15 +44,15 @@ export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number]
 // user-facing name for engine "player_selection"; "error" for "failed".
 
 export type PipelineState =
-  | "idle"
-  | "uploading"
-  | "scanning"
-  | "selecting"
-  | "analyzing"
-  | "rendering"
-  | "completed"
-  | "chatting"
-  | "error"
+  | 'idle'
+  | 'uploading'
+  | 'scanning'
+  | 'selecting'
+  | 'analyzing'
+  | 'rendering'
+  | 'completed'
+  | 'chatting'
+  | 'error'
 
 // ── Job Status ───────────────────────────────────────────────────────────────
 // Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
@@ -154,7 +154,7 @@ export type ShotEvent = {
 export type CoachAIError = {
   code: string
   message: string
-  layer: "engine" | "server" | "client"
+  layer: 'engine' | 'server' | 'client'
   retryable: boolean
   retry_after?: number
 }
@@ -162,14 +162,13 @@ export type CoachAIError = {
 // ── Upload Progress ──────────────────────────────────────────────────────────
 
 export type UploadProgress =
-  | { phase: 'uploading'; percent: number }
-  | { phase: 'scanning'; percent: number }
+  { phase: 'uploading'; percent: number } | { phase: 'scanning'; percent: number }
 
 // ── Chat Types ───────────────────────────────────────────────────────────────
 
 export type ChatMessage = {
   id: string
-  role: "user" | "assistant" | "system"
+  role: 'user' | 'assistant' | 'system'
   content: string
   timestamp_refs?: number[]
   event_refs?: number[]

@@ -23,7 +23,7 @@ export default function HistoryChat({
 
   useEffect(() => {
     getHistoryChatMessages(auth0Id, jobId)
-      .then(res => setMessages(res.messages || []))
+      .then((res) => setMessages(res.messages || []))
       .catch(() => setHistoryError(true))
       .finally(() => setInitialLoading(false))
   }, [auth0Id, jobId])
@@ -42,7 +42,7 @@ export default function HistoryChat({
       content: text,
       created_at: Date.now() / 1000,
     }
-    setMessages(prev => [...prev, userMsg])
+    setMessages((prev) => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
@@ -54,7 +54,7 @@ export default function HistoryChat({
         content: res.message,
         created_at: Date.now() / 1000,
       }
-      setMessages(prev => [...prev, assistantMsg])
+      setMessages((prev) => [...prev, assistantMsg])
     } catch {
       const errorMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -62,15 +62,20 @@ export default function HistoryChat({
         content: 'Failed to get response. Please try again.',
         created_at: Date.now() / 1000,
       }
-      setMessages(prev => [...prev, errorMsg])
+      setMessages((prev) => [...prev, errorMsg])
     } finally {
       setLoading(false)
     }
   }, [input, loading, auth0Id, jobId])
 
   const sportEmoji: Record<string, string> = {
-    basketball: '🏀', football: '⚽', cricket: '🏏',
-    tennis: '🎾', baseball: '⚾', hockey: '🏒', unknown: '🎯',
+    basketball: '🏀',
+    football: '⚽',
+    cricket: '🏏',
+    tennis: '🎾',
+    baseball: '⚾',
+    hockey: '🏒',
+    unknown: '🎯',
   }
 
   return (
@@ -78,10 +83,17 @@ export default function HistoryChat({
       {summary && (
         <div className="border-b border-border p-4">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-2xl">{sportEmoji[(summary.sport as string) || 'unknown'] || '🎯'}</span>
+            <span className="text-2xl">
+              {sportEmoji[(summary.sport as string) || 'unknown'] || '🎯'}
+            </span>
             <div>
-              <p className="text-sm text-foreground capitalize">{summary.sport as string || 'Sport'} Analysis</p>
-              <p className="text-xs text-muted-foreground">Score: {summary.form_score as number ?? '—'}/10 · {summary.overall_rating as string || ''}</p>
+              <p className="text-sm text-foreground capitalize">
+                {(summary.sport as string) || 'Sport'} Analysis
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Score: {(summary.form_score as number) ?? '—'}/10 ·{' '}
+                {(summary.overall_rating as string) || ''}
+              </p>
             </div>
           </div>
         </div>
@@ -89,7 +101,9 @@ export default function HistoryChat({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {initialLoading ? (
-          <div className="text-center text-muted-foreground text-sm py-8">Loading conversation...</div>
+          <div className="text-center text-muted-foreground text-sm py-8">
+            Loading conversation...
+          </div>
         ) : historyError ? (
           <div className="text-center py-8">
             <p className="text-destructive text-sm mb-2">Failed to load conversation history</p>
@@ -98,12 +112,20 @@ export default function HistoryChat({
         ) : messages.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-foreground font-bold text-lg mb-2">Ask about your analysis</p>
-            <p className="text-muted-foreground text-sm">Get insights on technique, tips, strengths, or specific events.</p>
+            <p className="text-muted-foreground text-sm">
+              Get insights on technique, tips, strengths, or specific events.
+            </p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {['What are my main areas to improve?', 'Show my strengths', 'What drill should I practice?'].map(q => (
+              {[
+                'What are my main areas to improve?',
+                'Show my strengths',
+                'What drill should I practice?',
+              ].map((q) => (
                 <button
                   key={q}
-                  onClick={() => { setInput(q) }}
+                  onClick={() => {
+                    setInput(q)
+                  }}
                   className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                 >
                   {q}
@@ -112,15 +134,20 @@ export default function HistoryChat({
             </div>
           </div>
         ) : (
-          messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm text-foreground ${
-                msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : msg.role === 'system'
-                    ? 'bg-muted text-muted-foreground border border-border'
-                    : 'border border-border bg-card shadow-sm'
-              }`}>
+          messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm text-foreground ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : msg.role === 'system'
+                      ? 'bg-muted text-muted-foreground border border-border'
+                      : 'border border-border bg-card shadow-sm'
+                }`}
+              >
                 {msg.content}
               </div>
             </div>
@@ -141,17 +168,13 @@ export default function HistoryChat({
           <input
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Ask about your analysis..."
             className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-50"
             disabled={loading}
           />
-          <Button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className="px-4"
-          >
+          <Button onClick={handleSend} disabled={loading || !input.trim()} className="px-4">
             Send
           </Button>
         </div>

@@ -9,11 +9,7 @@ import ErrorScreen from '@/components/ErrorScreen'
 import ChatLayout from '@/components/ChatLayout'
 import { usePipeline } from '@/lib/usePipeline'
 
-const UPLOAD_MESSAGES = [
-  'Uploading video...',
-  'Compressing frames...',
-  'Almost there...',
-]
+const UPLOAD_MESSAGES = ['Uploading video...', 'Compressing frames...', 'Almost there...']
 
 const SCANNING_MESSAGES = [
   'Finding players...',
@@ -22,13 +18,7 @@ const SCANNING_MESSAGES = [
   'Identifying key moments...',
 ]
 
-function RotatingMessage({
-  messages,
-  percent,
-}: {
-  messages: string[]
-  percent: number
-}) {
+function RotatingMessage({ messages, percent }: { messages: string[]; percent: number }) {
   const [index, setIndex] = useState(0)
   const [opacity, setOpacity] = useState(0)
 
@@ -60,9 +50,7 @@ function RotatingMessage({
       >
         {messages[index]}
       </p>
-      <span className="text-muted-foreground text-sm tabular-nums">
-        {Math.round(percent)}%
-      </span>
+      <span className="text-muted-foreground text-sm tabular-nums">{Math.round(percent)}%</span>
     </div>
   )
 }
@@ -88,8 +76,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
   } = usePipeline(auth0Id)
 
   const progressPercent = uploadProgress?.percent ?? 0
-  const activeScan =
-    angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+  const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
   const angleLabels = angleScans.map((s) => s.angle ?? 'primary')
 
   switch (pipelineState) {
@@ -102,9 +89,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
         <div className="min-h-screen bg-background flex flex-col items-center justify-center">
           <div className="w-16 h-16 border-4 border-muted border-t-primary rounded-full animate-spin mb-6" />
           <RotatingMessage
-            messages={
-              pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES
-            }
+            messages={pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES}
             percent={progressPercent}
           />
         </div>

@@ -17,15 +17,19 @@ import {
   User,
 } from 'lucide-react'
 
-type NavItem = { href: string; label: string; icon: React.ElementType; exact?: boolean; badge?: string }
+type NavItem = {
+  href: string
+  label: string
+  icon: React.ElementType
+  exact?: boolean
+  badge?: string
+}
 type NavGroup = { label: string | null; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
     label: null,
-    items: [
-      { href: '/dashboard', label: 'Home', icon: House, exact: true },
-    ],
+    items: [{ href: '/dashboard', label: 'Home', icon: House, exact: true }],
   },
   {
     label: 'Roster',
@@ -59,9 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Security & Monitoring',
-    items: [
-      { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
-    ],
+    items: [{ href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck }],
   },
 ]
 
@@ -79,20 +81,24 @@ export default function DashboardNav() {
           )}
           <div className="flex flex-col gap-0.5">
             {group.items.map(({ href, label, icon: Icon, exact, badge }) => {
-              const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+              const isActive = exact
+                ? pathname === href
+                : pathname === href || pathname.startsWith(href + '/')
               const active = isActive
               return (
                 <Link
                   key={href + label}
                   href={href}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? 'page' : undefined}
                   className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                     active
                       ? 'bg-accent text-foreground font-medium'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
-                  <Icon className={`size-4 shrink-0 ${active ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`} />
+                  <Icon
+                    className={`size-4 shrink-0 ${active ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
+                  />
                   <span className="truncate">{label}</span>
                   {badge && (
                     <span className="ml-auto rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-muted-foreground">

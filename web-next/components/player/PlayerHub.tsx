@@ -1,17 +1,24 @@
-"use client"
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { CalendarIcon, TrendingUpIcon, ClipboardListIcon, ActivityIcon, SparklesIcon, VideoIcon } from "lucide-react"
-import { toast } from "sonner"
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  CalendarIcon,
+  TrendingUpIcon,
+  ClipboardListIcon,
+  ActivityIcon,
+  SparklesIcon,
+  VideoIcon,
+} from 'lucide-react'
+import { toast } from 'sonner'
 
-import { Spinner } from "@/components/org/Spinner"
-import { Button } from "@/components/9ui/ui/button"
-import type { CoachAIError } from "@/lib/api"
-import { scanVideoWithProgress, streamScanProgress, getJobStatus } from "@/lib/api"
-import { meStartAnalysis } from "@/lib/playerUpload"
-import { startJobPolling, type JobPollingController } from "@/lib/jobPolling"
-import { toCoachAIError } from "@/lib/errors"
-import { MAX_FILE_SIZE_BYTES, type JobStatus, type ScanResult } from "@/types"
+import { Spinner } from '@/components/org/Spinner'
+import { Button } from '@/components/9ui/ui/button'
+import type { CoachAIError } from '@/lib/api'
+import { scanVideoWithProgress, streamScanProgress, getJobStatus } from '@/lib/api'
+import { meStartAnalysis } from '@/lib/playerUpload'
+import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
+import { toCoachAIError } from '@/lib/errors'
+import { MAX_FILE_SIZE_BYTES, type JobStatus, type ScanResult } from '@/types'
 import {
   getMyProfile,
   getMyAttendance,
@@ -25,21 +32,19 @@ import {
   type MyPerformance,
   type MyAnalyses,
   type MyReports,
-} from "@/lib/meApi"
+} from '@/lib/meApi'
 import {
   ATTENDANCE_STATUS_LABELS,
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   REPORT_TYPE_LABELS,
   STUDENT_STATUS_LABELS,
-} from "@/lib/org"
-import { formatDateMed, formatDateShort } from "@/lib/date"
-import { analysisScore } from "@/lib/analysis"
+} from '@/lib/org'
+import { formatDateMed, formatDateShort } from '@/lib/date'
+import { analysisScore } from '@/lib/analysis'
 
 type LoadState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: HubData }
+  { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: HubData }
 
 type HubData = {
   profile: MyProfile
@@ -51,7 +56,7 @@ type HubData = {
 }
 
 export default function PlayerHub() {
-  const [state, setState] = useState<LoadState>({ status: "loading" })
+  const [state, setState] = useState<LoadState>({ status: 'loading' })
 
   // Refresh only the analyses slice after a player-initiated upload completes,
   // so the Analyses section picks up the new job without a full page reload.
@@ -59,10 +64,10 @@ export default function PlayerHub() {
     try {
       const analyses = await getMyAnalyses()
       setState((prev) =>
-        prev.status === "ready" ? { status: "ready", data: { ...prev.data, analyses } } : prev
+        prev.status === 'ready' ? { status: 'ready', data: { ...prev.data, analyses } } : prev,
       )
     } catch {
-      toast.error("Failed to refresh your analyses.")
+      toast.error('Failed to refresh your analyses.')
     }
   }, [])
 
@@ -78,14 +83,17 @@ export default function PlayerHub() {
     ])
       .then(([profile, attendance, schedule, performance, analyses, reports]) => {
         if (cancelled) return
-        setState({ status: "ready", data: { profile, attendance, schedule, performance, analyses, reports } })
+        setState({
+          status: 'ready',
+          data: { profile, attendance, schedule, performance, analyses, reports },
+        })
       })
       .catch((error: unknown) => {
         if (cancelled) return
         const coachErr = error as CoachAIError
         setState({
-          status: "error",
-          message: coachErr?.message ?? "Failed to load your hub.",
+          status: 'error',
+          message: coachErr?.message ?? 'Failed to load your hub.',
         })
       })
     return () => {
@@ -93,7 +101,7 @@ export default function PlayerHub() {
     }
   }, [])
 
-  if (state.status === "loading") {
+  if (state.status === 'loading') {
     return (
       <div className="flex items-center gap-3 p-8 text-muted-foreground">
         <Spinner /> Loading your hub…
@@ -101,7 +109,7 @@ export default function PlayerHub() {
     )
   }
 
-  if (state.status === "error") {
+  if (state.status === 'error') {
     return (
       <div className="p-8">
         <p className="text-sm text-destructive">{state.message}</p>
@@ -114,15 +122,17 @@ export default function PlayerHub() {
   if (!profile.student) {
     return (
       <div className="mx-auto max-w-2xl p-8">
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">My Hub</p>
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          My Hub
+        </p>
         <h1 className="mb-6 text-[28px] font-bold tracking-tight text-foreground">
-          Welcome{profile.user?.name ? `, ${profile.user.name.split(" ")[0]}` : ""}
+          Welcome{profile.user?.name ? `, ${profile.user.name.split(' ')[0]}` : ''}
         </h1>
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
           <p className="text-sm leading-6 text-muted-foreground">
-            Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your
-            email (<span className="font-mono text-foreground">{profile.user?.email ?? "your email"}</span>){" "}
-            to your student profile and log in again.
+            Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your email (
+            <span className="font-mono text-foreground">{profile.user?.email ?? 'your email'}</span>
+            ) to your student profile and log in again.
           </p>
         </div>
       </div>
@@ -132,35 +142,37 @@ export default function PlayerHub() {
   const student = profile.student
   const attendanceRate = attendance.summary?.attendance_rate
   const upcoming = schedule.events
-    .filter((e) => e.status === "scheduled" && new Date(e.starts_at) >= new Date())
+    .filter((e) => e.status === 'scheduled' && new Date(e.starts_at) >= new Date())
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0]
 
   const kpis = [
     {
-      label: "Attendance Rate",
-      value: attendanceRate === null || attendanceRate === undefined ? "—" : `${attendanceRate}%`,
+      label: 'Attendance Rate',
+      value: attendanceRate === null || attendanceRate === undefined ? '—' : `${attendanceRate}%`,
       detail: attendance.summary
         ? `${attendance.summary.present} present · ${attendance.summary.absent} absent`
-        : "No sessions yet",
+        : 'No sessions yet',
     },
     {
-      label: "Next Event",
-      value: upcoming ? EVENT_TYPE_LABELS[upcoming.event_type] : "—",
-      detail: upcoming ? `${formatDateMed(upcoming.starts_at)} · ${upcoming.title}` : "Nothing scheduled",
+      label: 'Next Event',
+      value: upcoming ? EVENT_TYPE_LABELS[upcoming.event_type] : '—',
+      detail: upcoming
+        ? `${formatDateMed(upcoming.starts_at)} · ${upcoming.title}`
+        : 'Nothing scheduled',
     },
     {
-      label: "Analyses",
+      label: 'Analyses',
       value: String(analyses.analyses.length),
       detail: analyses.analyses.length
         ? `Latest: ${formatDateShort(analyses.analyses[0].requested_at)}`
-        : "No analyses yet",
+        : 'No analyses yet',
     },
     {
-      label: "Reports",
+      label: 'Reports',
       value: String(reports.reports.length),
       detail: reports.reports.length
         ? `Latest: ${formatDateShort(reports.reports[0].created_at)}`
-        : "No reports yet",
+        : 'No reports yet',
     },
   ]
 
@@ -169,9 +181,7 @@ export default function PlayerHub() {
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         My Hub
       </p>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">
-        {student.full_name}
-      </h1>
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">{student.full_name}</h1>
       <div className="mb-8 mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         {student.sport && <span>{student.sport}</span>}
         {student.jersey_number !== null && <span>#{student.jersey_number}</span>}
@@ -193,21 +203,12 @@ export default function PlayerHub() {
       </div>
 
       {/* Analyze my video */}
-      <Section
-        icon={<VideoIcon className="size-4" />}
-        title="Analyze My Video"
-      >
-        <AnalyzeVideoCard
-          auth0Id={profile.user?.auth0_id}
-          onCompleted={refreshAnalyses}
-        />
+      <Section icon={<VideoIcon className="size-4" />} title="Analyze My Video">
+        <AnalyzeVideoCard auth0Id={profile.user?.auth0_id} onCompleted={refreshAnalyses} />
       </Section>
 
       {/* Schedule */}
-      <Section
-        icon={<CalendarIcon className="size-4" />}
-        title="Schedule"
-      >
+      <Section icon={<CalendarIcon className="size-4" />} title="Schedule">
         {schedule.events.length === 0 ? (
           <Empty>No upcoming events.</Empty>
         ) : (
@@ -218,7 +219,7 @@ export default function PlayerHub() {
                   <p className="text-sm font-medium text-foreground">{event.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {formatDateMed(event.starts_at)} · {EVENT_TYPE_LABELS[event.event_type]}
-                    {event.location ? ` · ${event.location}` : ""}
+                    {event.location ? ` · ${event.location}` : ''}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
@@ -231,10 +232,7 @@ export default function PlayerHub() {
       </Section>
 
       {/* Attendance */}
-      <Section
-        icon={<ClipboardListIcon className="size-4" />}
-        title="Attendance"
-      >
+      <Section icon={<ClipboardListIcon className="size-4" />} title="Attendance">
         {attendance.records.length === 0 ? (
           <Empty>No attendance recorded yet.</Empty>
         ) : (
@@ -242,8 +240,12 @@ export default function PlayerHub() {
             {attendance.records.slice(0, 8).map((record) => (
               <li key={record.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{formatDateMed(record.session_date)}</p>
-                  {record.note && <p className="mt-0.5 text-xs text-muted-foreground">{record.note}</p>}
+                  <p className="text-sm font-medium text-foreground">
+                    {formatDateMed(record.session_date)}
+                  </p>
+                  {record.note && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{record.note}</p>
+                  )}
                 </div>
                 <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs">
                   {ATTENDANCE_STATUS_LABELS[record.status] ?? record.status}
@@ -255,10 +257,7 @@ export default function PlayerHub() {
       </Section>
 
       {/* Performance */}
-      <Section
-        icon={<TrendingUpIcon className="size-4" />}
-        title="Performance Trend"
-      >
+      <Section icon={<TrendingUpIcon className="size-4" />} title="Performance Trend">
         {performance.points.length === 0 ? (
           <Empty>No performance data yet.</Empty>
         ) : (
@@ -267,16 +266,29 @@ export default function PlayerHub() {
               .sort((a, b) => b.measured_at.localeCompare(a.measured_at))
               .slice(0, 8)
               .map((point, index) => (
-                <li key={point.source_analysis_id ?? `${point.measured_at}-${index}`} className="flex items-center justify-between gap-4 py-4">
+                <li
+                  key={point.source_analysis_id ?? `${point.measured_at}-${index}`}
+                  className="flex items-center justify-between gap-4 py-4"
+                >
                   <div>
-                    <p className="text-sm font-medium text-foreground">{formatDateShort(point.measured_at)}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {formatDateShort(point.measured_at)}
+                    </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {point.metric_key} · {point.source === "analysis" ? "from analysis" : "manual"}
+                      {point.metric_key} ·{' '}
+                      {point.source === 'analysis' ? 'from analysis' : 'manual'}
                     </p>
                   </div>
                   <span className="text-lg font-bold tracking-tight text-foreground">
                     {point.metric_value}
-                    {point.unit ? <span className="text-sm font-normal text-muted-foreground"> {point.unit}</span> : ""}
+                    {point.unit ? (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {' '}
+                        {point.unit}
+                      </span>
+                    ) : (
+                      ''
+                    )}
                   </span>
                 </li>
               ))}
@@ -285,19 +297,19 @@ export default function PlayerHub() {
       </Section>
 
       {/* Analyses */}
-      <Section
-        icon={<SparklesIcon className="size-4" />}
-        title="Analyses"
-      >
+      <Section icon={<SparklesIcon className="size-4" />} title="Analyses">
         {analyses.analyses.length === 0 ? (
           <Empty>No analyses yet.</Empty>
         ) : (
           <ul className="divide-y divide-border">
             {analyses.analyses.slice(0, 8).map((analysis) => (
-              <li key={analysis.server_job_id} className="flex items-center justify-between gap-4 py-4">
+              <li
+                key={analysis.server_job_id}
+                className="flex items-center justify-between gap-4 py-4"
+              >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">
-                    {analysis.display_name || "Untitled video"}
+                    {analysis.display_name || 'Untitled video'}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {formatDateShort(analysis.requested_at)}
@@ -305,16 +317,18 @@ export default function PlayerHub() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   {analysisScore(analysis) !== null && (
-                    <span className="text-lg font-bold tracking-tight text-foreground">{analysisScore(analysis)}</span>
+                    <span className="text-lg font-bold tracking-tight text-foreground">
+                      {analysisScore(analysis)}
+                    </span>
                   )}
                   <span
                     className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${
                       analysis.complete
-                        ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                        : "border-border text-muted-foreground"
+                        ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                        : 'border-border text-muted-foreground'
                     }`}
                   >
-                    {analysis.complete ? "Done" : "Processing"}
+                    {analysis.complete ? 'Done' : 'Processing'}
                   </span>
                 </div>
               </li>
@@ -324,10 +338,7 @@ export default function PlayerHub() {
       </Section>
 
       {/* Reports */}
-      <Section
-        icon={<ActivityIcon className="size-4" />}
-        title="Reports"
-      >
+      <Section icon={<ActivityIcon className="size-4" />} title="Reports">
         {reports.reports.length === 0 ? (
           <Empty>No reports yet.</Empty>
         ) : (
@@ -337,7 +348,8 @@ export default function PlayerHub() {
                 <div>
                   <p className="text-sm font-medium text-foreground">{report.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} · {formatDateShort(report.created_at)}
+                    {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} ·{' '}
+                    {formatDateShort(report.created_at)}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
@@ -365,7 +377,9 @@ function Section({
     <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-5 flex items-center gap-2">
         <span className="text-muted-foreground">{icon}</span>
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-foreground">{title}</h2>
+        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-foreground">
+          {title}
+        </h2>
       </div>
       {children}
     </section>
@@ -376,12 +390,12 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
-type AnalyzeStage = "idle" | "uploading" | "scanning" | "selecting" | "analyzing" | "finished"
+type AnalyzeStage = 'idle' | 'uploading' | 'scanning' | 'selecting' | 'analyzing' | 'finished'
 
 const STAGE_LABELS: Partial<Record<AnalyzeStage, string>> = {
-  uploading: "Uploading video…",
-  scanning: "Scanning for players…",
-  analyzing: "Analyzing your video…",
+  uploading: 'Uploading video…',
+  scanning: 'Scanning for players…',
+  analyzing: 'Analyzing your video…',
 }
 
 /**
@@ -402,14 +416,14 @@ function AnalyzeVideoCard({
   const pollRef = useRef<JobPollingController | null>(null)
   const liveRef = useRef(true)
 
-  const [stage, setStage] = useState<AnalyzeStage>("idle")
+  const [stage, setStage] = useState<AnalyzeStage>('idle')
   const [fileName, setFileName] = useState<string | null>(null)
   const [percent, setPercent] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [scanToken, setScanToken] = useState<string | null>(null)
   const [videoKey, setVideoKey] = useState<string | null>(null)
-  const [scanPlayers, setScanPlayers] = useState<ScanResult["players"]>([])
+  const [scanPlayers, setScanPlayers] = useState<ScanResult['players']>([])
 
   useEffect(() => {
     return () => {
@@ -422,7 +436,7 @@ function AnalyzeVideoCard({
   const reset = useCallback(() => {
     pollRef.current?.stop()
     pollRef.current = null
-    setStage("idle")
+    setStage('idle')
     setFileName(null)
     setPercent(0)
     setError(null)
@@ -433,7 +447,7 @@ function AnalyzeVideoCard({
 
   const runAnalysis = useCallback(
     (sessionToken: string, key: string | null, playerIndex: number) => {
-      setStage("analyzing")
+      setStage('analyzing')
       setPercent(0)
       setError(null)
 
@@ -457,17 +471,17 @@ function AnalyzeVideoCard({
             onComplete: (status) => {
               if (status.error) {
                 setError(status.error)
-                setStage("idle")
+                setStage('idle')
                 toast.error(status.error)
               } else {
-                setStage("finished")
-                toast.success("Analysis complete — check your analyses below.")
+                setStage('finished')
+                toast.success('Analysis complete — check your analyses below.')
                 onCompleted()
               }
             },
             onError: (failure) => {
               setError(failure.error.message)
-              setStage("idle")
+              setStage('idle')
               toast.error(failure.error.message)
             },
           })
@@ -475,7 +489,7 @@ function AnalyzeVideoCard({
           const err = toCoachAIError(e)
           if (!liveRef.current) return
           setError(err.message)
-          setStage("idle")
+          setStage('idle')
           toast.error(err.message)
         }
       }
@@ -488,19 +502,19 @@ function AnalyzeVideoCard({
     (file?: File) => {
       if (!file) return
       setError(null)
-      if (!file.type.startsWith("video/")) {
-        setError("Please select a valid video file.")
+      if (!file.type.startsWith('video/')) {
+        setError('Please select a valid video file.')
         return
       }
       if (file.size > MAX_FILE_SIZE_BYTES) {
-        setError("File size must be less than 500MB.")
+        setError('File size must be less than 500MB.')
         return
       }
 
       pollRef.current?.stop()
       pollRef.current = null
       setFileName(file.name)
-      setStage("uploading")
+      setStage('uploading')
       setPercent(0)
       setScanToken(null)
       setVideoKey(null)
@@ -517,7 +531,7 @@ function AnalyzeVideoCard({
             auth0Id ?? null,
           )
           if (!liveRef.current) return
-          setStage("scanning")
+          setStage('scanning')
           setPercent(0)
           try {
             for await (const event of streamScanProgress(result.session_token, scanAbort.signal)) {
@@ -527,9 +541,9 @@ function AnalyzeVideoCard({
               if (event.complete) {
                 if (event.error) {
                   throw {
-                    code: "SCAN_FAILED",
+                    code: 'SCAN_FAILED',
                     message: event.error,
-                    layer: "engine",
+                    layer: 'engine',
                     retryable: true,
                   } as CoachAIError
                 }
@@ -537,7 +551,7 @@ function AnalyzeVideoCard({
               }
             }
           } catch (scanErr: unknown) {
-            if (scanErr instanceof DOMException && scanErr.name === "AbortError") return
+            if (scanErr instanceof DOMException && scanErr.name === 'AbortError') return
             throw scanErr
           }
           if (!liveRef.current) return
@@ -548,14 +562,14 @@ function AnalyzeVideoCard({
             runAnalysis(result.session_token, result.video_key, playerIdx)
           } else {
             setScanPlayers(result.players)
-            setStage("selecting")
+            setStage('selecting')
             setPercent(0)
           }
         } catch (e: unknown) {
           if (!liveRef.current) return
           const err = toCoachAIError(e)
           setError(err.message)
-          setStage("idle")
+          setStage('idle')
           toast.error(err.message)
         }
       }
@@ -566,7 +580,7 @@ function AnalyzeVideoCard({
 
   const open = useCallback(() => fileInputRef.current?.click(), [])
 
-  if (stage === "uploading" || stage === "scanning" || stage === "analyzing") {
+  if (stage === 'uploading' || stage === 'scanning' || stage === 'analyzing') {
     return (
       <div className="flex items-center gap-3">
         <Spinner />
@@ -579,8 +593,8 @@ function AnalyzeVideoCard({
             />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {stage === "analyzing"
-              ? "This usually takes under a minute. The result will appear under Analyses."
+            {stage === 'analyzing'
+              ? 'This usually takes under a minute. The result will appear under Analyses.'
               : `${Math.round(percent)}%`}
           </p>
         </div>
@@ -588,7 +602,7 @@ function AnalyzeVideoCard({
     )
   }
 
-  if (stage === "selecting") {
+  if (stage === 'selecting') {
     return (
       <div>
         <p className="mb-3 text-sm font-medium text-foreground">
@@ -600,7 +614,7 @@ function AnalyzeVideoCard({
               key={player.player_index}
               variant="outline"
               size="sm"
-              onClick={() => runAnalysis(scanToken ?? "", videoKey, player.player_index)}
+              onClick={() => runAnalysis(scanToken ?? '', videoKey, player.player_index)}
             >
               Player {player.player_index} · {Math.round(player.confidence * 100)}%
             </Button>
@@ -617,9 +631,10 @@ function AnalyzeVideoCard({
 
   return (
     <div>
-      {stage === "finished" && (
+      {stage === 'finished' && (
         <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
-          Analysis complete — it&apos;s in your Analyses list below and in your coach&apos;s history.
+          Analysis complete — it&apos;s in your Analyses list below and in your coach&apos;s
+          history.
         </p>
       )}
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
@@ -628,7 +643,7 @@ function AnalyzeVideoCard({
         tabIndex={0}
         onClick={open}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
+          if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             open()
           }
@@ -647,7 +662,9 @@ function AnalyzeVideoCard({
           pick(e.dataTransfer.files[0])
         }}
         className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
-          isDragging ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"
+          isDragging
+            ? 'border-primary bg-primary/10'
+            : 'border-border bg-background hover:border-primary/40'
         }`}
       >
         <input
@@ -660,7 +677,9 @@ function AnalyzeVideoCard({
         <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
           <VideoIcon className="size-5" />
         </div>
-        <p className="mt-3 text-sm font-medium text-foreground">{fileName || "Drop video or click to browse"}</p>
+        <p className="mt-3 text-sm font-medium text-foreground">
+          {fileName || 'Drop video or click to browse'}
+        </p>
         <p className="mt-1 text-xs text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
         <Button
           size="sm"
@@ -681,6 +700,6 @@ function AnalyzeVideoCard({
 }
 
 function periodLabel(from: string | null, to: string | null): string {
-  if (!from && !to) return "—"
-  return `${from ? formatDateShort(from) : ""}${from && to ? " – " : ""}${to ? formatDateShort(to) : ""}`
+  if (!from && !to) return '—'
+  return `${from ? formatDateShort(from) : ''}${from && to ? ' – ' : ''}${to ? formatDateShort(to) : ''}`
 }

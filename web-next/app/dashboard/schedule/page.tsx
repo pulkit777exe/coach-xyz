@@ -1,27 +1,29 @@
-import type { Metadata } from "next";
-import { getSession } from "@/lib/session";
-import { redirect } from "next/navigation";
-import { getOrgContext, orgSchedule } from "@/lib/serverData";
-import { scheduleMonthWindow } from "@/lib/date";
-import ScheduleClient from "@/components/org/ScheduleClient";
-import { unstable_noStore as noStore } from "next/cache";
+import type { Metadata } from 'next'
+import { getSession } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import { getOrgContext, orgSchedule } from '@/lib/serverData'
+import { scheduleMonthWindow } from '@/lib/date'
+import ScheduleClient from '@/components/org/ScheduleClient'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
-  title: "Schedule | CoachXYZ",
-  description: "Plan practices, matches, and events.",
-};
+  title: 'Schedule | CoachXYZ',
+  description: 'Plan practices, matches, and events.',
+}
 
 export default async function SchedulePage() {
-  noStore();
-  const session = await getSession();
-  if (!session) redirect("/auth/login");
-  const { auth0Id } = await getOrgContext();
+  noStore()
+  const session = await getSession()
+  if (!session) redirect('/auth/login')
+  const { auth0Id } = await getOrgContext()
 
   // Widen the window by one day on each side so month-boundary events are
   // captured regardless of the server timezone vs. the browser timezone.
-  const { from, to } = scheduleMonthWindow(new Date());
+  const { from, to } = scheduleMonthWindow(new Date())
 
-  const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() }).catch(() => ({ events: [] }));
+  const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() }).catch(
+    () => ({ events: [] }),
+  )
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -36,5 +38,5 @@ export default async function SchedulePage() {
         <ScheduleClient auth0Id={auth0Id} initialEvents={res.events} />
       </div>
     </div>
-  );
+  )
 }

@@ -1,4 +1,4 @@
-import { apiFetch, IDENTITY_BASE, type UserRecord } from "./api"
+import { apiFetch, IDENTITY_BASE, type UserRecord } from './api'
 import type {
   AttendanceWithStudent,
   AttendanceSummary,
@@ -6,7 +6,7 @@ import type {
   ReportRecord,
   ScheduleEvent,
   Student,
-} from "./org"
+} from './org'
 
 // ── Player Hub API ──────────────────────────────────────────────────────────
 // Self-scoped ("/api/me/*") read-only endpoints for the player/student face.
@@ -15,7 +15,7 @@ import type {
 
 export type MyOrg = {
   org_auth0_id: string
-  role: "owner" | "admin" | "coach" | "player"
+  role: 'owner' | 'admin' | 'coach' | 'player'
   display_name: string | null
 }
 
@@ -70,11 +70,11 @@ export type MyReports = {
 const me = (path: string) => `${IDENTITY_BASE}/api/me${path}`
 
 export async function getMyOrgs(): Promise<MyOrgs> {
-  return apiFetch<MyOrgs>(me("/orgs"))
+  return apiFetch<MyOrgs>(me('/orgs'))
 }
 
 export async function getMyProfile(): Promise<MyProfile> {
-  return apiFetch<MyProfile>(me("/profile"))
+  return apiFetch<MyProfile>(me('/profile'))
 }
 
 export async function updateMyProfile(input: {
@@ -82,39 +82,41 @@ export async function updateMyProfile(input: {
   nickname?: string | null
   picture?: string | null
 }): Promise<{ user: UserRecord }> {
-  return apiFetch<{ user: UserRecord }>(me("/profile"), {
-    method: "PUT",
+  return apiFetch<{ user: UserRecord }>(me('/profile'), {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
 }
 
 export async function getMyAttendance(): Promise<MyAttendance> {
-  return apiFetch<MyAttendance>(me("/attendance"))
+  return apiFetch<MyAttendance>(me('/attendance'))
 }
 
 export async function getMySchedule(): Promise<MySchedule> {
-  return apiFetch<MySchedule>(me("/schedule"))
+  return apiFetch<MySchedule>(me('/schedule'))
 }
 
 export async function getMyPerformance(): Promise<MyPerformance> {
-  return apiFetch<MyPerformance>(me("/performance"))
+  return apiFetch<MyPerformance>(me('/performance'))
 }
 
 export async function getMyAnalyses(): Promise<MyAnalyses> {
-  return apiFetch<MyAnalyses>(me("/analyses"))
+  return apiFetch<MyAnalyses>(me('/analyses'))
 }
 
 export async function getMyReports(): Promise<MyReports> {
-  return apiFetch<MyReports>(me("/reports"))
+  return apiFetch<MyReports>(me('/reports'))
 }
 
 export async function acceptInvite(token: string): Promise<{ org_auth0_id: string; role: string }> {
-  return apiFetch<{ org_auth0_id: string; role: string }>(me("/invites/accept"), {
-    method: "POST",
+  return apiFetch<{ org_auth0_id: string; role: string }>(me('/invites/accept'), {
+    method: 'POST',
     body: JSON.stringify({ token }),
   })
 }
 
-export async function getMyReport(id: string): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
+export async function getMyReport(
+  id: string,
+): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
   return apiFetch(me(`/reports/${encodeURIComponent(id)}`))
 }

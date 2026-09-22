@@ -1,12 +1,18 @@
-"use client"
+'use client'
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
-import { toast } from "sonner"
-import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, StickyNoteIcon, MailIcon } from "lucide-react"
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { toast } from 'sonner'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  StickyNoteIcon,
+  MailIcon,
+} from 'lucide-react'
 
-import { Button } from "@/components/9ui/ui/button"
-import { Input } from "@/components/9ui/ui/input"
+import { Button } from '@/components/9ui/ui/button'
+import { Input } from '@/components/9ui/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -14,12 +20,12 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/9ui/ui/dialog"
-import { Spinner } from "./Spinner"
-import { downloadCSV } from "@/lib/csv"
-import EmailAttendanceDialog from "./EmailAttendanceDialog"
+} from '@/components/9ui/ui/dialog'
+import { Spinner } from './Spinner'
+import { downloadCSV } from '@/lib/csv'
+import EmailAttendanceDialog from './EmailAttendanceDialog'
 
-import type { AttendanceStatus, Student } from "@/lib/org"
+import type { AttendanceStatus, Student } from '@/lib/org'
 import {
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
@@ -27,19 +33,24 @@ import {
   orgUpsertAttendance,
   orgBatchAttendance,
   orgDeleteAttendance,
-} from "@/lib/org"
-import { toISODate } from "@/lib/date"
-import type { CoachAIError } from "@/lib/api"
+} from '@/lib/org'
+import { toISODate } from '@/lib/date'
+import type { CoachAIError } from '@/lib/api'
 
-type GridRecord = { student_id: string; session_date: string; status: AttendanceStatus; note?: string | null }
+type GridRecord = {
+  student_id: string
+  session_date: string
+  status: AttendanceStatus
+  note?: string | null
+}
 
 const STATUSES = ATTENDANCE_STATUSES
 
 const STATUS_META: Record<AttendanceStatus, { color: string; letter: string }> = {
-  present: { color: "var(--color-success)", letter: "P" },
-  late: { color: "var(--color-warning)", letter: "L" },
-  absent: { color: "var(--color-destructive)", letter: "A" },
-  excused: { color: "var(--color-info)", letter: "E" },
+  present: { color: 'var(--color-success)', letter: 'P' },
+  late: { color: 'var(--color-warning)', letter: 'L' },
+  absent: { color: 'var(--color-destructive)', letter: 'A' },
+  excused: { color: 'var(--color-info)', letter: 'E' },
 }
 
 function startOfLocalDay(d: Date) {
@@ -62,8 +73,8 @@ export default function AttendanceGrid({
   const today = startOfLocalDay(new Date())
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
   const roster = students
-  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(
-    () => makeMap(initialRecords),
+  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(() =>
+    makeMap(initialRecords),
   )
   const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
   const [loading, setLoading] = useState(false)
@@ -81,7 +92,7 @@ export default function AttendanceGrid({
     () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, monthNum, i + 1)),
     [year, monthNum, daysInMonth],
   )
-  const monthLabel = month.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const fetchMonth = async (targetMonth: Date) => {
     setLoading(true)
@@ -97,7 +108,7 @@ export default function AttendanceGrid({
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to load attendance")
+      toast.error((err as CoachAIError).message ?? 'Failed to load attendance')
     } finally {
       setLoading(false)
     }
@@ -130,7 +141,7 @@ export default function AttendanceGrid({
     try {
       if (next === null) {
         const res = await orgDeleteAttendance(auth0Id, studentId, dateStr)
-        if (!res.deleted) throw new Error("Failed to clear attendance")
+        if (!res.deleted) throw new Error('Failed to clear attendance')
         setNotes((prev) => {
           const map = new Map(prev)
           map.delete(k)
@@ -145,7 +156,7 @@ export default function AttendanceGrid({
         })
       }
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to save attendance")
+      toast.error((err as CoachAIError).message ?? 'Failed to save attendance')
       setRecords((prev) => {
         const map = new Map(prev)
         if (current) map.set(k, current)
@@ -177,14 +188,18 @@ export default function AttendanceGrid({
     const dateStr = toISODate(date)
     const unmarked = roster.filter((s) => !records.has(keyOf(s.id, dateStr)))
     if (unmarked.length === 0) {
-      toast.info("Everyone already has a status for this day")
+      toast.info('Everyone already has a status for this day')
       return
     }
     setLoading(true)
     try {
       const res = await orgBatchAttendance(
         auth0Id,
-        unmarked.map((s) => ({ student_id: s.id, session_date: dateStr, status: "present" as const })),
+        unmarked.map((s) => ({
+          student_id: s.id,
+          session_date: dateStr,
+          status: 'present' as const,
+        })),
       )
       setRecords((prev) => {
         const map = new Map(prev)
@@ -193,17 +208,17 @@ export default function AttendanceGrid({
       })
       setStatusDraft((prev) => {
         const next = { ...prev }
-        for (const s of unmarked) next[s.id] = "present"
+        for (const s of unmarked) next[s.id] = 'present'
         return next
       })
       setNoteDraft((prev) => {
         const next = { ...prev }
-        for (const s of unmarked) next[s.id] = next[s.id] ?? ""
+        for (const s of unmarked) next[s.id] = next[s.id] ?? ''
         return next
       })
       toast.success(`Marked ${unmarked.length} student(s) present`)
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to mark attendance")
+      toast.error((err as CoachAIError).message ?? 'Failed to mark attendance')
     } finally {
       setLoading(false)
     }
@@ -218,15 +233,15 @@ export default function AttendanceGrid({
       const currentStatus = records.get(k)
       const draftStatus = statusDraft[s.id]
       const desiredStatus = draftStatus ?? currentStatus
-      const existingNote = notes.get(k) ?? ""
-      const draftNote = noteDraft[s.id]?.trim() ?? ""
+      const existingNote = notes.get(k) ?? ''
+      const draftNote = noteDraft[s.id]?.trim() ?? ''
       const noteChanged = draftNote !== existingNote
       const statusChanged = currentStatus !== desiredStatus
       if (!statusChanged && !noteChanged) continue
       upserts.push({
         student: s,
-        status: desiredStatus ?? "present",
-        note: noteChanged ? (draftNote || null) : (existingNote || null),
+        status: desiredStatus ?? 'present',
+        note: noteChanged ? draftNote || null : existingNote || null,
       })
     }
     if (upserts.length === 0) {
@@ -259,10 +274,10 @@ export default function AttendanceGrid({
         }
         return map
       })
-      toast.success("Saved")
+      toast.success('Saved')
       setDayDialog(null)
     } catch (err) {
-      toast.error((err as CoachAIError).message ?? "Failed to save")
+      toast.error((err as CoachAIError).message ?? 'Failed to save')
     } finally {
       setNotesSaving(false)
     }
@@ -270,8 +285,8 @@ export default function AttendanceGrid({
 
   const exportCSV = () => {
     const header = [
-      "Student",
-      "Sport",
+      'Student',
+      'Sport',
       ...days.map((d) => String(d.getDate())),
       ...ATTENDANCE_STATUSES.map((s) => ATTENDANCE_STATUS_LABELS[s]),
     ]
@@ -279,10 +294,10 @@ export default function AttendanceGrid({
       const counts = rowCounts(s.id)
       return [
         s.full_name,
-        s.sport ?? "",
+        s.sport ?? '',
         ...days.map((d) => {
           const st = records.get(keyOf(s.id, toISODate(d)))
-          return st ? STATUS_META[st].letter : ""
+          return st ? STATUS_META[st].letter : ''
         }),
         counts.present,
         counts.late,
@@ -290,7 +305,10 @@ export default function AttendanceGrid({
         counts.excused,
       ]
     })
-    downloadCSV(`attendance-${year}-${String(monthNum + 1).padStart(2, "0")}.csv`, [header, ...rows])
+    downloadCSV(`attendance-${year}-${String(monthNum + 1).padStart(2, '0')}.csv`, [
+      header,
+      ...rows,
+    ])
   }
 
   const rowCounts = (studentId: string) => {
@@ -311,15 +329,17 @@ export default function AttendanceGrid({
       const st = records.get(keyOf(s.id, dateStr))
       if (st) {
         marked += 1
-        if (st === "present") present += 1
-        if (st === "late") late += 1
+        if (st === 'present') present += 1
+        if (st === 'late') late += 1
       }
     }
     return { marked, present, late }
   }
 
-  const dialogDateStr = dayDialog ? toISODate(dayDialog) : ""
-  const dialogMarked = dayDialog ? roster.filter((s) => records.has(keyOf(s.id, dialogDateStr))) : []
+  const dialogDateStr = dayDialog ? toISODate(dayDialog) : ''
+  const dialogMarked = dayDialog
+    ? roster.filter((s) => records.has(keyOf(s.id, dialogDateStr)))
+    : []
   const dialogUnmarked = roster.length - dialogMarked.length
 
   if (roster.length === 0) {
@@ -343,7 +363,12 @@ export default function AttendanceGrid({
       {/* Month header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" onClick={() => nav(-1)} aria-label="Previous month">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => nav(-1)}
+            aria-label="Previous month"
+          >
             <ChevronLeftIcon />
           </Button>
           <Button variant="outline" size="icon-sm" onClick={() => nav(1)} aria-label="Next month">
@@ -405,7 +430,7 @@ export default function AttendanceGrid({
                       onClick={() => openDayDialog(d)}
                       title="Open day — mark present or add notes"
                       className={`relative flex h-9 w-8 flex-col items-center justify-center rounded border border-transparent transition-colors hover:border-border ${
-                        isToday(d) ? "bg-(--success) text-background" : "text-muted-foreground"
+                        isToday(d) ? 'bg-(--success) text-background' : 'text-muted-foreground'
                       }`}
                     >
                       <span className="text-xs leading-none">{d.getDate()}</span>
@@ -441,7 +466,10 @@ export default function AttendanceGrid({
             {roster.map((s) => {
               const counts = rowCounts(s.id)
               return (
-                <tr key={s.id} className="border-border hover:bg-accent/40 border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]">
+                <tr
+                  key={s.id}
+                  className="border-border hover:bg-accent/40 border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                >
                   <td className="sticky left-0 z-10 bg-background/95 max-w-44 px-4 py-1.5">
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
                       <span className="truncate font-medium text-foreground">{s.full_name}</span>
@@ -465,8 +493,8 @@ export default function AttendanceGrid({
                           onClick={() => cycle(s.id, d)}
                           title={
                             st
-                              ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ""}${hasNote ? ` · ${notes.get(k)}` : ""} — click to change`
-                              : "Click to mark present"
+                              ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ''}${hasNote ? ` · ${notes.get(k)}` : ''} — click to change`
+                              : 'Click to mark present'
                           }
                           disabled={savingKey === k}
                           className="relative flex h-8 w-8 items-center justify-center rounded text-[0.65rem] font-semibold border border-border/60 transition-transform hover:scale-105 disabled:opacity-40"
@@ -474,15 +502,21 @@ export default function AttendanceGrid({
                             meta
                               ? {
                                   background: meta.color,
-                                  color: "var(--color-background)",
+                                  color: 'var(--color-background)',
                                   borderColor: meta.color,
                                 }
                               : isToday(d)
-                                ? { background: "var(--color-muted)", color: "var(--color-muted-foreground)" }
-                                : { background: "transparent", color: "var(--color-muted-foreground)" }
+                                ? {
+                                    background: 'var(--color-muted)',
+                                    color: 'var(--color-muted-foreground)',
+                                  }
+                                : {
+                                    background: 'transparent',
+                                    color: 'var(--color-muted-foreground)',
+                                  }
                           }
                         >
-                          {meta ? meta.letter : isToday(d) ? "•" : ""}
+                          {meta ? meta.letter : isToday(d) ? '•' : ''}
                           {hasNote && (
                             <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
                           )}
@@ -491,7 +525,10 @@ export default function AttendanceGrid({
                     )
                   })}
                   <td className="px-3 py-1.5 text-right">
-                    <span className="text-xs text-muted-foreground" title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}>
+                    <span
+                      className="text-xs text-muted-foreground"
+                      title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}
+                    >
                       {counts.present}/{daysInMonth}
                     </span>
                   </td>
@@ -502,8 +539,8 @@ export default function AttendanceGrid({
         </table>
       </div>
       <p className="text-muted-foreground mt-3 text-xs">
-        Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to mark
-        the day or add per-student notes.
+        Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
+        mark the day or add per-student notes.
       </p>
 
       {/* Day dialog: notes + batch mark */}
@@ -511,16 +548,16 @@ export default function AttendanceGrid({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {dayDialog?.toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
+              {dayDialog?.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
               })}
             </DialogTitle>
             <DialogDescription>
               {dialogMarked.length} of {roster.length} marked
-              {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ""}.
+              {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ''}.
             </DialogDescription>
           </DialogHeader>
 
@@ -532,7 +569,7 @@ export default function AttendanceGrid({
                 disabled={loading}
                 onClick={() => dayDialog && markRemainingPresent(dayDialog)}
               >
-                {loading ? <Spinner /> : "Mark remaining present"}
+                {loading ? <Spinner /> : 'Mark remaining present'}
               </Button>
             )}
 
@@ -544,7 +581,7 @@ export default function AttendanceGrid({
                   <div key={s.id} className="grid gap-1.5">
                     <div className="flex items-center gap-2 text-sm">
                       <select
-                        value={statusDraft[s.id] ?? ""}
+                        value={statusDraft[s.id] ?? ''}
                         onChange={(e) => {
                           const v = e.target.value as AttendanceStatus
                           setStatusDraft((prev) => {
@@ -556,10 +593,17 @@ export default function AttendanceGrid({
                         }}
                         className={`h-7 rounded border px-1 text-[0.65rem] font-semibold ${
                           st
-                            ? "text-background"
-                            : "text-muted-foreground border-border/60 bg-transparent"
+                            ? 'text-background'
+                            : 'text-muted-foreground border-border/60 bg-transparent'
                         }`}
-                        style={st ? { background: STATUS_META[st].color, borderColor: STATUS_META[st].color } : undefined}
+                        style={
+                          st
+                            ? {
+                                background: STATUS_META[st].color,
+                                borderColor: STATUS_META[st].color,
+                              }
+                            : undefined
+                        }
                         title="Status for this day"
                       >
                         <option value="">—</option>
@@ -573,8 +617,10 @@ export default function AttendanceGrid({
                       {!st && <span className="text-muted-foreground text-xs">not yet marked</span>}
                     </div>
                     <Input
-                      value={noteDraft[s.id] ?? ""}
-                      onChange={(e) => setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      value={noteDraft[s.id] ?? ''}
+                      onChange={(e) =>
+                        setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
+                      }
                       placeholder="Add a note (e.g. injured, arrived late)…"
                       className="h-8 text-sm"
                     />
@@ -589,7 +635,7 @@ export default function AttendanceGrid({
               Cancel
             </Button>
             <Button onClick={saveNotes} disabled={notesSaving}>
-              {notesSaving ? <Spinner /> : "Save"}
+              {notesSaving ? <Spinner /> : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

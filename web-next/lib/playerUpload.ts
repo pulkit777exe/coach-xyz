@@ -1,4 +1,4 @@
-import { apiFetch, IDENTITY_BASE } from "./api"
+import { apiFetch, IDENTITY_BASE } from './api'
 
 export type MeAnalyzeInput = {
   session_token: string | null
@@ -15,15 +15,13 @@ export type MeAnalyzeInput = {
  * Returns { job_id } — poll it with getJobStatus (same capability route the
  * coach flow uses).
  */
-export async function meStartAnalysis(
-  params: MeAnalyzeInput,
-): Promise<{ job_id: string }> {
+export async function meStartAnalysis(params: MeAnalyzeInput): Promise<{ job_id: string }> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30_000)
   try {
     return await apiFetch<{ job_id: string }>(`${IDENTITY_BASE}/api/me/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_token: params.session_token,
         player_index: params.player_index ?? null,

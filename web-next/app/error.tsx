@@ -22,7 +22,9 @@ export default function Error({
         <div className="mx-auto grid size-12 place-items-center rounded-xl bg-danger/10 text-destructive">
           <TriangleAlert className="size-6" />
         </div>
-        <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">Something went wrong</h1>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
+          Something went wrong
+        </h1>
         <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
           {error?.message || 'An unexpected error occurred.'}
         </p>
@@ -30,7 +32,9 @@ export default function Error({
           <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
         )}
         <div className="mt-6">
-          <Button size="lg" onClick={reset}>Try again</Button>
+          <Button size="lg" onClick={reset}>
+            Try again
+          </Button>
         </div>
       </div>
     </main>

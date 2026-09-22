@@ -31,7 +31,13 @@ function getInitials(name?: string | null, email?: string | null): string {
   return '?'
 }
 
-export default function UserAvatar({ picture, name, email, size = 'md', className = '' }: UserAvatarProps) {
+export default function UserAvatar({
+  picture,
+  name,
+  email,
+  size = 'md',
+  className = '',
+}: UserAvatarProps) {
   const [imgError, setImgError] = useState(false)
   const showImage = picture && !imgError
 

@@ -1,7 +1,7 @@
-"use client"
+'use client'
 
-import { PrinterIcon } from "lucide-react"
-import { Button } from "@/components/9ui/ui/button"
+import { PrinterIcon } from 'lucide-react'
+import { Button } from '@/components/9ui/ui/button'
 
 export default function PrintReportButton() {
   return (

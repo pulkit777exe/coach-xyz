@@ -95,9 +95,10 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
 
   function schedule(failureCount: number) {
     clearTimer()
-    const delay = failureCount === 0
-      ? intervalMs
-      : Math.min(intervalMs * Math.pow(backoffFactor, failureCount - 1), maxBackoffMs)
+    const delay =
+      failureCount === 0
+        ? intervalMs
+        : Math.min(intervalMs * Math.pow(backoffFactor, failureCount - 1), maxBackoffMs)
     timer = setTimeout(run, delay)
   }
 

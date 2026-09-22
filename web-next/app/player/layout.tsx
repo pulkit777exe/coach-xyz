@@ -1,23 +1,19 @@
-import { getSession } from "@/lib/session";
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import UserAvatar from "@/components/UserAvatar";
+import { getSession } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import UserAvatar from '@/components/UserAvatar'
 
-export default async function PlayerLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  let session;
+export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
+  let session
   try {
-    session = await getSession();
+    session = await getSession()
   } catch (error) {
-    console.error("Failed to get auth session:", error);
-    redirect("/auth/login");
+    console.error('Failed to get auth session:', error)
+    redirect('/auth/login')
   }
 
   if (!session) {
-    redirect("/auth/login");
+    redirect('/auth/login')
   }
 
   return (
@@ -41,18 +37,28 @@ export default async function PlayerLayout({
         </div>
         <div className="border-t border-sidebar-border p-3">
           <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-            <UserAvatar picture={session.user.picture} name={session.user.name} email={session.user.email} size="sm" />
+            <UserAvatar
+              picture={session.user.picture}
+              name={session.user.name}
+              email={session.user.email}
+              size="sm"
+            />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium leading-none text-foreground">{session.user.name || session.user.email}</p>
+              <p className="truncate text-sm font-medium leading-none text-foreground">
+                {session.user.name || session.user.email}
+              </p>
               <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
             </div>
           </div>
-          <a href="/auth/logout" className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+          <a
+            href="/auth/logout"
+            className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
             Log Out
           </a>
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-auto bg-[var(--background)]">{children}</main>
     </div>
-  );
+  )
 }

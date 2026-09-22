@@ -1,5 +1,5 @@
-import { apiFetch, IDENTITY_BASE } from "./api"
-import type { DashboardAnalysis } from "./api"
+import { apiFetch, IDENTITY_BASE } from './api'
+import type { DashboardAnalysis } from './api'
 
 const org = (auth0Id: string, path: string) =>
   `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
@@ -14,54 +14,54 @@ const email = (auth0Id: string, path: string) =>
 // Org vocabulary — single source of truth for the web app. The server mirrors
 // these (same values AND order: order is contractual — see server/src/lib/orgEnums.ts
 // and the org *Contract tests on both sides). Add a value there and here.
-export const STUDENT_STATUSES = ["active", "inactive", "transferred"] as const
+export const STUDENT_STATUSES = ['active', 'inactive', 'transferred'] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
-export const ATTENDANCE_STATUSES = ["present", "late", "absent", "excused"] as const
+export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
 
-export const EVENT_TYPES = ["practice", "match", "tournament", "meeting", "other"] as const
+export const EVENT_TYPES = ['practice', 'match', 'tournament', 'meeting', 'other'] as const
 export type EventType = (typeof EVENT_TYPES)[number]
 
-export const EVENT_STATUSES = ["scheduled", "completed", "cancelled"] as const
+export const EVENT_STATUSES = ['scheduled', 'completed', 'cancelled'] as const
 export type EventStatus = (typeof EVENT_STATUSES)[number]
 
-export const REPORT_TYPES = ["progress", "attendance", "performance", "monthly"] as const
+export const REPORT_TYPES = ['progress', 'attendance', 'performance', 'monthly'] as const
 export type ReportType = (typeof REPORT_TYPES)[number]
 
 // Human-readable labels — single source of truth for presentation.
 export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
-  active: "Active",
-  inactive: "Inactive",
-  transferred: "Transferred",
+  active: 'Active',
+  inactive: 'Inactive',
+  transferred: 'Transferred',
 }
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
-  present: "Present",
-  late: "Late",
-  absent: "Absent",
-  excused: "Excused",
+  present: 'Present',
+  late: 'Late',
+  absent: 'Absent',
+  excused: 'Excused',
 }
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  practice: "Practice",
-  match: "Match",
-  tournament: "Tournament",
-  meeting: "Meeting",
-  other: "Other",
+  practice: 'Practice',
+  match: 'Match',
+  tournament: 'Tournament',
+  meeting: 'Meeting',
+  other: 'Other',
 }
 
 export const EVENT_STATUS_LABELS: Record<EventStatus, string> = {
-  scheduled: "Scheduled",
-  completed: "Completed",
-  cancelled: "Cancelled",
+  scheduled: 'Scheduled',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
 }
 
 export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
-  progress: "Progress Report",
-  attendance: "Attendance Report",
-  performance: "Performance Report",
-  monthly: "Monthly Summary",
+  progress: 'Progress Report',
+  attendance: 'Attendance Report',
+  performance: 'Performance Report',
+  monthly: 'Monthly Summary',
 }
 
 export type Student = {
@@ -86,10 +86,7 @@ export type Student = {
   updated_at: string
 }
 
-export type StudentFormValues = Omit<
-  Student,
-  "id" | "auth0_id" | "created_at" | "updated_at"
->
+export type StudentFormValues = Omit<Student, 'id' | 'auth0_id' | 'created_at' | 'updated_at'>
 
 export type AttendanceRecord = {
   id: string
@@ -149,7 +146,7 @@ export type PerformanceSeriesPoint = {
   metric_key: string
   metric_value: number
   unit: string | null
-  source: "analysis" | "manual"
+  source: 'analysis' | 'manual'
   source_analysis_id: string | null
 }
 
@@ -181,7 +178,7 @@ export type TrendPoint = {
   measured_at: string
   metric_value: number
   unit: string | null
-  source: "analysis" | "manual"
+  source: 'analysis' | 'manual'
 }
 
 export type MetricTrend = {
@@ -267,23 +264,18 @@ export const orgStudents = async (
   opts: { search?: string; sport?: string; status?: string } = {},
 ): Promise<{ students: Student[] }> => {
   const params = new URLSearchParams()
-  if (opts.search) params.set("search", opts.search)
-  if (opts.sport) params.set("sport", opts.sport)
-  if (opts.status) params.set("status", opts.status)
+  if (opts.search) params.set('search', opts.search)
+  if (opts.sport) params.set('sport', opts.sport)
+  if (opts.status) params.set('status', opts.status)
   const qs = params.toString()
-  return apiFetch<{ students: Student[] }>(org(auth0Id, `/students${qs ? `?${qs}` : ""}`))
+  return apiFetch<{ students: Student[] }>(org(auth0Id, `/students${qs ? `?${qs}` : ''}`))
 }
 
-export const orgStudentsSports = async (
-  auth0Id: string,
-): Promise<{ sports: string[] }> => {
-  return apiFetch<{ sports: string[] }>(org(auth0Id, "/students/sports"))
+export const orgStudentsSports = async (auth0Id: string): Promise<{ sports: string[] }> => {
+  return apiFetch<{ sports: string[] }>(org(auth0Id, '/students/sports'))
 }
 
-export const orgStudent = async (
-  auth0Id: string,
-  id: string,
-): Promise<{ student: Student }> => {
+export const orgStudent = async (auth0Id: string, id: string): Promise<{ student: Student }> => {
   return apiFetch<{ student: Student }>(org(auth0Id, `/students/${encodeURIComponent(id)}`))
 }
 
@@ -291,8 +283,8 @@ export const orgCreateStudent = async (
   auth0Id: string,
   input: Partial<StudentFormValues>,
 ): Promise<{ student: Student }> => {
-  return apiFetch<{ student: Student }>(org(auth0Id, "/students"), {
-    method: "POST",
+  return apiFetch<{ student: Student }>(org(auth0Id, '/students'), {
+    method: 'POST',
     body: JSON.stringify(pickDefined(input)),
   })
 }
@@ -302,31 +294,27 @@ export const orgUpdateStudent = async (
   id: string,
   input: Partial<StudentFormValues>,
 ): Promise<{ student: Student }> => {
-  return apiFetch<{ student: Student }>(
-    org(auth0Id, `/students/${encodeURIComponent(id)}`),
-    {
-      method: "PUT",
-      body: JSON.stringify(pickDefined(input)),
-    },
-  )
+  return apiFetch<{ student: Student }>(org(auth0Id, `/students/${encodeURIComponent(id)}`), {
+    method: 'PUT',
+    body: JSON.stringify(pickDefined(input)),
+  })
 }
 
 export const orgDeleteStudent = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(
-    org(auth0Id, `/students/${encodeURIComponent(id)}`),
-    { method: "DELETE" },
-  )
+  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/students/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
 }
 
 export const orgImportStudents = async (
   auth0Id: string,
   rows: StudentImportRow[],
 ): Promise<StudentImportResult> => {
-  return apiFetch<StudentImportResult>(org(auth0Id, "/students/import"), {
-    method: "POST",
+  return apiFetch<StudentImportResult>(org(auth0Id, '/students/import'), {
+    method: 'POST',
     body: JSON.stringify({ rows }),
   })
 }
@@ -337,12 +325,12 @@ export const orgStudentTrends = async (
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<{ trends: MetricTrend[] }> => {
   const params = new URLSearchParams()
-  if (opts.metricKey) params.set("metricKey", opts.metricKey)
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
+  if (opts.metricKey) params.set('metricKey', opts.metricKey)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
   return apiFetch<{ trends: MetricTrend[] }>(
-    org(auth0Id, `/students/${encodeURIComponent(studentId)}/trends${qs ? `?${qs}` : ""}`),
+    org(auth0Id, `/students/${encodeURIComponent(studentId)}/trends${qs ? `?${qs}` : ''}`),
   )
 }
 
@@ -351,10 +339,10 @@ export const orgCompareStudents = async (
   ids: string[],
   metricKey?: string,
 ): Promise<{ comparison: ComparisonStudent[] }> => {
-  const qsParts = [`ids=${ids.map(encodeURIComponent).join(",")}`]
+  const qsParts = [`ids=${ids.map(encodeURIComponent).join(',')}`]
   if (metricKey) qsParts.push(`metricKey=${encodeURIComponent(metricKey)}`)
   return apiFetch<{ comparison: ComparisonStudent[] }>(
-    org(auth0Id, `/students/comparison?${qsParts.join("&")}`),
+    org(auth0Id, `/students/comparison?${qsParts.join('&')}`),
   )
 }
 
@@ -366,12 +354,12 @@ export const orgStudentPerformance = async (
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<{ series: PerformanceSeriesPoint[] }> => {
   const params = new URLSearchParams()
-  if (opts.metricKey) params.set("metricKey", opts.metricKey)
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
+  if (opts.metricKey) params.set('metricKey', opts.metricKey)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
   return apiFetch<{ series: PerformanceSeriesPoint[] }>(
-    org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance${qs ? `?${qs}` : ""}`),
+    org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance${qs ? `?${qs}` : ''}`),
   )
 }
 
@@ -382,7 +370,7 @@ export const orgAddPerformanceMetric = async (
 ): Promise<{ metric: PerformanceMetric }> => {
   return apiFetch<{ metric: PerformanceMetric }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance`),
-    { method: "POST", body: JSON.stringify(input) },
+    { method: 'POST', body: JSON.stringify(input) },
   )
 }
 
@@ -402,12 +390,12 @@ export const orgAttendance = async (
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<{ records: AttendanceWithStudent[] }> => {
   const params = new URLSearchParams()
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
-  if (opts.studentId) params.set("studentId", opts.studentId)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
+  if (opts.studentId) params.set('studentId', opts.studentId)
   const qs = params.toString()
   return apiFetch<{ records: AttendanceWithStudent[] }>(
-    org(auth0Id, `/attendance${qs ? `?${qs}` : ""}`),
+    org(auth0Id, `/attendance${qs ? `?${qs}` : ''}`),
   )
 }
 
@@ -416,12 +404,12 @@ export const orgAttendanceSummary = async (
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<{ summary: AttendanceSummary }> => {
   const params = new URLSearchParams()
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
-  if (opts.studentId) params.set("studentId", opts.studentId)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
+  if (opts.studentId) params.set('studentId', opts.studentId)
   const qs = params.toString()
   return apiFetch<{ summary: AttendanceSummary }>(
-    org(auth0Id, `/attendance/summary${qs ? `?${qs}` : ""}`),
+    org(auth0Id, `/attendance/summary${qs ? `?${qs}` : ''}`),
   )
 }
 
@@ -429,8 +417,8 @@ export const orgUpsertAttendance = async (
   auth0Id: string,
   input: { student_id: string; session_date: string; status: AttendanceStatus; note?: string },
 ): Promise<{ record: AttendanceRecord }> => {
-  return apiFetch<{ record: AttendanceRecord }>(org(auth0Id, "/attendance"), {
-    method: "PUT",
+  return apiFetch<{ record: AttendanceRecord }>(org(auth0Id, '/attendance'), {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
 }
@@ -440,8 +428,8 @@ export const orgBatchAttendance = async (
   entries: { student_id: string; session_date: string; status: AttendanceStatus; note?: string }[],
 ): Promise<{ records: AttendanceRecord[]; count: number }> => {
   return apiFetch<{ records: AttendanceRecord[]; count: number }>(
-    org(auth0Id, "/attendance/batch"),
-    { method: "POST", body: JSON.stringify({ entries }) },
+    org(auth0Id, '/attendance/batch'),
+    { method: 'POST', body: JSON.stringify({ entries }) },
   )
 }
 
@@ -451,8 +439,11 @@ export const orgDeleteAttendance = async (
   date: string,
 ): Promise<{ deleted: boolean }> => {
   return apiFetch<{ deleted: boolean }>(
-    org(auth0Id, `/attendance?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(date)}`),
-    { method: "DELETE" },
+    org(
+      auth0Id,
+      `/attendance?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(date)}`,
+    ),
+    { method: 'DELETE' },
   )
 }
 
@@ -463,18 +454,18 @@ export const orgSchedule = async (
   opts: { from?: string; to?: string } = {},
 ): Promise<{ events: ScheduleEvent[] }> => {
   const params = new URLSearchParams()
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
-  return apiFetch<{ events: ScheduleEvent[] }>(org(auth0Id, `/schedule${qs ? `?${qs}` : ""}`))
+  return apiFetch<{ events: ScheduleEvent[] }>(org(auth0Id, `/schedule${qs ? `?${qs}` : ''}`))
 }
 
 export const orgCreateEvent = async (
   auth0Id: string,
   input: Partial<ScheduleEvent>,
 ): Promise<{ event: ScheduleEvent }> => {
-  return apiFetch<{ event: ScheduleEvent }>(org(auth0Id, "/schedule"), {
-    method: "POST",
+  return apiFetch<{ event: ScheduleEvent }>(org(auth0Id, '/schedule'), {
+    method: 'POST',
     body: JSON.stringify(pickDefined(input)),
   })
 }
@@ -484,10 +475,10 @@ export const orgUpdateEvent = async (
   id: string,
   input: Partial<ScheduleEvent>,
 ): Promise<{ event: ScheduleEvent }> => {
-  return apiFetch<{ event: ScheduleEvent }>(
-    org(auth0Id, `/schedule/${encodeURIComponent(id)}`),
-    { method: "PUT", body: JSON.stringify(pickDefined(input)) },
-  )
+  return apiFetch<{ event: ScheduleEvent }>(org(auth0Id, `/schedule/${encodeURIComponent(id)}`), {
+    method: 'PUT',
+    body: JSON.stringify(pickDefined(input)),
+  })
 }
 
 export const orgDeleteEvent = async (
@@ -495,7 +486,7 @@ export const orgDeleteEvent = async (
   id: string,
 ): Promise<{ deleted: boolean }> => {
   return apiFetch<{ deleted: boolean }>(org(auth0Id, `/schedule/${encodeURIComponent(id)}`), {
-    method: "DELETE",
+    method: 'DELETE',
   })
 }
 
@@ -505,14 +496,11 @@ export const orgReports = async (
   auth0Id: string,
   opts: { studentId?: string } = {},
 ): Promise<{ reports: ReportRecord[] }> => {
-  const qs = opts.studentId ? `?studentId=${encodeURIComponent(opts.studentId)}` : ""
+  const qs = opts.studentId ? `?studentId=${encodeURIComponent(opts.studentId)}` : ''
   return apiFetch<{ reports: ReportRecord[] }>(org(auth0Id, `/reports${qs}`))
 }
 
-export const orgReport = async (
-  auth0Id: string,
-  id: string,
-): Promise<{ report: ReportRecord }> => {
+export const orgReport = async (auth0Id: string, id: string): Promise<{ report: ReportRecord }> => {
   return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`))
 }
 
@@ -526,8 +514,8 @@ export const orgCreateReport = async (
     title?: string
   },
 ): Promise<{ report: ReportRecord }> => {
-  return apiFetch<{ report: ReportRecord }>(org(auth0Id, "/reports"), {
-    method: "POST",
+  return apiFetch<{ report: ReportRecord }>(org(auth0Id, '/reports'), {
+    method: 'POST',
     body: JSON.stringify(pickDefined(input)),
   })
 }
@@ -537,19 +525,122 @@ export const orgDeleteReport = async (
   id: string,
 ): Promise<{ deleted: boolean }> => {
   return apiFetch<{ deleted: boolean }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
-    method: "DELETE",
+    method: 'DELETE',
   })
 }
 
 export const orgUpdateReport = async (
   auth0Id: string,
   id: string,
-  input: { report_type?: string; period_start?: string | null; period_end?: string | null; title?: string },
+  input: {
+    report_type?: string
+    period_start?: string | null
+    period_end?: string | null
+    title?: string
+  },
 ): Promise<{ report: ReportRecord }> => {
   return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
-    method: "PUT",
+    method: 'PUT',
     body: JSON.stringify(pickDefined(input)),
   })
+}
+
+// ── Training objectives (§26 loop) ──────────────────────────────────────────
+
+export type TrainingObjective = {
+  id: string
+  org_auth0_id: string
+  student_id: string | null
+  team_id: string | null
+  finding_id: string | null
+  analysis_job_id: string | null
+  title: string
+  description: string | null
+  status: 'active' | 'done' | 'archived'
+  due_on: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const orgObjectives = async (
+  auth0Id: string,
+  opts: { studentId?: string; teamId?: string; status?: string } = {},
+): Promise<{ objectives: TrainingObjective[] }> => {
+  const params = new URLSearchParams()
+  if (opts.studentId) params.set('student_id', opts.studentId)
+  if (opts.teamId) params.set('team_id', opts.teamId)
+  if (opts.status) params.set('status', opts.status)
+  const qs = params.toString()
+  return apiFetch<{ objectives: TrainingObjective[] }>(org(auth0Id, `/objectives${qs ? `?${qs}` : ''}`))
+}
+
+export const orgCreateObjective = async (
+  auth0Id: string,
+  input: {
+    student_id?: string | null
+    team_id?: string | null
+    finding_id?: string | null
+    analysis_job_id?: string | null
+    title: string
+    description?: string | null
+    due_on?: string | null
+  },
+): Promise<{ objective: TrainingObjective }> => {
+  return apiFetch<{ objective: TrainingObjective }>(org(auth0Id, '/objectives'), {
+    method: 'POST',
+    body: JSON.stringify(pickDefined(input)),
+  })
+}
+
+export const orgSetObjectiveStatus = async (
+  auth0Id: string,
+  id: string,
+  status: 'active' | 'done' | 'archived',
+): Promise<{ objective: TrainingObjective }> => {
+  return apiFetch<{ objective: TrainingObjective }>(org(auth0Id, `/objectives/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
+export const orgDeleteObjective = async (
+  auth0Id: string,
+  id: string,
+): Promise<{ deleted: boolean }> => {
+  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/objectives/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
+}
+
+export type StoredFinding = {
+  id: string
+  server_job_id: string
+  category: string | null
+  start_ms: number | null
+  end_ms: number | null
+  confidence: number | null
+  confidence_band: string | null
+  severity: string | null
+  observation: string | null
+  feedback: string | null
+  form_score: number | null
+  evidence_frames: unknown
+  measured_at_timestamp: number | null
+  model_versions: unknown
+  review_state: string
+  created_at: string
+}
+
+export const orgStudentFindings = async (
+  auth0Id: string,
+  studentId: string,
+  limit = 20,
+): Promise<{ findings: StoredFinding[] }> => {
+  const params = new URLSearchParams({ student_id: studentId, limit: String(limit) })
+  return apiFetch<{ findings: StoredFinding[] }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings?${params.toString()}`,
+  )
 }
 
 // ── Performance metrics ──────────────────────────────────────────────────────
@@ -559,9 +650,9 @@ export const orgPerformanceMetrics = async (
   opts: { studentId: string; metricKey?: string; from?: string; to?: string },
 ): Promise<{ metrics: PerformanceMetric[] }> => {
   const params = new URLSearchParams({ studentId: opts.studentId })
-  if (opts.metricKey) params.set("metricKey", opts.metricKey)
-  if (opts.from) params.set("from", opts.from)
-  if (opts.to) params.set("to", opts.to)
+  if (opts.metricKey) params.set('metricKey', opts.metricKey)
+  if (opts.from) params.set('from', opts.from)
+  if (opts.to) params.set('to', opts.to)
   return apiFetch<{ metrics: PerformanceMetric[] }>(
     org(auth0Id, `/performance?${params.toString()}`),
   )
@@ -572,7 +663,7 @@ export const orgDeletePerformanceMetric = async (
   id: string,
 ): Promise<{ deleted: boolean }> => {
   return apiFetch<{ deleted: boolean }>(org(auth0Id, `/performance/${encodeURIComponent(id)}`), {
-    method: "DELETE",
+    method: 'DELETE',
   })
 }
 
@@ -583,16 +674,14 @@ export const orgUpdatePerformanceMetric = async (
 ): Promise<{ metric: PerformanceMetric }> => {
   return apiFetch<{ metric: PerformanceMetric }>(
     org(auth0Id, `/performance/${encodeURIComponent(id)}`),
-    { method: "PUT", body: JSON.stringify(input) },
+    { method: 'PUT', body: JSON.stringify(input) },
   )
 }
 
 // ── Overview & analysis linking ──────────────────────────────────────────────
 
-export const orgOverview = async (
-  auth0Id: string,
-): Promise<{ overview: OrgOverview }> => {
-  return apiFetch<{ overview: OrgOverview }>(org(auth0Id, "/overview"))
+export const orgOverview = async (auth0Id: string): Promise<{ overview: OrgOverview }> => {
+  return apiFetch<{ overview: OrgOverview }>(org(auth0Id, '/overview'))
 }
 
 // ── Global search ────────────────────────────────────────────────────────────
@@ -610,13 +699,8 @@ export type OrgSearchResult = {
   analyses: SearchItem[]
 }
 
-export const orgSearch = async (
-  auth0Id: string,
-  query: string,
-): Promise<OrgSearchResult> => {
-  return apiFetch<OrgSearchResult>(
-    org(auth0Id, `/search?q=${encodeURIComponent(query)}`),
-  )
+export const orgSearch = async (auth0Id: string, query: string): Promise<OrgSearchResult> => {
+  return apiFetch<OrgSearchResult>(org(auth0Id, `/search?q=${encodeURIComponent(query)}`))
 }
 
 // ── Email (Resend) ───────────────────────────────────────────────────────────
@@ -630,8 +714,8 @@ export const orgSendInvites = async (
   auth0Id: string,
   input: { emails: string[]; student_ids?: string[] },
 ): Promise<{ sent: EmailSendOutcome[]; total: number; failed: number }> => {
-  return apiFetch(email(auth0Id, "/invite"), {
-    method: "POST",
+  return apiFetch(email(auth0Id, '/invite'), {
+    method: 'POST',
     body: JSON.stringify(input),
   })
 }
@@ -640,8 +724,8 @@ export const orgEmailReport = async (
   auth0Id: string,
   input: { report_id: string; to?: string },
 ): Promise<{ sent: { id: string | null; to: string; subject: string } }> => {
-  return apiFetch(email(auth0Id, "/report"), {
-    method: "POST",
+  return apiFetch(email(auth0Id, '/report'), {
+    method: 'POST',
     body: JSON.stringify(input),
   })
 }
@@ -650,8 +734,8 @@ export const orgEmailAttendance = async (
   auth0Id: string,
   input: { student_id?: string; from?: string; to?: string; recipient?: string },
 ): Promise<{ sent: unknown; records: number }> => {
-  return apiFetch(email(auth0Id, "/attendance"), {
-    method: "POST",
+  return apiFetch(email(auth0Id, '/attendance'), {
+    method: 'POST',
     body: JSON.stringify(input),
   })
 }
@@ -664,7 +748,7 @@ export const linkAnalysisToStudent = async (
   return apiFetch<{ analysis: DashboardAnalysis }>(
     org(auth0Id, `/analyses/${encodeURIComponent(jobId)}/student`),
     {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify({ student_id: studentId }),
     },
   )
@@ -675,7 +759,7 @@ export const linkAnalysisToStudent = async (
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Partial<T> = {}
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined && value !== "") out[key as keyof T] = value as T[keyof T]
+    if (value !== undefined && value !== '') out[key as keyof T] = value as T[keyof T]
   }
   return out
 }
