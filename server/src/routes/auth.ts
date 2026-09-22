@@ -14,6 +14,7 @@ import {
   updateAnalysisDisplayName,
 } from '../lib/analyses'
 import {
+  findingsToCsv,
   getFindingsTrend,
   getStudentFindings,
   reviewFinding,
@@ -251,6 +252,26 @@ export default new Elysia()
     const limit = Number.isFinite(limitRaw) ? limitRaw : 50
     set.status = 200
     return { findings: await getStudentFindings(auth0Id, studentId, limit) }
+  })
+  .get('/api/auth/user/:auth0Id/findings/export', async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const url = new URL(request.url)
+    const studentId = url.searchParams.get('student_id') ?? ''
+    if (!UUID_PARAM_RE.test(studentId)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
+    }
+    const limitRaw = Number(url.searchParams.get('limit') || 200)
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 500) : 200
+    const findings = await getStudentFindings(auth0Id, studentId, limit)
+    set.status = 200
+    set.headers['content-type'] = 'text/csv; charset=utf-8'
+    set.headers['content-disposition'] = `attachment; filename="findings-${studentId}.csv"`
+    return `\ufeff${findingsToCsv(findings)}`
   })
   .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
     const { auth0Id, jobId } = params

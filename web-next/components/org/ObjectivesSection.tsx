@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
@@ -29,6 +30,7 @@ import {
   orgObjectives,
   orgSetObjectiveStatus,
   orgStudentFindings,
+  downloadStudentFindingsCsv,
   type StoredFinding,
   type TrainingObjective,
 } from '@/lib/org'
@@ -50,6 +52,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
   const [findingId, setFindingId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -278,9 +281,28 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
 
         {findings.length > 0 && (
           <div className="pt-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-              Recent findings
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Recent findings
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={exporting}
+                onClick={() => {
+                  setExporting(true)
+                  void downloadStudentFindingsCsv(auth0Id, studentId)
+                    .then(() => toast.success('Findings exported'))
+                    .catch((e: unknown) => {
+                      toast.error(e instanceof Error ? e.message : 'Could not export findings.')
+                    })
+                    .finally(() => setExporting(false))
+                }}
+              >
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </Button>
+            </div>
             <div className="space-y-1.5">
               {findings.slice(0, 5).map((finding) => (
                 <div

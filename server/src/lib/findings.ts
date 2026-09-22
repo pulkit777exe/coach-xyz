@@ -120,6 +120,55 @@ export const getStudentFindings = async (
 export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
 export type ReviewState = (typeof REVIEW_STATES)[number]
 
+/** Column order for the findings CSV export (stable for spreadsheets). */
+export const FINDINGS_CSV_COLUMNS = [
+  'id',
+  'server_job_id',
+  'category',
+  'start_ms',
+  'end_ms',
+  'confidence',
+  'confidence_band',
+  'severity',
+  'observation',
+  'feedback',
+  'form_score',
+  'review_state',
+  'created_at',
+] as const
+
+const CSV_FORMULA_RE = /^[=+\-@\t\r]/
+
+/** Escape one CSV cell: defuse formula injection, quote delimiters. */
+const csvCell = (value: unknown): string => {
+  if (value === null || value === undefined) return ''
+  const raw = String(value)
+  const safe = CSV_FORMULA_RE.test(raw) ? `'${raw}` : raw
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
+}
+
+/** Serialize findings rows to CSV text (pure; BOM-free — the route adds it). */
+export const findingsToCsv = (findings: StoredFinding[]): string => {
+  const rows = (Array.isArray(findings) ? findings : []).map((f) => [
+    f.id,
+    f.server_job_id,
+    f.category ?? '',
+    f.start_ms ?? '',
+    f.end_ms ?? '',
+    f.confidence ?? '',
+    f.confidence_band ?? '',
+    f.severity ?? '',
+    f.observation ?? '',
+    f.feedback ?? '',
+    f.form_score ?? '',
+    f.review_state,
+    f.created_at,
+  ])
+  return [FINDINGS_CSV_COLUMNS.join(','), ...rows.map((r) => r.map(csvCell).join(','))].join(
+    '\n',
+  )
+}
+
 /** Human review transition (approve/flag). Only from auto/needs_review. */
 
 export const reviewFinding = async (

@@ -647,6 +647,43 @@ export const orgStudentFindings = async (
   )
 }
 
+/** Export URL for a student's findings CSV (server-serialized, BOM-prefixed). */
+export const studentFindingsExportUrl = (auth0Id: string, studentId: string, limit = 200) => {
+  const params = new URLSearchParams({ student_id: studentId, limit: String(limit) })
+  return `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings/export?${params.toString()}`
+}
+
+/**
+ * Downloads a student's findings as CSV through the identity proxy (session
+ * headers are injected there, so no manual auth wiring). Client-only: creates
+ * a blob download named findings-<studentId>.csv.
+ */
+export const downloadStudentFindingsCsv = async (
+  auth0Id: string,
+  studentId: string,
+): Promise<void> => {
+  const res = await fetch(studentFindingsExportUrl(auth0Id, studentId), {
+    headers: { 'x-request-id': crypto.randomUUID() },
+  })
+  if (!res.ok) {
+    let message = `Export failed (${res.status})`
+    try {
+      const body = (await res.json()) as { message?: unknown }
+      if (typeof body.message === 'string' && body.message) message = body.message
+    } catch {
+      // non-JSON error — keep the status message
+    }
+    throw new Error(message)
+  }
+  const text = await res.text()
+  const url = window.URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8;' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `findings-${studentId}.csv`
+  a.click()
+  window.URL.revokeObjectURL(url)
+}
+
 // ── Seasons & matches ──────────────────────────────────────────────────────
 
 export type Season = {
