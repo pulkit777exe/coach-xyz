@@ -20,7 +20,7 @@ export default function PageHeader({ trail, title, description, actions }: PageH
       </div>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-foreground">{title}</h1>
+          <h1 className="text-[28px] font-bold tracking-tight text-balance text-foreground">{title}</h1>
           {description && (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           )}

@@ -7,6 +7,7 @@ import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import FindingsTimeline from '@/components/FindingsTimeline'
+import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 
@@ -371,9 +372,7 @@ export default function ResultsSummary({
                         className="flex gap-5 p-5 rounded-2xl border border-border bg-muted hover:bg-accent transition-colors"
                       >
                         <div className="shrink-0 flex flex-col items-center">
-                          <span className="text-sm font-mono font-bold text-muted-foreground bg-muted px-2 py-1 rounded-lg">
-                            {event.timestamp?.toFixed(1) ?? '0.0'}s
-                          </span>
+                          <TimestampPill seconds={event.timestamp ?? 0} />
                           {index !== summary.shot_events.length - 1 && (
                             <div className="w-px h-full bg-border my-3"></div>
                           )}

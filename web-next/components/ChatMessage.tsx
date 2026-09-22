@@ -1,5 +1,6 @@
 'use client'
 
+import TimestampPill, { formatTimestampClock } from '@/components/TimestampPill'
 import type { ChatMessage } from '@/types'
 
 interface ChatMessageBubbleProps {
@@ -50,27 +51,12 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
         {message.timestamp_refs && message.timestamp_refs.length > 0 && onSeekTo && (
           <div className="mt-3 flex flex-wrap gap-2">
             {message.timestamp_refs.slice(0, 5).map((ts) => (
-              <button
+              <TimestampPill
                 key={ts}
-                onClick={() => onSeekTo(ts)}
-                className="inline-flex items-center gap-1 rounded-xl border border-border bg-muted px-2 py-1 text-[0.65rem] font-mono text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {formatTimestamp(ts)}
-              </button>
+                seconds={ts}
+                format="clock"
+                onSeek={onSeekTo}
+              />
             ))}
           </div>
         )}
@@ -80,9 +66,7 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
 }
 
 function formatTimestamp(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = (seconds % 60).toFixed(1)
-  return `${mins}:${secs.padStart(4, '0')}`
+  return formatTimestampClock(seconds)
 }
 
 function renderContent(

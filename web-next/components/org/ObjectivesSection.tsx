@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Textarea } from '@/components/9ui/ui/textarea'
+import TimestampPill from '@/components/TimestampPill'
 import {
   orgCreateObjective,
   orgDeleteObjective,
@@ -287,9 +288,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2"
                 >
                   <p className="text-xs text-foreground min-w-0 flex-1">
-                    <span className="font-mono text-muted-foreground">
-                      {finding.start_ms != null ? `${(finding.start_ms / 1000).toFixed(1)}s` : '—'}
-                    </span>{' '}
+                    <TimestampPill seconds={(finding.start_ms ?? 0) / 1000} />{' '}
                     <span className="capitalize">
                       {(finding.category ?? 'technique').replace(/_/g, ' ')}
                     </span>

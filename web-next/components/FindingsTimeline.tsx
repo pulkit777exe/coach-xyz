@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
+import TimestampPill from '@/components/TimestampPill'
 import type { Finding } from '@/types'
 
 interface FindingsTimelineProps {
@@ -77,9 +78,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                   aria-label={`${finding.category} at ${seconds.toFixed(1)} seconds`}
                 >
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="text-xs font-mono font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
-                      {seconds.toFixed(1)}s
-                    </span>
+                    <TimestampPill seconds={seconds} />
                     <span
                       className={`text-[0.65rem] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${severityClass}`}
                     >

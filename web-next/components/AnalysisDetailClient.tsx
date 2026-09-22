@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AnalysisTitle from '@/components/AnalysisTitle'
+import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
@@ -596,9 +597,7 @@ export default function AnalysisDetailClient({
             >
               {(event) => (
                 <div className="flex items-center gap-3 py-2">
-                  <span className="font-mono text-xs text-muted-foreground w-8">
-                    {typeof event.timestamp === 'number' ? `${event.timestamp.toFixed(1)}s` : '—'}
-                  </span>
+                  <TimestampPill seconds={typeof event.timestamp === 'number' ? event.timestamp : 0} />
                   <span className="text-sm text-foreground">
                     {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                   </span>
@@ -638,10 +637,7 @@ export default function AnalysisDetailClient({
                 }`}
               >
                 {typeof event.timestamp === 'number' && (
-                  <span className="font-mono text-xs text-muted-foreground tabular-nums w-16 shrink-0">
-                    {Math.floor(event.timestamp / 60)}:
-                    {String(Math.round(event.timestamp % 60)).padStart(2, '0')}
-                  </span>
+                  <TimestampPill seconds={event.timestamp} />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

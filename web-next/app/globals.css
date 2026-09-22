@@ -357,6 +357,11 @@
   .marquee-track {
     animation: none;
   }
+  [class*='animate-[fadeIn'],
+  [class*='animate-[fadeOut'],
+  [class*='animate-[slideUp'] {
+    animation: none !important;
+  }
 }
 
 @keyframes slideUp {
