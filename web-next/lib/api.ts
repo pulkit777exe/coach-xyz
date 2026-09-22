@@ -675,6 +675,45 @@ export async function reviewFinding(
   )
 }
 
+export type Clip = {
+  id: string
+  server_job_id: string
+  finding_id: string | null
+  label: string
+  start_ms: number
+  end_ms: number
+  created_by: string | null
+  created_at: string
+}
+
+export async function listClips(auth0Id: string, jobId: string): Promise<{ clips: Clip[] }> {
+  return apiFetch<{ clips: Clip[] }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/clips`,
+  )
+}
+
+export async function createClip(
+  auth0Id: string,
+  jobId: string,
+  input: { label: string; start_ms: number; end_ms: number; finding_id?: string | null },
+): Promise<{ clip: Clip }> {
+  return apiFetch<{ clip: Clip }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/clips`,
+    { method: 'POST', body: JSON.stringify(input) },
+  )
+}
+
+export async function deleteClip(
+  auth0Id: string,
+  jobId: string,
+  clipId: string,
+): Promise<{ deleted: boolean }> {
+  return apiFetch<{ deleted: boolean }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/clips/${encodeURIComponent(clipId)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export async function getUserProfile(auth0Id: string): Promise<{ user: UserRecord }> {
   return apiFetch<{ user: UserRecord }>(
     `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}`,

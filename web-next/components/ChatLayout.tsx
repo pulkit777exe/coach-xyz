@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import Link from 'next/link'
 import ChatPanel from '@/components/ChatPanel'
+import ClipsSection from '@/components/ClipsSection'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import { VideoPlayer, type VideoPlayerHandle } from '@/components/VideoPlayer'
 import { reviewFinding } from '@/lib/api'
@@ -103,6 +104,11 @@ export default function ChatLayout({
               />
             </div>
           )}
+
+          {/* Clips (coach-curated subclip bookmarks, click to seek) */}
+          <div className="shrink-0 border-t border-border max-h-72 overflow-y-auto">
+            <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+          </div>
         </div>
 
         {/* Right: Chat */}
@@ -131,6 +137,14 @@ export default function ChatLayout({
                 </div>
               </details>
             )}
+            <details className="border-t border-border px-4 py-2">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground py-1">
+                Clips
+              </summary>
+              <div className="py-2 max-h-64 overflow-y-auto">
+                <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+              </div>
+            </details>
           </div>
 
           {/* Chat Panel */}
