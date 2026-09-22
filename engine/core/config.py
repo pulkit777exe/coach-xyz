@@ -11,6 +11,15 @@ import os
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
+# ── Version Registry (§22 precursor) ─────────────────────────────────────────
+# Stamped into every analysis summary as `provenance` so a report stays
+# explainable after upgrades. Bump the prompt versions when prompt text
+# changes; bump sport-pack versions in sports/*.json alongside criteria edits.
+
+ENGINE_VERSION = "0.2.0"
+ANALYSIS_PROMPT_VERSION = "1"
+CHAT_PROMPT_VERSION = "2"
+
 # ── File Limits ─────────────────────────────────────────────────────────────
 
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024

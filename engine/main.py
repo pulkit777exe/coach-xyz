@@ -194,9 +194,11 @@ async def service_token_middleware(request: Request, call_next):
 @app.middleware("http")
 async def timing_middleware(request: Request, call_next):
     start = time.perf_counter()
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
     response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Response-Time"] = f"{duration_ms:.1f}ms"
+    response.headers["X-Request-Id"] = request_id
     if duration_ms > 1000:
         logging.warning(
             json.dumps({
@@ -204,6 +206,7 @@ async def timing_middleware(request: Request, call_next):
                 "method": request.method,
                 "path": request.url.path,
                 "duration_ms": round(duration_ms, 1),
+                "request_id": request_id,
             })
         )
     return response

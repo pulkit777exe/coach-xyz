@@ -3,7 +3,7 @@ import { Elysia } from "elysia"
 import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
 import { verifyJobAccess } from "../lib/jobAccess"
-import { getEngineJobStatus } from "../lib/engine"
+import { getEngineJobStatus, requestIdFrom } from "../lib/engine"
 import { persistAnalysisStatus, getAnalysisByServerJobId } from "../lib/supabaseHistory"
 
 type StatusResponse = {
@@ -73,7 +73,7 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, reque
   }
 
   // Read engine job status via HTTP (engine computes stage_name and video_ready)
-  const result = await getEngineJobStatus(serverJob.engine_job_id)
+  const result = await getEngineJobStatus(serverJob.engine_job_id, requestIdFrom(request))
 
   // Handle transient engine connectivity errors — don't permanently fail the job
   if (result.status === "transient_error") {

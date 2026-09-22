@@ -59,13 +59,17 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
 
 ## Phased plan
 
-### Phase 0 — Foundations (no schema changes)
-1. `EngineError` code vocabulary freeze + `error_status` mapping test (engine).
-2. Prompt-structure separation: build chat/analysis prompts as
-   `{system, trusted_context, untrusted_user}` sections with injection-guard
-   tests (§23, cheap, high value).
-3. Stamp detector/tracker/prompt/sport-pack versions into every summary (§22).
-4. `X-Request-Id` correlation across web→server→engine (§32 precursor).
+### Phase 0 — Foundations (no schema changes) — SHIPPED
+1. ~~Error vocabulary freeze~~ — already frozen + tested (`test_errors.py`
+   pins `STATUS_BY_CODE`, retryability, fallbacks).
+2. Prompt-structure separation (`core/prompt_guard.py`): athlete turns and
+   org data wrapped in UNTRUSTED/ORG-DATA delimiters with data-only rules;
+   guard tests (`test_prompt_guard.py`, `test_chat_prompt.py`).
+3. Version stamping: `ENGINE_VERSION` / prompt versions in `config.py`,
+   `"version": 1` in all six sport packs, `sport_pack_version()` loader,
+   `provenance` stamped on every summary and carried on the TS wire types.
+4. `X-Request-Id` web→server→engine (generated per call, forwarded through
+   the queue worker by job id, echoed + logged by the engine).
 
 ### Phase 1 — Evidence model (§19–§21, §25–§26)
 1. New `findings` table: `id, analysis_id, auth0_id, category, player ref,

@@ -92,5 +92,6 @@
       "label": "Behind the plate",
       "description": "Useful third angle for pitch movement and strike-zone command."
     }
-  ]
+  ],
+  "version": 1
 }

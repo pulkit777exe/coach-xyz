@@ -82,6 +82,15 @@ export type CameraAngleGuidance = {
   description: string
 }
 
+export type AnalysisProvenance = {
+  engine: string
+  model: string
+  analysis_prompt: string
+  sport: string | null
+  sport_pack_version: number
+  analyzed_at: string
+}
+
 export type AnalysisSummary = {
   sport: string
   player_name?: string
@@ -100,6 +109,8 @@ export type AnalysisSummary = {
   angle?: string
   /** Sport-specific guidance for the next angle to film. */
   recommended_angles?: CameraAngleGuidance[]
+  /** Model/prompt/pack versions so a report stays explainable (§22). */
+  provenance?: AnalysisProvenance
 }
 
 export type ShotEvent = {

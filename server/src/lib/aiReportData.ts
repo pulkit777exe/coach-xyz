@@ -82,11 +82,12 @@ export type EngineReportResult = {
 
 export const generateAiReport = async (
   payload: EngineReportPayload,
+  requestId?: string | null,
 ): Promise<EngineReportResult> => {
   try {
     const res = await withTimeout(`${ENGINE_URL}/report`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...engineServiceHeaders() },
+      headers: { "Content-Type": "application/json", ...engineServiceHeaders(requestId) },
       body: JSON.stringify(payload),
     }, 120_000) // 2 min — long prompt, single Gemini round-trip
 

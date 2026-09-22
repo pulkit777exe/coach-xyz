@@ -306,6 +306,29 @@ def _stamp_angle(result: dict, angle: str | None) -> dict:
     return result
 
 
+def _stamp_provenance(result: dict) -> dict:
+    """Stamp model/prompt/pack versions so a report stays explainable."""
+    from datetime import datetime, timezone
+
+    from core.config import (
+        ANALYSIS_PROMPT_VERSION,
+        ENGINE_VERSION,
+        GEMINI_MODEL,
+    )
+    from core.sport_config import sport_pack_version
+
+    sport = result.get("sport")
+    result["provenance"] = {
+        "engine": ENGINE_VERSION,
+        "model": GEMINI_MODEL,
+        "analysis_prompt": ANALYSIS_PROMPT_VERSION,
+        "sport": sport,
+        "sport_pack_version": sport_pack_version(sport if isinstance(sport, str) else None),
+        "analyzed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return result
+
+
 def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
     """Transition a job to completed, handling cases where the job is already
     past earlier states (e.g. retry after long Gemini call)."""
@@ -413,7 +436,7 @@ def run_analysis(
                 "player_index": player_index,
                 "job_id": job_id,
             }))
-            _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
+            _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
             return
 
         logging.info(json.dumps({
@@ -432,14 +455,14 @@ def run_analysis(
                 time.sleep(2)
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
+                    _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
                     return
             # If we exited the loop because the pending entry cleared (not timeout),
             # check cache one more time before proceeding
             if not deduplicator.is_pending(dedup_key):
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
+                    _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
                     return
 
         # Mark this video as being analyzed (for dedup)
@@ -509,7 +532,7 @@ def run_analysis(
                 call_gemini,
                 best_for_gemini,
                 video_duration,
-                video_fps,
+                fps,
                 video_width,
                 video_height,
                 player_index,
@@ -532,6 +555,7 @@ def run_analysis(
         # Stamp which camera perspective was analyzed + the sport's guidance
         # for the next angle, so the coach knows what to film next.
         _stamp_angle(gemini_result, angle)
+        _stamp_provenance(gemini_result)
 
         # Attach deterministic biomechanical metrics to each shot event
         # by looking up the nearest tracked frame for each event timestamp

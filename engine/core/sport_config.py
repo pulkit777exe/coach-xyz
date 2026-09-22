@@ -33,6 +33,13 @@ def load_sport_config(sport: str | None) -> dict[str, Any]:
     return config
 
 
+def sport_pack_version(sport: str | None) -> int:
+    """Version stamp of the sport pack (0 when unknown/unversioned)."""
+    config = load_sport_config(sport)
+    version = config.get("version")
+    return version if isinstance(version, int) and version > 0 else 0
+
+
 def recommended_camera_angles(sport: str | None) -> list[dict[str, str]]:
     """Coach-facing camera guidance from the sport config.
 

@@ -36,6 +36,14 @@ const CANONICAL: AnalysisSummary = {
   recommended_angles: [
     { id: "front", label: "Front view", description: "Best second angle." },
   ],
+  provenance: {
+    engine: "0.2.0",
+    model: "gemini-2.5-flash",
+    analysis_prompt: "1",
+    sport: "cricket",
+    sport_pack_version: 1,
+    analyzed_at: "2026-01-01T00:00:00+00:00",
+  },
 }
 
 const REQUIRED_TOP_LEVEL = [

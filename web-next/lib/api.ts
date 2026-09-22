@@ -83,6 +83,8 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const headers: Record<string, string> = {
     ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
+    // Per-call correlation id, forwarded server→engine for end-to-end traces.
+    'x-request-id': crypto.randomUUID(),
     ...(options.headers as Record<string, string> ?? {}),
   }
 
@@ -193,6 +195,7 @@ export async function scanVideoWithProgress(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${BASE}/api/scan-video`)
+    xhr.setRequestHeader('x-request-id', crypto.randomUUID())
 
     if (token) {
       xhr.setRequestHeader('x-attribution', token)
@@ -298,6 +301,7 @@ export async function* streamScanProgress(
     : `${BASE}/api/scan-progress/${sessionToken}`
   const res = await fetch(url, {
     signal,
+    headers: { 'x-request-id': crypto.randomUUID() },
   })
 
   if (!res.ok) {
@@ -395,6 +399,7 @@ export async function* sendChatMessageStream(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-request-id': crypto.randomUUID(),
       ...(attribution ? { 'x-attribution': attribution } : {}),
     },
     body: JSON.stringify({ job_id: jobId, message }),

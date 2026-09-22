@@ -126,7 +126,7 @@ const worker = redisAvailable
         // Cross the same engine adapter as the routes — one client, one
         // timeout posture, one error shape.
         try {
-          await analyzeVideo({ engine_job_id, session_token, player_index, video_key, angle })
+          await analyzeVideo({ engine_job_id, session_token, player_index, video_key, angle }, job.data.server_job_id)
         } catch (error) {
           const engineError = isCoachAIError(error)
             ? error
@@ -147,7 +147,7 @@ const worker = redisAvailable
         // Persist completed status immediately so history is accurate even if
         // the client never polls again (browser closed, network drop, etc.)
         try {
-          const statusResult = await getEngineJobStatus(engine_job_id)
+          const statusResult = await getEngineJobStatus(engine_job_id, job.data.server_job_id)
           if (statusResult.status === "found") {
             const engineStatus = statusResult.data
             const serverJob = await getJob(job.data.server_job_id)
@@ -239,6 +239,7 @@ if (redisAvailable && analysisQueue) {
           isUnrecoverable ? failedReason : "Analysis failed after retries. Please try again.",
           errorCode,
           retryable,
+          bullJob.data.server_job_id,
         )
 
         // Persist failed status to history so it appears even if client stops polling
@@ -406,7 +407,7 @@ const aiReportWorker = redisAvailable
             report_type,
             sport,
             student_name,
-          })
+          }, report_job_id)
           const persisted = await persistAiReportRecord({
             auth0_id,
             report_type: report_type as Parameters<typeof persistAiReportRecord>[0]["report_type"],

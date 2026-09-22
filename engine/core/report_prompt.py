@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
+from core.prompt_guard import wrap_org_data
+
 REPORT_TYPES: List[str] = ["progress", "attendance", "performance", "monthly"]
 
 REPORT_TYPE_DESCRIPTIONS: Dict[str, str] = {
@@ -95,7 +97,9 @@ def get_report_prompt(
         identity_lines.append(f"Student: {student_name}")
     if sport:
         identity_lines.append(f"Sport: {sport}")
-    identity_block = "\n".join(identity_lines) + "\n" if identity_lines else ""
+    identity_block = (
+        wrap_org_data("\n".join(identity_lines)) + "\n" if identity_lines else ""
+    )
 
     rules_block = "\n".join(f"  {i + 1}. {rule}" for i, rule in enumerate(REPORT_RULES))
 
@@ -105,7 +109,7 @@ Write {description}
 {identity_block}REPORT_TYPE: {report_type}
 
 REPORT_CONTEXT (JSON, may contain org/student/period/attendance/performance/analyses data):
-{_render_context(report_context)}
+{wrap_org_data(_render_context(report_context))}
 
 GUIDELINES:
 {rules_block}

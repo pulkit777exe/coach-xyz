@@ -91,5 +91,6 @@
       "label": "Behind the net",
       "description": "Useful third angle for shot placement and goalie reads."
     }
-  ]
+  ],
+  "version": 1
 }

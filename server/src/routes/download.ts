@@ -1,6 +1,6 @@
 import { Elysia } from "elysia"
 
-import { getDownloadStream } from "../lib/engine"
+import { getDownloadStream, requestIdFrom } from "../lib/engine"
 import { buildError, isCoachAIError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
 import { resolveJobCaller, verifyJobAccess } from "../lib/jobAccess"
@@ -34,7 +34,7 @@ export default new Elysia().get("/api/download/:jobId", async ({ params, request
   }
 
   try {
-    const engineResponse = await getDownloadStream(serverJob.engine_job_id)
+    const engineResponse = await getDownloadStream(serverJob.engine_job_id, requestIdFrom(request))
     const contentType = engineResponse.headers?.get("content-type") ?? "video/mp4"
     const contentLength = engineResponse.headers?.get("content-length")
     const headers: Record<string, string> = {

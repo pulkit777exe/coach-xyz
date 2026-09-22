@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from core.prompt_guard import GUARD_RULE, USER_CLOSE, USER_OPEN, wrap_untrusted
+
 
 def get_chat_prompt(
     analysis_result: dict[str, Any],
@@ -19,13 +21,18 @@ def get_chat_prompt(
     """
     Build a Gemini chat prompt with analysis context + conversation history.
 
+    Structure: trusted analysis context and assistant history stay plain;
+    every athlete-written turn is wrapped in UNTRUSTED delimiters so injected
+    instructions inside questions or quoted history are treated as data.
+
     Returns a list of message dicts suitable for a multi-turn conversation.
     """
     system = _build_system_message(analysis_result)
     history = _format_history(conversation_history)
+    question = wrap_untrusted(user_message, label="Athlete's question")
 
     messages: list[dict[str, str]] = [
-        {"role": "user", "content": f"{system}\n\n{history}\n\nAthlete's question:\n{user_message}"},
+        {"role": "user", "content": f"{system}\n\n{history}\n\n{question}"},
     ]
 
     return messages
@@ -79,11 +86,16 @@ RULES:
 5. Keep responses concise (2-4 paragraphs max) unless the athlete asks for detail.
 6. If the question goes beyond what the data supports, say so honestly.
 7. When suggesting drills, make them specific to the athlete's actual weaknesses.
-8. Format timestamps as seconds (e.g., 12.3s) for easy video navigation."""
+8. Format timestamps as seconds (e.g., 12.3s) for easy video navigation.
+9. {GUARD_RULE}"""
 
 
 def _format_history(history: list[dict[str, str]]) -> str:
-    """Format conversation history into a readable block."""
+    """Format conversation history into a readable block.
+
+    Athlete-written turns are wrapped as untrusted (they may quote or paste
+    anything); assistant turns stay plain trusted context.
+    """
     if not history:
         return ""
 
@@ -91,10 +103,14 @@ def _format_history(history: list[dict[str, str]]) -> str:
     for msg in history[-10:]:  # Last 10 messages to stay in context
         role = msg.get("role", "user")
         content = msg.get("content", "")
-        prefix = "Athlete" if role == "user" else "Coach"
         # Truncate very long messages
         if len(content) > 500:
             content = content[:500] + "..."
-        lines.append(f"\n{prefix}: {content}")
+        if role == "user":
+            lines.append(
+                f"\nAthlete:\n{USER_OPEN}\n{content}\n{USER_CLOSE}"
+            )
+        else:
+            lines.append(f"\nCoach: {content}")
 
     return "\n".join(lines)

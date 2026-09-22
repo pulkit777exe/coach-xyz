@@ -86,5 +86,6 @@
       "label": "Elevated view",
       "description": "Useful third angle for positioning, spacing and off-ball movement."
     }
-  ]
+  ],
+  "version": 1
 }

@@ -99,5 +99,6 @@
       "label": "Behind the arm",
       "description": "Useful third angle for line, length and seam movement."
     }
-  ]
+  ],
+  "version": 1
 }

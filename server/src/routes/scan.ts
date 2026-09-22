@@ -1,6 +1,6 @@
 import { Elysia } from "elysia"
 
-import { scanVideo, getScanProgressStream } from "../lib/engine"
+import { scanVideo, getScanProgressStream, requestIdFrom } from "../lib/engine"
 import { buildError, isCoachAIError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { resolveJobCaller } from "../lib/jobAccess"
@@ -89,7 +89,7 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     const result = await scanVideo(value, {
       sessionToken: appendSessionToken,
       angle: angleLabel,
-    })
+    }, requestIdFrom(request))
 
     await persistVideoConversation({
       ...requestMeta,
@@ -147,7 +147,7 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     // requested angle so parallel scans don't share one progress slot.
     const angle = new URL(request.url).searchParams.get("angle")
     try {
-      const engineRes = await getScanProgressStream(sessionToken, angle)
+      const engineRes = await getScanProgressStream(sessionToken, angle, requestIdFrom(request))
 
       // Proxy the SSE stream from the engine
       return new Response(engineRes.body, {
