@@ -1,41 +1,66 @@
-import type { Metadata } from "next";
-import { SentryProvider } from "./sentry-provider";
-import AuthHeader from "@/components/AuthHeader";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
+import { ThemeProvider } from 'next-themes'
+import { SentryProvider } from './sentry-provider'
+import AuthHeader from '@/components/AuthHeader'
+import { Toaster } from '@/components/9ui/ui/sonner'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "CoachXYZ | AI Sports Form Analysis",
+  title: 'CoachXYZ | AI Sports Form Analysis',
   description:
-    "Upload training footage and get timestamped form scores, correction cues, and annotated video — in under 60 seconds.",
+    'Upload training footage and get timestamped form scores, correction cues, and annotated video — in under 60 seconds.',
   openGraph: {
-    title: "CoachXYZ",
-    description: "AI-powered sports video analysis for coaches.",
-    type: "website",
+    title: 'CoachXYZ',
+    description: 'AI-powered sports video analysis for coaches.',
+    type: 'website',
   },
-};
+}
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-inter',
+  display: 'swap',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+})
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="min-h-screen antialiased pt-14">
-        <AuthHeader />
-        <a
-          href="#analyze"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-teal-600 focus:text-white focus:outline-none"
-        >
-          Skip to upload
-        </a>
-        <SentryProvider>{children}</SentryProvider>
+      <body className="min-h-screen antialiased bg-background text-foreground">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <SentryProvider>
+            <AuthHeader />
+            <a
+              href="#analyze"
+              className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+            >
+              Skip to upload
+            </a>
+            <div className="root">{children}</div>
+            <Toaster position="bottom-right" richColors />
+          </SentryProvider>
+        </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

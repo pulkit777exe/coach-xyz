@@ -1,62 +1,15 @@
-import { auth0 } from "@/lib/auth0";
-import UserAvatar from "./UserAvatar";
+import { getSession } from '@/lib/session'
+import HeaderClient from './HeaderClient'
 
 export default async function AuthHeader() {
-  const session = await auth0.getSession();
-
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-(--bg)/80 backdrop-blur-md border-b border-(--cream-05)">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <a href="/" className="font-serif text-xl text-(--fg)">
-          coach.xyz
-        </a>
-
-        <nav className="flex items-center gap-4">
-          {session ? (
-            <>
-              <a
-                href="/dashboard"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
-              >
-                Dashboard
-              </a>
-              <a
-                href="/account"
-                className="flex items-center gap-2 text-sm text-(--cream-40) hover:text-(--fg) transition-colors"
-              >
-                <UserAvatar
-                  picture={session.user.picture}
-                  name={session.user.name}
-                  email={session.user.email}
-                  size="sm"
-                />
-                <span>{session.user.name || session.user.email}</span>
-              </a>
-              <a
-                href="/auth/logout"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
-              >
-                Log Out
-              </a>
-            </>
-          ) : (
-            <>
-              <a
-                href="/auth/login"
-                className="text-[0.65rem] uppercase tracking-[0.2em] text-(--cream-40) transition-colors hover:text-(--fg)"
-              >
-                Log In
-              </a>
-              <a
-                href="/auth/login?screen_hint=signup"
-                className="border border-(--cream-10) px-5 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--fg) transition-all hover:bg-(--fg) hover:text-(--bg)"
-              >
-                Sign Up
-              </a>
-            </>
-          )}
-        </nav>
-      </div>
-    </header>
-  );
+  const session = await getSession()
+  const user = session?.user
+    ? {
+        sub: session.user.sub,
+        picture: session.user.picture ?? null,
+        name: session.user.name ?? null,
+        email: session.user.email ?? null,
+      }
+    : null
+  return <HeaderClient user={user} />
 }

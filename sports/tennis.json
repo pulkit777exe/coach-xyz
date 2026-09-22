@@ -2,34 +2,238 @@
   "sport": "tennis",
   "display_name": "Tennis",
   "events": {
-    "positive": ["winner", "ace"],
-    "negative": ["error", "double_fault"]
+    "positive": [
+      "winner",
+      "ace"
+    ],
+    "negative": [
+      "error",
+      "double_fault"
+    ]
   },
   "stats": [
-    { "key": "total_aces_so_far", "label": "Aces", "event_type": "ace" },
-    { "key": "total_winners_so_far", "label": "Winners", "event_type": "winner" },
-    { "key": "total_errors_so_far", "label": "Errors", "event_type": "error" },
-    { "key": "total_double_faults_so_far", "label": "Double Faults", "event_type": "double_fault" },
-    { "key": "points_played_so_far", "label": "Points", "event_type": null }
+    {
+      "key": "total_aces_so_far",
+      "label": "Aces",
+      "event_type": "ace"
+    },
+    {
+      "key": "total_winners_so_far",
+      "label": "Winners",
+      "event_type": "winner"
+    },
+    {
+      "key": "total_errors_so_far",
+      "label": "Errors",
+      "event_type": "error"
+    },
+    {
+      "key": "total_double_faults_so_far",
+      "label": "Double Faults",
+      "event_type": "double_fault"
+    },
+    {
+      "key": "points_played_so_far",
+      "label": "Points",
+      "event_type": null
+    }
   ],
   "form_criteria": [
-    "grip",
-    "stance",
-    "backswing",
-    "contact_point",
-    "footwork",
-    "follow_through",
-    "body_rotation",
-    "racket_head_speed",
-    "balance"
+    {
+      "key": "grip",
+      "label": "Grip",
+      "metric": "grip_consistency",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.08,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "stance",
+      "label": "Stance",
+      "metric": "hip_width_stance_deg",
+      "ideal_range": [
+        45,
+        65
+      ],
+      "acceptable_range": [
+        35,
+        75
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "backswing",
+      "label": "Backswing",
+      "metric": "left_shoulder_elbow_angle",
+      "ideal_range": [
+        90,
+        130
+      ],
+      "acceptable_range": [
+        70,
+        150
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.12,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "contact_point",
+      "label": "Contact Point",
+      "metric": "contact_height_px",
+      "ideal_range": [
+        150,
+        220
+      ],
+      "acceptable_range": [
+        120,
+        260
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "footwork",
+      "label": "Footwork",
+      "metric": "footwork_deviation_px",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.12,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "body_rotation",
+      "label": "Body Rotation",
+      "metric": "hip_rotation_deg",
+      "ideal_range": [
+        40,
+        70
+      ],
+      "acceptable_range": [
+        25,
+        85
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.13,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "racket_head_speed",
+      "label": "Racket Head Speed",
+      "metric": "racket_speed_consistency",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "balance",
+      "label": "Balance",
+      "metric": "balance_sway_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.08,
+      "phase": "follow_through",
+      "confidence_score": null
+    }
   ],
   "colors": {
-    "primary": [0, 165, 255],
-    "positive": [0, 220, 0],
-    "negative": [0, 0, 255],
-    "neutral": [255, 255, 255]
+    "primary": [
+      0,
+      165,
+      255
+    ],
+    "positive": [
+      0,
+      220,
+      0
+    ],
+    "negative": [
+      0,
+      0,
+      255
+    ],
+    "neutral": [
+      255,
+      255,
+      255
+    ]
   },
   "feedback_display_seconds": 4,
   "animation_duration_seconds": 1.25,
-  "summary_duration_seconds": 6
+  "summary_duration_seconds": 6,
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Groundstrokes and serve read best from the side \u2014 swing path, contact point and weight transfer stay in plane."
+    },
+    {
+      "id": "behind",
+      "label": "Behind the baseline",
+      "description": "Best second angle for serve toss placement, court positioning and shot depth."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Useful third angle for ready position, split step and volley technique."
+    }
+  ],
+  "version": 2
 }

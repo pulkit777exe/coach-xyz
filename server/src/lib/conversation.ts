@@ -1,11 +1,11 @@
-import { redis } from "./redis"
+import { redis } from './redis'
 
-const KEY = "coachai:conv:"
+const KEY = 'coachai:conv:'
 const CONV_TTL = 7200 // 2 hours, aligned with job TTL
 
 export interface ChatMessage {
   id: string
-  role: "user" | "assistant" | "system"
+  role: 'user' | 'assistant' | 'system'
   content: string
   timestamp_refs?: number[]
   event_refs?: number[]
@@ -22,9 +22,7 @@ function generateId(): string {
   return crypto.randomUUID().slice(0, 8)
 }
 
-export async function getConversation(
-  serverJobId: string,
-): Promise<ChatMessage[]> {
+export async function getConversation(serverJobId: string): Promise<ChatMessage[]> {
   const raw = await redis.get(`${KEY}${serverJobId}`)
   if (!raw) return []
 
@@ -64,7 +62,7 @@ return #conv.messages
 
 export async function saveMessage(
   serverJobId: string,
-  message: Omit<ChatMessage, "id" | "created_at">,
+  message: Omit<ChatMessage, 'id' | 'created_at'>,
 ): Promise<ChatMessage> {
   const msg: ChatMessage = {
     ...message,

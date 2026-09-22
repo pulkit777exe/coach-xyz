@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -9,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from core.pose_backend import get_pose_connections
+from core.sport_config import load_sport_config
 
 
 # ── Font loading ──────────────────────────────────────────────────────────────
@@ -38,24 +38,10 @@ def _text_size(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) ->
 
 
 # ── Sport config ──────────────────────────────────────────────────────────────
-
-_SPORT_CONFIG_CACHE: dict[str, dict] = {}
-
+# Loader lives in core.sport_config (single cached copy shared with analyzer).
 
 def _load_sport_config(sport: str) -> dict:
-    sport_lower = (sport or "").lower()
-    if sport_lower in _SPORT_CONFIG_CACHE:
-        return _SPORT_CONFIG_CACHE[sport_lower]
-
-    config_path = Path(__file__).resolve().parent.parent.parent / "sports" / f"{sport_lower}.json"
-    try:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        config = {}
-
-    _SPORT_CONFIG_CACHE[sport_lower] = config
-    return config
+    return load_sport_config(sport)
 
 
 def _sport_colors(sport: str) -> dict:

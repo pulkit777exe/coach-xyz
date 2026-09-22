@@ -9,11 +9,7 @@ import ErrorScreen from '@/components/ErrorScreen'
 import ChatLayout from '@/components/ChatLayout'
 import { usePipeline } from '@/lib/usePipeline'
 
-const UPLOAD_MESSAGES = [
-  'Uploading video...',
-  'Compressing frames...',
-  'Almost there...',
-]
+const UPLOAD_MESSAGES = ['Uploading video...', 'Compressing frames...', 'Almost there...']
 
 const SCANNING_MESSAGES = [
   'Finding players...',
@@ -22,43 +18,39 @@ const SCANNING_MESSAGES = [
   'Identifying key moments...',
 ]
 
-function RotatingMessage({
-  messages,
-  percent,
-}: {
-  messages: string[]
-  percent: number
-}) {
+function RotatingMessage({ messages, percent }: { messages: string[]; percent: number }) {
   const [index, setIndex] = useState(0)
   const [opacity, setOpacity] = useState(0)
 
   useEffect(() => {
-    setOpacity(0)
     const fadeIn = setTimeout(() => setOpacity(1), 50)
     return () => clearTimeout(fadeIn)
-  }, [index])
+  }, [])
 
   useEffect(() => {
+    let fadeBack: ReturnType<typeof setTimeout> | undefined
     const interval = setInterval(() => {
       setOpacity(0)
-      setTimeout(() => {
+      fadeBack = setTimeout(() => {
         setIndex((prev) => (prev + 1) % messages.length)
+        setOpacity(1)
       }, 300)
     }, 2500)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (fadeBack) clearTimeout(fadeBack)
+    }
   }, [messages.length])
 
   return (
     <div className="flex flex-col items-center gap-2">
       <p
-        className="text-(--fg) text-lg transition-opacity duration-300 ease-in-out"
+        className="text-foreground text-lg transition-opacity duration-300 ease-in-out"
         style={{ opacity }}
       >
         {messages[index]}
       </p>
-      <span className="text-(--cream-40) text-sm tabular-nums">
-        {Math.round(percent)}%
-      </span>
+      <span className="text-muted-foreground text-sm tabular-nums">{Math.round(percent)}%</span>
     </div>
   )
 }
@@ -67,12 +59,16 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
   const {
     pipelineState,
     scanResult,
+    angleScans,
+    activeAngle,
     jobId,
     jobStatus,
     errorStatus,
     uploadProgress,
     handleFileSelected,
     handlePlayerSelected,
+    handleAddAngle,
+    handleAngleChange,
     handleRetry,
     handleReset,
     handleStartChat,
@@ -80,6 +76,8 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
   } = usePipeline(auth0Id)
 
   const progressPercent = uploadProgress?.percent ?? 0
+  const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+  const angleLabels = angleScans.map((s) => s.angle ?? 'primary')
 
   switch (pipelineState) {
     case 'idle':
@@ -88,20 +86,27 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
     case 'uploading':
     case 'scanning':
       return (
-        <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-(--cream-10) border-t-(--fg) rounded-full animate-spin mb-6" />
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+          <div className="w-16 h-16 border-4 border-muted border-t-primary rounded-full animate-spin mb-6" />
           <RotatingMessage
-            messages={
-              pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES
-            }
+            messages={pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES}
             percent={progressPercent}
           />
         </div>
       )
 
     case 'selecting':
-      if (!scanResult) return <LandingPage onFileSelected={handleFileSelected} />
-      return <PlayerSelector players={scanResult.players} onSelect={handlePlayerSelected} />
+      if (!activeScan) return <LandingPage onFileSelected={handleFileSelected} />
+      return (
+        <PlayerSelector
+          players={activeScan.players}
+          angles={angleLabels}
+          activeAngle={activeAngle}
+          onAngleChange={handleAngleChange}
+          onAddAngle={handleAddAngle}
+          onSelect={handlePlayerSelected}
+        />
+      )
 
     case 'analyzing':
     case 'rendering':
@@ -122,6 +127,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
       if (!jobId) return <LandingPage onFileSelected={handleFileSelected} />
       return (
         <ChatLayout
+          auth0Id={auth0Id}
           jobId={jobId}
           jobStatus={jobStatus}
           onBackToResults={handleBackToResults}

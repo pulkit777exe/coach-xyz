@@ -22,6 +22,33 @@ class EngineError(Exception):
         }
 
 
+# ── HTTP Status Registry ─────────────────────────────────────────────────────
+# The engine owns the code → HTTP status mapping so the queue and callers can
+# rely on one source of truth. Codes not listed here fall back to 422 when
+# retryable, 500 otherwise (see error_status()).
+
+STATUS_BY_CODE = {
+    "NO_PLAYERS_DETECTED": 400,
+    "VIDEO_DECODE_FAILED": 400,
+    "VIDEO_EXPIRED": 400,
+    "VIDEO_NOT_FOUND": 404,
+    "JOB_NOT_FOUND": 404,
+    "GEMINI_QUOTA_EXCEEDED": 429,
+    "GEMINI_TIMEOUT": 504,
+    "GEMINI_PARSE_FAILED": 500,
+    "GEMINI_PROCESSING_FAILED": 500,
+    "MEDIAPIPE_UNAVAILABLE": 503,
+    "REDIS_UNAVAILABLE": 503,
+    "STORAGE_ERROR": 503,
+    "ENGINE_UNAVAILABLE": 503,
+}
+
+
+def error_status(exc: EngineError) -> int:
+    """HTTP status for an engine error. Unknown codes fall back on retryability."""
+    return STATUS_BY_CODE.get(exc.code, 422 if exc.retryable else 500)
+
+
 # ── Validation Errors ─────────────────────────────────────────────────────────
 
 class InvalidRequestError(EngineError):
@@ -49,7 +76,7 @@ class VideoDecodeError(EngineError):
         super().__init__(
             code="VIDEO_DECODE_FAILED",
             message=detail or "Could not read this video. Try MP4 or MOV format.",
-            retryable=True,
+            retryable=False,  # A corrupt video will not decode on retry
         )
 
 

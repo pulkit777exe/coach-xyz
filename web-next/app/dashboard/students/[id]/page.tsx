@@ -1,0 +1,74 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { getSession } from '@/lib/session'
+import { redirect, notFound } from 'next/navigation'
+import { getOrgContext, getDashboardAnalyses } from '@/lib/serverData'
+import {
+  orgStudent,
+  orgStudentPerformance,
+  orgAttendanceSummary,
+  orgStudentsSports,
+  orgReports,
+  orgStudentAnalyses,
+} from '@/lib/serverData'
+import StudentProfile from '@/components/org/StudentProfile'
+import { unstable_noStore as noStore } from 'next/cache'
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const session = await getSession()
+  if (!session) return { title: 'Student | CoachXYZ' }
+  try {
+    const { auth0Id } = await getOrgContext()
+    const res = await orgStudent(auth0Id, id)
+    return { title: `${res.student.full_name} | CoachXYZ` }
+  } catch {
+    return { title: 'Student | CoachXYZ' }
+  }
+}
+
+export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  noStore()
+  const { id } = await params
+  const session = await getSession()
+  if (!session) redirect('/auth/login')
+  const { auth0Id } = await getOrgContext()
+
+  const studentRes = await orgStudent(auth0Id, id).catch(() => null)
+  if (!studentRes) notFound()
+  const student = studentRes.student
+
+  const [seriesRes, attRes, linkedRes, unlinkedRes, sportsRes, reportsRes] = await Promise.all([
+    orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
+    orgAttendanceSummary(auth0Id, { studentId: id }).catch(() => null),
+    orgStudentAnalyses(auth0Id, id).catch(() => ({ analyses: [] })),
+    getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }).catch(() => ({ analyses: [] })),
+    orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
+    orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
+  ])
+
+  return (
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <Link
+        href="/dashboard/students"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Back to roster
+      </Link>
+
+      <StudentProfile
+        auth0Id={auth0Id}
+        student={student}
+        initialSeries={seriesRes.series}
+        initialAttendance={attRes?.summary ?? null}
+        initialReports={reportsRes.reports}
+        allAnalyses={[...unlinkedRes.analyses, ...linkedRes.analyses]}
+        sports={sportsRes.sports}
+      />
+    </div>
+  )
+}

@@ -2,11 +2,22 @@
   "sport": "football",
   "display_name": "Football",
   "events": {
-    "positive": ["goal"],
-    "negative": ["missed", "saved", "blocked", "offside"]
+    "positive": [
+      "goal"
+    ],
+    "negative": [
+      "missed",
+      "saved",
+      "blocked",
+      "offside"
+    ]
   },
   "stats": [
-    { "key": "total_goals_so_far", "label": "Goals", "event_type": "goal" },
+    {
+      "key": "total_goals_so_far",
+      "label": "Goals",
+      "event_type": "goal"
+    },
     {
       "key": "total_shots_on_target_so_far",
       "label": "On Target",
@@ -17,26 +28,208 @@
       "label": "Missed",
       "event_type": "missed"
     },
-    { "key": "total_headers_so_far", "label": "Headers", "event_type": null }
+    {
+      "key": "total_headers_so_far",
+      "label": "Headers",
+      "event_type": null
+    }
   ],
   "form_criteria": [
-    "approach_angle",
-    "plant_foot_position",
-    "hip_rotation",
-    "striking_surface",
-    "ankle_lock",
-    "head_position",
-    "follow_through",
-    "body_lean",
-    "arms"
+    {
+      "key": "approach_angle",
+      "label": "Approach Angle",
+      "metric": "approach_angle_deg",
+      "ideal_range": [
+        30,
+        45
+      ],
+      "acceptable_range": [
+        20,
+        55
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "plant_foot_position",
+      "label": "Plant Foot",
+      "metric": "plant_foot_deviation_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "hip_rotation",
+      "label": "Hip Rotation",
+      "metric": "hip_rotation_deg",
+      "ideal_range": [
+        30,
+        60
+      ],
+      "acceptable_range": [
+        15,
+        75
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "ankle_lock",
+      "label": "Ankle Lock",
+      "metric": "left_ankle_foot_angle",
+      "ideal_range": [
+        85,
+        110
+      ],
+      "acceptable_range": [
+        75,
+        120
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.13,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "body_lean",
+      "label": "Body Lean",
+      "metric": "torso_lean_left",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "arms",
+      "label": "Arm Balance",
+      "metric": "arm_balance_px",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.05,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "striking_surface",
+      "label": "Striking Surface",
+      "metric": "striking_surface_consistency",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    }
   ],
   "colors": {
-    "primary": [0, 165, 255],
-    "positive": [0, 220, 0],
-    "negative": [0, 0, 255],
-    "neutral": [255, 255, 255]
+    "primary": [
+      0,
+      165,
+      255
+    ],
+    "positive": [
+      0,
+      220,
+      0
+    ],
+    "negative": [
+      0,
+      0,
+      255
+    ],
+    "neutral": [
+      255,
+      255,
+      255
+    ]
   },
   "feedback_display_seconds": 4,
   "animation_duration_seconds": 1.25,
-  "summary_duration_seconds": 6
+  "summary_duration_seconds": 6,
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Kicking and sprint mechanics read best from the side \u2014 plant foot, hip drive and follow-through stay in plane."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Best second angle for body alignment, balance and first touch."
+    },
+    {
+      "id": "elevated",
+      "label": "Elevated view",
+      "description": "Useful third angle for positioning, spacing and off-ball movement."
+    }
+  ],
+  "version": 2
 }

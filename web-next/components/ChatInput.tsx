@@ -55,15 +55,20 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         placeholder={placeholder}
         rows={1}
         maxLength={2000}
-        className="flex-1 resize-none rounded-none border border-(--cream-10) bg-transparent px-4 py-3 text-sm text-(--fg) placeholder:text-(--cream-40) focus:border-(--cream-20) focus:outline-none disabled:opacity-50"
+        className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none disabled:opacity-50"
       />
       <button
         onClick={handleSubmit}
         disabled={disabled || !value.trim()}
-        className="shrink-0 rounded-none border border-(--cream-10) bg-(--fg) px-5 py-3 text-sm font-semibold text-(--bg) transition-all hover:bg-(--fg)/90 disabled:opacity-30 disabled:cursor-not-allowed"
+        className="shrink-0 rounded-xl border border-border bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-30 disabled:cursor-not-allowed"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M5 12h14M12 5l7 7-7 7"
+          />
         </svg>
       </button>
     </div>

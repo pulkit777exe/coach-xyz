@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
 
 interface ErrorScreenProps {
@@ -175,18 +175,29 @@ const ERROR_DETAILS: Record<string, { title: string; description: string; action
   },
 }
 
-
 export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const stableOnRetry = useCallback(onRetry, [onRetry])
+  const stableOnRetry = useCallback(() => onRetry(), [onRetry])
+
+  // Initialize the countdown when a rate-limit error appears/changes. Done via
+  // render-time state adjustment (the documented alternative to a sync
+  // setState-in-effect); the interval below only ticks it down.
+  const rateLimitKey = `${error.code}:${error.retry_after ?? ''}`
+  const [prevRateLimitKey, setPrevRateLimitKey] = useState(rateLimitKey)
+  if (prevRateLimitKey !== rateLimitKey) {
+    setPrevRateLimitKey(rateLimitKey)
+    setCountdown(
+      error.code === 'RATE_LIMITED' && error.retry_after && error.retry_after > 0
+        ? error.retry_after
+        : null,
+    )
+  }
 
   useEffect(() => {
     if (error.code === 'RATE_LIMITED' && error.retry_after && error.retry_after > 0) {
-      setCountdown(error.retry_after)
-
       timerRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev === null || prev <= 1) {
@@ -213,10 +224,10 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
 
   return (
     <>
-      <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center p-6 pt-20">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 pt-20">
         <div className="max-w-md w-full text-center">
           <svg
-            className="w-16 h-16 mx-auto mb-6 text-red-400"
+            className="w-16 h-16 mx-auto mb-6 text-destructive"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -229,38 +240,30 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
             />
           </svg>
 
-          <h1 className="text-2xl font-semibold text-(--fg) mb-3">
-            {details.title}
-          </h1>
+          <h1 className="text-2xl font-semibold text-foreground mb-3">{details.title}</h1>
 
-          <p className="text-(--cream-40) mb-2">{details.description}</p>
+          <p className="text-muted-foreground mb-2">{details.description}</p>
 
-          {details.action && (
-            <p className="text-sm text-(--cream-40) mb-2">{details.action}</p>
-          )}
+          {details.action && <p className="text-sm text-muted-foreground mb-2">{details.action}</p>}
 
-          <p className="text-xs text-(--cream-20) mb-8">
+          <p className="text-xs text-muted-foreground/60 mb-8">
             Error: {error.code} | Layer: {error.layer}
           </p>
 
           {countdown !== null && (
-            <p className="text-sm text-(--fg) mb-4 animate-pulse">
+            <p className="text-sm text-foreground mb-4 animate-pulse">
               Retrying in {countdown} seconds...
             </p>
           )}
 
           {error.retryable ? (
-            <Button
-              size="lg"
-              onClick={onRetry}
-              disabled={countdown !== null}
-            >
+            <Button size="lg" onClick={onRetry} disabled={countdown !== null}>
               {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
             </Button>
           ) : (
-            <p className="text-sm text-(--cream-40)">
+            <p className="text-sm text-muted-foreground">
               This error cannot be retried. Please{' '}
-              <a href="mailto:support@coachai.dev" className="text-(--fg) underline">
+              <a href="mailto:help@coachxyz.app" className="text-foreground underline">
                 contact support
               </a>
               .

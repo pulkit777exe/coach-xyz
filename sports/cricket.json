@@ -2,13 +2,35 @@
   "sport": "cricket",
   "display_name": "Cricket",
   "events": {
-    "positive": ["four", "six", "boundary", "single", "two", "three"],
-    "negative": ["wicket", "dot_ball"]
+    "positive": [
+      "four",
+      "six",
+      "boundary",
+      "single",
+      "two",
+      "three"
+    ],
+    "negative": [
+      "wicket",
+      "dot_ball"
+    ]
   },
   "stats": [
-    { "key": "total_runs_so_far", "label": "Runs", "event_type": null },
-    { "key": "total_fours_so_far", "label": "Fours", "event_type": "four" },
-    { "key": "total_sixes_so_far", "label": "Sixes", "event_type": "six" },
+    {
+      "key": "total_runs_so_far",
+      "label": "Runs",
+      "event_type": null
+    },
+    {
+      "key": "total_fours_so_far",
+      "label": "Fours",
+      "event_type": "four"
+    },
+    {
+      "key": "total_sixes_so_far",
+      "label": "Sixes",
+      "event_type": "six"
+    },
     {
       "key": "total_wickets_so_far",
       "label": "Wickets",
@@ -19,26 +41,208 @@
       "label": "Dot Balls",
       "event_type": "dot_ball"
     },
-    { "key": "balls_faced_so_far", "label": "Balls", "event_type": null }
+    {
+      "key": "balls_faced_so_far",
+      "label": "Balls",
+      "event_type": null
+    }
   ],
   "form_criteria": [
-    "stance",
-    "grip",
-    "backlift",
-    "head_position",
-    "front_foot_movement",
-    "weight_transfer",
-    "bottom_hand",
-    "follow_through",
-    "wrist_roll"
+    {
+      "key": "stance",
+      "label": "Stance",
+      "metric": "hip_width_stance_deg",
+      "ideal_range": [
+        45,
+        65
+      ],
+      "acceptable_range": [
+        35,
+        75
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "backlift",
+      "label": "Backlift",
+      "metric": "backlift_angle_deg",
+      "ideal_range": [
+        20,
+        45
+      ],
+      "acceptable_range": [
+        10,
+        60
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "front_foot_movement",
+      "label": "Front Foot",
+      "metric": "left_knee_ankle_angle",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "weight_transfer",
+      "label": "Weight Transfer",
+      "metric": "torso_lean_left",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.13,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "bottom_hand",
+      "label": "Bottom Hand",
+      "metric": "left_wrist_finger_ext",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        135,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "elbow_extension",
+      "label": "Arm Extension",
+      "metric": "elbow_extension_angle_deg",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.1,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "wrist_roll",
+      "label": "Wrist Roll",
+      "metric": "wrist_roll_deg",
+      "ideal_range": [
+        30,
+        60
+      ],
+      "acceptable_range": [
+        15,
+        75
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.08,
+      "phase": "follow_through",
+      "confidence_score": null
+    }
   ],
   "colors": {
-    "primary": [0, 165, 255],
-    "positive": [0, 200, 0],
-    "negative": [0, 0, 255],
-    "neutral": [255, 255, 255]
+    "primary": [
+      0,
+      165,
+      255
+    ],
+    "positive": [
+      0,
+      200,
+      0
+    ],
+    "negative": [
+      0,
+      0,
+      255
+    ],
+    "neutral": [
+      255,
+      255,
+      255
+    ]
   },
   "feedback_display_seconds": 4,
   "animation_duration_seconds": 1.25,
-  "summary_duration_seconds": 6
+  "summary_duration_seconds": 6,
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Batting and bowling actions read best from the side \u2014 head position, front-foot stride and release stay in plane."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Best second angle for alignment, balance at the crease and bat swing path."
+    },
+    {
+      "id": "behind",
+      "label": "Behind the arm",
+      "description": "Useful third angle for line, length and seam movement."
+    }
+  ],
+  "version": 2
 }

@@ -1,6 +1,6 @@
 <p align="center">
   <samp>
-    <b>Coach0</b> · multi-sport AI video analyzer<br>
+    <b>CoachXYZ</b> · multi-sport AI video analyzer<br>
     <sub>personal project · open source · built with next.js, elysia, fastapi, gemini</sub>
   </samp>
 </p>
@@ -15,7 +15,8 @@ Powered by **Google Gemini AI** + **MediaPipe** pose detection.
 
 - Upload → detect players → auto-analyze → annotated MP4 with pose overlays, HUD, and summary screen
 - Conversational follow-up: chat with an AI coach about the analysis (streaming), with timestamp references that seek the video
-- Dashboard with history, stats, per-analysis detail, rename, and persisted conversations
+- Coach dashboard: roster, attendance grid + batch entry, schedule/calendar, printable/emailable reports, per-student performance, global search
+- Player hub: read-only self view (own analyses, attendance, performance, reports, team schedule) linked by login email
 - Auth0 login (Google / GitHub), per-user history and chat persistence (Supabase)
 - 6 sports with per-sport scoring rules
 
@@ -35,29 +36,30 @@ Starts the Python analysis engine and the Elysia server. See [ARCHITECTURE.md](.
 
 ### Option B: Local setup
 
+Run everything from the repo root — the root `package.json` orchestrates both TS apps:
+
 ```bash
-# Engine (Python 3.11)
+# from repo root
+npm install                  # root tooling
+(cd server && bun install)
+(cd web-next && npm install)
+
+# Engine (Python 3.11) — no root orchestration
 cd engine
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.sample .env   # add GEMINI_API_KEY + Upstash Redis vars
 
-# Server (Bun)
-cd ../server
-bun install
-cp .env.example .env
-bun run dev
-
-# Frontend (Next.js)
-cd ../web-next
-bun install
-cp .env.example .env.local   # set NEXT_PUBLIC_API_URL + Auth0 vars
-bun run dev
+# Back to root — starts server (:8000) + web (:3000) in parallel
+cd ..
+npm run dev
 ```
 
-Frontend at `:3000`, server at `:8000`, engine at `:8001`.
+Per-app scripts: `npm run dev:server`, `npm run dev:web`. Checks: `npm run check` (typecheck + lint + tests, both TS apps), `npm run build` (web), `npm run smoke` (server live HTTP, needs `.env` + running server).
 
-> Auth0 credentials are required for `/dashboard` and `/account`. See [setup.md](./setup.md).
+Frontend at `:3000`, server at `:8000`, engine at `:8001` (start the engine separately, above).
+
+> Auth0 credentials are required for `/dashboard`, `/player`, and `/account`. See [setup.md](./setup.md).
 
 ## Project
 
@@ -73,12 +75,12 @@ Frontend at `:3000`, server at `:8000`, engine at `:8001`.
 
 | Layer | What it does |
 |---|---|
-| `web-next/` | SPA — upload video, pick player, poll progress, chat with AI coach, dashboard/history |
-| `server/` | Rate limiting (scan 10/min, analysis 5/hr), Auth0 user sync, BullMQ orchestration, Supabase history |
+| `web-next/` | Next.js App Router — coach dashboard (roster, attendance, schedule, reports, history) + read-only player hub + marketing site |
+| `server/` | Rate limiting (scan 10/min, analysis 5/hr), Auth0 user sync, org data layer, BullMQ orchestration, email (Resend), Supabase history |
 | `engine/` | Player detection, Gemini analysis, video annotation, caching, chat (streaming) |
 | `sports/` | Sport-specific event definitions and scoring rules |
 
-Engine tests: `cd engine && python -m pytest tests/ -q`
+Tests: `cd engine && python -m pytest tests/ -q` · `cd server && bun test` · `cd web-next && npm test` · or all of the TS apps with `npm run check` from the root.
 
 ## Supported sports
 

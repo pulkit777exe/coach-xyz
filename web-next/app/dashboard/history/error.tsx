@@ -3,6 +3,8 @@
 import * as Sentry from '@sentry/nextjs'
 import { useEffect } from 'react'
 import Link from 'next/link'
+import { TriangleAlert } from 'lucide-react'
+import { Button } from '@/components/9ui/ui/button'
 
 export default function HistoryError({
   error,
@@ -16,28 +18,23 @@ export default function HistoryError({
   }, [error])
 
   return (
-    <div className="p-8 lg:p-12 max-w-5xl">
-      <div className="border border-(--red) p-8">
-        <h2 className="text-(--fg) text-xl font-semibold mb-4">Failed to load history</h2>
-        <p className="text-(--cream-40) mb-6">
+    <div className="p-8 lg:p-12">
+      <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+        <div className="mx-auto grid size-12 place-items-center rounded-xl bg-danger/10 text-destructive">
+          <TriangleAlert className="size-6" />
+        </div>
+        <h2 className="mt-4 text-lg font-bold text-foreground">Failed to load history</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
           {error?.message || 'An error occurred while loading your analysis history.'}
         </p>
         {error?.digest && (
-          <p className="text-zinc-500 text-sm mb-4">Error ID: {error.digest}</p>
+          <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
         )}
-        <div className="flex gap-4">
-          <button
-            onClick={reset}
-            className="px-6 py-3 border border-(--cream-10) text-(--fg) text-[0.65rem] uppercase tracking-[0.2em] transition-all hover:bg-(--fg) hover:text-(--bg)"
-          >
-            Try again
-          </button>
-          <Link
-            href="/dashboard"
-            className="px-6 py-3 border border-(--cream-10) text-(--cream-40) text-[0.65rem] uppercase tracking-[0.2em] transition-all hover:text-(--fg) hover:border-(--cream-20)"
-          >
-            Back to Dashboard
-          </Link>
+        <div className="mt-6 flex justify-center gap-3">
+          <Button onClick={reset}>Try again</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/dashboard" />}>
+            Back to dashboard
+          </Button>
         </div>
       </div>
     </div>

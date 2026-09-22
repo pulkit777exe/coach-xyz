@@ -1,14 +1,19 @@
-# render.yaml — Deploy coach-xyz to Render (free tier)
+# render.yaml — Deploy coach-xyz to Render
+# Hybrid billing: engine on paid starter, server on free.
 # Docs: https://render.com/docs/render.yaml
 
 services:
   # ── Engine (Python/FastAPI — video processing + Gemini AI) ─────────────────
+  # Paid "starter" plan: free tier spins down after 15 min idle, which kills
+  # in-flight background analyses and wipes /tmp/storage. Videos are local-only
+  # (storage.py is_local_backend), so the filesystem is still ephemeral across
+  # deploys/restarts even on paid plans — keep demo clips short.
   - type: web
     name: coachai-engine
     runtime: docker
     rootDir: engine
     dockerfilePath: Dockerfile
-    plan: free
+    plan: starter
     healthCheckPath: /health
     envVars:
       - key: GEMINI_API_KEY
@@ -19,8 +24,17 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ENVIRONMENT
+        value: production
 
   # ── Server (Bun/Elysia — middleware + BullMQ worker) ──────────────────────
+  # Free plan is fine: tiny footprint, fits 512 MB. The queue worker lives in
+  # this process; the keepalive workflow (.github/workflows/keepalive.yml) pings
+  # /health every 9 min so the free instance never cold-starts and the worker
+  # stays continuous (engine is on paid starter, so this fits the 750 h/mo free
+  # budget).
   - type: web
     name: coachai-server
     runtime: docker

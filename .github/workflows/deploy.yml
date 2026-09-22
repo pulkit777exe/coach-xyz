@@ -1,0 +1,31 @@
+# Deploy — fires Vercel and Render deploy hooks on every push to main/master.
+#
+# NOTE: Both Vercel and Render already auto-deploy from git on push. These
+# hooks are the belt-and-suspenders trigger so a deploy happens even if the
+# platform's git webhook is delayed or misconfigured.
+#
+# Secrets (set in GitHub → Settings → Secrets and variables → Actions):
+#   VERCEL_DEPLOY_HOOK_URL — full deploy-hook URL from Vercel project settings
+#   RENDER_DEPLOY_HOOK_URL — full deploy-hook URL from Render service settings
+#
+# Both secrets are optional: if a secret is unset the corresponding hook is
+# skipped and the job still succeeds.
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  trigger-deploy-hooks:
+    name: Trigger Vercel + Render deploys
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Vercel deploy hook
+        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+        run: curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
+
+      - name: Trigger Render deploy hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

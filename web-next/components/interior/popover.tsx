@@ -43,7 +43,7 @@ export function Popover({
         <span
           role="tooltip"
           className={cn(
-            'absolute left-1/2 z-50 w-56 -translate-x-1/2 border border-(--cream-10) bg-(--bg) p-3 text-xs leading-relaxed text-(--cream-40) shadow-lg',
+            'absolute left-1/2 z-50 w-56 -translate-x-1/2 rounded-2xl border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground shadow-lg',
             side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
           )}
         >

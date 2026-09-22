@@ -18,8 +18,9 @@ from core.detection_utils import (
     iou,
     bbox_from_landmarks,
     transform_landmarks_to_global,
+    PoseCandidate,
 )
-from core.detector import PoseCandidate, detect_players
+from core.detector import detect_players
 from core.errors import NoPlayersDetectedError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.video_io import read_frame_by_index
@@ -212,6 +213,23 @@ def detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector)
     return deduped
 
 
+def select_detection_by_index(
+    detections: list[tuple[tuple[float, float, float, float], float]],
+    player_index: int,
+) -> tuple[float, float, float, float]:
+    """Pick the target bbox for a 1-based player_index.
+
+    Sorts left-to-right by x_min to match detector.extract_players (the scan
+    pipeline assigns player_index in x_min order). Raises
+    NoPlayersDetectedError when the index is out of range instead of silently
+    clamping to a different athlete.
+    """
+    ordered = sorted(detections, key=lambda d: d[0][0])
+    if player_index < 1 or player_index - 1 >= len(ordered):
+        raise NoPlayersDetectedError("Selected player was not found in the opening frames")
+    return ordered[player_index - 1][0]
+
+
 def build_active_player_tracks(
     video_path: str,
     keyframes: list[dict[str, Any]],
@@ -242,15 +260,12 @@ def build_active_player_tracks(
         if _first_frame is not None:
             _detections = detect_hog_people(_first_frame)
             if _detections:
-                # Sort by area descending; player_index is 1-based
-                _sorted = sorted(
-                    _detections,
-                    key=lambda d: (d[0][2] - d[0][0]) * (d[0][3] - d[0][1]),
-                    reverse=True,
-                )
-                _idx = min(player_index - 1, len(_sorted) - 1)
-                _bbox = _sorted[_idx][0]
-                selected_centroid_x = (_bbox[0] + _bbox[2]) / 2.0
+                try:
+                    _bbox = select_detection_by_index(_detections, player_index)
+                except NoPlayersDetectedError:
+                    _bbox = None
+                if _bbox is not None:
+                    selected_centroid_x = (_bbox[0] + _bbox[2]) / 2.0
 
         # Fall back to full detect_players() only if HOG gave nothing
         if selected_centroid_x is None:

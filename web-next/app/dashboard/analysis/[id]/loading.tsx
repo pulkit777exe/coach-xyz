@@ -1,8 +1,8 @@
 export default function AnalysisLoading() {
   return (
-    <div className="min-h-screen bg-(--bg) flex flex-col items-center justify-center">
-      <div className="w-12 h-12 border-4 border-(--cream-10) border-t-(--fg) rounded-full animate-spin mb-4" />
-      <p className="text-(--cream-40) text-sm">Loading analysis...</p>
+    <div className="flex min-h-[60vh] flex-col items-center justify-center bg-background">
+      <div className="mb-4 size-12 animate-spin rounded-full border-4 border-muted border-t-primary" />
+      <p className="text-sm text-muted-foreground">Loading analysis...</p>
     </div>
   )
 }

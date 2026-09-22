@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Image from 'next/image'
 
 interface LightboxProps {
   open: boolean
@@ -29,7 +30,7 @@ export function Lightbox({ open, onClose, src, alt }: LightboxProps) {
   const isVideo = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(src) || src.includes('/download')
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-6">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-foreground/90 p-6">
       <button
         type="button"
         aria-label="Close"
@@ -40,7 +41,9 @@ export function Lightbox({ open, onClose, src, alt }: LightboxProps) {
         {isVideo ? (
           <video src={src} controls autoPlay className="max-h-[85vh] max-w-full" />
         ) : (
-          <img src={src} alt={alt} className="max-h-[85vh] max-w-full object-contain" />
+          <div className="relative h-[85vh] w-[85vw]">
+            <Image unoptimized fill sizes="85vw" src={src} alt={alt} className="object-contain" />
+          </div>
         )}
         <figcaption className="sr-only">{alt}</figcaption>
       </figure>

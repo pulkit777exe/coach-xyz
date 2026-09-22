@@ -1,56 +1,83 @@
-import { auth0 } from "@/lib/auth0";
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import UserAvatar from "@/components/UserAvatar";
-import DashboardNav from "@/components/DashboardNav";
+import { getSession } from '@/lib/session'
+import { getUserProfile } from '@/lib/api'
+import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import UserAvatar from '@/components/UserAvatar'
+import DashboardNav from '@/components/DashboardNav'
+import OrgSwitcher from '@/components/org/OrgSwitcher'
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  let session;
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  let session
   try {
-    session = await auth0.getSession();
+    session = await getSession()
   } catch (error) {
-    console.error("Failed to get auth session:", error);
-    redirect("/auth/login");
+    console.error('Failed to get auth session:', error)
+    redirect('/auth/login')
   }
 
   if (!session) {
-    redirect("/auth/login");
+    redirect('/auth/login')
+  }
+
+  // Player accounts belong on /player, not the coach dashboard.
+  try {
+    const { user } = await getUserProfile(session.user.sub)
+    if (user?.role === 'player') redirect('/player')
+  } catch (error) {
+    console.error('Failed to resolve dashboard role:', error)
+  }
+
+  // Org switcher data — per-request cached via React.cache (getMyOrgsCached /
+  // getOrgContext share the same deduped fetch). Failures fall back to no
+  // switcher so a single-coach never regresses.
+  let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>['orgs'] = []
+  let switcherCurrent = session.user.sub
+  try {
+    const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
+    switcherCurrent = ctx.auth0Id
+    switcherOrgs = myOrgs.orgs
+  } catch (error) {
+    console.error('Failed to resolve org switcher:', error)
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-(--cream-05) p-6 flex flex-col">
-        <Link href="/" className="font-serif text-xl text-(--fg) mb-10">
-          coach.xyz
-        </Link>
+    <div className="min-h-screen flex bg-background">
+      {/* Sidebar — theme-aware (light: white, dark: near-black) */}
+      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+        <div className="flex-1 overflow-y-auto px-3 py-4">
+          <Link href="/" className="mb-6 flex items-center gap-2 px-2">
+            <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
+              C
+            </span>
+            <span className="text-sm font-semibold tracking-tight text-foreground">coach.xyz</span>
+          </Link>
 
-        <DashboardNav />
+          {switcherOrgs.length > 0 && (
+            <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
+          )}
 
-        <div className="border-t border-(--cream-05) pt-4 mt-auto">
-          <div className="flex items-center gap-3">
+          <DashboardNav />
+        </div>
+
+        <div className="border-t border-sidebar-border p-3">
+          <div className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-muted">
             <UserAvatar
               picture={session.user.picture}
               name={session.user.name}
               email={session.user.email}
-              size="md"
+              size="sm"
             />
-            <div className="min-w-0">
-              <p className="text-sm text-(--fg) truncate">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground leading-none">
                 {session.user.name || session.user.email}
               </p>
-              <p className="text-[0.6rem] text-(--cream-40) truncate">
-                {session.user.email}
-              </p>
+              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
             </div>
           </div>
           <a
             href="/auth/logout"
-            className="mt-3 block text-[0.6rem] uppercase tracking-[0.2em] text-(--cream-40) hover:text-(--fg) transition-colors"
+            className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             Log Out
           </a>
@@ -58,7 +85,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
     </div>
-  );
+  )
 }

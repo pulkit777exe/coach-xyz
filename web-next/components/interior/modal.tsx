@@ -34,23 +34,23 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-foreground/60"
       />
       <div
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-(--cream-10) bg-(--bg) shadow-2xl',
+          'relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl',
           className,
         )}
       >
-        <div className="flex items-center justify-between border-b border-(--cream-05) px-6 py-4">
-          <h2 className="text-sm text-(--fg)">{title}</h2>
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-sm font-medium text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="cursor-pointer text-(--cream-40) hover:text-(--fg)"
+            className="cursor-pointer text-muted-foreground hover:text-foreground"
           >
             ✕
           </button>

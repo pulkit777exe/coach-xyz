@@ -1,5 +1,5 @@
-import { redis } from "./redis"
-import { readRequestMeta } from "./requestMeta"
+import { redis } from './redis'
+import { readRequestMeta } from './requestMeta'
 
 // Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
@@ -20,8 +20,7 @@ function evictExpiredMemoryLimits(): void {
     if (now > entry.resetAt) memoryLimits.delete(key)
   }
   if (memoryLimits.size > MEMORY_LIMIT_MAX_ENTRIES) {
-    const entries = [...memoryLimits.entries()]
-      .sort((a, b) => a[1].resetAt - b[1].resetAt)
+    const entries = [...memoryLimits.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)
     const toRemove = entries.slice(0, entries.length - MEMORY_LIMIT_MAX_ENTRIES / 2)
     for (const [key] of toRemove) memoryLimits.delete(key)
   }
@@ -39,7 +38,11 @@ function memoryLimit(key: string, limit: number, windowMs: number): RateLimitRes
   if (entry.count > limit) {
     return { allowed: false, remaining: 0, reset: entry.resetAt }
   }
-  return { allowed: true, remaining: limit - entry.count, reset: entry.resetAt }
+  return {
+    allowed: true,
+    remaining: limit - entry.count,
+    reset: entry.resetAt,
+  }
 }
 
 interface RateLimitConfig {
@@ -51,45 +54,59 @@ interface RateLimitConfig {
 export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResult> {
   const { key, limit, windowSec } = config
   try {
-    // Try atomic increment first
-    if (redis.rateLimitIncrement) {
-      const result = await redis.rateLimitIncrement(key, limit, windowSec)
-      return {
-        allowed: result.allowed,
-        remaining: Math.max(0, limit - result.current),
-        reset: result.reset,
-      }
+    // Atomic increment fails over to the in-memory limiter below when Redis is down
+    const result = await redis.rateLimitIncrement(key, limit, windowSec)
+    return {
+      allowed: result.allowed,
+      remaining: Math.max(0, limit - result.current),
+      reset: result.reset,
     }
-
-    // Fallback to non-atomic (Upstash REST)
-    // Use INCR + EXPIRE for atomicity instead of GET/SET
-    const count = await redis.incr(key)
-    if (count === 1) {
-      // First request in this window — set expiry
-      await redis.expire(key, windowSec)
-    }
-    const reset = Date.now() + windowSec * 1000
-
-    if (count > limit) {
-      return { allowed: false, remaining: 0, reset }
-    }
-    return { allowed: true, remaining: limit - count, reset }
   } catch {
     return memoryLimit(key, limit, windowSec * 1000)
   }
 }
 
 export async function checkScanLimit(ip: string): Promise<RateLimitResult> {
-  const limit = parseInt(process.env.SCAN_RATE_LIMIT || "10")
+  const limit = parseInt(process.env.SCAN_RATE_LIMIT || '10')
   return checkLimit({ key: `rl:scan:${ip}`, limit, windowSec: 60 })
 }
 
 export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
-  const limit = parseInt(process.env.ANALYSIS_RATE_LIMIT || "5")
+  const limit = parseInt(process.env.ANALYSIS_RATE_LIMIT || '5')
   return checkLimit({ key: `rl:analysis:${ip}`, limit, windowSec: 3600 })
+}
+
+/** Per-IP+identity hourly cap on AI chat (paid Gemini calls). */
+export async function checkChatLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.CHAT_RATE_LIMIT || '30')
+  return checkLimit({ key: `rl:chat:${key}`, limit, windowSec: 3600 })
+}
+
+/** Per-IP+identity hourly cap on video downloads. */
+export async function checkDownloadLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.DOWNLOAD_RATE_LIMIT || '60')
+  return checkLimit({ key: `rl:download:${key}`, limit, windowSec: 3600 })
+}
+
+/** Per-IP per-minute cap on scan-progress SSE opens. */
+export async function checkScanProgressLimit(ip: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.SCAN_PROGRESS_RATE_LIMIT || '30')
+  return checkLimit({ key: `rl:scanprogress:${ip}`, limit, windowSec: 60 })
+}
+
+/** Per-org daily cap on outbound email (invites + reports + attendance). */
+export async function checkEmailLimit(orgId: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.EMAIL_RATE_LIMIT || '20')
+  return checkLimit({ key: `rl:email:${orgId}`, limit, windowSec: 86400 })
+}
+
+/** Per-org hourly cap on AI report generation (paid Gemini calls). */
+export async function checkAiReportLimit(orgId: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.AI_REPORT_RATE_LIMIT || '10')
+  return checkLimit({ key: `rl:aireport:${orgId}`, limit, windowSec: 3600 })
 }
 
 export function getIP(request: Request): string {
   const meta = readRequestMeta(request)
-  return meta.clientIp ?? "anonymous"
+  return meta.clientIp ?? 'anonymous'
 }

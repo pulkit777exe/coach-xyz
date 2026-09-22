@@ -1,0 +1,172 @@
+import { isTransientError, toCoachAIError } from '@/lib/errors'
+import type { CoachAIError } from '@/types'
+
+// ── Job Polling Engine ──────────────────────────────────────────────────────
+// The single poll loop used by every job-status consumer (the live analysis
+// pipeline and the dashboard detail page). One implementation drives interval,
+// exponential backoff, an optional hard timeout, and an optional "stuck"
+// warning — with the clock, fetcher, and completion predicate injected so the
+// loop is deterministic and testable.
+//
+// Callers stay declarative: they describe what the poll should do and react to
+// onStatus / onComplete / onTransient / onError / onWarn instead of
+// re-implementing interval + retry + cancellation logic.
+
+export type PollFailure = {
+  kind: 'transient' | 'permanent' | 'timeout'
+  error: CoachAIError
+  /** Consecutive failed attempts when the failure occurred (0 on success paths). */
+  attempts: number
+  /** True once at least one status fetch has succeeded before this failure. */
+  hadSucceeded: boolean
+}
+
+export interface JobPollingConfig<S> {
+  jobId: string
+  fetchStatus: (jobId: string) => Promise<S>
+  isComplete: (status: S) => boolean
+  intervalMs?: number
+  /** Hard deadline; after it elapses an onError({ kind: 'timeout' }) fires. Undefined = never. */
+  timeoutMs?: number
+  /** Warn (once) once this much time elapses while the job is still running. Undefined = never. */
+  warnAfterMs?: number
+  /** Consecutive failures allowed before giving up (default 5). */
+  maxFailures?: number
+  /** Interval multiplier per consecutive failure (default 2). Pass 1 for fixed-interval retries. */
+  backoffFactor?: number
+  maxBackoffMs?: number
+  /** Give up on the very first error instead of retrying (default false). */
+  giveUpOnFirstFailure?: boolean
+  /** Injectable clock for deterministic tests (default Date.now). */
+  now?: () => number
+  onStatus?: (status: S) => void
+  onComplete?: (status: S) => void
+  onTransient?: (failure: PollFailure) => void
+  onError?: (failure: PollFailure) => void
+  onWarn?: () => void
+}
+
+export interface JobPollingController {
+  stop: () => void
+  /** Immediately poll again and reset the timeout/warn clocks (used by manual refresh). */
+  refresh: () => void
+}
+
+const TIMEOUT_ERROR: CoachAIError = {
+  code: 'ANALYSIS_TIMEOUT',
+  message: 'Analysis is taking longer than expected. The job may still complete.',
+  layer: 'client',
+  retryable: false,
+}
+
+export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingController {
+  const {
+    jobId,
+    fetchStatus,
+    isComplete,
+    intervalMs = 2000,
+    timeoutMs,
+    warnAfterMs,
+    maxFailures = 5,
+    backoffFactor = 2,
+    maxBackoffMs = 30_000,
+    giveUpOnFirstFailure = false,
+    now = Date.now,
+    onStatus,
+    onComplete,
+    onTransient,
+    onError,
+    onWarn,
+  } = config
+
+  let stopped = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let startedAt = now()
+  let failures = 0
+  let hadSucceeded = false
+  let warned = false
+
+  function clearTimer() {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  function schedule(failureCount: number) {
+    clearTimer()
+    const delay =
+      failureCount === 0
+        ? intervalMs
+        : Math.min(intervalMs * Math.pow(backoffFactor, failureCount - 1), maxBackoffMs)
+    timer = setTimeout(run, delay)
+  }
+
+  function fail(kind: 'permanent' | 'timeout', error: CoachAIError) {
+    stopped = true
+    clearTimer()
+    onError?.({ kind, error, attempts: failures, hadSucceeded })
+  }
+
+  async function run() {
+    if (stopped) return
+
+    const elapsed = now() - startedAt
+    if (timeoutMs !== undefined && elapsed > timeoutMs) {
+      fail('timeout', TIMEOUT_ERROR)
+      return
+    }
+
+    let status: S
+    try {
+      status = await fetchStatus(jobId)
+    } catch (err) {
+      if (stopped) return
+      failures++
+      const error = toCoachAIError(err)
+
+      if (giveUpOnFirstFailure || !isTransientError(err) || failures >= maxFailures) {
+        fail('permanent', error)
+        return
+      }
+
+      onTransient?.({ kind: 'transient', error, attempts: failures, hadSucceeded })
+      schedule(failures)
+      return
+    }
+
+    if (stopped) return
+    hadSucceeded = true
+    failures = 0
+    onStatus?.(status)
+
+    if (isComplete(status)) {
+      // Terminal — end the loop. Completion is a success, not an error.
+      stop()
+      onComplete?.(status)
+      return
+    }
+
+    if (warnAfterMs !== undefined && !warned && elapsed > warnAfterMs) {
+      warned = true
+      onWarn?.()
+    }
+
+    schedule(0)
+  }
+
+  function stop() {
+    stopped = true
+    clearTimer()
+  }
+
+  function refresh() {
+    startedAt = now()
+    failures = 0
+    warned = false
+    void run()
+  }
+
+  void run()
+  return { stop, refresh }
+}

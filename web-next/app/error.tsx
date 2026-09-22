@@ -2,7 +2,8 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import { TriangleAlert } from 'lucide-react'
+import { Button } from '@/components/9ui/ui/button'
 
 export default function Error({
   error,
@@ -16,22 +17,26 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="min-h-screen bg-(--bg) flex items-center justify-center">
-      <div className="text-center max-w-md mx-auto px-4">
-        <h2 className="text-(--fg) text-xl font-semibold mb-4">Something went wrong</h2>
-        <p className="text-(--cream-40) mb-6">
+    <main className="flex min-h-[70vh] items-center justify-center px-6">
+      <div className="text-center">
+        <div className="mx-auto grid size-12 place-items-center rounded-xl bg-danger/10 text-destructive">
+          <TriangleAlert className="size-6" />
+        </div>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
+          Something went wrong
+        </h1>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
           {error?.message || 'An unexpected error occurred.'}
         </p>
         {error?.digest && (
-          <p className="text-zinc-500 text-sm mb-4">Error ID: {error.digest}</p>
+          <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
         )}
-        <Button
-          onClick={reset}
-          size="lg"
-        >
-          Try again
-        </Button>
+        <div className="mt-6">
+          <Button size="lg" onClick={reset}>
+            Try again
+          </Button>
+        </div>
       </div>
-    </div>
+    </main>
   )
 }

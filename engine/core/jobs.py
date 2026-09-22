@@ -43,6 +43,12 @@ def _get_job_lock(job_id: str) -> threading.Lock:
 # States flow: uploading → scanning → player_selection → analyzing → rendering → completed
 # On error: any state can transition to "failed"
 
+# Single source of the forward pipeline order. Callers that need to walk a job
+# toward completion import STATE_FLOW instead of re-literalizing the order.
+# NOTE: this order is a wire contract shared with the server and web layers
+# (see their ENGINE_PIPELINE_STATES constants + the pipeline contract tests).
+STATE_FLOW = ("uploading", "scanning", "player_selection", "analyzing", "rendering", "completed")
+
 PIPELINE_STATES = {
     "uploading": {"stage": 0, "progress": 0, "stage_name": "Uploading"},
     "scanning": {"stage": 1, "progress": 15, "stage_name": "Detecting Players"},
@@ -224,4 +230,8 @@ def fail_job(job_id: str, error: EngineError) -> None:
         job.error = error.message
         job.error_code = error.code
         job.retryable = error.retryable
+        # Clear the video reference so a failed job can no longer serve
+        # (or leak) the rendered/raw video via the download route.
+        job.video_key = None
+        job.video_path = None
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)

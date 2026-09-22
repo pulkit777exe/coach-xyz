@@ -24,14 +24,3 @@ def parse_json_response(text: str) -> dict[str, Any]:
     """Parse a JSON response from Gemini, handling markdown fences."""
     cleaned = clean_json_text(text)
     return json.loads(cleaned)
-
-
-def ensure_genai():
-    """Import and return the google.genai module."""
-    try:
-        from google import genai
-        return genai
-    except ImportError:
-        raise ImportError(
-            "google-genai is required. Install with: pip install google-genai"
-        )

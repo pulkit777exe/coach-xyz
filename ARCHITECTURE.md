@@ -26,8 +26,6 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 | Elysia | ^1.4.29 | `server/package.json:18` |
 | BullMQ | ^5.81.3 | `server/package.json:17` |
 | ioredis | ^5.11.1 | `server/package.json:19` |
-| @upstash/redis | ^1.38.0 | `server/package.json:16` |
-| @upstash/ratelimit | ^2.0.8 | `server/package.json:15` |
 | @sentry/node | ^10.69.0 | `server/package.json:14` |
 | TypeScript | ^5.9.3 | `server/package.json:24` |
 
@@ -99,7 +97,11 @@ coach-xyz/
 ├── web-next/                  # Frontend (Next.js + React)
 │   ├── app/page.tsx           # Home — renders AppClient (SPA pipeline)
 │   ├── app/account/page.tsx   # Account / profile page (Auth0 session)
-│   ├── app/dashboard/         # Dashboard (requires Auth0 session)
+│   ├── app/api/service/[[...path]]/route.ts  # Identity proxy (org/auth/me/sync)
+│   ├── app/player/           # Player Hub (read-only face)
+│   │   ├── layout.tsx         # Player shell (session required)
+│   │   └── page.tsx           # Role gate → PlayerHub
+│   ├── app/dashboard/         # Dashboard (requires Auth0 session; role gate → /player)
 │   │   ├── layout.tsx         # Sidebar layout with DashboardNav
 │   │   ├── page.tsx           # Overview — stats + recent analyses
 │   │   ├── history/page.tsx   # Paginated analysis history
@@ -126,14 +128,30 @@ coach-xyz/
 │   │   ├── QuickActions.tsx          # Pre-built chat action buttons
 │   │   ├── AnalysisTitle.tsx         # Click-to-rename analysis heading
 │   │   ├── InlineRename.tsx          # Inline rename (unused — not imported)
+│   │   ├── GlobalSearch.tsx          # Org-level search (fuzzy, client-side + proxy)
 │   │   ├── UserAvatar.tsx            # Auth0 profile picture / initials
-│   │   └── ui/                       # Custom button/card/badge primitives
+│   │   ├── org/                      # Coach dashboard: StudentsClient, AttendanceGrid,
+│   │   │                             #   ScheduleClient, ReportsClient, StudentProfile,
+│   │   │                             #   PerformanceChart (dynamic), dialogs
+│   │   ├── player/                   # PlayerHub (read-only player view)
+│   │   └── 9ui/ui/                   # shadcn-style primitives (button, badge, card, chart, …)
 │   ├── lib/
-│   │   ├── api.ts             # API client (all fetch calls)
+│   │   ├── api.ts             # API client (identity-bearing + pipeline fetch calls)
 │   │   ├── auth0.ts           # Auth0Client singleton
-│   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
+│   │   ├── org.ts             # Org domain: entity types, org API client, enum vocab + labels
+│   │   ├── session.ts         # React.cache wrapper — auth0.getSession (RSC only)
+│   │   ├── serverData.ts      # React.cache-wrapped server fetchers (RSC pages import these)
+│   │   ├── analysis.ts        # Pure helpers: analysisScore, getShotEvents (from summary_json)
+│   │   ├── csv.ts             # toCSVString (formula-injection-safe CSV escaping)
+│   │   ├── date.ts            # ISO date/time conversions + scheduleMonthWindow
 │   │   ├── sports.ts          # Sport emoji helpers
-│   │   └── utils.ts           # cn() class-name helper
+│   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
+│   │   ├── jobPolling.ts      # Single job-status poll engine (injected clock/fetch/callbacks)
+│   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
+│   │   ├── errors.ts          # Client error normalization + transient classification
+│   │   ├── sse.ts             # Shared SSE line parser (data: JSON)
+│   │   ├── utils.ts           # cn() class-name helper + capitalize
+│   │   └── __tests__/         # lib unit tests (csv, analysis, date, api, org, etc.)
 │   ├── proxy.ts               # Auth0 middleware proxy (Next.js 16)
 │   └── types/index.ts         # Shared type definitions
 │
@@ -145,14 +163,22 @@ coach-xyz/
 │   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
 │   │   ├── download.ts        # GET /api/download/:jobId — stream result video
 │   │   ├── chat.ts            # POST /api/chat — V2 chat proxy to engine
-│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history
+│   │   ├── email.ts           # POST /api/email/:auth0Id/{invite|report|attendance} (Resend, guarded)
+│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history (guarded)
+│   │   ├── org.ts             # /api/org/:auth0Id/* — coach org CRUD (guarded)
+│   │   ├── me.ts              # /api/me/* — player read-only hub (guarded, self-scoped) + mint endpoint
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
-│   │   ├── queue.ts           # BullMQ queue + worker + keep-alive + shutdown
+│   │   ├── queue.ts           # BullMQ queue + worker + shutdown
 │   │   ├── redis.ts           # Redis client (Upstash REST or local ioredis)
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
 │   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
+│   │   ├── attribution.ts     # Mint/verify signed attribution tokens (sub.exp.HMAC, SERVICE_TOKEN)
+│   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
+│   │   ├── orgEnums.ts        # Shared org vocab (values/order contract w/ web lib/org.ts)
+│   │   ├── orgData.ts         # Student/attendance/schedule/reports/performance queries
+│   │   ├── userRoles.ts       # coach/player role vocab (contract w/ web lib/userRoles.ts)
 │   │   ├── supabaseHistory.ts # PostgreSQL history + user + chat persistence
 │   │   ├── conversation.ts    # Redis-backed conversation storage (V2)
 │   │   └── errors.ts          # Error types and builders
@@ -188,7 +214,7 @@ coach-xyz/
 │   │   ├── player_tracker.py  # Player tracking (CLI only — engine/cli/frame_selector.py)
 │   │   ├── chunker.py         # Video chunking (CLI only)
 │   │   └── baseline.py        # Sport baseline metrics (dead code — unused by API pipeline)
-│   ├── tests/                 # pytest: test_state_machine.py + conftest.py (46 tests)
+│   ├── tests/                 # pytest suite (103 tests in test_state_machine/test_errors/test_analysis_contract/test_storage/test_chunker/test_config/test_dedup/test_validator)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -221,11 +247,16 @@ coach-xyz/
 **Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
 - Key: `coachai:srv:{server_job_id}`
 - TTL: 7200 seconds (2 hours)
-- Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at }`
+- Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at, owner_ids }`
+- `owner_ids` binds the job to its verified owners (analyze-video: the `x-attribution` sub; me/analyze: `[coachAuth0Id, requestedBy]`). Empty = anonymous demo job, bearer-readable. Status/chat/conversation/download require a matching `x-attribution` sub when owners exist (`server/src/lib/jobAccess.ts`).
 
-**Rate Limits** (`server/src/lib/ratelimit.ts:82-90`)
-- Key: `rl:scan:{ip}` (TTL 60s) — 10 requests/minute (`SCAN_RATE_LIMIT`, default `"10"`)
-- Key: `rl:analysis:{ip}` (TTL 3600s) — 5 requests/hour (`ANALYSIS_RATE_LIMIT`, default `"5"` — the 429 message in `analyze.ts:29` states "5 per hour", consistent)
+**Rate Limits** (`server/src/lib/ratelimit.ts`)
+- Key: `rl:scan:{sub|ip}` (TTL 60s) — 10 requests/minute (`SCAN_RATE_LIMIT`, default `"10"`)
+- Key: `rl:analysis:{sub|ip}` (TTL 3600s) — 5 requests/hour (`ANALYSIS_RATE_LIMIT`, default `"5"` — the 429 message in `analyze.ts` states "5 per hour", consistent)
+- Key: `rl:chat:{sub|ip}` (TTL 3600s) — 30 AI chats/hour (`CHAT_RATE_LIMIT`, default `"30"`)
+- Key: `rl:download:{sub|ip}` (TTL 3600s) — 60 downloads/hour (`DOWNLOAD_RATE_LIMIT`, default `"60"`)
+- Key: `rl:scanprogress:{ip}` (TTL 60s) — 30 SSE opens/minute (`SCAN_PROGRESS_RATE_LIMIT`, default `"30"`)
+- Scan/analysis/chat/download buckets key on the verified attribution sub when the caller sends `x-attribution` (unspoofable per-account bucket); anonymous callers share the IP bucket.
 
 **Video Cache** (`engine/core/cache.py:26-27`)
 - Key: `coachai:analysis:{video_hash}:p{player_index|all}`
@@ -249,8 +280,16 @@ coach-xyz/
 **users**
 - Primary key: `id` (UUID)
 - Unique: `auth0_id`
-- Fields: auth0_id, email, name, nickname, picture, email_verified, created_at, updated_at
-- Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`
+- Fields: auth0_id, email, name, nickname, picture, email_verified, `linked_auth0_ids` (text[]), `role` (text, 'coach' | 'player', default 'coach', CHECK constraint), created_at, updated_at
+- Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`. `role` defaults to `coach` (first account is a coach); a player's role is flipped to `player` when their login email auto-links to a student row. `linked_auth0_ids` merges multiple providers on one account.
+
+**students** (org — scoped by owning coach `auth0_id`)
+- Fields (in `server/src/lib/orgData.ts`): full_name, email, phone, sport, position, jersey_number, date_of_birth, gender, guardian_name, guardian_phone, notes, status (CHECK: STUDENT_STATUSES), joined_on, `account_auth0_id` (player login link, indexed), created_at, updated_at
+- Purpose: the coach's roster. A player's account is linked to their student row by email on first player login (`account_auth0_id` set, user `role` → 'player').
+
+**attendance** / **schedule_events** / **reports** / **performance_metrics** (org)
+- All scoped by owning coach `auth0_id`; attendance/performance also reference `student_id`. Player read-only views query these with the coach scope + the linked student. (CHECK constraints pin the shared vocab in `server/src/lib/orgEnums.ts`, mirrored contractually in `web-next/lib/org.ts`.)
+- **Uniqueness is org-scoped** (migrated 2026-09-21): `attendance` has a `UNIQUE (auth0_id, student_id, session_date)` constraint (`attendance_auth0_student_session_unique`) and `performance_metrics` a `UNIQUE (auth0_id, student_id, metric_key, measured_at)` (`performance_auth0_student_metric_unique`) — the legacy `UNIQUE (student_id, …)` keys were auto-dropped/migrated idempotently in `ensureInitialized` (`supabaseHistory.ts`), and the upsert `ON CONFLICT` targets in `orgData.ts` match. This stops one org's rows from colliding with another org's same-id student rows.
 
 **chat_messages**
 - Primary key: `id` (UUID)
@@ -259,10 +298,27 @@ coach-xyz/
 
 ### In-Memory State
 
-**Engine Sessions** (`engine/main.py:57-58`)
+**Engine Sessions** (`engine/main.py`)
 - Stored in Python dict with threading lock
-- TTL: 7200 seconds (2 hours, aligned with job TTL), max 10 sessions (`engine/main.py:45-46`)
-- Evicted every 300s by `_evict_old_sessions()` loop (`engine/main.py:123-128`)
+- TTL: 2 hours (aligned with job TTL), max 10 sessions
+- Multi-perspective: one session accumulates camera angles
+  (`core/multicam.py`) — `POST /scan` with `session_token` + `angle` appends
+  another upload/detection to the same session; `POST /analyze` takes `angle`
+  (defaults to `primary`). Legacy top-level `video_key`/`players` always mirror
+  the primary angle, so single-angle clients are unchanged. The analysis result
+  is stamped with the analyzed `angle` plus the sport's `recommended_angles`
+  guidance (from `sports/*.json` `camera_angles`, loaded via
+  `core/sport_config.py` — the single loader shared by analyzer + renderer).
+- Source uploads live until their session is evicted (files deleted per angle
+  in `_delete_session_files`), so re-analysis (other player, other angle,
+  retry) keeps working; re-uploading an angle deletes its orphaned file.
+- Scan progress is tracked per angle (`{session_token}:{angle}`) and streamed
+  via `GET /scan-progress/{session_token}?angle=…`, so parallel perspectives
+  don't share one progress slot.
+- Player identity contract: scan assigns 1-based `player_index` left-to-right
+  by `x_min`, and tracking resolves the same athlete via
+  `select_detection_by_index` (out-of-range raises instead of silently
+  analyzing a different player).
 
 ---
 
@@ -401,13 +457,45 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 
 - **Provider:** `@auth0/nextjs-auth0` v4.26.0 (`web-next/package.json`)
 - **Client:** `web-next/lib/auth0.ts` — `Auth0Client` singleton with 30s HTTP timeout
-- **Session check:** `auth0.getSession()` called in every protected server component
+- **Session check:** `getSession()` from `lib/session.ts` (React.cache wrapper over `auth0.getSession`) called in every protected server component; deduplicated within a single request so layout + generateMetadata + page call the JWT verify once
 - **Protected routes:** `/dashboard/*`, `/account` — redirect to `/auth/login` when session absent
 - **User identity:** `session.user.sub` (Auth0 subject claim, e.g. `google-oauth2|123` or `github|456`)
-- **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table
+- **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table. New accounts default to `role = 'coach'` (first account is a coach); when the login email matches a student row, the account is auto-linked (`students.account_auth0_id` set) and its role flips to `player`.
 - **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
 - **Logout:** `/auth/logout` (Auth0 SDK route)
-- **`auth0_id` propagation:** Frontend sends `x-auth0-id` header on scan and analyze requests; server stores it in `video_conversations.auth0_id` and `analysis_history.auth0_id`
+- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`), analyze (`POST /api/analyze-video`), status (`GET /api/job-status/:jobId`), chat (`POST /api/chat`, `/api/chat/stream`) and conversation (`GET /api/conversation/:jobId`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. Downloads (`<video src>`/`<a href>` cannot carry headers) send the same token as `?attribution=` (`getAuthorizedDownloadUrl`), verified identically. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
+
+### Identity Boundary (service-to-service, two-faces)
+
+The backend never trusts a client-supplied auth0Id. The Next app is the identity boundary for user-scoped data:
+
+- **Guard** (`server/src/lib/serviceGuard.ts`): an Elysia `onBeforeHandle` plugin applied to `auth.ts`/`org.ts`/`me.ts`. When `SERVICE_TOKEN` is set on the server it requires `x-service-token` to match and `x-verified-auth0-id` to equal the path `:auth0Id` (or `body.sub` for `/api/auth/sync`, or be present for self-scoped `/api/me/*`). Returns 403 otherwise. When `SERVICE_TOKEN` is unset the guard is inert (local dev back-compat) and logs a one-time warning.
+- **Proxy** (`web-next/app/api/service/[[...path]]/route.ts`): same-origin handler for identity-bearing routes only (`/api/org/*`, `/api/auth/user/*`, `/api/auth/sync`, `/api/me/*`). Reads the Auth0 session, rejects a verified sub that doesn't match the path resource owner, then injects `x-service-token` + `x-verified-auth0-id` before forwarding. Requires `auth0.getSession()` (401 otherwise).
+- **Client routing** (`web-next/lib/api.ts` `IDENTITY_BASE`, `web-next/lib/org.ts`, `web-next/lib/serverData.ts`): client components call the proxy via `lib/api`/`lib/org`; RSC pages call React.cache'd fetchers in `lib/serverData.ts` (which use `lib/api` internally with service headers when called server-side). Middleware (`proxy.ts`) and route handlers keep using raw `auth0`/`lib/api`.
+- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite. These routes never trust a raw `auth0_id` — attribution comes from the signed `x-attribution` token minted at `/api/me/attribution/mint` (see §6 Auth0).
+
+### Roles (two-faces)
+
+- **Vocabulary:** `server/src/lib/userRoles.ts` ↔ `web-next/lib/userRoles.ts`; values/order pinned by the `userRolesContract` tests on both sides.
+- **Enforcement server-side:** `users.role` CHECK `('coach','player')`; sync logic flips to `player` on email-linked first login.
+- **Enforcement client-side:** `app/dashboard/layout.tsx` redirects `role === 'player'` → `/player`; `app/player/page.tsx` redirects coaches → `/dashboard`. Pure enforcement lives in the server guard; the UI gates are UX layer only.
+
+### Player (read-only Hub) Routes (CONFIRMED — `server/src/routes/me.ts`)
+
+Self-scoped — identity is the verified `x-verified-auth0-id` header, never a caller-supplied id.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/me/profile` | Own user record + linked student + coach auth0_id |
+| `GET /api/me/attendance` | Own attendance records + summary |
+| `GET /api/me/schedule` | Team schedule (owning coach's org) |
+| `GET /api/me/performance` | Own performance trend (analysis + manual points) |
+| `GET /api/me/analyses` | Analyses linked to player's student row |
+| `GET /api/me/reports` | Reports mentioning the player |
+| `GET /api/me/reports/:id` | Single report (must belong to the linked student) |
+| `GET /api/me/attribution/mint` | Short-lived signed attribution token (HMAC over verified sub + expiry, `SERVICE_TOKEN` keyed) for browser-direct scan/analyze routes |
+
+All resolve the linked student via `students.account_auth0_id` and scope queries by the owning coach's `auth0_id` + `student_id`. UI: `app/player/*` (server shell + role gate) + `components/player/PlayerHub.tsx` (client fetch via `web-next/lib/meApi.ts`).
 
 ### Auth Routes (CONFIRMED — `server/src/routes/auth.ts`)
 
@@ -444,7 +532,11 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
 - **Model:** `gemini-2.5-flash` — used by the engine; stored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/api.ts`
 - **Usage:** Video analysis with structured JSON output
-- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`)
+- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`); the engine
+  analysis Gemini call has its own 10-minute deadline
+  (`GEMINI_ANALYSIS_TIMEOUT_S`, retryable `GEMINI_TIMEOUT`); conversational
+  calls cap at 100s (`CHAT_GEMINI_TIMEOUT_S`), with SSE comment heartbeats
+  on `/chat/stream` during token gaps.
 
 ### Upstash Redis (CONFIRMED)
 
@@ -508,7 +600,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 ### Keep-Alive (CONFIRMED)
 
 - **Server:** `server/src/lib/queue.ts:90-127` — pings `/health` every 10 minutes in production (`KEEPALIVE_INTERVAL`, production only)
-- **Frontend:** `web-next/lib/usePipeline.ts:78-84` — pings server `/health` every 8 minutes
+- **Frontend:** `web-next/lib/usePipeline.ts:51-57` — pings server `/health` every 8 minutes
 
 ### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:369-400`)
 
@@ -555,27 +647,50 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - `server/src/lib/ratelimit.ts:50-53` — Redis-backed with in-memory fallback
 - **Trade-off:** Rate limits lost on restart when using memory fallback, but service stays available
 
+### Per-Request Dedup via React.cache (web)
+
+- `web-next/lib/session.ts` + `web-next/lib/serverData.ts` wrap the auth session and server fetchers in `React.cache`, so every cacheable call within a single request shares one execution.
+- Layout + `generateMetadata` + page body previously each called `auth0.getSession()` (JWT verify / token refresh) and the underlying fetchers — now once per request.
+- **Boundary:** React.cache is RSC-only — client components, middleware (`proxy.ts`), and route handlers keep using `lib/api`/`lib/org`/raw `auth0`.
+- **Trade-off:** cache strengthens per-request identity guarantees (all callers agree on one session) with no shared mutable state; it does not cross requests (nothing shared on the server process).
+
+### Fresh Dashboard Data (web)
+
+- Authenticated dashboard/player pages call `unstable_noStore()` — no caching layers intervene; fetches hit the live API. `serverData.ts` fetchers themselves are cache-keyed per request only.
+- **Trade-off:** no edge staleness profit on these pages, but they serve per-user live data; the marketing site is the cacheable surface.
+
+### Heavy Client Visuals Loaded Lazy (web)
+
+- recharts is imported only by `components/org/PerformanceChart.tsx`, loaded via `next/dynamic` with `ssr: false` from `StudentProfile`.
+- Build splits recharts into its own ~360KB lazy chunk; the student page shell renders without paying that bundle upfront (skeleton fallback while loading).
+- Long list/matrix rows (students, reports, attendance grid, history) use `content-visibility: auto` with `contain-intrinsic-size` so off-screen rows skip render/layout.
+- **Trade-off:** charts are client-rendered (no SSR of the SVG); acceptable since the data is streamed via RSC pass-down.
+
+### Pure Helpers Under Test (web)
+
+- Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
+- Web test suite: 138 tests / 15 files (`vitest run`); server 179 pass / 15 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt).
+- **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
+
 ---
 
 ## 10. Known Gaps, Tech Debt, and Contradictions
 
 ### Dead Code (files still present)
 
-1. **`engine/core/player_tracker.py`** — Player tracking used only by the CLI (`engine/cli/frame_selector.py`), not the API pipeline.
+None. The last two orphans — `engine/core/baseline.py` and `web-next/components/InlineRename.tsx` — were **deleted** (2026-09-17).
 
-2. **`engine/core/chunker.py`** — Video chunking used only by the CLI, not the API pipeline.
-
-3. **`engine/core/baseline.py`** — Sport baseline loaders that no Python module imports.
-
-4. **`web-next/components/InlineRename.tsx`** — Exists but is not imported by any other source file.
+**Not dead (CLI-only, not part of the API pipeline):** `engine/core/player_tracker.py` and `engine/core/chunker.py` are the engine CLI's workload (`engine/cli/main.py`, `frame_selector.py`, `analyze_session.py`); `chunker` additionally has a dedicated pytest file (`tests/test_chunker.py`). They live, they are tested, and only the API pipeline is unaware of them.
 
 ### Removed Dead Code (since last verification)
 
 Previously documented as dead and since **deleted** from the repo — `pipeline.py`, `connection_pool.py`, `compress.py`, `quality.py`, `analysis_validator.py`, `overlay.py`, `utils.py` (plus the `register_job_input` no-op stub). Not present in `engine/core/` anymore.
 
+Also deleted 2026-09-17: `engine/core/baseline.py` (sport baseline models, never imported) and `web-next/components/InlineRename.tsx` (never imported).
+
 ### Inconsistencies
 
-1. **`detector.py:32-33`** — Creates a new `HOGDescriptor` per call, while `analyzer.py` caches it at module level. Both exist in the same codebase.
+None documented. The HOG descriptor is a single module-level singleton (`core/detection_utils.py:25`) shared by `detector.py` and `analyzer.py` alike.
 
 ### Resolved (fixed 2026-09-11)
 
@@ -587,15 +702,20 @@ Previously documented as dead and since **deleted** from the repo — `pipeline.
 6. ~~ruff config deprecation~~ — `engine/pyproject.toml` now uses `[tool.ruff.lint]`.
 7. ~~`render.yaml` `runtime: image` with a GitHub URL~~ — switched to `runtime: docker` + `dockerfilePath: Dockerfile` for both services.
 
+### Resolved (fixed 2026-09-17)
+
+8. ~~Per-call `HOGDescriptor` in `detector.py`~~ — already resolved by the `detection_utils` refactor: one module-level `_HOG_DESCRIPTOR` (`core/detection_utils.py:25`) serves `detector.py` and `analyzer.py`. Doc updated to match reality.
+9. ~~Session/scan-progress memory growth in `engine/main.py`~~ — sessions already cap at `MAX_SESSIONS` with every-300s TTL eviction; the unbounded path was the **`scan_progress` dict**, which was never pruned. Added `_evict_old_scan_progress()` (only reachable fix) — stale entries are dropped by the 2h TTL; completed entries are retained for only 5 min (`COMPLETE_SCAN_PROGRESS_RETENTION`). `started_at` is stamped on every entry.
+10. ~~Two Redis libraries in `server/`~~ — redis is ioredis-only now. `server/src/lib/redis.ts` derives a `rediss://` URL from `UPSTASH_REDIS_REST_URL` + `_TOKEN` (same derivation as `queue.ts`, already proven in prod by BullMQ) or uses the local URL; the Upstash REST branch and both `@upstash/redis` and `@upstash/ratelimit` dependencies are gone.
+11. ~~`lib/notifications.ts` tsc errors~~ — `DashboardAnalysis` now carries `auth0_id` (matches the `analysis_history` row shape); `orgValidate.ts` status-set typed as `ReadonlySet<string>` (mirrors `routes/org.ts`); lint fixes in the notifications file.
+
 ### Missing Features
 
-1. **No CI/CD** — No `.github/` directory, no GitHub Actions workflows.
+**CI/CD is active** — `.github/workflows/ci.yml` (tests), `deploy.yml` (Render deploys), `keepalive.yml` (GitHub Actions cron).
 
 ### Technical Debt
 
-1. **Session memory leak potential** — `engine/main.py:57` dict grows unbounded if `_evict_old_sessions()` is not called frequently enough.
-
-2. **Two Redis libraries in server** — Both `@upstash/redis` and `ioredis` are dependencies; `ioredis` is used for BullMQ and local Redis, `@upstash/redis` for Upstash REST.
+1. **Notifications DB integration tests are env-gated** — `server/tests/notifications.test.ts` keeps three DB-touching tests under `describe.skip` unless `DATABASE_URL` points at a reachable database. Locally, Bun auto-loads `server/.env`, so those tests run against the live Neon DB (they hang only if the DB is unreachable). CI without `DATABASE_URL` stays green.
 
 ---
 
@@ -616,14 +736,23 @@ Previously documented as dead and since **deleted** from the repo — `pipeline.
 | Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:88` |
 | Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
 | Pipeline states | `engine/core/jobs.py` |
-| Test suite: 46 tests pass | `cd engine && python -m pytest tests/` |
-| Dead code: baseline.py | `grep -rn "baseline" engine/core/*.py engine/main.py` only self-references |
-| Dead code: player_tracker.py/chunker.py | only imported by `engine/cli/` |
-| Dead code: InlineRename.tsx | `grep -rn "InlineRename" web-next/` only matches its own file |
+| Test suite: 103 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
+| Test suite: 179 pass / 15 files | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 138 tests pass (15 files) | `cd web-next && npx vitest run` |
+| Dead code deleted: baseline.py, InlineRename.tsx | `git rm`; `rg "baseline" engine/core engine/main.py` and `rg "InlineRename" web-next/` return nothing |
+| player_tracker.py/chunker.py are CLI-only (kept) | imported by `engine/cli/`; `tests/test_chunker.py` exists |
+| scan_progress pruned | `engine/main.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, `_evict_old_scan_progress()` called alongside `_evict_old_sessions()` |
+| HOG singleton | `engine/core/detection_utils.py:25` module-level `_HOG_DESCRIPTOR` used by `detector.py` + `analyzer.py` |
+| Redis is ioredis-only | `server/src/lib/redis.ts`; `rg "@upstash" server/package.json` returns nothing |
 | Auth0 auth (beta gate removed) | `grep -rn "BETA_CODES" server/src/` returns nothing |
-| Keep-alive: 10 min | `server/src/lib/queue.ts:93` |
-| Frontend keep-alive: 8 min | `web-next/lib/usePipeline.ts:80` |
+| Keep-alive: 9 min (external cron only) | `.github/workflows/keepalive.yml` → `GET /health` |
+| Frontend status poll: 8 min | `web-next/lib/usePipeline.ts:80` |
+| Session via React.cache | `web-next/lib/session.ts` wraps `auth0.getSession` in `React.cache` |
+| Server fetchers via React.cache | `web-next/lib/serverData.ts` wraps `lib/api`/`lib/org` fetchers |
+| recharts isolated in own chunk | `components/org/PerformanceChart.tsx` imported via `next/dynamic` (`ssr: false`) |
+| content-visibility on list rows | `rg -l "content-visibility" web-next/components/org web-next/app/dashboard` |
+| CSV formula injection escaped | `web-next/lib/csv.ts` `toCSVString` prefixes `= + - @ tab CR`-leading strings |
 
 ---
 
-*Last verified: 2026-09-11 (working tree — includes interior-components fix + lint/infra cleanup)*
+*Last verified: 2026-09-21 (attribution + org-scoped uniqueness pass: signed `x-attribution` tokens on browser-direct scan/analyze, `/api/me/attribution/mint`, org-scoped `UNIQUE` keys on attendance/performance_metrics with idempotent migration)*
