@@ -568,6 +568,22 @@ export const getAnalysisByServerJobId = async (
   })
 }
 
+/** Owner + requested-by for a job, without the heavy summary payload.
+/// Used on hot paths (status polls) that only need the access decision. */
+export const getAnalysisOwner = async (
+  serverJobId: string,
+): Promise<{ auth0_id: string | null; requested_by: string | null } | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ auth0_id: string | null; requested_by: string | null }[]>`
+      select auth0_id, requested_by from analysis_history
+      where server_job_id = ${serverJobId}
+      limit 1;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
   return (
     (await withHistoryStore(async (db) => {

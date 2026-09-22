@@ -468,6 +468,14 @@ function AnalyzeVideoCard({
   }, [])
 
   const flowResetRef = useRef(() => {})
+  const lastToastKey = useRef<string | null>(null)
+
+  const toastOnce = useCallback((code: string, message: string) => {
+    const key = `${code}:${message}`
+    if (lastToastKey.current === key) return
+    lastToastKey.current = key
+    toast.error(message)
+  }, [])
 
   const runAnalysis = useCallback(
     (scan: ScanResult, playerIndex: number) => {
@@ -497,7 +505,7 @@ function AnalyzeVideoCard({
               if (status.error) {
                 setLocalError(status.error)
                 flowResetRef.current()
-                toast.error(status.error)
+                toastOnce('ANALYSIS_FAILED', status.error)
               } else {
                 setFinished(true)
                 toast.success('Analysis complete — check your analyses below.')
@@ -507,7 +515,7 @@ function AnalyzeVideoCard({
             onError: (failure) => {
               setLocalError(failure.error.message)
               flowResetRef.current()
-              toast.error(failure.error.message)
+              toastOnce(failure.error.code, failure.error.message)
             },
           })
         } catch (e: unknown) {
@@ -515,12 +523,12 @@ function AnalyzeVideoCard({
           if (!liveRef.current) return
           setLocalError(err.message)
           flowResetRef.current()
-          toast.error(err.message)
+          toastOnce(err.code, err.message)
         }
       }
       void kickoff()
     },
-    [onCompleted],
+    [onCompleted, toastOnce],
   )
 
   const flow = useScanFlow({ auth0Id: auth0Id ?? null, onAnalyze: runAnalysis })
@@ -534,19 +542,22 @@ function AnalyzeVideoCard({
     setFileName(null)
     setPercent(0)
     setLocalError(null)
+    lastToastKey.current = null
   }, [flow])
 
   useEffect(() => {
     flowResetRef.current = reset
   }, [reset])
 
-  // Surface flow errors with the card's toast + inline treatment.
+  // Surface flow errors inline; toast everything except client-side
+  // validation (which stays inline-only, as before — no toast spam for a
+  // wrong file pick). toastOnce dedupes against the analyze-path toasts.
   const flowError = flow.errorStatus
   useEffect(() => {
     if (!flowError || !liveRef.current) return
     setLocalError(flowError.message)
-    toast.error(flowError.message)
-  }, [flowError])
+    if (flowError.layer !== 'client') toastOnce(flowError.code, flowError.message)
+  }, [flowError, toastOnce])
 
   const activeScan =
     flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ??
@@ -557,6 +568,7 @@ function AnalyzeVideoCard({
       if (!file) return
       setFinished(false)
       setLocalError(null)
+      lastToastKey.current = null
       setFileName(file.name)
       flow.handleFileSelected(file)
     },

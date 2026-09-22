@@ -8,6 +8,7 @@ import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 import {
   persistAnalysisStatus,
   getAnalysisByServerJobId,
+  getAnalysisOwner,
 } from '../lib/analyses'
 
 type StatusResponse = {
@@ -156,8 +157,8 @@ export default new Elysia().get('/api/job-status/:jobId', async ({ params, reque
   // only when a summary exists; the persisted row names the owning account.
   let summary: unknown = engineStatus.summary
   if (summary) {
-    const persisted = await getAnalysisByServerJobId(serverJob.server_job_id)
-    const maySee = await resolveMedicalAccess(persisted?.auth0_id ?? null, access.callerSub)
+    const owner = await getAnalysisOwner(serverJob.server_job_id)
+    const maySee = await resolveMedicalAccess(owner?.auth0_id ?? null, access.callerSub)
     if (!maySee) summary = redactWellness(summary)
   }
   return statusResponse(serverJob.server_job_id, {
