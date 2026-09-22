@@ -33,10 +33,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // switcher so a single-coach never regresses.
   let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>['orgs'] = []
   let switcherCurrent = session.user.sub
+  let navRole: Parameters<typeof DashboardNav>[0]['role'] = null
   try {
     const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
     switcherCurrent = ctx.auth0Id
     switcherOrgs = myOrgs.orgs
+    navRole = ctx.role
   } catch (error) {
     console.error('Failed to resolve org switcher:', error)
   }
@@ -57,7 +59,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
           )}
 
-          <DashboardNav />
+          <DashboardNav role={navRole} />
         </div>
 
         <div className="border-t border-sidebar-border p-3">

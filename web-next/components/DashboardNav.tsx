@@ -17,12 +17,21 @@ import {
   User,
 } from 'lucide-react'
 
+import {
+  AUDIT_NAV_ROLES,
+  MEMBERS_NAV_ROLES,
+  visibleNavGroups,
+  type NavRole,
+} from '@/lib/nav'
+
 type NavItem = {
   href: string
   label: string
   icon: React.ElementType
   exact?: boolean
   badge?: string
+  /** Roles allowed to see this item; undefined = every dashboard role. */
+  roles?: readonly NavRole[]
 }
 type NavGroup = { label: string | null; items: NavItem[] }
 
@@ -36,7 +45,12 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard/students', label: 'Students', icon: Users },
       { href: '/dashboard/teams', label: 'Teams', icon: Shield },
-      { href: '/dashboard/members', label: 'Members', icon: UserCheck },
+      {
+        href: '/dashboard/members',
+        label: 'Members',
+        icon: UserCheck,
+        roles: MEMBERS_NAV_ROLES,
+      },
       { href: '/dashboard/attendance', label: 'Attendance', icon: ClipboardCheck },
     ],
   },
@@ -63,16 +77,24 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Security & Monitoring',
-    items: [{ href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck }],
+    items: [
+      {
+        href: '/dashboard/audit',
+        label: 'Audit Log',
+        icon: ShieldCheck,
+        roles: AUDIT_NAV_ROLES,
+      },
+    ],
   },
 ]
 
-export default function DashboardNav() {
+export default function DashboardNav({ role = null }: { role?: NavRole | null }) {
   const pathname = usePathname()
+  const groups = visibleNavGroups(NAV_GROUPS, role)
 
   return (
     <nav className="flex flex-col flex-1 gap-6 overflow-y-auto pb-4">
-      {NAV_GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.label ?? 'home'}>
           {group.label && (
             <p className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
