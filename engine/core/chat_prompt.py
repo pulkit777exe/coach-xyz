@@ -65,6 +65,25 @@ def _build_system_message(analysis_result: dict[str, Any]) -> str:
         if breakdown:
             events_text += f"\n    Breakdown: {json.dumps(breakdown)}"
 
+    findings = analysis_result.get("findings", [])
+    findings_text = ""
+    if isinstance(findings, list):
+        for finding in findings[:20]:
+            if not isinstance(finding, dict):
+                continue
+            fid = finding.get("id", "?")
+            start_ms = finding.get("start_ms", 0) or 0
+            try:
+                start_s = float(start_ms) / 1000.0
+            except (TypeError, ValueError):
+                start_s = 0.0
+            findings_text += (
+                f"\n  [{fid}] {finding.get('category', 'technique')} at {start_s:.1f}s"
+                f" — severity {finding.get('severity', 'medium')}"
+                f" ({finding.get('confidence_band', 'needs_review')} confidence)"
+                f"\n    Observation: {finding.get('observation', '')}"
+            )
+
     return f"""You are an expert sports coach and analyst. You have just completed a video analysis for an athlete. Below is the full analysis data. Use it to answer the athlete's follow-up questions.
 
 ANALYSIS RESULTS:
@@ -77,7 +96,7 @@ ANALYSIS RESULTS:
 - Top Tips: {', '.join(top_tips) if top_tips else 'None provided'}
 
 DETECTED EVENTS ({len(shot_events)} total):{events_text}
-
+{f'KEY FINDINGS:{findings_text}' if findings_text else ''}
 RULES:
 1. Answer ONLY based on the analysis data above. Do not invent events or data.
 2. Reference specific timestamps (e.g., "At 12.3s...") and event numbers (e.g., "In Event 3...").
@@ -87,7 +106,8 @@ RULES:
 6. If the question goes beyond what the data supports, say so honestly.
 7. When suggesting drills, make them specific to the athlete's actual weaknesses.
 8. Format timestamps as seconds (e.g., 12.3s) for easy video navigation.
-9. {GUARD_RULE}"""
+9. When a question matches a KEY FINDING, cite its id (e.g., [job:e2]) with its timestamp so the coach can click through to the evidence.
+10. {GUARD_RULE}"""
 
 
 def _format_history(history: list[dict[str, str]]) -> str:

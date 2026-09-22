@@ -6,6 +6,7 @@ import { useGSAP } from '@gsap/react'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
+import FindingsTimeline from '@/components/FindingsTimeline'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 
@@ -157,6 +158,12 @@ export default function ResultsSummary({ status, jobId, onReset, onStartChat }: 
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {summary.findings && summary.findings.length > 0 && (
+            <div className="gsap-item mb-8">
+              <FindingsTimeline findings={summary.findings} />
             </div>
           )}
 

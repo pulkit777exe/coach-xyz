@@ -79,6 +79,23 @@ export type AnalysisProvenance = {
   analyzed_at: string
 }
 
+export type Finding = {
+  id: string
+  category?: string
+  start_ms?: number
+  end_ms?: number
+  confidence?: number | null
+  confidence_band?: string
+  severity?: string
+  observation?: string
+  feedback?: string
+  form_score?: number
+  evidence_frames?: number[]
+  measured_at_timestamp?: number | null
+  model_versions?: Record<string, unknown>
+  review_state?: string
+}
+
 export type AnalysisSummary = {
   sport: string
   player_name?: string
@@ -99,6 +116,8 @@ export type AnalysisSummary = {
   recommended_angles?: CameraAngleGuidance[]
   /** Model/prompt/pack versions so a report stays explainable (§22). */
   provenance?: AnalysisProvenance
+  /** Click-traceable evidence findings (§19). */
+  findings?: Finding[]
 }
 
 export type ShotEvent = {

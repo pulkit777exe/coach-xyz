@@ -238,6 +238,39 @@ export const ensureInitialized = async () => {
         on analysis_history (session_token);
       `
 
+      // Findings (§19): click-traceable evidence objects derived from scored
+      // events. Scoped to the owning account via analysis_history (join on
+      // server_job_id) so no auth0_id is duplicated here.
+      await sql`
+        create table if not exists findings (
+          id text not null,
+          server_job_id text not null,
+          category text not null,
+          start_ms bigint,
+          end_ms bigint,
+          confidence double precision,
+          confidence_band text,
+          severity text,
+          observation text,
+          feedback text,
+          form_score double precision,
+          evidence_frames jsonb not null default '[]'::jsonb,
+          measured_at_timestamp double precision,
+          model_versions jsonb not null default '{}'::jsonb,
+          review_state text not null default 'auto',
+          created_at timestamptz not null default now(),
+          constraint findings_unique unique (server_job_id, id)
+        );
+      `
+      await sql`
+        create index if not exists idx_findings_server_job_id
+        on findings (server_job_id);
+      `
+      await sql`
+        create index if not exists idx_findings_created_at
+        on findings (created_at desc);
+      `
+
       await sql`
         create table if not exists users (
           id uuid primary key default gen_random_uuid(),
@@ -677,6 +710,115 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
         updated_at = now();
     `
   })
+
+  // Findings are final only on completion — persist them once (replace any
+  // prior rows for idempotency across the worker + poll double-persist).
+  const summary = record.status.summary as { findings?: unknown } | null
+  if (record.status.complete && Array.isArray(summary?.findings)) {
+    await persistFindings(record.serverJobId, summary.findings as FindingRecord[])
+  }
+}
+
+export type FindingRecord = {
+  id: string
+  category?: string | null
+  start_ms?: number | null
+  end_ms?: number | null
+  confidence?: number | null
+  confidence_band?: string | null
+  severity?: string | null
+  observation?: string | null
+  feedback?: string | null
+  form_score?: number | null
+  evidence_frames?: unknown
+  measured_at_timestamp?: number | null
+  model_versions?: unknown
+  review_state?: string | null
+}
+
+const findingText = (value: unknown, max = 2000): string | null => {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, max) : null
+}
+
+const findingNumber = (value: unknown): number | null => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null
+  return value
+}
+
+/** Replace an analysis's findings (idempotent; safe to call per persist). */
+export const persistFindings = async (
+  serverJobId: string,
+  findings: FindingRecord[],
+): Promise<void> => {
+  const rows = (Array.isArray(findings) ? findings : [])
+    .filter((f) => f && typeof f.id === "string" && f.id.length > 0 && f.id.length <= 200)
+    .slice(0, 500)
+  await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    await db`delete from findings where server_job_id = ${serverJobId};`
+    for (const f of rows) {
+      await db`
+        insert into findings (
+          id, server_job_id, category, start_ms, end_ms, confidence,
+          confidence_band, severity, observation, feedback, form_score,
+          evidence_frames, measured_at_timestamp, model_versions, review_state
+        ) values (
+          ${f.id},
+          ${serverJobId},
+          ${findingText(f.category, 120) ?? "technique"},
+          ${findingNumber(f.start_ms)},
+          ${findingNumber(f.end_ms)},
+          ${findingNumber(f.confidence)},
+          ${findingText(f.confidence_band, 20)},
+          ${findingText(f.severity, 20)},
+          ${findingText(f.observation)},
+          ${findingText(f.feedback)},
+          ${findingNumber(f.form_score)},
+          ${JSON.stringify(Array.isArray(f.evidence_frames) ? f.evidence_frames.slice(0, 50) : [])}::jsonb,
+          ${findingNumber(f.measured_at_timestamp)},
+          ${JSON.stringify(f.model_versions && typeof f.model_versions === "object" ? f.model_versions : {})}::jsonb,
+          ${findingText(f.review_state, 20) ?? "auto"}
+        )
+        on conflict (server_job_id, id) do nothing;
+      `
+    }
+  })
+}
+
+export type FindingsTrendPoint = {
+  day: string
+  category: string
+  count: number
+  needs_review: number
+}
+
+/** Per-day finding counts for an account's analyses (longitudinal §26). */
+export const getFindingsTrend = async (
+  auth0Id: string,
+  opts: { days?: number; category?: string | null; severity?: string | null } = {},
+): Promise<FindingsTrendPoint[]> => {
+  const days = Math.min(Math.max(opts.days ?? 30, 1), 365)
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<FindingsTrendPoint[]>`
+      select
+        to_char(date_trunc('day', f.created_at), 'YYYY-MM-DD') as day,
+        f.category as category,
+        count(*)::int as count,
+        count(*) filter (where f.review_state = 'needs_review')::int as needs_review
+      from findings f
+      join analysis_history a on a.server_job_id = f.server_job_id
+      where a.auth0_id = ${auth0Id}
+        and f.created_at >= now() - (${days} || ' days')::interval
+        and (${opts.category ?? null}::text is null or f.category = ${opts.category ?? null})
+        and (${opts.severity ?? null}::text is null or f.severity = ${opts.severity ?? null})
+      group by 1, 2
+      order by 1 asc, 2 asc;
+    `
+    return rows ?? []
+  })) ?? []
 }
 
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {

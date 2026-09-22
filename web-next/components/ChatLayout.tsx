@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import Link from 'next/link'
 import ChatPanel from '@/components/ChatPanel'
+import FindingsTimeline from '@/components/FindingsTimeline'
 import { VideoPlayer, type VideoPlayerHandle } from '@/components/VideoPlayer'
 import type { JobStatus } from '@/types'
 
@@ -72,6 +73,13 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
               </div>
             </div>
           )}
+
+          {/* Findings Timeline (click a finding to seek the video) */}
+          {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
+            <div className="shrink-0 border-t border-border px-4 py-3 max-h-72 overflow-y-auto">
+              <FindingsTimeline findings={jobStatus.summary.findings} onSeek={handleSeekTo} />
+            </div>
+          )}
         </div>
 
         {/* Right: Chat */}
@@ -81,6 +89,16 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
             <div className="aspect-video w-full">
               <VideoPlayer ref={videoRef} jobId={jobId} summary={jobStatus?.summary} />
             </div>
+            {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
+              <details className="border-t border-border px-4 py-2">
+                <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground py-1">
+                  Key findings ({jobStatus.summary.findings.length})
+                </summary>
+                <div className="py-2 max-h-64 overflow-y-auto">
+                  <FindingsTimeline findings={jobStatus.summary.findings} onSeek={handleSeekTo} />
+                </div>
+              </details>
+            )}
           </div>
 
           {/* Chat Panel */}

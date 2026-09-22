@@ -531,6 +531,27 @@ export async function getDashboardStats(
   )
 }
 
+export type FindingsTrendPoint = {
+  day: string
+  category: string
+  count: number
+  needs_review: number
+}
+
+export async function getFindingsTrends(
+  auth0Id: string,
+  opts: { days?: number; category?: string | null; severity?: string | null } = {},
+): Promise<{ trends: FindingsTrendPoint[] }> {
+  const params = new URLSearchParams()
+  if (opts.days !== undefined) params.set('days', String(opts.days))
+  if (opts.category) params.set('category', opts.category)
+  if (opts.severity) params.set('severity', opts.severity)
+  const qs = params.toString()
+  return apiFetch<{ trends: FindingsTrendPoint[] }>(
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings/trends${qs ? `?${qs}` : ''}`,
+  )
+}
+
 export async function getUserProfile(
   auth0Id: string,
 ): Promise<{ user: UserRecord }> {

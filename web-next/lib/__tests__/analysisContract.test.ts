@@ -44,6 +44,24 @@ const CANONICAL: AnalysisSummary = {
     sport_pack_version: 1,
     analyzed_at: "2026-01-01T00:00:00+00:00",
   },
+  findings: [
+    {
+      id: "job:e1",
+      category: "drive",
+      start_ms: 90000,
+      end_ms: 94000,
+      confidence: 0.9,
+      confidence_band: "high",
+      severity: "medium",
+      observation: "head: needs_work",
+      feedback: "Good timing.",
+      form_score: 7.5,
+      evidence_frames: [375],
+      measured_at_timestamp: 90,
+      model_versions: { model: "gemini-2.5-flash" },
+      review_state: "auto",
+    },
+  ],
 }
 
 const REQUIRED_TOP_LEVEL = [

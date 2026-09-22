@@ -71,18 +71,19 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
 4. `X-Request-Id` web→server→engine (generated per call, forwarded through
    the queue worker by job id, echoed + logged by the engine).
 
-### Phase 1 — Evidence model (§19–§21, §25–§26)
-1. New `findings` table: `id, analysis_id, auth0_id, category, player ref,
-   start/end ms, confidence band, severity, observation, evidence frames,
-   model_versions, review_state (auto/approved/flagged), created_at`.
-2. Engine emits findings alongside `shot_events` (derive from events +
-   biomechanics + sport criteria; low-evidence → `needs_review`, never a
-   strong claim).
-3. Server persists + serves findings per analysis (owner-scoped like
-   summaries); web renders finding timeline with click-to-seek timestamps;
-   chat answers cite finding ids + timestamps (§25).
-4. Trend queries aggregate findings per player over time (§26), replacing
-   score-only trends.
+### Phase 1 — Evidence model (§19–§21, §25–§26) — SHIPPED (core)
+1. `findings` table: per-analysis rows keyed `(server_job_id, id)`, scoped
+   to accounts via the `analysis_history` join (no duplicated `auth0_id`).
+2. Engine `core/findings.py` derives one finding per scored event (stable
+   `{job}:e{n}` ids, ms timestamps, confidence bands, severity, evidence
+   frames, model versions); low-evidence → `needs_review`, never a strong
+   claim. Persisted once on completion (idempotent replace).
+3. Web `FindingsTimeline` with click-to-seek in chat (desktop + mobile),
+   read-only in results; chat prompts cite finding ids + timestamps (§25).
+4. `GET /api/auth/user/:auth0Id/findings/trends` — per-day counts by
+   category with needs-review split (§26 precursor).
+Open: review actions (approve/flag), finding→training-objective link,
+per-player trend views (deferred to Phase 2 teams).
 
 ### Phase 2 — Org hardening (§3, §4, §7, §29, §5)
 1. `teams` + `team_memberships` tables; scope students/analyses by team.

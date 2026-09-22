@@ -329,6 +329,22 @@ def _stamp_provenance(result: dict) -> dict:
     return result
 
 
+def _finalize_cached(result: dict, job_id: str, angle: str | None) -> dict:
+    """Stamp a cache-hit summary and backfill findings for pre-findings cache entries."""
+    _stamp_angle(result, angle)
+    _stamp_provenance(result)
+    if not isinstance(result.get("findings"), list):
+        from core.findings import build_findings
+
+        result["findings"] = build_findings(
+            result.get("shot_events", []),
+            result.get("sport"),
+            result.get("provenance"),
+            job_id,
+        )
+    return result
+
+
 def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
     """Transition a job to completed, handling cases where the job is already
     past earlier states (e.g. retry after long Gemini call)."""
@@ -436,7 +452,7 @@ def run_analysis(
                 "player_index": player_index,
                 "job_id": job_id,
             }))
-            _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
+            _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
             return
 
         logging.info(json.dumps({
@@ -455,14 +471,14 @@ def run_analysis(
                 time.sleep(2)
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
+                    _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
                     return
             # If we exited the loop because the pending entry cleared (not timeout),
             # check cache one more time before proceeding
             if not deduplicator.is_pending(dedup_key):
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _stamp_provenance(_stamp_angle(cached_result, angle)))
+                    _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
                     return
 
         # Mark this video as being analyzed (for dedup)
@@ -574,6 +590,18 @@ def run_analysis(
         gemini_result["success_rate_percent"] = corrected_stats["success_rate_percent"]
         gemini_result["average_form_score"] = corrected_stats["average_form_score"]
         gemini_result["total_events"] = corrected_stats["total_events"]
+
+        # Derive click-traceable findings from the final scored events (§19).
+        # Runs last so findings reflect corrected scores + attached
+        # biomechanics (confidence/frames are the evidence gate).
+        from core.findings import build_findings
+
+        gemini_result["findings"] = build_findings(
+            shot_events,
+            sport,
+            gemini_result.get("provenance"),
+            job_id,
+        )
 
         # Cache the result
         set_cached_analysis(video_hash, gemini_result, player_index)

@@ -44,3 +44,28 @@ class TestChatPromptStructure:
         )
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
+
+    def test_findings_cited_with_ids_and_timestamps(self):
+        result = _result()
+        result["findings"] = [
+            {
+                "id": "job:e1",
+                "category": "drive",
+                "start_ms": 12500,
+                "severity": "high",
+                "confidence_band": "high",
+                "observation": "head: needs_work",
+            }
+        ]
+        content = get_chat_prompt(
+            analysis_result=result, conversation_history=[], user_message="hi"
+        )[0]["content"]
+        assert "[job:e1]" in content
+        assert "12.5s" in content
+        assert "head: needs_work" in content
+
+    def test_missing_findings_renders_no_findings_block(self):
+        content = get_chat_prompt(
+            analysis_result=_result(), conversation_history=[], user_message="hi"
+        )[0]["content"]
+        assert "KEY FINDINGS" not in content

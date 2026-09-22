@@ -82,6 +82,23 @@ export type CameraAngleGuidance = {
   description: string
 }
 
+export type Finding = {
+  id: string
+  category?: string
+  start_ms?: number
+  end_ms?: number
+  confidence?: number | null
+  confidence_band?: string
+  severity?: string
+  observation?: string
+  feedback?: string
+  form_score?: number
+  evidence_frames?: number[]
+  measured_at_timestamp?: number | null
+  model_versions?: Record<string, unknown>
+  review_state?: string
+}
+
 export type AnalysisProvenance = {
   engine: string
   model: string
@@ -109,6 +126,8 @@ export type AnalysisSummary = {
   angle?: string
   /** Sport-specific guidance for the next angle to film. */
   recommended_angles?: CameraAngleGuidance[]
+  /** Click-traceable evidence findings (§19). */
+  findings?: Finding[]
   /** Model/prompt/pack versions so a report stays explainable (§22). */
   provenance?: AnalysisProvenance
 }

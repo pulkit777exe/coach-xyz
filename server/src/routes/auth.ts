@@ -6,6 +6,7 @@ import {
   getUserAnalyses,
   getUserAnalysisById,
   getUserStats,
+  getFindingsTrend,
   updateAnalysisDisplayName,
   saveChatMessage,
   getChatMessages,
@@ -49,6 +50,28 @@ function generateSimpleResponse(question: string, summary: Record<string, unknow
   }
 
   return `${summary.summary || "Here's a summary of the analysis."} The form score was ${summary.form_score ?? "N/A"}/10. Feel free to ask about specific events, tips, strengths, or drills.`
+}
+
+export type FindingsTrendQuery = {
+  days: number
+  category: string | null
+  severity: string | null
+}
+
+/**
+ * Pure parser for the findings-trends query string. Bounds days to 1..365
+ * and strips filter values to a safe alphabet (they are interpolated as
+ * bound parameters, but tight input keeps logs/URLs clean).
+ */
+export const parseFindingsTrendQuery = (params: URLSearchParams): FindingsTrendQuery => {
+  const daysRaw = Number(params.get("days") || 30)
+  const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 365) : 30
+  const clean = (v: string | null): string | null => {
+    if (!v) return null
+    const t = v.trim().toLowerCase().replace(/[^a-z0-9_ -]/g, "").slice(0, 60)
+    return t || null
+  }
+  return { days, category: clean(params.get("category")), severity: clean(params.get("severity")) }
 }
 
 export default new Elysia()
@@ -148,6 +171,18 @@ export default new Elysia()
     const stats = await getUserStats(auth0Id)
     set.status = 200
     return { stats }
+  })
+  .get("/api/auth/user/:auth0Id/findings/trends", async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing auth0Id parameter", false)
+    }
+
+    const url = new URL(request.url)
+    const trends = await getFindingsTrend(auth0Id, parseFindingsTrendQuery(url.searchParams))
+    set.status = 200
+    return { trends }
   })
   .patch("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, body, set }) => {
     const { auth0Id, jobId } = params
