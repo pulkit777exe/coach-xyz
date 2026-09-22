@@ -1,6 +1,12 @@
 import { Elysia } from 'elysia'
 
-import { scanVideo, getScanProgressStream, requestUploadIntent, scanFromKey, requestIdFrom } from '../lib/engine'
+import {
+  scanVideo,
+  getScanProgressStream,
+  requestUploadIntent,
+  scanFromKey,
+  requestIdFrom,
+} from '../lib/engine'
 import { buildError, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
 import { resolveJobCaller } from '../lib/jobAccess'
@@ -139,7 +145,11 @@ export default new Elysia()
       const retryAfter = Math.ceil((reset - Date.now()) / 1000)
       set.status = 429
       return {
-        ...buildError('RATE_LIMITED', 'Too many scan requests. Wait a minute before trying again.', true),
+        ...buildError(
+          'RATE_LIMITED',
+          'Too many scan requests. Wait a minute before trying again.',
+          true,
+        ),
         retry_after: retryAfter,
       }
     }
@@ -177,7 +187,13 @@ export default new Elysia()
 
     try {
       const intent = await requestUploadIntent(
-        { filename, mime_type: mimeType, size_bytes: sizeBytes, session_token: sessionToken, angle },
+        {
+          filename,
+          mime_type: mimeType,
+          size_bytes: sizeBytes,
+          session_token: sessionToken,
+          angle,
+        },
         requestIdFrom(request),
       )
       set.status = 200
@@ -188,7 +204,11 @@ export default new Elysia()
         return error
       }
       set.status = 500
-      return buildError('INTERNAL_ERROR', 'Could not create an upload slot. Please try again.', true)
+      return buildError(
+        'INTERNAL_ERROR',
+        'Could not create an upload slot. Please try again.',
+        true,
+      )
     }
   })
   // ── Scan an already-uploaded key (§8) ──────────────────────────────────
@@ -202,7 +222,11 @@ export default new Elysia()
       const retryAfter = Math.ceil((reset - Date.now()) / 1000)
       set.status = 429
       return {
-        ...buildError('RATE_LIMITED', 'Too many scan requests. Wait a minute before trying again.', true),
+        ...buildError(
+          'RATE_LIMITED',
+          'Too many scan requests. Wait a minute before trying again.',
+          true,
+        ),
         retry_after: retryAfter,
       }
     }
@@ -216,7 +240,10 @@ export default new Elysia()
     }
 
     const storageKey = body.storage_key
-    if (typeof storageKey !== 'string' || !/^raw\/[A-Za-z0-9_@.|-]+\/[a-z0-9_-]+\/[a-f0-9]{32}\.mp4$/.test(storageKey)) {
+    if (
+      typeof storageKey !== 'string' ||
+      !/^raw\/[A-Za-z0-9_@.|-]+\/[a-z0-9_-]+\/[a-f0-9]{32}\.mp4$/.test(storageKey)
+    ) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'storage_key must be an upload-intent key.', false)
     }

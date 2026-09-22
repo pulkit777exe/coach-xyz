@@ -571,7 +571,9 @@ export const orgObjectives = async (
   if (opts.teamId) params.set('team_id', opts.teamId)
   if (opts.status) params.set('status', opts.status)
   const qs = params.toString()
-  return apiFetch<{ objectives: TrainingObjective[] }>(org(auth0Id, `/objectives${qs ? `?${qs}` : ''}`))
+  return apiFetch<{ objectives: TrainingObjective[] }>(
+    org(auth0Id, `/objectives${qs ? `?${qs}` : ''}`),
+  )
 }
 
 export const orgCreateObjective = async (
@@ -597,10 +599,13 @@ export const orgSetObjectiveStatus = async (
   id: string,
   status: 'active' | 'done' | 'archived',
 ): Promise<{ objective: TrainingObjective }> => {
-  return apiFetch<{ objective: TrainingObjective }>(org(auth0Id, `/objectives/${encodeURIComponent(id)}`), {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
-  })
+  return apiFetch<{ objective: TrainingObjective }>(
+    org(auth0Id, `/objectives/${encodeURIComponent(id)}`),
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    },
+  )
 }
 
 export const orgDeleteObjective = async (
@@ -677,10 +682,7 @@ export const orgCreateSeason = async (
     body: JSON.stringify(pickDefined(input)),
   })
 
-export const orgDeleteSeason = async (
-  auth0Id: string,
-  id: string,
-): Promise<{ deleted: boolean }> =>
+export const orgDeleteSeason = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
   apiFetch<{ deleted: boolean }>(org(auth0Id, `/seasons/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   })
@@ -712,10 +714,7 @@ export const orgCreateMatch = async (
     body: JSON.stringify(pickDefined(input)),
   })
 
-export const orgDeleteMatch = async (
-  auth0Id: string,
-  id: string,
-): Promise<{ deleted: boolean }> =>
+export const orgDeleteMatch = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
   apiFetch<{ deleted: boolean }>(org(auth0Id, `/matches/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   })
@@ -770,10 +769,7 @@ export const orgSetPlanStatus = async (
     body: JSON.stringify({ status }),
   })
 
-export const orgDeletePlan = async (
-  auth0Id: string,
-  id: string,
-): Promise<{ deleted: boolean }> =>
+export const orgDeletePlan = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
   apiFetch<{ deleted: boolean }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   })

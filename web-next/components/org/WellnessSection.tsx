@@ -6,11 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
-import {
-  orgCreateWellness,
-  orgWellness,
-  type WellnessCheckin,
-} from '@/lib/org'
+import { orgCreateWellness, orgWellness, type WellnessCheckin } from '@/lib/org'
 
 interface WellnessSectionProps {
   auth0Id: string
@@ -72,7 +68,8 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
       <CardHeader>
         <CardTitle>Wellness</CardTitle>
         <CardDescription>
-          Health data — visible only to medical staff and the owner. Reported as observed, never diagnosed.
+          Health data — visible only to medical staff and the owner. Reported as observed, never
+          diagnosed.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -156,7 +153,9 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                       checkin.pain ? `pain: ${checkin.pain}` : null,
                     ]
                       .filter(Boolean)
-                      .join(' · ') || checkin.note || '—'}
+                      .join(' · ') ||
+                      checkin.note ||
+                      '—'}
                   </span>
                 </div>
               ))}

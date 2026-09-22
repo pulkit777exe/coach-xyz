@@ -74,7 +74,12 @@ function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
   )
 }
 
-export default function TeamsClient({ auth0Id, initialTeams, initialSeasons, students }: TeamsClientProps) {
+export default function TeamsClient({
+  auth0Id,
+  initialTeams,
+  initialSeasons,
+  students,
+}: TeamsClientProps) {
   const [teams, setTeams] = useState<Team[]>(initialTeams)
   const [seasons, setSeasons] = useState<Season[]>(initialSeasons)
   const [matches, setMatches] = useState<Match[]>([])
@@ -227,311 +232,319 @@ export default function TeamsClient({ auth0Id, initialTeams, initialSeasons, stu
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Teams</CardTitle>
-          <CardDescription>Groups for coaching scope and trends.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {teams.map((team) => (
-            <button
-              key={team.id}
-              type="button"
-              onClick={() => setSelectedId(team.id)}
-              aria-pressed={team.id === selectedId}
-              className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${
-                team.id === selectedId
-                  ? 'border-foreground bg-muted'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              <p className="text-sm font-semibold text-foreground">{team.name}</p>
-              {team.sport && (
-                <p className="text-xs text-muted-foreground capitalize">{team.sport}</p>
-              )}
-            </button>
-          ))}
-          {teams.length === 0 && (
-            <p className="text-sm text-muted-foreground">No teams yet — create one.</p>
-          )}
-          <Button className="w-full mt-2" onClick={() => setCreateOpen(true)}>
-            New team
-          </Button>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Teams</CardTitle>
+            <CardDescription>Groups for coaching scope and trends.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {teams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                onClick={() => setSelectedId(team.id)}
+                aria-pressed={team.id === selectedId}
+                className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${
+                  team.id === selectedId
+                    ? 'border-foreground bg-muted'
+                    : 'border-border hover:bg-muted'
+                }`}
+              >
+                <p className="text-sm font-semibold text-foreground">{team.name}</p>
+                {team.sport && (
+                  <p className="text-xs text-muted-foreground capitalize">{team.sport}</p>
+                )}
+              </button>
+            ))}
+            {teams.length === 0 && (
+              <p className="text-sm text-muted-foreground">No teams yet — create one.</p>
+            )}
+            <Button className="w-full mt-2" onClick={() => setCreateOpen(true)}>
+              New team
+            </Button>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </CardContent>
+        </Card>
 
-      <div className="space-y-6">
-        {selected ? (
-          <>
-            <Card>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <CardTitle>{selected.name}</CardTitle>
-                    <CardDescription>
-                      {members.length} member{members.length === 1 ? '' : 's'}
-                      {selected.sport ? ` · ${selected.sport}` : ''}
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      aria-label="Team name"
-                      className="h-9 w-44"
-                    />
-                    <Button
-                      variant="outline"
-                      disabled={busy || !renameValue.trim() || renameValue === selected.name}
-                      onClick={() =>
-                        run(async () => {
-                          await renameTeam(auth0Id, selected.id, renameValue.trim())
-                          await refreshTeams(selected.id)
-                        })
-                      }
-                    >
-                      Rename
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="text-destructive border-destructive/30"
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => {
-                          await deleteTeam(auth0Id, selected.id)
-                          setSelectedId(null)
-                          await refreshTeams()
-                        })
-                      }
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                  Findings · last 14 days
-                </p>
-                <TrendBars points={trends} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Members</CardTitle>
-                <CardDescription>Coaches by account, players by roster row.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {member.member_auth0_id ??
-                          students.find((s) => s.id === member.student_id)?.full_name ??
-                          'Unknown'}
-                      </p>
-                      <Badge variant="outline" className="mt-1 capitalize">
-                        {member.role}
-                      </Badge>
+        <div className="space-y-6">
+          {selected ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <CardTitle>{selected.name}</CardTitle>
+                      <CardDescription>
+                        {members.length} member{members.length === 1 ? '' : 's'}
+                        {selected.sport ? ` · ${selected.sport}` : ''}
+                      </CardDescription>
                     </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        aria-label="Team name"
+                        className="h-9 w-44"
+                      />
+                      <Button
+                        variant="outline"
+                        disabled={busy || !renameValue.trim() || renameValue === selected.name}
+                        onClick={() =>
+                          run(async () => {
+                            await renameTeam(auth0Id, selected.id, renameValue.trim())
+                            await refreshTeams(selected.id)
+                          })
+                        }
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-destructive border-destructive/30"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            await deleteTeam(auth0Id, selected.id)
+                            setSelectedId(null)
+                            await refreshTeams()
+                          })
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                    Findings · last 14 days
+                  </p>
+                  <TrendBars points={trends} />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Members</CardTitle>
+                  <CardDescription>Coaches by account, players by roster row.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {member.member_auth0_id ??
+                            students.find((s) => s.id === member.student_id)?.full_name ??
+                            'Unknown'}
+                        </p>
+                        <Badge variant="outline" className="mt-1 capitalize">
+                          {member.role}
+                        </Badge>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            await removeTeamMember(auth0Id, selected.id, member.id)
+                            const res = await listTeamMembers(auth0Id, selected.id)
+                            setMembers(res.members)
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  {members.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No members yet.</p>
+                  )}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Select
+                      items={{ coach: 'Coach (account)', player: 'Player (roster)' }}
+                      value={addKind}
+                      onValueChange={(v) => {
+                        if (v === 'coach' || v === 'player') {
+                          setAddKind(v)
+                          setAddRef('')
+                        }
+                      }}
+                    >
+                      <SelectTrigger aria-label="Member kind" className="w-44">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="coach">Coach (account)</SelectItem>
+                        <SelectItem value="player">Player (roster)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {addKind === 'coach' ? (
+                      <Input
+                        value={addRef}
+                        onChange={(e) => setAddRef(e.target.value)}
+                        placeholder="Coach auth0 id or email-linked id"
+                        aria-label="Coach member id"
+                        className="h-9 flex-1 min-w-44"
+                      />
+                    ) : (
+                      <Select
+                        items={Object.fromEntries(
+                          unassignedStudents.map((s) => [s.id, s.full_name]),
+                        )}
+                        value={addRef}
+                        onValueChange={(v) => {
+                          if (typeof v === 'string') setAddRef(v)
+                        }}
+                      >
+                        <SelectTrigger aria-label="Player" className="flex-1 min-w-44">
+                          <SelectValue placeholder="Select player" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {unassignedStudents.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
+                      disabled={busy || !addRef.trim()}
                       onClick={() =>
                         run(async () => {
-                          await removeTeamMember(auth0Id, selected.id, member.id)
+                          await addTeamMember(auth0Id, selected.id, {
+                            ...(addKind === 'coach'
+                              ? { member_auth0_id: addRef.trim(), role: 'coach' as const }
+                              : { student_id: addRef, role: 'player' as const }),
+                          })
+                          setAddRef('')
                           const res = await listTeamMembers(auth0Id, selected.id)
                           setMembers(res.members)
                         })
                       }
                     >
-                      Remove
+                      Add
                     </Button>
                   </div>
-                ))}
-                {members.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No members yet.</p>
-                )}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Select
-                    items={{ coach: 'Coach (account)', player: 'Player (roster)' }}
-                    value={addKind}
-                    onValueChange={(v) => {
-                      if (v === 'coach' || v === 'player') {
-                        setAddKind(v)
-                        setAddRef('')
-                      }
-                    }}
-                  >
-                    <SelectTrigger aria-label="Member kind" className="w-44">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="coach">Coach (account)</SelectItem>
-                      <SelectItem value="player">Player (roster)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {addKind === 'coach' ? (
-                    <Input
-                      value={addRef}
-                      onChange={(e) => setAddRef(e.target.value)}
-                      placeholder="Coach auth0 id or email-linked id"
-                      aria-label="Coach member id"
-                      className="h-9 flex-1 min-w-44"
-                    />
-                  ) : (
-                    <Select
-                      items={Object.fromEntries(unassignedStudents.map((s) => [s.id, s.full_name]))}
-                      value={addRef}
-                      onValueChange={(v) => {
-                        if (typeof v === 'string') setAddRef(v)
-                      }}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Matches</CardTitle>
+                  <CardDescription>Fixtures and results for this team.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {matches.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No matches scheduled.</p>
+                  )}
+                  {matches.map((match) => (
+                    <div
+                      key={match.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
                     >
-                      <SelectTrigger aria-label="Player" className="flex-1 min-w-44">
-                        <SelectValue placeholder="Select player" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {match.opponent ? `vs ${match.opponent}` : 'Match'}
+                          {match.result ? ` · ${match.result}` : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {[match.match_on, match.location].filter(Boolean).join(' · ') ||
+                            'Unscheduled'}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            await orgDeleteMatch(auth0Id, match.id)
+                            const res = await orgMatches(auth0Id, { teamId: selected.id })
+                            setMatches(res.matches)
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Input
+                      value={matchOpponent}
+                      onChange={(e) => setMatchOpponent(e.target.value)}
+                      placeholder="Opponent"
+                      aria-label="Opponent"
+                      className="h-9 flex-1 min-w-32"
+                    />
+                    <Input
+                      type="date"
+                      value={matchOn}
+                      onChange={(e) => setMatchOn(e.target.value)}
+                      aria-label="Match date"
+                      className="h-9 w-36"
+                    />
+                    <Select
+                      items={{
+                        __none: 'No season',
+                        ...Object.fromEntries(seasons.map((s) => [s.id, s.name])),
+                      }}
+                      value={matchSeason || '__none'}
+                      onValueChange={(v) =>
+                        setMatchSeason(v === '__none' ? '' : typeof v === 'string' ? v : '')
+                      }
+                    >
+                      <SelectTrigger aria-label="Season" className="w-36">
+                        <SelectValue placeholder="No season" />
                       </SelectTrigger>
                       <SelectContent>
-                        {unassignedStudents.map((s) => (
+                        <SelectItem value="__none">No season</SelectItem>
+                        {seasons.map((s) => (
                           <SelectItem key={s.id} value={s.id}>
-                            {s.full_name}
+                            {s.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                  <Button
-                    disabled={busy || !addRef.trim()}
-                    onClick={() =>
-                      run(async () => {
-                        await addTeamMember(auth0Id, selected.id, {
-                          ...(addKind === 'coach'
-                            ? { member_auth0_id: addRef.trim(), role: 'coach' as const }
-                            : { student_id: addRef, role: 'player' as const }),
-                        })
-                        setAddRef('')
-                        const res = await listTeamMembers(auth0Id, selected.id)
-                        setMembers(res.members)
-                      })
-                    }
-                  >
-                    Add
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Matches</CardTitle>
-                <CardDescription>Fixtures and results for this team.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {matches.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No matches scheduled.</p>
-                )}
-                {matches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">
-                        {match.opponent ? `vs ${match.opponent}` : 'Match'}
-                        {match.result ? ` · ${match.result}` : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {[match.match_on, match.location].filter(Boolean).join(' · ') || 'Unscheduled'}
-                      </p>
-                    </div>
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
+                      disabled={busy || !matchOpponent.trim()}
                       onClick={() =>
                         run(async () => {
-                          await orgDeleteMatch(auth0Id, match.id)
+                          await orgCreateMatch(auth0Id, {
+                            team_id: selected.id,
+                            season_id: matchSeason || null,
+                            opponent: matchOpponent.trim(),
+                            match_on: matchOn || null,
+                          })
+                          setMatchOpponent('')
+                          setMatchOn('')
+                          setMatchSeason('')
                           const res = await orgMatches(auth0Id, { teamId: selected.id })
                           setMatches(res.matches)
                         })
                       }
                     >
-                      Remove
+                      Add match
                     </Button>
                   </div>
-                ))}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Input
-                    value={matchOpponent}
-                    onChange={(e) => setMatchOpponent(e.target.value)}
-                    placeholder="Opponent"
-                    aria-label="Opponent"
-                    className="h-9 flex-1 min-w-32"
-                  />
-                  <Input
-                    type="date"
-                    value={matchOn}
-                    onChange={(e) => setMatchOn(e.target.value)}
-                    aria-label="Match date"
-                    className="h-9 w-36"
-                  />
-                  <Select
-                    items={{ __none: 'No season', ...Object.fromEntries(seasons.map((s) => [s.id, s.name])) }}
-                    value={matchSeason || '__none'}
-                    onValueChange={(v) => setMatchSeason(v === '__none' ? '' : (typeof v === 'string' ? v : ''))}
-                  >
-                    <SelectTrigger aria-label="Season" className="w-36">
-                      <SelectValue placeholder="No season" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">No season</SelectItem>
-                      {seasons.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    disabled={busy || !matchOpponent.trim()}
-                    onClick={() =>
-                      run(async () => {
-                        await orgCreateMatch(auth0Id, {
-                          team_id: selected.id,
-                          season_id: matchSeason || null,
-                          opponent: matchOpponent.trim(),
-                          match_on: matchOn || null,
-                        })
-                        setMatchOpponent('')
-                        setMatchOn('')
-                        setMatchSeason('')
-                        const res = await orgMatches(auth0Id, { teamId: selected.id })
-                        setMatches(res.matches)
-                      })
-                    }
-                  >
-                    Add match
-                  </Button>
-                </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Select a team to manage members and see trends.
               </CardContent>
             </Card>
-          </>
-        ) : (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              Select a team to manage members and see trends.
-            </CardContent>
-          </Card>
-        )}
+          )}
+        </div>
       </div>
-    </div>
 
-    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New team</DialogTitle>

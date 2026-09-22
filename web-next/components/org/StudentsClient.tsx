@@ -530,7 +530,7 @@ export default function StudentsClient({
           <Select
             items={{ __all: 'All sports', ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
             value={sport || '__all'}
-            onValueChange={(v) => setSport(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
+            onValueChange={(v) => setSport(v === '__all' ? '' : typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by sport" className="w-36">
               <SelectValue placeholder="All sports" />
@@ -550,7 +550,7 @@ export default function StudentsClient({
               ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])),
             }}
             value={status || '__all'}
-            onValueChange={(v) => setStatus(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
+            onValueChange={(v) => setStatus(v === '__all' ? '' : typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by status" className="w-36">
               <SelectValue placeholder="All statuses" />
@@ -567,7 +567,7 @@ export default function StudentsClient({
           <Select
             items={{ __all: 'All teams', ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
             value={teamId || '__all'}
-            onValueChange={(v) => setTeamId(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
+            onValueChange={(v) => setTeamId(v === '__all' ? '' : typeof v === 'string' ? v : '')}
           >
             <SelectTrigger aria-label="Filter by team" className="w-36">
               <SelectValue placeholder="All teams" />

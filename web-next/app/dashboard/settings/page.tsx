@@ -248,8 +248,12 @@ export default async function SettingsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-6 px-6 py-4">
             <div>
-              <p className="text-lg font-bold capitalize tracking-tight text-foreground">{subscription.tier}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Plan</p>
+              <p className="text-lg font-bold capitalize tracking-tight text-foreground">
+                {subscription.tier}
+              </p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Plan
+              </p>
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-foreground">

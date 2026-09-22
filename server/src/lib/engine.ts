@@ -68,7 +68,8 @@ export const scanVideo = async (
   videoFile: File,
   opts: { sessionToken?: string | null; angle?: string | null } = {},
   requestId?: string | null,
-): Promise<ScanResult> => {  const form = new FormData()
+): Promise<ScanResult> => {
+  const form = new FormData()
   form.append('video', videoFile, videoFile.name || 'video.mp4')
   // Multi-angle flow: appending to an existing session reuses its token and
   // labels the new perspective. The engine defaults both when omitted.
@@ -104,7 +105,9 @@ export type UploadIntent = {
   key: string
   session_token: string
   angle: string
-  upload: { mode: "multipart"; scan_url: string } | { mode: "presigned"; url: string; fields: Record<string, string> }
+  upload:
+    | { mode: 'multipart'; scan_url: string }
+    | { mode: 'presigned'; url: string; fields: Record<string, string> }
 }
 
 export const requestUploadIntent = async (
@@ -118,11 +121,15 @@ export const requestUploadIntent = async (
   requestId?: string | null,
 ): Promise<UploadIntent> => {
   try {
-    const res = await withTimeout(`${ENGINE_URL}/upload-intent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...engineServiceHeaders(requestId) },
-      body: JSON.stringify(payload),
-    }, 15_000)
+    const res = await withTimeout(
+      `${ENGINE_URL}/upload-intent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...engineServiceHeaders(requestId) },
+        body: JSON.stringify(payload),
+      },
+      15_000,
+    )
 
     if (!res.ok) {
       await throwNonOk(res)
@@ -131,7 +138,7 @@ export const requestUploadIntent = async (
     return (await res.json()) as UploadIntent
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
+      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
     }
 
     throw error
@@ -143,11 +150,15 @@ export const scanFromKey = async (
   requestId?: string | null,
 ): Promise<ScanResult> => {
   try {
-    const res = await withTimeout(`${ENGINE_URL}/scan-from-key`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...engineServiceHeaders(requestId) },
-      body: JSON.stringify(payload),
-    }, 180_000)
+    const res = await withTimeout(
+      `${ENGINE_URL}/scan-from-key`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...engineServiceHeaders(requestId) },
+        body: JSON.stringify(payload),
+      },
+      180_000,
+    )
 
     if (!res.ok) {
       await throwNonOk(res)
@@ -156,7 +167,7 @@ export const scanFromKey = async (
     return (await res.json()) as ScanResult
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError("ENGINE_UNAVAILABLE", "Analysis engine is temporarily unavailable.")
+      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
     }
 
     throw error

@@ -63,7 +63,12 @@ import {
   DEFAULT_COMPARISON_METRIC_KEY,
 } from '../lib/orgValidate'
 import type { ImportRow } from '../lib/orgValidate'
-import { linkAnalysisToStudent, getOrgTier, getTodayUsage, orgDailyAnalysisLimit } from '../lib/supabaseHistory'
+import {
+  linkAnalysisToStudent,
+  getOrgTier,
+  getTodayUsage,
+  orgDailyAnalysisLimit,
+} from '../lib/supabaseHistory'
 import { getTeam } from '../lib/teams'
 import { getMemberRole } from '../lib/orgMembers'
 import { listMemberTeamIds } from '../lib/teams'
@@ -868,16 +873,16 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
     }
     const raw = (body ?? {}) as Record<string, unknown>
-    const pickId = (v: unknown) =>
-      typeof v === 'string' && UUID_RE.test(v) ? v : null
+    const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
     const title = typeof raw.title === 'string' ? raw.title : ''
     if (!title.trim()) {
       set.status = 400
@@ -898,7 +903,11 @@ export default new Elysia()
     })
     if (!objective) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Could not create objective (unknown student/team?)', false)
+      return buildError(
+        'INVALID_REQUEST',
+        'Could not create objective (unknown student/team?)',
+        false,
+      )
     }
     set.status = 201
     return { objective }
@@ -910,9 +919,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
@@ -937,9 +947,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
@@ -960,9 +971,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (role !== 'owner' && role !== 'admin') {
       set.status = 403
       return buildError('FORBIDDEN', 'Subscription details are owner/admin only', false)
@@ -991,9 +1003,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
@@ -1026,9 +1039,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid season id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
@@ -1064,9 +1078,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
@@ -1104,9 +1119,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid match id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
@@ -1143,9 +1159,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1177,9 +1194,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1204,9 +1222,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1229,9 +1248,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const role =
+      verified === auth0Id
+        ? 'owner'
+        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
     if (!hasPermission(role, 'medical.read')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Reading wellness data requires the medical permission', false)
@@ -1239,36 +1259,40 @@ export default new Elysia()
     set.status = 200
     return { checkins: await listWellness(auth0Id, studentId) }
   })
-  .post('/api/org/:auth0Id/students/:studentId/wellness', async ({ params, body, request, set }) => {
-    const { auth0Id, studentId } = params
-    if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid student id', false)
-    }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role = verified === auth0Id
-      ? 'owner'
-      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
-    if (!hasPermission(role, 'player.manage')) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Recording wellness data requires player.manage', false)
-    }
-    const raw = (body ?? {}) as Record<string, unknown>
-    const checkin = await createWellnessCheckin(auth0Id, verified, {
-      student_id: studentId,
-      sleep_hours: typeof raw.sleep_hours === 'number' ? raw.sleep_hours : null,
-      fatigue: typeof raw.fatigue === 'number' ? raw.fatigue : null,
-      pain: typeof raw.pain === 'string' ? raw.pain : null,
-      availability: typeof raw.availability === 'string' ? raw.availability : null,
-      note: typeof raw.note === 'string' ? raw.note : null,
-    })
-    if (!checkin) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Student not found', false)
-    }
-    set.status = 201
-    return { checkin }
-  })
+  .post(
+    '/api/org/:auth0Id/students/:studentId/wellness',
+    async ({ params, body, request, set }) => {
+      const { auth0Id, studentId } = params
+      if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
+        set.status = 400
+        return buildError('INVALID_REQUEST', 'Invalid student id', false)
+      }
+      const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+      const role =
+        verified === auth0Id
+          ? 'owner'
+          : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+      if (!hasPermission(role, 'player.manage')) {
+        set.status = 403
+        return buildError('FORBIDDEN', 'Recording wellness data requires player.manage', false)
+      }
+      const raw = (body ?? {}) as Record<string, unknown>
+      const checkin = await createWellnessCheckin(auth0Id, verified, {
+        student_id: studentId,
+        sleep_hours: typeof raw.sleep_hours === 'number' ? raw.sleep_hours : null,
+        fatigue: typeof raw.fatigue === 'number' ? raw.fatigue : null,
+        pain: typeof raw.pain === 'string' ? raw.pain : null,
+        availability: typeof raw.availability === 'string' ? raw.availability : null,
+        note: typeof raw.note === 'string' ? raw.note : null,
+      })
+      if (!checkin) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Student not found', false)
+      }
+      set.status = 201
+      return { checkin }
+    },
+  )
   // ── Performance metrics (cross-student) ────────────────────────────────────
   .get('/api/org/:auth0Id/performance', async ({ params, request, set }) => {
     const { auth0Id } = params

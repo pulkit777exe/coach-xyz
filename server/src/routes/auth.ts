@@ -227,33 +227,33 @@ export default new Elysia()
     set.status = 200
     return { trends }
   })
-  .get("/api/auth/user/:auth0Id/findings", async ({ params, request, set }) => {
+  .get('/api/auth/user/:auth0Id/findings', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
       set.status = 400
-      return buildError("INVALID_REQUEST", "Missing auth0Id parameter", false)
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const url = new URL(request.url)
-    const studentId = url.searchParams.get("student_id") ?? ""
+    const studentId = url.searchParams.get('student_id') ?? ''
     if (!UUID_PARAM_RE.test(studentId)) {
       set.status = 400
-      return buildError("INVALID_REQUEST", "student_id must be a valid UUID", false)
+      return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
     }
-    const limitRaw = Number(url.searchParams.get("limit") || 50)
+    const limitRaw = Number(url.searchParams.get('limit') || 50)
     const limit = Number.isFinite(limitRaw) ? limitRaw : 50
     set.status = 200
     return { findings: await getStudentFindings(auth0Id, studentId, limit) }
   })
-  .get("/api/auth/user/:auth0Id/analyses/:jobId/stages", async ({ params, set }) => {
+  .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
-      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
     }
     const analysis = await getUserAnalysisById(auth0Id, jobId)
     if (!analysis) {
       set.status = 404
-      return buildError("NOT_FOUND", "Analysis not found", false)
+      return buildError('NOT_FOUND', 'Analysis not found', false)
     }
     set.status = 200
     return { stages: await getAnalysisStages(auth0Id, jobId) }

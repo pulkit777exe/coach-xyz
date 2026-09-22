@@ -92,7 +92,14 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
             <CardTitle>Training plans</CardTitle>
             <CardDescription>Longer-running programs above day-to-day objectives.</CardDescription>
           </div>
-          <Button onClick={() => { setError(null); setOpen(true) }}>New plan</Button>
+          <Button
+            onClick={() => {
+              setError(null)
+              setOpen(true)
+            }}
+          >
+            New plan
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -107,18 +114,32 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">{plan.title}</p>
               {plan.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{plan.description}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                  {plan.description}
+                </p>
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="capitalize">{plan.status}</Badge>
+              <Badge variant="outline" className="capitalize">
+                {plan.status}
+              </Badge>
               {plan.status !== 'done' && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => setStatus(plan.id, 'done')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setStatus(plan.id, 'done')}
+                >
                   Done
                 </Button>
               )}
               {plan.status === 'done' && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => setStatus(plan.id, 'active')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setStatus(plan.id, 'active')}
+                >
                   Reopen
                 </Button>
               )}

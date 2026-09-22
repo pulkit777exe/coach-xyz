@@ -302,7 +302,7 @@ export type TrainingObjective = {
   analysis_job_id: string | null
   title: string
   description: string | null
-  status: "active" | "done" | "archived"
+  status: 'active' | 'done' | 'archived'
   due_on: string | null
   created_by: string | null
   created_at: string
@@ -319,15 +319,16 @@ export type ObjectiveInput = {
   due_on?: string | null
 }
 
-const OBJECTIVE_STATUSES = ["active", "done", "archived"] as const
+const OBJECTIVE_STATUSES = ['active', 'done', 'archived'] as const
 
 export const listObjectives = async (
   auth0Id: string,
   opts: { studentId?: string | null; teamId?: string | null; status?: string | null } = {},
 ): Promise<TrainingObjective[]> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<TrainingObjective[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<TrainingObjective[]>`
       select *
       from training_objectives
       where org_auth0_id = ${auth0Id}
@@ -336,8 +337,9 @@ export const listObjectives = async (
         and (${opts.status ?? null}::text is null or status = ${opts.status ?? null})
       order by created_at desc;
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const createObjective = async (
@@ -397,15 +399,17 @@ export const setObjectiveStatus = async (
 }
 
 export const deleteObjective = async (auth0Id: string, id: string): Promise<boolean> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<{ id: string }[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<{ id: string }[]>`
       delete from training_objectives
       where org_auth0_id = ${auth0Id} and id = ${id}
       returning id;
     `
-    return Boolean(rows?.[0])
-  })) ?? false
+      return Boolean(rows?.[0])
+    })) ?? false
+  )
 }
 
 // ── Seasons & matches ────────────────────────────────────────────────────────
@@ -432,13 +436,15 @@ export type Match = {
 }
 
 export const listSeasons = async (auth0Id: string): Promise<Season[]> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<Season[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<Season[]>`
       select * from seasons where org_auth0_id = ${auth0Id} order by created_at desc;
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const createSeason = async (
@@ -459,30 +465,34 @@ export const createSeason = async (
 }
 
 export const deleteSeason = async (auth0Id: string, id: string): Promise<boolean> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<{ id: string }[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<{ id: string }[]>`
       delete from seasons where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
-    return Boolean(rows?.[0])
-  })) ?? false
+      return Boolean(rows?.[0])
+    })) ?? false
+  )
 }
 
 export const listMatches = async (
   auth0Id: string,
   opts: { teamId?: string | null; seasonId?: string | null } = {},
 ): Promise<Match[]> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<Match[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<Match[]>`
       select * from matches
       where org_auth0_id = ${auth0Id}
         and (${opts.teamId ?? null}::uuid is null or team_id = ${opts.teamId ?? null}::uuid)
         and (${opts.seasonId ?? null}::uuid is null or season_id = ${opts.seasonId ?? null}::uuid)
       order by match_on desc nulls last, created_at desc;
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const createMatch = async (
@@ -516,13 +526,15 @@ export const createMatch = async (
 }
 
 export const deleteMatch = async (auth0Id: string, id: string): Promise<boolean> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<{ id: string }[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<{ id: string }[]>`
       delete from matches where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
-    return Boolean(rows?.[0])
-  })) ?? false
+      return Boolean(rows?.[0])
+    })) ?? false
+  )
 }
 
 // ── Training plans ───────────────────────────────────────────────────────────
@@ -534,7 +546,7 @@ export type TrainingPlan = {
   student_id: string | null
   title: string
   description: string | null
-  status: "active" | "done" | "archived"
+  status: 'active' | 'done' | 'archived'
   created_by: string | null
   created_at: string
   updated_at: string
@@ -544,23 +556,30 @@ export const listTrainingPlans = async (
   auth0Id: string,
   opts: { teamId?: string | null; studentId?: string | null } = {},
 ): Promise<TrainingPlan[]> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<TrainingPlan[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<TrainingPlan[]>`
       select * from training_plans
       where org_auth0_id = ${auth0Id}
         and (${opts.teamId ?? null}::uuid is null or team_id = ${opts.teamId ?? null}::uuid)
         and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid)
       order by created_at desc;
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const createTrainingPlan = async (
   auth0Id: string,
   createdBy: string | null,
-  input: { team_id?: string | null; student_id?: string | null; title: string; description?: string | null },
+  input: {
+    team_id?: string | null
+    student_id?: string | null
+    title: string
+    description?: string | null
+  },
 ): Promise<TrainingPlan | null> => {
   const title = input.title.trim().slice(0, 200)
   if (!title) return null
@@ -595,7 +614,7 @@ export const setTrainingPlanStatus = async (
   id: string,
   status: string,
 ): Promise<TrainingPlan | null> => {
-  if (status !== "active" && status !== "done" && status !== "archived") return null
+  if (status !== 'active' && status !== 'done' && status !== 'archived') return null
   return withHistoryStore(async (db) => {
     await ensureInitialized()
     const rows = await db<TrainingPlan[]>`
@@ -608,13 +627,15 @@ export const setTrainingPlanStatus = async (
 }
 
 export const deleteTrainingPlan = async (auth0Id: string, id: string): Promise<boolean> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<{ id: string }[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<{ id: string }[]>`
       delete from training_plans where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
-    return Boolean(rows?.[0])
-  })) ?? false
+      return Boolean(rows?.[0])
+    })) ?? false
+  )
 }
 
 // ── Wellness check-ins (health data, §5) ─────────────────────────────────────
@@ -638,16 +659,18 @@ export const listWellness = async (
   limit = 30,
 ): Promise<WellnessCheckin[]> => {
   const capped = Math.min(Math.max(limit, 1), 200)
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<WellnessCheckin[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<WellnessCheckin[]>`
       select * from wellness_checkins
       where org_auth0_id = ${auth0Id} and student_id = ${studentId}::uuid
       order by created_at desc
       limit ${capped};
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const createWellnessCheckin = async (
@@ -664,12 +687,16 @@ export const createWellnessCheckin = async (
 ): Promise<WellnessCheckin | null> => {
   const student = await getStudent(auth0Id, input.student_id)
   if (!student) return null
-  const sleep = typeof input.sleep_hours === "number" && input.sleep_hours >= 0 && input.sleep_hours <= 24
-    ? input.sleep_hours
-    : null
-  const fatigue = Number.isInteger(input.fatigue) && (input.fatigue as number) >= 1 && (input.fatigue as number) <= 5
-    ? input.fatigue
-    : null
+  const sleep =
+    typeof input.sleep_hours === 'number' && input.sleep_hours >= 0 && input.sleep_hours <= 24
+      ? input.sleep_hours
+      : null
+  const fatigue =
+    Number.isInteger(input.fatigue) &&
+    (input.fatigue as number) >= 1 &&
+    (input.fatigue as number) <= 5
+      ? input.fatigue
+      : null
   return withHistoryStore(async (db) => {
     await ensureInitialized()
     const rows = await db<WellnessCheckin[]>`
@@ -681,9 +708,9 @@ export const createWellnessCheckin = async (
         ${input.student_id}::uuid,
         ${sleep},
         ${fatigue},
-        ${typeof input.pain === "string" ? input.pain.trim().slice(0, 500) || null : null},
-        ${typeof input.availability === "string" ? input.availability.trim().slice(0, 60) || null : null},
-        ${typeof input.note === "string" ? input.note.trim().slice(0, 2000) || null : null},
+        ${typeof input.pain === 'string' ? input.pain.trim().slice(0, 500) || null : null},
+        ${typeof input.availability === 'string' ? input.availability.trim().slice(0, 60) || null : null},
+        ${typeof input.note === 'string' ? input.note.trim().slice(0, 2000) || null : null},
         ${createdBy}
       )
       returning *;

@@ -296,10 +296,10 @@ export const ensureInitialized = async () => {
         on findings (created_at desc);
       `
 
-      // Training objectives (§26 loop): finding → objective → training →
-      // measurement. Owned by the org, optionally tied to a student, team,
-      // or the finding that motivated it.
-      await sql`
+        // Training objectives (§26 loop): finding → objective → training →
+        // measurement. Owned by the org, optionally tied to a student, team,
+        // or the finding that motivated it.
+        await sql`
         create table if not exists training_objectives (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -317,13 +317,13 @@ export const ensureInitialized = async () => {
           updated_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create index if not exists idx_objectives_org_student
         on training_objectives (org_auth0_id, student_id);
       `
 
-      // Seasons, matches, training plans, wellness (§28 domains).
-      await sql`
+        // Seasons, matches, training plans, wellness (§28 domains).
+        await sql`
         create table if not exists seasons (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -333,7 +333,7 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create table if not exists matches (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -346,7 +346,7 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create table if not exists training_plans (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -361,9 +361,9 @@ export const ensureInitialized = async () => {
           updated_at timestamptz not null default now()
         );
       `
-      // Wellness check-ins are health data (§5): same org scope, but reads
-      // are gated to the medical permission (see routes).
-      await sql`
+        // Wellness check-ins are health data (§5): same org scope, but reads
+        // are gated to the medical permission (see routes).
+        await sql`
         create table if not exists wellness_checkins (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -377,13 +377,13 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create index if not exists idx_wellness_org_student
         on wellness_checkins (org_auth0_id, student_id);
       `
-      // Billing structure (§28, §17 quotas): tier per org + usage ledger.
-      // No provider wired yet — record usage now so tiers enforce later.
-      await sql`
+        // Billing structure (§28, §17 quotas): tier per org + usage ledger.
+        // No provider wired yet — record usage now so tiers enforce later.
+        await sql`
         create table if not exists subscriptions (
           org_auth0_id text primary key,
           tier text not null default 'free'
@@ -392,7 +392,7 @@ export const ensureInitialized = async () => {
           updated_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create table if not exists usage_records (
           id uuid primary key default gen_random_uuid(),
           org_auth0_id text not null,
@@ -402,12 +402,12 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create index if not exists idx_usage_org_day
         on usage_records (org_auth0_id, period_day);
       `
-      // Internal stage history (§13): every persisted stage transition.
-      await sql`
+        // Internal stage history (§13): every persisted stage transition.
+        await sql`
         create table if not exists analysis_stages (
           id uuid primary key default gen_random_uuid(),
           server_job_id text not null,
@@ -416,7 +416,7 @@ export const ensureInitialized = async () => {
           created_at timestamptz not null default now()
         );
       `
-      await sql`
+        await sql`
         create index if not exists idx_stages_job
         on analysis_stages (server_job_id, created_at);
       `
@@ -960,13 +960,15 @@ const findingNumber = (value: unknown): number | null => {
     })
   }
 
-export type FindingsTrendPoint = {  day: string
+export type FindingsTrendPoint = {
+  day: string
   category: string
   count: number
   needs_review: number
 }
 
-export type StoredFinding = {  id: string
+export type StoredFinding = {
+  id: string
   server_job_id: string
   category: string | null
   start_ms: number | null
@@ -991,9 +993,10 @@ export const getStudentFindings = async (
   limit = 50,
 ): Promise<StoredFinding[]> => {
   const capped = Math.min(Math.max(limit, 1), 200)
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<StoredFinding[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<StoredFinding[]>`
       select f.id, f.server_job_id, f.category, f.start_ms, f.end_ms,
         f.confidence, f.confidence_band, f.severity, f.observation,
         f.feedback, f.form_score, f.evidence_frames, f.measured_at_timestamp,
@@ -1004,8 +1007,9 @@ export const getStudentFindings = async (
       order by f.created_at desc
       limit ${capped};
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export type AnalysisStageEntry = {
@@ -1019,17 +1023,19 @@ export const getAnalysisStages = async (
   auth0Id: string,
   serverJobId: string,
 ): Promise<AnalysisStageEntry[]> => {
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<AnalysisStageEntry[]>`
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      const rows = await db<AnalysisStageEntry[]>`
       select s.stage, s.stage_name, s.created_at
       from analysis_stages s
       join analysis_history a on a.server_job_id = s.server_job_id
       where a.auth0_id = ${auth0Id} and s.server_job_id = ${serverJobId}
       order by s.created_at asc;
     `
-    return rows ?? []
-  })) ?? []
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
@@ -1136,27 +1142,26 @@ export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number 
   })
 }
 
-/** Daily per-org quota verdict. Fail-open without org identity or DB. */export const checkOrgDailyQuota = async (
-  orgAuth0Id: string | null,
-): Promise<{ allowed: boolean; retryAfterSec: number }> => {
-  if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 }
-  const count = await countTodayOrgAnalyses(orgAuth0Id)
-  if (count === null || count < orgDailyAnalysisLimit()) {
-    return { allowed: true, retryAfterSec: 0 }
+/** Daily per-org quota verdict. Fail-open without org identity or DB. */ export const checkOrgDailyQuota =
+  async (orgAuth0Id: string | null): Promise<{ allowed: boolean; retryAfterSec: number }> => {
+    if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 }
+    const count = await countTodayOrgAnalyses(orgAuth0Id)
+    if (count === null || count < orgDailyAnalysisLimit()) {
+      return { allowed: true, retryAfterSec: 0 }
+    }
+    const now = Date.now()
+    const midnightUtc = Date.UTC(
+      new Date(now).getUTCFullYear(),
+      new Date(now).getUTCMonth(),
+      new Date(now).getUTCDate() + 1,
+    )
+    return {
+      allowed: false,
+      retryAfterSec: Math.max(1, Math.ceil((midnightUtc - now) / 1000)),
+    }
   }
-  const now = Date.now()
-  const midnightUtc = Date.UTC(
-    new Date(now).getUTCFullYear(),
-    new Date(now).getUTCMonth(),
-    new Date(now).getUTCDate() + 1,
-  )
-  return {
-    allowed: false,
-    retryAfterSec: Math.max(1, Math.ceil((midnightUtc - now) / 1000)),
-  }
-}
 
-export type OrgTier = "free" | "pro" | "elite"
+export type OrgTier = 'free' | 'pro' | 'elite'
 
 /** Org tier (default free). Quotas and queue priority derive from this. */
 export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
@@ -1171,9 +1176,9 @@ export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
     const existing = await db<{ tier: OrgTier }[]>`
       select tier from subscriptions where org_auth0_id = ${orgAuth0Id} limit 1;
     `
-    return existing?.[0]?.tier ?? "free"
+    return existing?.[0]?.tier ?? 'free'
   })
-  return tier ?? "free"
+  return tier ?? 'free'
 }
 
 /** Append to the org usage ledger (§17 quotas, future billing). */
@@ -1192,17 +1197,18 @@ export const recordUsage = async (
 }
 
 /** Usage totals per kind since midnight UTC (for quota + status views). */
-export const getTodayUsage = async (
-  orgAuth0Id: string,
-): Promise<Record<string, number>> => {
-  const rows = (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    return (await db<{ kind: string; total: number }[]>`
+export const getTodayUsage = async (orgAuth0Id: string): Promise<Record<string, number>> => {
+  const rows =
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized()
+      return (
+        (await db<{ kind: string; total: number }[]>`
       select kind, sum(quantity)::int as total from usage_records
       where org_auth0_id = ${orgAuth0Id} and period_day = current_date
       group by kind;
     `) ?? []
-  })) ?? []
+      )
+    })) ?? []
   return Object.fromEntries(rows.map((r) => [r.kind, r.total]))
 }
 

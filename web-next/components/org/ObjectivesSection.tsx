@@ -157,7 +157,14 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
               {reviewOpen > 0 ? ` · ${reviewOpen} need review` : ''}.
             </CardDescription>
           </div>
-          <Button onClick={() => { setError(null); setOpen(true) }}>New objective</Button>
+          <Button
+            onClick={() => {
+              setError(null)
+              setOpen(true)
+            }}
+          >
+            New objective
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -174,7 +181,9 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">{objective.title}</p>
               {objective.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{objective.description}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                  {objective.description}
+                </p>
               )}
               <p className="mt-1 text-[0.65rem] text-muted-foreground">
                 {objective.finding_id ? `from finding ${objective.finding_id.slice(-8)} · ` : ''}
@@ -183,14 +192,26 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="capitalize">{objective.status}</Badge>
+              <Badge variant="outline" className="capitalize">
+                {objective.status}
+              </Badge>
               {objective.status !== 'done' && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => setStatus(objective.id, 'done')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setStatus(objective.id, 'done')}
+                >
                   Done
                 </Button>
               )}
               {objective.status === 'done' && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => setStatus(objective.id, 'active')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setStatus(objective.id, 'active')}
+                >
                   Reopen
                 </Button>
               )}
@@ -220,26 +241,35 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
               Weekly measurement · findings vs objectives done
             </p>
-            <div className="flex items-end gap-2 h-20" role="img" aria-label="Weekly findings versus objectives completed">
-                {weeks.map(([week, w]) => (
-                  <div key={week} className="flex-1 flex items-end justify-center gap-0.5 h-full" title={`${week}: ${w.findings} findings, ${w.done} done`}>
-                    <div
-                      className="w-2 rounded-sm bg-primary/70 min-h-[3px]"
-                      style={{ height: `${Math.max(3, Math.round((w.findings / weekMax) * 100))}%` }}
-                    />
-                    <div
-                      className="w-2 rounded-sm bg-emerald-500/80 min-h-[3px]"
-                      style={{ height: `${Math.max(3, Math.round((w.done / weekMax) * 100))}%` }}
-                    />
-                  </div>
-                ))}
-              </div>
+            <div
+              className="flex items-end gap-2 h-20"
+              role="img"
+              aria-label="Weekly findings versus objectives completed"
+            >
+              {weeks.map(([week, w]) => (
+                <div
+                  key={week}
+                  className="flex-1 flex items-end justify-center gap-0.5 h-full"
+                  title={`${week}: ${w.findings} findings, ${w.done} done`}
+                >
+                  <div
+                    className="w-2 rounded-sm bg-primary/70 min-h-[3px]"
+                    style={{ height: `${Math.max(3, Math.round((w.findings / weekMax) * 100))}%` }}
+                  />
+                  <div
+                    className="w-2 rounded-sm bg-emerald-500/80 min-h-[3px]"
+                    style={{ height: `${Math.max(3, Math.round((w.done / weekMax) * 100))}%` }}
+                  />
+                </div>
+              ))}
+            </div>
             <div className="flex gap-4 mt-1 text-[0.65rem] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="inline-block size-2 rounded-sm bg-primary/70" /> findings
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-sm bg-emerald-500/80" /> objectives done
+                <span className="inline-block size-2 rounded-sm bg-emerald-500/80" /> objectives
+                done
               </span>
             </div>
           </div>
@@ -260,7 +290,9 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     <span className="font-mono text-muted-foreground">
                       {finding.start_ms != null ? `${(finding.start_ms / 1000).toFixed(1)}s` : '—'}
                     </span>{' '}
-                    <span className="capitalize">{(finding.category ?? 'technique').replace(/_/g, ' ')}</span>
+                    <span className="capitalize">
+                      {(finding.category ?? 'technique').replace(/_/g, ' ')}
+                    </span>
                     {finding.observation ? ` — ${finding.observation}` : ''}
                   </p>
                   <Button
@@ -287,7 +319,9 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New objective</DialogTitle>
-            <DialogDescription>Optionally linked to the finding that motivated it.</DialogDescription>
+            <DialogDescription>
+              Optionally linked to the finding that motivated it.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">

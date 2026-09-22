@@ -6,7 +6,12 @@ import { enqueueAnalysis } from '../lib/queue'
 import { checkAnalysisLimit, getIP } from '../lib/ratelimit'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { verifyAttributionToken } from '../lib/attribution'
-import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/supabaseHistory'
+import {
+  persistAnalysisStart,
+  checkOrgDailyQuota,
+  getOrgTier,
+  recordUsage,
+} from '../lib/supabaseHistory'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
 

@@ -266,7 +266,9 @@ export default function StudentFormDialog({
                   ...Object.fromEntries(teams.map((t) => [t.id, t.name])),
                 }}
                 value={values.team_id ?? '__none'}
-                onValueChange={(v) => set('team_id', v === '__none' ? '' : (typeof v === 'string' ? v : ''))}
+                onValueChange={(v) =>
+                  set('team_id', v === '__none' ? '' : typeof v === 'string' ? v : '')
+                }
               >
                 <SelectTrigger id="team">
                   <SelectValue placeholder="No team" />
