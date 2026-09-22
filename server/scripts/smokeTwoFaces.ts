@@ -4,10 +4,9 @@
 //   cd server && bun run scripts/smokeTwoFaces.ts
 import {
   ensureInitialized,
-  upsertUser,
-  getUserByAuth0Id,
   withHistoryStore,
-} from '../src/lib/supabaseHistory'
+} from '../src/lib/historyStore'
+import { upsertUser, getUserByAuth0Id } from '../src/lib/users'
 import { createStudent, deleteStudent, getLinkedPlayer } from '../src/lib/orgData'
 
 const tag = `smoke-${Math.random().toString(36).slice(2, 8)}`

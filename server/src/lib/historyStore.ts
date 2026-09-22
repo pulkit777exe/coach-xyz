@@ -689,6 +689,18 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+  // Team assignment must exist before any student query runs — the teams
+  // module also carries this alter, but lazy DDL there loses the race when
+  // student routes are hit first (smoke caught it).
+  await sql`alter table students add column if not exists team_id uuid;`
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_students_team_id
+          on students (team_id);
+        `
+          })(),
+          (async () => {
   await sql`
           create index if not exists idx_attendance_auth0_id
           on attendance (auth0_id);

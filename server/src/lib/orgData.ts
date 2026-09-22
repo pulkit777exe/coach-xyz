@@ -149,6 +149,10 @@ export const listStudents = async (
       // students on those teams are visible — even unassigned ones hide.
       const scopeIds = (opts.teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
       const scoped = opts.teamIds !== undefined
+      // Bun binds [] as '' which is not a valid uuid[] literal — bind NULL
+      // instead. Unscoped queries short-circuit on `not ${scoped}`; scoped
+      // queries with NULL match nothing (correct: no visible teams).
+      const scopeParam = scopeIds.length > 0 ? scopeIds : null
       const rows = await db<Student[]>`
         select *
         from students
@@ -157,8 +161,8 @@ export const listStudents = async (
                or email ilike ${`%${search}%`} or sport ilike ${`%${search}%`})
           and (${opts.sport ?? ''} = '' or sport = ${opts.sport ?? null})
           and (${opts.status ?? ''} = '' or status = ${opts.status ?? null})
-          and (${teamId} = '' or team_id = ${teamId}::uuid)
-          and (not ${scoped} or team_id = any(${scopeIds}::uuid[]))
+          and (${teamId} = '' or team_id = ${teamId === '' ? null : teamId}::uuid)
+          and (not ${scoped} or team_id = any(${scopeParam}::uuid[]))
         order by full_name asc;
       `
       return rows ?? []
@@ -263,6 +267,8 @@ export const updateStudent = async (
     const values = cols.map((k) => {
       const v = input[k]
       if (v === undefined || v === null) return null
+      // Cast columns (::uuid/::date/::integer) reject '' — treat as unset.
+      if (v === '' && colCasts[k]) return null
       return typeof v === 'number' ? v : String(v)
     })
     const rows = await db.unsafe<Student[]>(sql, [...values, auth0Id, id])

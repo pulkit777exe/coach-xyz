@@ -2,7 +2,7 @@
 // against the connected history database. Safe to re-run at any time.
 //
 //   cd server && bun run scripts/verifyMigration.ts
-import { ensureInitialized, withHistoryStore } from '../src/lib/supabaseHistory'
+import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
 
 async function main() {
   await ensureInitialized()
