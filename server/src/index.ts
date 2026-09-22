@@ -16,6 +16,7 @@ import orgRoute from "./routes/org"
 import meRoute from "./routes/me"
 import emailRoute from "./routes/email"
 import membersRoute from "./routes/members"
+import teamsRoute from "./routes/teams"
 import notificationsRoute from "./routes/notifications"
 import aiReportsRoute from "./routes/aiReports"
 import shareRoute from "./routes/share"
@@ -123,10 +124,11 @@ const app = new Elysia({
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)
-  .use(orgRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
+  .use(orgRoute.use(orgRoleGuard(["owner", "admin", "coach", "analyst", "medical"])))
   .use(meRoute)
   .use(emailRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
   .use(membersRoute)
+  .use(teamsRoute)
   .use(notificationsRoute)
   .use(aiReportsRoute.use(orgRoleGuard(["owner", "admin", "coach"])))
   .use(shareRoute)

@@ -56,6 +56,8 @@ const ROLE_BADGE_VARIANT: Record<
   owner: "default",
   admin: "info",
   coach: "success",
+  analyst: "info",
+  medical: "secondary",
   player: "secondary",
 }
 

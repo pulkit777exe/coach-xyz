@@ -42,6 +42,7 @@ export type Student = {
   status: (typeof STUDENT_STATUSES)[number]
   joined_on: string | null
   account_auth0_id: string | null
+  team_id: string | null
   created_at: string
   updated_at: string
 }
@@ -133,12 +134,13 @@ export type PerformanceSeriesPoint = {
 
 export const listStudents = async (
   auth0Id: string,
-  opts: { search?: string; sport?: string; status?: string } = {},
+  opts: { search?: string; sport?: string; status?: string; teamId?: string } = {},
 ): Promise<Student[]> => {
   return (
     (await withHistoryStore(async (db) => {
       await ensureInitialized()
       const search = opts.search?.trim() ?? ""
+      const teamId = opts.teamId?.trim() ?? ""
       const rows = await db<Student[]>`
         select *
         from students
@@ -147,6 +149,7 @@ export const listStudents = async (
                or email ilike ${`%${search}%`} or sport ilike ${`%${search}%`})
           and (${opts.sport ?? ""} = '' or sport = ${opts.sport ?? null})
           and (${opts.status ?? ""} = '' or status = ${opts.status ?? null})
+          and (${teamId} = '' or team_id = ${teamId}::uuid)
         order by full_name asc;
       `
       return rows ?? []
@@ -201,6 +204,7 @@ const studentInsertCols = {
   notes: true,
   status: true,
   joined_on: true,
+  team_id: true,
 } as const
 
 export type StudentInput = Record<string, unknown>
@@ -238,6 +242,7 @@ export const updateStudent = async (
       jersey_number: "::integer",
       date_of_birth: "::date",
       joined_on: "::date",
+      team_id: "::uuid",
     } as Record<string, string>
     const setClause =
       cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? ""}`).join(", ") +

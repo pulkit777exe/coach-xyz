@@ -48,6 +48,7 @@ import {
 } from "../lib/orgValidate"
 import type { ImportRow } from "../lib/orgValidate"
 import { linkAnalysisToStudent } from "../lib/supabaseHistory"
+import { getTeam } from "../lib/teams"
 import {
   ATTENDANCE_STATUSES,
   EVENT_STATUSES,
@@ -62,6 +63,25 @@ const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES)
 const EVENT_STATUS_SET: ReadonlySet<string> = new Set(EVENT_STATUSES)
 const STUDENT_STATUS_SET: ReadonlySet<string> = new Set(STUDENT_STATUSES)
 const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Validate an optional team assignment: null/"" clears it, otherwise the
+ * team must exist in this org (prevents cross-org linkage).
+ */
+const resolveTeamId = async (
+  auth0Id: string,
+  raw: unknown,
+): Promise<{ ok: true; teamId: string | null } | { ok: false; error: string }> => {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, teamId: null }
+  if (typeof raw !== "string" || !UUID_RE.test(raw)) {
+    return { ok: false, error: "team_id must be a valid UUID or null" }
+  }
+  const team = await getTeam(auth0Id, raw)
+  if (!team) return { ok: false, error: "team not found in this organization" }
+  return { ok: true, teamId: raw }
+};
 
 const parseStudentInput = (body: Record<string, unknown>) => {
   const input: StudentInput = {}
@@ -109,6 +129,7 @@ export default new Elysia()
       search: url.searchParams.get("search") ?? "",
       sport: url.searchParams.get("sport") ?? "",
       status: url.searchParams.get("status") ?? "",
+      teamId: url.searchParams.get("team_id") ?? "",
     })
     set.status = 200
     return { students }
@@ -157,6 +178,12 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "joined_on must be YYYY-MM-DD", false)
     }
+    const team = await resolveTeamId(auth0Id, (body as Record<string, unknown>).team_id)
+    if (!team.ok) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", team.error, false)
+    }
+    if (team.teamId) input.team_id = team.teamId
 
     const student = await createStudent(auth0Id, input)
     if (!student) {
@@ -198,6 +225,14 @@ export default new Elysia()
     if (input.joined_on !== undefined && input.joined_on !== null && !isDate(input.joined_on)) {
       set.status = 400
       return buildError("INVALID_REQUEST", "joined_on must be YYYY-MM-DD", false)
+    }
+    if ("team_id" in (body as Record<string, unknown>)) {
+      const team = await resolveTeamId(auth0Id, (body as Record<string, unknown>).team_id)
+      if (!team.ok) {
+        set.status = 400
+        return buildError("INVALID_REQUEST", team.error, false)
+      }
+      input.team_id = team.teamId
     }
 
     const student = await updateStudent(auth0Id, id, input)

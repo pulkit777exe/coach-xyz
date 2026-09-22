@@ -95,7 +95,7 @@ describe("verifyServiceIdentity", () => {
     setToken(TOKEN)
     const outcome = verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
       memberRole: "player",
-      allowedMemberRoles: ["owner", "admin", "coach"],
+      allowedMemberRoles: ["owner", "admin", "coach", "analyst"],
     })
     expect(outcome.ok).toBe(false)
     if (outcome.ok) throw new Error("unreachable")
@@ -107,7 +107,7 @@ describe("verifyServiceIdentity", () => {
     expect(
       verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
         memberRole: "coach",
-        allowedMemberRoles: ["owner", "admin", "coach"],
+        allowedMemberRoles: ["owner", "admin", "coach", "analyst"],
       }),
     ).toEqual({ ok: true })
   })

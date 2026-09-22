@@ -11,19 +11,21 @@ import {
 // orgMembers *Contract tests on both sides. This is a SEPARATE vocabulary from
 // the users.role enum (coach/player in server/src/lib/userRoles.ts) — org
 // membership grants access to an org's data, user.role describes the account.
-export const ORG_MEMBER_ROLES = ["owner", "admin", "coach", "player"] as const
+export const ORG_MEMBER_ROLES = ["owner", "admin", "coach", "analyst", "medical", "player"] as const
 export type OrgMemberRole = (typeof ORG_MEMBER_ROLES)[number]
 
 export const ORG_MEMBER_ROLE_LABELS: Record<OrgMemberRole, string> = {
   owner: "Owner",
   admin: "Admin",
   coach: "Coach",
+  analyst: "Analyst",
+  medical: "Medical",
   player: "Player",
 }
 
 // Roles an inviter may assign when adding a member. The owner role is never
 // assigned via invite — it exists only on the seeded owner row.
-export const ORG_MEMBER_INVITE_ROLES = ["admin", "coach", "player"] as const
+export const ORG_MEMBER_INVITE_ROLES = ["admin", "coach", "analyst", "medical", "player"] as const
 export type OrgMemberInviteRole = (typeof ORG_MEMBER_INVITE_ROLES)[number]
 
 export type OrgMember = {
@@ -60,13 +62,40 @@ const ensureSchema = async (db: SQL) => {
       org_auth0_id text not null,
       member_auth0_id text,
       member_email text,
-      role text not null check (role in ('owner','admin','coach','player')),
+      role text not null check (role in ('owner','admin','coach','analyst','medical','player')),
       status text not null default 'active',
       invited_by text,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       constraint org_members_unique unique (org_auth0_id, member_auth0_id)
     );
+  `
+  // Migrate pre-existing tables whose CHECK still lists only the four
+  // original roles: drop the old role check (name discovered dynamically)
+  // and re-add the six-role version. Idempotent.
+  await db`
+    do $$
+    declare _conname text;
+    begin
+      select conname into _conname
+      from pg_constraint
+      where conrelid = 'org_members'::regclass
+        and contype = 'c'
+        and pg_get_constraintdef(oid) like '%role in%';
+      if _conname is not null and _conname <> 'org_members_role_check' then
+        execute format('alter table org_members drop constraint %I', _conname);
+      end if;
+    end
+    $$;
+  `
+  await db`
+    alter table org_members
+      drop constraint if exists org_members_role_check;
+  `
+  await db`
+    alter table org_members
+      add constraint org_members_role_check
+      check (role in ('owner','admin','coach','analyst','medical','player'));
   `
   await db`
     create index if not exists idx_org_members_org_auth0_id
@@ -140,7 +169,9 @@ export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> =
           when 'owner' then 0
           when 'admin' then 1
           when 'coach' then 2
-          else 3
+          when 'analyst' then 3
+          when 'medical' then 4
+          else 5
         end,
         coalesce(u.name, m.member_email) asc nulls last;
     `
