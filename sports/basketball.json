@@ -336,5 +336,32 @@
       "description": "Useful third angle for layups, footwork and rim finishing."
     }
   ],
+  "positions": [
+    {
+      "id": "point_guard",
+      "label": "Point Guard",
+      "description": "Primary ball-handler and offense organizer."
+    },
+    {
+      "id": "shooting_guard",
+      "label": "Shooting Guard",
+      "description": "Perimeter scorer and secondary handler."
+    },
+    {
+      "id": "small_forward",
+      "label": "Small Forward",
+      "description": "Versatile wing scorer and defender."
+    },
+    {
+      "id": "power_forward",
+      "label": "Power Forward",
+      "description": "Interior scorer and rebounder."
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "description": "Rim protector, rebounder, and paint scorer."
+    }
+  ],
   "version": 1
 }

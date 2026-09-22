@@ -236,5 +236,27 @@
       "description": "Useful third angle for shot placement and goalie reads."
     }
   ],
+  "positions": [
+    {
+      "id": "goaltender",
+      "label": "Goaltender",
+      "description": "Protects the net and starts breakouts."
+    },
+    {
+      "id": "defense",
+      "label": "Defense",
+      "description": "Shuts down rushes and moves the puck up ice."
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "description": "Takes faceoffs and drives play through the middle."
+    },
+    {
+      "id": "winger",
+      "label": "Winger",
+      "description": "Attacks down the boards and finishes chances."
+    }
+  ],
   "version": 2
 }

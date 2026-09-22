@@ -244,5 +244,27 @@
       "description": "Useful third angle for line, length and seam movement."
     }
   ],
+  "positions": [
+    {
+      "id": "batter",
+      "label": "Batter",
+      "description": "Scores runs and anchors the innings."
+    },
+    {
+      "id": "bowler",
+      "label": "Bowler",
+      "description": "Takes wickets and restricts scoring."
+    },
+    {
+      "id": "all_rounder",
+      "label": "All-Rounder",
+      "description": "Contributes with both bat and ball."
+    },
+    {
+      "id": "wicket_keeper",
+      "label": "Wicket-Keeper",
+      "description": "Gloves behind the stumps and supports the bowlers."
+    }
+  ],
   "version": 2
 }

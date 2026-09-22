@@ -4,6 +4,7 @@ from core.sport_config import (
     load_sport_config,
     recommended_camera_angles,
     sport_pack_version,
+    sport_positions,
 )
 
 
@@ -32,6 +33,22 @@ class TestRecommendedCameraAngles:
     def test_unknown_sport_returns_empty_list(self):
         assert recommended_camera_angles("quidditch") == []
         assert recommended_camera_angles(None) == []
+
+
+class TestSportPositions:
+    def test_every_sport_has_positions(self):
+        for sport in ("baseball", "basketball", "cricket", "football", "hockey", "tennis"):
+            positions = sport_positions(sport)
+            assert len(positions) >= 3, sport
+            for entry in positions:
+                assert entry["id"].strip()
+                assert entry["label"].strip()
+            ids = [entry["id"] for entry in positions]
+            assert len(set(ids)) == len(ids), sport
+
+    def test_unknown_sport_returns_empty_list(self):
+        assert sport_positions("quidditch") == []
+        assert sport_positions(None) == []
 
 
 class TestSportPackVersion:

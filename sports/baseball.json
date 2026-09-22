@@ -253,5 +253,27 @@
       "description": "Useful third angle for pitch movement and strike-zone command."
     }
   ],
+  "positions": [
+    {
+      "id": "pitcher",
+      "label": "Pitcher",
+      "description": "Controls the game from the mound."
+    },
+    {
+      "id": "catcher",
+      "label": "Catcher",
+      "description": "Calls the game and anchors the defense."
+    },
+    {
+      "id": "infielder",
+      "label": "Infielder",
+      "description": "Covers the diamond inside the baseline."
+    },
+    {
+      "id": "outfielder",
+      "label": "Outfielder",
+      "description": "Tracks fly balls and covers the gaps."
+    }
+  ],
   "version": 2
 }

@@ -235,5 +235,22 @@
       "description": "Useful third angle for ready position, split step and volley technique."
     }
   ],
+  "positions": [
+    {
+      "id": "baseliner",
+      "label": "Baseliner",
+      "description": "Wins points from the back of the court with depth and consistency."
+    },
+    {
+      "id": "serve_volleyer",
+      "label": "Serve-and-Volleyer",
+      "description": "Pressures with the serve and finishes at the net."
+    },
+    {
+      "id": "all_court",
+      "label": "All-Court",
+      "description": "Mixes baseline rallies with net approaches."
+    }
+  ],
   "version": 2
 }

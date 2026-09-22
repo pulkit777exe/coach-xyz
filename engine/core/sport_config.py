@@ -68,3 +68,33 @@ def recommended_camera_angles(sport: str | None) -> list[dict[str, str]]:
             "description": description.strip() if isinstance(description, str) else "",
         })
     return guidance
+
+
+def sport_positions(sport: str | None) -> list[dict[str, str]]:
+    """Canonical position vocabulary for a sport from the sport config.
+
+    Returns [{id, label, description}] — [] when the sport has no vocabulary.
+    Malformed entries are skipped so a bad JSON file degrades to no vocabulary
+    instead of breaking roster flows.
+    """
+    config = load_sport_config(sport)
+    raw = config.get("positions")
+    if not isinstance(raw, list):
+        return []
+    positions: list[dict[str, str]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        position_id = entry.get("id")
+        label = entry.get("label")
+        if not isinstance(position_id, str) or not position_id.strip():
+            continue
+        if not isinstance(label, str) or not label.strip():
+            continue
+        description = entry.get("description")
+        positions.append({
+            "id": position_id.strip(),
+            "label": label.strip(),
+            "description": description.strip() if isinstance(description, str) else "",
+        })
+    return positions

@@ -231,5 +231,27 @@
       "description": "Useful third angle for positioning, spacing and off-ball movement."
     }
   ],
+  "positions": [
+    {
+      "id": "goalkeeper",
+      "label": "Goalkeeper",
+      "description": "Shot-stopper and last line of defense."
+    },
+    {
+      "id": "defender",
+      "label": "Defender",
+      "description": "Marks attackers and builds play from the back."
+    },
+    {
+      "id": "midfielder",
+      "label": "Midfielder",
+      "description": "Links defense and attack through possession."
+    },
+    {
+      "id": "forward",
+      "label": "Forward",
+      "description": "Leads the attack and finishes chances."
+    }
+  ],
   "version": 2
 }
