@@ -263,6 +263,8 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
 export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
   'owner',
   'admin',
+  'head_coach',
+  'assistant_coach',
   'coach',
   'analyst',
 ]

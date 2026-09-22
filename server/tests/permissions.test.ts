@@ -34,6 +34,25 @@ describe('hasPermission', () => {
     expect(hasPermission('coach', 'medical.read')).toBe(false)
   })
 
+  test('head coach matches the legacy coach track; assistant is scoped', () => {
+    for (const p of [
+      'analysis.create',
+      'player.manage',
+      'team.manage',
+      'finding.review',
+    ] as const) {
+      expect(hasPermission('head_coach', p)).toBe(hasPermission('coach', p))
+    }
+    expect(hasPermission('head_coach', 'team.manage')).toBe(true)
+    expect(hasPermission('head_coach', 'player.manage')).toBe(true)
+    expect(hasPermission('assistant_coach', 'analysis.create')).toBe(true)
+    expect(hasPermission('assistant_coach', 'finding.review')).toBe(true)
+    expect(hasPermission('assistant_coach', 'team.manage')).toBe(false)
+    expect(hasPermission('assistant_coach', 'player.manage')).toBe(false)
+    expect(hasPermission('assistant_coach', 'org.manage_members')).toBe(false)
+    expect(hasPermission('assistant_coach', 'medical.read')).toBe(false)
+  })
+
   test('analyst analyzes and reports without membership management', () => {
     expect(hasPermission('analyst', 'analysis.create')).toBe(true)
     expect(hasPermission('analyst', 'report.create')).toBe(true)
@@ -77,6 +96,13 @@ describe('canAccessTeam', () => {
     expect(canAccessTeam('analyst', ['team-1'], 'team-1')).toBe(true)
     expect(canAccessTeam('medical', ['team-1'], 'team-1')).toBe(true)
     expect(canAccessTeam('medical', [], 'team-1')).toBe(false)
+  })
+
+  test('head/assistant coaches need a membership on that team', () => {
+    expect(canAccessTeam('head_coach', ['team-1'], 'team-1')).toBe(true)
+    expect(canAccessTeam('head_coach', ['team-2'], 'team-1')).toBe(false)
+    expect(canAccessTeam('assistant_coach', ['team-1'], 'team-1')).toBe(true)
+    expect(canAccessTeam('assistant_coach', [], 'team-1')).toBe(false)
   })
 
   test('player never passes team scope (self-scope only)', () => {
@@ -153,6 +179,17 @@ describe('resolveStudentScope', () => {
     expect(resolveStudentScope('medical', ['t9'])).toEqual({
       all: false,
       teamIds: ['t9'],
+    })
+  })
+
+  test('coaching tracks see only their teams', () => {
+    expect(resolveStudentScope('head_coach', ['t1'])).toEqual({
+      all: false,
+      teamIds: ['t1'],
+    })
+    expect(resolveStudentScope('assistant_coach', ['t2'])).toEqual({
+      all: false,
+      teamIds: ['t2'],
     })
   })
 

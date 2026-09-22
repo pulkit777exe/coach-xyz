@@ -52,6 +52,8 @@ const INVITE_ROLE_ITEMS: Record<string, string> = Object.fromEntries(
 const ROLE_BADGE_VARIANT: Record<OrgMemberRole, 'default' | 'secondary' | 'success' | 'info'> = {
   owner: 'default',
   admin: 'info',
+  head_coach: 'success',
+  assistant_coach: 'success',
   coach: 'success',
   analyst: 'info',
   medical: 'secondary',

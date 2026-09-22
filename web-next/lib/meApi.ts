@@ -15,7 +15,15 @@ import type {
 
 export type MyOrg = {
   org_auth0_id: string
-  role: 'owner' | 'admin' | 'coach' | 'player'
+  role:
+    | 'owner'
+    | 'admin'
+    | 'head_coach'
+    | 'assistant_coach'
+    | 'coach'
+    | 'analyst'
+    | 'medical'
+    | 'player'
   display_name: string | null
 }
 

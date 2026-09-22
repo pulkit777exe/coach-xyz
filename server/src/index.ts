@@ -135,13 +135,13 @@ const app = new Elysia({
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)
-  .use(orgRoute.use(orgRoleGuard(['owner', 'admin', 'coach', 'analyst', 'medical'])))
+  .use(orgRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical'])))
   .use(meRoute)
-  .use(emailRoute.use(orgRoleGuard(['owner', 'admin', 'coach'])))
+  .use(emailRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
   .use(membersRoute)
   .use(teamsRoute)
   .use(notificationsRoute)
-  .use(aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'coach'])))
+  .use(aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
   .use(shareRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────

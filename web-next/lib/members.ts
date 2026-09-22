@@ -8,12 +8,23 @@ const org = (auth0Id: string, path: string) =>
 // contractual, pinned by the orgMembers *Contract tests on both sides). This is
 // separate from the account-level userRoles (coach/player) — membership grants
 // access to an org's data, userRoles describes the account.
-export const ORG_MEMBER_ROLES = ['owner', 'admin', 'coach', 'analyst', 'medical', 'player'] as const
+export const ORG_MEMBER_ROLES = [
+  'owner',
+  'admin',
+  'head_coach',
+  'assistant_coach',
+  'coach',
+  'analyst',
+  'medical',
+  'player',
+] as const
 export type OrgMemberRole = (typeof ORG_MEMBER_ROLES)[number]
 
 export const ORG_MEMBER_ROLE_LABELS: Record<OrgMemberRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
+  head_coach: 'Head Coach',
+  assistant_coach: 'Assistant Coach',
   coach: 'Coach',
   analyst: 'Analyst',
   medical: 'Medical',
@@ -22,7 +33,15 @@ export const ORG_MEMBER_ROLE_LABELS: Record<OrgMemberRole, string> = {
 
 // Roles assignable via invite. The owner role is never assigned — it exists
 // only on the seeded owner row.
-export const ORG_MEMBER_INVITE_ROLES = ['admin', 'coach', 'analyst', 'medical', 'player'] as const
+export const ORG_MEMBER_INVITE_ROLES = [
+  'admin',
+  'head_coach',
+  'assistant_coach',
+  'coach',
+  'analyst',
+  'medical',
+  'player',
+] as const
 export type OrgMemberInviteRole = (typeof ORG_MEMBER_INVITE_ROLES)[number]
 
 export type OrgMember = {

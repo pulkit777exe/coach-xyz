@@ -40,7 +40,7 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
   const [invites, setInvites] = useState<OrgInvite[]>(initialInvites)
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<string>('coach')
+  const [role, setRole] = useState<string>('assistant_coach')
   const [lastToken, setLastToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

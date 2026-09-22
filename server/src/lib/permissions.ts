@@ -50,9 +50,23 @@ const ANALYST_PERMISSIONS: readonly Permission[] = [
   'finding.review',
 ]
 
+// Assistant coaches run sessions and review findings but cannot reshape teams
+// or manage the roster — head coaches (and the legacy `coach` alias) can.
+const ASSISTANT_COACH_PERMISSIONS: readonly Permission[] = [
+  'team.read',
+  'analysis.create',
+  'analysis.read',
+  'player.read',
+  'report.read',
+  'report.create',
+  'finding.review',
+]
+
 const ROLE_PERMISSIONS: Record<OrgMemberRole, readonly Permission[]> = {
   owner: ALL,
   admin: ALL.filter((p) => p !== 'medical.read'),
+  head_coach: COACH_PERMISSIONS,
+  assistant_coach: ASSISTANT_COACH_PERMISSIONS,
   coach: COACH_PERMISSIONS,
   analyst: ANALYST_PERMISSIONS,
   medical: ['team.read', 'player.read', 'report.read', 'medical.read'],
@@ -76,7 +90,13 @@ export function canAccessTeam(
   teamId: string,
 ): boolean {
   if (role === 'owner' || role === 'admin') return true
-  if (role === 'coach' || role === 'analyst' || role === 'medical') {
+  if (
+    role === 'head_coach' ||
+    role === 'assistant_coach' ||
+    role === 'coach' ||
+    role === 'analyst' ||
+    role === 'medical'
+  ) {
     return memberTeamIds.includes(teamId)
   }
   return false
@@ -98,7 +118,13 @@ export function resolveStudentScope(
   memberTeamIds: readonly string[],
 ): { all: true } | { all: false; teamIds: string[] } {
   if (role === 'owner' || role === 'admin') return { all: true }
-  if (role === 'coach' || role === 'analyst' || role === 'medical') {
+  if (
+    role === 'head_coach' ||
+    role === 'assistant_coach' ||
+    role === 'coach' ||
+    role === 'analyst' ||
+    role === 'medical'
+  ) {
     return { all: false, teamIds: [...memberTeamIds] }
   }
   return { all: false, teamIds: [] }

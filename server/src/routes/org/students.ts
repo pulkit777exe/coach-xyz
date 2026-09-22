@@ -119,7 +119,13 @@ export default new Elysia()
       // Hierarchy convenience: a coach with exactly one team creates
       // players under that team unless another is chosen.
       const auto = await resolveCaller(auth0Id, request)
-      if (auto.role === 'coach' || auto.role === 'analyst' || auto.role === 'medical') {
+      if (
+        auto.role === 'head_coach' ||
+        auto.role === 'assistant_coach' ||
+        auto.role === 'coach' ||
+        auto.role === 'analyst' ||
+        auto.role === 'medical'
+      ) {
         if (auto.teamIds.length === 1) input.team_id = auto.teamIds[0]
       }
     }

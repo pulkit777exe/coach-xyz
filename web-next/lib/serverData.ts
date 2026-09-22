@@ -104,7 +104,15 @@ export const orgTeams = cache((auth0Id: string) => libListTeams(auth0Id))
 
 export const orgSeasons = cache((auth0Id: string) => libOrgSeasons(auth0Id))
 
-export type OrgRole = 'owner' | 'admin' | 'coach' | 'player'
+export type OrgRole =
+  | 'owner'
+  | 'admin'
+  | 'head_coach'
+  | 'assistant_coach'
+  | 'coach'
+  | 'analyst'
+  | 'medical'
+  | 'player'
 
 export type OrgContext = {
   /** The auth0Id to scope every org/email/auth-user call against. */

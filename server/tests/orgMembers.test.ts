@@ -33,8 +33,25 @@ afterEach(() => {
 // web-next/lib/members.ts (pinned there by the web-side contract). The
 // users.role enum (coach/player) is a separate vocabulary; do not merge them.
 const CANONICAL = {
-  orgMemberRoles: ['owner', 'admin', 'coach', 'analyst', 'medical', 'player'],
-  inviteRoles: ['admin', 'coach', 'analyst', 'medical', 'player'],
+  orgMemberRoles: [
+    'owner',
+    'admin',
+    'head_coach',
+    'assistant_coach',
+    'coach',
+    'analyst',
+    'medical',
+    'player',
+  ],
+  inviteRoles: [
+    'admin',
+    'head_coach',
+    'assistant_coach',
+    'coach',
+    'analyst',
+    'medical',
+    'player',
+  ],
 } as const
 
 describe('org-member role vocabulary contract', () => {

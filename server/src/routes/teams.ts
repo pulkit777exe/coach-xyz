@@ -53,7 +53,7 @@ export default new Elysia()
   .use(serviceGuard)
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin', 'coach', 'analyst', 'medical', 'player']))
+      .use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical', 'player']))
       .get('/api/org/:auth0Id/teams', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
@@ -108,7 +108,7 @@ export default new Elysia()
   )
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin', 'coach', 'analyst', 'medical']))
+      .use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical']))
       .get('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
         const { auth0Id, teamId } = params
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
