@@ -5,8 +5,6 @@ is set every route except /health must present the shared x-service-token
 header. When unset (local dev) the middleware is inert.
 """
 
-import os
-
 import pytest
 from fastapi.testclient import TestClient
 

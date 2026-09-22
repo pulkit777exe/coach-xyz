@@ -1298,23 +1298,24 @@ def _normalize_report(parsed: Dict[str, Any], report_context: Dict[str, Any]) ->
     Guarantees each schema field exists with the right shape so the server can
     persist the report without re-validating.
     """
-    def _string_list(value: Any) -> List[str]:
+    def _string_list(value: Any) -> list[str]:
         if not isinstance(value, list):
             return []
         return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
-    text = lambda v: v if isinstance(v, str) else ""
-    trend = text(parsed.get("form_score_trend")).lower()
+    def _text(v: Any) -> str:
+        return v if isinstance(v, str) else ""
+    trend = _text(parsed.get("form_score_trend")).lower()
     if trend not in ("improving", "steady", "declining", "mixed"):
         trend = "steady"
     generated_at = (
-        text(parsed.get("generated_at"))
+        _text(parsed.get("generated_at"))
         or (report_context.get("generated_at") if isinstance(report_context.get("generated_at"), str) else "")
         or datetime.now(timezone.utc).isoformat()
     )
     return {
-        "narrative": text(parsed.get("narrative")),
-        "summary": text(parsed.get("summary")),
+        "narrative": _text(parsed.get("narrative")),
+        "summary": _text(parsed.get("summary")),
         "strengths": _string_list(parsed.get("strengths")),
         "areas_to_improve": _string_list(parsed.get("areas_to_improve")),
         "recommendations": _string_list(parsed.get("recommendations")),
