@@ -93,6 +93,11 @@ export default function ResultsSummary({ status, jobId, onReset, onStartChat }: 
                   <Badge variant="outline" className="mt-4 border-border text-foreground bg-muted px-4 py-1.5 text-sm uppercase tracking-wide">
                     {summary.overall_rating} Level
                   </Badge>
+                  {summary.needs_review && (
+                    <Badge variant="outline" className="mt-4 ml-2 border-warning/40 text-warning bg-warning/10 px-4 py-1.5 text-sm uppercase tracking-wide">
+                      Needs review
+                    </Badge>
+                  )}
                 </div>
                 <div className="text-center md:text-left border-l-0 md:border-l border-border md:pl-8">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Overall Assessment</p>

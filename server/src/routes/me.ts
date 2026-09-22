@@ -368,6 +368,9 @@ export default new Elysia()
         player_index: playerIndex,
         video_key: videoKey,
         angle,
+        // Player-hub jobs are authenticated humans waiting on UX —
+        // outrank anonymous queue entries.
+        priority: 1,
         owner_ids: [decision.coachAuth0Id, decision.requestedBy].filter(
           (id, i, arr) => id && arr.indexOf(id) === i,
         ),

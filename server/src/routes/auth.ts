@@ -7,12 +7,18 @@ import {
   getUserAnalysisById,
   getUserStats,
   getFindingsTrend,
+  deleteAnalysis,
+  persistAnalysisStatus,
   updateAnalysisDisplayName,
   saveChatMessage,
   getChatMessages,
 } from "../lib/supabaseHistory"
+import { markEngineJobFailed } from "../lib/engine"
+import { getJob } from "../lib/jobs"
+import { audit } from "../lib/audit"
 import { buildError } from "../lib/errors"
 import { serviceGuard, SERVICE_HEADERS } from "../lib/serviceGuard"
+import { readRequestMeta } from "../lib/requestMeta"
 import { redactWellness, resolveMedicalAccess } from "../lib/permissions"
 
 function generateSimpleResponse(question: string, summary: Record<string, unknown> | null): string {
@@ -192,8 +198,7 @@ export default new Elysia()
     set.status = 200
     return { trends }
   })
-  .patch("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, body, set }) => {
-    const { auth0Id, jobId } = params
+  .patch("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, body, set }) => {    const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError("INVALID_REQUEST", "Missing required parameters", false)
@@ -222,6 +227,89 @@ export default new Elysia()
     }
     set.status = 200
     return { analysis: existing }
+  })
+  // Cancel a running analysis. Failing the engine job stops status polling
+  // from ever completing it, and the cancel-guard in persistAnalysisStatus
+  // keeps late worker completions from resurrecting it.
+  .post("/api/auth/user/:auth0Id/analyses/:jobId/cancel", async ({ params, request, set }) => {
+    const { auth0Id, jobId } = params
+    if (!auth0Id || !jobId) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+    }
+    const analysis = await getUserAnalysisById(auth0Id, jobId)
+    if (!analysis) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Analysis not found", false)
+    }
+    if (analysis.complete) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Analysis is already complete", false)
+    }
+    const serverJob = await getJob(jobId)
+    if (serverJob) {
+      await markEngineJobFailed(
+        serverJob.engine_job_id,
+        "Analysis cancelled.",
+        "ANALYSIS_CANCELLED",
+        false,
+        jobId,
+      )
+    }
+    await persistAnalysisStatus({
+      serverJobId: jobId,
+      engineJobId: analysis.engine_job_id,
+      sessionToken: analysis.session_token,
+      playerIndex: analysis.player_index,
+      model: analysis.model,
+      status: {
+        stage: -1,
+        stage_name: "Cancelled",
+        progress: analysis.progress ?? 0,
+        complete: true,
+        video_ready: false,
+        summary: null,
+        error: "Analysis cancelled.",
+        error_code: "ANALYSIS_CANCELLED",
+        retryable: false,
+      },
+    })
+    set.status = 200
+    return { cancelled: true }
+  })
+  // Delete an analysis and its derived rows (retention §30).
+  .delete("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, request, set }) => {
+    const { auth0Id, jobId } = params
+    if (!auth0Id || !jobId) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+    }
+    const serverJob = await getJob(jobId)
+    if (serverJob) {
+      await markEngineJobFailed(
+        serverJob.engine_job_id,
+        "Analysis deleted.",
+        "ANALYSIS_CANCELLED",
+        false,
+        jobId,
+      )
+    }
+    const removed = await deleteAnalysis(auth0Id, jobId)
+    if (!removed) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Analysis not found", false)
+    }
+    const meta = readRequestMeta(request)
+    void audit({
+      orgAuth0Id: auth0Id,
+      actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+      action: "analysis.deleted",
+      resourceType: "analysis",
+      resourceId: jobId,
+      clientIp: meta.clientIp,
+    })
+    set.status = 200
+    return { deleted: true }
   })
   .get("/api/auth/user/:auth0Id/analyses/:jobId/chat", async ({ params, set }) => {
     const { auth0Id, jobId } = params

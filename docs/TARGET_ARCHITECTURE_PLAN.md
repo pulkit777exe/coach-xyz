@@ -105,14 +105,20 @@ per-player trend views (deferred to Phase 2 teams).
 Open: teams UI (assignment/filter screens), finding review actions still
 Phase 1-open, per-player finding trends.
 
-### Phase 3 — Pipeline durability (§11–§18, §30)
-1. Stage-level idempotency keys (`analysis_id, stage, input_hash,
-   model_version`) with committed-artifact short-circuit (§18).
-2. Per-org concurrency + quota + priority with aging (§17); Redis stays
-   cache/realtime, Supabase becomes the completion source of truth (§16).
-3. User-visible state labels mapped from internal states (§12); orchestrator
-   owns retries/timeouts/cancellation explicitly (§14).
-4. Retention policy + deletion propagation across artifacts (§30).
+### Phase 3 — Pipeline durability (§11–§18, §30) — SHIPPED (core)
+1. Stage resume (`_committed_summary`): retries reuse a committed summary
+   (skip Gemini, re-track for fresh landmarks); a surviving render
+   completes directly. Committed-artifact short-circuit, tested helpers.
+2. Priority tilt: player-hub jobs enqueue at priority 1 over anonymous 0
+   (BullMQ); per-org quotas remain open (need org resolution at enqueue).
+3. Supabase completion truth strengthened: worker + poll double-persist
+   plus persisted-fallback reads (existing); cancelled rows are terminal —
+   late completions can't resurrect them.
+4. User-visible control: job-level `needs_review` flag + badge; cancel
+   (in-progress) and delete (history/findings/chat propagation, audited)
+   wired end to end in the dashboard.
+Open: per-org quotas/aging (§17), retention policy config (§30), backup
+restore testing (§31) — Phase 4 items.
 
 ### Phase 4 — Storage & workers (§8–§10, §31, §34)
 1. Upload intents + signed multipart URLs direct to object storage (§8);

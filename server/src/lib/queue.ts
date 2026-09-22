@@ -85,6 +85,8 @@ export interface AnalysisPayload {
   video_key: string | null
   angle?: string | null
   owner_ids?: string[]
+  /** BullMQ priority (higher = sooner). Signed-in flows outrank anonymous. */
+  priority?: number
 }
 
 /** Shared enqueue path for analyze-video and me/analyze-video. */
@@ -105,7 +107,7 @@ export async function enqueueAnalysis(job: AnalysisPayload): Promise<void> {
   await analysisQueue.add(
     job.server_job_id,
     job,
-    { priority: JOB_PRIORITY },
+    { priority: job.priority ?? JOB_PRIORITY },
   )
 }
 

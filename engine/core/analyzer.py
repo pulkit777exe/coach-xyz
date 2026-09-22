@@ -342,6 +342,7 @@ def _finalize_cached(result: dict, job_id: str, angle: str | None) -> dict:
             result.get("provenance"),
             job_id,
         )
+    result["needs_review"] = _needs_review(result.get("findings"))
     return result
 
 
@@ -400,6 +401,37 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
 
     # Fallback: just update the summary
     update_job(job_id, summary=cached_result)
+
+
+def _committed_summary(job_id: str) -> dict[str, Any] | None:
+    """Return a prior attempt's summary when it is a committable artifact.
+
+    Stage-level idempotency (§18): if a previous attempt got as far as a
+    valid summary, a retry must not redo the Gemini call — it resumes from
+    tracking (for fresh landmarks) and reuses the committed summary.
+    """
+    from core.jobs import get_job as _get_job
+
+    try:
+        prior = _get_job(job_id)
+    except Exception:
+        return None
+    summary = prior.summary
+    if not isinstance(summary, dict) or not summary.get("shot_events"):
+        return None
+    return summary
+
+
+def _rendered_key(job_id: str) -> str:
+    return f"results/{job_id}.mp4"
+
+
+def _needs_review(findings: Any) -> bool:
+    """True when any finding needs human review (§21 job-level flag)."""
+    return bool(
+        isinstance(findings, list)
+        and any(isinstance(f, dict) and f.get("review_state") == "needs_review" for f in findings)
+    )
 
 
 def run_analysis(
@@ -486,6 +518,28 @@ def run_analysis(
 
         # State: scanning (extracting frames and detecting players)
         transition_job(job_id, "scanning")
+
+        # Stage resume: a prior attempt may have committed a valid summary
+        # but died before/during render. Reuse it and skip the Gemini call —
+        # tracking still re-runs below for fresh landmarks.
+        resume_summary = _committed_summary(job_id)
+        if resume_summary is not None:
+            if storage.get_local_file_path(_rendered_key(job_id)):
+                update_job(
+                    job_id,
+                    video_key=_rendered_key(job_id),
+                    video_path=storage.get_local_file_path(_rendered_key(job_id)),
+                )
+                _safe_transition_to_completed(
+                    job_id, _finalize_cached(resume_summary, job_id, angle)
+                )
+                return
+            logging.info(json.dumps({
+                "type": "analysis_resume",
+                "job_id": job_id,
+                "stage": "render",
+            }))
+
         preprocessed_path = preprocess_video_ffmpeg(local_path)
         cleanup_preprocessed = preprocessed_path != local_path
 
@@ -527,43 +581,51 @@ def run_analysis(
             track["motion_score"] = motion
             track["composite_score"] = 0.4 * visibility + 0.6 * motion
 
-        # State: analyzing (calling Gemini)
+        # State: analyzing (calling Gemini — skipped on stage resume)
         transition_job(job_id, "analyzing")
-        frame_budget = min(20, len(active_tracks))
-        best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
-        logging.info(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
-        for i, t in enumerate(best_for_gemini[:5]):
-            logging.debug(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
+        if resume_summary is not None:
+            gemini_result = resume_summary
+            logging.info(json.dumps({
+                "type": "analysis_resume",
+                "job_id": job_id,
+                "stage": "analyzing_skipped",
+            }))
+        else:
+            frame_budget = min(20, len(active_tracks))
+            best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
+            logging.info(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
+            for i, t in enumerate(best_for_gemini[:5]):
+                logging.debug(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
 
-        # Bound the blocking multimodal call so a hung model request fails
-        # fast with a retryable error instead of wedging the worker. Runs in
-        # a one-shot executor; on timeout the stray thread is abandoned (it
-        # only writes the analysis cache, which is keyed and idempotent).
-        from concurrent.futures import ThreadPoolExecutor
-        from concurrent.futures import TimeoutError as FuturesTimeoutError
-        from core.config import GEMINI_ANALYSIS_TIMEOUT_S
+            # Bound the blocking multimodal call so a hung model request fails
+            # fast with a retryable error instead of wedging the worker. Runs in
+            # a one-shot executor; on timeout the stray thread is abandoned (it
+            # only writes the analysis cache, which is keyed and idempotent).
+            from concurrent.futures import ThreadPoolExecutor
+            from concurrent.futures import TimeoutError as FuturesTimeoutError
+            from core.config import GEMINI_ANALYSIS_TIMEOUT_S
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
-            gemini_future = gemini_pool.submit(
-                call_gemini,
-                best_for_gemini,
-                video_duration,
-                fps,
-                video_width,
-                video_height,
-                player_index,
-                preprocessed_path,
-                frame_cache,
-            )
-            try:
-                gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
-            except FuturesTimeoutError as exc:
-                raise EngineError(
-                    code="GEMINI_TIMEOUT",
-                    message="AI analysis timed out. Please try again.",
-                    retryable=True,
-                ) from exc
-        gemini_result = normalize_gemini_result(gemini_result)
+            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
+                gemini_future = gemini_pool.submit(
+                    call_gemini,
+                    best_for_gemini,
+                    video_duration,
+                    fps,
+                    video_width,
+                    video_height,
+                    player_index,
+                    preprocessed_path,
+                    frame_cache,
+                )
+                try:
+                    gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
+                except FuturesTimeoutError as exc:
+                    raise EngineError(
+                        code="GEMINI_TIMEOUT",
+                        message="AI analysis timed out. Please try again.",
+                        retryable=True,
+                    ) from exc
+            gemini_result = normalize_gemini_result(gemini_result)
 
         # Extract sport from Gemini result for scoring config
         sport = gemini_result.get("sport", "cricket")
@@ -602,6 +664,7 @@ def run_analysis(
             gemini_result.get("provenance"),
             job_id,
         )
+        gemini_result["needs_review"] = _needs_review(gemini_result["findings"])
 
         # Cache the result
         set_cached_analysis(video_hash, gemini_result, player_index)

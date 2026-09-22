@@ -8,7 +8,7 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
-import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
+import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl, deleteAnalysis, cancelAnalysis } from '@/lib/api'
 import type { CoachAIError } from '@/lib/api'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
@@ -362,6 +362,20 @@ export default function AnalysisDetailClient({
 
       {/* Actions */}
       <div className="flex items-center gap-3 mb-8">
+        {!data.complete && !ec && (
+          <HoldToConfirm
+            onConfirm={async () => {
+              await cancelAnalysis(auth0Id, data.server_job_id)
+              router.refresh()
+            }}
+            confirmLabel="Analysis cancelled"
+            className="[&_*]:!text-foreground"
+          >
+            <span className="px-4 py-2 border border-border text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground cursor-pointer">
+              Cancel
+            </span>
+          </HoldToConfirm>
+        )}
         {data.complete && data.video_ready && (
           <LoadingButton
             onAction={() => { window.location.href = downloadUrl }}
@@ -414,7 +428,10 @@ export default function AnalysisDetailClient({
         </Button>
         <AnalysisLinkControl auth0Id={auth0Id} jobId={data.server_job_id} initialStudentId={data.student_id} />
         <HoldToConfirm
-          onConfirm={() => {}}
+          onConfirm={async () => {
+            await deleteAnalysis(auth0Id, data.server_job_id)
+            router.push('/dashboard/history')
+          }}
           confirmLabel="Analysis deleted"
           className="[&_*]:!text-foreground"
         >

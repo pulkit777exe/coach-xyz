@@ -63,3 +63,14 @@ class TestBuildFindings:
 
     def test_non_dict_events_skipped(self):
         assert build_findings([None, "x", _event()], "cricket", PROV, JOB)[0]["id"] == f"{JOB}:e3"
+
+
+class TestNeedsReview:
+    def test_true_when_any_finding_needs_review(self):
+        from core.analyzer import _needs_review
+
+        assert _needs_review([{"review_state": "auto"}, {"review_state": "needs_review"}]) is True
+        assert _needs_review([{"review_state": "auto"}]) is False
+        assert _needs_review([]) is False
+        assert _needs_review(None) is False
+        assert _needs_review("nope") is False

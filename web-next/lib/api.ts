@@ -560,8 +560,25 @@ export async function getUserProfile(
   )
 }
 
-export const renameAnalysis = async (
+export const cancelAnalysis = async (
   auth0Id: string,
+  jobId: string,
+): Promise<{ cancelled: boolean }> => {
+  return apiFetch<{ cancelled: boolean }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/cancel`, {
+    method: "POST",
+  })
+}
+
+export const deleteAnalysis = async (
+  auth0Id: string,
+  jobId: string,
+): Promise<{ deleted: boolean }> => {
+  return apiFetch<{ deleted: boolean }>(`${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}`, {
+    method: "DELETE",
+  })
+}
+
+export const renameAnalysis = async (  auth0Id: string,
   jobId: string,
   displayName: string,
 ): Promise<{ analysis: DashboardAnalysis }> => {

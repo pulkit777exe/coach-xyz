@@ -650,6 +650,20 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
 
   await withHistoryStore(async (db) => {
     await ensureInitialized()
+    // A cancelled analysis stays cancelled: late worker completions must not
+    // resurrect it (cancellation is an explicit terminal state).
+    const existing = await db<{ complete: boolean; error_code: string | null }[]>`
+      select complete, error_code from analysis_history
+      where server_job_id = ${record.serverJobId}
+      limit 1;
+    `
+    if (existing?.[0]?.complete && existing[0].error_code === "ANALYSIS_CANCELLED") {
+      await db`
+        update analysis_history set last_polled_at = now()
+        where server_job_id = ${record.serverJobId};
+      `
+      return
+    }
     await db`
       insert into analysis_history (
         server_job_id,
@@ -819,6 +833,28 @@ export const getFindingsTrend = async (
     `
     return rows ?? []
   })) ?? []
+}
+
+/** Delete an analysis and its derived rows (retention §30).
+ * Removes history, findings, and chat messages. Engine artifacts expire via
+ * job TTL; the rendered video 404s once the engine job is failed/expired. */
+export const deleteAnalysis = async (
+  auth0Id: string,
+  serverJobId: string,
+): Promise<boolean> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const owned = await db<{ server_job_id: string }[]>`
+      select server_job_id from analysis_history
+      where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
+      limit 1;
+    `
+    if (!owned?.[0]) return false
+    await db`delete from findings where server_job_id = ${serverJobId};`
+    await db`delete from chat_messages where server_job_id = ${serverJobId};`
+    await db`delete from analysis_history where server_job_id = ${serverJobId};`
+    return true
+  })) ?? false
 }
 
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {

@@ -118,6 +118,8 @@ export type AnalysisSummary = {
   provenance?: AnalysisProvenance
   /** Click-traceable evidence findings (§19). */
   findings?: Finding[]
+  /** True when any finding needs human review (§21 job-level flag). */
+  needs_review?: boolean
 }
 
 export type ShotEvent = {

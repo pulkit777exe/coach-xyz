@@ -126,6 +126,8 @@ export type AnalysisSummary = {
   angle?: string
   /** Sport-specific guidance for the next angle to film. */
   recommended_angles?: CameraAngleGuidance[]
+  /** True when any finding needs human review (§21 job-level flag). */
+  needs_review?: boolean
   /** Click-traceable evidence findings (§19). */
   findings?: Finding[]
   /** Model/prompt/pack versions so a report stays explainable (§22). */

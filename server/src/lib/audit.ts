@@ -18,6 +18,7 @@ export type AuditAction =
   | "team.deleted"
   | "team.member_added"
   | "team.member_removed"
+  | "analysis.deleted"
 
 export const audit = async (entry: {
   orgAuth0Id: string
