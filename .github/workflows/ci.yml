@@ -22,6 +22,7 @@ jobs:
           cache-dependency-path: engine/requirements.txt
 
       - name: Install dependencies
+        working-directory: engine
         run: |
           pip install -r requirements.txt
           # Test/lint tooling is not part of the runtime requirements
