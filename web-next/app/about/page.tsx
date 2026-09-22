@@ -122,7 +122,7 @@ export default function AboutPage() {
               Upload → analysis → report, in under two minutes.
             </p>
             <Button
-              render={<Link href="/features" />}
+              nativeButton={false} render={<Link href="/features" />}
               variant="outline"
               className="mt-3 rounded-full border-[var(--marketing-beige)]/20 text-[var(--marketing-beige)] hover:bg-[var(--marketing-white)]/5"
             >
@@ -137,7 +137,7 @@ export default function AboutPage() {
               You’ll feel the difference.
             </h3>
             <Button
-              render={<Link href="/signup" />}
+              nativeButton={false} render={<Link href="/signup" />}
               className="mt-4 rounded-full bg-[var(--marketing-brown)] px-5 text-xs font-semibold text-[var(--marketing-beige)] hover:bg-foreground"
             >
               Create your account

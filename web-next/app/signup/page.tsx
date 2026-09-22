@@ -18,7 +18,7 @@ export default function SignupPage() {
         </p>
         <div className="mt-6 space-y-3">
           <Button
-            render={<a href="/auth/login?screen_hint=signup" />}
+            nativeButton={false} render={<a href="/auth/login?screen_hint=signup" />}
             className="h-10 w-full rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90"
           >
             Sign up with Auth0

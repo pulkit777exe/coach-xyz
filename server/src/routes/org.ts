@@ -1241,8 +1241,8 @@ export default new Elysia()
   // ── Wellness check-ins (health data, §5) ─────────────────────────────────
   // Reads require the medical permission; writes require player.manage.
   // The AI layer reports wellness observations verbatim — never diagnoses.
-  .get('/api/org/:auth0Id/students/:studentId/wellness', async ({ params, request, set }) => {
-    const { auth0Id, studentId } = params
+  .get('/api/org/:auth0Id/students/:id/wellness', async ({ params, request, set }) => {
+    const { auth0Id, id: studentId } = params
     if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid student id', false)
@@ -1260,9 +1260,9 @@ export default new Elysia()
     return { checkins: await listWellness(auth0Id, studentId) }
   })
   .post(
-    '/api/org/:auth0Id/students/:studentId/wellness',
+    '/api/org/:auth0Id/students/:id/wellness',
     async ({ params, body, request, set }) => {
-      const { auth0Id, studentId } = params
+      const { auth0Id, id: studentId } = params
       if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
         set.status = 400
         return buildError('INVALID_REQUEST', 'Invalid student id', false)

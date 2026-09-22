@@ -15,7 +15,7 @@ export default function DashboardNotFound() {
           The page you are looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="mt-6">
-          <Button render={<Link href="/dashboard" />}>Back to dashboard</Button>
+          <Button nativeButton={false} render={<Link href="/dashboard" />}>Back to dashboard</Button>
         </div>
       </div>
     </div>

@@ -169,7 +169,7 @@ export default async function DashboardPage() {
             </p>
             <div className="mt-5 flex items-center gap-3">
               <Button
-                render={<Link href="/#analyze" />}
+                nativeButton={false} render={<Link href="/#analyze" />}
                 className="h-8 rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
               >
                 Upload Video
@@ -239,7 +239,7 @@ export default async function DashboardPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    render={<Link href={t.href} />}
+                    nativeButton={false} render={<Link href={t.href} />}
                     className="h-7 rounded-md border-border bg-transparent px-3 text-xs text-foreground hover:bg-muted"
                   >
                     {t.value} view
@@ -286,7 +286,7 @@ export default async function DashboardPage() {
               <Button
                 variant="link"
                 size="sm"
-                render={<Link href="/dashboard/schedule" />}
+                nativeButton={false} render={<Link href="/dashboard/schedule" />}
                 className="text-info"
               >
                 Schedule
@@ -335,7 +335,7 @@ export default async function DashboardPage() {
               <Button
                 variant="link"
                 size="sm"
-                render={<Link href="/dashboard/reports" />}
+                nativeButton={false} render={<Link href="/dashboard/reports" />}
                 className="text-info"
               >
                 All Reports
@@ -376,7 +376,7 @@ export default async function DashboardPage() {
             <Button
               variant="link"
               size="sm"
-              render={<Link href="/dashboard/history" />}
+              nativeButton={false} render={<Link href="/dashboard/history" />}
               className="text-info"
             >
               View All
@@ -389,7 +389,7 @@ export default async function DashboardPage() {
               <p className="mb-4 text-sm text-muted-foreground">No analyses yet</p>
               <Button
                 variant="outline"
-                render={<Link href="/" />}
+                nativeButton={false} render={<Link href="/" />}
                 className="border-border text-foreground hover:bg-muted"
               >
                 Start Your First Analysis

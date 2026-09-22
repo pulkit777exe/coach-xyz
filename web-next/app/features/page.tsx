@@ -66,7 +66,7 @@ export default function FeaturesPage() {
             ))}
           </div>
           <Button
-            render={<Link href="/signup" />}
+            nativeButton={false} render={<Link href="/signup" />}
             className="mt-8 rounded-full bg-primary px-6 text-[var(--marketing-brown)] hover:bg-primary/90"
           >
             Start building

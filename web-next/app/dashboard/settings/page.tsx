@@ -215,7 +215,7 @@ export default async function SettingsPage() {
               Password
             </span>
             {passwordUrl ? (
-              <Button variant="outline" size="sm" render={<a href={passwordUrl} />}>
+              <Button variant="outline" size="sm" nativeButton={false} render={<a href={passwordUrl} />}>
                 <KeyRound className="size-3.5" />
                 Change Password
               </Button>
@@ -229,7 +229,7 @@ export default async function SettingsPage() {
             <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               Session
             </span>
-            <Button variant="destructive" size="sm" render={<a href="/auth/logout" />}>
+            <Button variant="destructive" size="sm" nativeButton={false} render={<a href="/auth/logout" />}>
               <LogOut className="size-3.5" />
               Log Out
             </Button>

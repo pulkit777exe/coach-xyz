@@ -21,13 +21,13 @@ export default function LoginPage() {
         </p>
         <div className="mt-6 space-y-3">
           <Button
-            render={<a href="/auth/login" />}
+            nativeButton={false} render={<a href="/auth/login" />}
             className="h-10 w-full rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90"
           >
             Continue with Auth0
           </Button>
           <Button
-            render={<a href="/signup" />}
+            nativeButton={false} render={<a href="/signup" />}
             variant="outline"
             className="h-10 w-full rounded-full border-[var(--marketing-white)]/15 text-[var(--marketing-beige)] hover:bg-[var(--marketing-white)]/5"
           >

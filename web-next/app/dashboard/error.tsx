@@ -32,7 +32,7 @@ export default function DashboardError({
         )}
         <div className="mt-6 flex justify-center gap-3">
           <Button onClick={reset}>Try again</Button>
-          <Button variant="outline" render={<Link href="/dashboard" />}>
+          <Button variant="outline" nativeButton={false} render={<Link href="/dashboard" />}>
             Back to dashboard
           </Button>
         </div>

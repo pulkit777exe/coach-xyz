@@ -32,7 +32,7 @@ export default function AnalysisError({
         )}
         <div className="mt-6 flex justify-center gap-3">
           <Button onClick={reset}>Try again</Button>
-          <Button variant="outline" render={<Link href="/dashboard/history" />}>
+          <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/history" />}>
             Back to history
           </Button>
         </div>

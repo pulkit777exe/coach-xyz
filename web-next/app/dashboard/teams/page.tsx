@@ -17,8 +17,8 @@ export default async function TeamsPage() {
   const { auth0Id } = await getOrgContext()
 
   const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
-    orgTeams(auth0Id),
-    orgStudents(auth0Id),
+    orgTeams(auth0Id).catch(() => ({ teams: [] })),
+    orgStudents(auth0Id).catch(() => ({ students: [] })),
     orgSeasons(auth0Id).catch(() => ({ seasons: [] })),
   ])
 

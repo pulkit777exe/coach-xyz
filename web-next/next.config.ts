@@ -24,7 +24,7 @@ const securityHeaders = [
       `connect-src ${connectSrc.join(' ')}`,
       "worker-src 'self' blob:",
       "base-uri 'self'",
-      "form-action 'self' 'mailto:'",
+      "form-action 'self' mailto:",
       "frame-ancestors 'none'",
     ].join('; '),
   },

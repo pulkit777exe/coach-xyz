@@ -97,7 +97,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
                 <Button
-                  render={<Link href={p.href} />}
+                  nativeButton={false} render={<Link href={p.href} />}
                   className={`mt-6 h-10 rounded-full font-semibold ${p.highlight ? 'bg-[var(--marketing-brown)] text-primary hover:bg-foreground' : 'bg-primary text-[var(--marketing-brown)] hover:bg-primary/90'}`}
                 >
                   {p.cta}
@@ -157,7 +157,7 @@ export default function PricingPage() {
               We’ll tailor Pro for your academy.
             </p>
             <Button
-              render={<Link href="/contact" />}
+              nativeButton={false} render={<Link href="/contact" />}
               className="mt-3 rounded-full bg-[var(--marketing-brown)] text-[var(--marketing-beige)] hover:bg-foreground"
             >
               Talk to sales
@@ -171,13 +171,13 @@ export default function PricingPage() {
           <h2 className="text-xl font-bold">Ready to ship faster?</h2>
           <div className="mt-4 flex justify-center gap-3">
             <Button
-              render={<Link href="/signup" />}
+              nativeButton={false} render={<Link href="/signup" />}
               className="rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90"
             >
               Start for free
             </Button>
             <Button
-              render={<Link href="/contact" />}
+              nativeButton={false} render={<Link href="/contact" />}
               variant="outline"
               className="rounded-full border-[var(--marketing-white)]/15 text-[var(--marketing-beige)] hover:bg-[var(--marketing-white)]/5"
             >

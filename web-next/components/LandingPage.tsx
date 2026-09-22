@@ -657,7 +657,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             </p>
             <Button
               variant="outline"
-              render={<Link href="/contact" />}
+              nativeButton={false} render={<Link href="/contact" />}
               className="mt-3 rounded-full border-[var(--marketing-white)]/15 text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]/5"
             >
               Book a call
