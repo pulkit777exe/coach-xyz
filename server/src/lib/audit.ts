@@ -23,8 +23,12 @@ export type AuditAction =
   | 'analysis.cancelled'
   | 'analysis.deleted'
   | 'video.exported'
+  | 'video.viewed'
   | 'report.exported'
   | 'settings.changed'
+  | 'player.created'
+  | 'player.transferred'
+  | 'health.record_viewed'
 
 export const audit = async (entry: {
   orgAuth0Id: string

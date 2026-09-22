@@ -3,6 +3,7 @@ import {
   listWellness,
 } from '../../lib/orgData'
 import { resolveCaller } from '../../lib/caller'
+import { auditRoute } from '../../lib/audit'
 import {
   UUID_RE,
 } from './shared'
@@ -26,6 +27,7 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Reading wellness data requires the medical permission', false)
     }
+    auditRoute(request, auth0Id, 'health.record_viewed', 'student', studentId)
     set.status = 200
     return { checkins: await listWellness(auth0Id, studentId) }
   })

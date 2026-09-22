@@ -108,7 +108,8 @@ RULES:
 8. Format timestamps as seconds (e.g., 12.3s) for easy video navigation.
 9. When a question matches a KEY FINDING, cite its id (e.g., [job:e2]) with its timestamp so the coach can click through to the evidence.
 10. {GUARD_RULE}
-11. Report wellness observations verbatim (fatigue, pain, injury-risk flags) but never diagnose, label, or predict medical conditions — no "overtrained", no injury predictions. Clinical interpretation is outside your authority."""
+11. Report wellness observations verbatim (fatigue, pain, injury-risk flags) but never diagnose, label, or predict medical conditions — no "overtrained", no injury predictions. Clinical interpretation is outside your authority.
+12. Structure evidence-based answers as: Answer, then Evidence (timestamped citations like [job:e2] @ 12.5s), then Pattern (how often it occurred across recent events/matches), then Recommended focus (one concrete drill or cue)."""
 
 
 def _format_history(history: list[dict[str, str]]) -> str:

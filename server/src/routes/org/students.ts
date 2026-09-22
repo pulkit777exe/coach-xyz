@@ -21,6 +21,7 @@ import {
   linkAnalysisToStudent,
 } from '../../lib/analyses'
 import { resolveCaller } from '../../lib/caller'
+import { auditRoute } from '../../lib/audit'
 import {
   STUDENT_STATUS_SET,
   parseStudentInput,
@@ -128,6 +129,9 @@ export default new Elysia()
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Failed to create student', true)
     }
+    auditRoute(request, auth0Id, 'player.created', 'student', student.id, {
+      full_name: student.full_name,
+    })
     set.status = 201
     return { student }
   })
@@ -195,6 +199,12 @@ export default new Elysia()
     if (!student) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
+    }
+    if (existing.status !== 'transferred' && student.status === 'transferred') {
+      auditRoute(request, auth0Id, 'player.transferred', 'student', id, {
+        from_team: existing.team_id,
+        to_team: student.team_id,
+      })
     }
     set.status = 200
     return { student }
