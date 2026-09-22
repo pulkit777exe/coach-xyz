@@ -315,6 +315,22 @@ export const ensureInitialized = async () => {
           })(),
           (async () => {
   await sql`
+          create table if not exists audit_logs (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text not null,
+            actor_auth0_id text,
+            action text not null,
+            resource_type text not null,
+            resource_id text,
+            result text,
+            meta jsonb not null default '{}'::jsonb,
+            client_ip text,
+            created_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+  await sql`
           create table if not exists users (
             id uuid primary key default gen_random_uuid(),
             auth0_id text unique not null,
@@ -498,6 +514,12 @@ export const ensureInitialized = async () => {
   await sql`
           create index if not exists idx_stages_job
           on analysis_stages (server_job_id, created_at);
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_audit_logs_org_created
+          on audit_logs (org_auth0_id, created_at desc);
         `
           })(),
           (async () => {

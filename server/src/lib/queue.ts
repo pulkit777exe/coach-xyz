@@ -587,8 +587,11 @@ if (redisAvailable && aiReportQueue) {
 // ── Graceful Shutdown ──────────────────────────────────────────────────────
 // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
 const SHUTDOWN_TIMEOUT_MS = 10_000
+let shuttingDown = false
 
 const gracefulShutdown = async (signal: string) => {
+  if (shuttingDown) return
+  shuttingDown = true
   console.log(
     JSON.stringify({
       type: 'shutdown_start',

@@ -151,6 +151,19 @@ const app = new Elysia({
       set.status = error.retryable ? 503 : 500
       return error
     }
+    // Routine 404s (unknown paths, scanners probing /v1/*) are not
+    // application errors — skip the stack-trace log for them.
+    const errStatus = (error as { status?: unknown; statusCode?: unknown }) ?? {}
+    const httpStatus =
+      typeof errStatus.status === 'number'
+        ? errStatus.status
+        : typeof errStatus.statusCode === 'number'
+          ? errStatus.statusCode
+          : 500
+    if (httpStatus === 404) {
+      set.status = 404
+      return buildError('NOT_FOUND', undefined, false)
+    }
     const e = error as { message?: string; stack?: string }
     console.error(
       JSON.stringify({
