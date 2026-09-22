@@ -267,8 +267,11 @@ export default function ResultsSummary({
               </Button>
             )}
 
-            <a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group">
-              <Button className="w-full h-16 rounded-xl text-base font-bold transition-colors">
+            <Button
+              nativeButton={false}
+              render={<a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group" />}
+              className="w-full h-16 rounded-xl text-base font-bold transition-colors"
+            >
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -279,7 +282,6 @@ export default function ResultsSummary({
                 </svg>
                 Download Video
               </Button>
-            </a>
 
             <Button
               variant="outline"
