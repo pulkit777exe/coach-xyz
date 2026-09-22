@@ -189,6 +189,17 @@ export async function scanVideoWithProgress(
   // available. The token method returns a GET through the identity proxy so it
   // is never blocked by upload size limits; the server ignores it otherwise.
   const token = auth0Id ? await getAttributionToken() : null
+  const headers: Record<string, string> = token ? { 'x-attribution': token } : {}
+
+  // Intent-first (§8): validate metadata + mint a namespaced key before any
+  // bytes move. On the S3 backend the browser uploads straight to storage
+  // (presigned POST) and finishes with scan-from-key; on local the intent
+  // carries the session/angle into the existing multipart path.
+  const intent = await requestScanIntent(file, auth0Id, opts, headers)
+  if (intent.upload.mode === 'presigned') {
+    await postPresigned(file, intent.upload.url, intent.upload.fields, onProgress)
+    return scanFromKey(intent, auth0Id, headers)
+  }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -280,6 +291,97 @@ export async function scanVideoWithProgress(
     // Multi-angle flow: append to an existing session under a labeled angle.
     if (opts.sessionToken) formData.append('session_token', opts.sessionToken)
     if (opts.angle) formData.append('angle', opts.angle)
+    xhr.send(formData)
+  })
+}
+
+export type UploadIntent =
+  | {
+      key: string
+      session_token: string
+      angle: string
+      upload: { mode: 'multipart'; scan_url: string }
+    }
+  | {
+      key: string
+      session_token: string
+      angle: string
+      upload: { mode: 'presigned'; url: string; fields: Record<string, string> }
+    }
+
+export async function requestScanIntent(
+  file: File,
+  auth0Id?: string | null,
+  opts: { sessionToken?: string | null; angle?: string | null } = {},
+  extraHeaders: Record<string, string> = {},
+): Promise<UploadIntent> {
+  return apiFetch<UploadIntent>(`${BASE}/api/scan-intent`, {
+    method: 'POST',
+    body: JSON.stringify({
+      filename: file.name || 'video.mp4',
+      mime_type: file.type,
+      size_bytes: file.size,
+      session_token: opts.sessionToken ?? null,
+      angle: opts.angle ?? null,
+    }),
+    headers: extraHeaders,
+  })
+}
+
+export async function scanFromKey(
+  intent: UploadIntent,
+  auth0Id?: string | null,
+  extraHeaders: Record<string, string> = {},
+): Promise<ScanResult> {
+  void auth0Id
+  return apiFetch<ScanResult>(`${BASE}/api/scan-from-key`, {
+    method: 'POST',
+    body: JSON.stringify({
+      storage_key: intent.key,
+      session_token: intent.session_token,
+      angle: intent.angle,
+    }),
+    headers: extraHeaders,
+  })
+}
+
+/** XHR POST of a file to a presigned S3 URL with upload progress. */
+function postPresigned(
+  file: File,
+  url: string,
+  fields: Record<string, string>,
+  onProgress: (progress: UploadProgress) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        onProgress({ phase: 'uploading', percent: Math.round((e.loaded / e.total) * 100) })
+      }
+    })
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else {
+        reject({
+          code: 'UPLOAD_FAILED',
+          message: 'Direct upload failed. Please try again.',
+          layer: 'server',
+          retryable: true,
+        } as CoachAIError)
+      }
+    })
+    xhr.addEventListener('error', () => {
+      reject({
+        code: 'NETWORK_ERROR',
+        message: 'Cannot connect to storage. Check your connection.',
+        layer: 'client',
+        retryable: true,
+      } as CoachAIError)
+    })
+    const formData = new FormData()
+    for (const [key, value] of Object.entries(fields)) formData.append(key, value)
+    formData.append('file', file)
     xhr.send(formData)
   })
 }

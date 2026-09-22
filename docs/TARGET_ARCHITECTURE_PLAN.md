@@ -82,11 +82,13 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
    read-only in results; chat prompts cite finding ids + timestamps (§25).
 4. `GET /api/auth/user/:auth0Id/findings/trends` — per-day counts by
    category with needs-review split (§26 precursor).
-Open: signed-URL direct uploads + versioned buckets (needs object
-storage); per-org quota aging beyond the daily cap (§17); K8s/GPU
+Open: per-org quota aging beyond the daily cap (§17); K8s/GPU
 (explicitly out of scope). The measurement loop itself is closed:
 objectives carry completion state, profiles render weekly findings-vs-done,
 and players see their objectives in the hub.
+Uploads (§8) run intent-first: validated metadata mints a namespaced key,
+browsers upload direct-to-storage (presigned POST on S3, multipart proxy
+on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.
 
 ### Phase 2 — Org hardening (§3, §4, §7, §29, §5) — SHIPPED (core)
 1. `teams` + `team_memberships` tables; `students.team_id` with cross-org

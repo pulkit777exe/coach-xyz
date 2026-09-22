@@ -5,6 +5,7 @@ import glob
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -69,6 +70,7 @@ except ImportError:
     _default_response_class = JSONResponse
 
 from core import storage
+from core.multicam import angle_labels, append_angle, normalize_angle_label, scan_progress_key
 from core.errors import (
     EngineError,
     JobNotFoundError,
@@ -433,6 +435,176 @@ def health_deep():
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 
+async def _scan_stored_file(
+    r2_key: str,
+    local_path: str,
+    session_token: str,
+    angle_label: str,
+    append_to_session: bool,
+) -> JSONResponse:
+    """Shared scan core: probe → detect → session store → response.
+
+    Used by /scan (after multipart upload) and /scan-from-key (after a
+    direct-to-storage upload). Cleans up S3 tmp copies; local files live
+    until session eviction.
+    """
+    try:
+        # Server-side media inspection (§8): never trust client filename/mime —
+        # probe the actual bytes before detection or session creation.
+        try:
+            from core.video_io import probe_video
+
+            _probe = probe_video(local_path)
+            logging.info(
+                f"[SCAN] Media OK: {_probe['width']}x{_probe['height']}, {_probe['duration']:.1f}s"
+            )
+        except VideoDecodeError as exc:
+            storage.delete_file(r2_key)
+            if "MediaPipe Pose backend unavailable" in exc.message:
+                return _error_response(
+                    503,
+                    "ENGINE_UNAVAILABLE",
+                    "MediaPipe runtime is unavailable on the engine.",
+                )
+            raise
+
+        # Set up scan progress tracking, keyed per angle so concurrent scans of
+        # different perspectives on one session don't overwrite each other.
+        progress_key = scan_progress_key(session_token, angle_label)
+        with scan_progress_lock:
+            scan_progress[progress_key] = {
+                "session_token": session_token,
+                "current": 0,
+                "total": 0,
+                "complete": False,
+                "error": None,
+                "angle": angle_label,
+                "started_at": time.time(),
+            }
+
+        def _report_scan_progress(current: int, total: int) -> None:
+            with scan_progress_lock:
+                if progress_key in scan_progress:
+                    scan_progress[progress_key]["current"] = current
+                    scan_progress[progress_key]["total"] = total
+
+        def _fail_scan_progress(message: str) -> None:
+            with scan_progress_lock:
+                if progress_key in scan_progress:
+                    scan_progress[progress_key]["complete"] = True
+                    scan_progress[progress_key]["error"] = message
+
+        def _complete_scan_progress() -> None:
+            with scan_progress_lock:
+                if progress_key in scan_progress:
+                    scan_progress[progress_key]["complete"] = True
+                    scan_progress[progress_key]["error"] = None
+
+        try:
+            from core.detector import detect_players
+            players = await asyncio.to_thread(detect_players, local_path, on_progress=_report_scan_progress)
+        except NoPlayersDetectedError as e:
+            _fail_scan_progress(str(e))
+            storage.delete_file(r2_key)
+            # The stored object is gone; a local tmp copy (S3) is unlinked by the finally below.
+            raise  # caught by global handler
+        except VideoDecodeError as exc:
+            _fail_scan_progress(str(exc))
+            storage.delete_file(r2_key)
+            # The stored object is gone; a local tmp copy (S3) is unlinked by the finally below.
+            if "MediaPipe Pose backend unavailable" in exc.message:
+                return _error_response(
+                    503,
+                    "ENGINE_UNAVAILABLE",
+                    "MediaPipe runtime is unavailable on the engine.",
+                )
+            raise  # caught by global handler
+        except Exception as exc:
+            _fail_scan_progress(str(exc))
+            storage.delete_file(r2_key)
+            # The stored object is gone; a local tmp copy (S3) is unlinked by the finally below.
+            raise  # caught by global handler
+
+        # Mark scan progress as complete
+        _complete_scan_progress()
+
+        # Evict old sessions before creating new one (memory optimization)
+        with sessions_lock:
+            _evict_old_sessions_unlocked()
+            if not append_to_session:
+                sessions[session_token] = {
+                    "video_key": r2_key,
+                    "players": players,
+                    "created_at": time.time(),
+                }
+            session = sessions.get(session_token)
+            if session is None:
+                # Evicted between checks — recreate it.
+                session = {
+                    "video_key": r2_key,
+                    "players": players,
+                    "created_at": time.time(),
+                }
+                sessions[session_token] = session
+            append_angle(session, angle_label, r2_key, players)
+            labels = angle_labels(session)
+            # Re-uploading an angle replaces its file — delete the orphaned
+            # previous upload now (the session only references the latest).
+            previous = session.pop("_replaced_video_key", None)
+        if previous and previous != r2_key:
+            try:
+                storage.delete_file(previous)
+            except Exception:
+                pass
+        # Warm cache for this video (makes subsequent analyses faster)
+        # Must happen before local_path is deleted
+        try:
+            from core.cache import compute_video_hash, warm_cache_for_video
+            video_hash = compute_video_hash(local_path)
+            warm_cache_for_video(video_hash, local_path)
+        except Exception as e:
+            logging.warning(f"Cache warming failed: {e}")
+
+        # Do NOT delete local_path here — storage.download_video_to_tmp now returns
+        # the storage path directly (no copy), so local_path IS the stored file.
+        # Source uploads live until their session is evicted (see
+        # _delete_session_files) so re-analysis keeps working.
+
+        response_players = [
+            {
+                "player_index": p["player_index"],
+                "confidence": p["confidence"],
+                "crop_base64": p["crop_base64"],
+            }
+            for p in players
+        ]
+
+        for rp in response_players:
+            cb64 = rp.get("crop_base64", "")
+            logging.info(
+                f"[SCAN] player {rp['player_index']}: crop_base64 length={len(cb64)}, "
+                f"starts_with={cb64[:20]!r}..."
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "session_token": session_token,
+                "video_key": r2_key,
+                "angle": angle_label,
+                "angles": labels,
+                "player_count": len(response_players),
+                "players": response_players,
+            },
+        )
+    finally:
+        if not storage.is_local_backend():
+            try:
+                os.unlink(local_path)
+            except OSError:
+                pass
+
+
 @app.post("/scan")
 async def scan(
     video: UploadFile,
@@ -448,13 +620,6 @@ async def scan(
     # Resolve the session before streaming so the upload lands under its
     # namespaced key (raw/{session}/{angle}/...). An unknown token starts a
     # new session; angle labels are sanitized by the session layer.
-    from core.multicam import (
-        angle_labels,
-        append_angle,
-        normalize_angle_label,
-        scan_progress_key,
-    )
-
     angle_label = normalize_angle_label(angle)
     with sessions_lock:
         existing = sessions.get(session_token) if session_token else None
@@ -505,157 +670,128 @@ async def scan(
         raise
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
 
-    # Server-side media inspection (§8): never trust client filename/mime —
-    # probe the actual bytes before detection or session creation.
-    try:
-        from core.video_io import probe_video
+    return await _scan_stored_file(
+        r2_key=r2_key,
+        local_path=local_path,
+        session_token=session_token,
+        angle_label=angle_label,
+        append_to_session=existing is not None,
+    )
 
-        _probe = probe_video(local_path)
-        logging.info(
-            f"[SCAN] Media OK: {_probe['width']}x{_probe['height']}, {_probe['duration']:.1f}s"
+
+
+@app.post("/upload-intent")
+async def upload_intent(request: Request) -> JSONResponse:
+    """Mint a direct-to-storage upload slot (§8).
+
+    Validates the client-declared metadata up front, resolves (or mints) the
+    scan session, and returns a namespaced storage key plus the upload
+    mechanism: presigned POST fields on the S3 backend, or the multipart
+    /scan endpoint on local (the app server still proxies small uploads).
+    The bytes themselves are always re-validated by ffprobe at scan time.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    if not isinstance(payload, dict):
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    filename = payload.get("filename")
+    mime_type = payload.get("mime_type")
+    size_bytes = payload.get("size_bytes")
+    if not isinstance(filename, str) or not filename.strip() or len(filename) > 255:
+        return _error_response(400, "INVALID_REQUEST", "filename (<=255 chars) required")
+    if not isinstance(mime_type, str) or not mime_type.startswith("video/"):
+        return _error_response(400, "INVALID_FILE_TYPE", "Please upload a video file.")
+    try:
+        size = int(size_bytes)
+    except (TypeError, ValueError):
+        return _error_response(400, "INVALID_REQUEST", "size_bytes (integer) required")
+    max_upload_size = int(os.environ.get("MAX_FILE_SIZE", MAX_FILE_SIZE_BYTES))
+    if size < 1 or size > max_upload_size:
+        return _error_response(
+            413,
+            "FILE_TOO_LARGE",
+            f"File must be between 1 byte and {max_upload_size // (1024 * 1024)}MB.",
         )
-    except VideoDecodeError as exc:
-        storage.delete_file(r2_key)
-        if "MediaPipe Pose backend unavailable" in exc.message:
-            return _error_response(
-                503,
-                "ENGINE_UNAVAILABLE",
-                "MediaPipe runtime is unavailable on the engine.",
-            )
-        raise
 
-    # The session was resolved before streaming (see above): an unknown token
-    # started a new session, otherwise this upload appends another angle.
-    append_to_session = existing is not None
 
-    # Set up scan progress tracking, keyed per angle so concurrent scans of
-    # different perspectives on one session don't overwrite each other.
-    progress_key = scan_progress_key(session_token, angle_label)
-    with scan_progress_lock:
-        scan_progress[progress_key] = {
-            "session_token": session_token,
-            "current": 0,
-            "total": 0,
-            "complete": False,
-            "error": None,
-            "angle": angle_label,
-            "started_at": time.time(),
-        }
-
-    def _report_scan_progress(current: int, total: int) -> None:
-        with scan_progress_lock:
-            if progress_key in scan_progress:
-                scan_progress[progress_key]["current"] = current
-                scan_progress[progress_key]["total"] = total
-
-    def _fail_scan_progress(message: str) -> None:
-        with scan_progress_lock:
-            if progress_key in scan_progress:
-                scan_progress[progress_key]["complete"] = True
-                scan_progress[progress_key]["error"] = message
-
-    def _complete_scan_progress() -> None:
-        with scan_progress_lock:
-            if progress_key in scan_progress:
-                scan_progress[progress_key]["complete"] = True
-                scan_progress[progress_key]["error"] = None
-
-    try:
-        from core.detector import detect_players
-        players = await asyncio.to_thread(detect_players, local_path, on_progress=_report_scan_progress)
-    except NoPlayersDetectedError as e:
-        _fail_scan_progress(str(e))
-        storage.delete_file(r2_key)
-        # local_path IS the storage path now — delete_file above already removed it.
-        raise  # caught by global handler
-    except VideoDecodeError as exc:
-        _fail_scan_progress(str(exc))
-        storage.delete_file(r2_key)
-        # local_path IS the storage path now — delete_file above already removed it.
-        if "MediaPipe Pose backend unavailable" in exc.message:
-            return _error_response(
-                503,
-                "ENGINE_UNAVAILABLE",
-                "MediaPipe runtime is unavailable on the engine.",
-            )
-        raise  # caught by global handler
-    except Exception as exc:
-        _fail_scan_progress(str(exc))
-        storage.delete_file(r2_key)
-        # local_path IS the storage path now — delete_file above already removed it.
-        raise  # caught by global handler
-
-    # Mark scan progress as complete
-    _complete_scan_progress()
-
-    # Evict old sessions before creating new one (memory optimization)
+    angle_label = normalize_angle_label(payload.get("angle"))
     with sessions_lock:
-        _evict_old_sessions_unlocked()
-        if not append_to_session:
-            sessions[session_token] = {
-                "video_key": r2_key,
-                "players": players,
-                "created_at": time.time(),
-            }
-        session = sessions.get(session_token)
-        if session is None:
-            # Evicted between checks — recreate it.
-            session = {
-                "video_key": r2_key,
-                "players": players,
-                "created_at": time.time(),
-            }
-            sessions[session_token] = session
-        append_angle(session, angle_label, r2_key, players)
-        labels = angle_labels(session)
-        # Re-uploading an angle replaces its file — delete the orphaned
-        # previous upload now (the session only references the latest).
-        previous = session.pop("_replaced_video_key", None)
-    if previous and previous != r2_key:
-        try:
-            storage.delete_file(previous)
-        except Exception:
-            pass
-    # Warm cache for this video (makes subsequent analyses faster)
-    # Must happen before local_path is deleted
-    try:
-        from core.cache import compute_video_hash, warm_cache_for_video
-        video_hash = compute_video_hash(local_path)
-        warm_cache_for_video(video_hash, local_path)
-    except Exception as e:
-        logging.warning(f"Cache warming failed: {e}")
+        existing = sessions.get(payload.get("session_token")) if payload.get("session_token") else None
+    session_token = payload.get("session_token") if existing is not None else str(uuid.uuid4())
 
-    # Do NOT delete local_path here — storage.download_video_to_tmp now returns
-    # the storage path directly (no copy), so local_path IS the stored file.
-    # Source uploads live until their session is evicted (see
-    # _delete_session_files) so re-analysis keeps working.
-
-    response_players = [
-        {
-            "player_index": p["player_index"],
-            "confidence": p["confidence"],
-            "crop_base64": p["crop_base64"],
-        }
-        for p in players
-    ]
-
-    for rp in response_players:
-        cb64 = rp.get("crop_base64", "")
-        logging.info(
-            f"[SCAN] player {rp['player_index']}: crop_base64 length={len(cb64)}, "
-            f"starts_with={cb64[:20]!r}..."
+    key = storage.raw_upload_key(session_token, angle_label)
+    if storage.is_local_backend():
+        return JSONResponse(
+            status_code=200,
+            content={
+                "key": key,
+                "session_token": session_token,
+                "angle": angle_label,
+                "upload": {"mode": "multipart", "scan_url": "/scan"},
+            },
         )
-
+    try:
+        presigned = storage.presigned_upload(key, mime_type)
+    except Exception:
+        logging.error(traceback.format_exc())
+        return _error_response(500, "STORAGE_ERROR", "Could not mint an upload URL. Please try again.")
     return JSONResponse(
         status_code=200,
         content={
+            "key": key,
             "session_token": session_token,
-            "video_key": r2_key,
             "angle": angle_label,
-            "angles": labels,
-            "player_count": len(response_players),
-            "players": response_players,
+            "upload": {"mode": "presigned", "url": presigned["url"], "fields": presigned["fields"]},
         },
+    )
+
+
+_STORAGE_KEY_RE = re.compile(r"^raw/[A-Za-z0-9_@.|-]+/[a-z0-9_-]+/[a-f0-9]{32}\.mp4$")
+
+
+@app.post("/scan-from-key")
+async def scan_from_key(request: Request) -> JSONResponse:
+    """Scan a video already in storage (after a direct upload, §8).
+
+    Only keys minted by /upload-intent are accepted (raw/ prefix + strict
+    shape) — never result keys or arbitrary paths.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    if not isinstance(payload, dict):
+        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+
+    storage_key = payload.get("storage_key")
+    if not isinstance(storage_key, str) or not _STORAGE_KEY_RE.match(storage_key):
+        return _error_response(400, "INVALID_REQUEST", "storage_key must be an upload-intent key")
+
+
+    angle_label = normalize_angle_label(payload.get("angle"))
+    with sessions_lock:
+        existing = sessions.get(payload.get("session_token")) if payload.get("session_token") else None
+    session_token = payload.get("session_token") if existing is not None else str(uuid.uuid4())
+
+    try:
+        local_path = storage.download_video_to_tmp(storage_key)
+    except FileNotFoundError:
+        return _error_response(
+            404, "SESSION_EXPIRED", "Upload not found in storage. Please upload your video again."
+        )
+    except Exception:
+        logging.error(traceback.format_exc())
+        return _error_response(500, "STORAGE_ERROR", "Could not read the uploaded video. Please try again.")
+
+    return await _scan_stored_file(
+        r2_key=storage_key,
+        local_path=local_path,
+        session_token=session_token,
+        angle_label=angle_label,
+        append_to_session=existing is not None,
     )
 
 
@@ -668,8 +804,6 @@ async def scan_progress_endpoint(session_token: str, angle: str | None = None):
     sessions track each angle separately); it defaults to the primary angle.
     """
     from fastapi.responses import StreamingResponse
-
-    from core.multicam import normalize_angle_label, scan_progress_key
 
     angle_label = normalize_angle_label(angle)
     progress_key = scan_progress_key(session_token, angle_label)
@@ -1291,7 +1425,10 @@ def download(job_id: str):
             headers={"Content-Disposition": 'inline; filename="coachai_analysis.mp4"'},
         )
 
-    url = storage.get_download_url(job.video_key)
+    try:
+        url = storage.presigned_download(job.video_key)
+    except Exception:
+        return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. Please upload your video again.")
     return RedirectResponse(url=url, status_code=302)
 
 

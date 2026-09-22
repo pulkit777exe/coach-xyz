@@ -464,6 +464,7 @@ def run_analysis(
         pass
 
     local_path: str | None = None
+    local_is_temp = False
     preprocessed_path = ""
     output_path: str | None = None
     cleanup_preprocessed = False
@@ -472,6 +473,9 @@ def run_analysis(
     try:
         local_path = storage.download_video_to_tmp(video_key)
         preprocessed_path = local_path
+        # S3 backend returns a throwaway tmp copy (local backend returns the
+        # stored file itself) — only the copy may be unlinked on the way out.
+        local_is_temp = not storage.is_local_backend()
 
         # Check cache first
         video_hash = compute_video_hash(local_path)
@@ -746,6 +750,13 @@ def run_analysis(
         # is evicted (see _delete_session_files in main.py) or by the
         # shutdown sweep. Deleting here broke every second analyze on one
         # upload with VideoExpiredError.
+        # Exception: on the S3 backend local_path is a throwaway tmp copy
+        # (not the stored object), so unlink it to avoid filling /tmp.
+        if local_is_temp and local_path and os.path.exists(local_path):
+            try:
+                os.unlink(local_path)
+            except Exception:
+                pass
         if output_path and os.path.exists(output_path):
             try:
                 os.unlink(output_path)
