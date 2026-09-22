@@ -46,6 +46,8 @@ import type { ChartConfig } from '@/components/9ui/ui/chart'
 import { Spinner } from './Spinner'
 import StudentFormDialog from './StudentFormDialog'
 import ObjectivesSection from './ObjectivesSection'
+import PlansSection from './PlansSection'
+import WellnessSection from './WellnessSection'
 
 import type {
   Student,
@@ -568,6 +570,16 @@ export default function StudentProfile({
         {/* Training objectives + finding trends (§26 loop) */}
         <div className="mt-8">
           <ObjectivesSection auth0Id={auth0Id} studentId={student_.id} />
+        </div>
+
+        {/* Training plans */}
+        <div className="mt-8">
+          <PlansSection auth0Id={auth0Id} studentId={student_.id} />
+        </div>
+
+        {/* Wellness check-ins (health data, medical-gated) */}
+        <div className="mt-8">
+          <WellnessSection auth0Id={auth0Id} studentId={student_.id} />
         </div>
 
         {/* Log metric */}

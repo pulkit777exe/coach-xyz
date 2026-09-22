@@ -322,6 +322,105 @@ export const ensureInitialized = async () => {
         on training_objectives (org_auth0_id, student_id);
       `
 
+      // Seasons, matches, training plans, wellness (§28 domains).
+      await sql`
+        create table if not exists seasons (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          name text not null,
+          starts_on date,
+          ends_on date,
+          created_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create table if not exists matches (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          team_id uuid,
+          season_id uuid,
+          opponent text,
+          match_on date,
+          location text,
+          result text,
+          created_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create table if not exists training_plans (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          team_id uuid,
+          student_id uuid,
+          title text not null,
+          description text,
+          status text not null default 'active'
+            check (status in ('active', 'done', 'archived')),
+          created_by text,
+          created_at timestamptz not null default now(),
+          updated_at timestamptz not null default now()
+        );
+      `
+      // Wellness check-ins are health data (§5): same org scope, but reads
+      // are gated to the medical permission (see routes).
+      await sql`
+        create table if not exists wellness_checkins (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          student_id uuid not null,
+          sleep_hours double precision,
+          fatigue integer check (fatigue is null or (fatigue >= 1 and fatigue <= 5)),
+          pain text,
+          availability text,
+          note text,
+          created_by text,
+          created_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_wellness_org_student
+        on wellness_checkins (org_auth0_id, student_id);
+      `
+      // Billing structure (§28, §17 quotas): tier per org + usage ledger.
+      // No provider wired yet — record usage now so tiers enforce later.
+      await sql`
+        create table if not exists subscriptions (
+          org_auth0_id text primary key,
+          tier text not null default 'free'
+            check (tier in ('free', 'pro', 'elite')),
+          status text not null default 'active',
+          updated_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create table if not exists usage_records (
+          id uuid primary key default gen_random_uuid(),
+          org_auth0_id text not null,
+          kind text not null,
+          quantity integer not null default 1,
+          period_day date not null default current_date,
+          created_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_usage_org_day
+        on usage_records (org_auth0_id, period_day);
+      `
+      // Internal stage history (§13): every persisted stage transition.
+      await sql`
+        create table if not exists analysis_stages (
+          id uuid primary key default gen_random_uuid(),
+          server_job_id text not null,
+          stage integer,
+          stage_name text,
+          created_at timestamptz not null default now()
+        );
+      `
+      await sql`
+        create index if not exists idx_stages_job
+        on analysis_stages (server_job_id, created_at);
+      `
+
         await sql`
         create table if not exists users (
           id uuid primary key default gen_random_uuid(),
@@ -778,6 +877,22 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
   if (record.status.complete && Array.isArray(summary?.findings)) {
     await persistFindings(record.serverJobId, summary.findings as FindingRecord[])
   }
+
+  // Internal stage history (§13): append only on transition, not per poll.
+  await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const last = await db<{ stage: number | null }[]>`
+      select stage from analysis_stages
+      where server_job_id = ${record.serverJobId}
+      order by created_at desc limit 1;
+    `
+    if (!last?.[0] || last[0].stage !== record.status.stage) {
+      await db`
+        insert into analysis_stages (server_job_id, stage, stage_name)
+        values (${record.serverJobId}, ${record.status.stage}, ${record.status.stage_name});
+      `
+    }
+  })
 }
 
 export type FindingRecord = {
@@ -845,15 +960,13 @@ const findingNumber = (value: unknown): number | null => {
     })
   }
 
-export type FindingsTrendPoint = {
-  day: string
+export type FindingsTrendPoint = {  day: string
   category: string
   count: number
   needs_review: number
 }
 
-export type StoredFinding = {
-  id: string
+export type StoredFinding = {  id: string
   server_job_id: string
   category: string | null
   start_ms: number | null
@@ -890,6 +1003,30 @@ export const getStudentFindings = async (
       where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}::uuid
       order by f.created_at desc
       limit ${capped};
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export type AnalysisStageEntry = {
+  stage: number | null
+  stage_name: string | null
+  created_at: string
+}
+
+/** Internal stage history for one analysis (debugging, §13/§32). */
+export const getAnalysisStages = async (
+  auth0Id: string,
+  serverJobId: string,
+): Promise<AnalysisStageEntry[]> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<AnalysisStageEntry[]>`
+      select s.stage, s.stage_name, s.created_at
+      from analysis_stages s
+      join analysis_history a on a.server_job_id = s.server_job_id
+      where a.auth0_id = ${auth0Id} and s.server_job_id = ${serverJobId}
+      order by s.created_at asc;
     `
     return rows ?? []
   })) ?? []
@@ -999,8 +1136,7 @@ export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number 
   })
 }
 
-/** Daily per-org quota verdict. Fail-open without org identity or DB. */
-export const checkOrgDailyQuota = async (
+/** Daily per-org quota verdict. Fail-open without org identity or DB. */export const checkOrgDailyQuota = async (
   orgAuth0Id: string | null,
 ): Promise<{ allowed: boolean; retryAfterSec: number }> => {
   if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 }
@@ -1018,6 +1154,56 @@ export const checkOrgDailyQuota = async (
     allowed: false,
     retryAfterSec: Math.max(1, Math.ceil((midnightUtc - now) / 1000)),
   }
+}
+
+export type OrgTier = "free" | "pro" | "elite"
+
+/** Org tier (default free). Quotas and queue priority derive from this. */
+export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
+  const tier = await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ tier: OrgTier }[]>`
+      insert into subscriptions (org_auth0_id) values (${orgAuth0Id})
+      on conflict (org_auth0_id) do nothing
+      returning tier;
+    `
+    if (rows?.[0]) return rows[0].tier
+    const existing = await db<{ tier: OrgTier }[]>`
+      select tier from subscriptions where org_auth0_id = ${orgAuth0Id} limit 1;
+    `
+    return existing?.[0]?.tier ?? "free"
+  })
+  return tier ?? "free"
+}
+
+/** Append to the org usage ledger (§17 quotas, future billing). */
+export const recordUsage = async (
+  orgAuth0Id: string,
+  kind: string,
+  quantity = 1,
+): Promise<void> => {
+  await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    await db`
+      insert into usage_records (org_auth0_id, kind, quantity)
+      values (${orgAuth0Id}, ${kind.slice(0, 60)}, ${quantity});
+    `
+  })
+}
+
+/** Usage totals per kind since midnight UTC (for quota + status views). */
+export const getTodayUsage = async (
+  orgAuth0Id: string,
+): Promise<Record<string, number>> => {
+  const rows = (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    return (await db<{ kind: string; total: number }[]>`
+      select kind, sum(quantity)::int as total from usage_records
+      where org_auth0_id = ${orgAuth0Id} and period_day = current_date
+      group by kind;
+    `) ?? []
+  })) ?? []
+  return Object.fromEntries(rows.map((r) => [r.kind, r.total]))
 }
 
 /** Retention window for analysis artifacts (days). */

@@ -11,7 +11,9 @@ import {
 } from '../lib/mailer'
 import { getUserByAuth0Id } from '../lib/supabaseHistory'
 import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
-import { serviceGuard } from '../lib/serviceGuard'
+import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
+import { audit } from '../lib/audit'
+import { readRequestMeta } from '../lib/requestMeta'
 import { checkEmailLimit } from '../lib/ratelimit'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
@@ -128,7 +130,7 @@ export default new Elysia()
 
   // ── Email a report to a recipient ───────────────────────────────────────
   // body: { report_id: string, to?: string }  — `to` defaults to the student's email
-  .post('/api/email/:auth0Id/report', async ({ params, body, set }) => {
+  .post('/api/email/:auth0Id/report', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
@@ -192,6 +194,15 @@ export default new Elysia()
         reportUrl,
       )
       const sent = await sendEmail({ to: recipient, subject, html, text })
+      void audit({
+        orgAuth0Id: auth0Id,
+        actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+        action: 'report.exported',
+        resourceType: 'report',
+        resourceId: report_id,
+        meta: { to: recipient },
+        clientIp: readRequestMeta(request).clientIp,
+      })
       set.status = 200
       return { sent }
     } catch (err) {

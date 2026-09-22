@@ -5,7 +5,9 @@ import { buildError, isCoachAIError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkDownloadLimit, getIP } from '../lib/ratelimit'
-import { markAnalysisDownloaded } from '../lib/supabaseHistory'
+import { markAnalysisDownloaded, getAnalysisByServerJobId } from '../lib/supabaseHistory'
+import { audit } from '../lib/audit'
+import { readRequestMeta } from '../lib/requestMeta'
 
 export default new Elysia().get('/api/download/:jobId', async ({ params, request, set }) => {
   const serverJob = await getJob(params.jobId)
@@ -47,6 +49,17 @@ export default new Elysia().get('/api/download/:jobId', async ({ params, request
     const response = new Response(engineResponse.body, { headers })
     // Increment download count after successful stream creation
     await markAnalysisDownloaded(serverJob.server_job_id)
+    // Video export is a sensitive action (§29) — audit the verified caller
+    // against the owning org.
+    const persisted = await getAnalysisByServerJobId(serverJob.server_job_id).catch(() => null)
+    void audit({
+      orgAuth0Id: persisted?.auth0_id ?? 'unknown',
+      actorAuth0Id: resolveJobCaller(request),
+      action: 'video.exported',
+      resourceType: 'analysis',
+      resourceId: serverJob.server_job_id,
+      clientIp: readRequestMeta(request).clientIp,
+    })
     return response
   } catch (error) {
     if (isCoachAIError(error)) {

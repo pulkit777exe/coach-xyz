@@ -86,6 +86,11 @@ Open: per-org quota aging beyond the daily cap (§17); K8s/GPU
 (explicitly out of scope). The measurement loop itself is closed:
 objectives carry completion state, profiles render weekly findings-vs-done,
 and players see their objectives in the hub.
+Full doc sweep: seasons, matches, training plans, wellness check-ins
+(medical-gated reads), subscriptions/usage ledger with tier-weighted queue
+priority, internal stage history, video/report/settings audit actions,
+no-diagnosis AI rules, deep dict-form criteria in all six sport packs
+(pack v2), stages debug endpoint.
 Uploads (§8) run intent-first: validated metadata mints a namespaced key,
 browsers upload direct-to-storage (presigned POST on S3, multipart proxy
 on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.

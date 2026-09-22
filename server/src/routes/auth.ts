@@ -8,6 +8,7 @@ import {
   getUserStats,
   getFindingsTrend,
   getStudentFindings,
+  getAnalysisStages,
   reviewFinding,
   deleteAnalysis,
   persistAnalysisStatus,
@@ -242,6 +243,20 @@ export default new Elysia()
     const limit = Number.isFinite(limitRaw) ? limitRaw : 50
     set.status = 200
     return { findings: await getStudentFindings(auth0Id, studentId, limit) }
+  })
+  .get("/api/auth/user/:auth0Id/analyses/:jobId/stages", async ({ params, set }) => {
+    const { auth0Id, jobId } = params
+    if (!auth0Id || !jobId) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Missing required parameters", false)
+    }
+    const analysis = await getUserAnalysisById(auth0Id, jobId)
+    if (!analysis) {
+      set.status = 404
+      return buildError("NOT_FOUND", "Analysis not found", false)
+    }
+    set.status = 200
+    return { stages: await getAnalysisStages(auth0Id, jobId) }
   })
   .patch('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, body, set }) => {
     const { auth0Id, jobId } = params

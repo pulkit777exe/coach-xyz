@@ -21,8 +21,10 @@ import {
   orgStudentPerformance as libOrgStudentPerformance,
   orgAttendanceSummary as libOrgAttendanceSummary,
   orgStudentAnalyses as libOrgStudentAnalyses,
+  orgSeasons as libOrgSeasons,
 } from './org'
 import { orgMembers as libOrgMembers } from './members'
+import { orgSubscription as libOrgSubscription } from './org'
 import { orgAuditLogs as libOrgAuditLogs, orgInvites as libOrgInvites } from './members'
 import { listTeams as libListTeams } from './teams'
 
@@ -92,11 +94,15 @@ export const orgStudentAnalyses = cache((auth0Id: string, id: string) =>
 
 export const orgMembers = cache((auth0Id: string) => libOrgMembers(auth0Id))
 
+export const orgSubscription = cache((auth0Id: string) => libOrgSubscription(auth0Id))
+
 export const orgInvites = cache((auth0Id: string) => libOrgInvites(auth0Id))
 
 export const orgAuditLogs = cache((auth0Id: string, limit = 50) => libOrgAuditLogs(auth0Id, limit))
 
 export const orgTeams = cache((auth0Id: string) => libListTeams(auth0Id))
+
+export const orgSeasons = cache((auth0Id: string) => libOrgSeasons(auth0Id))
 
 export type OrgRole = 'owner' | 'admin' | 'coach' | 'player'
 

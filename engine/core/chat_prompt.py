@@ -107,7 +107,8 @@ RULES:
 7. When suggesting drills, make them specific to the athlete's actual weaknesses.
 8. Format timestamps as seconds (e.g., 12.3s) for easy video navigation.
 9. When a question matches a KEY FINDING, cite its id (e.g., [job:e2]) with its timestamp so the coach can click through to the evidence.
-10. {GUARD_RULE}"""
+10. {GUARD_RULE}
+11. Report wellness observations verbatim (fatigue, pain, injury-risk flags) but never diagnose, label, or predict medical conditions — no "overtrained", no injury predictions. Clinical interpretation is outside your authority."""
 
 
 def _format_history(history: list[dict[str, str]]) -> str:

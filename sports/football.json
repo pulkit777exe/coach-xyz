@@ -35,15 +35,159 @@
     }
   ],
   "form_criteria": [
-    "approach_angle",
-    "plant_foot_position",
-    "hip_rotation",
-    "striking_surface",
-    "ankle_lock",
-    "head_position",
-    "follow_through",
-    "body_lean",
-    "arms"
+    {
+      "key": "approach_angle",
+      "label": "Approach Angle",
+      "metric": "approach_angle_deg",
+      "ideal_range": [
+        30,
+        45
+      ],
+      "acceptable_range": [
+        20,
+        55
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "plant_foot_position",
+      "label": "Plant Foot",
+      "metric": "plant_foot_deviation_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "hip_rotation",
+      "label": "Hip Rotation",
+      "metric": "hip_rotation_deg",
+      "ideal_range": [
+        30,
+        60
+      ],
+      "acceptable_range": [
+        15,
+        75
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "ankle_lock",
+      "label": "Ankle Lock",
+      "metric": "left_ankle_foot_angle",
+      "ideal_range": [
+        85,
+        110
+      ],
+      "acceptable_range": [
+        75,
+        120
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.13,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "body_lean",
+      "label": "Body Lean",
+      "metric": "torso_lean_left",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "arms",
+      "label": "Arm Balance",
+      "metric": "arm_balance_px",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.05,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "striking_surface",
+      "label": "Striking Surface",
+      "metric": "striking_surface_consistency",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    }
   ],
   "colors": {
     "primary": [
@@ -87,5 +231,5 @@
       "description": "Useful third angle for positioning, spacing and off-ball movement."
     }
   ],
-  "version": 1
+  "version": 2
 }

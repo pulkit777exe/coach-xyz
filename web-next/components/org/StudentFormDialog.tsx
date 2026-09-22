@@ -262,17 +262,17 @@ export default function StudentFormDialog({
               <Label htmlFor="team">Team</Label>
               <Select
                 items={{
-                  '': 'No team',
+                  __none: 'No team',
                   ...Object.fromEntries(teams.map((t) => [t.id, t.name])),
                 }}
-                value={values.team_id ?? ''}
-                onValueChange={(v) => set('team_id', typeof v === 'string' ? v : '')}
+                value={values.team_id ?? '__none'}
+                onValueChange={(v) => set('team_id', v === '__none' ? '' : (typeof v === 'string' ? v : ''))}
               >
                 <SelectTrigger id="team">
                   <SelectValue placeholder="No team" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No team</SelectItem>
+                  <SelectItem value="__none">No team</SelectItem>
                   {teams.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}

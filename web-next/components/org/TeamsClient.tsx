@@ -31,12 +31,22 @@ import {
   type Team,
   type TeamMember,
 } from '@/lib/teams'
+import {
+  orgCreateMatch,
+  orgCreateSeason,
+  orgDeleteMatch,
+  orgDeleteSeason,
+  orgMatches,
+  type Match,
+  type Season,
+} from '@/lib/org'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
 import type { Student } from '@/lib/org'
 
 interface TeamsClientProps {
   auth0Id: string
   initialTeams: Team[]
+  initialSeasons: Season[]
   students: Student[]
 }
 
@@ -64,8 +74,10 @@ function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
   )
 }
 
-export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsClientProps) {
+export default function TeamsClient({ auth0Id, initialTeams, initialSeasons, students }: TeamsClientProps) {
   const [teams, setTeams] = useState<Team[]>(initialTeams)
+  const [seasons, setSeasons] = useState<Season[]>(initialSeasons)
+  const [matches, setMatches] = useState<Match[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [members, setMembers] = useState<TeamMember[]>([])
   const [trends, setTrends] = useState<FindingsTrendPoint[]>([])
@@ -75,6 +87,10 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
   const [renameValue, setRenameValue] = useState('')
   const [addKind, setAddKind] = useState<'coach' | 'player'>('player')
   const [addRef, setAddRef] = useState('')
+  const [seasonName, setSeasonName] = useState('')
+  const [matchOpponent, setMatchOpponent] = useState('')
+  const [matchOn, setMatchOn] = useState('')
+  const [matchSeason, setMatchSeason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -102,6 +118,13 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
       })
       .catch(() => {
         if (!cancelled) setTrends([])
+      })
+    void orgMatches(auth0Id, { teamId: id })
+      .then((res) => {
+        if (!cancelled) setMatches(res.matches)
+      })
+      .catch(() => {
+        if (!cancelled) setMatches([])
       })
     return () => {
       cancelled = true
@@ -143,7 +166,67 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
   const unassignedStudents = students.filter((s) => !assignedStudentIds.has(s.id))
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Seasons</CardTitle>
+          <CardDescription>Group matches and analyses by season.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {seasons.map((season) => (
+              <span
+                key={season.id}
+                className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-foreground"
+              >
+                {season.name}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      await orgDeleteSeason(auth0Id, season.id)
+                      setSeasons((prev) => prev.filter((s) => s.id !== season.id))
+                    })
+                  }
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete season ${season.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {seasons.length === 0 && (
+              <span className="text-xs text-muted-foreground">No seasons yet.</span>
+            )}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Input
+              value={seasonName}
+              onChange={(e) => setSeasonName(e.target.value)}
+              placeholder="2026 season"
+              aria-label="Season name"
+              className="h-9 max-w-56"
+            />
+            <Button
+              variant="outline"
+              disabled={busy || !seasonName.trim()}
+              onClick={() =>
+                run(async () => {
+                  const res = await orgCreateSeason(auth0Id, { name: seasonName.trim() })
+                  setSeasons((prev) => [res.season, ...prev])
+                  setSeasonName('')
+                })
+              }
+            >
+              Add season
+            </Button>
+          </div>
+          {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
       <Card>
         <CardHeader>
           <CardTitle>Teams</CardTitle>
@@ -342,6 +425,101 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Matches</CardTitle>
+                <CardDescription>Fixtures and results for this team.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {matches.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No matches scheduled.</p>
+                )}
+                {matches.map((match) => (
+                  <div
+                    key={match.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        {match.opponent ? `vs ${match.opponent}` : 'Match'}
+                        {match.result ? ` · ${match.result}` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {[match.match_on, match.location].filter(Boolean).join(' · ') || 'Unscheduled'}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await orgDeleteMatch(auth0Id, match.id)
+                          const res = await orgMatches(auth0Id, { teamId: selected.id })
+                          setMatches(res.matches)
+                        })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Input
+                    value={matchOpponent}
+                    onChange={(e) => setMatchOpponent(e.target.value)}
+                    placeholder="Opponent"
+                    aria-label="Opponent"
+                    className="h-9 flex-1 min-w-32"
+                  />
+                  <Input
+                    type="date"
+                    value={matchOn}
+                    onChange={(e) => setMatchOn(e.target.value)}
+                    aria-label="Match date"
+                    className="h-9 w-36"
+                  />
+                  <Select
+                    items={{ __none: 'No season', ...Object.fromEntries(seasons.map((s) => [s.id, s.name])) }}
+                    value={matchSeason || '__none'}
+                    onValueChange={(v) => setMatchSeason(v === '__none' ? '' : (typeof v === 'string' ? v : ''))}
+                  >
+                    <SelectTrigger aria-label="Season" className="w-36">
+                      <SelectValue placeholder="No season" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">No season</SelectItem>
+                      {seasons.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    disabled={busy || !matchOpponent.trim()}
+                    onClick={() =>
+                      run(async () => {
+                        await orgCreateMatch(auth0Id, {
+                          team_id: selected.id,
+                          season_id: matchSeason || null,
+                          opponent: matchOpponent.trim(),
+                          match_on: matchOn || null,
+                        })
+                        setMatchOpponent('')
+                        setMatchOn('')
+                        setMatchSeason('')
+                        const res = await orgMatches(auth0Id, { teamId: selected.id })
+                        setMatches(res.matches)
+                      })
+                    }
+                  >
+                    Add match
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </>
         ) : (
           <Card>
@@ -351,8 +529,9 @@ export default function TeamsClient({ auth0Id, initialTeams, students }: TeamsCl
           </Card>
         )}
       </div>
+    </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New team</DialogTitle>

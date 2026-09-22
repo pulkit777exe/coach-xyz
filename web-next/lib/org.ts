@@ -546,7 +546,6 @@ export const orgUpdateReport = async (
 }
 
 // ── Training objectives (§26 loop) ──────────────────────────────────────────
-
 export type TrainingObjective = {
   id: string
   org_auth0_id: string
@@ -642,6 +641,192 @@ export const orgStudentFindings = async (
     `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings?${params.toString()}`,
   )
 }
+
+// ── Seasons & matches ──────────────────────────────────────────────────────
+
+export type Season = {
+  id: string
+  org_auth0_id: string
+  name: string
+  starts_on: string | null
+  ends_on: string | null
+  created_at: string
+}
+
+export type Match = {
+  id: string
+  org_auth0_id: string
+  team_id: string | null
+  season_id: string | null
+  opponent: string | null
+  match_on: string | null
+  location: string | null
+  result: string | null
+  created_at: string
+}
+
+export const orgSeasons = async (auth0Id: string): Promise<{ seasons: Season[] }> =>
+  apiFetch<{ seasons: Season[] }>(org(auth0Id, '/seasons'))
+
+export const orgCreateSeason = async (
+  auth0Id: string,
+  input: { name: string; starts_on?: string | null; ends_on?: string | null },
+): Promise<{ season: Season }> =>
+  apiFetch<{ season: Season }>(org(auth0Id, '/seasons'), {
+    method: 'POST',
+    body: JSON.stringify(pickDefined(input)),
+  })
+
+export const orgDeleteSeason = async (
+  auth0Id: string,
+  id: string,
+): Promise<{ deleted: boolean }> =>
+  apiFetch<{ deleted: boolean }>(org(auth0Id, `/seasons/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
+
+export const orgMatches = async (
+  auth0Id: string,
+  opts: { teamId?: string | null; seasonId?: string | null } = {},
+): Promise<{ matches: Match[] }> => {
+  const params = new URLSearchParams()
+  if (opts.teamId) params.set('team_id', opts.teamId)
+  if (opts.seasonId) params.set('season_id', opts.seasonId)
+  const qs = params.toString()
+  return apiFetch<{ matches: Match[] }>(org(auth0Id, `/matches${qs ? `?${qs}` : ''}`))
+}
+
+export const orgCreateMatch = async (
+  auth0Id: string,
+  input: {
+    team_id?: string | null
+    season_id?: string | null
+    opponent?: string | null
+    match_on?: string | null
+    location?: string | null
+    result?: string | null
+  },
+): Promise<{ match: Match }> =>
+  apiFetch<{ match: Match }>(org(auth0Id, '/matches'), {
+    method: 'POST',
+    body: JSON.stringify(pickDefined(input)),
+  })
+
+export const orgDeleteMatch = async (
+  auth0Id: string,
+  id: string,
+): Promise<{ deleted: boolean }> =>
+  apiFetch<{ deleted: boolean }>(org(auth0Id, `/matches/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
+
+// ── Training plans ─────────────────────────────────────────────────────────
+
+export type TrainingPlan = {
+  id: string
+  org_auth0_id: string
+  team_id: string | null
+  student_id: string | null
+  title: string
+  description: string | null
+  status: 'active' | 'done' | 'archived'
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const orgPlans = async (
+  auth0Id: string,
+  opts: { teamId?: string | null; studentId?: string | null } = {},
+): Promise<{ plans: TrainingPlan[] }> => {
+  const params = new URLSearchParams()
+  if (opts.teamId) params.set('team_id', opts.teamId)
+  if (opts.studentId) params.set('student_id', opts.studentId)
+  const qs = params.toString()
+  return apiFetch<{ plans: TrainingPlan[] }>(org(auth0Id, `/plans${qs ? `?${qs}` : ''}`))
+}
+
+export const orgCreatePlan = async (
+  auth0Id: string,
+  input: {
+    team_id?: string | null
+    student_id?: string | null
+    title: string
+    description?: string | null
+  },
+): Promise<{ plan: TrainingPlan }> =>
+  apiFetch<{ plan: TrainingPlan }>(org(auth0Id, '/plans'), {
+    method: 'POST',
+    body: JSON.stringify(pickDefined(input)),
+  })
+
+export const orgSetPlanStatus = async (
+  auth0Id: string,
+  id: string,
+  status: 'active' | 'done' | 'archived',
+): Promise<{ plan: TrainingPlan }> =>
+  apiFetch<{ plan: TrainingPlan }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+
+export const orgDeletePlan = async (
+  auth0Id: string,
+  id: string,
+): Promise<{ deleted: boolean }> =>
+  apiFetch<{ deleted: boolean }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+  })
+
+// ── Wellness check-ins (health data, §5 — medical permission to read) ──────
+
+export type WellnessCheckin = {
+  id: string
+  org_auth0_id: string
+  student_id: string
+  sleep_hours: number | null
+  fatigue: number | null
+  pain: string | null
+  availability: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export const orgWellness = async (
+  auth0Id: string,
+  studentId: string,
+): Promise<{ checkins: WellnessCheckin[] }> =>
+  apiFetch<{ checkins: WellnessCheckin[] }>(
+    org(auth0Id, `/students/${encodeURIComponent(studentId)}/wellness`),
+  )
+
+export const orgCreateWellness = async (
+  auth0Id: string,
+  studentId: string,
+  input: {
+    sleep_hours?: number | null
+    fatigue?: number | null
+    pain?: string | null
+    availability?: string | null
+    note?: string | null
+  },
+): Promise<{ checkin: WellnessCheckin }> =>
+  apiFetch<{ checkin: WellnessCheckin }>(
+    org(auth0Id, `/students/${encodeURIComponent(studentId)}/wellness`),
+    { method: 'POST', body: JSON.stringify(pickDefined(input)) },
+  )
+
+// ── Subscription & usage ───────────────────────────────────────────────────
+
+export type OrgSubscription = {
+  subscription: { tier: string; status: string }
+  usage_today: Record<string, number>
+  daily_analysis_limit: number
+}
+
+export const orgSubscription = async (auth0Id: string): Promise<OrgSubscription> =>
+  apiFetch<OrgSubscription>(org(auth0Id, '/subscription'))
 
 // ── Performance metrics ──────────────────────────────────────────────────────
 

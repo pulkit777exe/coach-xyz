@@ -408,6 +408,290 @@ export const deleteObjective = async (auth0Id: string, id: string): Promise<bool
   })) ?? false
 }
 
+// ── Seasons & matches ────────────────────────────────────────────────────────
+
+export type Season = {
+  id: string
+  org_auth0_id: string
+  name: string
+  starts_on: string | null
+  ends_on: string | null
+  created_at: string
+}
+
+export type Match = {
+  id: string
+  org_auth0_id: string
+  team_id: string | null
+  season_id: string | null
+  opponent: string | null
+  match_on: string | null
+  location: string | null
+  result: string | null
+  created_at: string
+}
+
+export const listSeasons = async (auth0Id: string): Promise<Season[]> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Season[]>`
+      select * from seasons where org_auth0_id = ${auth0Id} order by created_at desc;
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export const createSeason = async (
+  auth0Id: string,
+  input: { name: string; starts_on?: string | null; ends_on?: string | null },
+): Promise<Season | null> => {
+  const name = input.name.trim().slice(0, 120)
+  if (!name) return null
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Season[]>`
+      insert into seasons (org_auth0_id, name, starts_on, ends_on)
+      values (${auth0Id}, ${name}, ${input.starts_on ?? null}::date, ${input.ends_on ?? null}::date)
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const deleteSeason = async (auth0Id: string, id: string): Promise<boolean> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ id: string }[]>`
+      delete from seasons where org_auth0_id = ${auth0Id} and id = ${id} returning id;
+    `
+    return Boolean(rows?.[0])
+  })) ?? false
+}
+
+export const listMatches = async (
+  auth0Id: string,
+  opts: { teamId?: string | null; seasonId?: string | null } = {},
+): Promise<Match[]> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Match[]>`
+      select * from matches
+      where org_auth0_id = ${auth0Id}
+        and (${opts.teamId ?? null}::uuid is null or team_id = ${opts.teamId ?? null}::uuid)
+        and (${opts.seasonId ?? null}::uuid is null or season_id = ${opts.seasonId ?? null}::uuid)
+      order by match_on desc nulls last, created_at desc;
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export const createMatch = async (
+  auth0Id: string,
+  input: {
+    team_id?: string | null
+    season_id?: string | null
+    opponent?: string | null
+    match_on?: string | null
+    location?: string | null
+    result?: string | null
+  },
+): Promise<Match | null> => {
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<Match[]>`
+      insert into matches (org_auth0_id, team_id, season_id, opponent, match_on, location, result)
+      values (
+        ${auth0Id},
+        ${input.team_id ?? null}::uuid,
+        ${input.season_id ?? null}::uuid,
+        ${input.opponent?.trim().slice(0, 120) || null},
+        ${input.match_on ?? null}::date,
+        ${input.location?.trim().slice(0, 200) || null},
+        ${input.result?.trim().slice(0, 60) || null}
+      )
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const deleteMatch = async (auth0Id: string, id: string): Promise<boolean> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ id: string }[]>`
+      delete from matches where org_auth0_id = ${auth0Id} and id = ${id} returning id;
+    `
+    return Boolean(rows?.[0])
+  })) ?? false
+}
+
+// ── Training plans ───────────────────────────────────────────────────────────
+
+export type TrainingPlan = {
+  id: string
+  org_auth0_id: string
+  team_id: string | null
+  student_id: string | null
+  title: string
+  description: string | null
+  status: "active" | "done" | "archived"
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const listTrainingPlans = async (
+  auth0Id: string,
+  opts: { teamId?: string | null; studentId?: string | null } = {},
+): Promise<TrainingPlan[]> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<TrainingPlan[]>`
+      select * from training_plans
+      where org_auth0_id = ${auth0Id}
+        and (${opts.teamId ?? null}::uuid is null or team_id = ${opts.teamId ?? null}::uuid)
+        and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid)
+      order by created_at desc;
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export const createTrainingPlan = async (
+  auth0Id: string,
+  createdBy: string | null,
+  input: { team_id?: string | null; student_id?: string | null; title: string; description?: string | null },
+): Promise<TrainingPlan | null> => {
+  const title = input.title.trim().slice(0, 200)
+  if (!title) return null
+  if (input.student_id) {
+    const student = await getStudent(auth0Id, input.student_id)
+    if (!student) return null
+  }
+  if (input.team_id) {
+    const team = await getTeam(auth0Id, input.team_id)
+    if (!team) return null
+  }
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<TrainingPlan[]>`
+      insert into training_plans (org_auth0_id, team_id, student_id, title, description, created_by)
+      values (
+        ${auth0Id},
+        ${input.team_id ?? null}::uuid,
+        ${input.student_id ?? null}::uuid,
+        ${title},
+        ${input.description?.trim().slice(0, 2000) || null},
+        ${createdBy}
+      )
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const setTrainingPlanStatus = async (
+  auth0Id: string,
+  id: string,
+  status: string,
+): Promise<TrainingPlan | null> => {
+  if (status !== "active" && status !== "done" && status !== "archived") return null
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<TrainingPlan[]>`
+      update training_plans set status = ${status}, updated_at = now()
+      where org_auth0_id = ${auth0Id} and id = ${id}
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
+export const deleteTrainingPlan = async (auth0Id: string, id: string): Promise<boolean> => {
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<{ id: string }[]>`
+      delete from training_plans where org_auth0_id = ${auth0Id} and id = ${id} returning id;
+    `
+    return Boolean(rows?.[0])
+  })) ?? false
+}
+
+// ── Wellness check-ins (health data, §5) ─────────────────────────────────────
+
+export type WellnessCheckin = {
+  id: string
+  org_auth0_id: string
+  student_id: string
+  sleep_hours: number | null
+  fatigue: number | null
+  pain: string | null
+  availability: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export const listWellness = async (
+  auth0Id: string,
+  studentId: string,
+  limit = 30,
+): Promise<WellnessCheckin[]> => {
+  const capped = Math.min(Math.max(limit, 1), 200)
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<WellnessCheckin[]>`
+      select * from wellness_checkins
+      where org_auth0_id = ${auth0Id} and student_id = ${studentId}::uuid
+      order by created_at desc
+      limit ${capped};
+    `
+    return rows ?? []
+  })) ?? []
+}
+
+export const createWellnessCheckin = async (
+  auth0Id: string,
+  createdBy: string | null,
+  input: {
+    student_id: string
+    sleep_hours?: number | null
+    fatigue?: number | null
+    pain?: string | null
+    availability?: string | null
+    note?: string | null
+  },
+): Promise<WellnessCheckin | null> => {
+  const student = await getStudent(auth0Id, input.student_id)
+  if (!student) return null
+  const sleep = typeof input.sleep_hours === "number" && input.sleep_hours >= 0 && input.sleep_hours <= 24
+    ? input.sleep_hours
+    : null
+  const fatigue = Number.isInteger(input.fatigue) && (input.fatigue as number) >= 1 && (input.fatigue as number) <= 5
+    ? input.fatigue
+    : null
+  return withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const rows = await db<WellnessCheckin[]>`
+      insert into wellness_checkins (
+        org_auth0_id, student_id, sleep_hours, fatigue, pain,
+        availability, note, created_by
+      ) values (
+        ${auth0Id},
+        ${input.student_id}::uuid,
+        ${sleep},
+        ${fatigue},
+        ${typeof input.pain === "string" ? input.pain.trim().slice(0, 500) || null : null},
+        ${typeof input.availability === "string" ? input.availability.trim().slice(0, 60) || null : null},
+        ${typeof input.note === "string" ? input.note.trim().slice(0, 2000) || null : null},
+        ${createdBy}
+      )
+      returning *;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 // ── Attendance ───────────────────────────────────────────────────────────────
 export const listAttendance = async (
   auth0Id: string,

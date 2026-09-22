@@ -6,7 +6,7 @@ import { enqueueAnalysis } from '../lib/queue'
 import { checkAnalysisLimit, getIP } from '../lib/ratelimit'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { verifyAttributionToken } from '../lib/attribution'
-import { persistAnalysisStart, checkOrgDailyQuota } from '../lib/supabaseHistory'
+import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/supabaseHistory'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
 
@@ -66,9 +66,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
 
     // Per-org daily quota (§17): resolve the caller's primary org when
     // attributed; anonymous callers keep only the IP rate limit.
+    let priority = 0
     if (owner) {
       const memberships = await listMembershipsForUser(owner).catch(() => [])
-      const quota = await checkOrgDailyQuota(memberships?.[0]?.org_auth0_id ?? owner)
+      const orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
+      const quota = await checkOrgDailyQuota(orgAuth0Id)
       if (!quota.allowed) {
         set.status = 429
         return {
@@ -80,6 +82,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
           retry_after: quota.retryAfterSec,
         }
       }
+      // Fair queueing (§17): authenticated jobs outrank anonymous ones,
+      // paid tiers outrank free. FIFO within a priority (no starvation).
+      const tier = await getOrgTier(orgAuth0Id).catch(() => 'free' as const)
+      priority = 5 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
+      await recordUsage(orgAuth0Id, 'analysis').catch(() => {})
     }
 
     // Save the server job mapping to Redis BEFORE enqueuing
@@ -90,6 +97,7 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
       player_index: playerIndex,
       video_key: videoKey,
       angle,
+      priority,
       owner_ids: owner ? [owner] : [],
     })
 

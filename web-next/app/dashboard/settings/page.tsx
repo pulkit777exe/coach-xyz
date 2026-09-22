@@ -21,6 +21,7 @@ import {
   orgStudents,
   orgOverview,
   orgMembers,
+  orgSubscription,
 } from '@/lib/serverData'
 import type { Student, OrgOverview } from '@/lib/org'
 import type { OrgMembersResponse } from '@/lib/members'
@@ -66,19 +67,34 @@ export default async function SettingsPage() {
   let students: Student[] | null = null
   let overview: OrgOverview | null = null
   let membersData: OrgMembersResponse | null = null
+  let subscription: {
+    tier: string
+    status: string
+    usage_today: Record<string, number>
+    daily_analysis_limit: number
+  } | null = null
   let error: string | null = null
 
   try {
-    const [profileRes, studentsRes, overviewRes, membersRes] = await Promise.all([
+    const [profileRes, studentsRes, overviewRes, membersRes, subscriptionRes] = await Promise.all([
       getUserProfile(ownAuth0Id),
       orgStudents(auth0Id),
       orgOverview(auth0Id),
       orgMembers(auth0Id),
+      orgSubscription(auth0Id).catch(() => null),
     ])
     profile = profileRes.user
     students = studentsRes.students
     overview = overviewRes.overview
     membersData = membersRes
+    if (subscriptionRes) {
+      subscription = {
+        tier: subscriptionRes.subscription.tier,
+        status: subscriptionRes.subscription.status,
+        usage_today: subscriptionRes.usage_today,
+        daily_analysis_limit: subscriptionRes.daily_analysis_limit,
+      }
+    }
   } catch (err) {
     console.error('Failed to load settings data:', err)
     error = err instanceof Error ? err.message : 'Failed to load settings data'
@@ -222,6 +238,33 @@ export default async function SettingsPage() {
       </div>
 
       <MembersSection auth0Id={auth0Id} initialData={membersData} />
+
+      {subscription && (
+        <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-6 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Plan & Usage
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-6 px-6 py-4">
+            <div>
+              <p className="text-lg font-bold capitalize tracking-tight text-foreground">{subscription.tier}</p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Plan</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight text-foreground">
+                {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
+              </p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Analyses today
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Usage is metered per analysis for future billing tiers.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">

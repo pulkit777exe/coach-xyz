@@ -48,15 +48,159 @@
     }
   ],
   "form_criteria": [
-    "stance",
-    "grip",
-    "backlift",
-    "head_position",
-    "front_foot_movement",
-    "weight_transfer",
-    "bottom_hand",
-    "follow_through",
-    "wrist_roll"
+    {
+      "key": "stance",
+      "label": "Stance",
+      "metric": "hip_width_stance_deg",
+      "ideal_range": [
+        45,
+        65
+      ],
+      "acceptable_range": [
+        35,
+        75
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "backlift",
+      "label": "Backlift",
+      "metric": "backlift_angle_deg",
+      "ideal_range": [
+        20,
+        45
+      ],
+      "acceptable_range": [
+        10,
+        60
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "front_foot_movement",
+      "label": "Front Foot",
+      "metric": "left_knee_ankle_angle",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "weight_transfer",
+      "label": "Weight Transfer",
+      "metric": "torso_lean_left",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.13,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "bottom_hand",
+      "label": "Bottom Hand",
+      "metric": "left_wrist_finger_ext",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        135,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "elbow_extension",
+      "label": "Arm Extension",
+      "metric": "elbow_extension_angle_deg",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.1,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "wrist_roll",
+      "label": "Wrist Roll",
+      "metric": "wrist_roll_deg",
+      "ideal_range": [
+        30,
+        60
+      ],
+      "acceptable_range": [
+        15,
+        75
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.08,
+      "phase": "follow_through",
+      "confidence_score": null
+    }
   ],
   "colors": {
     "primary": [
@@ -100,5 +244,5 @@
       "description": "Useful third angle for line, length and seam movement."
     }
   ],
-  "version": 1
+  "version": 2
 }

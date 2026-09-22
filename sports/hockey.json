@@ -40,15 +40,159 @@
     }
   ],
   "form_criteria": [
-    "grip",
-    "weight_transfer",
-    "puck_position",
-    "stick_flex",
-    "contact_point",
-    "follow_through",
-    "body_rotation",
-    "head_position",
-    "balance"
+    {
+      "key": "balance",
+      "label": "Balance & Base",
+      "metric": "left_hip_knee_angle",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "weight_transfer",
+      "label": "Weight Transfer",
+      "metric": "weight_shift_px",
+      "ideal_range": [
+        30,
+        70
+      ],
+      "acceptable_range": [
+        15,
+        100
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "body_rotation",
+      "label": "Body Rotation",
+      "metric": "hip_rotation_deg",
+      "ideal_range": [
+        40,
+        70
+      ],
+      "acceptable_range": [
+        25,
+        85
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.13,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "contact_point",
+      "label": "Contact Point",
+      "metric": "contact_zone_px",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "extension",
+      "label": "Arm Extension",
+      "metric": "elbow_extension_angle_deg",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.12,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.08,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "grip",
+      "label": "Grip Spacing",
+      "metric": "grip_spacing_px",
+      "ideal_range": [
+        20,
+        50
+      ],
+      "acceptable_range": [
+        10,
+        70
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.08,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "puck_position",
+      "label": "Puck Position",
+      "metric": "puck_position_px",
+      "ideal_range": [
+        0,
+        25
+      ],
+      "acceptable_range": [
+        0,
+        50
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    }
   ],
   "colors": {
     "primary": [
@@ -92,5 +236,5 @@
       "description": "Useful third angle for shot placement and goalie reads."
     }
   ],
-  "version": 1
+  "version": 2
 }

@@ -40,16 +40,176 @@
     }
   ],
   "form_criteria": [
-    "stance",
-    "grip",
-    "load",
-    "stride",
-    "hip_rotation",
-    "hand_path",
-    "contact_point",
-    "extension",
-    "follow_through",
-    "head_position"
+    {
+      "key": "stance",
+      "label": "Stance",
+      "metric": "hip_width_stance_deg",
+      "ideal_range": [
+        45,
+        65
+      ],
+      "acceptable_range": [
+        35,
+        75
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "load",
+      "label": "Load",
+      "metric": "load_depth_px",
+      "ideal_range": [
+        15,
+        40
+      ],
+      "acceptable_range": [
+        5,
+        60
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.1,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "stride",
+      "label": "Stride",
+      "metric": "stride_length_px",
+      "ideal_range": [
+        40,
+        80
+      ],
+      "acceptable_range": [
+        20,
+        110
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.08,
+      "phase": "setup",
+      "confidence_score": null
+    },
+    {
+      "key": "hip_rotation",
+      "label": "Hip Rotation",
+      "metric": "hip_rotation_deg",
+      "ideal_range": [
+        45,
+        75
+      ],
+      "acceptable_range": [
+        30,
+        90
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.15,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "hand_path",
+      "label": "Hand Path",
+      "metric": "elbow_extension_angle_deg",
+      "ideal_range": [
+        140,
+        165
+      ],
+      "acceptable_range": [
+        130,
+        175
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "contact_point",
+      "label": "Contact Point",
+      "metric": "contact_depth_px",
+      "ideal_range": [
+        30,
+        70
+      ],
+      "acceptable_range": [
+        15,
+        100
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.12,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "extension",
+      "label": "Extension",
+      "metric": "right_shoulder_elbow_angle",
+      "ideal_range": [
+        150,
+        170
+      ],
+      "acceptable_range": [
+        140,
+        180
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.1,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "follow_through",
+      "label": "Follow Through",
+      "metric": "follow_through_hold_frames",
+      "ideal_range": [
+        15,
+        30
+      ],
+      "acceptable_range": [
+        10,
+        40
+      ],
+      "measured_at_frame": "follow_through",
+      "weight": 0.1,
+      "phase": "follow_through",
+      "confidence_score": null
+    },
+    {
+      "key": "head_position",
+      "label": "Head Position",
+      "metric": "head_stillness_px",
+      "ideal_range": [
+        0,
+        15
+      ],
+      "acceptable_range": [
+        0,
+        30
+      ],
+      "measured_at_frame": "release",
+      "weight": 0.08,
+      "phase": "release",
+      "confidence_score": null
+    },
+    {
+      "key": "grip",
+      "label": "Grip",
+      "metric": "grip_consistency",
+      "ideal_range": [
+        0,
+        20
+      ],
+      "acceptable_range": [
+        0,
+        40
+      ],
+      "measured_at_frame": "setup",
+      "weight": 0.05,
+      "phase": "setup",
+      "confidence_score": null
+    }
   ],
   "colors": {
     "primary": [
@@ -93,5 +253,5 @@
       "description": "Useful third angle for pitch movement and strike-zone command."
     }
   ],
-  "version": 1
+  "version": 2
 }

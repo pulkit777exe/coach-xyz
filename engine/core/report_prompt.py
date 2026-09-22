@@ -66,6 +66,7 @@ REPORT_RULES: List[str] = [
     "form_score_trend: exactly one of the values `improving`, `steady`, `declining`, or `mixed`, based only on the scores in the context.",
     "narrative: 2-3 paragraphs in plain, coach-like, encouraging language. No generic fluff.",
     "generated_at: the current date as ISO (YYYY-MM-DD).",
+    "Report wellness observations verbatim (fatigue, pain, availability) but never diagnose or predict medical conditions.",
     "Output ONLY a single JSON object matching REPORT_JSON_SCHEMA. No markdown fences, no extra text.",
 ]
 

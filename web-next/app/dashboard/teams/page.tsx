@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
-import { getOrgContext, orgStudents, orgTeams } from '@/lib/serverData'
+import { getOrgContext, orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
 import TeamsClient from '@/components/org/TeamsClient'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -16,7 +16,11 @@ export default async function TeamsPage() {
   if (!session) redirect('/auth/login')
   const { auth0Id } = await getOrgContext()
 
-  const [teamsRes, studentsRes] = await Promise.all([orgTeams(auth0Id), orgStudents(auth0Id)])
+  const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
+    orgTeams(auth0Id),
+    orgStudents(auth0Id),
+    orgSeasons(auth0Id).catch(() => ({ seasons: [] })),
+  ])
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -34,6 +38,7 @@ export default async function TeamsPage() {
         <TeamsClient
           auth0Id={auth0Id}
           initialTeams={teamsRes.teams}
+          initialSeasons={seasonsRes.seasons}
           students={studentsRes.students}
         />
       </div>

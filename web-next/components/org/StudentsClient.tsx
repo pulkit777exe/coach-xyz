@@ -528,15 +528,15 @@ export default function StudentsClient({
             />
           </div>
           <Select
-            items={{ '': 'All sports', ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
-            value={sport}
-            onValueChange={(v) => setSport(typeof v === 'string' ? v : '')}
+            items={{ __all: 'All sports', ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
+            value={sport || '__all'}
+            onValueChange={(v) => setSport(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
           >
             <SelectTrigger aria-label="Filter by sport" className="w-36">
               <SelectValue placeholder="All sports" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All sports</SelectItem>
+              <SelectItem value="__all">All sports</SelectItem>
               {sportsForForm.map((opt) => (
                 <SelectItem key={opt} value={opt}>
                   {opt}
@@ -546,17 +546,17 @@ export default function StudentsClient({
           </Select>
           <Select
             items={{
-              '': 'All statuses',
+              __all: 'All statuses',
               ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])),
             }}
-            value={status}
-            onValueChange={(v) => setStatus(typeof v === 'string' ? v : '')}
+            value={status || '__all'}
+            onValueChange={(v) => setStatus(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
           >
             <SelectTrigger aria-label="Filter by status" className="w-36">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All statuses</SelectItem>
+              <SelectItem value="__all">All statuses</SelectItem>
               {STUDENT_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
                   {STUDENT_STATUS_LABELS[s]}
@@ -565,15 +565,15 @@ export default function StudentsClient({
             </SelectContent>
           </Select>
           <Select
-            items={{ '': 'All teams', ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
-            value={teamId}
-            onValueChange={(v) => setTeamId(typeof v === 'string' ? v : '')}
+            items={{ __all: 'All teams', ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
+            value={teamId || '__all'}
+            onValueChange={(v) => setTeamId(v === '__all' ? '' : (typeof v === 'string' ? v : ''))}
           >
             <SelectTrigger aria-label="Filter by team" className="w-36">
               <SelectValue placeholder="All teams" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All teams</SelectItem>
+              <SelectItem value="__all">All teams</SelectItem>
               {teams.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}

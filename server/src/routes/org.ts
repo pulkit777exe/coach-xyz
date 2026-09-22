@@ -30,6 +30,18 @@ import {
   createObjective,
   setObjectiveStatus,
   deleteObjective,
+  listSeasons,
+  createSeason,
+  deleteSeason,
+  listMatches,
+  createMatch,
+  deleteMatch,
+  listTrainingPlans,
+  createTrainingPlan,
+  setTrainingPlanStatus,
+  deleteTrainingPlan,
+  listWellness,
+  createWellnessCheckin,
   getStudentPerformanceSeries,
   getStudentTrends,
   compareStudents,
@@ -51,7 +63,7 @@ import {
   DEFAULT_COMPARISON_METRIC_KEY,
 } from '../lib/orgValidate'
 import type { ImportRow } from '../lib/orgValidate'
-import { linkAnalysisToStudent } from '../lib/supabaseHistory'
+import { linkAnalysisToStudent, getOrgTier, getTodayUsage, orgDailyAnalysisLimit } from '../lib/supabaseHistory'
 import { getTeam } from '../lib/teams'
 import { getMemberRole } from '../lib/orgMembers'
 import { listMemberTeamIds } from '../lib/teams'
@@ -939,6 +951,323 @@ export default new Elysia()
     }
     set.status = 200
     return { deleted: true }
+  })
+  // ── Subscription & usage (billing structure, §28) ──────────────────────
+  .get('/api/org/:auth0Id/subscription', async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (role !== 'owner' && role !== 'admin') {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Subscription details are owner/admin only', false)
+    }
+    set.status = 200
+    return {
+      subscription: { tier: await getOrgTier(auth0Id), status: 'active' },
+      usage_today: await getTodayUsage(auth0Id),
+      daily_analysis_limit: orgDailyAnalysisLimit(),
+    }
+  })
+  // ── Seasons & matches ────────────────────────────────────────────────
+  .get('/api/org/:auth0Id/seasons', async ({ params, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    set.status = 200
+    return { seasons: await listSeasons(auth0Id) }
+  })
+  .post('/api/org/:auth0Id/seasons', async ({ params, body, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'team.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
+    }
+    const raw = (body ?? {}) as Record<string, unknown>
+    if (raw.starts_on !== undefined && raw.starts_on !== null && !isDate(raw.starts_on)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'starts_on must be YYYY-MM-DD', false)
+    }
+    if (raw.ends_on !== undefined && raw.ends_on !== null && !isDate(raw.ends_on)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'ends_on must be YYYY-MM-DD', false)
+    }
+    const season = await createSeason(auth0Id, {
+      name: typeof raw.name === 'string' ? raw.name : '',
+      starts_on: typeof raw.starts_on === 'string' ? raw.starts_on : null,
+      ends_on: typeof raw.ends_on === 'string' ? raw.ends_on : null,
+    })
+    if (!season) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'name is required', false)
+    }
+    set.status = 201
+    return { season }
+  })
+  .delete('/api/org/:auth0Id/seasons/:id', async ({ params, request, set }) => {
+    const { auth0Id, id } = params
+    if (!auth0Id || !id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid season id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'team.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
+    }
+    const removed = await deleteSeason(auth0Id, id)
+    if (!removed) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Season not found', false)
+    }
+    set.status = 200
+    return { deleted: true }
+  })
+  .get('/api/org/:auth0Id/matches', async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const url = new URL(request.url)
+    const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    set.status = 200
+    return {
+      matches: await listMatches(auth0Id, {
+        teamId: pickId(url.searchParams.get('team_id')),
+        seasonId: pickId(url.searchParams.get('season_id')),
+      }),
+    }
+  })
+  .post('/api/org/:auth0Id/matches', async ({ params, body, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'team.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
+    }
+    const raw = (body ?? {}) as Record<string, unknown>
+    const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
+    if (raw.match_on !== undefined && raw.match_on !== null && !isDate(raw.match_on)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'match_on must be YYYY-MM-DD', false)
+    }
+    const teamId = pickId(raw.team_id)
+    if (teamId && !(await getTeam(auth0Id, teamId))) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'team not found in this organization', false)
+    }
+    const match = await createMatch(auth0Id, {
+      team_id: teamId,
+      season_id: pickId(raw.season_id),
+      opponent: typeof raw.opponent === 'string' ? raw.opponent : null,
+      match_on: typeof raw.match_on === 'string' ? raw.match_on : null,
+      location: typeof raw.location === 'string' ? raw.location : null,
+      result: typeof raw.result === 'string' ? raw.result : null,
+    })
+    if (!match) {
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Could not create match', true)
+    }
+    set.status = 201
+    return { match }
+  })
+  .delete('/api/org/:auth0Id/matches/:id', async ({ params, request, set }) => {
+    const { auth0Id, id } = params
+    if (!auth0Id || !id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid match id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'team.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
+    }
+    const removed = await deleteMatch(auth0Id, id)
+    if (!removed) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Match not found', false)
+    }
+    set.status = 200
+    return { deleted: true }
+  })
+  // ── Training plans ───────────────────────────────────────────────────────
+  .get('/api/org/:auth0Id/plans', async ({ params, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const url = new URL(request.url)
+    const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    set.status = 200
+    return {
+      plans: await listTrainingPlans(auth0Id, {
+        teamId: pickId(url.searchParams.get('team_id')),
+        studentId: pickId(url.searchParams.get('student_id')),
+      }),
+    }
+  })
+  .post('/api/org/:auth0Id/plans', async ({ params, body, request, set }) => {
+    const { auth0Id } = params
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'player.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
+    }
+    const raw = (body ?? {}) as Record<string, unknown>
+    const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
+    const title = typeof raw.title === 'string' ? raw.title : ''
+    if (!title.trim()) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'title is required', false)
+    }
+    const plan = await createTrainingPlan(auth0Id, verified, {
+      team_id: pickId(raw.team_id),
+      student_id: pickId(raw.student_id),
+      title,
+      description: typeof raw.description === 'string' ? raw.description : null,
+    })
+    if (!plan) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Could not create plan (unknown student/team?)', false)
+    }
+    set.status = 201
+    return { plan }
+  })
+  .patch('/api/org/:auth0Id/plans/:id', async ({ params, body, request, set }) => {
+    const { auth0Id, id } = params
+    if (!auth0Id || !id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid plan id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'player.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
+    }
+    const { status } = (body ?? {}) as { status?: unknown }
+    if (status !== 'active' && status !== 'done' && status !== 'archived') {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'status must be active, done, or archived', false)
+    }
+    const plan = await setTrainingPlanStatus(auth0Id, id, status)
+    if (!plan) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Plan not found', false)
+    }
+    set.status = 200
+    return { plan }
+  })
+  .delete('/api/org/:auth0Id/plans/:id', async ({ params, request, set }) => {
+    const { auth0Id, id } = params
+    if (!auth0Id || !id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid plan id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'player.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
+    }
+    const removed = await deleteTrainingPlan(auth0Id, id)
+    if (!removed) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Plan not found', false)
+    }
+    set.status = 200
+    return { deleted: true }
+  })
+  // ── Wellness check-ins (health data, §5) ─────────────────────────────────
+  // Reads require the medical permission; writes require player.manage.
+  // The AI layer reports wellness observations verbatim — never diagnoses.
+  .get('/api/org/:auth0Id/students/:studentId/wellness', async ({ params, request, set }) => {
+    const { auth0Id, studentId } = params
+    if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'medical.read')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Reading wellness data requires the medical permission', false)
+    }
+    set.status = 200
+    return { checkins: await listWellness(auth0Id, studentId) }
+  })
+  .post('/api/org/:auth0Id/students/:studentId/wellness', async ({ params, body, request, set }) => {
+    const { auth0Id, studentId } = params
+    if (!auth0Id || !studentId || !UUID_RE.test(studentId)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
+    }
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const role = verified === auth0Id
+      ? 'owner'
+      : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    if (!hasPermission(role, 'player.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Recording wellness data requires player.manage', false)
+    }
+    const raw = (body ?? {}) as Record<string, unknown>
+    const checkin = await createWellnessCheckin(auth0Id, verified, {
+      student_id: studentId,
+      sleep_hours: typeof raw.sleep_hours === 'number' ? raw.sleep_hours : null,
+      fatigue: typeof raw.fatigue === 'number' ? raw.fatigue : null,
+      pain: typeof raw.pain === 'string' ? raw.pain : null,
+      availability: typeof raw.availability === 'string' ? raw.availability : null,
+      note: typeof raw.note === 'string' ? raw.note : null,
+    })
+    if (!checkin) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
+    set.status = 201
+    return { checkin }
   })
   // ── Performance metrics (cross-student) ────────────────────────────────────
   .get('/api/org/:auth0Id/performance', async ({ params, request, set }) => {

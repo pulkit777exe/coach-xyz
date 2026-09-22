@@ -7,6 +7,8 @@ import {
   resolveAuth0Id,
   persistAnalysisStart,
   checkOrgDailyQuota,
+  getOrgTier,
+  recordUsage,
 } from '../lib/supabaseHistory'
 import {
   getLinkedPlayer,
@@ -162,6 +164,14 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'User record not found', false)
     }
+    void audit({
+      orgAuth0Id: verified,
+      actorAuth0Id: verified,
+      action: 'settings.changed',
+      resourceType: 'user_profile',
+      resourceId: verified,
+      clientIp: readRequestMeta(request).clientIp,
+    })
     set.status = 200
     return { user }
   })
@@ -403,6 +413,9 @@ export default new Elysia()
         retry_after: quota.retryAfterSec,
       }
     }
+    const tier = await getOrgTier(decision.coachAuth0Id).catch(() => 'free' as const)
+    const priority = 10 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
+    await recordUsage(decision.coachAuth0Id, 'analysis').catch(() => {})
 
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
@@ -417,8 +430,8 @@ export default new Elysia()
         video_key: videoKey,
         angle,
         // Player-hub jobs are authenticated humans waiting on UX —
-        // outrank anonymous queue entries.
-        priority: 1,
+        // outrank anonymous queue entries (tier-weighted above).
+        priority,
         owner_ids: [decision.coachAuth0Id, decision.requestedBy].filter(
           (id, i, arr) => id && arr.indexOf(id) === i,
         ),

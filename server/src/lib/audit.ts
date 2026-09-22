@@ -17,6 +17,9 @@ export type AuditAction =
   | 'team.member_removed'
   | 'analysis.cancelled'
   | 'analysis.deleted'
+  | 'video.exported'
+  | 'report.exported'
+  | 'settings.changed'
 
 export const audit = async (entry: {
   orgAuth0Id: string
