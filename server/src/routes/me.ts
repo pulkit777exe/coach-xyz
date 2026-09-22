@@ -18,9 +18,12 @@ import {
   getReport,
 } from "../lib/orgData"
 import { SERVICE_HEADERS, serviceGuard } from "../lib/serviceGuard"
+import { redactWellness } from "../lib/permissions"
 import { listMembershipsForUser } from "../lib/orgMembers"
 import { readRequestMeta } from "../lib/requestMeta"
 import { mintAttributionToken } from "../lib/attribution"
+import { acceptInvite } from "../lib/invites"
+import { audit } from "../lib/audit"
 import { enqueueAnalysis } from "../lib/queue"
 import { DEFAULT_MODEL } from "../types"
 
@@ -244,8 +247,12 @@ export default new Elysia()
     const limit = Math.min(Number(url.searchParams.get("limit") || 50), 100)
 
     const analyses = await getStudentAnalyses(coachAuth0Id, student.id, limit)
+    // Player scope never carries wellness signals (§5) — strip injury_risk.
     set.status = 200
-    return { analyses, linked: true }
+    return {
+      analyses: analyses.map((a) => ({ ...a, summary_json: redactWellness(a.summary_json) })),
+      linked: true,
+    }
   })
 
   // Reports that mention me (student-scoped)
@@ -395,6 +402,44 @@ export default new Elysia()
       set.status = 500
       return buildError("INTERNAL_ERROR", "Failed to enqueue analysis job. Please try again.", true)
     }
+  })
+
+  // Accept an organization invitation: the verified caller redeems a
+  // single-use token minted for their email. Links their account on success.
+  .post("/api/me/invites/accept", async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    if (!verified) {
+      set.status = 403
+      return buildError("FORBIDDEN", "Missing verified identity", false)
+    }
+    let parsed: Record<string, unknown>
+    try {
+      parsed = (await request.json()) as Record<string, unknown>
+    } catch {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "Invalid JSON request body.", false)
+    }
+    const token = parsed.token
+    if (typeof token !== "string" || !token) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "token is required.", false)
+    }
+    const result = await acceptInvite(token, verified)
+    if (!result.ok) {
+      set.status = 400
+      return buildError("INVALID_REQUEST", result.error, false)
+    }
+    const meta = readRequestMeta(request)
+    void audit({
+      orgAuth0Id: result.orgAuth0Id,
+      actorAuth0Id: verified,
+      action: "member.invite_accepted",
+      resourceType: "org_invite",
+      meta: { role: result.role },
+      clientIp: meta.clientIp,
+    })
+    set.status = 200
+    return { org_auth0_id: result.orgAuth0Id, role: result.role }
   })
 
   // Mint a short-lived attribution token binding the verified session sub.

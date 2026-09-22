@@ -1,4 +1,4 @@
-import type { OrgMemberRole } from "./orgMembers"
+import { getMemberRole, type OrgMemberRole } from "./orgMembers"
 
 // ── Permission vocabulary (§4) ───────────────────────────────────────────────
 // Roles grant membership; permissions grant actions; team scope narrows WHERE.
@@ -80,4 +80,46 @@ export function canAccessTeam(
     return memberTeamIds.includes(teamId)
   }
   return false
+}
+
+// ── Health-data boundary (§5) ───────────────────────────────────────────────
+// injury_risk and other wellness signals ride inside analysis summaries but
+// must not behave like ordinary statistics: only the owning account and the
+// medical role may see them. Everyone else gets the summary with wellness
+// keys stripped (scores, feedback, and findings stay intact).
+
+/** Roles allowed to see wellness signals inside summaries. */
+export function maySeeMedical(role: OrgMemberRole | null, isOwner: boolean): boolean {
+  if (isOwner) return true
+  return role === "medical"
+}
+
+/** Resolve medical visibility for an analysis owned by `ownerAuth0Id`. */
+export async function resolveMedicalAccess(
+  ownerAuth0Id: string | null,
+  callerSub: string | null,
+): Promise<boolean> {
+  if (!ownerAuth0Id || !callerSub) return false
+  if (callerSub === ownerAuth0Id) return true
+  try {
+    const role = await getMemberRole(ownerAuth0Id, callerSub)
+    return role === "owner" || role === "medical"
+  } catch {
+    return false
+  }
+}
+
+/** Strip wellness keys from a summary (pure; returns the input when clean). */
+export function redactWellness(summary: unknown): unknown {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return summary
+  const copy = { ...(summary as Record<string, unknown>) }
+  const events = copy.shot_events
+  if (Array.isArray(events)) {
+    copy.shot_events = events.map((e) => {
+      if (!e || typeof e !== "object" || Array.isArray(e)) return e
+      const { injury_risk: _dropped, ...rest } = e as Record<string, unknown>
+      return rest
+    })
+  }
+  return copy
 }

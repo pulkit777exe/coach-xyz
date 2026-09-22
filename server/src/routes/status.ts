@@ -4,6 +4,7 @@ import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
 import { verifyJobAccess } from "../lib/jobAccess"
 import { getEngineJobStatus, requestIdFrom } from "../lib/engine"
+import { redactWellness, resolveMedicalAccess } from "../lib/permissions"
 import { persistAnalysisStatus, getAnalysisByServerJobId } from "../lib/supabaseHistory"
 
 type StatusResponse = {
@@ -47,6 +48,8 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, reque
         set.status = access.status
         return access.body
       }
+      // Wellness signals stay behind the medical boundary (§5).
+      const maySee = await resolveMedicalAccess(persisted.auth0_id, access.callerSub)
       set.status = 200
       return statusResponse(params.jobId, {
         state: persisted.complete ? "completed" : "failed",
@@ -54,7 +57,7 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, reque
         stage_name: persisted.stage_name ?? (persisted.complete ? "Complete" : "Failed"),
         progress: persisted.progress ?? 0,
         complete: persisted.complete,
-        summary: persisted.summary_json,
+        summary: maySee ? persisted.summary_json : redactWellness(persisted.summary_json),
         video_ready: persisted.video_ready,
         error: persisted.error_message,
         error_code: persisted.error_code,
@@ -146,13 +149,21 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, reque
   })
 
   set.status = 200
+  // Wellness signals stay behind the medical boundary (§5). The check runs
+  // only when a summary exists; the persisted row names the owning account.
+  let summary: unknown = engineStatus.summary
+  if (summary) {
+    const persisted = await getAnalysisByServerJobId(serverJob.server_job_id)
+    const maySee = await resolveMedicalAccess(persisted?.auth0_id ?? null, access.callerSub)
+    if (!maySee) summary = redactWellness(summary)
+  }
   return statusResponse(serverJob.server_job_id, {
     state: engineStatus.state,
     stage: engineStatus.stage ?? -1,
     stage_name: stageName,
     progress: engineStatus.progress,
     complete: engineStatus.complete,
-    summary: engineStatus.summary,
+    summary,
     video_ready: videoReady,
     error: engineStatus.error,
     error_code: engineStatus.error_code,

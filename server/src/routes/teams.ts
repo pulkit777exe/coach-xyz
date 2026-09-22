@@ -15,6 +15,8 @@ import {
 import { getMemberRole, type OrgMemberRole } from "../lib/orgMembers"
 import { orgRoleGuard, serviceGuard, SERVICE_HEADERS } from "../lib/serviceGuard"
 import { canAccessTeam, hasPermission, type Permission } from "../lib/permissions"
+import { audit } from "../lib/audit"
+import { readRequestMeta } from "../lib/requestMeta"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -38,6 +40,25 @@ const callerRole = async (
 const forbid = (set: { status?: number | string }) => {
   set.status = 403
   return buildError("FORBIDDEN", "Insufficient role for this organization", false)
+}
+
+const logTeamAudit = (
+  request: Request,
+  orgAuth0Id: string,
+  action: Parameters<typeof audit>[0]["action"],
+  teamId: string,
+  meta?: Record<string, unknown>,
+) => {
+  const requestMeta = readRequestMeta(request)
+  void audit({
+    orgAuth0Id,
+    actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+    action,
+    resourceType: "team",
+    resourceId: teamId,
+    meta,
+    clientIp: requestMeta.clientIp,
+  })
 }
 
 /** Guard: membership + permission + (for team-scoped routes) team scope. */
@@ -108,6 +129,7 @@ export default new Elysia()
           set.status = 400
           return buildError("INVALID_REQUEST", "Could not create team", false)
         }
+        logTeamAudit(request, auth0Id, "team.created", team.id, { name: team.name })
         set.status = 201
         return { team }
       }),
@@ -149,6 +171,7 @@ export default new Elysia()
           set.status = 404
           return buildError("NOT_FOUND", "Team not found", false)
         }
+        logTeamAudit(request, auth0Id, "team.renamed", team.id, { name: team.name })
         set.status = 200
         return { team }
       })
@@ -168,6 +191,7 @@ export default new Elysia()
           set.status = 404
           return buildError("NOT_FOUND", "Team not found", false)
         }
+        logTeamAudit(request, auth0Id, "team.deleted", teamId)
         set.status = 200
         return { deleted: true }
       })
@@ -227,6 +251,7 @@ export default new Elysia()
           set.status = 400
           return buildError("INVALID_REQUEST", "Could not add team member", false)
         }
+        logTeamAudit(request, auth0Id, "team.member_added", teamId, { membership: member.id })
         set.status = 201
         return { member }
       })
@@ -245,6 +270,7 @@ export default new Elysia()
             set.status = 404
             return buildError("NOT_FOUND", "Team member not found", false)
           }
+          logTeamAudit(request, auth0Id, "team.member_removed", teamId, { membership: membershipId })
           set.status = 200
           return { deleted: true }
         },

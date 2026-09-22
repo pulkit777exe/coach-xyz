@@ -4,6 +4,9 @@ import {
   PERMISSIONS,
   canAccessTeam,
   hasPermission,
+  maySeeMedical,
+  redactWellness,
+  resolveMedicalAccess,
 } from "../src/lib/permissions"
 
 describe("hasPermission", () => {
@@ -81,5 +84,47 @@ describe("canAccessTeam", () => {
 
   test("null role never passes", () => {
     expect(canAccessTeam(null, ["team-1"], "team-1")).toBe(false)
+  })
+})
+
+describe("medical boundary", () => {
+  test("owner always sees wellness signals", () => {
+    expect(maySeeMedical("coach", true)).toBe(true)
+    expect(maySeeMedical(null, true)).toBe(true)
+  })
+
+  test("only the medical role sees them otherwise", () => {
+    expect(maySeeMedical("medical", false)).toBe(true)
+    expect(maySeeMedical("coach", false)).toBe(false)
+    expect(maySeeMedical("analyst", false)).toBe(false)
+    expect(maySeeMedical("player", false)).toBe(false)
+    expect(maySeeMedical(null, false)).toBe(false)
+  })
+
+  test("redactWellness strips injury_risk but keeps scores and feedback", () => {
+    const summary = {
+      form_score: 7,
+      shot_events: [
+        { timestamp: 1, form_score: 7, feedback: "good", injury_risk: { level: "high" } },
+        { timestamp: 2, form_score: 8, feedback: "great" },
+      ],
+    }
+    const redacted = redactWellness(summary) as typeof summary
+    expect(redacted.form_score).toBe(7)
+    expect(redacted.shot_events[0]).not.toHaveProperty("injury_risk")
+    expect(redacted.shot_events[0].feedback).toBe("good")
+    expect(redacted.shot_events[1].feedback).toBe("great")
+  })
+
+  test("redactWellness passes through non-summaries", () => {
+    expect(redactWellness(null)).toBeNull()
+    expect(redactWellness("x")).toBe("x")
+    expect(redactWellness([1])).toEqual([1])
+  })
+
+  test("resolveMedicalAccess allows the owning account without a DB", async () => {
+    await expect(resolveMedicalAccess("auth0|a", "auth0|a")).resolves.toBe(true)
+    await expect(resolveMedicalAccess(null, "auth0|a")).resolves.toBe(false)
+    await expect(resolveMedicalAccess("auth0|a", null)).resolves.toBe(false)
   })
 })

@@ -85,14 +85,25 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
 Open: review actions (approve/flag), finding→training-objective link,
 per-player trend views (deferred to Phase 2 teams).
 
-### Phase 2 — Org hardening (§3, §4, §7, §29, §5)
-1. `teams` + `team_memberships` tables; scope students/analyses by team.
-2. Permission+scope check (`analysis.create @ team:X`) layered over roles;
-   players keep self-scope; add `analyst` and optional `medical` roles.
-3. Invite tokens table: random, hashed, single-use, expiring (§7).
-4. `audit_logs` writer on membership/permission/share/export/delete (§29).
-5. Move `injury_risk`/wellness behind the `medical` permission; AI never
-   states diagnoses (§5).
+### Phase 2 — Org hardening (§3, §4, §7, §29, §5) — SHIPPED (core)
+1. `teams` + `team_memberships` tables; `students.team_id` with cross-org
+   validation; team filter on student list; teams client in `web-next/lib`.
+2. `permissions.ts`: 14-permission vocabulary layered over roles
+   (owner full; admin all but `medical.read`; scoped coach; analyst;
+   medical; read-only player) + `canAccessTeam` scope; teams routes enforce
+   membership → permission → scope; analyst admitted to auth/user reads.
+   Roles extended to analyst/medical (server + web + contract tests).
+3. Token invites (`invites.ts`): random 256-bit, hashed storage, 7-day TTL,
+   single-use, revocable; mint/list/revoke (owner/admin) + self accept
+   (`/api/me/invites/accept`); uniform invalid/expired errors.
+4. `audit_logs` (best-effort writer): membership invite/role/remove,
+   invite revoke/accept, team CRUD + membership changes; owner/admin read.
+5. Medical boundary: `injury_risk` stripped from status/auth-detail/player
+   summaries unless the caller is the owning account or holds the medical
+   role (owner includes accountability); `maySeeMedical`/`redactWellness`
+   tested.
+Open: teams UI (assignment/filter screens), finding review actions still
+Phase 1-open, per-player finding trends.
 
 ### Phase 3 — Pipeline durability (§11–§18, §30)
 1. Stage-level idempotency keys (`analysis_id, stage, input_hash,

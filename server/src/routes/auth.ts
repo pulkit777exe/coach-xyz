@@ -12,7 +12,8 @@ import {
   getChatMessages,
 } from "../lib/supabaseHistory"
 import { buildError } from "../lib/errors"
-import { serviceGuard } from "../lib/serviceGuard"
+import { serviceGuard, SERVICE_HEADERS } from "../lib/serviceGuard"
+import { redactWellness, resolveMedicalAccess } from "../lib/permissions"
 
 function generateSimpleResponse(question: string, summary: Record<string, unknown> | null): string {
   if (!summary) {
@@ -145,7 +146,7 @@ export default new Elysia()
     set.status = 200
     return { analyses }
   })
-  .get("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, set }) => {
+  .get("/api/auth/user/:auth0Id/analyses/:jobId", async ({ params, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
@@ -158,8 +159,15 @@ export default new Elysia()
       return buildError("NOT_FOUND", "Analysis not found", false)
     }
 
+    // Wellness signals stay behind the medical boundary (§5).
+    const caller = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    const maySee = await resolveMedicalAccess(auth0Id, caller)
     set.status = 200
-    return { analysis }
+    return {
+      analysis: maySee
+        ? analysis
+        : { ...analysis, summary_json: redactWellness(analysis.summary_json) },
+    }
   })
   .get("/api/auth/user/:auth0Id/stats", async ({ params, set }) => {
     const { auth0Id } = params

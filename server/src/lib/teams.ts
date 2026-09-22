@@ -192,8 +192,11 @@ export const addTeamMember = async (
   const memberAuth0Id = input.memberAuth0Id?.trim() || null
   const studentId = input.studentId?.trim() || null
   if (!memberAuth0Id && !studentId) return null
-  const role: TeamMemberRole =
-    input.role === "coach" || input.role === "player" ? input.role : "player"
+  const role: TeamMemberRole = TEAM_MEMBER_ROLES.includes(
+    input.role as TeamMemberRole,
+  )
+    ? (input.role as TeamMemberRole)
+    : "player"
   return withHistoryStore(async (db) => {
     await ensureSchema(db)
     const rows = await db<TeamMember[]>`
