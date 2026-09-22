@@ -9,6 +9,7 @@ the extracted modules.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -436,6 +437,334 @@ def _needs_review(findings: Any) -> bool:
     )
 
 
+@dataclasses.dataclass
+class AnalysisContext:
+    """Mutable state threaded through the pipeline stages.
+
+    Each stage reads what it needs and writes its committed artifacts;
+    resume is stage selection based on which artifacts already exist.
+    """
+
+    job_id: str
+    video_key: str
+    player_index: int | None
+    angle: str | None = None
+    # prepare stage
+    local_path: str | None = None
+    local_is_temp: bool = False
+    video_hash: str = ""
+    dedup_key: str = ""
+    # tracking stage
+    preprocessed_path: str = ""
+    cleanup_preprocessed: bool = False
+    frame_cache: dict | None = None
+    keyframes: list = dataclasses.field(default_factory=list)
+    fps: float = 30.0
+    frame_count: int = 0
+    video_width: int = 0
+    video_height: int = 0
+    video_duration: float = 90.0
+    active_tracks: list = dataclasses.field(default_factory=list)
+    # reasoning + scoring stages
+    gemini_result: dict = dataclasses.field(default_factory=dict)
+    sport: str = "cricket"
+    # render stage
+    output_path: str | None = None
+
+
+def _stage_prepare(ctx: AnalysisContext) -> str:
+    """Download, hash, and short-circuit on cache/dedup.
+
+    Returns "done" when a cached result completed the job, else "continue".
+    Claims the dedup entry for the tracking stage on the continue path.
+    """
+    ctx.local_path = storage.download_video_to_tmp(ctx.video_key)
+    ctx.preprocessed_path = ctx.local_path
+    # S3 backend returns a throwaway tmp copy (local backend returns the
+    # stored file itself) — only the copy may be unlinked on the way out.
+    ctx.local_is_temp = not storage.is_local_backend()
+
+    # Check cache first
+    ctx.video_hash = compute_video_hash(ctx.local_path)
+    cached_result = get_cached_analysis(ctx.video_hash, ctx.player_index)
+    if cached_result is not None:
+        # Normalize cached results that may have old Gemini format
+        if "shots" in cached_result and "shot_events" not in cached_result:
+            cached_result = normalize_gemini_result(cached_result)
+        logging.info(json.dumps({
+            "type": "cache_hit",
+            "video_hash": ctx.video_hash,
+            "player_index": ctx.player_index,
+            "job_id": ctx.job_id,
+        }))
+        _safe_transition_to_completed(
+            ctx.job_id, _finalize_cached(cached_result, ctx.job_id, ctx.angle)
+        )
+        return "done"
+
+    logging.info(json.dumps({
+        "type": "cache_miss",
+        "video_hash": ctx.video_hash,
+        "player_index": ctx.player_index,
+        "job_id": ctx.job_id,
+    }))
+
+    # Deduplication: check if same video is being analyzed
+    ctx.dedup_key = f"{ctx.video_hash}:{ctx.player_index}"
+    if deduplicator.is_pending(ctx.dedup_key):
+        logging.info(f"[Analyzer] Deduplication: waiting for existing analysis of {ctx.video_hash}")
+        _wait_start = time.time()
+        while deduplicator.is_pending(ctx.dedup_key) and (time.time() - _wait_start) < 300:
+            time.sleep(2)
+            cached_result = get_cached_analysis(ctx.video_hash, ctx.player_index)
+            if cached_result is not None:
+                _safe_transition_to_completed(
+                    ctx.job_id, _finalize_cached(cached_result, ctx.job_id, ctx.angle)
+                )
+                return "done"
+        # If we exited the loop because the pending entry cleared (not timeout),
+        # check cache one more time before proceeding
+        if not deduplicator.is_pending(ctx.dedup_key):
+            cached_result = get_cached_analysis(ctx.video_hash, ctx.player_index)
+            if cached_result is not None:
+                _safe_transition_to_completed(
+                    ctx.job_id, _finalize_cached(cached_result, ctx.job_id, ctx.angle)
+                )
+                return "done"
+
+    # Mark this video as being analyzed (for dedup)
+    deduplicator.mark_pending(ctx.dedup_key)
+    return "continue"
+
+
+def _stage_resume_check(ctx: AnalysisContext) -> str:
+    """Stage resume: reuse a committed summary, or complete directly when the
+    render already survived. Returns "done", "render" (summary reused, fresh
+    tracking + render still needed), or "full"."""
+    resume_summary = _committed_summary(ctx.job_id)
+    if resume_summary is None:
+        return "full"
+    if storage.get_local_file_path(_rendered_key(ctx.job_id)):
+        update_job(
+            ctx.job_id,
+            video_key=_rendered_key(ctx.job_id),
+            video_path=storage.get_local_file_path(_rendered_key(ctx.job_id)),
+        )
+        _safe_transition_to_completed(
+            ctx.job_id, _finalize_cached(resume_summary, ctx.job_id, ctx.angle)
+        )
+        return "done"
+    logging.info(json.dumps({
+        "type": "analysis_resume",
+        "job_id": ctx.job_id,
+        "stage": "render",
+    }))
+    ctx.gemini_result = resume_summary
+    return "render"
+
+
+def _stage_tracking(ctx: AnalysisContext) -> None:
+    """Preprocess, extract keyframes, and build scored player tracks."""
+    assert ctx.local_path is not None
+    # State: scanning (extracting frames and detecting players)
+    transition_job(ctx.job_id, "scanning")
+    ctx.preprocessed_path = preprocess_video_ffmpeg(ctx.local_path)
+    ctx.cleanup_preprocessed = ctx.preprocessed_path != ctx.local_path
+
+    # Run keyframe extraction (CPU-bound) - returns frame cache
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        keyframes, fps, _frame_count, frame_cache = loop.run_until_complete(
+            asyncio.to_thread(extract_keyframes, ctx.preprocessed_path)
+        )
+
+        cap = cv2.VideoCapture(ctx.preprocessed_path)
+        try:
+            video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        finally:
+            cap.release()
+        video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
+
+        # Run detection and motion scoring in parallel (both use frame cache)
+        active_tracks, motion_scores = loop.run_until_complete(
+            asyncio.gather(
+                asyncio.to_thread(
+                    build_active_player_tracks,
+                    ctx.local_path,
+                    keyframes,
+                    ctx.player_index,
+                    frame_cache,
+                ),
+                asyncio.to_thread(compute_motion_scores, ctx.local_path, keyframes, frame_cache),
+            )
+        )
+    finally:
+        # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
+        default_executor = getattr(loop, '_default_executor', None)
+        loop.close()
+        if default_executor is not None:
+            default_executor.shutdown(wait=False)
+
+    ctx.keyframes = keyframes
+    ctx.fps = fps
+    ctx.frame_count = _frame_count
+    ctx.video_width = video_width
+    ctx.video_height = video_height
+    ctx.video_duration = video_duration
+    ctx.frame_cache = frame_cache
+
+    # Combine motion scores with tracks
+    for track in active_tracks:
+        fi = track["frame_index"]
+        motion = motion_scores.get(fi, 0.5)
+        visibility = track.get("visibility", 0.5)
+        track["motion_score"] = motion
+        track["composite_score"] = 0.4 * visibility + 0.6 * motion
+    ctx.active_tracks = active_tracks
+
+
+def _stage_reasoning(ctx: AnalysisContext, resumed: bool) -> None:
+    """Run the Gemini call, unless a resumed summary is already committed."""
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import TimeoutError as FuturesTimeoutError
+    from core.config import GEMINI_ANALYSIS_TIMEOUT_S
+
+    # State: analyzing (calling Gemini — skipped on stage resume)
+    transition_job(ctx.job_id, "analyzing")
+    if resumed:
+        logging.info(json.dumps({
+            "type": "analysis_resume",
+            "job_id": ctx.job_id,
+            "stage": "analyzing_skipped",
+        }))
+        return
+
+    frame_budget = min(20, len(ctx.active_tracks))
+    best_for_gemini = sorted(
+        ctx.active_tracks, key=lambda t: t["composite_score"], reverse=True
+    )[:frame_budget]
+    logging.info(f"[Analyzer] Selected {len(best_for_gemini)}/{len(ctx.active_tracks)} frames (budget={frame_budget})")
+    for i, t in enumerate(best_for_gemini[:5]):
+        logging.debug(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
+
+    # Bound the blocking multimodal call so a hung model request fails
+    # fast with a retryable error instead of wedging the worker. Runs in
+    # a one-shot executor; on timeout the stray thread is abandoned (it
+    # only writes the analysis cache, which is keyed and idempotent).
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
+        gemini_future = gemini_pool.submit(
+            call_gemini,
+            best_for_gemini,
+            ctx.video_duration,
+            ctx.fps,
+            ctx.video_width,
+            ctx.video_height,
+            ctx.player_index,
+            ctx.preprocessed_path,
+            ctx.frame_cache,
+        )
+        try:
+            gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
+        except FuturesTimeoutError as exc:
+            raise EngineError(
+                code="GEMINI_TIMEOUT",
+                message="AI analysis timed out. Please try again.",
+                retryable=True,
+            ) from exc
+    ctx.gemini_result = normalize_gemini_result(gemini_result)
+
+
+def _stage_scoring(ctx: AnalysisContext) -> None:
+    """Deterministic post-processing: stamps, biomechanics, scoring,
+    injury risk, stats, findings, cache, and the job summary write."""
+    from core.findings import build_findings
+
+    gemini_result = ctx.gemini_result
+    # Extract sport from Gemini result for scoring config
+    sport = gemini_result.get("sport", "cricket")
+    ctx.sport = sport
+
+    # Stamp which camera perspective was analyzed + the sport's guidance
+    # for the next angle, so the coach knows what to film next.
+    _stamp_angle(gemini_result, ctx.angle)
+    _stamp_provenance(gemini_result)
+
+    # Attach deterministic biomechanical metrics to each shot event
+    # by looking up the nearest tracked frame for each event timestamp
+    shot_events = gemini_result.get("shot_events", [])
+    if shot_events and ctx.active_tracks:
+        _attach_biomechanical_metrics(shot_events, ctx.active_tracks)
+
+    # Compute weighted composite scoring with per-criterion rationale
+    _compute_weighted_scoring(shot_events, sport)
+
+    # Compute injury-risk indicators for each shot event
+    _compute_injury_risk(shot_events, ctx.active_tracks)
+
+    # Validate and correct stats from shot events
+    corrected_stats = validate_and_correct_stats(gemini_result.get("shot_events", []))
+    gemini_result["success_rate_percent"] = corrected_stats["success_rate_percent"]
+    gemini_result["average_form_score"] = corrected_stats["average_form_score"]
+    gemini_result["total_events"] = corrected_stats["total_events"]
+
+    # Derive click-traceable findings from the final scored events (§19).
+    # Runs last so findings reflect corrected scores + attached
+    # biomechanics (confidence/frames are the evidence gate).
+    gemini_result["findings"] = build_findings(
+        shot_events,
+        sport,
+        gemini_result.get("provenance"),
+        ctx.job_id,
+    )
+    gemini_result["needs_review"] = _needs_review(gemini_result["findings"])
+
+    # Cache the result
+    set_cached_analysis(ctx.video_hash, gemini_result, ctx.player_index)
+
+    logging.info(json.dumps({
+        "type": "analysis_complete",
+        "video_hash": ctx.video_hash,
+        "player_index": ctx.player_index,
+        "job_id": ctx.job_id,
+        "form_score": gemini_result.get("form_score"),
+        "frames_analyzed": len(ctx.active_tracks),
+    }))
+
+    # Store analysis result
+    update_job(ctx.job_id, summary=gemini_result)
+
+
+def _stage_render(ctx: AnalysisContext) -> None:
+    """Render the annotated video, upload it, and complete the job."""
+    gemini_result = ctx.gemini_result
+    assert ctx.local_path is not None
+    # State: rendering (annotating video)
+    transition_job(ctx.job_id, "rendering")
+    output_path = str(tmp_dir() / f"{ctx.job_id}_annotated.mp4")
+    ctx.output_path = output_path
+    render_video(
+        video_path=ctx.local_path,
+        output_path=output_path,
+        analysis_result=gemini_result,
+        active_player_landmarks_per_frame=ctx.active_tracks,
+        fps=ctx.fps,
+        sport=gemini_result.get("sport"),
+    )
+
+    result_key = storage.upload_result_video(output_path, ctx.job_id)
+    ctx.output_path = None
+
+    # State: completed
+    transition_job(
+        ctx.job_id,
+        "completed",
+        video_key=result_key,
+        video_path=storage.get_local_file_path(result_key) if storage.is_local_backend() else None,
+    )
+
+
 def run_analysis(
     job_id: str,
     video_key: str,
@@ -463,252 +792,20 @@ def run_analysis(
         # Job doesn't exist yet or Redis error — proceed with analysis
         pass
 
-    local_path: str | None = None
-    local_is_temp = False
-    preprocessed_path = ""
-    output_path: str | None = None
-    cleanup_preprocessed = False
-    dedup_key = ""
-    frame_cache: dict | None = None
+    ctx = AnalysisContext(job_id=job_id, video_key=video_key, player_index=player_index, angle=angle)
     try:
-        local_path = storage.download_video_to_tmp(video_key)
-        preprocessed_path = local_path
-        # S3 backend returns a throwaway tmp copy (local backend returns the
-        # stored file itself) — only the copy may be unlinked on the way out.
-        local_is_temp = not storage.is_local_backend()
-
-        # Check cache first
-        video_hash = compute_video_hash(local_path)
-        cached_result = get_cached_analysis(video_hash, player_index)
-        if cached_result is not None:
-            # Normalize cached results that may have old Gemini format
-            if "shots" in cached_result and "shot_events" not in cached_result:
-                cached_result = normalize_gemini_result(cached_result)
-            logging.info(json.dumps({
-                "type": "cache_hit",
-                "video_hash": video_hash,
-                "player_index": player_index,
-                "job_id": job_id,
-            }))
-            _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
+        if _stage_prepare(ctx) == "done":
             return
 
-        logging.info(json.dumps({
-            "type": "cache_miss",
-            "video_hash": video_hash,
-            "player_index": player_index,
-            "job_id": job_id,
-        }))
+        resume = _stage_resume_check(ctx)
+        if resume == "done":
+            return
 
-        # Deduplication: check if same video is being analyzed
-        dedup_key = f"{video_hash}:{player_index}"
-        if deduplicator.is_pending(dedup_key):
-            logging.info(f"[Analyzer] Deduplication: waiting for existing analysis of {video_hash}")
-            _wait_start = time.time()
-            while deduplicator.is_pending(dedup_key) and (time.time() - _wait_start) < 300:
-                time.sleep(2)
-                cached_result = get_cached_analysis(video_hash, player_index)
-                if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
-                    return
-            # If we exited the loop because the pending entry cleared (not timeout),
-            # check cache one more time before proceeding
-            if not deduplicator.is_pending(dedup_key):
-                cached_result = get_cached_analysis(video_hash, player_index)
-                if cached_result is not None:
-                    _safe_transition_to_completed(job_id, _finalize_cached(cached_result, job_id, angle))
-                    return
+        _stage_tracking(ctx)
+        _stage_reasoning(ctx, resumed=(resume == "render"))
+        _stage_scoring(ctx)
+        _stage_render(ctx)
 
-        # Mark this video as being analyzed (for dedup)
-        deduplicator.mark_pending(dedup_key)
-
-        # State: scanning (extracting frames and detecting players)
-        transition_job(job_id, "scanning")
-
-        # Stage resume: a prior attempt may have committed a valid summary
-        # but died before/during render. Reuse it and skip the Gemini call —
-        # tracking still re-runs below for fresh landmarks.
-        resume_summary = _committed_summary(job_id)
-        if resume_summary is not None:
-            if storage.get_local_file_path(_rendered_key(job_id)):
-                update_job(
-                    job_id,
-                    video_key=_rendered_key(job_id),
-                    video_path=storage.get_local_file_path(_rendered_key(job_id)),
-                )
-                _safe_transition_to_completed(
-                    job_id, _finalize_cached(resume_summary, job_id, angle)
-                )
-                return
-            logging.info(json.dumps({
-                "type": "analysis_resume",
-                "job_id": job_id,
-                "stage": "render",
-            }))
-
-        preprocessed_path = preprocess_video_ffmpeg(local_path)
-        cleanup_preprocessed = preprocessed_path != local_path
-
-        # Run keyframe extraction (CPU-bound) - returns frame cache
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            keyframes, fps, _frame_count, frame_cache = loop.run_until_complete(
-                asyncio.to_thread(extract_keyframes, preprocessed_path)
-            )
-
-            cap = cv2.VideoCapture(preprocessed_path)
-            try:
-                video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            finally:
-                cap.release()
-            video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
-
-            # Run detection and motion scoring in parallel (both use frame cache)
-            active_tracks, motion_scores = loop.run_until_complete(
-                asyncio.gather(
-                    asyncio.to_thread(build_active_player_tracks, local_path, keyframes, player_index, frame_cache),
-                    asyncio.to_thread(compute_motion_scores, local_path, keyframes, frame_cache)
-                )
-            )
-        finally:
-            # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
-            default_executor = getattr(loop, '_default_executor', None)
-            loop.close()
-            if default_executor is not None:
-                default_executor.shutdown(wait=False)
-
-        # Combine motion scores with tracks
-        for track in active_tracks:
-            fi = track["frame_index"]
-            motion = motion_scores.get(fi, 0.5)
-            visibility = track.get("visibility", 0.5)
-            track["motion_score"] = motion
-            track["composite_score"] = 0.4 * visibility + 0.6 * motion
-
-        # State: analyzing (calling Gemini — skipped on stage resume)
-        transition_job(job_id, "analyzing")
-        if resume_summary is not None:
-            gemini_result = resume_summary
-            logging.info(json.dumps({
-                "type": "analysis_resume",
-                "job_id": job_id,
-                "stage": "analyzing_skipped",
-            }))
-        else:
-            frame_budget = min(20, len(active_tracks))
-            best_for_gemini = sorted(active_tracks, key=lambda t: t["composite_score"], reverse=True)[:frame_budget]
-            logging.info(f"[Analyzer] Selected {len(best_for_gemini)}/{len(active_tracks)} frames (budget={frame_budget})")
-            for i, t in enumerate(best_for_gemini[:5]):
-                logging.debug(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
-
-            # Bound the blocking multimodal call so a hung model request fails
-            # fast with a retryable error instead of wedging the worker. Runs in
-            # a one-shot executor; on timeout the stray thread is abandoned (it
-            # only writes the analysis cache, which is keyed and idempotent).
-            from concurrent.futures import ThreadPoolExecutor
-            from concurrent.futures import TimeoutError as FuturesTimeoutError
-            from core.config import GEMINI_ANALYSIS_TIMEOUT_S
-
-            with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
-                gemini_future = gemini_pool.submit(
-                    call_gemini,
-                    best_for_gemini,
-                    video_duration,
-                    fps,
-                    video_width,
-                    video_height,
-                    player_index,
-                    preprocessed_path,
-                    frame_cache,
-                )
-                try:
-                    gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
-                except FuturesTimeoutError as exc:
-                    raise EngineError(
-                        code="GEMINI_TIMEOUT",
-                        message="AI analysis timed out. Please try again.",
-                        retryable=True,
-                    ) from exc
-            gemini_result = normalize_gemini_result(gemini_result)
-
-        # Extract sport from Gemini result for scoring config
-        sport = gemini_result.get("sport", "cricket")
-
-        # Stamp which camera perspective was analyzed + the sport's guidance
-        # for the next angle, so the coach knows what to film next.
-        _stamp_angle(gemini_result, angle)
-        _stamp_provenance(gemini_result)
-
-        # Attach deterministic biomechanical metrics to each shot event
-        # by looking up the nearest tracked frame for each event timestamp
-        shot_events = gemini_result.get("shot_events", [])
-        if shot_events and active_tracks:
-            _attach_biomechanical_metrics(shot_events, active_tracks)
-
-        # Compute weighted composite scoring with per-criterion rationale
-        _compute_weighted_scoring(shot_events, sport)
-
-        # Compute injury-risk indicators for each shot event
-        _compute_injury_risk(shot_events, active_tracks)
-
-        # Validate and correct stats from shot events
-        corrected_stats = validate_and_correct_stats(gemini_result.get("shot_events", []))
-        gemini_result["success_rate_percent"] = corrected_stats["success_rate_percent"]
-        gemini_result["average_form_score"] = corrected_stats["average_form_score"]
-        gemini_result["total_events"] = corrected_stats["total_events"]
-
-        # Derive click-traceable findings from the final scored events (§19).
-        # Runs last so findings reflect corrected scores + attached
-        # biomechanics (confidence/frames are the evidence gate).
-        from core.findings import build_findings
-
-        gemini_result["findings"] = build_findings(
-            shot_events,
-            sport,
-            gemini_result.get("provenance"),
-            job_id,
-        )
-        gemini_result["needs_review"] = _needs_review(gemini_result["findings"])
-
-        # Cache the result
-        set_cached_analysis(video_hash, gemini_result, player_index)
-
-        logging.info(json.dumps({
-            "type": "analysis_complete",
-            "video_hash": video_hash,
-            "player_index": player_index,
-            "job_id": job_id,
-            "form_score": gemini_result.get("form_score"),
-            "frames_analyzed": len(best_for_gemini),
-        }))
-
-        # Store analysis result
-        update_job(job_id, summary=gemini_result)
-
-        # State: rendering (annotating video)
-        transition_job(job_id, "rendering")
-        output_path = str(tmp_dir() / f"{job_id}_annotated.mp4")
-        render_video(
-            video_path=local_path,
-            output_path=output_path,
-            analysis_result=gemini_result,
-            active_player_landmarks_per_frame=active_tracks,
-            fps=fps,
-            sport=gemini_result.get("sport"),
-        )
-
-        result_key = storage.upload_result_video(output_path, job_id)
-        output_path = None
-
-        # State: completed
-        transition_job(
-            job_id,
-            "completed",
-            video_key=result_key,
-            video_path=storage.get_local_file_path(result_key) if storage.is_local_backend() else None,
-        )
     except EngineError as exc:
         logging.error(json.dumps({"type": "analysis_engine_error", "job_id": job_id, "code": exc.code, "message": exc.message}))
         fail_job(job_id, exc)
@@ -732,16 +829,16 @@ def run_analysis(
         raise
     finally:
         # Free cached frames (~90MB) now that tracking is done
-        if frame_cache is not None:
-            frame_cache.clear()
+        if ctx.frame_cache is not None:
+            ctx.frame_cache.clear()
         # Clear dedup entry so other threads can proceed
-        deduplicator.mark_done(dedup_key)
+        deduplicator.mark_done(ctx.dedup_key)
         # Clean up the ffmpeg-preprocessed copy (only if it differs from the
         # storage path — storage.download_video_to_tmp now returns the storage
         # path directly, so we must NOT unlink local_path itself).
-        if cleanup_preprocessed and preprocessed_path and preprocessed_path != local_path:
+        if ctx.cleanup_preprocessed and ctx.preprocessed_path and ctx.preprocessed_path != ctx.local_path:
             try:
-                Path(preprocessed_path).unlink(missing_ok=True)
+                Path(ctx.preprocessed_path).unlink(missing_ok=True)
             except Exception:
                 pass
         # NOTE: the source upload is intentionally NOT deleted here. The same
@@ -752,13 +849,13 @@ def run_analysis(
         # upload with VideoExpiredError.
         # Exception: on the S3 backend local_path is a throwaway tmp copy
         # (not the stored object), so unlink it to avoid filling /tmp.
-        if local_is_temp and local_path and os.path.exists(local_path):
+        if ctx.local_is_temp and ctx.local_path and os.path.exists(ctx.local_path):
             try:
-                os.unlink(local_path)
+                os.unlink(ctx.local_path)
             except Exception:
                 pass
-        if output_path and os.path.exists(output_path):
+        if ctx.output_path and os.path.exists(ctx.output_path):
             try:
-                os.unlink(output_path)
+                os.unlink(ctx.output_path)
             except Exception:
                 pass

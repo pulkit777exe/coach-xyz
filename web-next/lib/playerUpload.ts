@@ -4,6 +4,7 @@ export type MeAnalyzeInput = {
   session_token: string | null
   player_index?: number | null
   video_key?: string | null
+  angle?: string | null
 }
 
 /**
@@ -26,6 +27,7 @@ export async function meStartAnalysis(params: MeAnalyzeInput): Promise<{ job_id:
         session_token: params.session_token,
         player_index: params.player_index ?? null,
         video_key: params.video_key ?? null,
+        angle: params.angle ?? null,
       }),
       signal: controller.signal,
     })

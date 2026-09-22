@@ -14,11 +14,12 @@ import { toast } from 'sonner'
 import { Spinner } from '@/components/org/Spinner'
 import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
-import { scanVideoWithProgress, streamScanProgress, getJobStatus } from '@/lib/api'
+import { getJobStatus } from '@/lib/api'
 import { meStartAnalysis } from '@/lib/playerUpload'
+import { useScanFlow } from '@/lib/useScanFlow'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import { toCoachAIError } from '@/lib/errors'
-import { MAX_FILE_SIZE_BYTES, type JobStatus, type ScanResult } from '@/types'
+import { type JobStatus, type ScanResult } from '@/types'
 import {
   getMyProfile,
   getMyAttendance,
@@ -430,18 +431,16 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>
 }
 
-type AnalyzeStage = 'idle' | 'uploading' | 'scanning' | 'selecting' | 'analyzing' | 'finished'
-
-const STAGE_LABELS: Partial<Record<AnalyzeStage, string>> = {
+const STAGE_LABELS: Partial<Record<string, string>> = {
   uploading: 'Uploading video…',
   scanning: 'Scanning for players…',
   analyzing: 'Analyzing your video…',
 }
 
 /**
- * Player-side upload + analysis kickoff. Reuses the coach flow's primitives
- * (scanVideoWithProgress → meStartAnalysis → startJobPolling) but scopes the
- * analysis through /api/me/analyze so the server attributes it to this player
+ * Player-side upload + analysis kickoff. Shares the coach flow's scan-phase
+ * module (useScanFlow: validate → upload → SSE → select → angles) but kicks
+ * off through /api/me/analyze so the server attributes it to this player
  * (requested_by) while keeping it visible to the coach in their history.
  */
 function AnalyzeVideoCard({
@@ -452,51 +451,37 @@ function AnalyzeVideoCard({
   onCompleted: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const scanAbortRef = useRef<AbortController | null>(null)
   const pollRef = useRef<JobPollingController | null>(null)
   const liveRef = useRef(true)
 
-  const [stage, setStage] = useState<AnalyzeStage>('idle')
+  const [finished, setFinished] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const [percent, setPercent] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [scanToken, setScanToken] = useState<string | null>(null)
-  const [videoKey, setVideoKey] = useState<string | null>(null)
-  const [scanPlayers, setScanPlayers] = useState<ScanResult['players']>([])
 
   useEffect(() => {
     return () => {
       liveRef.current = false
-      scanAbortRef.current?.abort()
       pollRef.current?.stop()
     }
   }, [])
 
-  const reset = useCallback(() => {
-    pollRef.current?.stop()
-    pollRef.current = null
-    setStage('idle')
-    setFileName(null)
-    setPercent(0)
-    setError(null)
-    setScanToken(null)
-    setVideoKey(null)
-    setScanPlayers([])
-  }, [])
+  const flowResetRef = useRef(() => {})
 
   const runAnalysis = useCallback(
-    (sessionToken: string, key: string | null, playerIndex: number) => {
-      setStage('analyzing')
+    (scan: ScanResult, playerIndex: number) => {
+      setFinished(false)
+      setLocalError(null)
       setPercent(0)
-      setError(null)
 
       const kickoff = async () => {
         try {
           const { job_id } = await meStartAnalysis({
-            session_token: sessionToken,
+            session_token: scan.session_token,
             player_index: playerIndex,
-            video_key: key,
+            video_key: scan.video_key,
+            angle: scan.angle ?? null,
           })
           if (!liveRef.current) return
           pollRef.current?.stop()
@@ -510,26 +495,26 @@ function AnalyzeVideoCard({
             onStatus: (status) => setPercent(Math.min(status.progress, 99)),
             onComplete: (status) => {
               if (status.error) {
-                setError(status.error)
-                setStage('idle')
+                setLocalError(status.error)
+                flowResetRef.current()
                 toast.error(status.error)
               } else {
-                setStage('finished')
+                setFinished(true)
                 toast.success('Analysis complete — check your analyses below.')
                 onCompleted()
               }
             },
             onError: (failure) => {
-              setError(failure.error.message)
-              setStage('idle')
+              setLocalError(failure.error.message)
+              flowResetRef.current()
               toast.error(failure.error.message)
             },
           })
         } catch (e: unknown) {
           const err = toCoachAIError(e)
           if (!liveRef.current) return
-          setError(err.message)
-          setStage('idle')
+          setLocalError(err.message)
+          flowResetRef.current()
           toast.error(err.message)
         }
       }
@@ -538,87 +523,54 @@ function AnalyzeVideoCard({
     [onCompleted],
   )
 
+  const flow = useScanFlow({ auth0Id: auth0Id ?? null, onAnalyze: runAnalysis })
+
+  // Keep a stable reset that also clears card-local state.
+  const reset = useCallback(() => {
+    pollRef.current?.stop()
+    pollRef.current = null
+    flow.reset()
+    setFinished(false)
+    setFileName(null)
+    setPercent(0)
+    setLocalError(null)
+  }, [flow])
+
+  useEffect(() => {
+    flowResetRef.current = reset
+  }, [reset])
+
+  // Surface flow errors with the card's toast + inline treatment.
+  const flowError = flow.errorStatus
+  useEffect(() => {
+    if (!flowError || !liveRef.current) return
+    setLocalError(flowError.message)
+    toast.error(flowError.message)
+  }, [flowError])
+
+  const activeScan =
+    flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ??
+    flow.scanResult
+
   const pick = useCallback(
     (file?: File) => {
       if (!file) return
-      setError(null)
-      if (!file.type.startsWith('video/')) {
-        setError('Please select a valid video file.')
-        return
-      }
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        setError('File size must be less than 500MB.')
-        return
-      }
-
-      pollRef.current?.stop()
-      pollRef.current = null
+      setFinished(false)
+      setLocalError(null)
       setFileName(file.name)
-      setStage('uploading')
-      setPercent(0)
-      setScanToken(null)
-      setVideoKey(null)
-      setScanPlayers([])
-
-      const scanAbort = new AbortController()
-      scanAbortRef.current = scanAbort
-
-      const start = async () => {
-        try {
-          const result = await scanVideoWithProgress(
-            file,
-            (progress) => setPercent(progress.percent),
-            auth0Id ?? null,
-          )
-          if (!liveRef.current) return
-          setStage('scanning')
-          setPercent(0)
-          try {
-            for await (const event of streamScanProgress(result.session_token, scanAbort.signal)) {
-              if (event.total > 0) {
-                setPercent(Math.round((event.current / event.total) * 100))
-              }
-              if (event.complete) {
-                if (event.error) {
-                  throw {
-                    code: 'SCAN_FAILED',
-                    message: event.error,
-                    layer: 'engine',
-                    retryable: true,
-                  } as CoachAIError
-                }
-                break
-              }
-            }
-          } catch (scanErr: unknown) {
-            if (scanErr instanceof DOMException && scanErr.name === 'AbortError') return
-            throw scanErr
-          }
-          if (!liveRef.current) return
-          setScanToken(result.session_token)
-          setVideoKey(result.video_key)
-          if (result.player_count === 1) {
-            const playerIdx = result.players[0]?.player_index ?? 1
-            runAnalysis(result.session_token, result.video_key, playerIdx)
-          } else {
-            setScanPlayers(result.players)
-            setStage('selecting')
-            setPercent(0)
-          }
-        } catch (e: unknown) {
-          if (!liveRef.current) return
-          const err = toCoachAIError(e)
-          setError(err.message)
-          setStage('idle')
-          toast.error(err.message)
-        }
-      }
-      void start()
+      flow.handleFileSelected(file)
     },
-    [auth0Id, runAnalysis],
+    [flow],
   )
 
   const open = useCallback(() => fileInputRef.current?.click(), [])
+
+  const stage = finished ? 'finished' : flow.phase
+  const error = localError ?? flow.errorStatus?.message ?? null
+  const scanPlayers = activeScan?.players ?? []
+  // Upload/scan percent comes from the flow; analyzing percent from polling.
+  const displayPercent =
+    stage === 'analyzing' ? percent : (flow.uploadProgress?.percent ?? percent)
 
   if (stage === 'uploading' || stage === 'scanning' || stage === 'analyzing') {
     return (
@@ -629,13 +581,13 @@ function AnalyzeVideoCard({
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary/20">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.max(2, Math.min(percent, 99))}%` }}
+              style={{ width: `${Math.max(2, Math.min(displayPercent, 99))}%` }}
             />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {stage === 'analyzing'
               ? 'This usually takes under a minute. The result will appear under Analyses.'
-              : `${Math.round(percent)}%`}
+              : `${Math.round(displayPercent)}%`}
           </p>
         </div>
       </div>
@@ -654,7 +606,7 @@ function AnalyzeVideoCard({
               key={player.player_index}
               variant="outline"
               size="sm"
-              onClick={() => runAnalysis(scanToken ?? '', videoKey, player.player_index)}
+              onClick={() => flow.handlePlayerSelected(player.player_index)}
             >
               Player {player.player_index} · {Math.round(player.confidence * 100)}%
             </Button>
