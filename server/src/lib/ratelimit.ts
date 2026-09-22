@@ -106,6 +106,12 @@ export async function checkAiReportLimit(orgId: string): Promise<RateLimitResult
   return checkLimit({ key: `rl:aireport:${orgId}`, limit, windowSec: 3600 })
 }
 
+/** Per-caller hourly cap on clip writes (cheap rows, but unbounded spam). */
+export async function checkClipLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.CLIP_RATE_LIMIT || '60')
+  return checkLimit({ key: `rl:clip:${key}`, limit, windowSec: 3600 })
+}
+
 export function getIP(request: Request): string {
   const meta = readRequestMeta(request)
   return meta.clientIp ?? 'anonymous'

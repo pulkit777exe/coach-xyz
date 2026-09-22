@@ -29,6 +29,15 @@ const ACTION_GROUPS = [
   'team.member_removed',
   'analysis.cancelled',
   'analysis.deleted',
+  'video.exported',
+  'video.viewed',
+  'report.exported',
+  'settings.changed',
+  'player.created',
+  'player.transferred',
+  'health.record_viewed',
+  'clip.created',
+  'clip.deleted',
 ] as const
 
 export default function AuditClient({ initialLogs }: AuditClientProps) {

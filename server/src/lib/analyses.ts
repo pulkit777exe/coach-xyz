@@ -306,6 +306,8 @@ export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Prom
     `
       if (!owned?.[0]) return false
       await db`delete from findings where server_job_id = ${serverJobId};`
+      await db`delete from clips where server_job_id = ${serverJobId};`
+      await db`delete from player_events where server_job_id = ${serverJobId};`
       await db`delete from chat_messages where server_job_id = ${serverJobId};`
       await db`delete from analysis_history where server_job_id = ${serverJobId};`
       return true
@@ -432,6 +434,8 @@ export const pruneRetention = async (): Promise<number> => {
       if (!stale?.length) return 0
       const ids = stale.map((r) => r.server_job_id)
       await db`delete from findings where server_job_id = any(${ids});`
+      await db`delete from clips where server_job_id = any(${ids});`
+      await db`delete from player_events where server_job_id = any(${ids});`
       await db`delete from chat_messages where server_job_id = any(${ids});`
       await db`delete from analysis_history where server_job_id = any(${ids});`
       return ids.length

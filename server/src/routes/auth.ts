@@ -33,6 +33,7 @@ import {
 } from '../lib/chatMessages'
 import { markEngineJobFailed } from '../lib/engine'
 import { getJob } from '../lib/jobs'
+import { checkClipLimit, getIP } from '../lib/ratelimit'
 import { buildError } from '../lib/errors'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
 import { resolveCaller } from '../lib/caller'
@@ -307,6 +308,14 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Clip creation requires the finding.review permission', false)
     }
+    const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
+    if (!allowed) {
+      set.status = 429
+      return {
+        ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
+        retry_after: Math.ceil((reset - Date.now()) / 1000),
+      }
+    }
     const parsed = parseClipInput((body ?? {}) as Record<string, unknown>)
     if (!parsed.ok) {
       set.status = 400
@@ -344,6 +353,14 @@ export default new Elysia()
     if (caller.verified !== auth0Id && !caller.can('finding.review')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Clip deletion requires the finding.review permission', false)
+    }
+    const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
+    if (!allowed) {
+      set.status = 429
+      return {
+        ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
+        retry_after: Math.ceil((reset - Date.now()) / 1000),
+      }
     }
     const removed = await deleteClip(auth0Id, jobId, clipId)
     if (!removed) {

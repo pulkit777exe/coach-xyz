@@ -32,6 +32,35 @@ export type AuditAction =
   | 'clip.created'
   | 'clip.deleted'
 
+/**
+ * All audit actions in display order. The web audit filter
+ * (`web-next/components/org/AuditClient.tsx` ACTION_GROUPS) mirrors this
+ * list — update both when adding an action.
+ */
+export const AUDIT_ACTIONS: readonly AuditAction[] = [
+  'member.invited',
+  'member.invite_accepted',
+  'member.invite_revoked',
+  'member.role_changed',
+  'member.removed',
+  'team.created',
+  'team.renamed',
+  'team.deleted',
+  'team.member_added',
+  'team.member_removed',
+  'analysis.cancelled',
+  'analysis.deleted',
+  'video.exported',
+  'video.viewed',
+  'report.exported',
+  'settings.changed',
+  'player.created',
+  'player.transferred',
+  'health.record_viewed',
+  'clip.created',
+  'clip.deleted',
+]
+
 export const audit = async (entry: {
   orgAuth0Id: string
   actorAuth0Id: string | null
