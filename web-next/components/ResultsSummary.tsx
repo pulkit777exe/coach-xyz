@@ -15,6 +15,27 @@ if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP)
 }
 
+const QUALITY_ISSUE_LABELS: Record<string, string> = {
+  missing_summary: 'unreadable summary',
+  missing_sport: 'sport not detected',
+  missing_form_score: 'score missing',
+  form_score_out_of_range: 'score out of range',
+  invalid_overall_rating: 'rating invalid',
+  missing_shot_events: 'no events detected',
+  malformed_shot_event: 'event data malformed',
+  event_missing_timestamp: 'event timestamp missing',
+  event_timestamp_out_of_range: 'event outside video',
+  event_count_mismatch: 'event count mismatch',
+  missing_findings: 'no findings derived',
+  malformed_finding: 'finding data malformed',
+  unsupported_strong_claim: 'claim needs evidence',
+  invalid_review_state: 'review state invalid',
+}
+
+function humanizeQualityIssue(code: string): string {
+  return QUALITY_ISSUE_LABELS[code] ?? code.replace(/_/g, ' ')
+}
+
 interface ResultsSummaryProps {
   status: JobStatus
   jobId: string
@@ -129,6 +150,11 @@ export default function ResultsSummary({
                     >
                       Needs review
                     </Badge>
+                  )}
+                  {summary.quality && !summary.quality.passed && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Quality check: {summary.quality.issues.map(humanizeQualityIssue).join(' · ')}
+                    </p>
                   )}
                 </div>
                 <div className="text-center md:text-left border-l-0 md:border-l border-border md:pl-8">

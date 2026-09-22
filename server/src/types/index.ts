@@ -122,6 +122,12 @@ export type AnalysisSummary = {
   findings?: Finding[]
   /** True when any finding needs human review (§21 job-level flag). */
   needs_review?: boolean
+  /** Pre-render quality-gate report (engine-stamped, never blocks). */
+  quality?: {
+    passed: boolean
+    issues: string[]
+    needs_review: boolean
+  }
 }
 
 export type ShotEvent = {

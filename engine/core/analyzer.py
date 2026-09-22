@@ -344,7 +344,16 @@ def _finalize_cached(result: dict, job_id: str, angle: str | None) -> dict:
             job_id,
         )
         result["findings"], _ = enforce_evidence_gate(built)
-    result["needs_review"] = _needs_review(result.get("findings"))
+    if not isinstance(result.get("quality"), dict):
+        from core.quality import quality_check
+
+        report = quality_check(result)
+        result["quality"] = report
+        if report["needs_review"]:
+            result["needs_review"] = True
+    result["needs_review"] = bool(result.get("needs_review")) or _needs_review(
+        result.get("findings")
+    )
     return result
 
 
@@ -731,9 +740,6 @@ def _stage_scoring(ctx: AnalysisContext) -> None:
         }))
     gemini_result["needs_review"] = _needs_review(gemini_result["findings"])
 
-    # Cache the result
-    set_cached_analysis(ctx.video_hash, gemini_result, ctx.player_index)
-
     logging.info(json.dumps({
         "type": "analysis_complete",
         "video_hash": ctx.video_hash,
@@ -743,8 +749,30 @@ def _stage_scoring(ctx: AnalysisContext) -> None:
         "frames_analyzed": len(ctx.active_tracks),
     }))
 
+    # Cache the result
+    set_cached_analysis(ctx.video_hash, gemini_result, ctx.player_index)
+
     # Store analysis result
     update_job(ctx.job_id, summary=gemini_result)
+
+
+def _stage_quality_check(ctx: AnalysisContext) -> None:
+    """Pre-render quality gate: validate the scored summary, stamp `quality`,
+    and force needs_review on any issue. Never blocks — a flawed analysis
+    degrades to human review instead of failing the job."""
+    from core.quality import quality_check
+
+    gemini_result = ctx.gemini_result
+    report = quality_check(gemini_result, ctx.video_duration)
+    gemini_result["quality"] = report
+    if report["needs_review"]:
+        gemini_result["needs_review"] = True
+    logging.info(json.dumps({
+        "type": "quality_check",
+        "job_id": ctx.job_id,
+        "passed": report["passed"],
+        "issues": report["issues"],
+    }))
 
 
 def _stage_render(ctx: AnalysisContext) -> None:
@@ -815,6 +843,7 @@ def run_analysis(
         _stage_tracking(ctx)
         _stage_reasoning(ctx, resumed=(resume == "render"))
         _stage_scoring(ctx)
+        _stage_quality_check(ctx)
         _stage_render(ctx)
 
     except EngineError as exc:
