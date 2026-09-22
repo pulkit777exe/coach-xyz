@@ -8,7 +8,7 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
-import { getJobStatus, getDownloadUrl } from '@/lib/api'
+import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import type { CoachAIError } from '@/lib/api'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
@@ -68,6 +68,21 @@ export default function AnalysisDetailClient({
   const [shareError, setShareError] = useState<string | null>(null)
   const [shareExpires, setShareExpires] = useState<string | null>(null)
   const shareLoadIdRef = useRef(0)
+  // Owned jobs need the signed token on the download URL (<a>/lightbox
+  // cannot send headers) — resolve per analysis, fall back to the base URL.
+  const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
+  const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
+  if (downloadUrlJob !== jobId) {
+    setDownloadUrlJob(jobId)
+    setDownloadUrl(getDownloadUrl(jobId))
+  }
+  useEffect(() => {
+    let cancelled = false
+    void getAuthorizedDownloadUrl(jobId).then((url) => {
+      if (!cancelled) setDownloadUrl(url)
+    })
+    return () => { cancelled = true }
+  }, [jobId])
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
 
   useEffect(() => {
@@ -349,7 +364,7 @@ export default function AnalysisDetailClient({
       <div className="flex items-center gap-3 mb-8">
         {data.complete && data.video_ready && (
           <LoadingButton
-            onAction={() => { window.location.href = getDownloadUrl(data.server_job_id) }}
+            onAction={() => { window.location.href = downloadUrl }}
             pendingLabel="Downloading..."
             successLabel="Started!"
             className="!border !border-border !bg-transparent !px-4 !py-2 !text-[0.65rem] !uppercase tracking-[0.15em] !text-muted-foreground hover:!text-foreground"
@@ -376,7 +391,7 @@ export default function AnalysisDetailClient({
         <Lightbox
           open={lightboxOpen}
           onClose={() => setLightboxOpen(false)}
-          src={data.video_ready ? getDownloadUrl(data.server_job_id) : ''}
+          src={data.video_ready ? downloadUrl : ''}
           alt="Analysis video preview"
         />
         <CopyButton

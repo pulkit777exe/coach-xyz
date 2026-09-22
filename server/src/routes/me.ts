@@ -311,6 +311,7 @@ export default new Elysia()
     const sessionTokenRaw = body.session_token ?? null
     const playerIndexRaw = body.player_index ?? null
     const videoKeyRaw = body.video_key ?? null
+    const angleRaw = body.angle ?? null
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (sessionTokenRaw !== null && typeof sessionTokenRaw !== "string") {
       set.status = 400
@@ -331,10 +332,15 @@ export default new Elysia()
       set.status = 400
       return buildError("INVALID_REQUEST", "video_key must be null or a string.", false)
     }
+    if (angleRaw !== null && typeof angleRaw !== "string") {
+      set.status = 400
+      return buildError("INVALID_REQUEST", "angle must be null or a string.", false)
+    }
 
     const sessionToken = typeof sessionTokenRaw === "string" ? sessionTokenRaw : null
     const playerIndex = typeof playerIndexRaw === "number" ? playerIndexRaw : null
     const videoKey = typeof videoKeyRaw === "string" ? videoKeyRaw : null
+    const angle = typeof angleRaw === "string" ? angleRaw : null
 
     const scope = await playerScope(verified)
     const decision = decidePlayerAnalysis({ verifiedAuth0Id: verified, playerScope: scope })
@@ -354,6 +360,10 @@ export default new Elysia()
         session_token: sessionToken,
         player_index: playerIndex,
         video_key: videoKey,
+        angle,
+        owner_ids: [decision.coachAuth0Id, decision.requestedBy].filter(
+          (id, i, arr) => id && arr.indexOf(id) === i,
+        ),
       })
 
       await persistAnalysisStart({

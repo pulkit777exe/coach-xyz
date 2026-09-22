@@ -71,12 +71,16 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
   const {
     pipelineState,
     scanResult,
+    angleScans,
+    activeAngle,
     jobId,
     jobStatus,
     errorStatus,
     uploadProgress,
     handleFileSelected,
     handlePlayerSelected,
+    handleAddAngle,
+    handleAngleChange,
     handleRetry,
     handleReset,
     handleStartChat,
@@ -84,6 +88,9 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
   } = usePipeline(auth0Id)
 
   const progressPercent = uploadProgress?.percent ?? 0
+  const activeScan =
+    angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+  const angleLabels = angleScans.map((s) => s.angle ?? 'primary')
 
   switch (pipelineState) {
     case 'idle':
@@ -104,8 +111,17 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
       )
 
     case 'selecting':
-      if (!scanResult) return <LandingPage onFileSelected={handleFileSelected} />
-      return <PlayerSelector players={scanResult.players} onSelect={handlePlayerSelected} />
+      if (!activeScan) return <LandingPage onFileSelected={handleFileSelected} />
+      return (
+        <PlayerSelector
+          players={activeScan.players}
+          angles={angleLabels}
+          activeAngle={activeAngle}
+          onAngleChange={handleAngleChange}
+          onAddAngle={handleAddAngle}
+          onSelect={handlePlayerSelected}
+        />
+      )
 
     case 'analyzing':
     case 'rendering':

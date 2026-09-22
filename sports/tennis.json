@@ -2,15 +2,41 @@
   "sport": "tennis",
   "display_name": "Tennis",
   "events": {
-    "positive": ["winner", "ace"],
-    "negative": ["error", "double_fault"]
+    "positive": [
+      "winner",
+      "ace"
+    ],
+    "negative": [
+      "error",
+      "double_fault"
+    ]
   },
   "stats": [
-    { "key": "total_aces_so_far", "label": "Aces", "event_type": "ace" },
-    { "key": "total_winners_so_far", "label": "Winners", "event_type": "winner" },
-    { "key": "total_errors_so_far", "label": "Errors", "event_type": "error" },
-    { "key": "total_double_faults_so_far", "label": "Double Faults", "event_type": "double_fault" },
-    { "key": "points_played_so_far", "label": "Points", "event_type": null }
+    {
+      "key": "total_aces_so_far",
+      "label": "Aces",
+      "event_type": "ace"
+    },
+    {
+      "key": "total_winners_so_far",
+      "label": "Winners",
+      "event_type": "winner"
+    },
+    {
+      "key": "total_errors_so_far",
+      "label": "Errors",
+      "event_type": "error"
+    },
+    {
+      "key": "total_double_faults_so_far",
+      "label": "Double Faults",
+      "event_type": "double_fault"
+    },
+    {
+      "key": "points_played_so_far",
+      "label": "Points",
+      "event_type": null
+    }
   ],
   "form_criteria": [
     "grip",
@@ -24,12 +50,45 @@
     "balance"
   ],
   "colors": {
-    "primary": [0, 165, 255],
-    "positive": [0, 220, 0],
-    "negative": [0, 0, 255],
-    "neutral": [255, 255, 255]
+    "primary": [
+      0,
+      165,
+      255
+    ],
+    "positive": [
+      0,
+      220,
+      0
+    ],
+    "negative": [
+      0,
+      0,
+      255
+    ],
+    "neutral": [
+      255,
+      255,
+      255
+    ]
   },
   "feedback_display_seconds": 4,
   "animation_duration_seconds": 1.25,
-  "summary_duration_seconds": 6
+  "summary_duration_seconds": 6,
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Groundstrokes and serve read best from the side \u2014 swing path, contact point and weight transfer stay in plane."
+    },
+    {
+      "id": "behind",
+      "label": "Behind the baseline",
+      "description": "Best second angle for serve toss placement, court positioning and shot depth."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Useful third angle for ready position, split step and volley technique."
+    }
+  ]
 }

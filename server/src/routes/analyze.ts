@@ -4,6 +4,7 @@ import { buildError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
 import { enqueueAnalysis } from "../lib/queue"
 import { checkAnalysisLimit, getIP } from "../lib/ratelimit"
+import { resolveJobCaller } from "../lib/jobAccess"
 import { verifyAttributionToken } from "../lib/attribution"
 import { persistAnalysisStart } from "../lib/supabaseHistory"
 import { DEFAULT_MODEL } from "../types"
@@ -12,12 +13,15 @@ type AnalyzeBody = {
   session_token: string | null
   player_index: number | null
   video_key?: string | null
+  angle?: string | null
 }
 
 export default new Elysia().post("/api/analyze-video", async ({ request, set }) => {
-  // ── Rate Limiting (per-IP) ─────────────────────────────────────────────
+  // ── Rate Limiting (per-IP, per-account when attributed) ────────────────
   const ip = getIP(request)
-  const { allowed, reset } = await checkAnalysisLimit(ip)
+  const { allowed, reset } = await checkAnalysisLimit(
+    resolveJobCaller(request) ?? ip,
+  )
   if (!allowed) {
     const retryAfter = Math.ceil((reset - Date.now()) / 1000)
     set.status = 429
@@ -45,6 +49,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   const sessionToken = body.session_token
   const playerIndex = body.player_index
   const videoKey = body.video_key ?? null
+  const angle = typeof body.angle === "string" ? body.angle : null
 
   // Validate session_token format (must be UUID if provided)
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -68,6 +73,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
   try {
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
+    const owner = verifyAttributionToken(request.headers.get("x-attribution"))
 
     // Save the server job mapping to Redis BEFORE enqueuing
     await enqueueAnalysis({
@@ -76,6 +82,8 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       session_token: sessionToken,
       player_index: playerIndex,
       video_key: videoKey,
+      angle,
+      owner_ids: owner ? [owner] : [],
     })
 
     await persistAnalysisStart({
@@ -85,7 +93,7 @@ export default new Elysia().post("/api/analyze-video", async ({ request, set }) 
       sessionToken,
       playerIndex,
       model: DEFAULT_MODEL,
-      auth0Id: verifyAttributionToken(request.headers.get("x-attribution")),
+      auth0Id: owner,
     })
 
     set.status = 200

@@ -2,15 +2,42 @@
   "sport": "baseball",
   "display_name": "Baseball",
   "events": {
-    "positive": ["hit", "home_run"],
-    "negative": ["out", "strikeout", "error"]
+    "positive": [
+      "hit",
+      "home_run"
+    ],
+    "negative": [
+      "out",
+      "strikeout",
+      "error"
+    ]
   },
   "stats": [
-    { "key": "total_hits_so_far", "label": "Hits", "event_type": "hit" },
-    { "key": "total_outs_so_far", "label": "Outs", "event_type": "out" },
-    { "key": "total_walks_so_far", "label": "Walks", "event_type": "walk" },
-    { "key": "total_strikeouts_so_far", "label": "Strikeouts", "event_type": "strikeout" },
-    { "key": "at_bats_so_far", "label": "At Bats", "event_type": null }
+    {
+      "key": "total_hits_so_far",
+      "label": "Hits",
+      "event_type": "hit"
+    },
+    {
+      "key": "total_outs_so_far",
+      "label": "Outs",
+      "event_type": "out"
+    },
+    {
+      "key": "total_walks_so_far",
+      "label": "Walks",
+      "event_type": "walk"
+    },
+    {
+      "key": "total_strikeouts_so_far",
+      "label": "Strikeouts",
+      "event_type": "strikeout"
+    },
+    {
+      "key": "at_bats_so_far",
+      "label": "At Bats",
+      "event_type": null
+    }
   ],
   "form_criteria": [
     "stance",
@@ -25,12 +52,45 @@
     "head_position"
   ],
   "colors": {
-    "primary": [0, 165, 255],
-    "positive": [0, 220, 0],
-    "negative": [0, 0, 255],
-    "neutral": [255, 255, 255]
+    "primary": [
+      0,
+      165,
+      255
+    ],
+    "positive": [
+      0,
+      220,
+      0
+    ],
+    "negative": [
+      0,
+      0,
+      255
+    ],
+    "neutral": [
+      255,
+      255,
+      255
+    ]
   },
   "feedback_display_seconds": 4,
   "animation_duration_seconds": 1.25,
-  "summary_duration_seconds": 6
+  "summary_duration_seconds": 6,
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Pitching and hitting mechanics read best from the side \u2014 stride, hip rotation and bat path stay in plane."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Best second angle for release point, stride direction and plate coverage."
+    },
+    {
+      "id": "behind",
+      "label": "Behind the plate",
+      "description": "Useful third angle for pitch movement and strike-zone command."
+    }
+  ]
 }

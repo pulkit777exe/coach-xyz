@@ -10,6 +10,9 @@ export interface ServerJob {
   player_index: number | null
   model: string
   created_at: number
+  /** Verified subs authorized to read this job (owner set). Empty/missing =
+   * anonymous job — readable by bearer job id (demo/landing flow). */
+  owner_ids?: string[]
 }
 
 export async function saveJob(job: ServerJob): Promise<void> {

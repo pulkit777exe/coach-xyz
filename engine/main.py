@@ -56,10 +56,9 @@ if _missing_env_vars:
     logging.error(f"Missing required environment variables: {', '.join(_missing_env_vars)}")
     raise SystemExit(1)
 
-from fastapi import FastAPI, Request, UploadFile
+from fastapi import FastAPI, Form, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -156,7 +155,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan, default_response_class=_default_response_class)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# NOTE: no GZipMiddleware by design. GZip buffers the full response body before
+# compressing, which stalls Server-Sent Events (scan-progress, chat/stream)
+# and wastes CPU re-compressing already-compressed mp4 bytes on /download.
+# JSON payloads stay small via ORJSON; videos are served as-is.
 _cors_origins = [o.strip() for o in os.environ.get("SERVER_URL", "http://localhost:8000").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -322,22 +324,35 @@ def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None])
     return None
 
 
-def _session_video_path(session_token: str) -> tuple[Optional[str], Optional[JSONResponse]]:
+def _session_angle_video_path(
+    session_token: str, angle: Any
+) -> tuple[Optional[str], Optional[str], Optional[JSONResponse]]:
+    """Resolve (video_key, angle_label) for an analyze request.
+
+    Falls back to the session's primary angle when the requested angle is
+    unknown, so single-angle clients (no angle sent) keep working unchanged.
+    """
+    from core.multicam import normalize_angle_label, resolve_angle_video_key
+
     with sessions_lock:
         session = sessions.get(session_token)
 
     if not session:
-        return None, _error_response(
+        return None, None, _error_response(
             404, "SESSION_EXPIRED", "Session expired. Please upload your video again."
         )
 
-    video_key = session.get("video_key")
-    if not video_key:
-        return None, _error_response(
-            404, "SESSION_EXPIRED", "Session expired. Please upload your video again."
-        )
-
-    return str(video_key), None
+    label = normalize_angle_label(angle)
+    video_key = resolve_angle_video_key(session, label)
+    if video_key:
+        return video_key, label, None
+    # Unknown angle — fall back to primary rather than failing the job.
+    primary = resolve_angle_video_key(session, "primary")
+    if primary:
+        return primary, "primary", None
+    return None, None, _error_response(
+        404, "SESSION_EXPIRED", "Session expired. Please upload your video again."
+    )
 
 
 # ── Health Endpoints ─────────────────────────────────────────────────────────
@@ -389,7 +404,11 @@ def health_deep():
 
 
 @app.post("/scan")
-async def scan(video: UploadFile) -> JSONResponse:
+async def scan(
+    video: UploadFile,
+    session_token: str | None = Form(default=None),
+    angle: str | None = Form(default=None),
+) -> JSONResponse:
     logging.info(f"[SCAN] Received upload: filename={video.filename}, content_type={video.content_type}, size={video.size}")
     validation_error = _validate_video_upload(video)
     if validation_error:
@@ -440,8 +459,19 @@ async def scan(video: UploadFile) -> JSONResponse:
         raise
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
 
-    # Create session token early so scan progress can be tracked
-    session_token = str(uuid.uuid4())
+    # Create session token early so scan progress can be tracked.
+    # Passing an existing session_token appends another camera angle to that
+    # session (multi-perspective flow) instead of starting a new one.
+    from core.multicam import append_angle, angle_labels, normalize_angle_label
+
+    angle_label = normalize_angle_label(angle)
+    with sessions_lock:
+        existing = sessions.get(session_token) if session_token else None
+    if existing is None:
+        session_token = str(uuid.uuid4())
+        append_to_session = False
+    else:
+        append_to_session = True
 
     # Set up scan progress tracking
     with scan_progress_lock:
@@ -450,6 +480,7 @@ async def scan(video: UploadFile) -> JSONResponse:
             "total": 0,
             "complete": False,
             "error": None,
+            "angle": angle_label,
             "started_at": time.time(),
         }
 
@@ -501,11 +532,23 @@ async def scan(video: UploadFile) -> JSONResponse:
     # Evict old sessions before creating new one (memory optimization)
     with sessions_lock:
         _evict_old_sessions_unlocked()
-        sessions[session_token] = {
-            "video_key": r2_key,
-            "players": players,
-            "created_at": time.time(),
-        }
+        if not append_to_session:
+            sessions[session_token] = {
+                "video_key": r2_key,
+                "players": players,
+                "created_at": time.time(),
+            }
+        session = sessions.get(session_token)
+        if session is None:
+            # Evicted between checks — recreate it.
+            session = {
+                "video_key": r2_key,
+                "players": players,
+                "created_at": time.time(),
+            }
+            sessions[session_token] = session
+        append_angle(session, angle_label, r2_key, players)
+        labels = angle_labels(session)
 
     # Warm cache for this video (makes subsequent analyses faster)
     # Must happen before local_path is deleted
@@ -541,6 +584,8 @@ async def scan(video: UploadFile) -> JSONResponse:
         content={
             "session_token": session_token,
             "video_key": r2_key,
+            "angle": angle_label,
+            "angles": labels,
             "player_count": len(response_players),
             "players": response_players,
         },
@@ -577,6 +622,7 @@ async def scan_progress_endpoint(session_token: str):
                     # Send progress update
                     data = json.dumps({
                         "session_token": session_token,
+                        "angle": progress.get("angle", "primary"),
                         "current": progress["current"],
                         "total": progress["total"],
                         "complete": progress["complete"],
@@ -639,6 +685,7 @@ async def analyze(request: Request) -> JSONResponse:
     session_token = payload.get("session_token")
     player_index = _safe_int(payload.get("player_index"))
     video_key_fallback = payload.get("video_key")
+    requested_angle = payload.get("angle")
 
     if not engine_job_id:
         return _error_response(400, "MISSING_JOB_ID", "engine_job_id required")
@@ -655,8 +702,9 @@ async def analyze(request: Request) -> JSONResponse:
 
     # Get video key from session (with fallback to persisted video_key)
     video_key = None
+    angle_label = "primary"
     if session_token:
-        video_key, err = _session_video_path(session_token)
+        video_key, angle_label, err = _session_angle_video_path(session_token, requested_angle)
         if err:
             # Session expired — try fallback video_key from job state
             if video_key_fallback:
@@ -687,7 +735,7 @@ async def analyze(request: Request) -> JSONResponse:
         ctx = copy_context()
         await loop.run_in_executor(
             _analysis_executor,
-            lambda: ctx.run(run_analysis, engine_job_id, video_key, player_index),
+            lambda: ctx.run(run_analysis, engine_job_id, video_key, player_index, angle_label),
         )
         return JSONResponse({"ok": True})
     except EngineError as e:
@@ -805,7 +853,7 @@ async def chat(request: Request) -> JSONResponse:
 
     # Build the chat prompt
     from core.chat_prompt import get_chat_prompt
-    from core.config import GEMINI_MODEL
+    from core.config import GEMINI_MODEL, CHAT_GEMINI_TIMEOUT_S
 
     messages = get_chat_prompt(
         analysis_result=job.summary,
@@ -813,7 +861,9 @@ async def chat(request: Request) -> JSONResponse:
         user_message=user_message,
     )
 
-    # Call Gemini in a thread to avoid blocking the event loop
+    # Call Gemini in a thread to avoid blocking the event loop, with an
+    # overall deadline so a hung model call fails fast (the server gives
+    # /chat 60s — this deadline sits inside it).
     try:
         if _gemini_client is None:
             return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
@@ -825,8 +875,13 @@ async def chat(request: Request) -> JSONResponse:
                 config=genai_types.GenerateContentConfig(temperature=0.4),
             )
 
-        response = await asyncio.to_thread(_call_gemini)
+        response = await asyncio.wait_for(
+            asyncio.to_thread(_call_gemini), timeout=CHAT_GEMINI_TIMEOUT_S
+        )
         reply = getattr(response, "text", None) or ""
+    except asyncio.TimeoutError:
+        logging.error("Chat Gemini timeout")
+        return _error_response(504, "GEMINI_TIMEOUT", "AI service timed out. Please try again.")
     except Exception as exc:
         status_code = getattr(exc, "status_code", None)
         message = str(exc)
@@ -889,7 +944,7 @@ async def chat_stream(request: Request):
         return _error_response(400, "INVALID_REQUEST", "Analysis not complete yet — no summary available")
 
     from core.chat_prompt import get_chat_prompt
-    from core.config import GEMINI_MODEL
+    from core.config import GEMINI_MODEL, CHAT_GEMINI_TIMEOUT_S
 
     messages = get_chat_prompt(
         analysis_result=job.summary,
@@ -900,32 +955,66 @@ async def chat_stream(request: Request):
     if _gemini_client is None:
         return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
 
-    def generate():
+    def _stream_error_event(exc: BaseException) -> str:
+        status_code = getattr(exc, "status_code", None)
+        msg = str(exc)
+        is_quota = (
+            status_code == 429
+            or "RESOURCE_EXHAUSTED" in msg
+            or "quota" in msg.lower()
+        )
+        if is_quota:
+            return f"data: {json.dumps({'type': 'error', 'message': 'AI quota exceeded. Please try again later.'})}\n\n"
+        logging.error(f"Chat stream Gemini error: {exc}")
+        return f"data: {json.dumps({'type': 'error', 'message': 'AI service error. Please try again.'})}\n\n"
+
+    async def generate():
+        """Async SSE generator — the blocking Gemini iterator runs in a worker
+        thread and pushes chunks through a queue, so the event loop stays
+        responsive and each chunk is flushed immediately (no buffering lag).
+        A first-chunk deadline keeps a hung model call from hanging the SSE
+        stream forever."""
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+
+        def _pump() -> None:
+            try:
+                stream = _gemini_client.models.generate_content_stream(
+                    model=GEMINI_MODEL,
+                    contents=messages[0]["content"],
+                    config=genai_types.GenerateContentConfig(temperature=0.4),
+                )
+                for chunk in stream:
+                    text = getattr(chunk, "text", None) or ""
+                    if text:
+                        loop.call_soon_threadsafe(queue.put_nowait, ("token", text))
+                loop.call_soon_threadsafe(queue.put_nowait, ("end", None))
+            except Exception as exc:  # noqa: BLE001 — forwarded to the SSE consumer
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
+
+        pump_task = asyncio.create_task(asyncio.to_thread(_pump))
         full_text = ""
         try:
-            for chunk in _gemini_client.models.generate_content_stream(
-                model=GEMINI_MODEL,
-                contents=messages[0]["content"],
-                config=genai_types.GenerateContentConfig(temperature=0.4),
-            ):
-                text = getattr(chunk, "text", None) or ""
-                if text:
-                    full_text += text
-                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
-        except Exception as exc:
-            status_code = getattr(exc, "status_code", None)
-            msg = str(exc)
-            is_quota = (
-                status_code == 429
-                or "RESOURCE_EXHAUSTED" in msg
-                or "quota" in msg.lower()
-            )
-            if is_quota:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'AI quota exceeded. Please try again later.'})}\n\n"
-            else:
-                logging.error(f"Chat stream Gemini error: {exc}")
-                yield f"data: {json.dumps({'type': 'error', 'message': 'AI service error. Please try again.'})}\n\n"
-            return
+            while True:
+                try:
+                    kind, payload = await asyncio.wait_for(
+                        queue.get(), timeout=CHAT_GEMINI_TIMEOUT_S
+                    )
+                except asyncio.TimeoutError:
+                    logging.error("Chat stream Gemini timeout")
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'AI service timed out. Please try again.'})}\n\n"
+                    return
+                if kind == "token":
+                    full_text += payload
+                    yield f"data: {json.dumps({'type': 'token', 'text': payload})}\n\n"
+                elif kind == "end":
+                    break
+                else:
+                    yield _stream_error_event(payload)
+                    return
+        finally:
+            if not pump_task.done():
+                pump_task.cancel()
 
         import re
         timestamp_refs = sorted(set(float(m) for m in re.findall(r'(\d+\.?\d*)s', full_text)))

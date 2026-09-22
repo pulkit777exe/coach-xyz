@@ -59,6 +59,7 @@ type AnalysisStatusRecord = {
  *  query. Used via `db.unsafe(ANALYSES_SELECT_COLUMNS)` inside a select. */
 export const ANALYSES_SELECT_COLUMNS = `
   a.server_job_id,
+  a.auth0_id,
   a.engine_job_id,
   a.session_token,
   a.player_index,

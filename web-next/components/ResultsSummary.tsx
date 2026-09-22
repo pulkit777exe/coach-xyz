@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { getDownloadUrl } from '@/lib/api'
+import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 
@@ -23,6 +23,19 @@ interface ResultsSummaryProps {
 export default function ResultsSummary({ status, jobId, onReset, onStartChat }: ResultsSummaryProps) {
   const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
+  const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
+  const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
+  if (downloadUrlJob !== jobId) {
+    setDownloadUrlJob(jobId)
+    setDownloadUrl(getDownloadUrl(jobId))
+  }
+  useEffect(() => {
+    let cancelled = false
+    void getAuthorizedDownloadUrl(jobId).then((url) => {
+      if (!cancelled) setDownloadUrl(url)
+    })
+    return () => { cancelled = true }
+  }, [jobId])
 
   useGSAP(() => {
     if (!summary) return
@@ -60,6 +73,11 @@ export default function ResultsSummary({ status, jobId, onReset, onStartChat }: 
                 <span className="text-4xl">{SPORT_EMOJI[summary.sport] || SPORT_EMOJI.unknown}</span>
                 <span className="text-foreground capitalize">{summary.sport} Analysis Complete</span>
               </h2>
+              {summary.angle && summary.angle !== 'primary' && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Analyzed perspective: <span className="font-semibold text-foreground capitalize">{summary.angle}</span>
+                </p>
+              )}
             </div>
             <div className="space-y-8 pt-8">
               <div className="grid md:grid-cols-2 gap-8 items-center bg-muted rounded-2xl p-8 border border-border">
@@ -123,6 +141,25 @@ export default function ResultsSummary({ status, jobId, onReset, onStartChat }: 
             </div>
           </div>
 
+          {summary.recommended_angles && summary.recommended_angles.length > 0 && (
+            <div className="gsap-item mb-8 rounded-2xl border border-border bg-card p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                Film next for a fuller picture
+              </h3>
+              <ul className="space-y-3 mt-4">
+                {summary.recommended_angles.map((angle) => (
+                  <li key={angle.id} className="flex gap-3 text-sm">
+                    <span className="shrink-0 rounded-full bg-muted border border-border px-3 py-1 font-semibold text-foreground capitalize h-fit">
+                      {angle.label}
+                    </span>
+                    <span className="leading-relaxed text-muted-foreground">{angle.description}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className={`gsap-item gap-4 mb-8 ${onStartChat ? 'grid sm:grid-cols-3' : 'grid sm:grid-cols-2'}`}>
             {onStartChat && (
               <Button
@@ -135,7 +172,7 @@ export default function ResultsSummary({ status, jobId, onReset, onStartChat }: 
             )}
             
             <a
-              href={getDownloadUrl(jobId)}
+              href={downloadUrl}
               download="coachai_analysis.mp4"
               className="flex-1 block group"
             >

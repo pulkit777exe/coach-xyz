@@ -83,6 +83,8 @@ export interface AnalysisPayload {
   session_token: string | null
   player_index: number | null
   video_key: string | null
+  angle?: string | null
+  owner_ids?: string[]
 }
 
 /** Shared enqueue path for analyze-video and me/analyze-video. */
@@ -94,6 +96,7 @@ export async function enqueueAnalysis(job: AnalysisPayload): Promise<void> {
     player_index: job.player_index,
     model: DEFAULT_MODEL,
     created_at: Date.now(),
+    owner_ids: job.owner_ids ?? [],
   })
 
   if (!analysisQueue) {
@@ -112,7 +115,7 @@ const worker = redisAvailable
   ? new Worker<AnalysisPayload>(
       "coachai-analysis",
       async (job) => {
-        const { engine_job_id, session_token, player_index, video_key } = job.data
+        const { engine_job_id, session_token, player_index, video_key, angle } = job.data
 
         // Idempotency check: skip if job already processed (race with status poll)
         const existingJob = await job.getState()
@@ -123,7 +126,7 @@ const worker = redisAvailable
         // Cross the same engine adapter as the routes — one client, one
         // timeout posture, one error shape.
         try {
-          await analyzeVideo({ engine_job_id, session_token, player_index, video_key })
+          await analyzeVideo({ engine_job_id, session_token, player_index, video_key, angle })
         } catch (error) {
           const engineError = isCoachAIError(error)
             ? error

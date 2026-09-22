@@ -3,14 +3,34 @@ import { Elysia } from "elysia"
 import { getDownloadStream } from "../lib/engine"
 import { buildError, isCoachAIError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
+import { resolveJobCaller, verifyJobAccess } from "../lib/jobAccess"
+import { checkDownloadLimit, getIP } from "../lib/ratelimit"
 import { markAnalysisDownloaded } from "../lib/supabaseHistory"
 
-export default new Elysia().get("/api/download/:jobId", async ({ params, set }) => {
+export default new Elysia().get("/api/download/:jobId", async ({ params, request, set }) => {
   const serverJob = await getJob(params.jobId)
 
   if (!serverJob) {
     set.status = 404
     return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
+  }
+
+  const access = verifyJobAccess(request, serverJob)
+  if (!access.ok) {
+    set.status = access.status
+    return access.body
+  }
+
+  const { allowed, reset } = await checkDownloadLimit(
+    resolveJobCaller(request) ?? getIP(request),
+  )
+  if (!allowed) {
+    const retryAfter = Math.ceil((reset - Date.now()) / 1000)
+    set.status = 429
+    return {
+      ...buildError("RATE_LIMITED", "Too many download requests. Try again later.", true),
+      retry_after: retryAfter,
+    }
   }
 
   try {

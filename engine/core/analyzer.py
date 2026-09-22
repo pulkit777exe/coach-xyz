@@ -22,6 +22,8 @@ from core.cache import compute_video_hash, get_cached_analysis, set_cached_analy
 from core.dedup import deduplicator
 from core.errors import EngineError, VideoExpiredError, JobNotFoundError
 from core.gemini_client import call_gemini, normalize_gemini_result
+from core.multicam import normalize_angle_label
+from core.sport_config import load_sport_config, recommended_camera_angles
 from core.stats import validate_and_correct_stats
 from core.jobs import get_job, update_job, transition_job, fail_job, STATE_FLOW
 from core.renderer import render_video
@@ -101,19 +103,8 @@ def _attach_biomechanical_metrics(
 
 
 def _load_sport_config(sport: str) -> dict:
-    """Load sport configuration from sports/<sport>.json."""
-    from pathlib import Path as _Path
-
-    config_path = (
-        _Path(__file__).resolve().parent.parent.parent
-        / "sports"
-        / f"{sport.lower()}.json"
-    )
-    try:
-        with open(config_path, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+    """Load sport configuration (single cached loader in sport_config)."""
+    return load_sport_config(sport)
 
 
 def _compute_criterion_score(
@@ -308,6 +299,13 @@ def _compute_injury_risk(
             event["injury_risk"] = indicators
 
 
+def _stamp_angle(result: dict, angle: str | None) -> dict:
+    """Stamp the analyzed camera perspective + next-angle guidance."""
+    result["angle"] = normalize_angle_label(angle)
+    result["recommended_angles"] = recommended_camera_angles(result.get("sport"))
+    return result
+
+
 def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
     """Transition a job to completed, handling cases where the job is already
     past earlier states (e.g. retry after long Gemini call)."""
@@ -365,7 +363,12 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
     update_job(job_id, summary=cached_result)
 
 
-def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
+def run_analysis(
+    job_id: str,
+    video_key: str,
+    player_index: int | None,
+    angle: str | None = None,
+) -> None:
     """Run the full analysis pipeline for a video.
 
     Idempotent: if the job is already completed, this function returns
@@ -410,7 +413,7 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
                 "player_index": player_index,
                 "job_id": job_id,
             }))
-            _safe_transition_to_completed(job_id, cached_result)
+            _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
             return
 
         logging.info(json.dumps({
@@ -429,14 +432,14 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
                 time.sleep(2)
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, cached_result)
+                    _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
                     return
             # If we exited the loop because the pending entry cleared (not timeout),
             # check cache one more time before proceeding
             if not deduplicator.is_pending(dedup_key):
                 cached_result = get_cached_analysis(video_hash, player_index)
                 if cached_result is not None:
-                    _safe_transition_to_completed(job_id, cached_result)
+                    _safe_transition_to_completed(job_id, _stamp_angle(cached_result, angle))
                     return
 
         # Mark this video as being analyzed (for dedup)
@@ -509,6 +512,10 @@ def run_analysis(job_id: str, video_key: str, player_index: int | None) -> None:
 
         # Extract sport from Gemini result for scoring config
         sport = gemini_result.get("sport", "cricket")
+
+        # Stamp which camera perspective was analyzed + the sport's guidance
+        # for the next angle, so the coach knows what to film next.
+        _stamp_angle(gemini_result, angle)
 
         # Attach deterministic biomechanical metrics to each shot event
         # by looking up the nearest tracked frame for each event timestamp

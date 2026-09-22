@@ -13,6 +13,10 @@ export type Player = {
 export type ScanResult = {
   session_token: string
   video_key: string
+  /** Camera perspective this upload was scanned as (engine-normalized). */
+  angle?: string
+  /** All perspectives accumulated in this session (primary first). */
+  angles?: string[]
   player_count: number
   players: Player[]
 }
@@ -72,6 +76,12 @@ export type JobStatus = {
 // The engine is the source of truth — keep this type in sync with it and with
 // the analysis contract tests in all three layers.
 
+export type CameraAngleGuidance = {
+  id: string
+  label: string
+  description: string
+}
+
 export type AnalysisSummary = {
   sport: string
   player_name?: string
@@ -86,6 +96,10 @@ export type AnalysisSummary = {
   success_rate_percent?: number
   average_form_score?: number
   total_events?: number
+  /** Camera perspective the analysis ran on (engine-stamped). */
+  angle?: string
+  /** Sport-specific guidance for the next angle to film. */
+  recommended_angles?: CameraAngleGuidance[]
 }
 
 export type ShotEvent = {

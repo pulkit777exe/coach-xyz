@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useEffect, forwardRef, useImperativeHandle, useState, useCallback, useMemo } from 'react'
-import { getDownloadUrl } from '@/lib/api'
+import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
 interface VideoPlayerProps {
@@ -43,6 +43,21 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
     const [hasError, setHasError] = useState(false)
     const [isHoveringTimeline, setIsHoveringTimeline] = useState(false)
     const [hoverX, setHoverX] = useState(0)
+    // Owned jobs require the signed attribution token, which a <video> tag
+    // cannot send as a header — resolve the query-token URL per job.
+    const [videoSrc, setVideoSrc] = useState(() => getDownloadUrl(jobId))
+    const [videoSrcJob, setVideoSrcJob] = useState(jobId)
+    if (videoSrcJob !== jobId) {
+      setVideoSrcJob(jobId)
+      setVideoSrc(getDownloadUrl(jobId))
+    }
+    useEffect(() => {
+      let cancelled = false
+      void getAuthorizedDownloadUrl(jobId).then((url) => {
+        if (!cancelled) setVideoSrc(url)
+      })
+      return () => { cancelled = true }
+    }, [jobId])
     const activeCallouts = useRef<Array<{ event: ShotEvent; startMs: number; opacity: number }>>([])
     const lastCalloutIndex = useRef<number>(-1)
     const animFrameRef = useRef<number>(0)
@@ -318,7 +333,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
         )}
         <video
           ref={videoRef}
-          src={getDownloadUrl(jobId)}
+          src={videoSrc}
           controls
           className={`max-h-full max-w-full object-contain ${hasError ? 'hidden' : ''}`}
           preload="metadata"

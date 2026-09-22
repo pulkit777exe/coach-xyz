@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
@@ -8,8 +8,14 @@ import type { Player } from '@/types'
 
 interface PlayerSelectorProps {
   players: Player[]
+  angles: string[]
+  activeAngle: string
+  onAngleChange: (angle: string) => void
+  onAddAngle: (file: File, angle: string) => void
   onSelect: (playerIndex: number) => void
 }
+
+const ANGLE_SUGGESTIONS = ['side', 'front', 'behind', 'baseline', 'elevated']
 
 function PlayerImage({ player }: { player: Player }) {
   const [imgError, setImgError] = useState(false)
@@ -50,8 +56,28 @@ function PlayerImage({ player }: { player: Player }) {
   )
 }
 
-export default function PlayerSelector({ players, onSelect }: PlayerSelectorProps) {
+export default function PlayerSelector({
+  players,
+  angles,
+  activeAngle,
+  onAngleChange,
+  onAddAngle,
+  onSelect,
+}: PlayerSelectorProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [newAngle, setNewAngle] = useState<string>(ANGLE_SUGGESTIONS[0])
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // Reset the picked player when the coach switches perspective — indices
+  // are per-angle, so a selection must never leak across angles.
+  const switchAngle = (angle: string) => {
+    setSelectedIndex(null)
+    onAngleChange(angle)
+  }
+
+  const existingAngles = new Set(angles)
+  const nextSuggestion =
+    ANGLE_SUGGESTIONS.find((a) => !existingAngles.has(a)) ?? ANGLE_SUGGESTIONS[0]
 
   return (
     <>
@@ -62,9 +88,33 @@ export default function PlayerSelector({ players, onSelect }: PlayerSelectorProp
                 Who do you want to <span className="text-foreground">analyze?</span>
               </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Our vision models detected <span className="text-foreground font-bold">{players.length}</span> potential subjects. Select the primary athlete to continue the pipeline.
+              Our vision models detected <span className="text-foreground font-bold">{players.length}</span> potential subjects
+              {angles.length > 1 ? (
+                <> in the <span className="text-foreground font-bold capitalize">{activeAngle}</span> view</>
+              ) : null}
+              . Select the primary athlete to continue the pipeline.
             </p>
           </div>
+
+          {angles.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-8" role="tablist" aria-label="Camera angles">
+              {angles.map((angle) => (
+                <button
+                  key={angle}
+                  role="tab"
+                  aria-selected={angle === activeAngle}
+                  onClick={() => switchAngle(angle)}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
+                    angle === activeAngle
+                      ? 'bg-foreground text-background'
+                      : 'bg-muted text-muted-foreground hover:text-foreground border border-border'
+                  }`}
+                >
+                  {angle}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-8 mb-16 px-4 justify-items-center mx-auto w-fit max-w-full">
             {players.map((player, i) => {
@@ -136,6 +186,46 @@ export default function PlayerSelector({ players, onSelect }: PlayerSelectorProp
                 </span>
               ) : 'Select a subject to continue'}
             </Button>
+          </div>
+
+          <div className="max-w-sm mx-auto mt-8 rounded-2xl border border-border bg-card p-5">
+            <p className="text-sm font-semibold text-foreground mb-1">Add another camera angle</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Film the same drill from a second perspective (e.g. side + front) for a more complete read.
+            </p>
+            <div className="flex gap-2">
+              <label className="sr-only" htmlFor="angle-label">Camera angle label</label>
+              <select
+                id="angle-label"
+                value={ANGLE_SUGGESTIONS.includes(newAngle) ? newAngle : nextSuggestion}
+                onChange={(e) => setNewAngle(e.target.value)}
+                className="h-10 flex-1 rounded-xl border border-border bg-muted px-3 text-sm text-foreground capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+              >
+                {ANGLE_SUGGESTIONS.map((a) => (
+                  <option key={a} value={a} disabled={existingAngles.has(a)}>
+                    {a}{existingAngles.has(a) ? ' (added)' : ''}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl font-semibold"
+                onClick={() => fileRef.current?.click()}
+              >
+                Upload
+              </Button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) onAddAngle(file, newAngle)
+                  e.target.value = ''
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>

@@ -91,6 +91,36 @@ describe("verifyServiceIdentity", () => {
     ).toEqual({ ok: true })
   })
 
+  test("denies a player-role member on /api/auth/user trees (allowedMemberRoles)", () => {
+    setToken(TOKEN)
+    const outcome = verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
+      memberRole: "player",
+      allowedMemberRoles: ["owner", "admin", "coach"],
+    })
+    expect(outcome.ok).toBe(false)
+    if (outcome.ok) throw new Error("unreachable")
+    expect(outcome.status).toBe(403)
+  })
+
+  test("allows a coach-role member on /api/auth/user trees (allowedMemberRoles)", () => {
+    setToken(TOKEN)
+    expect(
+      verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
+        memberRole: "coach",
+        allowedMemberRoles: ["owner", "admin", "coach"],
+      }),
+    ).toEqual({ ok: true })
+  })
+
+  test("player-role member without an allowlist still passes (org/email trees)", () => {
+    setToken(TOKEN)
+    expect(
+      verifyServiceIdentity(TOKEN, "auth0|member-1", "auth0|owner-1", {
+        memberRole: "player",
+      }),
+    ).toEqual({ ok: true })
+  })
+
   test("rejects a non-owner with a null memberRole", () => {
     setToken(TOKEN)
     const outcome = verifyServiceIdentity(TOKEN, "auth0|outsider", "auth0|owner-1", {

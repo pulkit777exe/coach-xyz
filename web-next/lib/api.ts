@@ -156,10 +156,10 @@ export async function apiFetch<T>(
 
 /**
  * Fetch a short-lived attribution token binding the verified session sub.
- * Browser-direct capability routes (scan/analyze) receive it as `x-attribution`
- * so the backend can attribute uploads to the signed-in caller without trusting
- * a raw client header. Cache it until expiry to avoid an extra round-trip per
- * scan/analyze pair.
+ * Browser-direct capability routes (scan/analyze/status/chat/conversation)
+ * receive it as `x-attribution` so the backend can attribute uploads to the
+ * signed-in caller without trusting a raw client header. Cache it until
+ * expiry to avoid an extra round-trip per scan/analyze pair.
  */
 let attributionTokenCache: { token: string; exp: number } | null = null
 export async function getAttributionToken(): Promise<string | null> {
@@ -183,6 +183,7 @@ export async function scanVideoWithProgress(
   file: File,
   onProgress: (progress: UploadProgress) => void,
   auth0Id?: string | null,
+  opts: { sessionToken?: string | null; angle?: string | null } = {},
 ): Promise<ScanResult> {
   // Best-effort attribution: only set the header when a signed token is
   // available. The token method returns a GET through the identity proxy so it
@@ -267,12 +268,16 @@ export async function scanVideoWithProgress(
 
     const formData = new FormData()
     formData.append('video', file)
+    // Multi-angle flow: append to an existing session under a labeled angle.
+    if (opts.sessionToken) formData.append('session_token', opts.sessionToken)
+    if (opts.angle) formData.append('angle', opts.angle)
     xhr.send(formData)
   })
 }
 
 export type ScanProgressEvent = {
   session_token: string
+  angle?: string
   current: number
   total: number
   complete: boolean
@@ -308,6 +313,7 @@ export async function startAnalysis(params: {
   session_token: string | null
   player_index: number | null
   video_key?: string | null
+  angle?: string | null
   auth0Id?: string | null
 }): Promise<{ job_id: string }> {
   const { auth0Id, ...rest } = params
@@ -333,8 +339,13 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15_000)
   try {
+    // Owned jobs require the caller's signed sub — attach best-effort
+    // attribution so status polls keep working after the ownership binding.
+    // Anonymous jobs stay readable without it.
+    const attribution = await getAttributionToken().catch(() => null)
     return await apiFetch<JobStatus>(`${BASE}/api/job-status/${jobId}`, {
       signal: controller.signal,
+      headers: attribution ? { 'x-attribution': attribution } : {},
     })
   } finally {
     clearTimeout(timeout)
@@ -343,6 +354,18 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 
 export function getDownloadUrl(jobId: string): string {
   return `/api/download/${jobId}`
+}
+
+/**
+ * Headerless consumers (`<video src>`, `<a href>`, `window.location.href`)
+ * cannot send `x-attribution`, so owned-job downloads carry the signed token
+ * as an `?attribution=` query param instead — the server verifies it exactly
+ * like the header. Anonymous jobs need no token; the base URL is returned.
+ */
+export async function getAuthorizedDownloadUrl(jobId: string): Promise<string> {
+  const base = getDownloadUrl(jobId)
+  const token = await getAttributionToken().catch(() => null)
+  return token ? `${base}?attribution=${encodeURIComponent(token)}` : base
 }
 
 // ── Chat API ─────────────────────────────────────────────────────────────────
@@ -363,9 +386,13 @@ export async function* sendChatMessageStream(
   message: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
+  const attribution = await getAttributionToken().catch(() => null)
   const res = await fetch(`${BASE}/api/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(attribution ? { 'x-attribution': attribution } : {}),
+    },
     body: JSON.stringify({ job_id: jobId, message }),
     signal,
   })
@@ -389,9 +416,13 @@ export async function getConversation(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
+    const attribution = await getAttributionToken().catch(() => null)
     return await apiFetch<{ messages: ChatMessage[] }>(
       `${BASE}/api/conversation/${jobId}`,
-      { signal: controller.signal },
+      {
+        signal: controller.signal,
+        headers: attribution ? { 'x-attribution': attribution } : {},
+      },
     )
   } finally {
     clearTimeout(timeout)

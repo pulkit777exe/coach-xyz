@@ -247,11 +247,16 @@ coach-xyz/
 **Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
 - Key: `coachai:srv:{server_job_id}`
 - TTL: 7200 seconds (2 hours)
-- Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at }`
+- Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at, owner_ids }`
+- `owner_ids` binds the job to its verified owners (analyze-video: the `x-attribution` sub; me/analyze: `[coachAuth0Id, requestedBy]`). Empty = anonymous demo job, bearer-readable. Status/chat/conversation/download require a matching `x-attribution` sub when owners exist (`server/src/lib/jobAccess.ts`).
 
-**Rate Limits** (`server/src/lib/ratelimit.ts:82-90`)
-- Key: `rl:scan:{ip}` (TTL 60s) — 10 requests/minute (`SCAN_RATE_LIMIT`, default `"10"`)
-- Key: `rl:analysis:{ip}` (TTL 3600s) — 5 requests/hour (`ANALYSIS_RATE_LIMIT`, default `"5"` — the 429 message in `analyze.ts:29` states "5 per hour", consistent)
+**Rate Limits** (`server/src/lib/ratelimit.ts`)
+- Key: `rl:scan:{sub|ip}` (TTL 60s) — 10 requests/minute (`SCAN_RATE_LIMIT`, default `"10"`)
+- Key: `rl:analysis:{sub|ip}` (TTL 3600s) — 5 requests/hour (`ANALYSIS_RATE_LIMIT`, default `"5"` — the 429 message in `analyze.ts` states "5 per hour", consistent)
+- Key: `rl:chat:{sub|ip}` (TTL 3600s) — 30 AI chats/hour (`CHAT_RATE_LIMIT`, default `"30"`)
+- Key: `rl:download:{sub|ip}` (TTL 3600s) — 60 downloads/hour (`DOWNLOAD_RATE_LIMIT`, default `"60"`)
+- Key: `rl:scanprogress:{ip}` (TTL 60s) — 30 SSE opens/minute (`SCAN_PROGRESS_RATE_LIMIT`, default `"30"`)
+- Scan/analysis/chat/download buckets key on the verified attribution sub when the caller sends `x-attribution` (unspoofable per-account bucket); anonymous callers share the IP bucket.
 
 **Video Cache** (`engine/core/cache.py:26-27`)
 - Key: `coachai:analysis:{video_hash}:p{player_index|all}`
@@ -293,10 +298,17 @@ coach-xyz/
 
 ### In-Memory State
 
-**Engine Sessions** (`engine/main.py:57-58`)
+**Engine Sessions** (`engine/main.py`)
 - Stored in Python dict with threading lock
-- TTL: 7200 seconds (2 hours, aligned with job TTL), max 10 sessions (`engine/main.py:45-46`)
-- Evicted every 300s by `_evict_old_sessions()` loop (`engine/main.py:123-128`)
+- TTL: 2 hours (aligned with job TTL), max 10 sessions
+- Multi-perspective: one session accumulates camera angles
+  (`core/multicam.py`) — `POST /scan` with `session_token` + `angle` appends
+  another upload/detection to the same session; `POST /analyze` takes `angle`
+  (defaults to `primary`). Legacy top-level `video_key`/`players` always mirror
+  the primary angle, so single-angle clients are unchanged. The analysis result
+  is stamped with the analyzed `angle` plus the sport's `recommended_angles`
+  guidance (from `sports/*.json` `camera_angles`, loaded via
+  `core/sport_config.py` — the single loader shared by analyzer + renderer).
 
 ---
 
@@ -441,7 +453,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table. New accounts default to `role = 'coach'` (first account is a coach); when the login email matches a student row, the account is auto-linked (`students.account_auth0_id` set) and its role flips to `player`.
 - **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
 - **Logout:** `/auth/logout` (Auth0 SDK route)
-- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`) and analyze (`POST /api/analyze-video`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
+- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`), analyze (`POST /api/analyze-video`), status (`GET /api/job-status/:jobId`), chat (`POST /api/chat`, `/api/chat/stream`) and conversation (`GET /api/conversation/:jobId`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. Downloads (`<video src>`/`<a href>` cannot carry headers) send the same token as `?attribution=` (`getAuthorizedDownloadUrl`), verified identically. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
 
 ### Identity Boundary (service-to-service, two-faces)
 

@@ -20,6 +20,11 @@ CHUNK_SIZE = 8 * 1024 * 1024  # 8MB streaming chunk size
 
 FFMPEG_TIMEOUT_S = int(os.environ.get("FFMPEG_TIMEOUT_S", "300"))
 
+# Upper bound for one conversational Gemini round-trip. The server gives /chat
+# 60s and /chat/stream 120s; the engine deadline sits inside both so a hung
+# model call surfaces as a structured error instead of a hung SSE stream.
+CHAT_GEMINI_TIMEOUT_S = int(os.environ.get("CHAT_GEMINI_TIMEOUT_S", "100"))
+
 # ── Shared Utilities ────────────────────────────────────────────────────────
 
 def parse_timestamp(ts: str) -> float:

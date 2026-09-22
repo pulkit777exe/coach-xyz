@@ -58,7 +58,11 @@ export function verifyServiceIdentity(
   token: string | null,
   verifiedAuth0Id: string | null,
   resourceAuth0Id: string | null | undefined,
-  opts: { self?: boolean; memberRole?: OrgMemberRole | null } = {},
+  opts: {
+    self?: boolean
+    memberRole?: OrgMemberRole | null
+    allowedMemberRoles?: readonly OrgMemberRole[]
+  } = {},
 ): ServiceIdentityCheck {
   if (!serviceGuardEnabled()) {
     maybeLogDisabled()
@@ -102,7 +106,18 @@ export function verifyServiceIdentity(
     }
   }
 
-  if (verifiedAuth0Id === resourceAuth0Id || opts.memberRole) return { ok: true }
+  if (verifiedAuth0Id === resourceAuth0Id) return { ok: true }
+
+  // Cross-account access via org membership. Some trees (notably
+  // /api/auth/user/*, where the resource id is the coach's own account and the
+  // rows include full summaries) must not grant player-role members read
+  // access to another account — restrict those trees via allowedMemberRoles.
+  if (
+    opts.memberRole &&
+    (!opts.allowedMemberRoles || opts.allowedMemberRoles.includes(opts.memberRole))
+  ) {
+    return { ok: true }
+  }
 
   return {
     ok: false,
@@ -243,6 +258,24 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
     },
   )
 
+/** Roles allowed cross-account access on /api/auth/user/* trees. The resource
+ * id is the coach's own account (analyses carry full summary_json), so
+ * player-role members must not read another account's dashboard — they use
+ * self-scoped /api/me/* instead. */
+export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
+  "owner",
+  "admin",
+  "coach",
+]
+
+const isAuthUserPath = (url: string): boolean => {
+  try {
+    return new URL(url).pathname.startsWith("/api/auth/user/")
+  } catch {
+    return false
+  }
+}
+
 const isSelfPath = (url: string): boolean => {
   try {
     const pathname = new URL(url).pathname
@@ -288,6 +321,9 @@ export const serviceGuard = new Elysia({ name: "serviceGuard" }).onBeforeHandle(
       {
         self: isSelfPath(request.url),
         memberRole,
+        allowedMemberRoles: isAuthUserPath(request.url)
+          ? AUTH_USER_ALLOWED_MEMBER_ROLES
+          : undefined,
       },
     )
     if (!outcome.ok) {

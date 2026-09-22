@@ -3,7 +3,8 @@ import { Elysia } from "elysia"
 import { scanVideo, getScanProgressStream } from "../lib/engine"
 import { buildError, isCoachAIError } from "../lib/errors"
 import { readRequestMeta } from "../lib/requestMeta"
-import { checkScanLimit, getIP } from "../lib/ratelimit"
+import { resolveJobCaller } from "../lib/jobAccess"
+import { checkScanLimit, checkScanProgressLimit, getIP } from "../lib/ratelimit"
 import { verifyAttributionToken } from "../lib/attribution"
 import { persistVideoConversation } from "../lib/supabaseHistory"
 import { MAX_FILE_SIZE_BYTES } from "../types"
@@ -27,8 +28,13 @@ const scanErrorStatus = (code: string): number => {
 
 export default new Elysia().post("/api/scan-video", async ({ request, set }) => {
   // ── Rate Limiting ──────────────────────────────────────────────────────
+  // Key by verified sub when the caller sent a signed attribution token —
+  // unlike X-Forwarded-For, the sub cannot be spoofed, so logged-in callers
+  // get a per-account bucket and cannot rotate IPs to evade the limit.
   const ip = getIP(request)
-  const { allowed, remaining, reset } = await checkScanLimit(ip)
+  const { allowed, remaining, reset } = await checkScanLimit(
+    resolveJobCaller(request) ?? ip,
+  )
   set.headers["X-RateLimit-Remaining"] = String(remaining)
   if (!allowed) {
     const retryAfter = Math.ceil((reset - Date.now()) / 1000)
@@ -54,6 +60,14 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
   const form = await request.formData()
   const value = form.get("video")
   const requestMeta = readRequestMeta(request)
+  // Multi-angle flow: the web appends these fields when adding another
+  // camera perspective to an existing session.
+  const appendSessionToken =
+    typeof form.get("session_token") === "string"
+      ? (form.get("session_token") as string)
+      : null
+  const angleLabel =
+    typeof form.get("angle") === "string" ? (form.get("angle") as string) : null
 
   if (!(value instanceof File)) {
     set.status = 400
@@ -72,7 +86,10 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
 
   // ── Call Engine ────────────────────────────────────────────────────────
   try {
-    const result = await scanVideo(value)
+    const result = await scanVideo(value, {
+      sessionToken: appendSessionToken,
+      angle: angleLabel,
+    })
 
     await persistVideoConversation({
       ...requestMeta,
@@ -108,12 +125,22 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
     return buildError(code, "Video scan failed. Please try again.")
   }
 })
-  .get("/api/scan-progress/:sessionToken", async ({ params, set }) => {
+  .get("/api/scan-progress/:sessionToken", async ({ params, request, set }) => {
     const { sessionToken } = params
 
     if (!sessionToken) {
       set.status = 400
       return buildError("INVALID_REQUEST", "sessionToken required.", false)
+    }
+
+    const { allowed, reset } = await checkScanProgressLimit(getIP(request))
+    if (!allowed) {
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
+      set.status = 429
+      return {
+        ...buildError("RATE_LIMITED", "Too many scan-progress requests. Try again later.", true),
+        retry_after: retryAfter,
+      }
     }
 
     try {

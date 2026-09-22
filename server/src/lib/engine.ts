@@ -49,9 +49,16 @@ export const isConnectivityError = (error: unknown): boolean =>
   (error instanceof Error && /ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|fetch failed/i.test(`${error.message} ${error.cause ?? ""}`)) ||
   (typeof error === "object" && error !== null && "code" in error && /^(ECONNREFUSED|ECONNRESET|EPIPE|ENOTFOUND|UND_ERR)$/i.test(String((error as Record<string, unknown>).code)))
 
-export const scanVideo = async (videoFile: File): Promise<ScanResult> => {
+export const scanVideo = async (
+  videoFile: File,
+  opts: { sessionToken?: string | null; angle?: string | null } = {},
+): Promise<ScanResult> => {
   const form = new FormData()
   form.append("video", videoFile, videoFile.name || "video.mp4")
+  // Multi-angle flow: appending to an existing session reuses its token and
+  // labels the new perspective. The engine defaults both when omitted.
+  if (opts.sessionToken) form.append("session_token", opts.sessionToken)
+  if (opts.angle) form.append("angle", opts.angle)
 
   try {
     const res = await withTimeout(`${ENGINE_URL}/scan`, {
@@ -100,6 +107,7 @@ export type AnalyzePayload = {
   session_token: string | null
   player_index: number | null
   video_key: string | null
+  angle?: string | null
 }
 
 export const analyzeVideo = async (payload: AnalyzePayload): Promise<void> => {

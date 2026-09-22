@@ -2,6 +2,7 @@ import { Elysia } from "elysia"
 
 import { buildError } from "../lib/errors"
 import { getJob } from "../lib/jobs"
+import { verifyJobAccess } from "../lib/jobAccess"
 import { getEngineJobStatus } from "../lib/engine"
 import { persistAnalysisStatus, getAnalysisByServerJobId } from "../lib/supabaseHistory"
 
@@ -34,13 +35,18 @@ const statusResponse = (jobId: string, overrides: Partial<StatusResponse>): Stat
   ...overrides,
 })
 
-export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }) => {
+export default new Elysia().get("/api/job-status/:jobId", async ({ params, request, set }) => {
   const serverJob = await getJob(params.jobId)
 
   if (!serverJob) {
     // Redis key expired — check Supabase for persisted analysis
     const persisted = await getAnalysisByServerJobId(params.jobId)
     if (persisted) {
+      const access = verifyJobAccess(request, null, persisted)
+      if (!access.ok) {
+        set.status = access.status
+        return access.body
+      }
       set.status = 200
       return statusResponse(params.jobId, {
         state: persisted.complete ? "completed" : "failed",
@@ -58,6 +64,12 @@ export default new Elysia().get("/api/job-status/:jobId", async ({ params, set }
 
     set.status = 404
     return buildError("JOB_NOT_FOUND", "Analysis session not found.", false)
+  }
+
+  const access = verifyJobAccess(request, serverJob)
+  if (!access.ok) {
+    set.status = access.status
+    return access.body
   }
 
   // Read engine job status via HTTP (engine computes stage_name and video_ready)

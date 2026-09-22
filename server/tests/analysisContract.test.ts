@@ -32,6 +32,10 @@ const CANONICAL: AnalysisSummary = {
   success_rate_percent: 62,
   average_form_score: 7.5,
   total_events: 1,
+  angle: "side",
+  recommended_angles: [
+    { id: "front", label: "Front view", description: "Best second angle." },
+  ],
 }
 
 const REQUIRED_TOP_LEVEL = [

@@ -73,6 +73,24 @@ export async function checkAnalysisLimit(ip: string): Promise<RateLimitResult> {
   return checkLimit({ key: `rl:analysis:${ip}`, limit, windowSec: 3600 })
 }
 
+/** Per-IP+identity hourly cap on AI chat (paid Gemini calls). */
+export async function checkChatLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.CHAT_RATE_LIMIT || "30")
+  return checkLimit({ key: `rl:chat:${key}`, limit, windowSec: 3600 })
+}
+
+/** Per-IP+identity hourly cap on video downloads. */
+export async function checkDownloadLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.DOWNLOAD_RATE_LIMIT || "60")
+  return checkLimit({ key: `rl:download:${key}`, limit, windowSec: 3600 })
+}
+
+/** Per-IP per-minute cap on scan-progress SSE opens. */
+export async function checkScanProgressLimit(ip: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.SCAN_PROGRESS_RATE_LIMIT || "30")
+  return checkLimit({ key: `rl:scanprogress:${ip}`, limit, windowSec: 60 })
+}
+
 /** Per-org daily cap on outbound email (invites + reports + attendance). */
 export async function checkEmailLimit(orgId: string): Promise<RateLimitResult> {
   const limit = parseInt(process.env.EMAIL_RATE_LIMIT || "20")
