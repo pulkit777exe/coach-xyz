@@ -335,14 +335,15 @@ def _finalize_cached(result: dict, job_id: str, angle: str | None) -> dict:
     _stamp_angle(result, angle)
     _stamp_provenance(result)
     if not isinstance(result.get("findings"), list):
-        from core.findings import build_findings
+        from core.findings import build_findings, enforce_evidence_gate
 
-        result["findings"] = build_findings(
+        built = build_findings(
             result.get("shot_events", []),
             result.get("sport"),
             result.get("provenance"),
             job_id,
         )
+        result["findings"], _ = enforce_evidence_gate(built)
     result["needs_review"] = _needs_review(result.get("findings"))
     return result
 
@@ -679,7 +680,7 @@ def _stage_reasoning(ctx: AnalysisContext, resumed: bool) -> None:
 def _stage_scoring(ctx: AnalysisContext) -> None:
     """Deterministic post-processing: stamps, biomechanics, scoring,
     injury risk, stats, findings, cache, and the job summary write."""
-    from core.findings import build_findings
+    from core.findings import build_findings, enforce_evidence_gate
 
     gemini_result = ctx.gemini_result
     # Extract sport from Gemini result for scoring config
@@ -711,13 +712,23 @@ def _stage_scoring(ctx: AnalysisContext) -> None:
 
     # Derive click-traceable findings from the final scored events (§19).
     # Runs last so findings reflect corrected scores + attached
-    # biomechanics (confidence/frames are the evidence gate).
-    gemini_result["findings"] = build_findings(
-        shot_events,
-        sport,
-        gemini_result.get("provenance"),
-        ctx.job_id,
+    # biomechanics (confidence/frames are the evidence gate). The gate then
+    # downgrades strong claims with no supporting frames (§21).
+    gemini_result["findings"], gated = enforce_evidence_gate(
+        build_findings(
+            shot_events,
+            sport,
+            gemini_result.get("provenance"),
+            ctx.job_id,
+        ),
+        ctx.video_duration,
     )
+    if gated:
+        logging.info(json.dumps({
+            "type": "evidence_gate",
+            "job_id": ctx.job_id,
+            "downgraded": gated,
+        }))
     gemini_result["needs_review"] = _needs_review(gemini_result["findings"])
 
     # Cache the result

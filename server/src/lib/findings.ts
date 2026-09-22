@@ -31,6 +31,7 @@ const findingNumber = (value: unknown): number | null => {
   async (serverJobId: string, findings: FindingRecord[]): Promise<void> => {
     const rows = (Array.isArray(findings) ? findings : [])
       .filter((f) => f && typeof f.id === 'string' && f.id.length > 0 && f.id.length <= 200)
+      .map(applyEvidenceGate)
       .slice(0, 500)
     await withHistoryStore(async (db) => {
       await ensureInitialized()
@@ -120,8 +121,22 @@ export const getStudentFindings = async (
 export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
 export type ReviewState = (typeof REVIEW_STATES)[number]
 
-/** Column order for the findings CSV export (stable for spreadsheets). */
-export const FINDINGS_CSV_COLUMNS = [
+/**
+ * Defense-in-depth evidence gate (§21): a stored finding must never claim a
+ * strong band with no supporting frames. The engine enforces this at build
+ * time; persistence re-applies it so backfilled or third-party rows cannot
+ * smuggle an unsupported high/moderate claim into review queues. Pure.
+ */
+export const applyEvidenceGate = (finding: FindingRecord): FindingRecord => {
+  const frames = Array.isArray(finding.evidence_frames) ? finding.evidence_frames : []
+  const band = typeof finding.confidence_band === 'string' ? finding.confidence_band : null
+  if ((band === 'high' || band === 'moderate') && frames.length === 0) {
+    return { ...finding, confidence_band: 'needs_review', review_state: 'needs_review' }
+  }
+  return finding
+}
+
+/** Column order for the findings CSV export (stable for spreadsheets). */export const FINDINGS_CSV_COLUMNS = [
   'id',
   'server_job_id',
   'category',

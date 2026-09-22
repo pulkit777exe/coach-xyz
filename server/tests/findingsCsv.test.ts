@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   FINDINGS_CSV_COLUMNS,
+  applyEvidenceGate,
   findingsToCsv,
   type StoredFinding,
 } from '../src/lib/findings'
@@ -64,5 +65,59 @@ describe('findingsToCsv', () => {
 
   test('empty input yields the header only', () => {
     expect(findingsToCsv([])).toBe(FINDINGS_CSV_COLUMNS.join(','))
+  })
+})
+
+describe('applyEvidenceGate', () => {
+  const base = {
+    id: 'job1:e1',
+    category: 'release_point',
+    start_ms: 1200,
+    end_ms: 1800,
+    confidence: 0.9,
+    observation: 'Elbow flares',
+    feedback: 'Tuck it',
+    form_score: 6,
+  }
+
+  test('strong band without frames downgrades to needs_review', () => {
+    for (const band of ['high', 'moderate']) {
+      const out = applyEvidenceGate({
+        ...base,
+        confidence_band: band,
+        review_state: 'auto',
+        evidence_frames: [],
+      })
+      expect(out.confidence_band).toBe('needs_review')
+      expect(out.review_state).toBe('needs_review')
+    }
+  })
+
+  test('supported claims and weak bands pass through untouched', () => {
+    const supported = applyEvidenceGate({
+      ...base,
+      confidence_band: 'high',
+      review_state: 'auto',
+      evidence_frames: [375],
+    })
+    expect(supported.confidence_band).toBe('high')
+    expect(supported.review_state).toBe('auto')
+    const weak = applyEvidenceGate({
+      ...base,
+      confidence_band: 'needs_review',
+      review_state: 'needs_review',
+      evidence_frames: [],
+    })
+    expect(weak.review_state).toBe('needs_review')
+  })
+
+  test('non-array evidence counts as empty', () => {
+    const out = applyEvidenceGate({
+      ...base,
+      confidence_band: 'high',
+      review_state: 'auto',
+      evidence_frames: null,
+    })
+    expect(out.review_state).toBe('needs_review')
   })
 })

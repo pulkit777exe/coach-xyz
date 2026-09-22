@@ -1,6 +1,6 @@
 """Tests for core/findings.py — deterministic, evidence-bound findings."""
 
-from core.findings import build_findings
+from core.findings import build_findings, enforce_evidence_gate
 
 JOB = "job-123"
 PROV = {"model": "gemini-2.5-flash", "analysis_prompt": "1", "sport_pack_version": 1}
@@ -74,3 +74,96 @@ class TestNeedsReview:
         assert _needs_review([]) is False
         assert _needs_review(None) is False
         assert _needs_review("nope") is False
+
+
+def _finding(**over):
+    base = {
+        "id": f"{JOB}:e1",
+        "category": "drive",
+        "start_ms": 12000,
+        "end_ms": 16000,
+        "confidence": 0.9,
+        "confidence_band": "high",
+        "severity": "medium",
+        "observation": "Good timing.",
+        "feedback": "Good timing.",
+        "form_score": 7.5,
+        "evidence_frames": [375],
+        "measured_at_timestamp": 12.5,
+        "model_versions": {},
+        "review_state": "auto",
+    }
+    base.update(over)
+    return base
+
+
+class TestEnforceEvidenceGate:
+    def test_supported_claims_pass_through(self):
+        gated, downgraded = enforce_evidence_gate([_finding()], duration_s=90.0)
+        assert downgraded == 0
+        assert gated[0]["confidence_band"] == "high"
+        assert gated[0]["review_state"] == "auto"
+
+    def test_strong_claim_without_frames_downgrades(self):
+        gated, downgraded = enforce_evidence_gate(
+            [_finding(evidence_frames=[])], duration_s=90.0
+        )
+        assert downgraded == 1
+        assert gated[0]["confidence_band"] == "needs_review"
+        assert gated[0]["review_state"] == "needs_review"
+
+    def test_moderate_without_frames_downgrades(self):
+        gated, downgraded = enforce_evidence_gate(
+            [_finding(confidence_band="moderate", evidence_frames=None)]
+        )
+        assert downgraded == 1
+        assert gated[0]["review_state"] == "needs_review"
+
+    def test_inverted_range_needs_review(self):
+        gated, downgraded = enforce_evidence_gate([_finding(start_ms=5000, end_ms=1000)])
+        assert downgraded == 1
+        assert gated[0]["review_state"] == "needs_review"
+
+    def test_range_fully_outside_duration_needs_review(self):
+        gated, downgraded = enforce_evidence_gate([_finding(start_ms=95000, end_ms=99000)], duration_s=90.0)
+        assert downgraded == 1
+        assert gated[0]["review_state"] == "needs_review"
+
+    def test_partial_overflow_clamps_without_downgrade(self):
+        gated, downgraded = enforce_evidence_gate([_finding(start_ms=88000, end_ms=99000)], duration_s=90.0)
+        assert downgraded == 0
+        assert gated[0]["start_ms"] == 88000
+        assert gated[0]["end_ms"] == 90000
+        assert gated[0]["review_state"] == "auto"
+
+    def test_already_needs_review_not_double_counted(self):
+        gated, downgraded = enforce_evidence_gate(
+            [_finding(confidence_band="needs_review", review_state="needs_review")]
+        )
+        assert downgraded == 0
+        assert gated[0]["review_state"] == "needs_review"
+
+    def test_non_dict_entries_skipped(self):
+        gated, downgraded = enforce_evidence_gate([None, "x", _finding()])
+        assert len(gated) == 1
+        assert downgraded == 0
+
+    def test_gate_end_to_end_on_built_findings(self):
+        built = build_findings(
+            [_event(biomechanics={"confidence": 0.9, "measured_at_frame": 375})],
+            "cricket",
+            PROV,
+            JOB,
+        )
+        gated, downgraded = enforce_evidence_gate(built, duration_s=90.0)
+        assert downgraded == 0
+        assert gated[0]["review_state"] == "auto"
+
+    def test_gate_end_to_end_downgrades_frameless_claims(self):
+        built = build_findings(
+            [_event(biomechanics={"confidence": 0.9})], "cricket", PROV, JOB
+        )
+        assert built[0]["confidence_band"] == "high"
+        gated, downgraded = enforce_evidence_gate(built, duration_s=90.0)
+        assert downgraded == 1
+        assert gated[0]["confidence_band"] == "needs_review"

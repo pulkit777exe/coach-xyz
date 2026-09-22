@@ -106,3 +106,66 @@ def build_findings(
             "review_state": "needs_review" if band == "needs_review" else "auto",
         })
     return findings
+
+
+def enforce_evidence_gate(
+    findings: list[dict[str, Any]],
+    duration_s: float | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """Validate finding evidence and downgrade unsupported strong claims.
+
+    Rules (§21 evidence correctness):
+    - a high/moderate band with empty evidence_frames cannot stand: the band
+      drops to needs_review and so does the review state;
+    - inverted ranges (end <= start) always need review;
+    - when the video duration is known, ranges fully outside it need review
+      and partially-outside ranges are clamped into bounds.
+
+    Returns (gated findings, downgraded count). Pure function.
+    """
+    try:
+        duration_ms = float(duration_s) * 1000 if duration_s is not None else None
+    except (TypeError, ValueError):
+        duration_ms = None
+    if duration_ms is not None and duration_ms <= 0:
+        duration_ms = None
+
+    downgraded = 0
+    gated: list[dict[str, Any]] = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        finding = dict(finding)
+        needs_review = finding.get("review_state") == "needs_review"
+
+        try:
+            start_ms = int(finding.get("start_ms", 0))
+        except (TypeError, ValueError):
+            start_ms = 0
+        try:
+            end_ms = int(finding.get("end_ms", 0))
+        except (TypeError, ValueError):
+            end_ms = 0
+        if duration_ms is not None:
+            if end_ms <= 0 or start_ms >= duration_ms:
+                needs_review = True
+            else:
+                start_ms = max(0, start_ms)
+                end_ms = min(int(duration_ms), end_ms)
+        if end_ms <= start_ms:
+            needs_review = True
+        finding["start_ms"] = start_ms
+        finding["end_ms"] = end_ms
+
+        frames = finding.get("evidence_frames")
+        if not isinstance(frames, list) or not frames:
+            if finding.get("confidence_band") in ("high", "moderate"):
+                needs_review = True
+        if needs_review:
+            if finding.get("confidence_band") in ("high", "moderate"):
+                finding["confidence_band"] = "needs_review"
+            if finding.get("review_state") != "needs_review":
+                downgraded += 1
+            finding["review_state"] = "needs_review"
+        gated.append(finding)
+    return gated, downgraded
