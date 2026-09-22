@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import type { Redis } from "ioredis"
 import { markEngineJobFailed, getEngineJobStatus } from "./engine"
 import { saveJob, getJob } from "./jobs"
-import { shutdownHistoryStore, persistAnalysisStatus } from "./supabaseHistory"
+import { shutdownHistoryStore, persistAnalysisStatus, pruneRetention } from "./supabaseHistory"
 import { wrapEngineError, isQueueRetryable, isCoachAIError } from "./errors"
 import { analyzeVideo } from "./engine"
 import { DEFAULT_MODEL } from "../types"
@@ -333,6 +333,22 @@ if (redisAvailable && analysisQueue) {
   const stuckRecoveryInterval = setInterval(recoverStuckJobs, 10 * 60 * 1000)
   stuckRecoveryInterval.unref()
   setTimeout(recoverStuckJobs, 30_000)
+
+  // Retention pruning (§30) — daily sweep of analyses past RETENTION_DAYS.
+  async function pruneOldAnalyses(): Promise<void> {
+    try {
+      const pruned = await pruneRetention()
+      if (pruned > 0) {
+        console.log(JSON.stringify({ type: "retention_pruned", analyses: pruned }))
+      }
+    } catch (err) {
+      console.error(JSON.stringify({ type: "retention_prune_error", error: String(err) }))
+    }
+  }
+
+  const retentionInterval = setInterval(pruneOldAnalyses, 24 * 60 * 60 * 1000)
+  retentionInterval.unref()
+  setTimeout(pruneOldAnalyses, 60_000)
 }
 
 // ── AI Report Queue ─────────────────────────────────────────────────────────

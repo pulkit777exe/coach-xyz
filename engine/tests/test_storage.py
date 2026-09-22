@@ -47,3 +47,20 @@ class TestLocalStorageFlow:
     def test_download_video_to_tmp_raises_for_missing(self, storage_root):
         with pytest.raises(FileNotFoundError):
             storage.download_video_to_tmp("does-not-exist.mp4")
+
+
+class TestBucketLayout:
+    def test_raw_upload_key_namespaces_session_and_angle(self):
+        key = storage.raw_upload_key("sess-1", "side")
+        assert key.startswith("raw/sess-1/side/")
+        assert key.endswith(".mp4")
+
+    def test_raw_upload_keys_are_unique_per_upload(self):
+        assert storage.raw_upload_key("s", "a") != storage.raw_upload_key("s", "a")
+
+    def test_result_key_is_stable_per_job(self):
+        assert storage.result_key("job-1") == "results/job-1.mp4"
+        assert storage.result_key("job-1") == storage.result_key("job-1")
+
+    def test_angle_label_falls_back_to_primary(self):
+        assert storage.raw_upload_key("s", "").split("/")[2] == "primary"

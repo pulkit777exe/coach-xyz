@@ -423,7 +423,9 @@ def _committed_summary(job_id: str) -> dict[str, Any] | None:
 
 
 def _rendered_key(job_id: str) -> str:
-    return f"results/{job_id}.mp4"
+    from core.storage import result_key
+
+    return result_key(job_id)
 
 
 def _needs_review(findings: Any) -> bool:

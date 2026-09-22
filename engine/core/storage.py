@@ -7,6 +7,29 @@ from typing import BinaryIO
 
 from core.config import CHUNK_SIZE
 
+# ── Bucket layout (§10 precursor) ────────────────────────────────────────────
+# Keys are namespaced by artifact kind so a future object-store migration maps
+# 1:1: raw/ (immutable source uploads, per session+angle), results/ (one
+# rendered video per analysis job). Derived/preview artifacts go under the
+# same roots as sibling prefixes when added.
+
+RAW_PREFIX = "raw"
+RESULTS_PREFIX = "results"
+
+
+def raw_upload_key(session_token: str, angle: str) -> str:
+    """Namespaced key for a source upload. UUID-suffixed so re-uploads of an
+    angle never collide; the session record always points at the latest."""
+    import uuid
+
+    safe_angle = (angle or "primary").strip().lower() or "primary"
+    return f"{RAW_PREFIX}/{session_token}/{safe_angle}/{uuid.uuid4().hex}.mp4"
+
+
+def result_key(job_id: str) -> str:
+    """Namespaced key for a rendered analysis video (one per job)."""
+    return f"{RESULTS_PREFIX}/{job_id}.mp4"
+
 
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 TMP_ROOT = (ENGINE_ROOT / "tmp").resolve()
@@ -89,7 +112,7 @@ def download_video_to_tmp(key: str) -> str:
 
 
 def upload_result_video(local_path: str, job_id: str) -> str:
-    key = f"results/{job_id}.mp4"
+    key = result_key(job_id)
     dest = _key_to_local_path(key)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(local_path, dest)

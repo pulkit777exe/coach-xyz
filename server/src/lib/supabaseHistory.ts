@@ -857,6 +857,34 @@ export const deleteAnalysis = async (
   })) ?? false
 }
 
+/** Retention window for analysis artifacts (days). */
+export const retentionDays = (): number => {
+  const raw = Number(process.env.RETENTION_DAYS ?? 365)
+  return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 30), 3650) : 365
+}
+
+/**
+ * Delete analyses (plus findings + chat) older than the retention window.
+ * Derived rows go first so no orphans survive the history delete. Returns
+ * the number of analyses pruned.
+ */
+export const pruneRetention = async (): Promise<number> => {
+  const days = retentionDays()
+  return (await withHistoryStore(async (db) => {
+    await ensureInitialized()
+    const stale = await db<{ server_job_id: string }[]>`
+      select server_job_id from analysis_history
+      where requested_at < now() - (${days} || ' days')::interval;
+    `
+    if (!stale?.length) return 0
+    const ids = stale.map((r) => r.server_job_id)
+    await db`delete from findings where server_job_id = any(${ids});`
+    await db`delete from chat_messages where server_job_id = any(${ids});`
+    await db`delete from analysis_history where server_job_id = any(${ids});`
+    return ids.length
+  })) ?? 0
+}
+
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {
   await withHistoryStore(async (db) => {
     await ensureInitialized()

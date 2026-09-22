@@ -25,6 +25,56 @@ def tmp_dir() -> Path:
     return Path(tempfile.gettempdir()).resolve()
 
 
+def probe_video(video_path: str) -> dict[str, Any]:
+    """Validate an uploaded file is a decodable video (never trust client
+    metadata). Returns duration/width/height. Raises VideoDecodeError when
+    ffprobe is missing, the file has no video stream, or it is corrupt."""
+    import json as _json
+
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height,codec_name,duration",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                video_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise VideoDecodeError("Media inspection is unavailable on the engine.") from exc
+    except Exception as exc:
+        raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.") from exc
+
+    try:
+        info = _json.loads(proc.stdout.decode("utf-8") or "{}")
+        stream = (info.get("streams") or [{}])[0]
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+        duration = float(
+            stream.get("duration") or (info.get("format") or {}).get("duration") or 0
+        )
+    except (ValueError, TypeError, IndexError, AttributeError) as exc:
+        raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.") from exc
+
+    if width <= 0 or height <= 0:
+        raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.")
+    if duration <= 0 or duration > 3600:
+        raise VideoDecodeError("Video must be between 1 second and 60 minutes long.")
+    return {"width": width, "height": height, "duration": duration}
+
+
 def preprocess_video_ffmpeg(video_path: str) -> str:
     """
     Normalize input video stream for stable OpenCV decoding.

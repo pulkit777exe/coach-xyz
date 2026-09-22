@@ -445,8 +445,24 @@ async def scan(
         logging.info(f"[SCAN] Validation failed: {validation_error.body}")
         return validation_error
 
+    # Resolve the session before streaming so the upload lands under its
+    # namespaced key (raw/{session}/{angle}/...). An unknown token starts a
+    # new session; angle labels are sanitized by the session layer.
+    from core.multicam import (
+        angle_labels,
+        append_angle,
+        normalize_angle_label,
+        scan_progress_key,
+    )
+
+    angle_label = normalize_angle_label(angle)
+    with sessions_lock:
+        existing = sessions.get(session_token) if session_token else None
+    if existing is None:
+        session_token = str(uuid.uuid4())
+
     # Stream upload to storage (memory-efficient for large files)
-    r2_key = f"uploads/{uuid.uuid4().hex}.mp4"
+    r2_key = storage.raw_upload_key(session_token, angle_label)
     logging.info(f"[SCAN] Streaming upload to storage: {r2_key}")
 
     # Always stream to disk (memory optimization: remove 10MB threshold)
@@ -489,24 +505,31 @@ async def scan(
         raise
     logging.info(f"[SCAN] Saved to {local_path} ({os.path.getsize(local_path)} bytes)")
 
-    # Create session token early so scan progress can be tracked.
-    # Passing an existing session_token appends another camera angle to that
-    # session (multi-perspective flow) instead of starting a new one.
-    from core.multicam import append_angle, angle_labels, normalize_angle_label
+    # Server-side media inspection (§8): never trust client filename/mime —
+    # probe the actual bytes before detection or session creation.
+    try:
+        from core.video_io import probe_video
 
-    angle_label = normalize_angle_label(angle)
-    with sessions_lock:
-        existing = sessions.get(session_token) if session_token else None
-    if existing is None:
-        session_token = str(uuid.uuid4())
-        append_to_session = False
-    else:
-        append_to_session = True
+        _probe = probe_video(local_path)
+        logging.info(
+            f"[SCAN] Media OK: {_probe['width']}x{_probe['height']}, {_probe['duration']:.1f}s"
+        )
+    except VideoDecodeError as exc:
+        storage.delete_file(r2_key)
+        if "MediaPipe Pose backend unavailable" in exc.message:
+            return _error_response(
+                503,
+                "ENGINE_UNAVAILABLE",
+                "MediaPipe runtime is unavailable on the engine.",
+            )
+        raise
+
+    # The session was resolved before streaming (see above): an unknown token
+    # started a new session, otherwise this upload appends another angle.
+    append_to_session = existing is not None
 
     # Set up scan progress tracking, keyed per angle so concurrent scans of
     # different perspectives on one session don't overwrite each other.
-    from core.multicam import scan_progress_key
-
     progress_key = scan_progress_key(session_token, angle_label)
     with scan_progress_lock:
         scan_progress[progress_key] = {

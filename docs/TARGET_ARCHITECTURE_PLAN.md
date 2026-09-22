@@ -120,14 +120,18 @@ Phase 1-open, per-player finding trends.
 Open: per-org quotas/aging (§17), retention policy config (§30), backup
 restore testing (§31) — Phase 4 items.
 
-### Phase 4 — Storage & workers (§8–§10, §31, §34)
-1. Upload intents + signed multipart URLs direct to object storage (§8);
-   server validates mime/size/duration server-side post-upload.
-2. Bucket layout `raw/normalized/frames/clips/annotations/reports/exports`
-   with `organization/analysis/artifact/version` keys (§10).
-3. Worker container policy (non-root, RO fs, CPU/mem/disk/pids limits, no
-   shell strings — already structured) documented + enforced in Docker (§9).
-4. Backup/restore runbook with tested restore (§31).
+### Phase 4 — Storage & workers (§8–§10, §31, §34) — SHIPPED (core)
+1. Bucket layout on local disk (`storage.raw_upload_key` /
+   `result_key`): immutable `raw/{session}/{angle}/{uuid}.mp4` sources,
+   one `results/{job}.mp4` per analysis — maps 1:1 to future buckets.
+2. Server-side media inspection: ffprobe duration/dimensions/codec check
+   in scan (rejects corrupt/mislabeled uploads early); Dockerfiles already
+   non-root; compose pins `no-new-privileges`, pids/mem ceilings.
+3. Retention: `RETENTION_DAYS` (default 365) daily prune of analyses +
+   findings + chat; backup/restore runbook in `docs/BACKUP_RESTORE.md`
+   (Supabase PITR, quarterly restore test, explicit gaps).
+Open: signed-URL direct uploads + versioned buckets (needs object
+storage); per-org quotas/aging (§17); K8s/GPU (not until workload).
 
 ## Suggested order
 
