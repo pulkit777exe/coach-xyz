@@ -26,12 +26,14 @@ import {
   getMyPerformance,
   getMyAnalyses,
   getMyReports,
+  getMyObjectives,
   type MyProfile,
   type MyAttendance,
   type MySchedule,
   type MyPerformance,
   type MyAnalyses,
   type MyReports,
+  type MyObjectives,
 } from '@/lib/meApi'
 import {
   ATTENDANCE_STATUS_LABELS,
@@ -53,6 +55,7 @@ type HubData = {
   performance: MyPerformance
   analyses: MyAnalyses
   reports: MyReports
+  objectives: MyObjectives
 }
 
 export default function PlayerHub() {
@@ -80,12 +83,13 @@ export default function PlayerHub() {
       getMyPerformance(),
       getMyAnalyses(),
       getMyReports(),
+      getMyObjectives().catch(() => ({ objectives: [], linked: false })),
     ])
-      .then(([profile, attendance, schedule, performance, analyses, reports]) => {
+      .then(([profile, attendance, schedule, performance, analyses, reports, objectives]) => {
         if (cancelled) return
         setState({
           status: 'ready',
-          data: { profile, attendance, schedule, performance, analyses, reports },
+          data: { profile, attendance, schedule, performance, analyses, reports, objectives },
         })
       })
       .catch((error: unknown) => {
@@ -117,7 +121,7 @@ export default function PlayerHub() {
     )
   }
 
-  const { profile, attendance, schedule, performance, analyses, reports } = state.data
+  const { profile, attendance, schedule, performance, analyses, reports, objectives } = state.data
 
   if (!profile.student) {
     return (
@@ -174,6 +178,13 @@ export default function PlayerHub() {
         ? `Latest: ${formatDateShort(reports.reports[0].created_at)}`
         : 'No reports yet',
     },
+    {
+      label: 'Objectives',
+      value: String(objectives.objectives.filter((o) => o.status === 'active').length),
+      detail: objectives.objectives.length
+        ? `${objectives.objectives.filter((o) => o.status === 'done').length} completed`
+        : 'No objectives yet',
+    },
   ]
 
   return (
@@ -190,7 +201,7 @@ export default function PlayerHub() {
       </div>
 
       {/* KPI cards */}
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -331,6 +342,35 @@ export default function PlayerHub() {
                     {analysis.complete ? 'Done' : 'Processing'}
                   </span>
                 </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      {/* Training objectives (set by your coach) */}
+      <Section icon={<ActivityIcon className="size-4" />} title="Training Objectives">
+        {objectives.objectives.length === 0 ? (
+          <Empty>No objectives yet.</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {objectives.objectives.slice(0, 8).map((objective) => (
+              <li key={objective.id} className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{objective.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {objective.due_on ? `Due ${objective.due_on}` : 'No due date'}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs capitalize ${
+                    objective.status === 'done'
+                      ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  {objective.status}
+                </span>
               </li>
             ))}
           </ul>

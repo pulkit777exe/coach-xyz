@@ -17,6 +17,7 @@ import {
   getStudentAnalyses,
   listReports,
   getReport,
+  listObjectives,
 } from '../lib/orgData'
 import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
 import { redactWellness } from '../lib/permissions'
@@ -236,6 +237,23 @@ export default new Elysia()
     })
     set.status = 200
     return { points, linked: true }
+  })
+
+  // Own training objectives (read-only player view of the coaching loop)
+  .get('/api/me/objectives', async ({ request, set }) => {
+    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+    if (!verified) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Missing verified identity', false)
+    }
+    const { student, coachAuth0Id } = await playerScope(verified)
+    if (!student || !coachAuth0Id) {
+      set.status = 200
+      return { objectives: [], linked: false }
+    }
+    const objectives = await listObjectives(coachAuth0Id, { studentId: student.id })
+    set.status = 200
+    return { objectives, linked: true }
   })
 
   // Own analyses (analysis_history rows linked to the player's student row)

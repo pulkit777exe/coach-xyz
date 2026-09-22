@@ -108,6 +108,23 @@ export async function getMyReports(): Promise<MyReports> {
   return apiFetch<MyReports>(me('/reports'))
 }
 
+export type MyObjectives = {
+  objectives: Array<{
+    id: string
+    title: string
+    description: string | null
+    status: string
+    due_on: string | null
+    finding_id: string | null
+    created_at: string
+  }>
+  linked: boolean
+}
+
+export async function getMyObjectives(): Promise<MyObjectives> {
+  return apiFetch<MyObjectives>(me('/objectives'))
+}
+
 export async function acceptInvite(token: string): Promise<{ org_auth0_id: string; role: string }> {
   return apiFetch<{ org_auth0_id: string; role: string }>(me('/invites/accept'), {
     method: 'POST',
