@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { getOrgContext, orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
 import TeamsClient from '@/components/org/TeamsClient'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -24,15 +25,11 @@ export default async function TeamsPage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Organizations</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground">Teams</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Teams</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Organize your roster into teams for scoped coaching and trends.
-      </p>
+      <PageHeader
+        trail={['Organizations', 'Teams']}
+        title="Teams"
+        description="Organize your roster into teams for scoped coaching and trends."
+      />
 
       <div className="mt-6">
         <TeamsClient

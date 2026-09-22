@@ -41,6 +41,7 @@ import {
   type Season,
 } from '@/lib/org'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
+import EmptyState from './EmptyState'
 import type { Student } from '@/lib/org'
 
 interface TeamsClientProps {
@@ -257,7 +258,7 @@ export default function TeamsClient({
               </button>
             ))}
             {teams.length === 0 && (
-              <p className="text-sm text-muted-foreground">No teams yet — create one.</p>
+              <EmptyState title="No teams yet" description="Create your first team to scope coaching and trends." />
             )}
             <Button className="w-full mt-2" onClick={() => setCreateOpen(true)}>
               New team
@@ -361,7 +362,7 @@ export default function TeamsClient({
                     </div>
                   ))}
                   {members.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No members yet.</p>
+                    <EmptyState title="No members yet" description="Add coaches by account or players from the roster." />
                   )}
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
@@ -440,7 +441,7 @@ export default function TeamsClient({
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {matches.length === 0 && (
-                    <p className="text-sm text-muted-foreground">No matches scheduled.</p>
+                  <EmptyState title="No matches scheduled" description="Add the next fixture for this team." />
                   )}
                   {matches.map((match) => (
                     <div
