@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { retentionDays } from '../src/lib/supabaseHistory'
+import { retentionDays } from '../src/lib/analyses'
 
 function setEnv(value: string | undefined) {
   if (value === undefined) {

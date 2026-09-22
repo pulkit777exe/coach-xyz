@@ -1,7 +1,13 @@
 import { EventEmitter } from 'events'
 
 import type { Queue as BullQueue } from 'bullmq'
-import { withHistoryStore, ensureInitialized, getAnalysisByServerJobId } from './supabaseHistory'
+import {
+  withHistoryStore,
+  ensureInitialized,
+} from './historyStore'
+import {
+  getAnalysisByServerJobId,
+} from './analyses'
 
 // ── In-process pub/sub ───────────────────────────────────────────────────────
 // Lightweight fan-out so SSE endpoints get notified when a new notification is

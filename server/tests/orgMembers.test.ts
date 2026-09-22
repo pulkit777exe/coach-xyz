@@ -10,7 +10,9 @@ import {
   removeOrgMember,
 } from '../src/lib/orgMembers'
 import { verifyOrgRole } from '../src/lib/serviceGuard'
-import { upsertUser } from '../src/lib/supabaseHistory'
+import {
+  upsertUser,
+} from '../src/lib/users'
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 const TOKEN = 'test-service-token'

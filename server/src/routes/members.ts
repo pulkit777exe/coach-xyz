@@ -15,8 +15,7 @@ import {
 } from '../lib/orgMembers'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { listInvites, mintInvite, revokeInvite } from '../lib/invites'
-import { audit, listAuditLogs } from '../lib/audit'
-import { readRequestMeta } from '../lib/requestMeta'
+import { auditRoute, listAuditLogs } from '../lib/audit'
 
 // Org-member management routes. The identity (service) guard applies globally;
 // role gates are applied per route group via orgRoleGuard on dedicated (sub-)
@@ -86,20 +85,11 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Cannot invite the org owner', false)
         }
-        const meta = readRequestMeta(request)
-        void audit({
-          orgAuth0Id: auth0Id,
-          actorAuth0Id: inviterAuth0Id,
-          action: 'member.invited',
-          resourceType: 'org_member',
-          resourceId: member.id,
-          meta: {
-            email: member.member_email,
-            role: member.role,
-            direct: true,
-          },
-          clientIp: meta.clientIp,
-        })
+        auditRoute(request, auth0Id, 'member.invited', 'org_member', member.id, {
+          email: member.member_email,
+          role: member.role,
+          direct: true,
+        }, inviterAuth0Id)
         set.status = 201
         return { member }
       }),
@@ -164,15 +154,7 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Invitation not found or already used', false)
         }
-        const meta = readRequestMeta(request)
-        void audit({
-          orgAuth0Id: auth0Id,
-          actorAuth0Id: request.headers.get('x-verified-auth0-id'),
-          action: 'member.invite_revoked',
-          resourceType: 'org_invite',
-          resourceId: id,
-          clientIp: meta.clientIp,
-        })
+        auditRoute(request, auth0Id, 'member.invite_revoked', 'org_invite', id)
         set.status = 200
         return { revoked: true }
       })
@@ -225,15 +207,9 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Member not found', false)
         }
-        const meta = readRequestMeta(request)
-        void audit({
-          orgAuth0Id: auth0Id,
-          actorAuth0Id: request.headers.get('x-verified-auth0-id'),
-          action: 'member.role_changed',
-          resourceType: 'org_member',
-          resourceId: id,
-          meta: { from: target.role, to: role },
-          clientIp: meta.clientIp,
+        auditRoute(request, auth0Id, 'member.role_changed', 'org_member', id, {
+          from: target.role,
+          to: role,
         })
         set.status = 200
         return { member: updated }
@@ -268,15 +244,9 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Member not found', false)
         }
-        const meta = readRequestMeta(request)
-        void audit({
-          orgAuth0Id: auth0Id,
-          actorAuth0Id: request.headers.get('x-verified-auth0-id'),
-          action: 'member.removed',
-          resourceType: 'org_member',
-          resourceId: id,
-          meta: { email: target.member_email, role: target.role },
-          clientIp: meta.clientIp,
+        auditRoute(request, auth0Id, 'member.removed', 'org_member', id, {
+          email: target.member_email,
+          role: target.role,
         })
         set.status = 200
         return { deleted: true }

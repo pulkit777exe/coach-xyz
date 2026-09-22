@@ -1,6 +1,9 @@
 import { SQL } from 'bun'
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './supabaseHistory'
+import {
+  withHistoryStoreOrThrow as withHistoryStore,
+  ensureInitialized,
+} from './historyStore'
 
 // ── Teams ────────────────────────────────────────────────────────────────────
 // Teams scope students, analyses, and coaching permissions inside an org.

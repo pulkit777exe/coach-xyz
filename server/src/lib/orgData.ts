@@ -1,9 +1,11 @@
 import {
   withHistoryStoreOrThrow as withHistoryStore,
   ensureInitialized,
+} from './historyStore'
+import {
   ANALYSES_SELECT_COLUMNS,
-} from './supabaseHistory'
-import type { DashboardAnalysis } from './supabaseHistory'
+} from './analyses'
+import type { DashboardAnalysis } from './analyses'
 import { EVENT_STATUSES, EVENT_TYPES, REPORT_TYPES, STUDENT_STATUSES } from './orgEnums'
 import type { AttendanceStatus, ReportType } from './orgEnums'
 import { computeMetricTrends as computeTrends } from './orgValidate'

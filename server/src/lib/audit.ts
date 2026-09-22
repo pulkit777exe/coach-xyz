@@ -1,4 +1,9 @@
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './supabaseHistory'
+import {
+  withHistoryStoreOrThrow as withHistoryStore,
+  ensureInitialized,
+} from './historyStore'
+import { SERVICE_HEADERS } from './serviceGuard'
+import { readRequestMeta } from './requestMeta'
 
 // ── Audit logs (§29) ─────────────────────────────────────────────────────────
 // Append-only record of sensitive organizational actions. Writes are
@@ -90,6 +95,35 @@ export type AuditLog = {
   meta: Record<string, unknown>
   client_ip: string | null
   created_at: string
+}
+
+/**
+ * Audit a route action with request-derived context. The actor sub and
+ * client IP come from the request itself, so call sites pass only what
+ * they know: the org, the action, and the resource.
+ */
+export const auditRoute = (
+  request: Request,
+  orgAuth0Id: string,
+  action: AuditAction,
+  resourceType: string,
+  resourceId?: string | null,
+  meta?: Record<string, unknown> | null,
+  actorOverride?: string | null,
+): void => {
+  const actor =
+    actorOverride !== undefined
+      ? actorOverride
+      : request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+  void audit({
+    orgAuth0Id,
+    actorAuth0Id: actor,
+    action,
+    resourceType,
+    resourceId: resourceId ?? null,
+    meta: meta ?? null,
+    clientIp: readRequestMeta(request).clientIp,
+  })
 }
 
 export const listAuditLogs = async (orgAuth0Id: string, limit = 50): Promise<AuditLog[]> => {

@@ -53,7 +53,7 @@ import {
   type AttendanceStatus,
 } from '../lib/orgData'
 import { buildError } from '../lib/errors'
-import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
+import { serviceGuard } from '../lib/serviceGuard'
 import {
   isDate,
   isIsoDate,
@@ -68,11 +68,10 @@ import {
   getOrgTier,
   getTodayUsage,
   orgDailyAnalysisLimit,
-} from '../lib/supabaseHistory'
+} from '../lib/analyses'
 import { getTeam } from '../lib/teams'
-import { getMemberRole } from '../lib/orgMembers'
-import { listMemberTeamIds } from '../lib/teams'
-import { hasPermission, resolveStudentScope } from '../lib/permissions'
+import { resolveCaller } from '../lib/caller'
+import { hasPermission } from '../lib/permissions'
 import {
   ATTENDANCE_STATUSES,
   EVENT_STATUSES,
@@ -98,12 +97,7 @@ const studentScope = async (
   orgAuth0Id: string,
   request: Request,
 ): Promise<{ all: true } | { all: false; teamIds: string[] }> => {
-  const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-  if (verified && verified === orgAuth0Id) return { all: true }
-  const role = verified ? await getMemberRole(orgAuth0Id, verified).catch(() => null) : null
-  if (role === 'owner' || role === 'admin') return { all: true }
-  const teamIds = verified ? await listMemberTeamIds(verified).catch(() => []) : []
-  return resolveStudentScope(role, teamIds)
+  return (await resolveCaller(orgAuth0Id, request)).studentScope
 }
 
 /**
@@ -249,11 +243,9 @@ export default new Elysia()
     } else {
       // Hierarchy convenience: a coach with exactly one team creates
       // players under that team unless another is chosen.
-      const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-      const role = verified ? await getMemberRole(auth0Id, verified).catch(() => null) : null
-      if (role === 'coach' || role === 'analyst' || role === 'medical') {
-        const mine = verified ? await listMemberTeamIds(verified).catch(() => []) : []
-        if (mine.length === 1) input.team_id = mine[0]
+      const auto = await resolveCaller(auth0Id, request)
+      if (auto.role === 'coach' || auto.role === 'analyst' || auto.role === 'medical') {
+        if (auto.teamIds.length === 1) input.team_id = auto.teamIds[0]
       }
     }
 
@@ -872,11 +864,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
@@ -892,7 +881,7 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'due_on must be YYYY-MM-DD', false)
     }
-    const objective = await createObjective(auth0Id, verified, {
+    const objective = await createObjective(auth0Id, caller.verified, {
       student_id: pickId(raw.student_id),
       team_id: pickId(raw.team_id),
       finding_id: typeof raw.finding_id === 'string' ? raw.finding_id : null,
@@ -918,11 +907,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
@@ -946,11 +932,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
@@ -970,11 +953,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (role !== 'owner' && role !== 'admin') {
       set.status = 403
       return buildError('FORBIDDEN', 'Subscription details are owner/admin only', false)
@@ -1002,11 +982,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
@@ -1038,11 +1015,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid season id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
@@ -1077,11 +1051,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
@@ -1118,11 +1089,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid match id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
@@ -1158,11 +1126,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1174,7 +1139,7 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'title is required', false)
     }
-    const plan = await createTrainingPlan(auth0Id, verified, {
+    const plan = await createTrainingPlan(auth0Id, caller.verified, {
       team_id: pickId(raw.team_id),
       student_id: pickId(raw.student_id),
       title,
@@ -1193,11 +1158,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1221,11 +1183,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
@@ -1247,12 +1206,8 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    const role =
-      verified === auth0Id
-        ? 'owner'
-        : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
-    if (!hasPermission(role, 'medical.read')) {
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('medical.read')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Reading wellness data requires the medical permission', false)
     }
@@ -1267,12 +1222,9 @@ export default new Elysia()
         set.status = 400
         return buildError('INVALID_REQUEST', 'Invalid student id', false)
       }
-      const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-      const role =
-        verified === auth0Id
-          ? 'owner'
-          : await getMemberRole(auth0Id, verified ?? '').catch(() => null)
-      if (!hasPermission(role, 'player.manage')) {
+      const caller = await resolveCaller(auth0Id, request)
+      const verified = caller.verified
+      if (!caller.can('player.manage')) {
         set.status = 403
         return buildError('FORBIDDEN', 'Recording wellness data requires player.manage', false)
       }

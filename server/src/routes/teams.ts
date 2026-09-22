@@ -6,36 +6,17 @@ import {
   createTeam,
   deleteTeam,
   getTeam,
-  listMemberTeamIds,
   listTeamMembers,
   listTeams,
   removeTeamMember,
   renameTeam,
 } from '../lib/teams'
-import { getMemberRole, type OrgMemberRole } from '../lib/orgMembers'
-import { orgRoleGuard, serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
-import { canAccessTeam, hasPermission, type Permission } from '../lib/permissions'
-import { audit } from '../lib/audit'
-import { readRequestMeta } from '../lib/requestMeta'
+import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
+import { type Permission } from '../lib/permissions'
+import { auditRoute, type AuditAction } from '../lib/audit'
+import { resolveCaller, type Caller } from '../lib/caller'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * Resolve the caller's org role (owner fast-path, else membership lookup).
- * Returns null for non-members (denied downstream).
- */
-const callerRole = async (
-  orgAuth0Id: string,
-  verifiedAuth0Id: string | null,
-): Promise<OrgMemberRole | null> => {
-  if (!verifiedAuth0Id) return null
-  if (verifiedAuth0Id === orgAuth0Id) return 'owner'
-  try {
-    return await getMemberRole(orgAuth0Id, verifiedAuth0Id)
-  } catch {
-    return null
-  }
-}
 
 const forbid = (set: { status?: number | string }) => {
   set.status = 403
@@ -45,20 +26,11 @@ const forbid = (set: { status?: number | string }) => {
 const logTeamAudit = (
   request: Request,
   orgAuth0Id: string,
-  action: Parameters<typeof audit>[0]['action'],
+  action: AuditAction,
   teamId: string,
   meta?: Record<string, unknown>,
 ) => {
-  const requestMeta = readRequestMeta(request)
-  void audit({
-    orgAuth0Id,
-    actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
-    action,
-    resourceType: 'team',
-    resourceId: teamId,
-    meta,
-    clientIp: requestMeta.clientIp,
-  })
+  auditRoute(request, orgAuth0Id, action, 'team', teamId, meta)
 }
 
 /** Guard: membership + permission + (for team-scoped routes) team scope. */
@@ -68,13 +40,11 @@ const guard = async (
   set: { status?: number | string },
   permission: Permission,
   teamId?: string,
-): Promise<{ role: OrgMemberRole; teamIds: string[] } | ReturnType<typeof buildError>> => {
-  const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-  const role = await callerRole(orgAuth0Id, verified)
-  if (!role || !hasPermission(role, permission)) return forbid(set)
-  const teamIds = verified ? await listMemberTeamIds(verified).catch(() => []) : []
-  if (teamId && !canAccessTeam(role, teamIds, teamId)) return forbid(set)
-  return { role, teamIds }
+): Promise<{ caller: Caller } | ReturnType<typeof buildError>> => {
+  const caller = await resolveCaller(orgAuth0Id, request)
+  if (!caller.role || !caller.can(permission)) return forbid(set)
+  if (teamId && !caller.canAccessTeam(teamId)) return forbid(set)
+  return { caller }
 }
 
 // Team management routes. orgRoleGuard keeps every route member-scoped;
@@ -90,15 +60,14 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
         }
-        const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-        const role = await callerRole(auth0Id, verified)
-        if (!role || !hasPermission(role, 'team.read')) return forbid(set)
+        const caller = await resolveCaller(auth0Id, request)
+        if (!caller.can('team.read')) return forbid(set)
         const all = await listTeams(auth0Id)
-        if (role === 'owner' || role === 'admin') {
+        if (caller.role === 'owner' || caller.role === 'admin') {
           set.status = 200
           return { teams: all }
         }
-        const mine = new Set(verified ? await listMemberTeamIds(verified).catch(() => []) : [])
+        const mine = new Set(caller.teamIds)
         set.status = 200
         return { teams: all.filter((t) => mine.has(t.id)) }
       })
@@ -109,7 +78,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
         }
         const g = await guard(auth0Id, request, set, 'team.create')
-        if (!('role' in g)) return g
+        if (!('caller' in g)) return g
         const { name, sport } = (body ?? {}) as {
           name?: unknown
           sport?: unknown
@@ -147,7 +116,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
         }
         const g = await guard(auth0Id, request, set, 'team.read', teamId)
-        if (!('role' in g)) return g
+        if (!('caller' in g)) return g
         const team = await getTeam(auth0Id, teamId)
         if (!team) {
           set.status = 404
@@ -163,7 +132,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
         }
         const g = await guard(auth0Id, request, set, 'team.manage', teamId)
-        if (!('role' in g)) return g
+        if (!('caller' in g)) return g
         const { name } = (body ?? {}) as { name?: unknown }
         if (typeof name !== 'string' || !name.trim()) {
           set.status = 400
@@ -188,8 +157,7 @@ export default new Elysia()
         }
         // Deletion stays owner/admin-only even though coaches may rename
         // assigned teams: guard() enforces scope, this pins the role floor.
-        const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-        const role = await callerRole(auth0Id, verified)
+        const { role } = await resolveCaller(auth0Id, request)
         if (role !== 'owner' && role !== 'admin') return forbid(set)
         const removed = await deleteTeam(auth0Id, teamId)
         if (!removed) {
@@ -207,7 +175,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
         }
         const g = await guard(auth0Id, request, set, 'team.read', teamId)
-        if (!('role' in g)) return g
+        if (!('caller' in g)) return g
         if (!(await getTeam(auth0Id, teamId))) {
           set.status = 404
           return buildError('NOT_FOUND', 'Team not found', false)
@@ -222,7 +190,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
         }
         const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
-        if (!('role' in g)) return g
+        if (!('caller' in g)) return g
         if (!(await getTeam(auth0Id, teamId))) {
           set.status = 404
           return buildError('NOT_FOUND', 'Team not found', false)
@@ -277,7 +245,7 @@ export default new Elysia()
             return buildError('INVALID_REQUEST', 'Invalid team or membership id', false)
           }
           const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
-          if (!('role' in g)) return g
+          if (!('caller' in g)) return g
           const removed = await removeTeamMember(teamId, membershipId)
           if (!removed) {
             set.status = 404

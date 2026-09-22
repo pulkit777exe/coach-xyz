@@ -1,6 +1,9 @@
 import { SQL } from 'bun'
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './supabaseHistory'
+import {
+  withHistoryStoreOrThrow as withHistoryStore,
+  ensureInitialized,
+} from './historyStore'
 
 // ── Org-member role vocabulary ──────────────────────────────────────────────
 // Single source of truth for org membership roles. Mirrored on the web
@@ -38,7 +41,7 @@ export type OrgMember = {
 
 // Shared select for org_members joined with users (display name/picture).
 // Written as a SQL fragment used via db.unsafe inside a select, mirroring
-// ANALYSES_SELECT_COLUMNS in supabaseHistory.ts.
+// ANALYSES_SELECT_COLUMNS in analyses.ts.
 const MEMBER_SELECT_COLUMNS = `
   m.id,
   m.member_auth0_id,

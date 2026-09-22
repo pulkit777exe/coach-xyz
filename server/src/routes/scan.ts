@@ -12,7 +12,9 @@ import { readRequestMeta } from '../lib/requestMeta'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { checkScanLimit, checkScanProgressLimit, getIP } from '../lib/ratelimit'
 import { verifyAttributionToken } from '../lib/attribution'
-import { persistVideoConversation } from '../lib/supabaseHistory'
+import {
+  persistVideoConversation,
+} from '../lib/analyses'
 import { MAX_FILE_SIZE_BYTES } from '../types'
 
 const scanErrorStatus = (code: string): number => {

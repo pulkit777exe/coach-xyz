@@ -8,7 +8,7 @@ import {
   type ShareTokenRecord,
 } from '../src/lib/shareTokens'
 import { orgShareRoute, publicShareRoute } from '../src/routes/share'
-import type { DashboardAnalysis } from '../src/lib/supabaseHistory'
+import type { DashboardAnalysis } from '../src/lib/analyses'
 
 const TEST_SERVICE_TOKEN = 'test-service-token'
 const headersFor = (auth0Id: string) => ({

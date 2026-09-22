@@ -15,8 +15,10 @@ import {
 } from '../lib/serviceGuard'
 import { createShareTokenStore } from '../lib/shareTokens'
 import type { ShareTokenStore } from '../lib/shareTokens'
-import { getAnalysisByServerJobId } from '../lib/supabaseHistory'
-import type { DashboardAnalysis } from '../lib/supabaseHistory'
+import {
+  getAnalysisByServerJobId,
+} from '../lib/analyses'
+import type { DashboardAnalysis } from '../lib/analyses'
 
 const defaultStore = createShareTokenStore()
 

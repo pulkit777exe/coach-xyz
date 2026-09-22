@@ -3,27 +3,31 @@ import {
   upsertUser,
   getUserByAuth0Id,
   resolveAuth0Id,
+} from '../lib/users'
+import {
   getUserAnalyses,
   getUserAnalysisById,
   getUserStats,
-  getFindingsTrend,
-  getStudentFindings,
   getAnalysisStages,
-  reviewFinding,
   deleteAnalysis,
   persistAnalysisStatus,
   updateAnalysisDisplayName,
+} from '../lib/analyses'
+import {
+  getFindingsTrend,
+  getStudentFindings,
+  reviewFinding,
+} from '../lib/findings'
+import {
   saveChatMessage,
   getChatMessages,
-} from '../lib/supabaseHistory'
+} from '../lib/chatMessages'
 import { markEngineJobFailed } from '../lib/engine'
 import { getJob } from '../lib/jobs'
-import { audit } from '../lib/audit'
 import { buildError } from '../lib/errors'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
-import { getMemberRole } from '../lib/orgMembers'
-import { hasPermission } from '../lib/permissions'
-import { readRequestMeta } from '../lib/requestMeta'
+import { resolveCaller } from '../lib/caller'
+import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 
 function generateSimpleResponse(question: string, summary: Record<string, unknown> | null): string {
@@ -301,15 +305,12 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'review_state must be approved or flagged', false)
     }
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.verified) {
       set.status = 403
       return buildError('FORBIDDEN', 'Missing verified identity', false)
     }
-    const allowed =
-      verified === auth0Id ||
-      hasPermission(await getMemberRole(auth0Id, verified).catch(() => null), 'finding.review')
-    if (!allowed) {
+    if (caller.verified !== auth0Id && !caller.can('finding.review')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Finding review requires the finding.review permission', false)
     }
@@ -367,14 +368,7 @@ export default new Elysia()
         retryable: false,
       },
     })
-    void audit({
-      orgAuth0Id: auth0Id,
-      actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
-      action: 'analysis.cancelled',
-      resourceType: 'analysis',
-      resourceId: jobId,
-      clientIp: readRequestMeta(request).clientIp,
-    })
+    auditRoute(request, auth0Id, 'analysis.cancelled', 'analysis', jobId)
     set.status = 200
     return { cancelled: true }
   }) // Delete an analysis and its derived rows (retention §30).
@@ -399,15 +393,7 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Analysis not found', false)
     }
-    const meta = readRequestMeta(request)
-    void audit({
-      orgAuth0Id: auth0Id,
-      actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
-      action: 'analysis.deleted',
-      resourceType: 'analysis',
-      resourceId: jobId,
-      clientIp: meta.clientIp,
-    })
+    auditRoute(request, auth0Id, 'analysis.deleted', 'analysis', jobId)
     set.status = 200
     return { deleted: true }
   })

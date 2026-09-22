@@ -9,11 +9,12 @@ import {
   attendanceEmail,
   escapeHtml,
 } from '../lib/mailer'
-import { getUserByAuth0Id } from '../lib/supabaseHistory'
+import {
+  getUserByAuth0Id,
+} from '../lib/users'
 import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
-import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
-import { audit } from '../lib/audit'
-import { readRequestMeta } from '../lib/requestMeta'
+import { serviceGuard } from '../lib/serviceGuard'
+import { auditRoute } from '../lib/audit'
 import { checkEmailLimit } from '../lib/ratelimit'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
@@ -194,15 +195,7 @@ export default new Elysia()
         reportUrl,
       )
       const sent = await sendEmail({ to: recipient, subject, html, text })
-      void audit({
-        orgAuth0Id: auth0Id,
-        actorAuth0Id: request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
-        action: 'report.exported',
-        resourceType: 'report',
-        resourceId: report_id,
-        meta: { to: recipient },
-        clientIp: readRequestMeta(request).clientIp,
-      })
+      auditRoute(request, auth0Id, 'report.exported', 'report', report_id, { to: recipient })
       set.status = 200
       return { sent }
     } catch (err) {

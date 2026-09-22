@@ -5,11 +5,13 @@ import {
   getUserByAuth0Id,
   updateUserProfile,
   resolveAuth0Id,
+} from '../lib/users'
+import {
   persistAnalysisStart,
   checkOrgDailyQuota,
   getOrgTier,
   recordUsage,
-} from '../lib/supabaseHistory'
+} from '../lib/analyses'
 import {
   getLinkedPlayer,
   listAttendance,
@@ -27,7 +29,7 @@ import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
 import { mintAttributionToken } from '../lib/attribution'
 import { acceptInvite } from '../lib/invites'
-import { audit } from '../lib/audit'
+import { auditRoute } from '../lib/audit'
 import { enqueueAnalysis } from '../lib/queue'
 import { DEFAULT_MODEL } from '../types'
 
@@ -164,14 +166,7 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'User record not found', false)
     }
-    void audit({
-      orgAuth0Id: verified,
-      actorAuth0Id: verified,
-      action: 'settings.changed',
-      resourceType: 'user_profile',
-      resourceId: verified,
-      clientIp: readRequestMeta(request).clientIp,
-    })
+    auditRoute(request, verified, 'settings.changed', 'user_profile', verified)
     set.status = 200
     return { user }
   })
@@ -493,15 +488,9 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', result.error, false)
     }
-    const meta = readRequestMeta(request)
-    void audit({
-      orgAuth0Id: result.orgAuth0Id,
-      actorAuth0Id: verified,
-      action: 'member.invite_accepted',
-      resourceType: 'org_invite',
-      meta: { role: result.role },
-      clientIp: meta.clientIp,
-    })
+    auditRoute(request, result.orgAuth0Id, 'member.invite_accepted', 'org_invite', null, {
+      role: result.role,
+    }, verified)
     set.status = 200
     return { org_auth0_id: result.orgAuth0Id, role: result.role }
   })

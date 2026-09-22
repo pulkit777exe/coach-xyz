@@ -1,7 +1,10 @@
 import { SQL } from 'bun'
 import { createHash, randomBytes } from 'node:crypto'
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './supabaseHistory'
+import {
+  withHistoryStoreOrThrow as withHistoryStore,
+  ensureInitialized,
+} from './historyStore'
 import { inviteOrgMember, type OrgMemberInviteRole } from './orgMembers'
 
 // ── Organization invitations (§7) ───────────────────────────────────────────

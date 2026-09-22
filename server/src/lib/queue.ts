@@ -3,7 +3,13 @@ import { randomUUID } from 'crypto'
 import type { Redis } from 'ioredis'
 import { markEngineJobFailed, getEngineJobStatus } from './engine'
 import { saveJob, getJob } from './jobs'
-import { shutdownHistoryStore, persistAnalysisStatus, pruneRetention } from './supabaseHistory'
+import {
+  shutdownHistoryStore,
+} from './historyStore'
+import {
+  persistAnalysisStatus,
+  pruneRetention,
+} from './analyses'
 import { wrapEngineError, isQueueRetryable, isCoachAIError } from './errors'
 import { analyzeVideo } from './engine'
 import { DEFAULT_MODEL } from '../types'

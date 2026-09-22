@@ -11,7 +11,7 @@ import {
   checkOrgDailyQuota,
   getOrgTier,
   recordUsage,
-} from '../lib/supabaseHistory'
+} from '../lib/analyses'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
 

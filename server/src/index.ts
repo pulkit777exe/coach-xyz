@@ -21,7 +21,10 @@ import notificationsRoute from './routes/notifications'
 import aiReportsRoute from './routes/aiReports'
 import shareRoute from './routes/share'
 import { healthRoute } from './routes/health'
-import { historyStoreEnabled, initializeHistoryStore } from './lib/supabaseHistory'
+import {
+  historyStoreEnabled,
+  initializeHistoryStore,
+} from './lib/historyStore'
 import { buildError, isCoachAIError } from './lib/errors'
 import { orgRoleGuard } from './lib/serviceGuard'
 import { MAX_FILE_SIZE_BYTES } from './types'

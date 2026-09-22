@@ -1,6 +1,6 @@
 // ── Org vocabulary (single source of truth, server side) ─────────────────────
 // Types are derived from the arrays below; the schema CHECK constraints
-// (supabaseHistory.ts), route validation (org.ts) and report titles
+// (historyStore.ts), route validation (org.ts) and report titles
 // (orgValidate.ts) all import from here so a new value is added in one place.
 // NOTE: values AND order must match web-next/lib/org.ts — pinned by the
 // org *Contract tests on both sides.
