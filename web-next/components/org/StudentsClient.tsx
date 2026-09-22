@@ -28,6 +28,13 @@ import {
 } from "@/components/9ui/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/9ui/ui/avatar"
 import { Input } from "@/components/9ui/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/9ui/ui/select"
 import { Spinner } from "./Spinner"
 import StudentFormDialog from "./StudentFormDialog"
 import InvitePlayersDialog from "./InvitePlayersDialog"
@@ -321,15 +328,18 @@ export default function StudentsClient({
   auth0Id,
   initialStudents,
   sports,
+  teams,
 }: {
   auth0Id: string
   initialStudents: Student[]
   sports: string[]
+  teams: { id: string; name: string }[]
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
   const [search, setSearch] = useState("")
   const [sport, setSport] = useState("")
   const [status, setStatus] = useState("")
+  const [teamId, setTeamId] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [deleting, setDeleting] = useState<Student | null>(null)
@@ -346,9 +356,10 @@ export default function StudentsClient({
       if (q && !`${s.full_name} ${s.email ?? ""} ${s.sport ?? ""}`.toLowerCase().includes(q)) return false
       if (sport && s.sport !== sport) return false
       if (status && s.status !== status) return false
+      if (teamId && (s.team_id ?? "") !== teamId) return false
       return true
     })
-  }, [students, search, sport, status])
+  }, [students, search, sport, status, teamId])
 
   const selectedIds = filtered.filter((s) => selected.has(s.id)).map((s) => s.id)
   const allFilteredSelected = filtered.length > 0 && selectedIds.length === filtered.length
@@ -490,30 +501,57 @@ export default function StudentsClient({
               className="pl-9"
             />
           </div>
-          <select
+          <Select
+            items={{ "": "All sports", ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
             value={sport}
-            onChange={(e) => setSport(e.target.value)}
-            className="bg-input text-foreground border-input focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
+            onValueChange={(v) => setSport(typeof v === "string" ? v : "")}
           >
-            <option value="">All sports</option>
-            {sportsForForm.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          <select
+            <SelectTrigger aria-label="Filter by sport" className="w-36">
+              <SelectValue placeholder="All sports" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All sports</SelectItem>
+              {sportsForForm.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            items={{ "": "All statuses", ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])) }}
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            className="bg-input text-foreground border-input focus-visible:ring-ring/50 focus-visible:border-ring h-9 rounded-md border px-3 text-sm outline-none focus-visible:ring-[3px]"
+            onValueChange={(v) => setStatus(typeof v === "string" ? v : "")}
           >
-            <option value="">All statuses</option>
-            {STUDENT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STUDENT_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Filter by status" className="w-36">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All statuses</SelectItem>
+              {STUDENT_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STUDENT_STATUS_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            items={{ "": "All teams", ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
+            value={teamId}
+            onValueChange={(v) => setTeamId(typeof v === "string" ? v : "")}
+          >
+            <SelectTrigger aria-label="Filter by team" className="w-36">
+              <SelectValue placeholder="All teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All teams</SelectItem>
+              {teams.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center gap-2">
@@ -607,6 +645,9 @@ export default function StudentsClient({
                   Sport
                 </th>
                 <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                  Team
+                </th>
+                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
                   Position
                 </th>
                 <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
@@ -654,6 +695,18 @@ export default function StudentsClient({
                       <span className="text-muted-foreground">—</span>
                     )}
                     {s.jersey_number ? <span className="text-muted-foreground ml-1 text-xs">#{s.jersey_number}</span> : null}
+                  </td>
+                  <td className="hidden px-4 py-3 md:table-cell">
+                    {(() => {
+                      const team = teams.find((t) => t.id === s.team_id)
+                      return team ? (
+                        <Badge variant="outline" className="border-border text-muted-foreground">
+                          {team.name}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )
+                    })()}
                   </td>
                   <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
                     {s.position || "—"}
@@ -717,6 +770,7 @@ export default function StudentsClient({
         onOpenChange={setDialogOpen}
         student={editingStudent}
         sports={sports}
+        teams={teams}
         onCreated={onCreated}
         onUpdated={onUpdated}
       />

@@ -75,3 +75,58 @@ export const orgRemoveMember = async (
     method: "DELETE",
   });
 };
+
+export type OrgInvite = {
+  id: string;
+  org_auth0_id: string;
+  email: string;
+  role: OrgMemberInviteRole;
+  created_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export const orgInvites = async (auth0Id: string): Promise<{ invites: OrgInvite[] }> => {
+  return apiFetch<{ invites: OrgInvite[] }>(org(auth0Id, "/invites"));
+};
+
+export const orgMintInvite = async (
+  auth0Id: string,
+  input: { email: string; role: OrgMemberInviteRole },
+): Promise<{ invite: OrgInvite; token: string }> => {
+  return apiFetch<{ invite: OrgInvite; token: string }>(org(auth0Id, "/invites"), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+};
+
+export const orgRevokeInvite = async (
+  auth0Id: string,
+  id: string,
+): Promise<{ revoked: boolean }> => {
+  return apiFetch<{ revoked: boolean }>(org(auth0Id, `/invites/${encodeURIComponent(id)}/revoke`), {
+    method: "POST",
+  });
+};
+
+export type AuditLog = {
+  id: string;
+  org_auth0_id: string;
+  actor_auth0_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  result: string | null;
+  meta: Record<string, unknown>;
+  client_ip: string | null;
+  created_at: string;
+};
+
+export const orgAuditLogs = async (
+  auth0Id: string,
+  limit = 50,
+): Promise<{ logs: AuditLog[] }> => {
+  return apiFetch<{ logs: AuditLog[] }>(org(auth0Id, `/audit?limit=${limit}`));
+};

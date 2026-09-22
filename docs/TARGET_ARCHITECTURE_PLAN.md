@@ -82,8 +82,9 @@ Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
    read-only in results; chat prompts cite finding ids + timestamps (§25).
 4. `GET /api/auth/user/:auth0Id/findings/trends` — per-day counts by
    category with needs-review split (§26 precursor).
-Open: review actions (approve/flag), finding→training-objective link,
-per-player trend views (deferred to Phase 2 teams).
+Open: finding→training-objective link (§26 loop), per-player trend views
+now served by team/student filters on the trends endpoint (UI on team
+pages; student-profile trends still open).
 
 ### Phase 2 — Org hardening (§3, §4, §7, §29, §5) — SHIPPED (core)
 1. `teams` + `team_memberships` tables; `students.team_id` with cross-org
@@ -102,8 +103,16 @@ per-player trend views (deferred to Phase 2 teams).
    summaries unless the caller is the owning account or holds the medical
    role (owner includes accountability); `maySeeMedical`/`redactWellness`
    tested.
-Open: teams UI (assignment/filter screens), finding review actions still
-Phase 1-open, per-player finding trends.
+Hierarchy (§3: owner → coaches/medical → players): `resolveStudentScope`
+gives owners/admins the full roster and staff only their teams' students
+(list + detail-404, cross-team assignment blocked, single-team coaches
+auto-assign on create).
+Management UI (9ui): members page (staff + token invites with one-shot
+links), teams page (CRUD, membership, per-team finding trends), audit page
+(action filter), student team assignment + filter + column, `/invite`
+accept flow, finding approve/flag in chat, needs-review badge, working
+cancel/delete, per-org daily analysis quota (`ORG_DAILY_ANALYSIS_LIMIT`).
+Open: finding→training-objective link, student-profile trend views.
 
 ### Phase 3 — Pipeline durability (§11–§18, §30) — SHIPPED (core)
 1. Stage resume (`_committed_summary`): retries reuse a committed summary

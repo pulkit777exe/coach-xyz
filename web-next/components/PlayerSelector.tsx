@@ -4,6 +4,13 @@ import { useRef, useState } from 'react'
 import Image from 'next/image'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/9ui/ui/select'
 import type { Player } from '@/types'
 
 interface PlayerSelectorProps {
@@ -194,19 +201,26 @@ export default function PlayerSelector({
               Film the same drill from a second perspective (e.g. side + front) for a more complete read.
             </p>
             <div className="flex gap-2">
-              <label className="sr-only" htmlFor="angle-label">Camera angle label</label>
-              <select
-                id="angle-label"
+              <Select
+                items={Object.fromEntries(ANGLE_SUGGESTIONS.map((a) => [a, a]))}
                 value={ANGLE_SUGGESTIONS.includes(newAngle) ? newAngle : nextSuggestion}
-                onChange={(e) => setNewAngle(e.target.value)}
-                className="h-10 flex-1 rounded-xl border border-border bg-muted px-3 text-sm text-foreground capitalize focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                onValueChange={(value) => {
+                  if (typeof value === 'string') setNewAngle(value)
+                }}
               >
-                {ANGLE_SUGGESTIONS.map((a) => (
-                  <option key={a} value={a} disabled={existingAngles.has(a)}>
-                    {a}{existingAngles.has(a) ? ' (added)' : ''}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Camera angle label" className="flex-1 capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANGLE_SUGGESTIONS.map((a) => (
+                    <SelectItem key={a} value={a} disabled={existingAngles.has(a)}>
+                      <span className="capitalize">
+                        {a}{existingAngles.has(a) ? ' (added)' : ''}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 className="h-10 rounded-xl font-semibold"

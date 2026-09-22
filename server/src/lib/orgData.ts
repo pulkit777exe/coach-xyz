@@ -2,145 +2,157 @@ import {
   withHistoryStoreOrThrow as withHistoryStore,
   ensureInitialized,
   ANALYSES_SELECT_COLUMNS,
-} from "./supabaseHistory"
-import type { DashboardAnalysis } from "./supabaseHistory"
+} from "./supabaseHistory";
+import type { DashboardAnalysis } from "./supabaseHistory";
 import {
   EVENT_STATUSES,
   EVENT_TYPES,
   REPORT_TYPES,
   STUDENT_STATUSES,
-} from "./orgEnums"
-import type { AttendanceStatus, ReportType } from "./orgEnums"
-import { computeMetricTrends as computeTrends } from "./orgValidate"
-import type { MetricTrend } from "./orgValidate"
+} from "./orgEnums";
+import type { AttendanceStatus, ReportType } from "./orgEnums";
+import { computeMetricTrends as computeTrends } from "./orgValidate";
+import type { MetricTrend } from "./orgValidate";
 export type {
   AttendanceStatus,
   EventStatus,
   EventType,
   ReportType,
   StudentStatus,
-} from "./orgEnums"
-export { computeMetricTrends } from "./orgValidate"
-export type { MetricTrend, TrendPoint } from "./orgValidate"
+} from "./orgEnums";
+export { computeMetricTrends } from "./orgValidate";
+export type { MetricTrend, TrendPoint } from "./orgValidate";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type Student = {
-  id: string
-  auth0_id: string
-  full_name: string
-  email: string | null
-  phone: string | null
-  sport: string | null
-  position: string | null
-  jersey_number: number | null
-  date_of_birth: string | null
-  gender: string | null
-  guardian_name: string | null
-  guardian_phone: string | null
-  notes: string | null
-  status: (typeof STUDENT_STATUSES)[number]
-  joined_on: string | null
-  account_auth0_id: string | null
-  team_id: string | null
-  created_at: string
-  updated_at: string
-}
+  id: string;
+  auth0_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  sport: string | null;
+  position: string | null;
+  jersey_number: number | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+  notes: string | null;
+  status: (typeof STUDENT_STATUSES)[number];
+  joined_on: string | null;
+  account_auth0_id: string | null;
+  team_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type AttendanceRecord = {
-  id: string
-  auth0_id: string
-  student_id: string
-  session_date: string
-  status: AttendanceStatus
-  note: string | null
-  created_at: string
-  updated_at: string
-}
+  id: string;
+  auth0_id: string;
+  student_id: string;
+  session_date: string;
+  status: AttendanceStatus;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type AttendanceWithStudent = AttendanceRecord & {
-  full_name: string | null
-  sport: string | null
-}
+  full_name: string | null;
+  sport: string | null;
+};
 
 export type ScheduleEvent = {
-  id: string
-  auth0_id: string
-  title: string
-  event_type: (typeof EVENT_TYPES)[number]
-  starts_at: string
-  ends_at: string | null
-  location: string | null
-  description: string | null
-  status: (typeof EVENT_STATUSES)[number]
-  created_at: string
-  updated_at: string
-}
+  id: string;
+  auth0_id: string;
+  title: string;
+  event_type: (typeof EVENT_TYPES)[number];
+  starts_at: string;
+  ends_at: string | null;
+  location: string | null;
+  description: string | null;
+  status: (typeof EVENT_STATUSES)[number];
+  created_at: string;
+  updated_at: string;
+};
 
 export type ReportRecord = {
-  id: string
-  auth0_id: string
-  student_id: string | null
-  report_type: (typeof REPORT_TYPES)[number]
-  title: string
-  period_start: string | null
-  period_end: string | null
-  content_json: Record<string, unknown>
-  created_at: string
-  updated_at: string
-}
+  id: string;
+  auth0_id: string;
+  student_id: string | null;
+  report_type: (typeof REPORT_TYPES)[number];
+  title: string;
+  period_start: string | null;
+  period_end: string | null;
+  content_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
 
 export type PerformanceMetric = {
-  id: string
-  auth0_id: string
-  student_id: string
-  metric_key: string
-  metric_value: number
-  unit: string | null
-  source_analysis_id: string | null
-  measured_at: string
-  created_at: string
-}
+  id: string;
+  auth0_id: string;
+  student_id: string;
+  metric_key: string;
+  metric_value: number;
+  unit: string | null;
+  source_analysis_id: string | null;
+  measured_at: string;
+  created_at: string;
+};
 
 export type AttendanceSummary = {
-  total_records: number
-  present: number
-  absent: number
-  late: number
-  excused: number
-  attendance_rate: number | null
-}
+  total_records: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendance_rate: number | null;
+};
 
 export type OrgOverview = {
-  student_count: number
-  active_students: number
-  sessions_this_month: number
-  upcoming_events: number
-  analyses_linked: number
-  avg_attendance_rate: number | null
-}
+  student_count: number;
+  active_students: number;
+  sessions_this_month: number;
+  upcoming_events: number;
+  analyses_linked: number;
+  avg_attendance_rate: number | null;
+};
 
 export type PerformanceSeriesPoint = {
-  id: string | null
-  measured_at: string
-  metric_key: string
-  metric_value: number
-  unit: string | null
-  source: "analysis" | "manual"
-  source_analysis_id: string | null
-}
+  id: string | null;
+  measured_at: string;
+  metric_key: string;
+  metric_value: number;
+  unit: string | null;
+  source: "analysis" | "manual";
+  source_analysis_id: string | null;
+};
 
 // ── Students ─────────────────────────────────────────────────────────────────
 
 export const listStudents = async (
   auth0Id: string,
-  opts: { search?: string; sport?: string; status?: string; teamId?: string } = {},
+  opts: {
+    search?: string;
+    sport?: string;
+    status?: string;
+    teamId?: string;
+    teamIds?: string[];
+  } = {},
 ): Promise<Student[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const search = opts.search?.trim() ?? ""
-      const teamId = opts.teamId?.trim() ?? ""
+      await ensureInitialized();
+      const search = opts.search?.trim() ?? "";
+      const teamId = opts.teamId?.trim() ?? "";
+      // Scope filter (coach hierarchy): when teamIds is present, only
+      // students on those teams are visible — even unassigned ones hide.
+      const scopeIds = (opts.teamIds ?? []).filter(
+        (t) => typeof t === "string" && t.length > 0,
+      );
+      const scoped = opts.teamIds !== undefined;
       const rows = await db<Student[]>`
         select *
         from students
@@ -150,27 +162,31 @@ export const listStudents = async (
           and (${opts.sport ?? ""} = '' or sport = ${opts.sport ?? null})
           and (${opts.status ?? ""} = '' or status = ${opts.status ?? null})
           and (${teamId} = '' or team_id = ${teamId}::uuid)
+          and (not ${scoped} or team_id = any(${scopeIds}::uuid[]))
         order by full_name asc;
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
-export const getStudent = async (auth0Id: string, id: string): Promise<Student | null> => {
+export const getStudent = async (
+  auth0Id: string,
+  id: string,
+): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<Student[]>`
       select * from students where auth0_id = ${auth0Id} and id = ${id} limit 1;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
 export type LinkedPlayer = {
-  student: Student
-  coachAuth0Id: string
-}
+  student: Student;
+  coachAuth0Id: string;
+};
 
 /**
  * Resolves the student a player account is linked to (via their Auth0 id).
@@ -181,14 +197,14 @@ export const getLinkedPlayer = async (
   accountAuth0Id: string,
 ): Promise<LinkedPlayer | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<Student[]>`
       select * from students where account_auth0_id = ${accountAuth0Id} limit 1;
-    `
-    if (!rows?.[0]) return null
-    return { student: rows[0], coachAuth0Id: rows[0].auth0_id }
-  })
-}
+    `;
+    if (!rows?.[0]) return null;
+    return { student: rows[0], coachAuth0Id: rows[0].auth0_id };
+  });
+};
 
 const studentInsertCols = {
   full_name: true,
@@ -205,30 +221,34 @@ const studentInsertCols = {
   status: true,
   joined_on: true,
   team_id: true,
-} as const
+} as const;
 
-export type StudentInput = Record<string, unknown>
+export type StudentInput = Record<string, unknown>;
 
 export const createStudent = async (
   auth0Id: string,
   input: StudentInput,
 ): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const cols = Object.keys(studentInsertCols).filter(
-      (k) => k in input && input[k] !== undefined && input[k] !== null && input[k] !== "",
-    )
-    const placeholders = ["$1", ...cols.map((_, i) => `$${i + 2}`)].join(", ")
+      (k) =>
+        k in input &&
+        input[k] !== undefined &&
+        input[k] !== null &&
+        input[k] !== "",
+    );
+    const placeholders = ["$1", ...cols.map((_, i) => `$${i + 2}`)].join(", ");
     const sql = `
       insert into students (auth0_id, ${cols.join(", ")})
       values (${placeholders})
       returning *;
-    `
-    const values = cols.map((k) => input[k])
-    const rows = await db.unsafe<Student[]>(sql, [auth0Id, ...values])
-    return rows[0] ?? null
-  })
-}
+    `;
+    const values = cols.map((k) => input[k]);
+    const rows = await db.unsafe<Student[]>(sql, [auth0Id, ...values]);
+    return rows[0] ?? null;
+  });
+};
 
 export const updateStudent = async (
   auth0Id: string,
@@ -236,57 +256,60 @@ export const updateStudent = async (
   input: StudentInput,
 ): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const cols = Object.keys(studentInsertCols).filter((k) => k in input)
+    await ensureInitialized();
+    const cols = Object.keys(studentInsertCols).filter((k) => k in input);
     const colCasts = {
       jersey_number: "::integer",
       date_of_birth: "::date",
       joined_on: "::date",
       team_id: "::uuid",
-    } as Record<string, string>
+    } as Record<string, string>;
     const setClause =
       cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? ""}`).join(", ") +
-      (cols.length ? ", " : "")
+      (cols.length ? ", " : "");
     const sql = `
       update students set
         ${setClause} updated_at = now()
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
-    `
+    `;
     const values = cols.map((k) => {
-      const v = input[k]
-      if (v === undefined || v === null) return null
-      return typeof v === "number" ? v : String(v)
-    })
-    const rows = await db.unsafe<Student[]>(sql, [...values, auth0Id, id])
-    return rows[0] ?? null
-  })
-}
+      const v = input[k];
+      if (v === undefined || v === null) return null;
+      return typeof v === "number" ? v : String(v);
+    });
+    const rows = await db.unsafe<Student[]>(sql, [...values, auth0Id, id]);
+    return rows[0] ?? null;
+  });
+};
 
-export const deleteStudent = async (auth0Id: string, id: string): Promise<boolean> => {
+export const deleteStudent = async (
+  auth0Id: string,
+  id: string,
+): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<{ id: string }[]>`
       delete from students where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+    `;
+    return rows?.[0] ? true : false;
+  });
+  return res ?? false;
+};
 
 export const listStudentSports = async (auth0Id: string): Promise<string[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<{ sport: string | null }[]>`
         select distinct sport from students
         where auth0_id = ${auth0Id} and sport is not null
         order by sport asc;
-      `
-      return (rows ?? []).map((r) => r.sport as string)
+      `;
+      return (rows ?? []).map((r) => r.sport as string);
     })) ?? []
-  )
-}
+  );
+};
 
 // ── Attendance ───────────────────────────────────────────────────────────────
 
@@ -296,7 +319,7 @@ export const listAttendance = async (
 ): Promise<AttendanceWithStudent[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<AttendanceWithStudent[]>`
         select a.*, s.full_name, s.sport
         from attendance a
@@ -306,11 +329,11 @@ export const listAttendance = async (
           and (${opts.to ?? null}::date is null or a.session_date <= ${opts.to ?? null}::date)
           and (${opts.studentId ?? null}::uuid is null or a.student_id = ${opts.studentId ?? null}::uuid)
         order by a.session_date desc, s.full_name asc;
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
 export const upsertAttendance = async (
   auth0Id: string,
@@ -320,7 +343,7 @@ export const upsertAttendance = async (
   note?: string | null,
 ): Promise<AttendanceRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<AttendanceRecord[]>`
       insert into attendance (auth0_id, student_id, session_date, status, note)
       values (${auth0Id}, ${studentId}, ${sessionDate}::date, ${status}, ${note || null})
@@ -329,22 +352,33 @@ export const upsertAttendance = async (
         note = excluded.note,
         updated_at = now()
       returning *;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
 export const setAttendanceBatch = async (
   auth0Id: string,
-  entries: { studentId: string; sessionDate: string; status: AttendanceStatus; note?: string | null }[],
+  entries: {
+    studentId: string;
+    sessionDate: string;
+    status: AttendanceStatus;
+    note?: string | null;
+  }[],
 ): Promise<AttendanceRecord[]> => {
-  const results: AttendanceRecord[] = []
+  const results: AttendanceRecord[] = [];
   for (const entry of entries) {
-    const record = await upsertAttendance(auth0Id, entry.studentId, entry.sessionDate, entry.status, entry.note)
-    if (record) results.push(record)
+    const record = await upsertAttendance(
+      auth0Id,
+      entry.studentId,
+      entry.sessionDate,
+      entry.status,
+      entry.note,
+    );
+    if (record) results.push(record);
   }
-  return results
-}
+  return results;
+};
 
 export const deleteAttendance = async (
   auth0Id: string,
@@ -352,16 +386,16 @@ export const deleteAttendance = async (
   sessionDate: string,
 ): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<{ id: string }[]>`
       delete from attendance
       where auth0_id = ${auth0Id} and student_id = ${studentId} and session_date = ${sessionDate}::date
       returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+    `;
+    return rows?.[0] ? true : false;
+  });
+  return res ?? false;
+};
 
 export const attendanceSummary = async (
   auth0Id: string,
@@ -369,7 +403,7 @@ export const attendanceSummary = async (
 ): Promise<AttendanceSummary> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<AttendanceSummary[]>`
         select
           count(*)::int as total_records,
@@ -385,7 +419,7 @@ export const attendanceSummary = async (
           and (${opts.from ?? null}::date is null or session_date >= ${opts.from ?? null}::date)
           and (${opts.to ?? null}::date is null or session_date <= ${opts.to ?? null}::date)
           and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid);
-      `
+      `;
       return (
         rows?.[0] ?? {
           total_records: 0,
@@ -395,7 +429,7 @@ export const attendanceSummary = async (
           excused: 0,
           attendance_rate: null,
         }
-      )
+      );
     })) ?? {
       total_records: 0,
       present: 0,
@@ -404,8 +438,8 @@ export const attendanceSummary = async (
       excused: 0,
       attendance_rate: null,
     }
-  )
-}
+  );
+};
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
 
@@ -415,18 +449,18 @@ export const listSchedule = async (
 ): Promise<ScheduleEvent[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<ScheduleEvent[]>`
         select * from schedule_events
         where auth0_id = ${auth0Id}
           and (${opts.from ?? null}::timestamptz is null or starts_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or starts_at <= ${opts.to ?? null}::timestamptz)
         order by starts_at asc;
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
 const scheduleInsertCols = {
   title: true,
@@ -436,29 +470,36 @@ const scheduleInsertCols = {
   location: true,
   description: true,
   status: true,
-} as const
+} as const;
 
-export type ScheduleInput = Record<string, unknown>
+export type ScheduleInput = Record<string, unknown>;
 
 export const createScheduleEvent = async (
   auth0Id: string,
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const cols = Object.keys(scheduleInsertCols).filter(
-      (k) => k in input && input[k] !== undefined && input[k] !== null && input[k] !== "",
-    )
-    const placeholders = ["$1", ...cols.map((_, i) => `$${i + 2}`)].join(", ")
+      (k) =>
+        k in input &&
+        input[k] !== undefined &&
+        input[k] !== null &&
+        input[k] !== "",
+    );
+    const placeholders = ["$1", ...cols.map((_, i) => `$${i + 2}`)].join(", ");
     const sql = `
       insert into schedule_events (auth0_id, ${cols.join(", ")})
       values (${placeholders})
       returning *;
-    `
-    const rows = await db.unsafe<ScheduleEvent[]>(sql, [auth0Id, ...cols.map((k) => input[k])])
-    return rows[0] ?? null
-  })
-}
+    `;
+    const rows = await db.unsafe<ScheduleEvent[]>(sql, [
+      auth0Id,
+      ...cols.map((k) => input[k]),
+    ]);
+    return rows[0] ?? null;
+  });
+};
 
 export const updateScheduleEvent = async (
   auth0Id: string,
@@ -466,37 +507,44 @@ export const updateScheduleEvent = async (
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const cols = Object.keys(scheduleInsertCols).filter((k) => k in input)
+    await ensureInitialized();
+    const cols = Object.keys(scheduleInsertCols).filter((k) => k in input);
     const setClause =
       cols.map((k, i) => `${k} = $${i + 1}::text`).join(", ") +
-      (cols.length ? ", " : "")
+      (cols.length ? ", " : "");
     const sql = `
       update schedule_events set
         ${setClause} updated_at = now()
       where auth0_id = $${cols.length + 1} and id = $${cols.length + 2}
       returning *;
-    `
+    `;
     const values = cols.map((k) => {
-      const v = input[k]
-      if (v === undefined || v === null) return null
-      return String(v)
-    })
-    const rows = await db.unsafe<ScheduleEvent[]>(sql, [...values, auth0Id, id])
-    return rows[0] ?? null
-  })
-}
+      const v = input[k];
+      if (v === undefined || v === null) return null;
+      return String(v);
+    });
+    const rows = await db.unsafe<ScheduleEvent[]>(sql, [
+      ...values,
+      auth0Id,
+      id,
+    ]);
+    return rows[0] ?? null;
+  });
+};
 
-export const deleteScheduleEvent = async (auth0Id: string, id: string): Promise<boolean> => {
+export const deleteScheduleEvent = async (
+  auth0Id: string,
+  id: string,
+): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<{ id: string }[]>`
       delete from schedule_events where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+    `;
+    return rows?.[0] ? true : false;
+  });
+  return res ?? false;
+};
 
 // ── Reports ──────────────────────────────────────────────────────────────────
 
@@ -507,7 +555,7 @@ export const getStudentAnalyses = async (
 ): Promise<DashboardAnalysis[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<DashboardAnalysis[]>`
         select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
@@ -515,20 +563,20 @@ export const getStudentAnalyses = async (
         where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}
         order by a.requested_at desc
         limit ${limit};
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
 export type ReportInput = {
-  student_id?: string | null
-  report_type: ReportType
-  title: string
-  period_start?: string | null
-  period_end?: string | null
-  content_json: Record<string, unknown>
-}
+  student_id?: string | null;
+  report_type: ReportType;
+  title: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  content_json: Record<string, unknown>;
+};
 
 export const listReports = async (
   auth0Id: string,
@@ -536,7 +584,7 @@ export const listReports = async (
 ): Promise<Array<ReportRecord & { full_name: string | null }>> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
         select r.*, s.full_name
         from reports r
@@ -544,35 +592,35 @@ export const listReports = async (
         where r.auth0_id = ${auth0Id}
           and (${opts.studentId ?? null}::uuid is null or r.student_id = ${opts.studentId ?? null}::uuid)
         order by r.created_at desc;
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
 export const getReport = async (
   auth0Id: string,
   id: string,
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       select r.*, s.full_name
       from reports r
       left join students s on s.id = r.student_id
       where r.auth0_id = ${auth0Id} and r.id = ${id}
       limit 1;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
 export const createReportRecord = async (
   auth0Id: string,
   input: ReportInput,
 ): Promise<ReportRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<ReportRecord[]>`
       insert into reports (
         auth0_id, student_id, report_type, title, period_start, period_end, content_json
@@ -586,21 +634,24 @@ export const createReportRecord = async (
         ${JSON.stringify(input.content_json)}::jsonb
       )
       returning *;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
-export const deleteReport = async (auth0Id: string, id: string): Promise<boolean> => {
+export const deleteReport = async (
+  auth0Id: string,
+  id: string,
+): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<{ id: string }[]>`
       delete from reports where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+    `;
+    return rows?.[0] ? true : false;
+  });
+  return res ?? false;
+};
 
 export const listRecentAnalysisScores = async (
   auth0Id: string,
@@ -608,7 +659,7 @@ export const listRecentAnalysisScores = async (
 ): Promise<DashboardAnalysis[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<DashboardAnalysis[]>`
         select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
@@ -619,42 +670,46 @@ export const listRecentAnalysisScores = async (
           and (a.summary_json->>'form_score') is not null
         order by a.requested_at desc
         limit ${limit};
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
-function buildPeriodLabel(
-  opts: { reportType?: ReportType | null; from?: string | null; to?: string | null },
-): string {
-  const { reportType, from, to } = opts
+function buildPeriodLabel(opts: {
+  reportType?: ReportType | null;
+  from?: string | null;
+  to?: string | null;
+}): string {
+  const { reportType, from, to } = opts;
   const fmt = (iso: string) =>
     new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
-    })
+    });
   if (reportType === "monthly") {
-    const anchor = from ? new Date(`${from.slice(0, 10)}T00:00:00`) : new Date()
-    return `Month of ${anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`
+    const anchor = from
+      ? new Date(`${from.slice(0, 10)}T00:00:00`)
+      : new Date();
+    return `Month of ${anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`;
   }
-  if (from && to) return `from ${fmt(from)} to ${fmt(to)}`
-  if (from) return `since ${fmt(from)}`
-  if (to) return `through ${fmt(to)}`
-  return "All time"
+  if (from && to) return `from ${fmt(from)} to ${fmt(to)}`;
+  if (from) return `since ${fmt(from)}`;
+  if (to) return `through ${fmt(to)}`;
+  return "All time";
 }
 
 export const buildReportContent = async (
   auth0Id: string,
   opts: {
-    student_id?: string | null
-    from?: string | null
-    to?: string | null
-    report_type?: ReportType | null
+    student_id?: string | null;
+    from?: string | null;
+    to?: string | null;
+    report_type?: ReportType | null;
   } = {},
 ): Promise<Record<string, unknown>> => {
-  const { student_id, from, to, report_type } = opts
+  const { student_id, from, to, report_type } = opts;
   const [attendance, series, analyses] = await Promise.all([
     attendanceSummary(auth0Id, {
       from: from ?? undefined,
@@ -662,26 +717,36 @@ export const buildReportContent = async (
       studentId: student_id ?? undefined,
     }),
     student_id
-      ? getStudentPerformanceSeries(auth0Id, student_id, { from: from ?? undefined, to: to ?? undefined })
+      ? getStudentPerformanceSeries(auth0Id, student_id, {
+          from: from ?? undefined,
+          to: to ?? undefined,
+        })
       : Promise.resolve([]),
     student_id
       ? getStudentAnalyses(auth0Id, student_id, 20)
       : listRecentAnalysisScores(auth0Id, 20),
-  ])
+  ]);
 
-  const student = student_id ? await getStudent(auth0Id, student_id) : null
+  const student = student_id ? await getStudent(auth0Id, student_id) : null;
 
-  const formScores = series.filter((s) => s.metric_key === "form_score")
+  const formScores = series.filter((s) => s.metric_key === "form_score");
   const formScoreAvg =
     formScores.length > 0
-      ? Math.round((formScores.reduce((acc, s) => acc + s.metric_value, 0) / formScores.length) * 10) / 10
-      : null
-  const formScoreLatest = formScores.length > 0 ? formScores[formScores.length - 1].metric_value : null
+      ? Math.round(
+          (formScores.reduce((acc, s) => acc + s.metric_value, 0) /
+            formScores.length) *
+            10,
+        ) / 10
+      : null;
+  const formScoreLatest =
+    formScores.length > 0
+      ? formScores[formScores.length - 1].metric_value
+      : null;
 
   const orgBlock = student_id
     ? null
     : await (async () => {
-        const o = await getOrgOverview(auth0Id)
+        const o = await getOrgOverview(auth0Id);
         return {
           student_count: o.student_count,
           active_students: o.active_students,
@@ -689,8 +754,8 @@ export const buildReportContent = async (
           upcoming_events: o.upcoming_events,
           analyses_linked: o.analyses_linked,
           avg_attendance_rate: o.avg_attendance_rate,
-        }
-      })()
+        };
+      })();
 
   const attendanceBlock = {
     total_records: attendance.total_records,
@@ -699,53 +764,71 @@ export const buildReportContent = async (
     late: attendance.late,
     excused: attendance.excused,
     attendance_rate: attendance.attendance_rate,
-  }
+  };
   const performanceBlock = {
     form_score_avg: formScoreAvg,
     form_score_latest: formScoreLatest,
     total_sessions: formScores.length,
-    latest_analysis_at: formScores.length > 0 ? formScores[formScores.length - 1].measured_at : null,
-  }
+    latest_analysis_at:
+      formScores.length > 0
+        ? formScores[formScores.length - 1].measured_at
+        : null,
+  };
   const analysesBlock = analyses.map((a) => ({
     server_job_id: a.server_job_id,
     requested_at: a.requested_at,
     display_name: a.display_name,
     student_id: a.student_id,
     form_score:
-      typeof a.summary_json === "object" && a.summary_json && "form_score" in a.summary_json
+      typeof a.summary_json === "object" &&
+      a.summary_json &&
+      "form_score" in a.summary_json
         ? Number((a.summary_json as Record<string, unknown>).form_score)
         : null,
-  }))
+  }));
 
-  let summary: string | null
+  let summary: string | null;
   if (orgBlock) {
-    const parts: string[] = []
-    parts.push(`${orgBlock.student_count} student(s) on the roster (${orgBlock.active_students} active).`)
+    const parts: string[] = [];
+    parts.push(
+      `${orgBlock.student_count} student(s) on the roster (${orgBlock.active_students} active).`,
+    );
     if (orgBlock.avg_attendance_rate !== null) {
-      parts.push(`Roster attendance over the last 30 days: ${orgBlock.avg_attendance_rate}%.`)
+      parts.push(
+        `Roster attendance over the last 30 days: ${orgBlock.avg_attendance_rate}%.`,
+      );
     }
-    if (orgBlock.sessions_this_month > 0) parts.push(`${orgBlock.sessions_this_month} session(s) scheduled this month.`)
-    if (orgBlock.analyses_linked > 0) parts.push(`${orgBlock.analyses_linked} analysis(ies) linked to students.`)
+    if (orgBlock.sessions_this_month > 0)
+      parts.push(
+        `${orgBlock.sessions_this_month} session(s) scheduled this month.`,
+      );
+    if (orgBlock.analyses_linked > 0)
+      parts.push(
+        `${orgBlock.analyses_linked} analysis(ies) linked to students.`,
+      );
     if (performanceBlock.form_score_avg !== null) {
       parts.push(
         `Average form score across the ${performanceBlock.total_sessions} most recent analyzed session(s) is ${performanceBlock.form_score_avg}/10.`,
-      )
+      );
     } else if (attendanceBlock.total_records > 0) {
       parts.push(
         `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`,
-      )
+      );
     }
-    summary = parts.length ? parts.join(" ") : "No data is available yet for this academy."
+    summary = parts.length
+      ? parts.join(" ")
+      : "No data is available yet for this academy.";
   } else if (performanceBlock.form_score_avg !== null) {
     summary = `Average form score across ${performanceBlock.total_sessions} analyzed session(s) is ${performanceBlock.form_score_avg}/10${
       attendanceBlock.total_records > 0
         ? `; attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}%`
         : ""
-    }.`
+    }.`;
   } else if (attendanceBlock.total_records > 0) {
-    summary = `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`
+    summary = `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`;
   } else {
-    summary = "No attendance or performance data is available for the selected period."
+    summary =
+      "No attendance or performance data is available for the selected period.";
   }
 
   return {
@@ -759,28 +842,32 @@ export const buildReportContent = async (
           status: student.status,
         }
       : null,
-    period: { start: from ?? null, end: to ?? null, label: buildPeriodLabel({ reportType: report_type, from, to }) },
+    period: {
+      start: from ?? null,
+      end: to ?? null,
+      label: buildPeriodLabel({ reportType: report_type, from, to }),
+    },
     attendance: attendanceBlock,
     performance: performanceBlock,
     analyses: analysesBlock,
     summary,
     org: orgBlock,
-  }
-}
+  };
+};
 
 export const updateReportRecord = async (
   auth0Id: string,
   id: string,
   input: {
-    report_type: string
-    title: string
-    period_start: string | null
-    period_end: string | null
-    content_json: Record<string, unknown>
+    report_type: string;
+    title: string;
+    period_start: string | null;
+    period_end: string | null;
+    content_json: Record<string, unknown>;
   },
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       update reports set
         report_type = ${input.report_type},
@@ -791,10 +878,10 @@ export const updateReportRecord = async (
         updated_at = now()
       where auth0_id = ${auth0Id} and id = ${id}
       returning *, (select full_name from students s where s.id = reports.student_id) as full_name;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
 // ── Performance ──────────────────────────────────────────────────────────────
 
@@ -805,7 +892,7 @@ export const listPerformance = async (
 ): Promise<PerformanceMetric[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<PerformanceMetric[]>`
         select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
                source_analysis_id, measured_at, created_at
@@ -816,27 +903,27 @@ export const listPerformance = async (
           and (${opts.to ?? null}::timestamptz is null or measured_at <= ${opts.to ?? null}::timestamptz)
         order by measured_at asc
         limit ${opts.limit ?? 500};
-      `
-      return rows ?? []
+      `;
+      return rows ?? [];
     })) ?? []
-  )
-}
+  );
+};
 
 export type PerformanceInput = {
-  student_id: string
-  metric_key: string
-  metric_value: number
-  unit?: string | null
-  source_analysis_id?: string | null
-  measured_at?: string | null
-}
+  student_id: string;
+  metric_key: string;
+  metric_value: number;
+  unit?: string | null;
+  source_analysis_id?: string | null;
+  measured_at?: string | null;
+};
 
 export const createPerformanceMetric = async (
   auth0Id: string,
   input: PerformanceInput,
 ): Promise<PerformanceMetric | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<PerformanceMetric[]>`
       insert into performance_metrics (
         auth0_id, student_id, metric_key, metric_value, unit, source_analysis_id, measured_at
@@ -852,10 +939,10 @@ export const createPerformanceMetric = async (
       on conflict (auth0_id, student_id, metric_key, measured_at) do nothing
       returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
         unit, source_analysis_id, measured_at, created_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
 export const updatePerformanceMetric = async (
   auth0Id: string,
@@ -863,7 +950,7 @@ export const updatePerformanceMetric = async (
   input: { metric_value: number; unit?: string | null },
 ): Promise<PerformanceMetric | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<PerformanceMetric[]>`
       update performance_metrics set
         metric_value = ${input.metric_value}::float8,
@@ -871,21 +958,24 @@ export const updatePerformanceMetric = async (
       where auth0_id = ${auth0Id} and id = ${id}::uuid and source_analysis_id is null
       returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
         unit, source_analysis_id, measured_at, created_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
+    `;
+    return rows?.[0] ?? null;
+  });
+};
 
-export const deletePerformanceMetric = async (auth0Id: string, id: string): Promise<boolean> => {
+export const deletePerformanceMetric = async (
+  auth0Id: string,
+  id: string,
+): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
     const rows = await db<{ id: string }[]>`
       delete from performance_metrics where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+    `;
+    return rows?.[0] ? true : false;
+  });
+  return res ?? false;
+};
 
 /**
  * Combined performance timeline for a student: manual metrics + form scores
@@ -898,9 +988,13 @@ export const getStudentPerformanceSeries = async (
 ): Promise<PerformanceSeriesPoint[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const analyses = await db<
-        { requested_at: string; form_score: number | null; server_job_id: string }[]
+        {
+          requested_at: string;
+          form_score: number | null;
+          server_job_id: string;
+        }[]
       >`
         select
           requested_at,
@@ -915,12 +1009,12 @@ export const getStudentPerformanceSeries = async (
           and (${opts.from ?? null}::timestamptz is null or requested_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or requested_at <= ${opts.to ?? null}::timestamptz)
         order by requested_at asc;
-      `
+      `;
       const manual = await listPerformance(auth0Id, studentId, {
         metricKey: opts.metricKey || undefined,
         from: opts.from,
         to: opts.to,
-      })
+      });
 
       const points: PerformanceSeriesPoint[] = [
         ...(analyses ?? []).map((a) => ({
@@ -941,21 +1035,21 @@ export const getStudentPerformanceSeries = async (
           source: "manual" as const,
           source_analysis_id: m.source_analysis_id,
         })),
-      ]
+      ];
 
-      points.sort((a, b) => a.measured_at.localeCompare(b.measured_at))
-      return points
+      points.sort((a, b) => a.measured_at.localeCompare(b.measured_at));
+      return points;
     })) ?? []
-  )
-}
+  );
+};
 
 // ── Bulk import ────────────────────────────────────────────────────────────
 
 export type ImportResult = {
-  imported: number
-  failed: Array<{ row_index: number; reason: string }>
-  duplicates_skipped: number
-}
+  imported: number;
+  failed: Array<{ row_index: number; reason: string }>;
+  duplicates_skipped: number;
+};
 
 /**
  * Insert multiple student rows in a single transactional call.
@@ -967,65 +1061,82 @@ export const importStudents = async (
   rows: Array<{ cleaned: Record<string, unknown> }>,
 ): Promise<ImportResult> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
 
-    const result: ImportResult = { imported: 0, failed: [], duplicates_skipped: 0 }
+    const result: ImportResult = {
+      imported: 0,
+      failed: [],
+      duplicates_skipped: 0,
+    };
 
-    if (rows.length === 0) return result
+    if (rows.length === 0) return result;
 
     // Fetch existing emails for duplicate detection
     const existingEmails = await db<{ email: string | null }[]>`
       select lower(email) as email from students
       where auth0_id = ${auth0Id} and email is not null;
-    `
-    const emailSet = new Set((existingEmails ?? []).map((r) => r.email))
+    `;
+    const emailSet = new Set((existingEmails ?? []).map((r) => r.email));
 
     // Process each row individually (best-effort within the transaction)
     for (let i = 0; i < rows.length; i++) {
-      const { cleaned } = rows[i]
+      const { cleaned } = rows[i];
 
       // Duplicate check by email
-      const email = typeof cleaned.email === "string" ? cleaned.email.toLowerCase() : null
+      const email =
+        typeof cleaned.email === "string" ? cleaned.email.toLowerCase() : null;
       if (email && emailSet.has(email)) {
-        result.duplicates_skipped++
-        continue
+        result.duplicates_skipped++;
+        continue;
       }
 
       // Build insert
       const cols = Object.keys(cleaned).filter(
-        (k) => cleaned[k] !== undefined && cleaned[k] !== null && cleaned[k] !== "",
-      )
+        (k) =>
+          cleaned[k] !== undefined && cleaned[k] !== null && cleaned[k] !== "",
+      );
       if (cols.length === 0) {
-        result.failed.push({ row_index: i, reason: "No valid fields after cleaning" })
-        continue
+        result.failed.push({
+          row_index: i,
+          reason: "No valid fields after cleaning",
+        });
+        continue;
       }
 
       try {
-        const placeholders = ["$1", ...cols.map((_, j) => `$${j + 2}`)].join(", ")
+        const placeholders = ["$1", ...cols.map((_, j) => `$${j + 2}`)].join(
+          ", ",
+        );
         const sql = `
           insert into students (auth0_id, ${cols.join(", ")})
           values (${placeholders})
           returning id;
-        `
-        const values = cols.map((k) => cleaned[k])
-        const rowsInserted = await db.unsafe<{ id: string }[]>(sql, [auth0Id, ...values])
+        `;
+        const values = cols.map((k) => cleaned[k]);
+        const rowsInserted = await db.unsafe<{ id: string }[]>(sql, [
+          auth0Id,
+          ...values,
+        ]);
         if (rowsInserted?.[0]) {
-          result.imported++
-          if (email) emailSet.add(email)
+          result.imported++;
+          if (email) emailSet.add(email);
         } else {
-          result.failed.push({ row_index: i, reason: "Insert returned no rows" })
+          result.failed.push({
+            row_index: i,
+            reason: "Insert returned no rows",
+          });
         }
       } catch (err) {
         result.failed.push({
           row_index: i,
           reason: err instanceof Error ? err.message : "Database error",
-        })
+        });
       }
     }
 
-    return result
-  })
-}
+    return result;
+  });
+};
 
 // ── Trends ─────────────────────────────────────────────────────────────────
 
@@ -1038,19 +1149,19 @@ export const getStudentTrends = async (
   studentId: string,
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<MetricTrend[]> => {
-  const series = await getStudentPerformanceSeries(auth0Id, studentId, opts)
-  return computeTrends(series)
-}
+  const series = await getStudentPerformanceSeries(auth0Id, studentId, opts);
+  return computeTrends(series);
+};
 
 // ── Comparison ─────────────────────────────────────────────────────────────
 
 export type ComparisonStudent = {
-  student_id: string
-  full_name: string
-  latest: number | null
-  avg: number | null
-  points: Array<{ measured_at: string; metric_value: number }>
-}
+  student_id: string;
+  full_name: string;
+  latest: number | null;
+  avg: number | null;
+  points: Array<{ measured_at: string; metric_value: number }>;
+};
 
 /**
  * Compare multiple students on a single metric key.
@@ -1061,43 +1172,46 @@ export const compareStudents = async (
   studentIds: string[],
   metricKey = "form_score",
 ): Promise<ComparisonStudent[]> => {
-  if (studentIds.length === 0) return []
+  if (studentIds.length === 0) return [];
 
   return withHistoryStore(async (_db) => {
-    await ensureInitialized()
+    await ensureInitialized();
 
-    const result: ComparisonStudent[] = []
+    const result: ComparisonStudent[] = [];
 
     for (const sid of studentIds) {
-      const series = await getStudentPerformanceSeries(auth0Id, sid, {})
-      const filtered = series.filter((s) => s.metric_key === metricKey)
-      const values = filtered.map((s) => s.metric_value)
+      const series = await getStudentPerformanceSeries(auth0Id, sid, {});
+      const filtered = series.filter((s) => s.metric_key === metricKey);
+      const values = filtered.map((s) => s.metric_value);
 
-      const student = await getStudent(auth0Id, sid)
+      const student = await getStudent(auth0Id, sid);
       result.push({
         student_id: sid,
         full_name: student?.full_name ?? "Unknown",
         latest: values.length > 0 ? values[values.length - 1] : null,
-        avg: values.length > 0
-          ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100
-          : null,
+        avg:
+          values.length > 0
+            ? Math.round(
+                (values.reduce((s, v) => s + v, 0) / values.length) * 100,
+              ) / 100
+            : null,
         points: filtered.map((s) => ({
           measured_at: s.measured_at,
           metric_value: s.metric_value,
         })),
-      })
+      });
     }
 
-    return result
-  })
-}
+    return result;
+  });
+};
 
 // ── Org Overview ─────────────────────────────────────────────────────────────
 
 export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       const rows = await db<OrgOverview[]>`
         select
           (select count(*)::int from students where auth0_id = ${auth0Id}) as student_count,
@@ -1117,7 +1231,7 @@ export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
             where auth0_id = ${auth0Id}
               and session_date >= current_date - interval '30 days'
           ) as avg_attendance_rate;
-      `
+      `;
       return (
         rows?.[0] ?? {
           student_count: 0,
@@ -1127,7 +1241,7 @@ export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
           analyses_linked: 0,
           avg_attendance_rate: null,
         }
-      )
+      );
     })) ?? {
       student_count: 0,
       active_students: 0,
@@ -1136,34 +1250,45 @@ export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
       analyses_linked: 0,
       avg_attendance_rate: null,
     }
-  )
-}
+  );
+};
 
 // ── Global search ────────────────────────────────────────────────────────────
 
 export type SearchItem = {
-  id: string
-  label: string
-  subtitle: string | null
-}
+  id: string;
+  label: string;
+  subtitle: string | null;
+};
 
 export type OrgSearchResult = {
-  students: SearchItem[]
-  schedule: SearchItem[]
-  reports: SearchItem[]
-  analyses: SearchItem[]
-}
+  students: SearchItem[];
+  schedule: SearchItem[];
+  reports: SearchItem[];
+  analyses: SearchItem[];
+};
 
-export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSearchResult> => {
-  const q = query.trim().slice(0, 100)
-  if (!q) return { students: [], schedule: [], reports: [], analyses: [] }
-  const like = `%${q}%`
+export const searchOrg = async (
+  auth0Id: string,
+  query: string,
+): Promise<OrgSearchResult> => {
+  const q = query.trim().slice(0, 100);
+  if (!q) return { students: [], schedule: [], reports: [], analyses: [] };
+  const like = `%${q}%`;
 
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
+    await ensureInitialized();
 
     const [students, schedule, reports, analyses] = await Promise.all([
-      db<{ id: string; full_name: string; email: string | null; sport: string | null; position: string | null }[]>`
+      db<
+        {
+          id: string;
+          full_name: string;
+          email: string | null;
+          sport: string | null;
+          position: string | null;
+        }[]
+      >`
         select id, full_name, email, sport, "position"
         from students
         where auth0_id = ${auth0Id}
@@ -1171,7 +1296,15 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
         order by full_name asc
         limit 8;
       `,
-      db<{ id: string; title: string; event_type: string; starts_at: string; location: string | null }[]>`
+      db<
+        {
+          id: string;
+          title: string;
+          event_type: string;
+          starts_at: string;
+          location: string | null;
+        }[]
+      >`
         select id, title, event_type, starts_at, location
         from schedule_events
         where auth0_id = ${auth0Id}
@@ -1179,7 +1312,15 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
         order by starts_at desc
         limit 8;
       `,
-      db<{ id: string; title: string; report_type: string; created_at: string; full_name: string | null }[]>`
+      db<
+        {
+          id: string;
+          title: string;
+          report_type: string;
+          created_at: string;
+          full_name: string | null;
+        }[]
+      >`
         select r.id, r.title, r.report_type, r.created_at, s.full_name
         from reports r
         left join students s on r.student_id = s.id
@@ -1188,7 +1329,15 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
         order by r.created_at desc
         limit 8;
       `,
-      db<{ server_job_id: string; display_name: string | null; student_id: string | null; requested_at: string; file_name: string | null }[]>`
+      db<
+        {
+          server_job_id: string;
+          display_name: string | null;
+          student_id: string | null;
+          requested_at: string;
+          file_name: string | null;
+        }[]
+      >`
         select a.server_job_id, a.display_name, a.student_id, a.requested_at, v.file_name
         from analysis_history a
         left join video_conversations v on a.session_token = v.session_token
@@ -1197,13 +1346,14 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
         order by a.requested_at desc
         limit 8;
       `,
-    ])
+    ]);
 
     return {
       students: (students ?? []).map((s) => ({
         id: s.id,
         label: s.full_name,
-        subtitle: [s.email, s.sport, s.position].filter(Boolean).join(" · ") || null,
+        subtitle:
+          [s.email, s.sport, s.position].filter(Boolean).join(" · ") || null,
       })),
       schedule: (schedule ?? []).map((e) => ({
         id: e.id,
@@ -1220,6 +1370,6 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
         label: a.display_name || a.file_name || a.server_job_id,
         subtitle: a.student_id ? "Linked to a player" : "Unlinked",
       })),
-    }
-  })
-}
+    };
+  });
+};

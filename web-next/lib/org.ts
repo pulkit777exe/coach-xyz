@@ -81,6 +81,7 @@ export type Student = {
   status: StudentStatus
   joined_on: string | null
   account_auth0_id: string | null
+  team_id: string | null
   created_at: string
   updated_at: string
 }

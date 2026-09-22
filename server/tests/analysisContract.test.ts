@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test"
-import type { AnalysisSummary } from "../src/types"
+import { describe, expect, test } from "bun:test";
+import type { AnalysisSummary } from "../src/types";
 
 // Canonical wire contract emitted by engine normalize_gemini_result.
 // Assigning this literal to the AnalysisSummary type is a compile-time guard:
@@ -62,7 +62,7 @@ const CANONICAL: AnalysisSummary = {
       review_state: "auto",
     },
   ],
-}
+};
 
 const REQUIRED_TOP_LEVEL = [
   "sport",
@@ -72,30 +72,35 @@ const REQUIRED_TOP_LEVEL = [
   "summary",
   "strengths",
   "shot_events",
-]
+];
 
-const REQUIRED_SHOT_EVENT = ["timestamp", "event_type", "form_score", "feedback"]
+const REQUIRED_SHOT_EVENT = [
+  "timestamp",
+  "event_type",
+  "form_score",
+  "feedback",
+];
 
 describe("analysis result contract", () => {
   test("canonical fixture satisfies the AnalysisSummary type", () => {
-    expect(CANONICAL).toBeTypeOf("object")
-    expect(Array.isArray(CANONICAL.shot_events)).toBe(true)
-  })
+    expect(CANONICAL).toBeTypeOf("object");
+    expect(Array.isArray(CANONICAL.shot_events)).toBe(true);
+  });
 
   test("required fields are present on the wire", () => {
     for (const key of REQUIRED_TOP_LEVEL) {
-      expect(CANONICAL).toHaveProperty(key)
+      expect(CANONICAL).toHaveProperty(key);
     }
-    expect(CANONICAL.shot_events.length).toBeGreaterThan(0)
+    expect(CANONICAL.shot_events.length).toBeGreaterThan(0);
     for (const key of REQUIRED_SHOT_EVENT) {
-      expect(CANONICAL.shot_events[0]).toHaveProperty(key)
+      expect(CANONICAL.shot_events[0]).toHaveProperty(key);
     }
-  })
+  });
 
   test("optional enriched fields survive round-trip typed", () => {
-    const event = CANONICAL.shot_events[0]
-    expect(event.result).toBe("four")
-    expect(event.form_breakdown?.["head"]).toBe("needs_work")
-    expect(event.biomechanics?.["confidence"]).toBe(0.9)
-  })
-})
+    const event = CANONICAL.shot_events[0];
+    expect(event.result).toBe("four");
+    expect(event.form_breakdown?.["head"]).toBe("needs_work");
+    expect(event.biomechanics?.["confidence"]).toBe(0.9);
+  });
+});

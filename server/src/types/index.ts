@@ -2,25 +2,25 @@
 // These types define the contract between engine → server → frontend.
 // Server is the source of truth. Frontend mirrors them.
 
-export const DEFAULT_MODEL = "gemini-2.5-flash"
-export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+export const DEFAULT_MODEL = "gemini-2.5-flash";
+export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 
 export type Player = {
-  player_index: number
-  confidence: number
-  crop_base64: string
-}
+  player_index: number;
+  confidence: number;
+  crop_base64: string;
+};
 
 export type ScanResult = {
-  session_token: string
-  video_key: string
+  session_token: string;
+  video_key: string;
   /** Camera perspective this upload was scanned as (engine-normalized). */
-  angle?: string
+  angle?: string;
   /** All perspectives accumulated in this session (primary first). */
-  angles?: string[]
-  player_count: number
-  players: Player[]
-}
+  angles?: string[];
+  player_count: number;
+  players: Player[];
+};
 
 // ── Pipeline States ──────────────────────────────────────────────────────────
 // Engine states: uploading → scanning → player_selection → analyzing → rendering → completed
@@ -38,26 +38,26 @@ export const ENGINE_PIPELINE_STATES = [
   "rendering",
   "completed",
   "failed",
-] as const
+] as const;
 
-export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number]
+export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number];
 
 // ── Job Status ───────────────────────────────────────────────────────────────
 // Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
 
 export type JobStatus = {
-  job_id: string
-  state: EnginePipelineState
-  stage: number
-  stage_name: string
-  progress: number
-  complete: boolean
-  summary: AnalysisSummary | null
-  video_ready: boolean
-  error: string | null
-  error_code: string | null
-  retryable: boolean
-}
+  job_id: string;
+  state: EnginePipelineState;
+  stage: number;
+  stage_name: string;
+  progress: number;
+  complete: boolean;
+  summary: AnalysisSummary | null;
+  video_ready: boolean;
+  error: string | null;
+  error_code: string | null;
+  retryable: boolean;
+};
 
 // ── Analysis Results ─────────────────────────────────────────────────────────
 // Wire contract emitted by engine/core/gemini_client.py normalize_gemini_result.
@@ -65,75 +65,75 @@ export type JobStatus = {
 // the analysis contract tests in all three layers.
 
 export type CameraAngleGuidance = {
-  id: string
-  label: string
-  description: string
-}
+  id: string;
+  label: string;
+  description: string;
+};
 
 export type AnalysisProvenance = {
-  engine: string
-  model: string
-  analysis_prompt: string
-  sport: string | null
-  sport_pack_version: number
-  analyzed_at: string
-}
+  engine: string;
+  model: string;
+  analysis_prompt: string;
+  sport: string | null;
+  sport_pack_version: number;
+  analyzed_at: string;
+};
 
 export type Finding = {
-  id: string
-  category?: string
-  start_ms?: number
-  end_ms?: number
-  confidence?: number | null
-  confidence_band?: string
-  severity?: string
-  observation?: string
-  feedback?: string
-  form_score?: number
-  evidence_frames?: number[]
-  measured_at_timestamp?: number | null
-  model_versions?: Record<string, unknown>
-  review_state?: string
-}
+  id: string;
+  category?: string;
+  start_ms?: number;
+  end_ms?: number;
+  confidence?: number | null;
+  confidence_band?: string;
+  severity?: string;
+  observation?: string;
+  feedback?: string;
+  form_score?: number;
+  evidence_frames?: number[];
+  measured_at_timestamp?: number | null;
+  model_versions?: Record<string, unknown>;
+  review_state?: string;
+};
 
 export type AnalysisSummary = {
-  sport: string
-  player_name?: string
-  session_date?: string | null
-  form_score: number
-  overall_rating: string
-  top_tips: string[]
-  summary: string
-  strengths: string[]
-  priority_drill?: string
-  shot_events: ShotEvent[]
-  success_rate_percent?: number
-  average_form_score?: number
-  total_events?: number
+  sport: string;
+  player_name?: string;
+  session_date?: string | null;
+  form_score: number;
+  overall_rating: string;
+  top_tips: string[];
+  summary: string;
+  strengths: string[];
+  priority_drill?: string;
+  shot_events: ShotEvent[];
+  success_rate_percent?: number;
+  average_form_score?: number;
+  total_events?: number;
   /** Camera perspective the analysis ran on (engine-stamped). */
-  angle?: string
+  angle?: string;
   /** Sport-specific guidance for the next angle to film. */
-  recommended_angles?: CameraAngleGuidance[]
+  recommended_angles?: CameraAngleGuidance[];
   /** Model/prompt/pack versions so a report stays explainable (§22). */
-  provenance?: AnalysisProvenance
+  provenance?: AnalysisProvenance;
   /** Click-traceable evidence findings (§19). */
-  findings?: Finding[]
+  findings?: Finding[];
   /** True when any finding needs human review (§21 job-level flag). */
-  needs_review?: boolean
-}
+  needs_review?: boolean;
+};
 
 export type ShotEvent = {
-  timestamp: number
-  event_type: string
-  form_score: number
-  feedback: string
-  key_observation?: string
-  result?: string
-  form_breakdown?: Record<string, string>
-  biomechanics?: Record<string, unknown> | null
-  weighted_scoring?: Record<string, unknown> | null
-  injury_risk?: Record<string, unknown> | null
-}
+  timestamp: number;
+  event_type: string;
+  form_score: number;
+  feedback: string;
+  key_observation?: string;
+  result?: string;
+  form_breakdown?: Record<string, string>;
+  biomechanics?: Record<string, unknown> | null;
+  weighted_scoring?: Record<string, unknown> | null;
+  injury_risk?: Record<string, unknown> | null;
+};
 
 // ── Error Types ──────────────────────────────────────────────────────────────
 // Canonical error shape returned by all layers (engine, server, client).
@@ -142,55 +142,55 @@ export type ShotEvent = {
 // Frontend: CoachAIError (TypeScript) mirrors this.
 
 export type CoachAIError = {
-  code: string
-  message: string
-  layer: "engine" | "server" | "client"
-  retryable: boolean
-  retry_after?: number
-}
+  code: string;
+  message: string;
+  layer: "engine" | "server" | "client";
+  retryable: boolean;
+  retry_after?: number;
+};
 
 // ── Chat Types ─────────────────────────────────────────────────────────────
 
 export type ChatMessage = {
-  id: string
-  role: "user" | "assistant" | "system"
-  content: string
-  timestamp_refs?: number[]
-  event_refs?: number[]
-  created_at: number
-}
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp_refs?: number[];
+  event_refs?: number[];
+  created_at: number;
+};
 
 // ── Dashboard Types ────────────────────────────────────────────────────────
 
 export type DashboardAnalysis = {
-  server_job_id: string
-  engine_job_id: string
-  session_token: string
-  player_index: number | null
-  model: string
-  stage: number | null
-  stage_name: string | null
-  progress: number
-  complete: boolean
-  video_ready: boolean
-  summary_json: unknown
-  status_json: unknown
-  error_code: string | null
-  error_message: string | null
-  download_count: number
-  display_name: string | null
-  file_name: string | null
-  file_size_bytes: number | null
-  player_count: number | null
-  requested_at: string
-  completed_at: string | null
-  auth0_id: string | null
-}
+  server_job_id: string;
+  engine_job_id: string;
+  session_token: string;
+  player_index: number | null;
+  model: string;
+  stage: number | null;
+  stage_name: string | null;
+  progress: number;
+  complete: boolean;
+  video_ready: boolean;
+  summary_json: unknown;
+  status_json: unknown;
+  error_code: string | null;
+  error_message: string | null;
+  download_count: number;
+  display_name: string | null;
+  file_name: string | null;
+  file_size_bytes: number | null;
+  player_count: number | null;
+  requested_at: string;
+  completed_at: string | null;
+  auth0_id: string | null;
+};
 
 export type DashboardStats = {
-  total_analyses: number
-  completed_analyses: number
-  in_progress_analyses: number
-  failed_analyses: number
-  total_downloads: number
-}
+  total_analyses: number;
+  completed_analyses: number;
+  in_progress_analyses: number;
+  failed_analyses: number;
+  total_downloads: number;
+};

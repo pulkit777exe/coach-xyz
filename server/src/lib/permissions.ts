@@ -1,4 +1,4 @@
-import { getMemberRole, type OrgMemberRole } from "./orgMembers"
+import { getMemberRole, type OrgMemberRole } from "./orgMembers";
 
 // ── Permission vocabulary (§4) ───────────────────────────────────────────────
 // Roles grant membership; permissions grant actions; team scope narrows WHERE.
@@ -21,11 +21,11 @@ export const PERMISSIONS = [
   "report.create",
   "finding.review",
   "medical.read",
-] as const
+] as const;
 
-export type Permission = (typeof PERMISSIONS)[number]
+export type Permission = (typeof PERMISSIONS)[number];
 
-const ALL: readonly Permission[] = PERMISSIONS
+const ALL: readonly Permission[] = PERMISSIONS;
 
 const COACH_PERMISSIONS: readonly Permission[] = [
   "team.read",
@@ -38,7 +38,7 @@ const COACH_PERMISSIONS: readonly Permission[] = [
   "report.read",
   "report.create",
   "finding.review",
-]
+];
 
 const ANALYST_PERMISSIONS: readonly Permission[] = [
   "team.read",
@@ -48,7 +48,7 @@ const ANALYST_PERMISSIONS: readonly Permission[] = [
   "report.read",
   "report.create",
   "finding.review",
-]
+];
 
 const ROLE_PERMISSIONS: Record<OrgMemberRole, readonly Permission[]> = {
   owner: ALL,
@@ -57,12 +57,15 @@ const ROLE_PERMISSIONS: Record<OrgMemberRole, readonly Permission[]> = {
   analyst: ANALYST_PERMISSIONS,
   medical: ["team.read", "player.read", "report.read", "medical.read"],
   player: ["analysis.read", "report.read"],
-}
+};
 
 /** Pure permission check: does this org role grant the permission? */
-export function hasPermission(role: OrgMemberRole | null, permission: Permission): boolean {
-  if (!role) return false
-  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false
+export function hasPermission(
+  role: OrgMemberRole | null,
+  permission: Permission,
+): boolean {
+  if (!role) return false;
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
 /**
@@ -75,11 +78,11 @@ export function canAccessTeam(
   memberTeamIds: readonly string[],
   teamId: string,
 ): boolean {
-  if (role === "owner" || role === "admin") return true
+  if (role === "owner" || role === "admin") return true;
   if (role === "coach" || role === "analyst" || role === "medical") {
-    return memberTeamIds.includes(teamId)
+    return memberTeamIds.includes(teamId);
   }
-  return false
+  return false;
 }
 
 // ── Health-data boundary (§5) ───────────────────────────────────────────────
@@ -88,10 +91,29 @@ export function canAccessTeam(
 // medical role may see them. Everyone else gets the summary with wellness
 // keys stripped (scores, feedback, and findings stay intact).
 
+/**
+ * Pure student-visibility scope (§3 hierarchy: owner → coaches → players).
+ * Owners/admins see the whole org roster; coaches, analysts, and medical
+ * staff see only students on their assigned teams.
+ */
+export function resolveStudentScope(
+  role: OrgMemberRole | null,
+  memberTeamIds: readonly string[],
+): { all: true } | { all: false; teamIds: string[] } {
+  if (role === "owner" || role === "admin") return { all: true };
+  if (role === "coach" || role === "analyst" || role === "medical") {
+    return { all: false, teamIds: [...memberTeamIds] };
+  }
+  return { all: false, teamIds: [] };
+}
+
 /** Roles allowed to see wellness signals inside summaries. */
-export function maySeeMedical(role: OrgMemberRole | null, isOwner: boolean): boolean {
-  if (isOwner) return true
-  return role === "medical"
+export function maySeeMedical(
+  role: OrgMemberRole | null,
+  isOwner: boolean,
+): boolean {
+  if (isOwner) return true;
+  return role === "medical";
 }
 
 /** Resolve medical visibility for an analysis owned by `ownerAuth0Id`. */
@@ -99,27 +121,28 @@ export async function resolveMedicalAccess(
   ownerAuth0Id: string | null,
   callerSub: string | null,
 ): Promise<boolean> {
-  if (!ownerAuth0Id || !callerSub) return false
-  if (callerSub === ownerAuth0Id) return true
+  if (!ownerAuth0Id || !callerSub) return false;
+  if (callerSub === ownerAuth0Id) return true;
   try {
-    const role = await getMemberRole(ownerAuth0Id, callerSub)
-    return role === "owner" || role === "medical"
+    const role = await getMemberRole(ownerAuth0Id, callerSub);
+    return role === "owner" || role === "medical";
   } catch {
-    return false
+    return false;
   }
 }
 
 /** Strip wellness keys from a summary (pure; returns the input when clean). */
 export function redactWellness(summary: unknown): unknown {
-  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return summary
-  const copy = { ...(summary as Record<string, unknown>) }
-  const events = copy.shot_events
+  if (!summary || typeof summary !== "object" || Array.isArray(summary))
+    return summary;
+  const copy = { ...(summary as Record<string, unknown>) };
+  const events = copy.shot_events;
   if (Array.isArray(events)) {
     copy.shot_events = events.map((e) => {
-      if (!e || typeof e !== "object" || Array.isArray(e)) return e
-      const { injury_risk: _dropped, ...rest } = e as Record<string, unknown>
-      return rest
-    })
+      if (!e || typeof e !== "object" || Array.isArray(e)) return e;
+      const { injury_risk: _dropped, ...rest } = e as Record<string, unknown>;
+      return rest;
+    });
   }
-  return copy
+  return copy;
 }

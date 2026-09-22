@@ -108,6 +108,13 @@ export async function getMyReports(): Promise<MyReports> {
   return apiFetch<MyReports>(me("/reports"))
 }
 
+export async function acceptInvite(token: string): Promise<{ org_auth0_id: string; role: string }> {
+  return apiFetch<{ org_auth0_id: string; role: string }>(me("/invites/accept"), {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  })
+}
+
 export async function getMyReport(id: string): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
   return apiFetch(me(`/reports/${encodeURIComponent(id)}`))
 }

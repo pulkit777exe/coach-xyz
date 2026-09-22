@@ -5,6 +5,9 @@ import { usePathname } from 'next/navigation'
 import {
   House,
   Users,
+  UserCheck,
+  Shield,
+  ShieldCheck,
   ClipboardCheck,
   CalendarDays,
   FileText,
@@ -28,6 +31,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Roster',
     items: [
       { href: '/dashboard/students', label: 'Students', icon: Users },
+      { href: '/dashboard/teams', label: 'Teams', icon: Shield },
+      { href: '/dashboard/members', label: 'Members', icon: UserCheck },
       { href: '/dashboard/attendance', label: 'Attendance', icon: ClipboardCheck },
     ],
   },
@@ -52,14 +57,12 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/dashboard/settings', label: 'Settings', icon: Settings, exact: true },
     ],
   },
-  // Audit Log is planned but has no route yet — keep the group hidden
-  // until /dashboard/audit ships to avoid duplicate /account hrefs.
-  // {
-  //   label: 'Security & Monitoring',
-  //   items: [
-  //     { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
-  //   ],
-  // },
+  {
+    label: 'Security & Monitoring',
+    items: [
+      { href: '/dashboard/audit', label: 'Audit Log', icon: ShieldCheck },
+    ],
+  },
 ]
 
 export default function DashboardNav() {

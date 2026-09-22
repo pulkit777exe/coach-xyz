@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { getOrgContext, orgStudents, orgStudentsSports } from "@/lib/serverData";
+import { getOrgContext, orgStudents, orgStudentsSports, orgTeams } from "@/lib/serverData";
 import StudentsClient from "@/components/org/StudentsClient";
 import { unstable_noStore as noStore } from "next/cache";
 
@@ -16,9 +16,10 @@ export default async function StudentsPage() {
   if (!session) redirect("/auth/login");
   const { auth0Id } = await getOrgContext();
 
-  const [studentsRes, sportsRes] = await Promise.all([
+  const [studentsRes, sportsRes, teamsRes] = await Promise.all([
     orgStudents(auth0Id),
     orgStudentsSports(auth0Id),
+    orgTeams(auth0Id),
   ]);
 
   return (
@@ -36,6 +37,7 @@ export default async function StudentsPage() {
           auth0Id={auth0Id}
           initialStudents={studentsRes.students}
           sports={sportsRes.sports}
+          teams={teamsRes.teams}
         />
       </div>
     </div>

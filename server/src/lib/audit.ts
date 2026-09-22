@@ -1,7 +1,7 @@
 import {
   withHistoryStoreOrThrow as withHistoryStore,
   ensureInitialized,
-} from "./supabaseHistory"
+} from "./supabaseHistory";
 
 // ── Audit logs (§29) ─────────────────────────────────────────────────────────
 // Append-only record of sensitive organizational actions. Writes are
@@ -18,21 +18,22 @@ export type AuditAction =
   | "team.deleted"
   | "team.member_added"
   | "team.member_removed"
-  | "analysis.deleted"
+  | "analysis.cancelled"
+  | "analysis.deleted";
 
 export const audit = async (entry: {
-  orgAuth0Id: string
-  actorAuth0Id: string | null
-  action: AuditAction
-  resourceType: string
-  resourceId?: string | null
-  result?: string | null
-  meta?: Record<string, unknown> | null
-  clientIp?: string | null
+  orgAuth0Id: string;
+  actorAuth0Id: string | null;
+  action: AuditAction;
+  resourceType: string;
+  resourceId?: string | null;
+  result?: string | null;
+  meta?: Record<string, unknown> | null;
+  clientIp?: string | null;
 }): Promise<void> => {
   try {
     await withHistoryStore(async (db) => {
-      await ensureInitialized()
+      await ensureInitialized();
       await db`
         create table if not exists audit_logs (
           id uuid primary key default gen_random_uuid(),
@@ -46,11 +47,11 @@ export const audit = async (entry: {
           client_ip text,
           created_at timestamptz not null default now()
         );
-      `
+      `;
       await db`
         create index if not exists idx_audit_logs_org_created
         on audit_logs (org_auth0_id, created_at desc);
-      `
+      `;
       await db`
         insert into audit_logs (
           org_auth0_id, actor_auth0_id, action, resource_type, resource_id,
@@ -65,45 +66,49 @@ export const audit = async (entry: {
           ${JSON.stringify(entry.meta ?? {})}::jsonb,
           ${entry.clientIp ?? null}
         );
-      `
-    })
+      `;
+    });
   } catch (error) {
-    console.error(JSON.stringify({
-      type: "audit_write_failed",
-      action: entry.action,
-      error: error instanceof Error ? error.message : "unknown",
-    }))
+    console.error(
+      JSON.stringify({
+        type: "audit_write_failed",
+        action: entry.action,
+        error: error instanceof Error ? error.message : "unknown",
+      }),
+    );
   }
-}
+};
 
 export type AuditLog = {
-  id: string
-  org_auth0_id: string
-  actor_auth0_id: string | null
-  action: string
-  resource_type: string
-  resource_id: string | null
-  result: string | null
-  meta: Record<string, unknown>
-  client_ip: string | null
-  created_at: string
-}
+  id: string;
+  org_auth0_id: string;
+  actor_auth0_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  result: string | null;
+  meta: Record<string, unknown>;
+  client_ip: string | null;
+  created_at: string;
+};
 
 export const listAuditLogs = async (
   orgAuth0Id: string,
   limit = 50,
 ): Promise<AuditLog[]> => {
-  const capped = Math.min(Math.max(limit, 1), 200)
-  return (await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<AuditLog[]>`
+  const capped = Math.min(Math.max(limit, 1), 200);
+  return (
+    (await withHistoryStore(async (db) => {
+      await ensureInitialized();
+      const rows = await db<AuditLog[]>`
       select id, org_auth0_id, actor_auth0_id, action, resource_type,
         resource_id, result, meta, client_ip, created_at
       from audit_logs
       where org_auth0_id = ${orgAuth0Id}
       order by created_at desc
       limit ${capped};
-    `
-    return rows ?? []
-  })) ?? []
-}
+    `;
+      return rows ?? [];
+    })) ?? []
+  );
+};

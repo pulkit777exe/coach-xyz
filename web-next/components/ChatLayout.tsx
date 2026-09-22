@@ -5,15 +5,17 @@ import Link from 'next/link'
 import ChatPanel from '@/components/ChatPanel'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import { VideoPlayer, type VideoPlayerHandle } from '@/components/VideoPlayer'
+import { reviewFinding } from '@/lib/api'
 import type { JobStatus } from '@/types'
 
 interface ChatLayoutProps {
+  auth0Id: string | null
   jobId: string
   jobStatus: JobStatus | null
   onBackToResults: () => void
 }
 
-export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLayoutProps) {
+export default function ChatLayout({ auth0Id, jobId, jobStatus, onBackToResults }: ChatLayoutProps) {
   const videoRef = useRef<VideoPlayerHandle>(null)
 
   const handleSeekTo = (timestamp: number) => {
@@ -77,7 +79,16 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
           {/* Findings Timeline (click a finding to seek the video) */}
           {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
             <div className="shrink-0 border-t border-border px-4 py-3 max-h-72 overflow-y-auto">
-              <FindingsTimeline findings={jobStatus.summary.findings} onSeek={handleSeekTo} />
+              <FindingsTimeline
+                findings={jobStatus.summary.findings}
+                onSeek={handleSeekTo}
+                onReview={
+                  auth0Id
+                    ? (findingId, state) =>
+                        reviewFinding(auth0Id, findingId, state).then(() => {})
+                    : undefined
+                }
+              />
             </div>
           )}
         </div>
@@ -95,7 +106,16 @@ export default function ChatLayout({ jobId, jobStatus, onBackToResults }: ChatLa
                   Key findings ({jobStatus.summary.findings.length})
                 </summary>
                 <div className="py-2 max-h-64 overflow-y-auto">
-                  <FindingsTimeline findings={jobStatus.summary.findings} onSeek={handleSeekTo} />
+                  <FindingsTimeline
+                    findings={jobStatus.summary.findings}
+                    onSeek={handleSeekTo}
+                    onReview={
+                      auth0Id
+                        ? (findingId, state) =>
+                            reviewFinding(auth0Id, findingId, state).then(() => {})
+                        : undefined
+                    }
+                  />
                 </div>
               </details>
             )}

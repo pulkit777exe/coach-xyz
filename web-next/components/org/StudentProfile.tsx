@@ -117,6 +117,24 @@ export default function StudentProfile({
   const [reports, setReports] = useState<ReportRecord[]>(initialReports)
   const [analyses, setAnalyses] = useState<DashboardAnalysis[]>(allAnalyses)
   const [editOpen, setEditOpen] = useState(false)
+  const [editTeams, setEditTeams] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    if (!editOpen) return
+    let cancelled = false
+    void import('@/lib/teams').then(({ listTeams }) =>
+      listTeams(auth0Id)
+        .then((res) => {
+          if (!cancelled) setEditTeams(res.teams)
+        })
+        .catch(() => {
+          if (!cancelled) setEditTeams([])
+        }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [editOpen, auth0Id])
   const [confirm, setConfirm] = useState<{
     title: string
     description: string
@@ -904,6 +922,7 @@ export default function StudentProfile({
         onOpenChange={setEditOpen}
         student={student_}
         sports={sports}
+        teams={editTeams}
         onUpdated={(s) => {
           setStudent(s)
           refresh()

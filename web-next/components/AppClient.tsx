@@ -142,6 +142,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
       if (!jobId) return <LandingPage onFileSelected={handleFileSelected} />
       return (
         <ChatLayout
+          auth0Id={auth0Id}
           jobId={jobId}
           jobStatus={jobStatus}
           onBackToResults={handleBackToResults}

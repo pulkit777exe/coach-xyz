@@ -7,6 +7,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/9ui/ui/button"
 import { Input } from "@/components/9ui/ui/input"
 import { Label } from "@/components/9ui/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/9ui/ui/select"
 import { Textarea } from "@/components/9ui/ui/textarea"
 import { Spinner } from "./Spinner"
 import { NativeSelect } from "./EventFormDialog"
@@ -24,6 +31,7 @@ export type StudentFormDialogProps = {
   onOpenChange: (open: boolean) => void
   student?: Student | null
   sports: string[]
+  teams?: { id: string; name: string }[]
   onCreated: (student: Student) => void
   onUpdated: (student: Student) => void
 }
@@ -40,6 +48,7 @@ export default function StudentFormDialog({
   onOpenChange,
   student,
   sports,
+  teams = [],
   onCreated,
   onUpdated,
 }: StudentFormDialogProps) {
@@ -233,6 +242,29 @@ export default function StudentFormDialog({
                 value={values.joined_on ?? ""}
                 onChange={(e) => set("joined_on", e.target.value)}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="team">Team</Label>
+              <Select
+                items={{
+                  "": "No team",
+                  ...Object.fromEntries(teams.map((t) => [t.id, t.name])),
+                }}
+                value={values.team_id ?? ""}
+                onValueChange={(v) => set("team_id", typeof v === "string" ? v : "")}
+              >
+                <SelectTrigger id="team">
+                  <SelectValue placeholder="No team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No team</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
