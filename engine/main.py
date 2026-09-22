@@ -270,6 +270,31 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _delete_session_files(session: dict[str, Any]) -> None:
+    """Delete every upload backing an evicted session (all angles).
+
+    Sessions own their source files: the analyzer no longer deletes uploads
+    on completion so re-analysis works, which makes eviction the lifetime
+    boundary (plus the shutdown sweep as a backstop).
+    """
+    if not isinstance(session, dict):
+        return
+    keys: set[str] = set()
+    video_key = session.get("video_key")
+    if video_key:
+        keys.add(str(video_key))
+    angles = session.get("angles")
+    if isinstance(angles, dict):
+        for entry in angles.values():
+            if isinstance(entry, dict) and entry.get("video_key"):
+                keys.add(str(entry["video_key"]))
+    for key in keys:
+        try:
+            storage.delete_file(key)
+        except Exception:
+            pass
+
+
 def _evict_old_sessions_unlocked() -> None:
     """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit.
 
@@ -280,12 +305,14 @@ def _evict_old_sessions_unlocked() -> None:
     expired = [sid for sid, s in sessions.items()
                if now - s.get("created_at", 0) > SESSION_TTL]
     for sid in expired:
-        sessions.pop(sid, None)
+        session = sessions.pop(sid, None)
+        _delete_session_files(session)
 
     # Enforce max sessions limit (remove oldest first)
     while len(sessions) > MAX_SESSIONS:
         oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
-        sessions.pop(oldest_sid, None)
+        session = sessions.pop(oldest_sid, None)
+        _delete_session_files(session)
 
 
 def _evict_old_sessions() -> None:
@@ -473,9 +500,14 @@ async def scan(
     else:
         append_to_session = True
 
-    # Set up scan progress tracking
+    # Set up scan progress tracking, keyed per angle so concurrent scans of
+    # different perspectives on one session don't overwrite each other.
+    from core.multicam import scan_progress_key
+
+    progress_key = scan_progress_key(session_token, angle_label)
     with scan_progress_lock:
-        scan_progress[session_token] = {
+        scan_progress[progress_key] = {
+            "session_token": session_token,
             "current": 0,
             "total": 0,
             "complete": False,
@@ -486,26 +518,32 @@ async def scan(
 
     def _report_scan_progress(current: int, total: int) -> None:
         with scan_progress_lock:
-            if session_token in scan_progress:
-                scan_progress[session_token]["current"] = current
-                scan_progress[session_token]["total"] = total
+            if progress_key in scan_progress:
+                scan_progress[progress_key]["current"] = current
+                scan_progress[progress_key]["total"] = total
+
+    def _fail_scan_progress(message: str) -> None:
+        with scan_progress_lock:
+            if progress_key in scan_progress:
+                scan_progress[progress_key]["complete"] = True
+                scan_progress[progress_key]["error"] = message
+
+    def _complete_scan_progress() -> None:
+        with scan_progress_lock:
+            if progress_key in scan_progress:
+                scan_progress[progress_key]["complete"] = True
+                scan_progress[progress_key]["error"] = None
 
     try:
         from core.detector import detect_players
         players = await asyncio.to_thread(detect_players, local_path, on_progress=_report_scan_progress)
     except NoPlayersDetectedError as e:
-        with scan_progress_lock:
-            if session_token in scan_progress:
-                scan_progress[session_token]["complete"] = True
-                scan_progress[session_token]["error"] = str(e)
+        _fail_scan_progress(str(e))
         storage.delete_file(r2_key)
         # local_path IS the storage path now — delete_file above already removed it.
         raise  # caught by global handler
     except VideoDecodeError as exc:
-        with scan_progress_lock:
-            if session_token in scan_progress:
-                scan_progress[session_token]["complete"] = True
-                scan_progress[session_token]["error"] = str(exc)
+        _fail_scan_progress(str(exc))
         storage.delete_file(r2_key)
         # local_path IS the storage path now — delete_file above already removed it.
         if "MediaPipe Pose backend unavailable" in exc.message:
@@ -516,18 +554,13 @@ async def scan(
             )
         raise  # caught by global handler
     except Exception as exc:
-        with scan_progress_lock:
-            if session_token in scan_progress:
-                scan_progress[session_token]["complete"] = True
-                scan_progress[session_token]["error"] = str(exc)
+        _fail_scan_progress(str(exc))
         storage.delete_file(r2_key)
         # local_path IS the storage path now — delete_file above already removed it.
         raise  # caught by global handler
 
     # Mark scan progress as complete
-    with scan_progress_lock:
-        if session_token in scan_progress:
-            scan_progress[session_token]["complete"] = True
+    _complete_scan_progress()
 
     # Evict old sessions before creating new one (memory optimization)
     with sessions_lock:
@@ -549,7 +582,14 @@ async def scan(
             sessions[session_token] = session
         append_angle(session, angle_label, r2_key, players)
         labels = angle_labels(session)
-
+        # Re-uploading an angle replaces its file — delete the orphaned
+        # previous upload now (the session only references the latest).
+        previous = session.pop("_replaced_video_key", None)
+    if previous and previous != r2_key:
+        try:
+            storage.delete_file(previous)
+        except Exception:
+            pass
     # Warm cache for this video (makes subsequent analyses faster)
     # Must happen before local_path is deleted
     try:
@@ -561,7 +601,8 @@ async def scan(
 
     # Do NOT delete local_path here — storage.download_video_to_tmp now returns
     # the storage path directly (no copy), so local_path IS the stored file.
-    # The analysis pipeline will clean it up via storage.delete_file(video_key).
+    # Source uploads live until their session is evicted (see
+    # _delete_session_files) so re-analysis keeps working.
 
     response_players = [
         {
@@ -593,24 +634,39 @@ async def scan(
 
 
 @app.get("/scan-progress/{session_token}")
-async def scan_progress_endpoint(session_token: str):
+async def scan_progress_endpoint(session_token: str, angle: str | None = None):
     """
     SSE endpoint for live scan progress updates.
     Client can listen for real-time frame scanning progress.
+    `angle` selects which perspective's progress to stream (multi-angle
+    sessions track each angle separately); it defaults to the primary angle.
     """
     from fastapi.responses import StreamingResponse
+
+    from core.multicam import normalize_angle_label, scan_progress_key
+
+    angle_label = normalize_angle_label(angle)
+    progress_key = scan_progress_key(session_token, angle_label)
+
+    def _read_progress() -> dict[str, Any] | None:
+        with scan_progress_lock:
+            entry = scan_progress.get(progress_key)
+            if entry is None and angle_label == "primary":
+                # Back-compat: entries written before per-angle keys.
+                entry = scan_progress.get(session_token)
+            return dict(entry) if entry is not None else None
 
     async def event_generator():
         try:
             while True:
                 try:
-                    with scan_progress_lock:
-                        progress = scan_progress.get(session_token)
+                    progress = _read_progress()
 
                     if progress is None:
                         # Session not found or expired
                         data = json.dumps({
                             "session_token": session_token,
+                            "angle": angle_label,
                             "current": 0,
                             "total": 0,
                             "complete": True,
@@ -622,7 +678,7 @@ async def scan_progress_endpoint(session_token: str):
                     # Send progress update
                     data = json.dumps({
                         "session_token": session_token,
-                        "angle": progress.get("angle", "primary"),
+                        "angle": progress.get("angle", angle_label),
                         "current": progress["current"],
                         "total": progress["total"],
                         "complete": progress["complete"],
@@ -636,10 +692,10 @@ async def scan_progress_endpoint(session_token: str):
 
                 except Exception:
                     # Transient error, send current state and retry
-                    with scan_progress_lock:
-                        progress = scan_progress.get(session_token, {})
+                    progress = _read_progress() or {}
                     data = json.dumps({
                         "session_token": session_token,
+                        "angle": progress.get("angle", angle_label),
                         "current": progress.get("current", 0),
                         "total": progress.get("total", 0),
                         "complete": progress.get("complete", False),
@@ -994,16 +1050,22 @@ async def chat_stream(request: Request):
 
         pump_task = asyncio.create_task(asyncio.to_thread(_pump))
         full_text = ""
+        started = loop.time()
         try:
             while True:
+                # Short waits double as SSE comment heartbeats (`: ping` lines
+                # are ignored by event parsers but keep proxies/CDNs from
+                # closing an idle stream); the overall deadline still bounds
+                # a hung model call.
                 try:
-                    kind, payload = await asyncio.wait_for(
-                        queue.get(), timeout=CHAT_GEMINI_TIMEOUT_S
-                    )
+                    kind, payload = await asyncio.wait_for(queue.get(), timeout=15)
                 except asyncio.TimeoutError:
-                    logging.error("Chat stream Gemini timeout")
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'AI service timed out. Please try again.'})}\n\n"
-                    return
+                    if loop.time() - started > CHAT_GEMINI_TIMEOUT_S:
+                        logging.error("Chat stream Gemini timeout")
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'AI service timed out. Please try again.'})}\n\n"
+                        return
+                    yield ": ping\n\n"
+                    continue
                 if kind == "token":
                     full_text += payload
                     yield f"data: {json.dumps({'type': 'token', 'text': payload})}\n\n"

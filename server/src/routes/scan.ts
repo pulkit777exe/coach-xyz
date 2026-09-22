@@ -143,8 +143,11 @@ export default new Elysia().post("/api/scan-video", async ({ request, set }) => 
       }
     }
 
+    // Multi-angle sessions track each perspective separately — forward the
+    // requested angle so parallel scans don't share one progress slot.
+    const angle = new URL(request.url).searchParams.get("angle")
     try {
-      const engineRes = await getScanProgressStream(sessionToken)
+      const engineRes = await getScanProgressStream(sessionToken, angle)
 
       // Proxy the SSE stream from the engine
       return new Response(engineRes.body, {

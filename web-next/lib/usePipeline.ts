@@ -206,9 +206,13 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
       setPipelineState('scanning')
       setUploadProgress({ phase: 'scanning', percent: 0 })
 
-      // Stream real scan progress from engine via SSE
+      // Stream real scan progress from engine via SSE (per-angle slot)
       try {
-        for await (const event of streamScanProgress(result.session_token, scanAbort.signal)) {
+        for await (const event of streamScanProgress(
+          result.session_token,
+          scanAbort.signal,
+          result.angle ?? append?.angle ?? null,
+        )) {
           if (event.total > 0) {
             const percent = Math.round((event.current / event.total) * 100)
             setUploadProgress({ phase: 'scanning', percent })

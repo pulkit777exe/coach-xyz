@@ -25,6 +25,12 @@ FFMPEG_TIMEOUT_S = int(os.environ.get("FFMPEG_TIMEOUT_S", "300"))
 # model call surfaces as a structured error instead of a hung SSE stream.
 CHAT_GEMINI_TIMEOUT_S = int(os.environ.get("CHAT_GEMINI_TIMEOUT_S", "100"))
 
+# Upper bound for the analysis Gemini call (multimodal, up to 20 frames). The
+# server gives /analyze 12 minutes; this deadline sits inside it so a hung
+# model call fails the job with a retryable error instead of wedging the
+# worker until BullMQ's stuck-job recovery fires.
+GEMINI_ANALYSIS_TIMEOUT_S = int(os.environ.get("GEMINI_ANALYSIS_TIMEOUT_S", "600"))
+
 # ── Shared Utilities ────────────────────────────────────────────────────────
 
 def parse_timestamp(ts: str) -> float:

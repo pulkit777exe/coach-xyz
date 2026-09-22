@@ -50,6 +50,13 @@ class TestAppendAngle:
         assert resolve_angle_video_key(session, "side") == "k-new"
         assert angle_labels(session) == ["side"]
 
+    def test_reappend_records_orphaned_file_for_cleanup(self):
+        session = _session()
+        append_angle(session, "side", "k-old", [])
+        assert session.pop("_replaced_video_key", None) is None
+        append_angle(session, "side", "k-new", [])
+        assert session.pop("_replaced_video_key", None) == "k-old"
+
 
 class TestResolve:
     def test_unknown_angle_returns_none(self):

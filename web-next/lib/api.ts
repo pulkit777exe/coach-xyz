@@ -291,8 +291,12 @@ export type ScanProgressEvent = {
 export async function* streamScanProgress(
   sessionToken: string,
   signal?: AbortSignal,
+  angle?: string | null,
 ): AsyncGenerator<ScanProgressEvent> {
-  const res = await fetch(`${BASE}/api/scan-progress/${sessionToken}`, {
+  const url = angle
+    ? `${BASE}/api/scan-progress/${sessionToken}?angle=${encodeURIComponent(angle)}`
+    : `${BASE}/api/scan-progress/${sessionToken}`
+  const res = await fetch(url, {
     signal,
   })
 

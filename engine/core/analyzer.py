@@ -496,18 +496,34 @@ def run_analysis(
         for i, t in enumerate(best_for_gemini[:5]):
             logging.debug(f"  Frame {i}: ts={t['timestamp']}s visibility={t.get('visibility', 0):.2f} motion={t.get('motion_score', 0):.2f} composite={t.get('composite_score', 0):.2f}")
 
-        gemini_result = call_gemini(
-            best_for_gemini,
-            video_duration=video_duration,
-            video_fps=fps,
-            video_width=video_width,
-            video_height=video_height,
-            player_index=player_index,
-            video_path=preprocessed_path,
-            frame_cache=frame_cache,
-        )
+        # Bound the blocking multimodal call so a hung model request fails
+        # fast with a retryable error instead of wedging the worker. Runs in
+        # a one-shot executor; on timeout the stray thread is abandoned (it
+        # only writes the analysis cache, which is keyed and idempotent).
+        from concurrent.futures import ThreadPoolExecutor
+        from concurrent.futures import TimeoutError as FuturesTimeoutError
+        from core.config import GEMINI_ANALYSIS_TIMEOUT_S
 
-        # Normalize Gemini output to match frontend type contract
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
+            gemini_future = gemini_pool.submit(
+                call_gemini,
+                best_for_gemini,
+                video_duration,
+                video_fps,
+                video_width,
+                video_height,
+                player_index,
+                preprocessed_path,
+                frame_cache,
+            )
+            try:
+                gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
+            except FuturesTimeoutError as exc:
+                raise EngineError(
+                    code="GEMINI_TIMEOUT",
+                    message="AI analysis timed out. Please try again.",
+                    retryable=True,
+                ) from exc
         gemini_result = normalize_gemini_result(gemini_result)
 
         # Extract sport from Gemini result for scoring config
@@ -607,13 +623,12 @@ def run_analysis(
                 Path(preprocessed_path).unlink(missing_ok=True)
             except Exception:
                 pass
-        # Delete the source upload via the storage API (not os.unlink) so the
-        # storage layer stays consistent.
-        if video_key:
-            try:
-                storage.delete_file(video_key)
-            except Exception:
-                pass
+        # NOTE: the source upload is intentionally NOT deleted here. The same
+        # upload backs re-analysis (another player, another angle, retry) and
+        # the session owns its lifetime — files are deleted when the session
+        # is evicted (see _delete_session_files in main.py) or by the
+        # shutdown sweep. Deleting here broke every second analyze on one
+        # upload with VideoExpiredError.
         if output_path and os.path.exists(output_path):
             try:
                 os.unlink(output_path)

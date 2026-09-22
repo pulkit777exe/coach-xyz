@@ -190,9 +190,13 @@ export type ScanProgressEvent = {
 
 export const getScanProgressStream = async (
   sessionToken: string,
+  angle?: string | null,
 ): Promise<Response> => {
   try {
-    const res = await fetch(`${ENGINE_URL}/scan-progress/${sessionToken}`, {
+    const url = angle
+      ? `${ENGINE_URL}/scan-progress/${sessionToken}?angle=${encodeURIComponent(angle)}`
+      : `${ENGINE_URL}/scan-progress/${sessionToken}`
+    const res = await fetch(url, {
       headers: { Accept: "text/event-stream", ...engineServiceHeaders() },
     })
 

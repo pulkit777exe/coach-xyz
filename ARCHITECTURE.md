@@ -309,6 +309,16 @@ coach-xyz/
   is stamped with the analyzed `angle` plus the sport's `recommended_angles`
   guidance (from `sports/*.json` `camera_angles`, loaded via
   `core/sport_config.py` — the single loader shared by analyzer + renderer).
+- Source uploads live until their session is evicted (files deleted per angle
+  in `_delete_session_files`), so re-analysis (other player, other angle,
+  retry) keeps working; re-uploading an angle deletes its orphaned file.
+- Scan progress is tracked per angle (`{session_token}:{angle}`) and streamed
+  via `GET /scan-progress/{session_token}?angle=…`, so parallel perspectives
+  don't share one progress slot.
+- Player identity contract: scan assigns 1-based `player_index` left-to-right
+  by `x_min`, and tracking resolves the same athlete via
+  `select_detection_by_index` (out-of-range raises instead of silently
+  analyzing a different player).
 
 ---
 
@@ -522,7 +532,11 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 - **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
 - **Model:** `gemini-2.5-flash` — used by the engine; stored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/api.ts`
 - **Usage:** Video analysis with structured JSON output
-- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`)
+- **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`); the engine
+  analysis Gemini call has its own 10-minute deadline
+  (`GEMINI_ANALYSIS_TIMEOUT_S`, retryable `GEMINI_TIMEOUT`); conversational
+  calls cap at 100s (`CHAT_GEMINI_TIMEOUT_S`), with SSE comment heartbeats
+  on `/chat/stream` during token gaps.
 
 ### Upstash Redis (CONFIRMED)
 

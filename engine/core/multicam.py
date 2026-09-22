@@ -24,6 +24,15 @@ def normalize_angle_label(angle: Any) -> str:
     return cleaned or PRIMARY_ANGLE
 
 
+def scan_progress_key(session_token: str, angle: Any) -> str:
+    """Progress-dict key for one angle scan.
+
+    Per-angle keys keep concurrent perspectives on one session from
+    overwriting each other's progress slot.
+    """
+    return f"{session_token}:{normalize_angle_label(angle)}"
+
+
 def angle_labels(session: dict[str, Any]) -> list[str]:
     """Angle labels in insertion order (primary first)."""
     angles = session.get("angles")
@@ -48,6 +57,14 @@ def append_angle(
     if not isinstance(angles, dict):
         angles = {}
         session["angles"] = angles
+    previous = angles.get(label)
+    if (
+        isinstance(previous, dict)
+        and previous.get("video_key")
+        and previous.get("video_key") != video_key
+    ):
+        # Re-uploaded angle — the caller deletes this orphaned file.
+        session["_replaced_video_key"] = previous.get("video_key")
     angles[label] = {"video_key": video_key, "players": players}
     if label == PRIMARY_ANGLE or "video_key" not in session:
         session["video_key"] = video_key
