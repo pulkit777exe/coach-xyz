@@ -29,6 +29,8 @@ export type AuditAction =
   | 'player.created'
   | 'player.transferred'
   | 'health.record_viewed'
+  | 'clip.created'
+  | 'clip.deleted'
 
 export const audit = async (entry: {
   orgAuth0Id: string

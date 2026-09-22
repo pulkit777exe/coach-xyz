@@ -377,6 +377,26 @@ export const ensureInitialized = async () => {
           })(),
           (async () => {
   await sql`
+          create table if not exists clips (
+            id uuid primary key default gen_random_uuid(),
+            server_job_id text not null,
+            finding_id text,
+            label text not null,
+            start_ms integer not null check (start_ms >= 0),
+            end_ms integer not null check (end_ms > start_ms),
+            created_by text,
+            created_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_clips_server_job_id
+          on clips (server_job_id);
+        `
+          })(),
+          (async () => {
+  await sql`
           create table if not exists users (
             id uuid primary key default gen_random_uuid(),
             auth0_id text unique not null,
