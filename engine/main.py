@@ -451,10 +451,17 @@ async def _scan_stored_file(
     try:
         # Server-side media inspection (§8): never trust client filename/mime —
         # probe the actual bytes before detection or session creation.
+        media_info: dict | None = None
         try:
             from core.video_io import probe_video
 
             _probe = probe_video(local_path)
+            media_info = {
+                "width": _probe["width"],
+                "height": _probe["height"],
+                "duration": round(_probe["duration"], 1),
+                "has_audio": _probe.get("has_audio", False),
+            }
             logging.info(
                 f"[SCAN] Media OK: {_probe['width']}x{_probe['height']}, {_probe['duration']:.1f}s"
             )
@@ -595,6 +602,7 @@ async def _scan_stored_file(
                 "angles": labels,
                 "player_count": len(response_players),
                 "players": response_players,
+                "media": media_info,
             },
         )
     finally:

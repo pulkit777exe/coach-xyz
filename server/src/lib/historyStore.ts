@@ -331,6 +331,52 @@ export const ensureInitialized = async () => {
           })(),
           (async () => {
   await sql`
+          create table if not exists organizations (
+            auth0_id text primary key,
+            name text,
+            created_by text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+  await sql`
+          create table if not exists videos (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text,
+            storage_key text not null unique,
+            session_token text,
+            file_name text,
+            mime_type text,
+            size_bytes bigint,
+            duration_s double precision,
+            width integer,
+            height integer,
+            has_audio boolean,
+            status text not null default 'uploaded'
+              check (status in ('uploaded', 'scanning', 'ready', 'failed', 'expired')),
+            uploaded_by text,
+            created_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+  await sql`
+          create table if not exists player_events (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text,
+            server_job_id text,
+            student_id uuid,
+            category text not null,
+            event_at_s double precision,
+            form_score double precision,
+            created_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+  await sql`
           create table if not exists users (
             id uuid primary key default gen_random_uuid(),
             auth0_id text unique not null,
@@ -520,6 +566,30 @@ export const ensureInitialized = async () => {
   await sql`
           create index if not exists idx_audit_logs_org_created
           on audit_logs (org_auth0_id, created_at desc);
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_videos_storage_key
+          on videos (storage_key);
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_videos_session
+          on videos (session_token);
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_player_events_job
+          on player_events (server_job_id);
+        `
+          })(),
+          (async () => {
+  await sql`
+          create index if not exists idx_player_events_student_time
+          on player_events (student_id, event_at_s);
         `
           })(),
           (async () => {

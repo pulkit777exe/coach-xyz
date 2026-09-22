@@ -15,7 +15,47 @@ import { verifyAttributionToken } from '../lib/attribution'
 import {
   persistVideoConversation,
 } from '../lib/analyses'
+import { registerVideo, updateVideoProbe } from '../lib/registry'
+import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
+import type { ScanResult } from '../types'
+
+/** Best-effort org attribution for uploads (primary membership, else the sub). */
+const resolveUploadOrg = async (request: Request): Promise<string | null> => {
+  const owner = verifyAttributionToken(request.headers.get('x-attribution'))
+  if (!owner) return null
+  const memberships = await listMembershipsForUser(owner).catch(() => [])
+  return memberships?.[0]?.org_auth0_id ?? owner
+}
+
+// ── Shared scan-result persistence ───────────────────────────────────────
+// Both upload paths (multipart + direct key) land here: history row plus
+// the video registry probe update.
+const persistScanResult = async (
+  request: Request,
+  result: ScanResult,
+  file: { name: string; type: string; size: number },
+) => {
+  const auth0Id = verifyAttributionToken(request.headers.get('x-attribution'))
+  await persistVideoConversation({
+    ...readRequestMeta(request),
+    sessionToken: result.session_token,
+    fileName: file.name,
+    fileMimeType: file.type,
+    fileSizeBytes: file.size,
+    playerCount: result.player_count,
+    players: result.players,
+    scanResponse: result as Record<string, unknown>,
+    auth0Id,
+  })
+  await updateVideoProbe(result.video_key, {
+    status: 'ready',
+    duration_s: result.media?.duration ?? null,
+    width: result.media?.width ?? null,
+    height: result.media?.height ?? null,
+    has_audio: result.media?.has_audio ?? null,
+  }).catch(() => null)
+}
 
 const scanErrorStatus = (code: string): number => {
   switch (code) {
@@ -99,16 +139,10 @@ export default new Elysia()
         requestIdFrom(request),
       )
 
-      await persistVideoConversation({
-        ...requestMeta,
-        sessionToken: result.session_token,
-        fileName: value.name || 'unknown',
-        fileMimeType: value.type || 'application/octet-stream',
-        fileSizeBytes: value.size,
-        playerCount: result.player_count,
-        players: result.players,
-        scanResponse: result as Record<string, unknown>,
-        auth0Id: verifyAttributionToken(request.headers.get('x-attribution')),
+      await persistScanResult(request, result, {
+        name: value.name || 'unknown',
+        type: value.type || 'application/octet-stream',
+        size: value.size,
       })
 
       set.status = 200
@@ -198,6 +232,15 @@ export default new Elysia()
         },
         requestIdFrom(request),
       )
+      await registerVideo({
+        orgAuth0Id: await resolveUploadOrg(request),
+        storageKey: intent.key,
+        sessionToken: intent.session_token,
+        fileName: filename.trim(),
+        mimeType,
+        sizeBytes,
+        uploadedBy: verifyAttributionToken(request.headers.get('x-attribution')),
+      }).catch(() => null)
       set.status = 200
       return intent
     } catch (error) {
@@ -258,16 +301,10 @@ export default new Elysia()
         { storage_key: storageKey, session_token: sessionToken, angle },
         requestIdFrom(request),
       )
-      await persistVideoConversation({
-        ...requestMeta,
-        sessionToken: result.session_token,
-        fileName: 'direct-upload',
-        fileMimeType: 'video/mp4',
-        fileSizeBytes: 0,
-        playerCount: result.player_count,
-        players: result.players,
-        scanResponse: result as Record<string, unknown>,
-        auth0Id: verifyAttributionToken(request.headers.get('x-attribution')),
+      await persistScanResult(request, result, {
+        name: 'direct-upload',
+        type: 'video/mp4',
+        size: 0,
       })
       set.status = 200
       return result

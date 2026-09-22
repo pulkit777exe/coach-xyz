@@ -143,6 +143,10 @@ export default new Elysia()
     // Resolve to primary auth0_id in case this is a linked account
     const primaryAuth0Id = await resolveAuth0Id(sub)
 
+    // First login forms the org: ensure its registry row exists.
+    const { ensureOrg } = await import('../lib/registry')
+    await ensureOrg(primaryAuth0Id, name ?? nickname ?? null, sub).catch(() => null)
+
     set.status = 200
     return { user: { ...user, auth0_id: primaryAuth0Id } }
   })

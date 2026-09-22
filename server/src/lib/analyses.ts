@@ -2,6 +2,7 @@ import type { Player } from '../types'
 import type { RequestMeta } from './requestMeta'
 import { ensureInitialized, withHistoryStore } from './historyStore'
 import { persistFindings, type FindingRecord } from './findings'
+import { persistPlayerEvents } from './registry'
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
   fileName: string
@@ -261,9 +262,20 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
 
   // Findings are final only on completion — persist them once (replace any
   // prior rows for idempotency across the worker + poll double-persist).
-  const summary = record.status.summary as { findings?: unknown } | null
+  const summary = record.status.summary as {
+    findings?: unknown
+    shot_events?: unknown
+  } | null
   if (record.status.complete && Array.isArray(summary?.findings)) {
     await persistFindings(record.serverJobId, summary.findings as FindingRecord[])
+    // Materialize the event timeline for trend queries (§26).
+    const owner = await getAnalysisOwner(record.serverJobId)
+    await persistPlayerEvents(
+      record.serverJobId,
+      owner?.auth0_id ?? null,
+      owner?.student_id ?? null,
+      Array.isArray(summary?.shot_events) ? (summary?.shot_events as Array<Record<string, unknown>>) : [],
+    )
   }
 
   // Internal stage history (§13): append only on transition, not per poll.
@@ -568,15 +580,19 @@ export const getAnalysisByServerJobId = async (
   })
 }
 
-/** Owner + requested-by for a job, without the heavy summary payload.
-/// Used on hot paths (status polls) that only need the access decision. */
+/** Owner + requested-by + student for a job, without the heavy summary payload.
+/// Used on hot paths (status polls, event materialization). */
 export const getAnalysisOwner = async (
   serverJobId: string,
-): Promise<{ auth0_id: string | null; requested_by: string | null } | null> => {
+): Promise<{ auth0_id: string | null; requested_by: string | null; student_id: string | null } | null> => {
   return withHistoryStore(async (db) => {
     await ensureInitialized()
-    const rows = await db<{ auth0_id: string | null; requested_by: string | null }[]>`
-      select auth0_id, requested_by from analysis_history
+    const rows = await db<{
+      auth0_id: string | null
+      requested_by: string | null
+      student_id: string | null
+    }[]>`
+      select auth0_id, requested_by, student_id from analysis_history
       where server_job_id = ${serverJobId}
       limit 1;
     `

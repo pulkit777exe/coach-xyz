@@ -20,6 +20,8 @@ export type ScanResult = {
   angles?: string[]
   player_count: number
   players: Player[]
+  /** ffprobe media inspection (present when the engine probed the bytes). */
+  media?: { width: number; height: number; duration: number; has_audio: boolean } | null
 }
 
 // ── Pipeline States ──────────────────────────────────────────────────────────

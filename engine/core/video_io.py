@@ -27,8 +27,9 @@ def tmp_dir() -> Path:
 
 def probe_video(video_path: str) -> dict[str, Any]:
     """Validate an uploaded file is a decodable video (never trust client
-    metadata). Returns duration/width/height. Raises VideoDecodeError when
-    ffprobe is missing, the file has no video stream, or it is corrupt."""
+    metadata). Returns duration/width/height/audio presence. Raises
+    VideoDecodeError when ffprobe is missing, the file has no video stream,
+    or it is corrupt."""
     import json as _json
 
     try:
@@ -52,6 +53,24 @@ def probe_video(video_path: str) -> dict[str, Any]:
             timeout=60,
             check=True,
         )
+        audio = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "json",
+                video_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+            check=False,
+        )
     except FileNotFoundError as exc:
         raise VideoDecodeError("Media inspection is unavailable on the engine.") from exc
     except Exception as exc:
@@ -65,6 +84,8 @@ def probe_video(video_path: str) -> dict[str, Any]:
         duration = float(
             stream.get("duration") or (info.get("format") or {}).get("duration") or 0
         )
+        audio_info = _json.loads(audio.stdout.decode("utf-8") or "{}")
+        has_audio = bool((audio_info.get("streams") or []))
     except (ValueError, TypeError, IndexError, AttributeError) as exc:
         raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.") from exc
 
@@ -72,7 +93,7 @@ def probe_video(video_path: str) -> dict[str, Any]:
         raise VideoDecodeError("Could not read this video file. Try MP4, MOV, or AVI format.")
     if duration <= 0 or duration > 3600:
         raise VideoDecodeError("Video must be between 1 second and 60 minutes long.")
-    return {"width": width, "height": height, "duration": duration}
+    return {"width": width, "height": height, "duration": duration, "has_audio": has_audio}
 
 
 def preprocess_video_ffmpeg(video_path: str) -> str:
