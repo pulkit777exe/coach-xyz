@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { orgCreateWellness, orgWellness, type WellnessCheckin } from '@/lib/org'
+import Section from './Section'
 
 interface WellnessSectionProps {
   auth0Id: string
@@ -64,17 +64,14 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Wellness</CardTitle>
-        <CardDescription>
-          Health data — visible only to medical staff and the owner. Reported as observed, never
-          diagnosed.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <Section title="Wellness">
+      <p className="mb-4 text-[13px] leading-[1.5] text-muted-foreground">
+        Health data — visible only to medical staff and the owner. Reported as observed, never
+        diagnosed.
+      </p>
+      <div className="space-y-3">
         {denied ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[14px] text-muted-foreground">
             Reading wellness data requires the medical permission.
           </p>
         ) : (
@@ -90,7 +87,7 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                   step={0.5}
                   value={sleep}
                   onChange={(e) => setSleep(e.target.value)}
-                  className="h-9"
+                  className="h-9 tabular-nums"
                 />
               </div>
               <div className="space-y-1.5">
@@ -103,10 +100,10 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                   step={1}
                   value={fatigue}
                   onChange={(e) => setFatigue(e.target.value)}
-                  className="h-9"
+                  className="h-9 tabular-nums"
                 />
                 {fatigue !== '' && (
-                  <p className="text-[0.65rem] text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground">
                     {FATIGUE_LABELS[Number(fatigue)] ?? ''}
                   </p>
                 )}
@@ -132,20 +129,20 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                 placeholder="Player-reported observation…"
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-[13px] text-destructive">{error}</p>}
             <Button size="sm" disabled={busy} onClick={submit}>
               {busy ? 'Recording…' : 'Record check-in'}
             </Button>
-            <div className="space-y-1.5 pt-1">
+            <div className="pt-1">
               {(checkins ?? []).slice(0, 8).map((checkin) => (
                 <div
                   key={checkin.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-xs"
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-[13px] last:border-b-0 hover:bg-accent/50 transition-colors"
                 >
-                  <span className="text-muted-foreground">
+                  <span className="text-muted-foreground tabular-nums">
                     {new Date(checkin.created_at).toLocaleDateString()}
                   </span>
-                  <span className="text-foreground">
+                  <span className="text-foreground tabular-nums">
                     {[
                       checkin.sleep_hours != null ? `${checkin.sleep_hours}h sleep` : null,
                       checkin.fatigue != null ? `fatigue ${checkin.fatigue}/5` : null,
@@ -160,12 +157,12 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                 </div>
               ))}
               {checkins?.length === 0 && (
-                <p className="text-xs text-muted-foreground">No check-ins yet.</p>
+                <p className="text-[13px] text-muted-foreground">No check-ins yet.</p>
               )}
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   )
 }

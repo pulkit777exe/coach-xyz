@@ -29,7 +29,9 @@ import {
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
 import EventFormDialog from './EventFormDialog'
+import StatusPill from './StatusPill'
 import { downloadCSV } from '@/lib/csv'
+import { cn } from '@/lib/utils'
 
 import type { EventStatus, ScheduleEvent } from '@/lib/org'
 import {
@@ -45,39 +47,19 @@ import type { CoachAIError } from '@/lib/api'
 
 const TYPE_META: Record<
   ScheduleEvent['event_type'],
-  { color: string; bg: string; border: string }
+  { text: string; bg: string; border: string }
 > = {
-  practice: {
-    color: 'var(--info)',
-    bg: 'color-mix(in srgb, var(--info) 12%, transparent)',
-    border: 'var(--info-border)',
-  },
-  match: {
-    color: 'var(--destructive)',
-    bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)',
-    border: 'var(--danger-border)',
-  },
-  tournament: {
-    color: 'var(--warning)',
-    bg: 'color-mix(in srgb, var(--warning) 12%, transparent)',
-    border: 'var(--warning-border)',
-  },
-  meeting: {
-    color: 'var(--success)',
-    bg: 'color-mix(in srgb, var(--success) 12%, transparent)',
-    border: 'var(--success-border)',
-  },
-  other: {
-    color: 'var(--muted-foreground)',
-    bg: 'color-mix(in srgb, var(--muted) 60%, transparent)',
-    border: 'var(--border)',
-  },
+  practice: { text: 'text-info', bg: 'bg-info/10', border: 'border-info-border' },
+  match: { text: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive-border' },
+  tournament: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning-border' },
+  meeting: { text: 'text-success', bg: 'bg-success/10', border: 'border-success-border' },
+  other: { text: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
 }
 
-const STATUS_META: Record<EventStatus, { className: string }> = {
-  scheduled: { className: 'border-info-border text-info' },
-  completed: { className: 'border-success-border text-success' },
-  cancelled: { className: 'border-danger-border text-danger' },
+const STATUS_TONE: Record<EventStatus, 'blue' | 'green' | 'red'> = {
+  scheduled: 'blue',
+  completed: 'green',
+  cancelled: 'red',
 }
 
 function localDateTimeKey(iso: string) {
@@ -268,7 +250,7 @@ export default function ScheduleClient({
             Today
           </Button>
         </div>
-        <p className="font-semibold text-lg text-foreground">
+        <p className="text-[16px] font-semibold tracking-[-0.01em] text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
@@ -299,12 +281,12 @@ export default function ScheduleClient({
       </div>
 
       {/* Calendar grid */}
-      <div className="border-border overflow-hidden rounded-lg border">
+      <div className="border-border overflow-hidden rounded-[6px] border">
         <div className="grid grid-cols-7 border-b border-border">
           {orderedWeekdays(weekStartsMonday).map((w) => (
             <div
               key={w}
-              className="text-muted-foreground bg-muted/50 py-2 text-center text-[0.6rem] font-normal uppercase tracking-[0.15em]"
+              className="py-2 text-center text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
             >
               {w}
             </div>
@@ -328,15 +310,16 @@ export default function ScheduleClient({
                 type="button"
                 onClick={() => setDayView(date)}
                 className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                  isToday ? 'bg-success/5 border-success-border' : ''
+                  isToday ? 'bg-accent/40' : ''
                 }`}
               >
                 <span
-                  className={`mb-1 inline-flex size-5 items-center justify-center rounded text-xs ${
+                  className={cn(
+                    'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-[12px] tabular-nums',
                     isToday
-                      ? 'bg-success font-bold text-primary-foreground'
+                      ? 'bg-accent font-medium text-foreground'
                       : 'text-muted-foreground'
-                  }`}
+                  )}
                 >
                   {date.getDate()}
                 </span>
@@ -348,22 +331,21 @@ export default function ScheduleClient({
                         key={ev.id}
                         onClick={(e) => openEdit(ev, e)}
                         title={ev.title}
-                        className={`truncate rounded px-1.5 py-0.5 text-[0.6rem] leading-tight ${
+                        className={cn(
+                          'truncate rounded-[4px] border px-1.5 py-0.5 text-[11px] font-medium leading-tight transition-colors',
+                          meta.text,
+                          meta.bg,
+                          meta.border,
                           ev.status === 'cancelled' ? 'line-through opacity-60' : ''
-                        }`}
-                        style={{
-                          color: meta.color,
-                          background: meta.bg,
-                          border: `1px solid ${meta.border}`,
-                        }}
+                        )}
                       >
-                        <span className="font-semibold">{ev.starts_at.slice(11, 16)}</span>{' '}
+                        <span className="tabular-nums">{ev.starts_at.slice(11, 16)}</span>{' '}
                         {ev.title}
                       </div>
                     )
                   })}
                   {dayEvents.length > 3 && (
-                    <span className="text-muted-foreground block px-1 text-[0.6rem]">
+                    <span className="text-muted-foreground block px-1 text-[11px] tabular-nums">
                       +{dayEvents.length - 3} more
                     </span>
                   )}
@@ -375,7 +357,7 @@ export default function ScheduleClient({
       </div>
 
       {visibleEvents.length === 0 && (
-        <p className="text-muted-foreground mt-4 text-xs">
+        <p className="text-muted-foreground mt-4 text-[13px]">
           {events.length === 0
             ? `No events in ${monthLabel}. Click any day to add one.`
             : 'No events match the selected status.'}
@@ -403,26 +385,21 @@ export default function ScheduleClient({
 
           <div className="grid gap-2">
             {dayViewEvents.map((ev) => {
-              const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
               return (
                 <button
                   key={ev.id}
                   type="button"
                   onClick={() => openEdit(ev)}
-                  className="border-border hover:bg-accent/50 rounded-md border p-3 text-left"
+                  className="border-border hover:bg-accent/50 rounded-[6px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-foreground font-medium">{ev.title}</span>
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-[0.6rem] uppercase tracking-[0.1em] ${
-                        STATUS_META[ev.status]?.className ?? 'border-border'
-                      }`}
-                    >
+                    <span className="text-[14px] font-medium text-foreground">{ev.title}</span>
+                    <StatusPill tone={STATUS_TONE[ev.status]}>
                       {EVENT_STATUS_LABELS[ev.status] ?? ev.status}
-                    </span>
+                    </StatusPill>
                   </div>
-                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1">
+                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-[13px]">
+                    <span className="flex items-center gap-1 tabular-nums">
                       <ClockIcon className="size-3" />
                       {ev.starts_at.slice(11, 16)}
                       {ev.ends_at ? `–${ev.ends_at.slice(11, 16)}` : ''}
@@ -432,7 +409,7 @@ export default function ScheduleClient({
                         <MapPinIcon className="size-3" /> {ev.location}
                       </span>
                     )}
-                    <span style={{ color: meta.color }}>
+                    <span className={cn(TYPE_META[ev.event_type]?.text ?? TYPE_META.other.text)}>
                       {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
                     </span>
                   </div>

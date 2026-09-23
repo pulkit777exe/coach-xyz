@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 
 import { AUDIT_NAV_ROLES, MEMBERS_NAV_ROLES, visibleNavGroups, type NavRole } from '@/lib/nav'
+import { cn } from '@/lib/utils'
 
 type NavItem = {
   href: string
@@ -83,43 +84,58 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
+/**
+ * Notion sidebar rows — shared at module scope so no component is defined
+ * inside a component. Section rows are 28px/r4; the unlabeled top group
+ * renders as the taller "tab" pill directly under search.
+ */
+const NAV_ROW_CLASS =
+  'flex h-7 items-center gap-2 rounded-[4px] px-2 text-sm outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+const NAV_TAB_CLASS =
+  'flex h-8 items-center gap-2 rounded-[6px] px-2 text-sm font-medium outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+const NAV_ACTIVE_CLASS = 'bg-accent text-foreground'
+const NAV_IDLE_CLASS = 'text-foreground/90 hover:bg-accent'
+const NAV_SECTION_LABEL_CLASS = 'px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground'
+
 export default function DashboardNav({ role = null }: { role?: NavRole | null }) {
   const pathname = usePathname()
   const groups = visibleNavGroups(NAV_GROUPS, role)
 
   return (
-    <nav className="flex flex-col flex-1 gap-4 overflow-y-auto pb-4">
+    <nav className="flex min-h-0 flex-1 flex-col pb-3 pt-1">
       {groups.map((group) => (
         <div key={group.label ?? 'home'}>
           {group.label && (
-            <p className="px-2 mb-1 text-[11px] font-medium text-muted-foreground">{group.label}</p>
+            <p className={NAV_SECTION_LABEL_CLASS}>{group.label}</p>
           )}
-          <div className="flex flex-col gap-px">
+          <div className="flex flex-col">
             {group.items.map(({ href, label, icon: Icon, exact, badge }) => {
               const isActive = exact
                 ? pathname === href
                 : pathname === href || pathname.startsWith(href + '/')
-              const active = isActive
+              const isTab = group.label === null
               return (
                 <Link
                   key={href + label}
                   href={href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`group flex items-center gap-2 rounded-md px-2 py-[5px] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                    active
-                      ? 'bg-accent text-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    isTab ? NAV_TAB_CLASS : NAV_ROW_CLASS,
+                    isActive ? NAV_ACTIVE_CLASS : NAV_IDLE_CLASS,
+                  )}
                 >
                   <Icon
-                    className={`size-4 shrink-0 ${active ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
+                    className={cn(
+                      'size-4 shrink-0',
+                      isActive ? 'text-foreground' : 'text-muted-foreground',
+                    )}
                   />
-                  <span className="flex-1 truncate">{label}</span>
-                  {badge && (
-                    <span className="rounded bg-accent px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  {badge ? (
+                    <span className="shrink-0 rounded-[3px] bg-accent px-1.5 text-[9px] font-semibold leading-4 tracking-wider text-muted-foreground">
                       {badge}
                     </span>
-                  )}
+                  ) : null}
                 </Link>
               )
             })}

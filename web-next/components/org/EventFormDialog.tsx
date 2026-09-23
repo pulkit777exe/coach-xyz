@@ -153,7 +153,7 @@ export default function EventFormDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="title">Title *</Label>
             <Input
               id="title"
@@ -164,7 +164,7 @@ export default function EventFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="event_type">Type</Label>
               <NativeSelect
                 id="event_type"
@@ -173,7 +173,7 @@ export default function EventFormDialog({
                 options={[...EVENT_TYPES]}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="status">Status</Label>
               <NativeSelect
                 id="status"
@@ -185,7 +185,7 @@ export default function EventFormDialog({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="date">Date *</Label>
               <Input
                 id="date"
@@ -194,7 +194,7 @@ export default function EventFormDialog({
                 onChange={(e) => set('date', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="start_time">Starts *</Label>
               <Input
                 id="start_time"
@@ -203,7 +203,7 @@ export default function EventFormDialog({
                 onChange={(e) => set('start_time', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="end_time">Ends</Label>
               <Input
                 id="end_time"
@@ -214,7 +214,7 @@ export default function EventFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="location">Location</Label>
             <Input
               id="location"
@@ -224,7 +224,7 @@ export default function EventFormDialog({
             />
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
@@ -234,7 +234,7 @@ export default function EventFormDialog({
             />
           </div>
 
-          {error && <p className="text-sm text-(--danger)">{error}</p>}
+          {error && <p className="text-[13px] text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>
@@ -279,7 +279,7 @@ export function NativeSelect({
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+      className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-[6px] border px-3 py-1.5 text-[14px] outline-none focus-visible:ring-[3px]"
     >
       {placeholder !== undefined && <option value="">{placeholder}</option>}
       {options.map((opt) => (

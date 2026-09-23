@@ -45,12 +45,12 @@ function RotatingMessage({ messages, percent }: { messages: string[]; percent: n
   return (
     <div className="flex flex-col items-center gap-2">
       <p
-        className="text-foreground text-lg transition-opacity duration-300 ease-in-out"
+        className="text-foreground text-[15px] font-medium transition-opacity duration-200 ease-in-out"
         style={{ opacity }}
       >
         {messages[index]}
       </p>
-      <span className="text-muted-foreground text-sm tabular-nums">{Math.round(percent)}%</span>
+      <span className="text-muted-foreground text-[13px] tabular-nums">{Math.round(percent)}%</span>
     </div>
   )
 }

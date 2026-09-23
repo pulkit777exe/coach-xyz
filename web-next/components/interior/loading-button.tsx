@@ -53,7 +53,7 @@ export function LoadingButton({
           {pendingLabel}
         </>
       ) : state === 'success' ? (
-        <span className="text-green-400">✓ {successLabel}</span>
+        <span className="text-success">✓ {successLabel}</span>
       ) : (
         children
       )}

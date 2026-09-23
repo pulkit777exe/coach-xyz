@@ -14,9 +14,9 @@ interface FindingsTimelineProps {
 }
 
 const SEVERITY_STYLE: Record<string, string> = {
-  high: 'text-destructive bg-destructive/10 border-destructive/20',
-  medium: 'text-warning bg-warning/10 border-warning/20',
-  low: 'text-foreground bg-muted border-border',
+  high: 'text-destructive bg-destructive/10',
+  medium: 'text-warning bg-warning/15',
+  low: 'text-muted-foreground bg-muted',
 }
 
 const BAND_LABEL: Record<string, string> = {
@@ -49,10 +49,10 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card">
+    <div className="rounded-[6px] border border-border bg-card">
       <div className="px-5 pt-4 pb-2">
-        <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
-          Key findings · {findings.length}
+        <h3 className="text-[13px] font-medium text-muted-foreground">
+          Key findings · <span className="tabular-nums">{findings.length}</span>
         </h3>
       </div>
       <ul className="max-h-64 overflow-y-auto px-3 pb-3 space-y-1">
@@ -66,48 +66,42 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
           return (
             <li key={finding.id}>
               <div
-                className={`w-full text-left rounded-xl border border-transparent px-3 py-2.5 transition-colors ${
-                  onSeek ? 'hover:bg-muted' : ''
+                className={`w-full text-left rounded-[4px] border border-transparent px-3 py-2.5 transition-colors ${
+                  onSeek ? 'hover:bg-accent' : ''
                 }`}
               >
                 <button
                   type="button"
                   disabled={!onSeek}
                   onClick={() => onSeek?.(seconds)}
-                  className={`w-full text-left ${onSeek ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`w-full text-left rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${onSeek ? 'cursor-pointer' : 'cursor-default'}`}
                   aria-label={`${finding.category} at ${seconds.toFixed(1)} seconds`}
                 >
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <TimestampPill seconds={seconds} />
                     <span
-                      className={`text-[0.65rem] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${severityClass}`}
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${severityClass}`}
                     >
                       {finding.severity ?? 'medium'}
                     </span>
-                    <span className="text-[0.65rem] text-muted-foreground">
+                    <span className="text-[12px] text-muted-foreground">
                       {BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band}
                     </span>
                     {state === 'needs_review' && (
-                      <span className="text-[0.65rem] font-semibold uppercase tracking-widest text-warning">
-                        Needs review
-                      </span>
+                      <span className="text-[12px] font-medium text-warning">Needs review</span>
                     )}
                     {state === 'approved' && (
-                      <span className="text-[0.65rem] font-semibold uppercase tracking-widest text-primary">
-                        Approved
-                      </span>
+                      <span className="text-[12px] font-medium text-primary">Approved</span>
                     )}
                     {state === 'flagged' && (
-                      <span className="text-[0.65rem] font-semibold uppercase tracking-widest text-destructive">
-                        Flagged
-                      </span>
+                      <span className="text-[12px] font-medium text-destructive">Flagged</span>
                     )}
                   </div>
-                  <p className="text-sm text-foreground leading-snug capitalize">
+                  <p className="text-[14px] text-foreground leading-snug capitalize">
                     {(finding.category ?? 'technique').replace(/_/g, ' ')}
                   </p>
                   {finding.observation && (
-                    <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                    <p className="text-[13px] text-muted-foreground leading-[1.5] mt-0.5">
                       {finding.observation}
                     </p>
                   )}
@@ -117,7 +111,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 rounded-lg text-xs font-semibold"
+                      className="h-7 rounded-[6px] text-[12px] font-medium"
                       disabled={isPending}
                       onClick={() => review(finding.id, 'approved')}
                     >
@@ -126,7 +120,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 rounded-lg text-xs font-semibold text-destructive border-destructive/30"
+                      className="h-7 rounded-[6px] text-[12px] font-medium text-destructive border-destructive/30"
                       disabled={isPending}
                       onClick={() => review(finding.id, 'flagged')}
                     >

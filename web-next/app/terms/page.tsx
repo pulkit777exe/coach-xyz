@@ -44,7 +44,7 @@ const sections = [
   {
     title: 'Disclaimer of warranties',
     body: [
-      'CoachXYZ is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo; without warranties of any kind, whether express or implied, including fitness for a particular purpose and non-infringement. Analyses may occasionally be wrong — they are a starting point for your own judgment, never a substitute for it.',
+      'CoachXYZ is provided "as is" and "as available" without warranties of any kind, whether express or implied, including fitness for a particular purpose and non-infringement. Analyses may occasionally be wrong — they are a starting point for your own judgment, never a substitute for it.',
     ],
   },
   {
@@ -67,51 +67,66 @@ const sections = [
   },
 ]
 
+const hairline = 'border-[rgba(55,53,47,0.09)] dark:border-[rgba(255,255,255,0.08)]'
+
 export default function TermsPage() {
   return (
-    <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
-      <section className="border-b border-[var(--marketing-white)]/5 px-6 py-10 lg:px-8">
+    <main className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
+      <section className={`border-b px-6 py-14 lg:px-8 ${hairline}`}>
         <div className="mx-auto max-w-[720px]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
+          <p className="text-[12px] font-medium tracking-[0.08em] text-[#787774] uppercase dark:text-[#9b9b9b]">
             Legal
           </p>
-          <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">
+          <h1 className="mt-3 text-balance text-[32px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[40px]">
             Terms of Service
           </h1>
-          <p className="mt-2 text-sm text-[var(--marketing-beige)]/50">
+          <p className="mt-3 text-sm text-[#787774] tabular-nums dark:text-[#9b9b9b]">
             Last updated: September 15, 2026
           </p>
         </div>
       </section>
-      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
+      <section className="px-6 py-12 lg:px-8">
         <div className="mx-auto max-w-[720px]">
-          <p className="text-sm leading-6 text-[var(--marketing-brown)]/70">
+          <p className="text-[16px] leading-[1.6] text-[#37352f]/80 dark:text-[#ececec]/80">
             These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of CoachXYZ.
             By creating an account or using the service you agree to be bound by them. Please read
             them carefully.
           </p>
-          <div className="mt-10 space-y-8">
-            {sections.map((s) => (
-              <section key={s.title}>
-                <h2 className="text-base font-bold">{s.title}</h2>
-                <div className="mt-2 space-y-3">
-                  {s.body.map((p) => (
-                    <p
-                      key={p.slice(0, 32)}
-                      className="text-sm leading-6 text-[var(--marketing-brown)]/70"
-                    >
-                      {p}
-                    </p>
-                  ))}
+          <div className={`mt-10 border-t ${hairline}`}>
+            {sections.map((s, i) => (
+              <section
+                key={s.title}
+                className={`grid gap-4 py-8 sm:grid-cols-[56px_1fr] ${hairline} border-b`}
+              >
+                <span className="text-[13px] font-medium text-[#787774]/60 tabular-nums dark:text-[#9b9b9b]/60">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div>
+                  <h2 className="text-[16px] font-semibold">{s.title}</h2>
+                  <div className="mt-2.5 space-y-3">
+                    {s.body.map((p) => (
+                      <p
+                        key={p.slice(0, 32)}
+                        className="text-[15px] leading-[1.6] text-[#37352f]/80 dark:text-[#ececec]/80"
+                      >
+                        {p}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </section>
             ))}
           </div>
-          <div className="mt-12 rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)] p-6">
-            <h2 className="text-base font-bold">Contact</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--marketing-brown)]/70">
+          <div
+            className={`mt-10 rounded-[8px] border bg-[#f7f7f5] p-6 dark:bg-[#202020] ${hairline}`}
+          >
+            <h2 className="text-[16px] font-semibold">Contact</h2>
+            <p className="mt-2 text-[15px] leading-[1.6] text-[#37352f]/80 dark:text-[#ececec]/80">
               Questions about these terms? Email{' '}
-              <span className="font-medium text-[var(--marketing-brown)]">help@coachxyz.app</span>.
+              <span className="font-medium text-[#37352f] dark:text-[#ececec]">
+                help@coachxyz.app
+              </span>
+              .
             </p>
           </div>
         </div>

@@ -28,6 +28,8 @@ import type { OrgMembersResponse } from '@/lib/members'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/9ui/ui/button'
 import PageHeader from '@/components/org/PageHeader'
+import Section from '@/components/org/Section'
+import StatusPill from '@/components/org/StatusPill'
 import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
 import MembersSection from '@/components/org/MembersSection'
@@ -56,6 +58,22 @@ function changePasswordUrl(): string | null {
     scope: 'openid profile email',
   })
   return `https://${AUTH0_DOMAIN}/authorize?${params.toString()}`
+}
+
+// Settings row: 14px/500 label + 13px muted description on the left, control on the right.
+function SettingRow({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border py-4 last:border-b-0">
+      <span className="text-[14px] font-medium leading-[1.4] text-foreground">{label}</span>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
 }
 
 export default async function SettingsPage() {
@@ -154,21 +172,16 @@ export default async function SettingsPage() {
         description="Choose how you want CoachXYZ to look and behave."
       />
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+      {error ? (
+        <div className="mb-6 rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
           Failed to load some settings data. Try refreshing the page.
         </div>
-      )}
+      ) : null}
 
-      <PreferencesSection />
+      <div className="space-y-8">
+        <PreferencesSection />
 
-      <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Profile
-          </p>
-        </div>
-        <div className="p-6">
+        <Section title="Profile">
           <div className="flex items-center gap-4">
             <UserAvatar
               picture={profile?.picture ?? session.user.picture}
@@ -177,10 +190,10 @@ export default async function SettingsPage() {
               size="lg"
             />
             <div>
-              <p className="text-lg font-semibold text-foreground">
+              <p className="text-[16px] font-semibold leading-[1.4] text-foreground">
                 {profile?.name ?? session.user.name ?? 'No name'}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
                 {profile?.email ?? session.user.email}
               </p>
             </div>
@@ -192,164 +205,144 @@ export default async function SettingsPage() {
               initialPicture={profile?.picture ?? session.user.picture ?? null}
             />
           </div>
-        </div>
-      </div>
+        </Section>
 
-      <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Security
-          </p>
-        </div>
-        <div className="divide-y divide-border">
-          <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Email Verified
-            </span>
-            {emailVerified ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                <Check className="size-3" />
-                Verified
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">No</span>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Password
-            </span>
-            {passwordUrl ? (
+        <Section title="Security">
+          <div>
+            <SettingRow label="Email Verified">
+              {emailVerified ? (
+                <StatusPill tone="green">
+                  <Check className="mr-1 size-3" aria-hidden="true" />
+                  Verified
+                </StatusPill>
+              ) : (
+                <span className="text-[13px] text-muted-foreground">No</span>
+              )}
+            </SettingRow>
+            <SettingRow label="Password">
+              {passwordUrl ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<a href={passwordUrl} />}
+                >
+                  <KeyRound className="size-3.5" />
+                  Change Password
+                </Button>
+              ) : (
+                <span className="text-[13px] text-muted-foreground">
+                  Ask your administrator to reset your password.
+                </span>
+              )}
+            </SettingRow>
+            <SettingRow label="Session">
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
                 nativeButton={false}
-                render={<a href={passwordUrl} />}
+                render={<a href="/auth/logout" />}
               >
-                <KeyRound className="size-3.5" />
-                Change Password
+                <LogOut className="size-3.5" />
+                Log Out
               </Button>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                Ask your administrator to reset your password.
-              </span>
-            )}
+            </SettingRow>
           </div>
-          <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Session
-            </span>
-            <Button
-              variant="destructive"
-              size="sm"
-              nativeButton={false}
-              render={<a href="/auth/logout" />}
-            >
-              <LogOut className="size-3.5" />
-              Log Out
-            </Button>
-          </div>
-        </div>
-      </div>
+        </Section>
 
-      <MembersSection auth0Id={auth0Id} initialData={membersData} />
+        <MembersSection auth0Id={auth0Id} initialData={membersData} />
 
-      {subscription && (
-        <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Plan & Usage
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-6 px-6 py-4">
-            <div>
-              <p className="text-lg font-bold capitalize tracking-tight text-foreground">
-                {subscription.tier}
-              </p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Plan
+        {subscription ? (
+          <Section title="Plan & Usage">
+            <div className="flex flex-wrap items-center gap-8">
+              <div>
+                <p className="text-[24px] font-semibold capitalize leading-[1.1] tracking-[-0.01em] text-foreground">
+                  {subscription.tier}
+                </p>
+                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Plan
+                </p>
+              </div>
+              <div>
+                <p className="text-[24px] font-semibold leading-[1.1] tabular-nums text-foreground">
+                  {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
+                </p>
+                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Analyses today
+                </p>
+              </div>
+              <p className="text-[13px] text-muted-foreground">
+                Usage is metered per analysis for future billing tiers.
               </p>
             </div>
-            <div>
-              <p className="text-lg font-bold tracking-tight text-foreground">
-                {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
-              </p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                Analyses today
-              </p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Usage is metered per analysis for future billing tiers.
-            </p>
-          </div>
-        </div>
-      )}
+          </Section>
+        ) : null}
 
-      <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Members
-          </p>
-        </div>
-        {students && students.length > 0 ? (
-          <ul className="divide-y divide-border overflow-hidden">
-            {students.map((s) => {
-              const linked = Boolean(s.account_auth0_id)
-              const contact = s.email || s.phone || 'No contact on file'
-              return (
-                <li key={s.id} className="flex items-center gap-4 bg-card px-6 py-3.5">
-                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
-                    {initials(s.full_name)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{s.full_name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {contact}
-                      {s.sport ? ` · ${s.sport}` : ''}
-                    </p>
-                  </div>
-                  {linked ? (
-                    <span className="inline-flex shrink-0 items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                      Player account linked
+        <Section title="Members">
+          {students && students.length > 0 ? (
+            <ul>
+              {students.map((s) => {
+                const linked = Boolean(s.account_auth0_id)
+                const contact = s.email || s.phone || 'No contact on file'
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
+                  >
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
+                      {initials(s.full_name)}
                     </span>
-                  ) : (
-                    <span className="shrink-0 text-xs text-muted-foreground">Not linked yet</span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        ) : (
-          <p className="px-6 py-8 text-center text-sm text-muted-foreground">
-            {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
-          </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                        {s.full_name}
+                      </p>
+                      <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                        {contact}
+                        {s.sport ? ` · ${s.sport}` : ''}
+                      </p>
+                    </div>
+                    {linked ? (
+                      <StatusPill tone="primary">Player account linked</StatusPill>
+                    ) : (
+                      <span className="shrink-0 text-[13px] text-muted-foreground">
+                        Not linked yet
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="py-8 text-center text-[14px] text-muted-foreground">
+              {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
+            </p>
+          )}
+        </Section>
+
+        {tiles.length > 0 && (
+          <Section title="Records">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {tiles.map((t) => (
+                <Link
+                  key={t.label}
+                  href={t.href}
+                  className="rounded-[6px] border border-border bg-card p-5 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      {t.label}
+                    </span>
+                    <t.icon className="size-4 text-muted-foreground/60" />
+                  </div>
+                  <p className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
+                    {t.value}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </Section>
         )}
       </div>
-
-      {tiles.length > 0 && (
-        <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Records
-            </p>
-          </div>
-          <div className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-3">
-            {tiles.map((t) => (
-              <Link
-                key={t.label}
-                href={t.href}
-                className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted"
-              >
-                <t.icon className="size-5 text-muted-foreground" />
-                <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{t.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                  {t.label}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

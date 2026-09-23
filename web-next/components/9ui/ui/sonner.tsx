@@ -11,21 +11,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       style={
         {
-          '--normal-bg': 'var(--color-popover)',
-          '--normal-text': 'var(--color-popover-foreground)',
-          '--normal-border': 'var(--color-border)',
-          '--error-bg': 'var(--color-danger)',
-          '--error-text': 'var(--color-danger-foreground)',
-          '--error-border': 'var(--color-danger-border)',
-          '--warning-bg': 'var(--color-warning)',
-          '--warning-text': 'var(--color-warning-foreground)',
-          '--warning-border': 'var(--color-warning-border)',
-          '--info-bg': 'var(--color-info)',
-          '--info-text': 'var(--color-info-foreground)',
-          '--info-border': 'var(--color-info-border)',
-          '--success-bg': 'var(--color-success)',
-          '--success-text': 'var(--color-success-foreground)',
-          '--success-border': 'var(--color-success-border)',
+          '--normal-bg': 'var(--card)',
+          '--normal-text': 'var(--card-foreground)',
+          '--normal-border': 'var(--border)',
+          '--border-radius': '8px',
+          '--error-bg': 'var(--card)',
+          '--error-text': 'var(--danger)',
+          '--error-border': 'var(--border)',
+          '--warning-bg': 'var(--card)',
+          '--warning-text': 'var(--warning)',
+          '--warning-border': 'var(--border)',
+          '--info-bg': 'var(--card)',
+          '--info-text': 'var(--info)',
+          '--info-border': 'var(--border)',
+          '--success-bg': 'var(--card)',
+          '--success-text': 'var(--success)',
+          '--success-border': 'var(--border)',
         } as React.CSSProperties
       }
       {...props}

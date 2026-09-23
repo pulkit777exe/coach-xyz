@@ -101,8 +101,8 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
 
   return (
     <div className="px-4 py-3">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-        Clips ({clips.length})
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        Clips (<span className="tabular-nums">{clips.length}</span>)
       </p>
 
       {loading ? (
@@ -112,28 +112,28 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
       ) : (
         <>
           {clips.length === 0 ? (
-            <p className="py-2 text-xs text-muted-foreground">
+            <p className="py-2 text-[13px] text-muted-foreground">
               No clips yet — mark a time range to revisit it instantly.
             </p>
           ) : (
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-0.5">
               {clips.map((clip) => (
                 <li
                   key={clip.id}
-                  className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted"
+                  className="group flex items-center gap-2 rounded-[4px] px-2 py-1.5 hover:bg-accent transition-colors"
                 >
                   <button
                     type="button"
                     onClick={() => onSeek(clip.start_ms / 1000)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                     aria-label={`Play clip ${clip.label}`}
                   >
                     <PlayIcon className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" />
-                    <span className="truncate text-xs font-medium text-foreground">
+                    <span className="truncate text-[13px] font-medium text-foreground">
                       {clip.label}
                     </span>
                     <TimestampPill seconds={clip.start_ms / 1000} />
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                    <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">
                       {formatRange(clip.start_ms, clip.end_ms)}
                     </span>
                   </button>
@@ -158,19 +158,19 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
           {auth0Id && (
             <div className="mt-3 grid grid-cols-[1fr_64px_64px_auto] items-end gap-2">
               <div className="grid gap-1">
-                <Label htmlFor="clip-label" className="text-[10px]">
+                <Label htmlFor="clip-label" className="text-[11px] font-medium text-muted-foreground">
                   Label
                 </Label>
                 <Input
                   id="clip-label"
-                  className="h-7 text-xs"
+                  className="h-8 text-[13px]"
                   placeholder="Release sequence"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="clip-start" className="text-[10px]">
+                <Label htmlFor="clip-start" className="text-[11px] font-medium text-muted-foreground">
                   Start (s)
                 </Label>
                 <Input
@@ -178,14 +178,14 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                   type="number"
                   min="0"
                   step="0.1"
-                  className="h-7 text-xs"
+                  className="h-8 text-[13px] tabular-nums"
                   placeholder="12.5"
                   value={start}
                   onChange={(e) => setStart(e.target.value)}
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="clip-end" className="text-[10px]">
+                <Label htmlFor="clip-end" className="text-[11px] font-medium text-muted-foreground">
                   End (s)
                 </Label>
                 <Input
@@ -193,13 +193,13 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                   type="number"
                   min="0"
                   step="0.1"
-                  className="h-7 text-xs"
+                  className="h-8 text-[13px] tabular-nums"
                   placeholder="15.0"
                   value={end}
                   onChange={(e) => setEnd(e.target.value)}
                 />
               </div>
-              <Button size="sm" className="h-7" onClick={submit} disabled={busy}>
+              <Button size="sm" className="h-8" onClick={submit} disabled={busy}>
                 {busy ? <Spinner /> : <PlusIcon />}
                 Save
               </Button>

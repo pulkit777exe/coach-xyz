@@ -3,11 +3,19 @@ import { getUserProfile } from '@/lib/api'
 import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { LogOut, Settings } from 'lucide-react'
 import UserAvatar from '@/components/UserAvatar'
 import DashboardNav from '@/components/DashboardNav'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import SidebarSearch from '@/components/SidebarSearch'
 import OrgSwitcher from '@/components/org/OrgSwitcher'
+
+/** 28px sidebar ghost icon button — Notion footer/top row. */
+const SIDEBAR_ICON_BUTTON =
+  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+/** Workspace mark row — same press/hover affordance as the icon buttons. */
+const WORKSPACE_LINK =
+  'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   let session
@@ -46,18 +54,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Sidebar — theme-aware (light: white, dark: near-black) */}
-      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="mb-6 flex items-center justify-between gap-2 px-2">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar — Notion chrome: 240px, hairline border on bg-sidebar,
+          internal scroll region with a bottom-pinned footer block. */}
+      <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {/* Top row: workspace mark + small ghost icon buttons */}
+          <div className="flex h-8 items-center justify-between gap-1 px-1">
+            <Link href="/" className={WORKSPACE_LINK}>
+              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-primary text-[11px] leading-none font-bold text-primary-foreground">
                 C
               </span>
-              <span className="text-sm font-semibold tracking-tight text-foreground">
-                coach.xyz
-              </span>
+              <span className="truncate text-sm font-medium text-foreground">coach.xyz</span>
             </Link>
             <NotificationBell />
           </div>
@@ -71,27 +79,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <DashboardNav role={navRole} />
         </div>
 
-        <div className="border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-muted">
+        {/* Footer block — avatar + account name, ghost icon actions */}
+        <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-[6px] px-1 py-1">
             <UserAvatar
               picture={session.user.picture}
               name={session.user.name}
               email={session.user.email}
               size="sm"
             />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground leading-none">
-                {session.user.name || session.user.email}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
-            </div>
+            <p
+              className="min-w-0 flex-1 truncate text-sm text-foreground/90"
+              title={session.user.email ?? undefined}
+            >
+              {session.user.name || session.user.email}
+            </p>
+            <Link href="/dashboard/settings" aria-label="Settings" className={SIDEBAR_ICON_BUTTON}>
+              <Settings className="size-4" />
+            </Link>
+            <a href="/auth/logout" aria-label="Log out" className={SIDEBAR_ICON_BUTTON}>
+              <LogOut className="size-4" />
+            </a>
           </div>
-          <a
-            href="/auth/logout"
-            className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            Log Out
-          </a>
         </div>
       </aside>
 

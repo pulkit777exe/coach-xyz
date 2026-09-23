@@ -59,8 +59,8 @@ export function HoldToConfirm({
       onBlur={cancel}
       aria-describedby="hold-to-confirm-hint"
       className={cn(
-        'inline-flex cursor-pointer select-none items-center gap-2 border border-danger/30 bg-transparent text-[0.65rem] uppercase tracking-[0.15em] text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-        armed && 'bg-danger text-danger-foreground',
+        'inline-flex cursor-pointer select-none items-center gap-2 rounded-[6px] border border-destructive/20 bg-transparent px-3 py-1.5 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+        armed && 'border-destructive bg-destructive text-destructive-foreground',
         className,
       )}
     >

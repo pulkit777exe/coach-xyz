@@ -64,7 +64,10 @@ export function ReorderList<T>({
               setDragId(null)
               setOverId(null)
             }}
-            className={cn('rounded-lg', overId === id && 'outline outline-1 outline-foreground')}
+            className={cn(
+              'rounded-[6px] transition-shadow',
+              overId === id && 'ring-2 ring-ring/40',
+            )}
           >
             <div className="flex items-center gap-2">
               <span
@@ -82,7 +85,7 @@ export function ReorderList<T>({
                 onClick={() => move(index, Math.max(0, index - 1))}
                 disabled={index === 0}
                 aria-label="Move up"
-                className="cursor-pointer px-1 text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-30"
+                className="cursor-pointer rounded-[4px] px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-30"
               >
                 ↑
               </button>
@@ -91,7 +94,7 @@ export function ReorderList<T>({
                 onClick={() => move(index, Math.min(items.length - 1, index + 1))}
                 disabled={index === items.length - 1}
                 aria-label="Move down"
-                className="cursor-pointer px-1 text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-30"
+                className="cursor-pointer rounded-[4px] px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-30"
               >
                 ↓
               </button>

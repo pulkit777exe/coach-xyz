@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 
 import { Spinner } from '@/components/org/Spinner'
 import PageHeader from '@/components/org/PageHeader'
+import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
 import { getJobStatus } from '@/lib/api'
@@ -127,13 +128,13 @@ export default function PlayerHub() {
 
   if (!profile.student) {
     return (
-      <div className="mx-auto max-w-2xl p-8">
+      <div className="mx-auto max-w-[720px] px-6 py-6 lg:px-8">
         <PageHeader
           trail={['My Hub']}
           title={`Welcome${profile.user?.name ? `, ${profile.user.name.split(' ')[0]}` : ''}`}
         />
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <p className="text-sm leading-6 text-muted-foreground">
+        <div className="rounded-[6px] border border-border bg-card p-6">
+          <p className="text-[14px] leading-6 text-muted-foreground">
             Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your email (
             <span className="font-mono text-foreground">{profile.user?.email ?? 'your email'}</span>
             ) to your student profile and log in again.
@@ -196,21 +197,23 @@ export default function PlayerHub() {
   const hubDescription = hubMeta.length > 0 ? hubMeta.join(' · ') : undefined
 
   return (
-    <div className="max-w-5xl p-8 lg:p-12">
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['My Hub', student.full_name || 'Details']}
         title={student.full_name || 'My Hub'}
         description={hubDescription}
       />
-      {/* KPI cards */}
+      {/* KPI stat tiles */}
       <div className="mt-8 mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <div key={kpi.label} className="rounded-[6px] border border-border bg-card p-5">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {kpi.label}
             </p>
-            <p className="mb-1 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
-            <p className="text-xs text-muted-foreground">{kpi.detail}</p>
+            <p className="mb-1.5 truncate text-[28px] font-semibold leading-none tabular-nums text-foreground">
+              {kpi.value}
+            </p>
+            <p className="truncate text-[12px] text-muted-foreground">{kpi.detail}</p>
           </div>
         ))}
       </div>
@@ -229,15 +232,15 @@ export default function PlayerHub() {
             {schedule.events.slice(0, 8).map((event) => (
               <li key={event.id} className="flex items-start justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{event.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="text-[14px] font-medium text-foreground">{event.title}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     {formatDateMed(event.starts_at)} · {EVENT_TYPE_LABELS[event.event_type]}
                     {event.location ? ` · ${event.location}` : ''}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                <StatusPill tone={eventTone(event.status)}>
                   {EVENT_STATUS_LABELS[event.status]}
-                </span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -253,16 +256,16 @@ export default function PlayerHub() {
             {attendance.records.slice(0, 8).map((record) => (
               <li key={record.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-[14px] font-medium text-foreground">
                     {formatDateMed(record.session_date)}
                   </p>
                   {record.note && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{record.note}</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">{record.note}</p>
                   )}
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs">
+                <StatusPill tone={attendanceTone(record.status)}>
                   {ATTENDANCE_STATUS_LABELS[record.status] ?? record.status}
-                </span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -284,18 +287,18 @@ export default function PlayerHub() {
                   className="flex items-center justify-between gap-4 py-4"
                 >
                   <div>
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-[14px] font-medium text-foreground">
                       {formatDateShort(point.measured_at)}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
                       {point.metric_key} ·{' '}
                       {point.source === 'analysis' ? 'from analysis' : 'manual'}
                     </p>
                   </div>
-                  <span className="text-lg font-bold tracking-tight text-foreground">
+                  <span className="text-[17px] font-semibold tabular-nums text-foreground">
                     {point.metric_value}
                     {point.unit ? (
-                      <span className="text-sm font-normal text-muted-foreground">
+                      <span className="text-[13px] font-normal text-muted-foreground">
                         {' '}
                         {point.unit}
                       </span>
@@ -321,28 +324,22 @@ export default function PlayerHub() {
                 className="flex items-center justify-between gap-4 py-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
+                  <p className="truncate text-[14px] font-medium text-foreground">
                     {analysis.display_name || 'Untitled video'}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     {formatDateShort(analysis.requested_at)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   {analysisScore(analysis) !== null && (
-                    <span className="text-lg font-bold tracking-tight text-foreground">
+                    <span className="text-[17px] font-semibold tabular-nums text-foreground">
                       {analysisScore(analysis)}
                     </span>
                   )}
-                  <span
-                    className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${
-                      analysis.complete
-                        ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
+                  <StatusPill tone={analysis.complete ? 'green' : 'gray'}>
                     {analysis.complete ? 'Done' : 'Processing'}
-                  </span>
+                  </StatusPill>
                 </div>
               </li>
             ))}
@@ -359,20 +356,16 @@ export default function PlayerHub() {
             {objectives.objectives.slice(0, 8).map((objective) => (
               <li key={objective.id} className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{objective.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="truncate text-[14px] font-medium text-foreground">
+                    {objective.title}
+                  </p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     {objective.due_on ? `Due ${objective.due_on}` : 'No due date'}
                   </p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs capitalize ${
-                    objective.status === 'done'
-                      ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                      : 'border-border text-muted-foreground'
-                  }`}
-                >
-                  {objective.status}
-                </span>
+                <StatusPill tone={objective.status === 'done' ? 'green' : 'gray'}>
+                  <span className="capitalize">{objective.status}</span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -388,15 +381,13 @@ export default function PlayerHub() {
             {reports.reports.slice(0, 8).map((report) => (
               <li key={report.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{report.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="text-[14px] font-medium text-foreground">{report.title}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} ·{' '}
                     {formatDateShort(report.created_at)}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
-                  {periodLabel(report.period_start, report.period_end)}
-                </span>
+                <StatusPill tone="gray">{periodLabel(report.period_start, report.period_end)}</StatusPill>
               </li>
             ))}
           </ul>
@@ -416,12 +407,10 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center gap-2">
+    <section className="mb-8">
+      <div className="mb-2 flex items-center gap-2 border-b border-border pb-3">
         <span className="text-muted-foreground">{icon}</span>
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-foreground">
-          {title}
-        </h2>
+        <h2 className="text-[16px] font-semibold text-foreground">{title}</h2>
       </div>
       {children}
     </section>
@@ -429,7 +418,20 @@ function Section({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
+  return <p className="py-3 text-[14px] text-muted-foreground">{children}</p>
+}
+
+function eventTone(status: string): StatusTone {
+  if (status === 'completed') return 'green'
+  if (status === 'cancelled' || status === 'canceled') return 'red'
+  return 'gray'
+}
+
+function attendanceTone(status: string): StatusTone {
+  if (status === 'present') return 'green'
+  if (status === 'absent') return 'red'
+  if (status === 'late') return 'amber'
+  return 'gray'
 }
 
 const STAGE_LABELS: Partial<Record<string, string>> = {
@@ -590,14 +592,14 @@ function AnalyzeVideoCard({
       <div className="flex items-center gap-3">
         <Spinner />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">{STAGE_LABELS[stage]}</p>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary/20">
+          <p className="text-[14px] font-medium text-foreground">{STAGE_LABELS[stage]}</p>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary transition-all"
+              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
               style={{ width: `${Math.max(2, Math.min(displayPercent, 99))}%` }}
             />
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-[13px] text-muted-foreground tabular-nums">
             {stage === 'analyzing'
               ? 'This usually takes under a minute. The result will appear under Analyses.'
               : `${Math.round(displayPercent)}%`}
@@ -610,7 +612,7 @@ function AnalyzeVideoCard({
   if (stage === 'selecting') {
     return (
       <div>
-        <p className="mb-3 text-sm font-medium text-foreground">
+        <p className="mb-3 text-[14px] font-medium text-foreground">
           Multiple players detected — who should we analyze?
         </p>
         <div className="flex flex-wrap gap-2">
@@ -637,12 +639,12 @@ function AnalyzeVideoCard({
   return (
     <div>
       {stage === 'finished' && (
-        <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
+        <p className="mb-3 text-[14px] text-success">
           Analysis complete — it&apos;s in your Analyses list below and in your coach&apos;s
           history.
         </p>
       )}
-      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      {error && <p className="mb-3 text-[13px] text-destructive">{error}</p>}
       <div
         role="button"
         tabIndex={0}
@@ -666,7 +668,7 @@ function AnalyzeVideoCard({
           setIsDragging(false)
           pick(e.dataTransfer.files[0])
         }}
-        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
+        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-[6px] border-2 border-dashed p-5 text-center transition-colors ${
           isDragging
             ? 'border-primary bg-primary/10'
             : 'border-border bg-background hover:border-primary/40'
@@ -682,10 +684,10 @@ function AnalyzeVideoCard({
         <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
           <VideoIcon className="size-5" />
         </div>
-        <p className="mt-3 text-sm font-medium text-foreground">
+        <p className="mt-3 text-[14px] font-medium text-foreground">
           {fileName || 'Drop video or click to browse'}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
         <Button
           size="sm"
           className="mt-3"
@@ -697,7 +699,7 @@ function AnalyzeVideoCard({
           Choose video
         </Button>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-[13px] text-muted-foreground">
         Your coach will see the result in their dashboard history, attributed to you.
       </p>
     </div>

@@ -159,50 +159,54 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-3xl space-y-6">
           {isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-sm py-8">
+            <div className="text-center text-muted-foreground text-[14px] py-8">
               Loading conversation...
             </div>
           )}
 
           {historyError && !isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-xs py-4 opacity-60">
+            <div className="text-center text-muted-foreground text-[13px] py-4">
               Could not load previous messages
             </div>
           )}
 
           {!isLoadingHistory && messages.length === 0 && summary && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+              <div className="rounded-[6px] border border-border bg-card p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="text-2xl">{SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}</span>
                   <div>
-                    <h3 className="text-2xl font-bold tracking-tight text-foreground capitalize">
+                    <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-foreground capitalize">
                       {summary.sport} Analysis Complete
                     </h3>
-                    <p className="text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground tabular-nums">
                       {summary.total_events ?? 0} events detected
                     </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="font-bold text-3xl text-foreground">{summary.form_score}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Form Score
                     </p>
+                    <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground">
+                      {summary.form_score}
+                    </p>
                   </div>
                   <div>
-                    <p className="font-bold text-lg text-foreground">{summary.overall_rating}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Rating
                     </p>
+                    <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground capitalize">
+                      {summary.overall_rating}
+                    </p>
                   </div>
                   <div>
-                    <p className="font-bold text-lg text-foreground">
-                      {summary.success_rate_percent ?? 0}%
-                    </p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Success Rate
+                    </p>
+                    <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground">
+                      {summary.success_rate_percent ?? 0}%
                     </p>
                   </div>
                 </div>
@@ -240,7 +244,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         </div>
       </div>
 
-      <div className="border-t border-border bg-background/80 backdrop-blur-md">
+      <div className="border-t border-border bg-background">
         <div className="mx-auto max-w-3xl px-4 py-4">
           <ChatInput
             onSend={handleSend}

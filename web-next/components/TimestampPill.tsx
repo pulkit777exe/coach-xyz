@@ -22,10 +22,16 @@ export function formatTimestampClock(seconds: number): string {
   return `${mins}:${secs.padStart(4, '0')}`
 }
 
-export default function TimestampPill({ seconds, format = 'short', onSeek, className }: TimestampPillProps) {
+export default function TimestampPill({
+  seconds,
+  format = 'short',
+  onSeek,
+  className,
+}: TimestampPillProps) {
   const label = format === 'clock' ? formatTimestampClock(seconds) : formatTimestampShort(seconds)
+  // Notion-style reference pill: soft primary tint, full radius, 11px/500.
   const styles =
-    'inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-muted-foreground'
+    'inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary'
   if (!onSeek) {
     return <span className={cn(styles, className)}>{label}</span>
   }
@@ -36,11 +42,17 @@ export default function TimestampPill({ seconds, format = 'short', onSeek, class
       aria-label={`Seek to ${label}`}
       className={cn(
         styles,
-        'transition-colors hover:border-primary/50 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground',
+        'transition-colors duration-150 hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]',
         className,
       )}
     >
-      <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        className="size-3"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
         <path
           strokeLinecap="round"
           strokeLinejoin="round"

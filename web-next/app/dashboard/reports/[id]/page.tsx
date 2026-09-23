@@ -26,7 +26,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   if (!report) notFound()
 
   return (
-    <div className="mx-auto max-w-[800px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['Reports', report.title || 'Untitled']}
         title={report.title || 'Untitled'}

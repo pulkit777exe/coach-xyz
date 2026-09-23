@@ -45,28 +45,26 @@ export default function ProfileForm({
   return (
     <form onSubmit={submit} className="grid gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
+        <div className="grid gap-1.5">
           <Label htmlFor="name">Name</Label>
           <Input
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your full name"
-            className="border-border bg-transparent"
           />
         </div>
-        <div className="grid gap-2">
+        <div className="grid gap-1.5">
           <Label htmlFor="nickname">Nickname</Label>
           <Input
             id="nickname"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             placeholder="Coach, boss, Gaffer…"
-            className="border-border bg-transparent"
           />
         </div>
       </div>
-      <div className="grid gap-2">
+      <div className="grid gap-1.5">
         <Label htmlFor="picture">Picture URL</Label>
         <Input
           id="picture"
@@ -74,7 +72,6 @@ export default function ProfileForm({
           value={picture}
           onChange={(e) => setPicture(e.target.value)}
           placeholder="https://…/avatar.jpg"
-          className="border-border bg-transparent"
         />
       </div>
       <div>

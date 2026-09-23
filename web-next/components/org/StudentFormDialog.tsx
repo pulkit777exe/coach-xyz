@@ -169,12 +169,11 @@ export default function StudentFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
-        {' '}
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit Student' : 'Add Student'}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="full_name">Full name *</Label>
             <Input
               id="full_name"
@@ -185,7 +184,7 @@ export default function StudentFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -193,11 +192,11 @@ export default function StudentFormDialog({
                 value={values.email ?? ''}
                 onChange={(e) => set('email', e.target.value)}
               />
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[13px]">
                 Use the student’s login email to auto-link their player account.
               </p>
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="phone">Phone</Label>
               <Input
                 id="phone"
@@ -208,7 +207,7 @@ export default function StudentFormDialog({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="sport">Sport</Label>
               <NativeSelect
                 id="sport"
@@ -222,7 +221,7 @@ export default function StudentFormDialog({
                 placeholder="Select sport"
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="position">Position</Label>
               {positions.length > 0 ? (
                 <PositionSelect
@@ -239,7 +238,7 @@ export default function StudentFormDialog({
                 />
               )}
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="jersey_number">Jersey #</Label>
               <Input
                 id="jersey_number"
@@ -251,7 +250,7 @@ export default function StudentFormDialog({
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="date_of_birth">Date of birth</Label>
               <Input
                 id="date_of_birth"
@@ -260,7 +259,7 @@ export default function StudentFormDialog({
                 onChange={(e) => set('date_of_birth', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="gender">Gender</Label>
               <NativeSelect
                 id="gender"
@@ -270,7 +269,7 @@ export default function StudentFormDialog({
                 placeholder="—"
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="status">Status</Label>
               <NativeSelect
                 id="status"
@@ -282,7 +281,7 @@ export default function StudentFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="joined_on">Joined</Label>
               <Input
                 id="joined_on"
@@ -291,7 +290,7 @@ export default function StudentFormDialog({
                 onChange={(e) => set('joined_on', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="team">Team</Label>
               <Select
                 items={{
@@ -319,7 +318,7 @@ export default function StudentFormDialog({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="guardian_name">Guardian name</Label>
               <Input
                 id="guardian_name"
@@ -327,7 +326,7 @@ export default function StudentFormDialog({
                 onChange={(e) => set('guardian_name', e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               <Label htmlFor="guardian_phone">Guardian phone</Label>
               <Input
                 id="guardian_phone"
@@ -337,7 +336,7 @@ export default function StudentFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="notes">Notes</Label>
             <Textarea
               id="notes"
@@ -348,7 +347,7 @@ export default function StudentFormDialog({
             />
           </div>
 
-          {error && <p className="text-sm text-(--danger)">{error}</p>}
+          {error && <p className="text-[13px] text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>

@@ -1,7 +1,14 @@
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { House, LogOut } from 'lucide-react'
 import UserAvatar from '@/components/UserAvatar'
+
+/** 28px sidebar ghost icon button — Notion footer row. */
+const SIDEBAR_ICON_BUTTON =
+  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+const WORKSPACE_LINK =
+  'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
   let session
@@ -17,48 +24,51 @@ export default async function PlayerLayout({ children }: { children: React.React
   }
 
   return (
-    <div className="min-h-screen flex bg-[var(--background)]">
-      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <Link href="/player" className="mb-6 flex items-center gap-2 px-2">
-            <span className="inline-flex size-6 items-center justify-center rounded bg-foreground text-background text-xs font-bold dark:bg-background dark:text-foreground">
-              P
-            </span>
-            <span className="text-sm font-semibold tracking-tight text-foreground">player.xyz</span>
-          </Link>
-          <nav className="flex flex-col gap-1">
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar — same Notion chrome as the dashboard shell */}
+      <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <div className="flex h-8 items-center px-1">
+            <Link href="/player" className={WORKSPACE_LINK}>
+              <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-primary text-[11px] leading-none font-bold text-primary-foreground">
+                P
+              </span>
+              <span className="truncate text-sm font-medium text-foreground">player.xyz</span>
+            </Link>
+          </div>
+          <nav className="mt-2 flex flex-col">
             <Link
               href="/player"
-              className="flex items-center gap-2.5 rounded-md bg-primary/10 px-2.5 py-2 text-sm font-medium text-primary dark:bg-primary/20 dark:text-primary"
+              aria-current="page"
+              className="flex h-7 items-center gap-2 rounded-[4px] bg-accent px-2 text-sm font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]"
             >
-              My Hub
+              <House className="size-4 shrink-0 text-foreground" />
+              <span className="min-w-0 flex-1 truncate">My Hub</span>
             </Link>
           </nav>
         </div>
-        <div className="border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+        {/* Footer block — avatar + account name, ghost logout action */}
+        <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">
+          <div className="flex items-center gap-2 rounded-[6px] px-1 py-1">
             <UserAvatar
               picture={session.user.picture}
               name={session.user.name}
               email={session.user.email}
               size="sm"
             />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium leading-none text-foreground">
-                {session.user.name || session.user.email}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
-            </div>
+            <p
+              className="min-w-0 flex-1 truncate text-sm text-foreground/90"
+              title={session.user.email ?? undefined}
+            >
+              {session.user.name || session.user.email}
+            </p>
+            <a href="/auth/logout" aria-label="Log out" className={SIDEBAR_ICON_BUTTON}>
+              <LogOut className="size-4" />
+            </a>
           </div>
-          <a
-            href="/auth/logout"
-            className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            Log Out
-          </a>
         </div>
       </aside>
-      <main className="flex-1 min-w-0 overflow-auto bg-[var(--background)]">{children}</main>
+      <main className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
     </div>
   )
 }

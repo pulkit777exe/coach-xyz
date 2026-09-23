@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/9ui/ui/button'
-import { Badge } from '@/components/9ui/ui/badge'
+import StatusPill from '@/components/org/StatusPill'
 import { Checkbox } from '@/components/9ui/ui/checkbox'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Spinner } from './Spinner'
+import EmptyState from './EmptyState'
 import StudentFormDialog from './StudentFormDialog'
 import InvitePlayersDialog from './InvitePlayersDialog'
 
@@ -62,9 +63,9 @@ import { formatDateMed } from '@/lib/date'
 import type { CoachAIError } from '@/lib/api'
 
 const STATUS_STYLE: Record<string, string> = {
-  active: 'border-(--success-border) text-(--success) bg-(--success)',
-  inactive: 'border-(--warning-border) text-(--warning)',
-  transferred: 'border-border text-muted-foreground',
+  active: 'bg-success/15 text-success',
+  inactive: 'bg-warning/15 text-warning',
+  transferred: 'bg-muted text-muted-foreground',
 }
 
 function initials(name: string) {
@@ -231,7 +232,7 @@ function StudentImportDialog({
           <div className="flex items-center gap-2">
             <Label
               htmlFor="import-file"
-              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm"
+              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-[6px] border px-3 text-[14px]"
             >
               <UploadIcon className="size-4" />
               Choose CSV file
@@ -249,7 +250,7 @@ function StudentImportDialog({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="import-paste" className="text-xs">
+            <Label htmlFor="import-paste" className="text-[14px] font-medium">
               …or paste CSV
             </Label>
             <Textarea
@@ -264,17 +265,17 @@ function StudentImportDialog({
 
           {rows.length > 0 && (
             <div>
-              <p className="text-muted-foreground mb-2 text-xs">
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {rows.length} row(s) parsed — first {Math.min(rows.length, 8)} shown
               </p>
-              <div className="border-border max-h-48 overflow-auto rounded-md border">
-                <table className="w-full text-xs">
+              <div className="border-border max-h-48 overflow-auto rounded-[6px] border">
+                <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="bg-muted/50 text-muted-foreground border-b border-border uppercase">
-                      <th className="px-3 py-2 text-left font-normal">Name</th>
-                      <th className="px-3 py-2 text-left font-normal">Email</th>
-                      <th className="px-3 py-2 text-left font-normal">Sport</th>
-                      <th className="px-3 py-2 text-left font-normal">Status</th>
+                    <tr className="border-b border-border text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      <th className="px-3 py-2 text-left">Name</th>
+                      <th className="px-3 py-2 text-left">Email</th>
+                      <th className="px-3 py-2 text-left">Sport</th>
+                      <th className="px-3 py-2 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -292,10 +293,10 @@ function StudentImportDialog({
             </div>
           )}
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
 
           {result ? (
-            <div className="border-border bg-muted/40 space-y-1 rounded-md border p-3 text-sm">
+            <div className="border-border bg-muted/40 space-y-1 rounded-[6px] border p-3 text-[13px]">
               <p className="text-foreground font-medium">{result.imported} imported</p>
               {result.duplicates_skipped > 0 ? (
                 <p className="text-muted-foreground">
@@ -606,8 +607,10 @@ export default function StudentsClient({
 
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
-        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
-          <span className="text-muted-foreground text-sm">{selectedIds.length} selected</span>
+        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-[6px] border px-3 py-2">
+          <span className="text-[13px] tabular-nums text-muted-foreground">
+            {selectedIds.length} selected
+          </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
@@ -670,18 +673,29 @@ export default function StudentsClient({
       )}
 
       {/* Table */}
-      <div className="border-border overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-[6px] border border-border bg-card">
         {filtered.length === 0 ? (
-          <div className="text-muted-foreground bg-card p-16 text-center text-sm">
-            {students.length === 0
-              ? 'No students yet. Add your first student to get started.'
-              : 'No students match your filters.'}
-          </div>
+          <EmptyState
+            title={students.length === 0 ? 'No students yet' : 'No matching students'}
+            description={
+              students.length === 0
+                ? 'Add your first student to get started.'
+                : 'Try clearing your search or filters.'
+            }
+            action={
+              students.length === 0 ? (
+                <Button size="sm" onClick={openCreate}>
+                  <PlusIcon />
+                  Add student
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-[14px]">
             <thead>
-              <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
-                <th className="px-4 py-3">
+              <tr className="border-b border-border">
+                <th className="px-4 py-2.5">
                   <Checkbox
                     checked={allFilteredSelected}
                     indeterminate={selectedIds.length > 0 && !allFilteredSelected}
@@ -689,104 +703,100 @@ export default function StudentsClient({
                     aria-label="Select all students"
                   />
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Student
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Sport
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Team
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Position
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Joined
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3 text-right font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-card">
+            <tbody>
               {filtered.map((s) => (
                 <tr
                   key={s.id}
-                  className="hover:bg-accent/50 border-b border-border last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                  className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <Checkbox
                       checked={selected.has(s.id)}
                       onCheckedChange={() => toggleSelect(s.id)}
                       aria-label={`Select ${s.full_name}`}
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
                       <Avatar className="border-border size-9 border">
                         <AvatarImage src={undefined} alt="" />
-                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                        <AvatarFallback className="bg-muted text-muted-foreground text-[12px]">
                           {initials(s.full_name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="text-foreground truncate font-medium">{s.full_name}</p>
-                        <p className="text-muted-foreground truncate text-xs">
+                        <p className="truncate font-medium text-foreground">{s.full_name}</p>
+                        <p className="truncate text-[13px] text-muted-foreground">
                           {s.email || s.phone || '—'}
                         </p>
                         {s.account_auth0_id && (
-                          <p className="text-muted-foreground mt-0.5 text-[0.6rem] uppercase tracking-[0.15em]">
+                          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
                             • linked to player account
                           </p>
                         )}
                       </div>
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     {s.sport ? (
-                      <Badge variant="outline" className="border-border text-muted-foreground">
-                        {s.sport}
-                      </Badge>
+                      <StatusPill tone="gray">{s.sport}</StatusPill>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                     {s.jersey_number ? (
-                      <span className="text-muted-foreground ml-1 text-xs">#{s.jersey_number}</span>
+                      <span className="ml-1 text-[13px] tabular-nums text-muted-foreground">
+                        #{s.jersey_number}
+                      </span>
                     ) : null}
                   </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 md:table-cell">
                     {(() => {
                       const team = teams.find((t) => t.id === s.team_id)
                       return team ? (
-                        <Badge variant="outline" className="border-border text-muted-foreground">
-                          {team.name}
-                        </Badge>
+                        <StatusPill tone="gray">{team.name}</StatusPill>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )
                     })()}
                   </td>
-                  <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">
                     {s.position || '—'}
                   </td>
-                  <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 text-muted-foreground tabular-nums md:table-cell">
                     {s.joined_on ? formatDateMed(s.joined_on) : '—'}
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      className={
-                        (STATUS_STYLE[s.status] ?? 'border-border text-muted-foreground') +
-                        ' border'
-                      }
+                  <td className="px-4 py-2.5">
+                    <span
+                      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none ${STATUS_STYLE[s.status] ?? 'bg-muted text-muted-foreground'}`}
+                      style={{ fontSize: 11 }}
                     >
                       {s.status}
-                    </Badge>
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={

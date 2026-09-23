@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import {
   Dialog,
@@ -24,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Spinner } from './Spinner'
+import StatusPill, { type StatusTone } from './StatusPill'
 
 import {
   ORG_MEMBER_INVITE_ROLES,
@@ -49,15 +49,15 @@ const INVITE_ROLE_ITEMS: Record<string, string> = Object.fromEntries(
   ORG_MEMBER_INVITE_ROLES.map((r) => [r, ORG_MEMBER_ROLE_LABELS[r]]),
 )
 
-const ROLE_BADGE_VARIANT: Record<OrgMemberRole, 'default' | 'secondary' | 'success' | 'info'> = {
-  owner: 'default',
-  admin: 'info',
-  head_coach: 'success',
-  assistant_coach: 'success',
-  coach: 'success',
-  analyst: 'info',
-  medical: 'secondary',
-  player: 'secondary',
+const ROLE_TONE: Record<OrgMemberRole, StatusTone> = {
+  owner: 'primary',
+  admin: 'blue',
+  head_coach: 'green',
+  assistant_coach: 'green',
+  coach: 'green',
+  analyst: 'blue',
+  medical: 'gray',
+  player: 'gray',
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -171,11 +171,11 @@ export default function MembersSection({
     member.role === 'owner' && ownerCount <= 1
 
   return (
-    <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <div className="mt-8">
+      <div className="flex items-center justify-between gap-4 border-b border-border pb-2.5">
+        <h2 className="text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
           Staff
-        </p>
+        </h2>
         {canInvite && (
           <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
             <PlusIcon />
@@ -185,36 +185,41 @@ export default function MembersSection({
       </div>
 
       {error ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">{error}</p>
+        <p className="py-8 text-center text-[14px] text-muted-foreground">{error}</p>
       ) : loading ? (
-        <div className="flex items-center justify-center px-6 py-10">
+        <div className="flex items-center justify-center py-10">
           <Spinner className="text-muted-foreground" />
         </div>
       ) : members.length === 0 ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+        <p className="py-8 text-center text-[14px] text-muted-foreground">
           No staff on the team yet.
         </p>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul>
           {members.map((member) => {
             const name = member.display_name ?? member.member_email ?? 'No name'
             const isOwner = member.role === 'owner'
             return (
-              <li key={member.id} className="flex items-center gap-4 px-6 py-3.5">
-                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
+              <li
+                key={member.id}
+                className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
+              >
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
                   {name === 'No name' ? '?' : initials(name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{name}</p>
+                  <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                    {name}
+                  </p>
                   {member.member_email && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
                       {member.member_email}
                     </p>
                   )}
                 </div>
-                <Badge variant={ROLE_BADGE_VARIANT[member.role]}>
+                <StatusPill tone={ROLE_TONE[member.role]}>
                   {ORG_MEMBER_ROLE_LABELS[member.role]}
-                </Badge>
+                </StatusPill>
                 {busyId === member.id ? (
                   <Spinner className="shrink-0 text-muted-foreground" />
                 ) : (
@@ -259,7 +264,7 @@ export default function MembersSection({
       )}
 
       {owner && (
-        <p className="border-t border-border px-6 py-3 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-3 text-[13px] text-muted-foreground">
           Staff with a Coach or Admin role gain access to this organization when they sign in with
           their email. {canManageRoles ? 'Only the owner' : 'The owner'} can change roles or remove
           staff.

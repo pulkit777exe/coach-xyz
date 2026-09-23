@@ -17,86 +17,30 @@ export default function GlobalError({
   return (
     <html>
       <body style={{ margin: 0 }}>
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#16120f',
-            color: '#f0ebe1',
-          }}
-        >
-          <div style={{ textAlign: 'center', maxWidth: '28rem', padding: '1.5rem' }}>
-            <div
-              style={{
-                display: 'grid',
-                placeItems: 'center',
-                width: '3rem',
-                height: '3rem',
-                borderRadius: '0.5rem',
-                backgroundColor: 'rgba(188,245,108,0.1)',
-                color: '#BCF56C',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                margin: '0 auto 1rem',
-              }}
-            >
-              C
-            </div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-              Something went wrong
-            </h1>
-            <p
-              style={{
-                fontSize: '0.875rem',
-                color: 'rgba(240,235,225,0.4)',
-                marginBottom: '0.5rem',
-              }}
-            >
+        <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+          <div className="w-full max-w-sm rounded-[8px] border border-border bg-card p-6 text-center">
+            <p className="text-[40px] leading-none font-bold text-muted-foreground">C</p>
+            <h1 className="mt-4 text-base font-medium text-foreground">Something went wrong</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               {error.message || 'An unexpected error occurred.'}
             </p>
             {error.digest && (
-              <p
-                style={{
-                  color: 'rgba(240,235,225,0.25)',
-                  fontSize: '0.75rem',
-                  marginBottom: '1.5rem',
-                }}
-              >
-                Error ID: {error.digest}
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
             )}
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+            <div className="mt-5 flex justify-center gap-3">
               <button
+                type="button"
                 onClick={reset}
-                style={{
-                  backgroundColor: '#BCF56C',
-                  color: '#13160f',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '9999px',
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.8125rem',
-                }}
+                className="rounded-[4px] px-1 text-sm font-medium text-primary outline-none transition-colors duration-150 hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 Try again
               </button>
               <button
+                type="button"
                 onClick={() => {
                   window.location.href = window.location.origin + '/'
                 }}
-                style={{
-                  backgroundColor: 'transparent',
-                  color: '#f0ebe1',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '9999px',
-                  fontWeight: 500,
-                  border: '1px solid rgba(240,235,225,0.15)',
-                  cursor: 'pointer',
-                  fontSize: '0.8125rem',
-                }}
+                className="rounded-[4px] px-1 text-sm font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
               >
                 Go home
               </button>

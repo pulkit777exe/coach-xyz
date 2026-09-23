@@ -96,7 +96,7 @@ export default function InvitePlayersDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="invite_emails">Email addresses</Label>
             <textarea
               id="invite_emails"
@@ -104,10 +104,10 @@ export default function InvitePlayersDialog({
               onChange={(e) => setRaw(e.target.value)}
               placeholder={'one@email.com\ntwo@email.com'}
               rows={5}
-              className="border-input bg-muted text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
+              className="border-input bg-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 focus-visible:border-ring rounded-[6px] border px-3 py-2 text-[14px] outline-none focus-visible:ring-[3px]"
             />
             {emails.length > 0 && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[13px] tabular-nums">
                 {emails.length} valid email{emails.length !== 1 && 's'} detected
               </p>
             )}

@@ -52,7 +52,7 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
           type="button"
           onClick={() => scrollTo(s.id)}
           className={cn(
-            'cursor-pointer text-[0.6rem] uppercase tracking-[0.2em] transition-colors',
+            'cursor-pointer rounded-[4px] px-1.5 py-0.5 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             active === s.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
           )}
         >

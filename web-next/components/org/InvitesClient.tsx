@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
+import Section from '@/components/org/Section'
+import StatusPill from '@/components/org/StatusPill'
 import {
   Dialog,
   DialogContent,
@@ -94,40 +94,39 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>Invitations</CardTitle>
-            <CardDescription>
-              Single-use links, valid 7 days. {pending.length} pending.
-            </CardDescription>
-          </div>
-          <Button
-            onClick={() => {
-              setLastToken(null)
-              setError(null)
-              setOpen(true)
-            }}
-          >
-            New invitation
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+    <Section
+      title="Invitations"
+      actions={
+        <Button
+          size="sm"
+          onClick={() => {
+            setLastToken(null)
+            setError(null)
+            setOpen(true)
+          }}
+        >
+          New invitation
+        </Button>
+      }
+    >
+      <p className="mb-3 text-[13px] leading-[1.5] text-muted-foreground">
+        Single-use links, valid 7 days. <span className="tabular-nums">{pending.length}</span>{' '}
+        pending.
+      </p>
+      <div className="space-y-2">
         {lastToken && inviteLink && (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
-            <p className="text-xs font-semibold text-foreground mb-1">
+          <div className="rounded-[6px] border border-primary/30 bg-primary/5 p-3">
+            <p className="mb-1 text-[13px] font-medium text-foreground">
               Share this link (shown once)
             </p>
-            <p className="text-xs text-muted-foreground break-all">{inviteLink}</p>
+            <p className="break-all text-[13px] text-muted-foreground">{inviteLink}</p>
             <Button size="sm" variant="outline" className="mt-2 h-7" onClick={copyLink}>
               {copied ? 'Copied' : 'Copy link'}
             </Button>
           </div>
         )}
         {invites.length === 0 && (
-          <p className="text-sm text-muted-foreground">No invitations yet.</p>
+          <p className="text-[14px] text-muted-foreground">No invitations yet.</p>
         )}
         {invites.map((invite) => {
           const state = invite.accepted_at
@@ -138,30 +137,29 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
           return (
             <div
               key={invite.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-border px-3 py-2.5"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{invite.email}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                  {invite.email}
+                </p>
+                <p className="text-[13px] text-muted-foreground">
                   Expires {new Date(invite.expires_at).toLocaleDateString()}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="capitalize">
-                  {ORG_MEMBER_ROLE_LABELS[invite.role] ?? invite.role}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={
+                <StatusPill tone="gray">{ORG_MEMBER_ROLE_LABELS[invite.role] ?? invite.role}</StatusPill>
+                <StatusPill
+                  tone={
                     state === 'pending'
-                      ? 'border-warning/40 text-warning'
+                      ? 'amber'
                       : state === 'accepted'
-                        ? 'border-primary/40 text-primary'
-                        : 'text-muted-foreground'
+                        ? 'primary'
+                        : 'gray'
                   }
                 >
                   {state}
-                </Badge>
+                </StatusPill>
                 {state === 'pending' && (
                   <Button
                     variant="ghost"
@@ -184,7 +182,7 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
             </div>
           )
         })}
-      </CardContent>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -240,6 +238,6 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </Section>
   )
 }

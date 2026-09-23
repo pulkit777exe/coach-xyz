@@ -52,7 +52,7 @@ export function Drawer({
         aria-label="Close"
         onClick={() => onOpenChange(false)}
         className={cn(
-          'absolute inset-0 bg-foreground/60 transition-opacity duration-300',
+          'absolute inset-0 bg-black/45 dark:bg-black/65 transition-opacity duration-200 ease-[var(--ease-out)]',
           open ? 'opacity-100' : 'opacity-0',
         )}
       />
@@ -60,19 +60,19 @@ export function Drawer({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'absolute bg-background shadow-2xl transition-transform duration-300',
+          'absolute bg-popover shadow-lg transition-transform duration-200 ease-in-out',
           panel,
           open ? 'translate-x-0 translate-y-0' : closed,
           className,
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-sm font-medium text-foreground">{title}</h2>
+          <h2 className="text-[16px] font-semibold text-foreground">{title}</h2>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
             aria-label="Close drawer"
-            className="cursor-pointer text-muted-foreground hover:text-foreground"
+            className="cursor-pointer rounded-[4px] p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             ✕
           </button>

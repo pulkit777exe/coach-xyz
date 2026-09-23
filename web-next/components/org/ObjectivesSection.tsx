@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -24,6 +22,9 @@ import {
 } from '@/components/9ui/ui/select'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import TimestampPill from '@/components/TimestampPill'
+import Section from '@/components/org/Section'
+import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
+import EmptyState from '@/components/org/EmptyState'
 import {
   orgCreateObjective,
   orgDeleteObjective,
@@ -167,47 +168,56 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>Training objectives</CardTitle>
-            <CardDescription>
-              Findings → objectives → training → measurement. {total} findings in 30 days
-              {reviewOpen > 0 ? ` · ${reviewOpen} need review` : ''}.
-            </CardDescription>
+    <Section
+      title="Training objectives"
+      actions={
+        <div className="flex items-center gap-2">
+          <div
+            role="group"
+            aria-label="Objectives layout"
+            className="flex rounded-[6px] bg-accent p-0.5"
+          >
+            {(['list', 'board'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`rounded-[4px] px-2.5 py-1 text-[13px] font-medium capitalize transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                  view === v
+                    ? 'bg-card text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-2">
-            <div
-              role="group"
-              aria-label="Objectives layout"
-              className="flex rounded-md border border-border bg-muted p-0.5"
-            >
-              {(['list', 'board'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  aria-pressed={view === v}
-                  className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                    view === v
-                      ? 'bg-card text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-            <Button onClick={openNewObjective}>New objective</Button>
-          </div>
+          <Button size="sm" onClick={openNewObjective}>
+            New objective
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+      }
+    >
+      <p className="mb-3 text-[13px] leading-[1.5] text-muted-foreground">
+        Findings → objectives → training → measurement.{' '}
+        <span className="tabular-nums">{total}</span> findings in 30 days
+        {reviewOpen > 0 ? (
+          <>
+            {' · '}
+            <span className="tabular-nums">{reviewOpen}</span> need review
+          </>
+        ) : null}
+        .
+      </p>
+
+      <div className="space-y-2">
         {objectives.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No objectives yet — create one from a recent finding below.
-          </p>
+          <EmptyState
+            compact
+            title="No objectives yet"
+            description="Create one from a recent finding below."
+          />
         ) : view === 'board' ? (
           <ObjectiveBoard
             objectives={objectives}
@@ -220,25 +230,35 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
           objectives.map((objective) => (
             <div
               key={objective.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-border px-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{objective.title}</p>
+                <p className="text-[14px] font-medium leading-[1.4] text-foreground">
+                  {objective.title}
+                </p>
                 {objective.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                  <p className="mt-0.5 line-clamp-2 text-[13px] text-muted-foreground">
                     {objective.description}
                   </p>
                 )}
-                <p className="mt-1 text-[0.65rem] text-muted-foreground">
+                <p className="mt-1 text-[13px] text-muted-foreground/60">
                   {objective.finding_id ? `from finding ${objective.finding_id.slice(-8)} · ` : ''}
                   {objective.due_on ? `due ${objective.due_on} · ` : ''}
                   {objective.status}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="capitalize">
+                <StatusPill
+                  tone={
+                    objective.status === 'done'
+                      ? 'green'
+                      : objective.status === 'active'
+                        ? 'amber'
+                        : 'gray'
+                  }
+                >
                   {objective.status}
-                </Badge>
+                </StatusPill>
                 {objective.status !== 'done' && (
                   <Button
                     size="sm"
@@ -275,37 +295,37 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
 
         {weeks.length > 0 && (
           <div className="pt-3">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Weekly measurement · findings vs objectives done
             </p>
             <div
-              className="flex items-end gap-2 h-20"
+              className="flex h-20 items-end gap-2"
               role="img"
               aria-label="Weekly findings versus objectives completed"
             >
               {weeks.map(([week, w]) => (
                 <div
                   key={week}
-                  className="flex-1 flex items-end justify-center gap-0.5 h-full"
+                  className="flex h-full flex-1 items-end justify-center gap-0.5"
                   title={`${week}: ${w.findings} findings, ${w.done} done`}
                 >
                   <div
-                    className="w-2 rounded-sm bg-primary/70 min-h-[3px]"
+                    className="min-h-[3px] w-2 rounded-[2px] bg-primary/70"
                     style={{ height: `${Math.max(3, Math.round((w.findings / weekMax) * 100))}%` }}
                   />
                   <div
-                    className="w-2 rounded-sm bg-emerald-500/80 min-h-[3px]"
+                    className="min-h-[3px] w-2 rounded-[2px] bg-success/80"
                     style={{ height: `${Math.max(3, Math.round((w.done / weekMax) * 100))}%` }}
                   />
                 </div>
               ))}
             </div>
-            <div className="flex gap-4 mt-1 text-[0.65rem] text-muted-foreground">
+            <div className="mt-1.5 flex gap-4 text-[13px] text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-sm bg-primary/70" /> findings
+                <span className="inline-block size-2 rounded-[2px] bg-primary/70" /> findings
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-sm bg-emerald-500/80" /> objectives
+                <span className="inline-block size-2 rounded-[2px] bg-success/80" /> objectives
                 done
               </span>
             </div>
@@ -315,13 +335,13 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
         {findings.length > 0 && (
           <div className="pt-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Recent findings
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-xs"
+                className="h-7 text-[13px]"
                 disabled={exporting}
                 onClick={() => {
                   setExporting(true)
@@ -340,9 +360,9 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
               {findings.slice(0, 5).map((finding) => (
                 <div
                   key={finding.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-muted px-3 py-2"
                 >
-                  <p className="text-xs text-foreground min-w-0 flex-1">
+                  <p className="min-w-0 flex-1 text-[13px] text-foreground">
                     <TimestampPill seconds={(finding.start_ms ?? 0) / 1000} />{' '}
                     <span className="capitalize">
                       {(finding.category ?? 'technique').replace(/_/g, ' ')}
@@ -352,7 +372,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs"
+                    className="h-7 text-[13px]"
                     onClick={() => {
                       setFindingId(finding.id)
                       setTitle(finding.observation ?? '')
@@ -367,7 +387,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
             </div>
           </div>
         )}
-      </CardContent>
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -427,7 +447,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                 </Select>
               </div>
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -439,14 +459,14 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </Section>
   )
 }
 
 const BOARD_COLUMNS = [
-  { status: 'active', label: 'To do', dot: 'bg-primary' },
-  { status: 'done', label: 'Done', dot: 'bg-emerald-500' },
-  { status: 'archived', label: 'Archived', dot: 'bg-muted-foreground/60' },
+  { status: 'active', label: 'To do', tone: 'gray' as StatusTone },
+  { status: 'done', label: 'Done', tone: 'green' as StatusTone },
+  { status: 'archived', label: 'Archived', tone: 'blue' as StatusTone },
 ] as const
 
 /**
@@ -468,35 +488,39 @@ function ObjectiveBoard({
   onNew: () => void
 }) {
   return (
-    <div className="grid items-start gap-3 md:grid-cols-3">
+    <div className="grid items-start gap-4 md:grid-cols-3">
       {BOARD_COLUMNS.map((col) => {
         const cards = objectives.filter((o) => o.status === col.status)
         return (
-          <div key={col.status} className="rounded-xl bg-muted/60 p-2">
-            <p className="flex items-center gap-1.5 px-1.5 py-1 text-xs font-medium text-foreground">
-              <span className={`inline-block size-2 rounded-full ${col.dot}`} />
-              {col.label}
-              <span className="text-muted-foreground">{cards.length}</span>
-            </p>
-            <div className="mt-1 flex flex-col gap-1.5">
+          <div key={col.status}>
+            <div className="mb-2 flex items-center gap-2 px-0.5">
+              <StatusPill tone={col.tone}>{col.label}</StatusPill>
+              <span className="text-[13px] tabular-nums text-muted-foreground">
+                {cards.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
               {cards.map((o) => (
-                <div key={o.id} className="rounded-lg border border-border bg-card px-3 py-2.5">
-                  <p className="text-[13px] font-medium leading-snug text-foreground">{o.title}</p>
+                <div
+                  key={o.id}
+                  className="rounded-[6px] border border-border bg-card p-3"
+                >
+                  <p className="text-[14px] font-medium leading-snug text-foreground">{o.title}</p>
                   {o.description && (
-                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
                       {o.description}
                     </p>
                   )}
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-1.5 text-[13px] text-muted-foreground/60">
                     {o.finding_id ? `finding ${o.finding_id.slice(-8)} · ` : ''}
                     {o.due_on ? `due ${o.due_on}` : 'no due date'}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {o.status === 'active' && (
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
+                        className="h-7 text-[13px]"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'done')}
                       >
@@ -507,7 +531,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
+                        className="h-7 text-[13px]"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'active')}
                       >
@@ -518,7 +542,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
+                        className="h-7 text-[13px]"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'active')}
                       >
@@ -528,7 +552,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-xs text-muted-foreground"
+                        className="h-7 text-[13px] text-muted-foreground"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'archived')}
                       >
@@ -538,7 +562,7 @@ function ObjectiveBoard({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-xs text-destructive"
+                      className="h-7 text-[13px] text-destructive"
                       disabled={busy}
                       onClick={() => void onDelete(o.id)}
                     >
@@ -550,9 +574,9 @@ function ObjectiveBoard({
               <button
                 type="button"
                 onClick={onNew}
-                className="rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-9 items-center gap-1 rounded-[4px] px-2 text-left text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
-                + New page
+                <span aria-hidden="true">+</span> New page
               </button>
             </div>
           </div>

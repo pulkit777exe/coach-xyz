@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +13,8 @@ import {
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
+import Section from './Section'
+import StatusPill, { type StatusTone } from './StatusPill'
 import {
   orgCreatePlan,
   orgDeletePlan,
@@ -26,6 +26,12 @@ import {
 interface PlansSectionProps {
   auth0Id: string
   studentId: string
+}
+
+const PLAN_TONE: Record<TrainingPlan['status'], StatusTone> = {
+  active: 'blue',
+  done: 'green',
+  archived: 'gray',
 }
 
 export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) {
@@ -85,14 +91,12 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle>Training plans</CardTitle>
-            <CardDescription>Longer-running programs above day-to-day objectives.</CardDescription>
-          </div>
+    <>
+      <Section
+        title="Training plans"
+        actions={
           <Button
+            size="sm"
             onClick={() => {
               setError(null)
               setOpen(true)
@@ -100,29 +104,32 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
           >
             New plan
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {plans.length === 0 && (
-          <p className="text-sm text-muted-foreground">No training plans yet.</p>
-        )}
-        {plans.map((plan) => (
-          <div
-            key={plan.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">{plan.title}</p>
-              {plan.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                  {plan.description}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="capitalize">
-                {plan.status}
-              </Badge>
+        }
+      >
+        <p className="mb-3 text-[13px] text-muted-foreground">
+          Longer-running programs above day-to-day objectives.
+        </p>
+        <div>
+          {plans.length === 0 && (
+            <p className="text-[13px] text-muted-foreground">No training plans yet.</p>
+          )}
+          {plans.map((plan) => (
+            <div
+              key={plan.id}
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0 hover:bg-accent/50 transition-colors"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-medium text-foreground">{plan.title}</p>
+                {plan.description && (
+                  <p className="mt-0.5 text-[13px] text-muted-foreground line-clamp-2">
+                    {plan.description}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusPill tone={PLAN_TONE[plan.status] ?? 'gray'}>
+                  <span className="capitalize">{plan.status}</span>
+                </StatusPill>
               {plan.status !== 'done' && (
                 <Button
                   size="sm"
@@ -161,9 +168,10 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                 Delete
               </Button>
             </div>
-          </div>
-        ))}
-      </CardContent>
+            </div>
+          ))}
+        </div>
+      </Section>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -190,7 +198,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                 rows={2}
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-[13px] text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -202,6 +210,6 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   )
 }

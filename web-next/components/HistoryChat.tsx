@@ -87,10 +87,10 @@ export default function HistoryChat({
               {sportEmoji[(summary.sport as string) || 'unknown'] || '🎯'}
             </span>
             <div>
-              <p className="text-sm text-foreground capitalize">
+              <p className="text-[14px] font-medium text-foreground capitalize">
                 {(summary.sport as string) || 'Sport'} Analysis
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[13px] text-muted-foreground tabular-nums">
                 Score: {(summary.form_score as number) ?? '—'}/10 ·{' '}
                 {(summary.overall_rating as string) || ''}
               </p>
@@ -106,13 +106,15 @@ export default function HistoryChat({
           </div>
         ) : historyError ? (
           <div className="text-center py-8">
-            <p className="text-destructive text-sm mb-2">Failed to load conversation history</p>
-            <p className="text-muted-foreground text-xs">You can still send new messages.</p>
+            <p className="text-[14px] text-destructive mb-2">Failed to load conversation history</p>
+            <p className="text-[13px] text-muted-foreground">You can still send new messages.</p>
           </div>
         ) : messages.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-foreground font-bold text-lg mb-2">Ask about your analysis</p>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-foreground text-[17px] font-semibold tracking-[-0.01em] mb-2">
+              Ask about your analysis
+            </p>
+            <p className="text-muted-foreground text-[14px]">
               Get insights on technique, tips, strengths, or specific events.
             </p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">
@@ -123,10 +125,11 @@ export default function HistoryChat({
               ].map((q) => (
                 <button
                   key={q}
+                  type="button"
                   onClick={() => {
                     setInput(q)
                   }}
-                  className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                  className="rounded-[6px] border border-border bg-card px-3 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   {q}
                 </button>
@@ -140,12 +143,12 @@ export default function HistoryChat({
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm text-foreground ${
+                className={`max-w-[80%] rounded-[8px] px-4 py-3 text-[14px] leading-6 ${
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground'
                     : msg.role === 'system'
                       ? 'bg-muted text-muted-foreground border border-border'
-                      : 'border border-border bg-card shadow-sm'
+                      : 'border border-border bg-card text-foreground'
                 }`}
               >
                 {msg.content}
@@ -155,7 +158,7 @@ export default function HistoryChat({
         )}
         {loading && (
           <div className="flex justify-start">
-            <div className="rounded-2xl border border-border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
+            <div className="rounded-[8px] border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
               Thinking...
             </div>
           </div>
@@ -171,7 +174,7 @@ export default function HistoryChat({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Ask about your analysis..."
-            className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-50"
+            className="flex-1 rounded-[8px] border border-border bg-background px-4 py-3 text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
             disabled={loading}
           />
           <Button onClick={handleSend} disabled={loading || !input.trim()} className="px-4">

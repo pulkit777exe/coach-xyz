@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
+import { cn } from '@/lib/utils'
 
 interface UserAvatarProps {
   picture?: string | null
@@ -11,10 +13,11 @@ interface UserAvatarProps {
   className?: string
 }
 
+/** Sidebar/topbar sizes: sm = 24px (20–24px Notion range), md = 32px, lg = 56px. */
 const sizeClasses = {
-  sm: 'w-6 h-6 text-[0.5rem]',
-  md: 'w-8 h-8 text-xs',
-  lg: 'w-14 h-14 text-lg',
+  sm: 'size-6! text-[0.5rem]!',
+  md: 'size-8! text-xs!',
+  lg: 'size-14! text-lg!',
 }
 
 function getInitials(name?: string | null, email?: string | null): string {
@@ -39,24 +42,18 @@ export default function UserAvatar({
   className = '',
 }: UserAvatarProps) {
   const [imgError, setImgError] = useState(false)
-  const showImage = picture && !imgError
+  const showImage = Boolean(picture) && !imgError
 
   return (
-    <div
-      className={`relative rounded-full border border-border flex items-center justify-center bg-muted text-muted-foreground font-medium ${sizeClasses[size]} ${className}`}
-    >
+    <Avatar className={cn('font-medium', sizeClasses[size], className)}>
       {showImage ? (
-        <Image
-          fill
-          sizes="56px"
+        <AvatarImage
           src={picture!}
           alt={name || email || 'Profile'}
-          className="w-full h-full rounded-full object-cover"
           onError={() => setImgError(true)}
         />
-      ) : (
-        <span>{getInitials(name, email)}</span>
-      )}
-    </div>
+      ) : null}
+      <AvatarFallback>{getInitials(name, email)}</AvatarFallback>
+    </Avatar>
   )
 }

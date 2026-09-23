@@ -3,8 +3,8 @@
 import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
+import StatusPill from '@/components/org/StatusPill'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import TimestampPill from '@/components/TimestampPill'
@@ -71,11 +71,11 @@ export default function ResultsSummary({
     () => {
       if (!summary) return
       gsap.from('.gsap-item', {
-        y: 30,
+        y: 24,
         opacity: 0,
-        duration: 0.8,
-        stagger: 0.15,
-        ease: 'power3.out',
+        duration: 0.3,
+        stagger: 0.05,
+        ease: 'power2.out',
       })
     },
     { scope: containerRef },
@@ -108,9 +108,9 @@ export default function ResultsSummary({
         className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-20"
       >
         <div className="max-w-4xl w-full">
-          <div className="gsap-item mb-8 rounded-2xl border border-border bg-card p-6 shadow-sm relative overflow-hidden">
+          <div className="gsap-item mb-8 rounded-[6px] border border-border bg-card p-6 relative overflow-hidden">
             <div className="border-b border-border pb-6 pt-2">
-              <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
+              <h2 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground flex items-center gap-3">
                 <span className="text-4xl">
                   {SPORT_EMOJI[summary.sport] || SPORT_EMOJI.unknown}
                 </span>
@@ -119,57 +119,51 @@ export default function ResultsSummary({
                 </span>
               </h2>
               {summary.angle && summary.angle !== 'primary' && (
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-[14px] text-muted-foreground">
                   Analyzed perspective:{' '}
-                  <span className="font-semibold text-foreground capitalize">{summary.angle}</span>
+                  <span className="font-medium text-foreground capitalize">{summary.angle}</span>
                 </p>
               )}
             </div>
-            <div className="space-y-8 pt-8">
-              <div className="grid md:grid-cols-2 gap-8 items-center bg-muted rounded-2xl p-8 border border-border">
+            <div className="space-y-6 pt-6">
+              <div className="grid md:grid-cols-2 gap-6 items-center bg-muted rounded-[6px] p-6 border border-border">
                 <div className="text-center md:text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                     Total Form Score
                   </p>
-                  <div className="flex items-baseline justify-center md:justify-start gap-2">
-                    <div className={`text-7xl font-bold ${formScoreColor}`}>
+                  <div className="flex items-baseline justify-center md:justify-start gap-1.5">
+                    <div className={`text-[32px] font-semibold leading-none tabular-nums ${formScoreColor}`}>
                       {summary.form_score}
                     </div>
-                    <span className="text-xl text-muted-foreground font-medium">/ 10</span>
+                    <span className="text-[15px] text-muted-foreground font-medium tabular-nums">
+                      / 10
+                    </span>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="mt-4 border-border text-foreground bg-muted px-4 py-1.5 text-sm uppercase tracking-wide"
-                  >
-                    {summary.overall_rating} Level
-                  </Badge>
-                  {summary.needs_review && (
-                    <Badge
-                      variant="outline"
-                      className="mt-4 ml-2 border-warning/40 text-warning bg-warning/10 px-4 py-1.5 text-sm uppercase tracking-wide"
-                    >
-                      Needs review
-                    </Badge>
-                  )}
+                  <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
+                    <StatusPill tone="gray">
+                      <span className="capitalize">{summary.overall_rating} Level</span>
+                    </StatusPill>
+                    {summary.needs_review && <StatusPill tone="amber">Needs review</StatusPill>}
+                  </div>
                   {summary.quality && !summary.quality.passed && (
-                    <p className="mt-2 text-xs text-muted-foreground">
+                    <p className="mt-2 text-[13px] text-muted-foreground">
                       Quality check: {summary.quality.issues.map(humanizeQualityIssue).join(' · ')}
                     </p>
                   )}
                 </div>
                 <div className="text-center md:text-left border-l-0 md:border-l border-border md:pl-8">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
                     Overall Assessment
                   </p>
-                  <p className="text-muted-foreground text-lg leading-relaxed">{summary.summary}</p>
+                  <p className="text-muted-foreground text-[14px] leading-[1.6]">{summary.summary}</p>
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-muted rounded-2xl p-6 border border-border">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="bg-card rounded-[6px] p-6 border border-border">
+                  <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
                     <svg
-                      className="w-5 h-5 text-amber-400"
+                      className="w-5 h-5 text-warning"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -186,28 +180,28 @@ export default function ResultsSummary({
                   <ol className="space-y-3">
                     {summary.top_tips?.map((tip, index) => (
                       <li key={index} className="flex gap-3 text-muted-foreground">
-                        <span className="shrink-0 size-8 rounded-full bg-muted border border-border flex items-center justify-center text-xs font-bold text-muted-foreground">
+                        <span className="shrink-0 size-7 rounded-full bg-muted border border-border flex items-center justify-center text-[12px] font-medium tabular-nums text-muted-foreground">
                           {index + 1}
                         </span>
-                        <span className="leading-relaxed">{tip}</span>
+                        <span className="leading-relaxed text-[14px]">{tip}</span>
                       </li>
                     ))}
                   </ol>
                   {summary.priority_drill && (
-                    <div className="mt-6 p-4 rounded-2xl border border-border bg-muted">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                    <div className="mt-6 p-4 rounded-[6px] border border-border bg-muted">
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.08em] mb-1">
                         Recommended Drill
                       </p>
-                      <p className="text-sm text-muted-foreground">{summary.priority_drill}</p>
+                      <p className="text-[14px] text-foreground">{summary.priority_drill}</p>
                     </div>
                   )}
                 </div>
 
                 {summary.strengths && summary.strengths.length > 0 && (
-                  <div className="bg-muted rounded-2xl p-6 border border-border flex flex-col justify-start">
-                    <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <div className="bg-card rounded-[6px] p-6 border border-border flex flex-col justify-start">
+                    <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
                       <svg
-                        className="w-5 h-5 text-foreground"
+                        className="w-5 h-5 text-success"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -224,8 +218,8 @@ export default function ResultsSummary({
                     <ul className="space-y-3">
                       {summary.strengths.map((strength, index) => (
                         <li key={index} className="flex gap-3 text-muted-foreground items-start">
-                          <span className="text-primary mt-1 shrink-0">•</span>
-                          <span className="leading-relaxed">{strength}</span>
+                          <span className="text-success mt-1 shrink-0">•</span>
+                          <span className="leading-relaxed text-[14px]">{strength}</span>
                         </li>
                       ))}
                     </ul>
@@ -236,8 +230,8 @@ export default function ResultsSummary({
           </div>
 
           {summary.recommended_angles && summary.recommended_angles.length > 0 && (
-            <div className="gsap-item mb-8 rounded-2xl border border-border bg-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
+            <div className="gsap-item mb-8 rounded-[6px] border border-border bg-card p-6">
+              <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-muted-foreground"
                   fill="none"
@@ -255,8 +249,8 @@ export default function ResultsSummary({
               </h3>
               <ul className="space-y-3 mt-4">
                 {summary.recommended_angles.map((angle) => (
-                  <li key={angle.id} className="flex gap-3 text-sm">
-                    <span className="shrink-0 rounded-full bg-muted border border-border px-3 py-1 font-semibold text-foreground capitalize h-fit">
+                  <li key={angle.id} className="flex gap-3 text-[14px]">
+                    <span className="shrink-0 rounded-full bg-accent px-2.5 py-0.5 font-medium text-foreground capitalize h-fit">
                       {angle.label}
                     </span>
                     <span className="leading-relaxed text-muted-foreground">
@@ -279,7 +273,7 @@ export default function ResultsSummary({
           >
             {onStartChat && (
               <Button
-                className="h-16 rounded-xl text-base font-bold transition-colors"
+                className="h-12 rounded-[6px] text-[14px] font-medium transition-colors active:scale-[0.98]"
                 onClick={onStartChat}
               >
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -297,7 +291,7 @@ export default function ResultsSummary({
             <Button
               nativeButton={false}
               render={<a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group" />}
-              className="w-full h-16 rounded-xl text-base font-bold transition-colors"
+              className="w-full h-12 rounded-[6px] text-[14px] font-medium transition-colors active:scale-[0.98]"
             >
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -312,7 +306,7 @@ export default function ResultsSummary({
 
             <Button
               variant="outline"
-              className="h-16 rounded-xl bg-muted border-border text-foreground font-semibold hover:bg-accent transition-all"
+              className="h-12 rounded-[6px] text-[14px] font-medium transition-colors hover:bg-accent active:scale-[0.98]"
               onClick={onReset}
             >
               <svg
@@ -335,14 +329,14 @@ export default function ResultsSummary({
           {summary.shot_events && summary.shot_events.length > 0 && (
             <div className="gsap-item mb-12">
               <details
-                className="group rounded-2xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden transition-all open:bg-muted"
+                className="group rounded-[6px] border border-border bg-card [&_summary::-webkit-details-marker]:hidden transition-colors open:bg-muted"
                 open
               >
                 <summary className="cursor-pointer p-6 flex flex-wrap items-center justify-between gap-4 select-none">
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-muted border border-border text-foreground">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-[6px] bg-accent text-foreground">
                       <svg
-                        className="w-6 h-6"
+                        className="w-5 h-5"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -356,20 +350,21 @@ export default function ResultsSummary({
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-foreground leading-none">
+                      <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground leading-none">
                         Event Timeline
                       </h3>
-                      <p className="text-muted-foreground font-medium text-sm mt-1">
-                        {summary.shot_events.length} events analyzed
+                      <p className="text-muted-foreground text-[13px] mt-1.5">
+                        <span className="tabular-nums">{summary.shot_events.length}</span> events
+                        analyzed
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-muted-foreground group-open:hidden">
+                    <span className="text-[13px] font-medium text-muted-foreground group-open:hidden">
                       Tap to view breakdown
                     </span>
                     <svg
-                      className="w-6 h-6 text-muted-foreground group-open:rotate-180 transition-transform"
+                      className="w-5 h-5 text-muted-foreground group-open:rotate-180 transition-transform duration-200"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -385,17 +380,17 @@ export default function ResultsSummary({
                 </summary>
                 <div className="px-6 pb-6 pt-2 space-y-4 border-t border-border mt-2">
                   {summary.shot_events.map((event, index) => {
-                    const colorClass =
+                    const toneClass =
                       event.form_score >= 8
-                        ? 'text-foreground bg-muted border-border'
+                        ? 'bg-success/15 text-success'
                         : event.form_score >= 5
-                          ? 'text-warning bg-warning/10 border-warning/20'
-                          : 'text-destructive bg-destructive/10 border-destructive/20'
+                          ? 'bg-warning/15 text-warning'
+                          : 'bg-destructive/10 text-destructive'
 
                     return (
                       <div
                         key={index}
-                        className="flex gap-5 p-5 rounded-2xl border border-border bg-muted hover:bg-accent transition-colors"
+                        className="flex gap-5 p-5 rounded-[6px] border border-border bg-card hover:bg-accent/50 transition-colors"
                       >
                         <div className="shrink-0 flex flex-col items-center">
                           <TimestampPill seconds={event.timestamp ?? 0} />
@@ -404,26 +399,25 @@ export default function ResultsSummary({
                           )}
                         </div>
                         <div className="flex-1 pb-1">
-                          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                            <Badge
-                              variant="secondary"
-                              className="bg-muted text-muted-foreground border border-border capitalize px-3 py-1 text-xs tracking-wide"
-                            >
+                          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
                               {event.event_type?.replace('_', ' ') || 'Action'}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={`font-mono text-xs shadow-sm px-3 py-1 uppercase tracking-widest font-bold ${colorClass}`}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${toneClass}`}
                             >
-                              Score: {event.form_score}/10
-                            </Badge>
+                              Score:{' '}
+                              <span className="tabular-nums">
+                                {event.form_score}/10
+                              </span>
+                            </span>
                           </div>
                           {event.key_observation && (
-                            <p className="text-sm font-bold text-muted-foreground mb-2 border-l-2 border-border pl-3">
+                            <p className="text-[14px] font-medium text-foreground mb-2 border-l-2 border-border pl-3">
                               {event.key_observation}
                             </p>
                           )}
-                          <p className="text-muted-foreground text-sm leading-relaxed pl-3">
+                          <p className="text-muted-foreground text-[14px] leading-[1.55] pl-3">
                             {event.feedback}
                           </p>
                         </div>

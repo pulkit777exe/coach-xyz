@@ -45,7 +45,7 @@ const QUICK_LINKS: { label: string; icon: React.ElementType; href: string }[] = 
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-1 px-2.5 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <p className="mb-1 px-2.5 pt-3 pb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
       {children}
     </p>
   )
@@ -156,7 +156,7 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
         type="button"
         aria-label="Search"
         onClick={() => setOpen(true)}
-        className="hidden sm:flex h-8 w-[240px] lg:w-[320px] items-center gap-2 rounded-md border border-topbar-border bg-muted/60 pl-2.5 pr-1.5 text-sm text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:border-ring"
+        className="hidden sm:flex h-8 w-[240px] lg:w-[320px] items-center gap-2 rounded-[6px] border border-border bg-muted pl-2.5 pr-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="flex-1 text-left">Search...</span>
@@ -196,7 +196,7 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                       key={label}
                       type="button"
                       onClick={() => go(href)}
-                      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted hover:text-foreground"
+                      className="flex w-full items-center gap-2.5 rounded-[4px] px-2.5 py-2 text-left text-[14px] text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                     >
                       <Icon className="size-4 shrink-0 text-muted-foreground" />
                       <span>{label}</span>
@@ -205,13 +205,13 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                 </div>
               </>
             ) : error ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">{error}</p>
+              <p className="px-4 py-8 text-center text-[14px] text-muted-foreground">{error}</p>
             ) : loading && !results ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner />
               </div>
             ) : totalItems === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+              <p className="px-4 py-8 text-center text-[14px] text-muted-foreground">
                 No results for &apos;{query.trim()}&apos;
               </p>
             ) : (
@@ -228,15 +228,15 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                           key={`${key}-${item.id}`}
                           type="button"
                           onClick={() => go(href(item.id))}
-                          className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-muted"
+                          className="flex w-full items-start gap-2.5 rounded-[4px] px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                         >
                           <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                           <span className="min-w-0">
-                            <span className="block truncate text-sm text-foreground">
+                            <span className="block truncate text-[14px] text-foreground">
                               {item.label}
                             </span>
                             {item.subtitle && (
-                              <span className="block truncate text-xs text-muted-foreground">
+                              <span className="block truncate text-[13px] text-muted-foreground">
                                 {item.subtitle}
                               </span>
                             )}

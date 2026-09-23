@@ -240,18 +240,22 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
             />
           </svg>
 
-          <h1 className="text-2xl font-semibold text-foreground mb-3">{details.title}</h1>
+          <h1 className="text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3">
+            {details.title}
+          </h1>
 
-          <p className="text-muted-foreground mb-2">{details.description}</p>
+          <p className="text-[14px] text-muted-foreground mb-2">{details.description}</p>
 
-          {details.action && <p className="text-sm text-muted-foreground mb-2">{details.action}</p>}
+          {details.action && (
+            <p className="text-[14px] text-muted-foreground mb-2">{details.action}</p>
+          )}
 
-          <p className="text-xs text-muted-foreground/60 mb-8">
+          <p className="text-[13px] text-muted-foreground/60 mb-8 tabular-nums">
             Error: {error.code} | Layer: {error.layer}
           </p>
 
           {countdown !== null && (
-            <p className="text-sm text-foreground mb-4 animate-pulse">
+            <p className="text-[14px] text-foreground mb-4 tabular-nums animate-pulse">
               Retrying in {countdown} seconds...
             </p>
           )}
@@ -261,9 +265,12 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
               {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
             </Button>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[14px] text-muted-foreground">
               This error cannot be retried. Please{' '}
-              <a href="mailto:help@coachxyz.app" className="text-foreground underline">
+              <a
+                href="mailto:help@coachxyz.app"
+                className="text-foreground underline underline-offset-2 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-[2px]"
+              >
                 contact support
               </a>
               .

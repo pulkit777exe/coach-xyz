@@ -45,7 +45,7 @@ export default function AnalysisTitle({
             setEditing(false)
           }
         }}
-        className="text-4xl font-bold tracking-tight leading-none text-foreground bg-transparent border-b border-border w-full focus:outline-none sm:text-5xl"
+        className="text-[30px] sm:text-[32px] font-bold tracking-[-0.015em] leading-tight text-foreground bg-transparent border-b border-border w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-[4px] py-0.5"
       />
     )
   }
@@ -56,11 +56,11 @@ export default function AnalysisTitle({
         setDraft(name)
         setEditing(true)
       }}
-      className="text-4xl font-bold tracking-tight leading-none text-foreground cursor-pointer hover:opacity-70 group sm:text-5xl"
+      className="text-[30px] sm:text-[32px] font-bold tracking-[-0.015em] leading-tight text-foreground cursor-pointer hover:text-muted-foreground transition-colors group"
       title="Click to rename"
     >
       {name}
-      <span className="ml-2 opacity-0 group-hover:opacity-50 text-sm align-middle">✎</span>
+      <span className="ml-2 opacity-0 group-hover:opacity-60 text-sm align-middle transition-opacity">✎</span>
     </h1>
   )
 }

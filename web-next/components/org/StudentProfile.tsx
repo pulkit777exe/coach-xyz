@@ -16,7 +16,6 @@ import {
   FileTextIcon,
 } from 'lucide-react'
 import { Button } from '@/components/9ui/ui/button'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import {
@@ -77,14 +76,14 @@ import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
 import { capitalize } from '@/lib/utils'
 
 const STATUS_STYLE: Record<string, string> = {
-  active: 'border-(--success-border) text-(--success) bg-(--success)',
-  inactive: 'border-(--warning-border) text-(--warning)',
-  transferred: 'border-border text-muted-foreground',
+  active: 'bg-success/15 text-success',
+  inactive: 'bg-warning/15 text-warning',
+  transferred: 'bg-muted text-muted-foreground',
 }
 
 const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
-  loading: () => <div className="aspect-[16/7] w-full animate-pulse rounded-lg bg-muted" />,
+  loading: () => <div className="aspect-[16/7] w-full animate-pulse rounded-[6px] bg-muted" />,
 })
 
 const METRIC_COLORS = [
@@ -412,33 +411,33 @@ export default function StudentProfile({
   return (
     <div>
       {/* Header */}
-      <div className="border-border bg-card flex flex-col gap-5 rounded-lg border p-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-border bg-card flex flex-col gap-5 rounded-[6px] border p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="border-border size-16 border">
             <AvatarImage src={undefined} alt="" />
-            <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold text-lg">
+            <AvatarFallback className="bg-muted text-muted-foreground font-semibold text-lg">
               {initials(student_.full_name)}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="font-bold text-xl text-foreground">{student_.full_name}</h2>
-              <Badge
-                className={
-                  (STATUS_STYLE[student_.status] ?? 'border-border text-muted-foreground') +
-                  ' border'
-                }
+              <h2 className="text-[20px] font-semibold leading-[1.3] tracking-[-0.01em] text-foreground">
+                {student_.full_name}
+              </h2>
+              <span
+                className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none ${STATUS_STYLE[student_.status] ?? 'bg-muted text-muted-foreground'}`}
+                style={{ fontSize: 11 }}
               >
                 {student_.status}
-              </Badge>
+              </span>
             </div>
-            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px]">
               {student_.sport && <span>{student_.sport}</span>}
               {student_.position && <span>{student_.position}</span>}
               {student_.jersey_number && <span>#{student_.jersey_number}</span>}
               {student_.gender && <span className="capitalize">{student_.gender}</span>}
             </div>
-            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
               {student_.email && (
                 <span className="flex items-center gap-1.5">
                   <MailIcon className="size-3" /> {student_.email}
@@ -488,10 +487,10 @@ export default function StudentProfile({
 
       {/* Profile details */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Profile Details
         </p>
-        <div className="border-border bg-card grid gap-px rounded-lg border sm:grid-cols-2">
+        <div className="border-border bg-card grid gap-px rounded-[6px] border sm:grid-cols-2">
           <DetailRow
             label="Date of birth"
             value={student_.date_of_birth ? formatDateLong(student_.date_of_birth) : '—'}
@@ -500,8 +499,8 @@ export default function StudentProfile({
           <DetailRow label="Guardian" value={student_.guardian_name || '—'} />
           <DetailRow label="Guardian phone" value={student_.guardian_phone || '—'} />
           <div className="border-border border-t p-4 sm:col-span-2">
-            <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">Notes</p>
-            <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-sm">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Notes</p>
+            <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-[14px]">
               {student_.notes || 'No notes recorded.'}
             </p>
           </div>
@@ -510,26 +509,31 @@ export default function StudentProfile({
 
       {/* Attendance summary */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Attendance Overview
         </p>
-        <div className="grid grid-cols-2 gap-px bg-muted md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {attStats.map((s) => (
-            <div key={s.label} className="bg-card p-5">
-              <p className="font-bold text-xl" style={{ color: s.color }}>
-                {s.value}
-              </p>
-              <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+            <div key={s.label} className="rounded-[6px] border border-border bg-card p-5">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <span
+                  className="inline-block size-1.5 rounded-full"
+                  style={{ backgroundColor: s.color }}
+                  aria-hidden="true"
+                />
                 {s.label}
+              </p>
+              <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums text-foreground">
+                {s.value}
               </p>
             </div>
           ))}
-          <div className="bg-card p-5">
-            <p className="font-bold text-xl text-foreground">
-              {attendance?.attendance_rate === null ? '—' : `${attendance?.attendance_rate ?? 0}%`}
-            </p>
-            <p className="mt-1 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+          <div className="rounded-[6px] border border-border bg-card p-5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Attendance Rate
+            </p>
+            <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums text-foreground">
+              {attendance?.attendance_rate === null ? '—' : `${attendance?.attendance_rate ?? 0}%`}
             </p>
           </div>
         </div>
@@ -538,7 +542,7 @@ export default function StudentProfile({
       {/* Performance chart */}
       <div className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Performance Trend
           </p>
           {keys.length > 1 && (
@@ -555,12 +559,12 @@ export default function StudentProfile({
           )}
         </div>
 
-        <div className="border-border bg-card rounded-lg border p-4">
+        <div className="border-border bg-card rounded-[6px] border p-4">
           {chartData.length ? (
             <PerformanceChart data={chartData} config={chartConfig} keys={shownKeys} />
           ) : (
             <div className="flex h-40 items-center justify-center">
-              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 No performance metrics yet — log one below
               </p>
             </div>
@@ -583,10 +587,10 @@ export default function StudentProfile({
         </div>
 
         {/* Log metric */}
-        <div className="border-border bg-card mt-4 rounded-lg border p-4">
+        <div className="border-border bg-card mt-4 rounded-[6px] border p-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_key" className="text-xs">
+              <Label htmlFor="metric_key" className="text-[14px] font-medium">
                 Metric
               </Label>
               <Input
@@ -599,7 +603,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_value" className="text-xs">
+              <Label htmlFor="metric_value" className="text-[14px] font-medium">
                 Value *
               </Label>
               <Input
@@ -612,7 +616,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_unit" className="text-xs">
+              <Label htmlFor="metric_unit" className="text-[14px] font-medium">
                 Unit
               </Label>
               <Input
@@ -624,7 +628,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_at" className="text-xs">
+              <Label htmlFor="metric_at" className="text-[14px] font-medium">
                 Date
               </Label>
               <Input
@@ -713,36 +717,35 @@ export default function StudentProfile({
 
       {/* Trends summary */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Performance Trends
         </p>
         {trends.length === 0 ? (
-          <div className="border-border bg-card flex h-20 items-center justify-center rounded-lg border">
+          <div className="border-border bg-card flex h-20 items-center justify-center rounded-[6px] border">
             <p className="text-muted-foreground text-xs">
               No trend data yet — metrics appear as they are logged or analyzed.
             </p>
           </div>
         ) : (
-          <div className="grid gap-px bg-muted sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {trends.map((t) => (
-              <div key={t.metric_key} className="bg-card p-5">
-                <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+              <div key={t.metric_key} className="rounded-[6px] border border-border bg-card p-5">
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   {formatKey(t.metric_key)}
                 </p>
-                <p className="text-foreground mt-1 font-bold text-2xl">
+                <p className="text-foreground mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums">
                   {t.latest ?? '—'}
                   {t.points[0]?.unit ? (
-                    <span className="text-muted-foreground text-xs font-normal">
-                      {' '}
-                      {t.points[0].unit}
-                    </span>
+                    <span className="text-muted-foreground text-[13px] font-normal"> {t.points[0].unit}</span>
                   ) : null}
                 </p>
-                <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
-                  <span>avg {t.avg ?? '—'}</span>
+                <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-[13px]">
+                  <span className="tabular-nums">avg {t.avg ?? '—'}</span>
                   <TrendDelta change={t.change} />
                 </div>
-                <p className="text-muted-foreground mt-1 text-xs">{t.points.length} point(s)</p>
+                <p className="text-muted-foreground mt-1 text-[13px] tabular-nums">
+                  {t.points.length} point(s)
+                </p>
               </div>
             ))}
           </div>
@@ -752,7 +755,7 @@ export default function StudentProfile({
       {/* Compare with teammates */}
       <div className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Compare with Teammates
           </p>
           <div className="flex items-center gap-2">
@@ -782,7 +785,7 @@ export default function StudentProfile({
           </div>
         </div>
 
-        <div className="border-border bg-card rounded-lg border p-4">
+        <div className="border-border bg-card rounded-[6px] border p-4">
           {roster.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No other students on the roster to compare against yet.
@@ -796,9 +799,9 @@ export default function StudentProfile({
                     key={s.id}
                     type="button"
                     onClick={() => toggleCompare(s.id)}
-                    className={`border px-2.5 py-1 text-xs transition-colors ${
+                    className={`rounded-[6px] border border-border px-2.5 py-1 text-[13px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                       selected
-                        ? 'bg-muted text-foreground border-border'
+                        ? 'border-transparent bg-accent text-foreground'
                         : 'text-muted-foreground border-border hover:text-foreground'
                     }`}
                   >
@@ -835,7 +838,7 @@ export default function StudentProfile({
       {/* Linked analyses */}
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Linked Analyses
           </p>
           {unlinked.length > 0 && (
@@ -847,7 +850,7 @@ export default function StudentProfile({
         </div>
 
         {linked.length === 0 ? (
-          <div className="border-border bg-card flex flex-col items-center gap-2 rounded-lg border p-10 text-center">
+          <div className="border-border bg-card flex flex-col items-center gap-2 rounded-[6px] border p-10 text-center">
             <p className="text-muted-foreground text-sm">
               No analyses linked to {student_.full_name}.
             </p>
@@ -858,47 +861,49 @@ export default function StudentProfile({
             </p>
           </div>
         ) : (
-          <div className="border-border overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
+          <div className="border-border overflow-hidden rounded-[6px] border">
+            <table className="w-full text-[14px]">
               <thead>
-                <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
-                  <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
-                    Analysis
-                  </th>
-                  <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
-                    Date
-                  </th>
-                  <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
-                    Form
-                  </th>
-                  <th className="px-4 py-3 text-right font-normal text-[0.65rem] tracking-[0.15em]">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {linked.map((a) => (
-                  <tr
-                    key={a.server_job_id}
-                    className="hover:bg-accent/50 border-b border-border last:border-0"
-                  >
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/dashboard/analysis/${a.server_job_id}`}
-                        className="hover:underline"
-                      >
-                        {a.display_name || a.file_name || 'Untitled video'}
-                      </Link>
-                    </td>
-                    <td className="text-muted-foreground px-4 py-3">
-                      {new Date(a.requested_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">{analysisScore(a) ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
+                  <tr className="border-b border-border">
+                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      Analysis
+                    </th>
+                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      Date
+                    </th>
+                    <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                      Form
+                    </th>
+                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linked.map((a) => (
+                    <tr
+                      key={a.server_job_id}
+                      className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50"
+                    >
+                      <td className="px-4 py-2.5 text-[14px]">
+                        <Link
+                          href={`/dashboard/analysis/${a.server_job_id}`}
+                          className="hover:underline"
+                        >
+                          {a.display_name || a.file_name || 'Untitled video'}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5 text-[14px] text-muted-foreground">
+                        {new Date(a.requested_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </td>
+                      <td className="hidden px-4 py-2.5 text-[14px] tabular-nums md:table-cell">
+                        {analysisScore(a) ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -918,11 +923,11 @@ export default function StudentProfile({
 
       {/* Reports */}
       <div className="mt-8">
-        <p className="mb-3 text-[0.6rem] uppercase tracking-[0.25em] text-muted-foreground">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Reports
         </p>
         {reports.length === 0 ? (
-          <div className="border-border bg-card flex flex-col items-center gap-2 rounded-lg border p-10 text-center">
+          <div className="border-border bg-card flex flex-col items-center gap-2 rounded-[6px] border p-10 text-center">
             <FileTextIcon className="text-muted-foreground size-6" />
             <p className="text-muted-foreground text-sm">
               No reports generated for {student_.full_name} yet.
@@ -932,12 +937,12 @@ export default function StudentProfile({
             </Link>
           </div>
         ) : (
-          <div className="border-border overflow-hidden rounded-lg border">
+          <div className="border-border overflow-hidden rounded-[6px] border">
             <ul>
               {reports.map((r) => (
                 <li
                   key={r.id}
-                  className="hover:bg-accent/50 border-b border-border last:border-0 flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                  className="hover:bg-accent/50 border-b border-border flex items-center justify-between gap-3 px-4 py-2.5 text-[14px] transition-colors duration-150 last:border-b-0"
                 >
                   <Link
                     href={`/dashboard/reports/${r.id}`}
@@ -1020,8 +1025,8 @@ export default function StudentProfile({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-border border-t p-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
-      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="text-foreground mt-1 text-sm">{value}</p>
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-foreground mt-1 text-[14px]">{value}</p>
     </div>
   )
 }
@@ -1039,10 +1044,10 @@ function MetricPill({
     <button
       type="button"
       onClick={onClick}
-      className={`border px-2.5 py-1 text-[0.6rem] uppercase tracking-[0.15em] transition-colors ${
+      className={`rounded-[6px] border border-border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
         active
-          ? 'text-foreground border-border bg-muted'
-          : 'text-muted-foreground border-border hover:text-foreground'
+          ? 'border-transparent bg-accent text-foreground'
+          : 'text-muted-foreground hover:text-foreground'
       }`}
     >
       {children}

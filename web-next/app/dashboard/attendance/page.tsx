@@ -38,7 +38,7 @@ export default async function AttendancePage() {
       />
       <div className="mt-6">
         {active.length === 0 && studentsRes.students.length > 0 && (
-          <p className="mt-4 rounded-lg border border-warning-border bg-warning/10 px-4 py-3 text-sm text-foreground">
+          <p className="rounded-[6px] border border-warning-border bg-warning/10 px-4 py-3 text-[14px] text-foreground">
             No active students — check the roster.
           </p>
         )}

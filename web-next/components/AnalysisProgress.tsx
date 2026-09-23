@@ -73,10 +73,10 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center pt-20">
       <div className="w-full max-w-3xl">
         <div className="mb-9 text-center">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Analysis in progress
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground">
             Reading the athlete&apos;s movement
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
@@ -85,7 +85,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
         </div>
 
         {currentStageIndex === 0 && (
-          <div className="mb-5 border border-border bg-muted p-4 rounded-2xl">
+          <div className="mb-5 border border-border bg-muted rounded-[6px] p-4">
             <p className="text-sm text-muted-foreground">
               Queued and waiting for analysis capacity.
             </p>
@@ -93,13 +93,13 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
         )}
 
         {isWaitingForQuota && (
-          <div className="mb-5 border border-danger/30 bg-danger/10 p-4 rounded-2xl">
-            <p className="text-sm text-foreground">AI capacity is busy. Retrying automatically.</p>
+          <div className="mb-5 border border-destructive/20 bg-destructive/10 rounded-[6px] p-4">
+            <p className="text-[14px] text-destructive">AI capacity is busy. Retrying automatically.</p>
           </div>
         )}
 
-        <div className="flex flex-col gap-8 border border-border bg-card p-6 sm:p-8 rounded-2xl shadow-sm">
-          <div className="flex flex-col gap-5 border border-border bg-muted p-5 sm:p-6 rounded-2xl">
+        <div className="flex flex-col gap-8 border border-border bg-card rounded-[6px] p-6 sm:p-8">
+          <div className="flex flex-col gap-5 border border-border bg-muted rounded-[6px] p-5 sm:p-6">
             <div
               className="flex min-h-10 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
               aria-live="polite"
@@ -121,11 +121,11 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
                   <span>Analysis complete</span>
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Current stage
                 </span>
               )}
-              <span className="font-semibold text-3xl tabular-nums text-foreground">
+              <span className="font-semibold text-[28px] leading-none tabular-nums text-foreground">
                 {Math.trunc(boundedProgress)}%
               </span>
             </div>
@@ -133,7 +133,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
             <div className="flex h-2 w-full items-center overflow-hidden bg-muted rounded-full">
               <div
                 role="progressbar"
-                className="flex items-center justify-center self-stretch bg-primary transition-[width] duration-500 ease-out"
+                className="flex items-center justify-center self-stretch bg-primary transition-[width] duration-300 ease-out"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={boundedProgress}
@@ -142,11 +142,11 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
             </div>
 
             <div
-              className="flex flex-col gap-2 text-xs uppercase text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-2 text-[13px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
               aria-live="polite"
             >
               <span>{stageName}</span>
-              <span>
+              <span className="tabular-nums">
                 {estimatedSeconds > 0 ? `ETA ${estimatedSeconds}s` : 'Timing estimate pending'}
               </span>
             </div>
@@ -160,27 +160,27 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
               return (
                 <div
                   key={index}
-                  className={`flex min-h-16 items-center gap-4 border p-3 rounded-xl transition-colors ${
+                  className={`flex min-h-16 items-center gap-4 rounded-[6px] border p-3 transition-colors ${
                     isActive
-                      ? 'bg-muted border-2 border-foreground'
+                      ? 'bg-primary/10 border-primary'
                       : isCompleted
                         ? 'bg-muted border border-border'
                         : 'bg-transparent border border-border opacity-60'
                   }`}
                 >
                   <div
-                    className={`shrink-0 w-10 h-10 flex items-center justify-center border rounded-lg text-xs tabular-nums transition-colors ${
+                    className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-[6px] border text-xs font-medium tabular-nums transition-colors ${
                       isActive
-                        ? 'bg-foreground text-background border-foreground'
+                        ? 'bg-primary text-primary-foreground border-primary'
                         : isCompleted
-                          ? 'bg-muted text-foreground border-border'
+                          ? 'bg-accent text-foreground border-border'
                           : 'bg-transparent text-muted-foreground border-border'
                     }`}
                   >
                     {isCompleted ? 'OK' : stage.label}
                   </div>
                   <span
-                    className={`text-sm tracking-wide ${
+                    className={`text-[14px] ${
                       isActive
                         ? 'text-foreground font-semibold'
                         : isCompleted

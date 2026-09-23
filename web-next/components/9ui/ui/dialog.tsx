@@ -27,7 +27,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Base
     <BaseDialog.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 bg-foreground/50 transition-all duration-200 [&[data-ending-style]]:opacity-0 [&[data-starting-style]]:opacity-0',
+        'fixed inset-0 bg-black/45 dark:bg-black/65 transition-opacity duration-200 ease-[var(--ease-out)] outline-none data-ending-style:duration-150 data-ending-style:ease-[var(--ease-in)] [&[data-ending-style]]:opacity-0 [&[data-starting-style]]:opacity-0',
         className,
       )}
       {...props}
@@ -49,7 +49,7 @@ function DialogContent({
       <BaseDialog.Popup
         data-slot="dialog-content"
         className={cn(
-          'bg-popover text-popover-foreground fixed top-[100vh] left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-full gap-4 rounded-lg border p-6 shadow-lg transition-all duration-200 outline-none data-ending-style:translate-y-full data-ending-style:opacity-0 data-starting-style:translate-y-full data-starting-style:opacity-0 max-sm:rounded-b-none sm:top-[50%] sm:w-[32rem] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:scale-[calc(1-0.1*var(--nested-dialogs))] data-ending-style:sm:translate-y-[-50%] data-ending-style:sm:scale-95 data-starting-style:sm:translate-y-[-50%] data-starting-style:sm:scale-95',
+          'bg-card text-card-foreground fixed top-[100vh] left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-full gap-4 rounded-lg border border-[var(--border)] p-6 shadow-lg dark:shadow-none transition-all duration-200 ease-[var(--ease-out)] outline-none data-ending-style:duration-150 data-ending-style:ease-[var(--ease-in)] data-ending-style:opacity-0 data-starting-style:opacity-0 data-ending-style:scale-[0.98] data-starting-style:scale-[0.98] max-sm:rounded-b-none sm:top-[50%] sm:w-[32rem] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:scale-[calc(1_-_0.1*var(--nested-dialogs))] data-ending-style:sm:translate-y-[-50%] data-starting-style:sm:translate-y-[-50%] data-ending-style:sm:scale-[calc(1_-_0.1*var(--nested-dialogs)_-_0.02)] data-starting-style:sm:scale-[calc(1_-_0.1*var(--nested-dialogs)_-_0.02)]',
           className,
         )}
         {...props}

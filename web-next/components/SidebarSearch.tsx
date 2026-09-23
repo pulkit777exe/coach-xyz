@@ -35,6 +35,21 @@ const PAGES: PageEntry[] = [
 
 type Result = { key: string; label: string; hint: string; href: string; icon: 'page' | 'player' }
 
+/**
+ * Notion search trigger: 32px inset field, 14px muted placeholder, kbd chip
+ * right. Inset fill is not a token — explicit light/dark rgba pair.
+ */
+const TRIGGER_CLASS =
+  'mb-2 flex h-8 w-full items-center gap-2 rounded-[6px] bg-[rgba(55,53,47,0.06)] px-2 text-left text-sm text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-[rgba(55,53,47,0.09)] focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] dark:bg-[rgba(255,255,255,0.06)] dark:hover:bg-[rgba(255,255,255,0.09)]'
+const KBD_CHIP_CLASS =
+  'shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 text-[11px] leading-none font-medium text-muted-foreground'
+/** Panel: radius 8 + hairline; enter 200ms opacity+scale(.98→1) ease-out, exit 150ms ease-in. */
+const PANEL_CLASS =
+  'max-w-lg gap-0! rounded-[8px]! border border-border bg-popover p-0! shadow-lg duration-200! ease-[cubic-bezier(0.23,1,0.32,1)]! data-starting-style:scale-[0.98]! data-ending-style:duration-150! data-ending-style:ease-in! data-ending-style:scale-[0.98]!'
+/** 28px list rows — same pattern as the sidebar. */
+const ROW_CLASS =
+  'flex h-7 w-full items-center gap-2 rounded-[4px] px-2 text-left text-sm outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+
 export default function SidebarSearch({
   auth0Id,
   role = null,
@@ -147,26 +162,21 @@ export default function SidebarSearch({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpenState(true)}
-        className="mb-3 flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-card px-2.5 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <SearchIcon className="size-3.5 shrink-0" />
-        <span className="flex-1 text-left">Search</span>
-        <kbd className="rounded border border-border bg-muted px-1 text-[10px] font-medium leading-4">
-          ⌘K
-        </kbd>
+      <button type="button" onClick={() => setOpenState(true)} className={TRIGGER_CLASS}>
+        <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-left">Search or ask</span>
+        <kbd className={KBD_CHIP_CLASS}>Ctrl+K</kbd>
       </button>
 
       <Dialog open={open} onOpenChange={setOpenState}>
         <DialogContent
-          className="max-w-lg gap-0 p-0"
+          className={PANEL_CLASS}
           onKeyDown={onDialogKey}
           aria-label="Quick find"
+          showCloseButton={false}
         >
           <DialogTitle className="sr-only">Quick find</DialogTitle>
-          <div className="flex items-center gap-2 border-b border-border px-3">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
             <Input
               autoFocus
@@ -176,14 +186,16 @@ export default function SidebarSearch({
                 setActive(0)
               }}
               placeholder="Search pages and players…"
-              className="h-11 border-0 bg-transparent text-sm shadow-none focus-visible:ring-0"
+              inputContainerClassName="min-w-0 flex-1"
+              className="h-7! border-0! bg-transparent! px-0! text-sm! shadow-none focus-visible:border-0! focus-visible:ring-0!"
               aria-label="Search pages and players"
             />
             {searching && <Spinner className="shrink-0 text-muted-foreground" />}
+            <kbd className={KBD_CHIP_CLASS}>Esc</kbd>
           </div>
-          <ul className="max-h-72 overflow-y-auto p-1.5">
+          <ul className="max-h-72 overflow-y-auto p-1">
             {results.length === 0 ? (
-              <li className="px-2.5 py-6 text-center text-[13px] text-muted-foreground">
+              <li className="px-2 py-6 text-center text-sm text-muted-foreground">
                 {query.trim() ? 'No matches.' : 'Type to search pages and players.'}
               </li>
             ) : (
@@ -194,17 +206,27 @@ export default function SidebarSearch({
                     onMouseEnter={() => setActive(i)}
                     onClick={() => go(r.href)}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors',
-                      i === active ? 'bg-accent text-foreground' : 'text-muted-foreground',
+                      ROW_CLASS,
+                      i === active ? 'bg-accent text-foreground' : 'text-foreground/90 hover:bg-accent',
                     )}
                   >
                     {r.icon === 'player' ? (
-                      <UserIcon className="size-4 shrink-0" />
+                      <UserIcon
+                        className={cn(
+                          'size-4 shrink-0',
+                          i === active ? 'text-foreground' : 'text-muted-foreground',
+                        )}
+                      />
                     ) : (
-                      <FileTextIcon className="size-4 shrink-0" />
+                      <FileTextIcon
+                        className={cn(
+                          'size-4 shrink-0',
+                          i === active ? 'text-foreground' : 'text-muted-foreground',
+                        )}
+                      />
                     )}
-                    <span className="flex-1 truncate font-medium">{r.label}</span>
-                    <span className="shrink-0 text-[11px]">{r.hint}</span>
+                    <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground/60">{r.hint}</span>
                   </button>
                 </li>
               ))

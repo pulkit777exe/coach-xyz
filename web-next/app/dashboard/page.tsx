@@ -14,6 +14,7 @@ import type { ScheduleEvent, ReportRecord, OrgOverview } from '@/lib/org'
 import type { DashboardPlayerAnalysis, MyObjectives } from '@/lib/meApi'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import {
   CalendarIcon,
   FileTextIcon,
@@ -27,7 +28,8 @@ import {
 } from 'lucide-react'
 import { unstable_noStore as noStore } from 'next/cache'
 
-import { Badge } from '@/components/9ui/ui/badge'
+import PageHeader from '@/components/org/PageHeader'
+import StatusPill from '@/components/org/StatusPill'
 
 export const metadata: Metadata = {
   title: 'Dashboard | CoachXYZ',
@@ -56,6 +58,101 @@ function overviewTiles(overview: OrgOverview) {
     },
   ]
 }
+
+// ── Shared dashboard building blocks (module level — never nested) ─────────
+
+function SectionHeading({
+  title,
+  href,
+  linkLabel,
+}: {
+  title: string
+  href: string
+  linkLabel: string
+}) {
+  return (
+    <div className="mb-1 flex items-baseline justify-between gap-4">
+      <h2 className="text-[13px] font-semibold leading-[1.4] text-foreground">{title}</h2>
+      <Link
+        href={href}
+        className="text-[13px] text-muted-foreground transition-colors hover:text-foreground hover:underline"
+      >
+        {linkLabel}
+      </Link>
+    </div>
+  )
+}
+
+function ListShell({ children }: { children: ReactNode }) {
+  return <ul className="space-y-0.5 py-0.5">{children}</ul>
+}
+
+function ListRow({
+  href,
+  icon,
+  label,
+  meta,
+  trailing,
+}: {
+  href: string
+  icon: ReactNode
+  label: ReactNode
+  meta?: ReactNode
+  trailing?: ReactNode
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="flex h-10 items-center gap-2.5 rounded-[4px] px-2 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[14px] leading-[1.4] text-foreground">
+          {label}
+        </span>
+        {meta ? (
+          <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">{meta}</span>
+        ) : null}
+        {trailing}
+      </Link>
+    </li>
+  )
+}
+
+function StatTiles({ tiles }: { tiles: { label: string; value: number | string }[] }) {
+  return (
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {tiles.map((stat) => (
+        <div
+          key={stat.label}
+          className="rounded-[6px] border border-border bg-card px-5 py-4"
+        >
+          <p className="text-[11px] font-medium uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground">
+            {stat.label}
+          </p>
+          <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
+            {stat.value}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyCard({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-[6px] border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+      {children}
+    </p>
+  )
+}
+
+const rowLinkClass =
+  'flex h-10 items-center gap-2.5 rounded-[4px] px-2 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+
+const shellClass = 'mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
 export default async function DashboardPage() {
   noStore()
@@ -119,78 +216,56 @@ export default async function DashboardPage() {
   const tiles = overview ? overviewTiles(overview) : []
 
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-8">
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Home</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Your coaching organization at a glance.</p>
+    <div className={shellClass}>
+      <PageHeader title="Home" description="Your coaching organization at a glance." />
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+      {error ? (
+        <div className="mb-2 rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
           Failed to load dashboard data. Please try again later.
         </div>
-      )}
+      ) : null}
 
-      {statCards.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-x">
-          {statCards.map((stat) => (
-            <div key={stat.label} className="px-5 py-4">
-              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                {stat.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+      {statCards.length > 0 && <StatTiles tiles={statCards} />}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Link
           href="/#analyze"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex h-10 items-center gap-2.5 rounded-[6px] border border-border bg-card px-4 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           <Plus className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">New analysis</span>
+          <span className="text-[14px] leading-[1.4] text-foreground">New analysis</span>
         </Link>
         <Link
           href="/dashboard/students"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex h-10 items-center gap-2.5 rounded-[6px] border border-border bg-card px-4 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           <Users className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Add student</span>
+          <span className="text-[14px] leading-[1.4] text-foreground">Add student</span>
         </Link>
         <Link
           href="/dashboard/schedule"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex h-10 items-center gap-2.5 rounded-[6px] border border-border bg-card px-4 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Schedule event</span>
+          <span className="text-[14px] leading-[1.4] text-foreground">Schedule event</span>
         </Link>
         {canInvite && (
           <Link
             href="/dashboard/members"
-            className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+            className="flex h-10 items-center gap-2.5 rounded-[6px] border border-border bg-card px-4 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <UserPlus className="size-4 shrink-0 text-muted-foreground" />
-            <span className="text-[13px] font-medium text-foreground">Invite member</span>
+            <span className="text-[14px] leading-[1.4] text-foreground">Invite member</span>
           </Link>
         )}
       </div>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Recents</h2>
-          <Link
-            href="/dashboard/history"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            View all
-          </Link>
-        </div>
+        <SectionHeading title="Recents" href="/dashboard/history" linkLabel="View all" />
         {!analyses || analyses.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
-            No analyses yet — run your first one above.
-          </p>
+          <EmptyCard>No analyses yet — run your first one above.</EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {analyses.slice(0, 5).map((a) => {
               const score =
                 a.summary_json &&
@@ -199,65 +274,49 @@ export default async function DashboardPage() {
                   ? (a.summary_json as { form_score: number }).form_score
                   : null
               return (
-                <li key={a.server_job_id} className="border-b border-border last:border-0">
-                  <Link
-                    href={`/dashboard/analysis/${a.server_job_id}`}
-                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                  >
-                    <Video className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                <ListRow
+                  key={a.server_job_id}
+                  href={`/dashboard/analysis/${a.server_job_id}`}
+                  icon={<Video className="size-4" />}
+                  label={
+                    <>
                       {a.display_name || a.file_name || 'Untitled video'}
                       {a.player_index !== null && (
-                        <span className="font-normal text-muted-foreground">
-                          {` — Player ${a.player_index}`}
-                        </span>
+                        <span className="text-muted-foreground">{` — Player ${a.player_index}`}</span>
                       )}
-                    </span>
-                    {score !== null && (
-                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
-                        {score}
-                      </span>
-                    )}
-                    <Badge variant={a.complete ? 'success' : a.error_code ? 'danger' : 'secondary'}>
+                    </>
+                  }
+                  meta={score !== null ? score : undefined}
+                  trailing={
+                    <StatusPill tone={a.complete ? 'green' : a.error_code ? 'red' : 'gray'}>
                       {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}
-                    </Badge>
-                  </Link>
-                </li>
+                    </StatusPill>
+                  }
+                />
               )
             })}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Upcoming events</h2>
-          <Link
-            href="/dashboard/schedule"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            Schedule
-          </Link>
-        </div>
+        <SectionHeading title="Upcoming events" href="/dashboard/schedule" linkLabel="Schedule" />
         {!upcomingEvents || upcomingEvents.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <EmptyCard>
             {upcomingEvents === null
               ? 'Events failed to load.'
               : 'No upcoming events in the next 30 days.'}
-          </p>
+          </EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {upcomingEvents.map((e) => (
-              <li key={e.id} className="border-b border-border last:border-0">
-                <Link
-                  href="/dashboard/schedule"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {e.title}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              <ListRow
+                key={e.id}
+                href="/dashboard/schedule"
+                icon={<CalendarIcon className="size-4" />}
+                label={e.title}
+                meta={
+                  <span className="inline-flex items-center gap-1">
                     <ClockIcon className="size-3" />
                     {new Date(e.starts_at).toLocaleDateString('en-US', {
                       weekday: 'short',
@@ -265,74 +324,54 @@ export default async function DashboardPage() {
                       day: 'numeric',
                     })}
                   </span>
-                </Link>
-              </li>
+                }
+              />
             ))}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Recent reports</h2>
-          <Link
-            href="/dashboard/reports"
-            className="text-xs text-muted-foreground hover:text-foreground"
-          >
-            All reports
-          </Link>
-        </div>
+        <SectionHeading title="Recent reports" href="/dashboard/reports" linkLabel="All reports" />
         {!recentReports || recentReports.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
-            No reports generated yet.
-          </p>
+          <EmptyCard>No reports generated yet.</EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {recentReports.map((r) => (
-              <li key={r.id} className="border-b border-border last:border-0">
-                <Link
-                  href={`/dashboard/reports/${r.id}`}
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {r.title}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {r.full_name || 'Organization'}
-                  </span>
-                </Link>
-              </li>
+              <ListRow
+                key={r.id}
+                href={`/dashboard/reports/${r.id}`}
+                icon={<FileTextIcon className="size-4" />}
+                label={r.title}
+                meta={r.full_name || 'Organization'}
+              />
             ))}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       {showOrgSection && tiles.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-1 text-[13px] font-semibold text-foreground">Organization</h2>
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="mb-1">
+            <h2 className="text-[13px] font-semibold leading-[1.4] text-foreground">
+              Organization
+            </h2>
+          </div>
+          <ListShell>
             {tiles.map((t) => (
-              <li key={t.label} className="border-b border-border last:border-0">
-                <Link
-                  href={t.href}
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <t.icon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {t.label}
-                  </span>
-                  <span className="shrink-0 text-[13px] font-semibold text-foreground">
-                    {t.value}
-                  </span>
-                </Link>
-              </li>
+              <ListRow
+                key={t.label}
+                href={t.href}
+                icon={<t.icon className="size-4" />}
+                label={t.label}
+                meta={t.value}
+              />
             ))}
-          </ul>
+          </ListShell>
         </section>
       )}
       {!overview && !error && (
-        <p className="mt-6 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-6 rounded-[6px] border border-border bg-card p-6 text-center text-[14px] text-muted-foreground">
           No organization data yet — add students to get started.
         </p>
       )}
@@ -395,17 +434,18 @@ async function PlayerHome() {
     : []
 
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-8">
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">My training</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Your analyses, schedule, and objectives.</p>
+    <div className={shellClass}>
+      <PageHeader title="My training" description="Your analyses, schedule, and objectives." />
 
       {statCards.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-3 sm:divide-x">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {statCards.map((stat) => (
-            <div key={stat.label} className="px-5 py-4">
-              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+            <div key={stat.label} className="rounded-[6px] border border-border bg-card px-5 py-4">
+              <p className="text-[11px] font-medium uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground">
                 {stat.label}
+              </p>
+              <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
+                {stat.value}
               </p>
             </div>
           ))}
@@ -413,18 +453,11 @@ async function PlayerHome() {
       )}
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">My analyses</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
-            Player hub
-          </Link>
-        </div>
+        <SectionHeading title="My analyses" href="/player" linkLabel="Player hub" />
         {!analyses || analyses.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
-            {analyses === null ? 'Analyses failed to load.' : 'No analyses yet.'}
-          </p>
+          <EmptyCard>{analyses === null ? 'Analyses failed to load.' : 'No analyses yet.'}</EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {analyses.slice(0, 5).map((a) => {
               const score =
                 a.summary_json &&
@@ -433,55 +466,38 @@ async function PlayerHome() {
                   ? (a.summary_json as { form_score: number }).form_score
                   : null
               return (
-                <li key={a.server_job_id} className="border-b border-border last:border-0">
-                  <Link
-                    href="/player"
-                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                  >
-                    <Video className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                      {a.display_name || a.file_name || 'Untitled video'}
-                    </span>
-                    {score !== null && (
-                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
-                        {score}
-                      </span>
-                    )}
-                    <Badge variant={a.complete ? 'success' : a.error_code ? 'danger' : 'secondary'}>
+                <ListRow
+                  key={a.server_job_id}
+                  href="/player"
+                  icon={<Video className="size-4" />}
+                  label={a.display_name || a.file_name || 'Untitled video'}
+                  meta={score !== null ? score : undefined}
+                  trailing={
+                    <StatusPill tone={a.complete ? 'green' : a.error_code ? 'red' : 'gray'}>
                       {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}
-                    </Badge>
-                  </Link>
-                </li>
+                    </StatusPill>
+                  }
+                />
               )
             })}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Up next</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
-            Player hub
-          </Link>
-        </div>
+        <SectionHeading title="Up next" href="/player" linkLabel="Player hub" />
         {!upcoming || upcoming.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
-            {upcoming === null ? 'Schedule failed to load.' : 'Nothing scheduled.'}
-          </p>
+          <EmptyCard>{upcoming === null ? 'Schedule failed to load.' : 'Nothing scheduled.'}</EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {upcoming.map((e) => (
-              <li key={e.id} className="border-b border-border last:border-0">
-                <Link
-                  href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {e.title}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              <ListRow
+                key={e.id}
+                href="/player"
+                icon={<CalendarIcon className="size-4" />}
+                label={e.title}
+                meta={
+                  <span className="inline-flex items-center gap-1">
                     <ClockIcon className="size-3" />
                     {new Date(e.starts_at).toLocaleDateString('en-US', {
                       weekday: 'short',
@@ -489,79 +505,53 @@ async function PlayerHome() {
                       day: 'numeric',
                     })}
                   </span>
-                </Link>
-              </li>
+                }
+              />
             ))}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Objectives</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
-            Player hub
-          </Link>
-        </div>
+        <SectionHeading title="Objectives" href="/player" linkLabel="Player hub" />
         {!objectives || objectives.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <EmptyCard>
             {objectives === null ? 'Objectives failed to load.' : 'No active objectives.'}
-          </p>
+          </EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {objectives.slice(0, 5).map((o) => (
-              <li key={o.id} className="border-b border-border last:border-0">
-                <Link
-                  href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <ClipboardCheck className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {o.title}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatDueOn(o.due_on)}
-                  </span>
-                </Link>
-              </li>
+              <ListRow
+                key={o.id}
+                href="/player"
+                icon={<ClipboardCheck className="size-4" />}
+                label={o.title}
+                meta={formatDueOn(o.due_on)}
+              />
             ))}
-          </ul>
+          </ListShell>
         )}
       </section>
 
       <section className="mt-8">
-        <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Reports</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
-            Player hub
-          </Link>
-        </div>
+        <SectionHeading title="Reports" href="/player" linkLabel="Player hub" />
         {!reports || reports.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
-            {reports === null ? 'Reports failed to load.' : 'No reports yet.'}
-          </p>
+          <EmptyCard>{reports === null ? 'Reports failed to load.' : 'No reports yet.'}</EmptyCard>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ListShell>
             {reports.map((r) => (
-              <li key={r.id} className="border-b border-border last:border-0">
-                <Link
-                  href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
-                >
-                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-                    {r.title}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(r.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </Link>
-              </li>
+              <ListRow
+                key={r.id}
+                href="/player"
+                icon={<FileTextIcon className="size-4" />}
+                label={r.title}
+                meta={new Date(r.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              />
             ))}
-          </ul>
+          </ListShell>
         )}
       </section>
     </div>

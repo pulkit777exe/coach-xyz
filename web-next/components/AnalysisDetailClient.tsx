@@ -23,6 +23,7 @@ import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
+import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
 import { CopyButton } from '@/components/interior/copy-button'
 import { SegmentedControl } from '@/components/interior/segmented-control'
@@ -42,6 +43,21 @@ import { Lightbox } from '@/components/interior/lightbox'
 const POLL_INTERVAL = 2000
 const MAX_POLL_RETRIES = 3
 const STUCK_WARNING_MS = 5 * 60 * 1000
+
+/** Card heading: 16px/600 over a hairline rule that bleeds to the card edges. */
+function CardHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="-mx-6 -mt-6 mb-4 border-b border-border px-6 py-3.5">
+      <h2 className="text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
+        {children}
+      </h2>
+    </div>
+  )
+}
+
+/** Outline action chip used where a full Button can't be the child (hold-to-confirm). */
+const CHIP_CLASS =
+  'inline-flex items-center rounded-[6px] border border-border px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer'
 
 interface AnalysisDetailClientProps {
   auth0Id: string
@@ -175,8 +191,8 @@ export default function AnalysisDetailClient({
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <div className="size-12 animate-spin rounded-full border-4 border-muted border-t-primary mb-4" />
-        <p className="text-muted-foreground text-sm">Loading analysis...</p>
+        <div className="size-10 animate-spin rounded-full border-[3px] border-muted border-t-primary mb-4" />
+        <p className="text-muted-foreground text-[14px]">Loading analysis...</p>
       </div>
     )
   }
@@ -199,11 +215,13 @@ export default function AnalysisDetailClient({
               d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <h1 className="text-2xl font-semibold text-foreground mb-3">Analysis Expired</h1>
-          <p className="text-muted-foreground mb-6">{expiredMessage}</p>
+          <h1 className="text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3">
+            Analysis Expired
+          </h1>
+          <p className="text-muted-foreground text-[14px] mb-6">{expiredMessage}</p>
           <Link
             href="/"
-            className="inline-block px-6 py-3 border border-border text-muted-foreground text-sm uppercase tracking-[0.15em] hover:text-foreground hover:border-foreground transition-colors"
+            className="inline-block px-4 py-2 rounded-[6px] border border-border text-[14px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             Start New Analysis
           </Link>
@@ -217,9 +235,9 @@ export default function AnalysisDetailClient({
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-          <div className="size-12 animate-spin rounded-full border-4 border-muted border-t-primary mb-4" />
-          <p className="text-muted-foreground text-sm mb-2">Loading analysis...</p>
-          <p className="text-destructive text-xs">{pollError}</p>
+          <div className="size-10 animate-spin rounded-full border-[3px] border-muted border-t-primary mb-4" />
+          <p className="text-muted-foreground text-[14px] mb-2">Loading analysis...</p>
+          <p className="text-destructive text-[13px]">{pollError}</p>
         </div>
       </div>
     )
@@ -233,8 +251,8 @@ export default function AnalysisDetailClient({
     return (
       <>
         <AnalysisProgress status={status} />
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-background border border-border px-6 py-4 text-center shadow-lg">
-          <p className="text-muted-foreground text-sm mb-3">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 rounded-[8px] bg-popover border border-border px-6 py-4 text-center shadow-lg">
+          <p className="text-muted-foreground text-[14px] mb-3">
             This analysis is taking longer than usual.
           </p>
           <button
@@ -242,7 +260,7 @@ export default function AnalysisDetailClient({
               setStuckWarning(false)
               pollControllerRef.current?.refresh()
             }}
-            className="px-4 py-2 border border-border text-muted-foreground text-[0.65rem] uppercase tracking-[0.15em] hover:text-foreground hover:border-foreground transition-colors"
+            className="rounded-[6px] border border-border px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             Refresh Status
           </button>
@@ -273,11 +291,15 @@ export default function AnalysisDetailClient({
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-          <h1 className="text-2xl font-semibold text-foreground mb-3">Analysis Expired</h1>
-          <p className="text-muted-foreground mb-6">Analysis not found or expired.</p>
+          <h1 className="text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3">
+            Analysis Expired
+          </h1>
+          <p className="text-muted-foreground text-[14px] mb-6">
+            Analysis not found or expired.
+          </p>
           <Link
             href="/"
-            className="inline-block px-6 py-3 border border-border text-muted-foreground text-sm uppercase tracking-[0.15em] hover:text-foreground hover:border-foreground transition-colors"
+            className="inline-block px-4 py-2 rounded-[6px] border border-border text-[14px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             Start New Analysis
           </Link>
@@ -309,7 +331,7 @@ export default function AnalysisDetailClient({
     summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
 
   return (
-    <div ref={containerRef} className="p-8 lg:p-12 max-w-[1080px] mx-auto">
+    <div ref={containerRef} className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       {/* Reading Progress */}
       <ReadingProgress scroller={containerRef} className="fixed top-14 left-0 right-0 z-40" />
 
@@ -327,28 +349,25 @@ export default function AnalysisDetailClient({
       />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-8 text-sm text-muted-foreground">
+      <div className="flex items-center gap-1.5 mb-6 text-[13px] text-muted-foreground">
         <span>History</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="font-medium text-foreground">
+        <span className="text-muted-foreground/60">/</span>
+        <span className="text-foreground">
           {data.display_name || data.file_name || 'Untitled'}
         </span>
       </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-12">
+      <div className="flex items-start justify-between mb-8">
         <div>
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Analysis Detail
-          </p>
           <AnalysisTitle
             auth0Id={auth0Id}
             jobId={jobId}
             displayName={data.display_name}
             fileName={data.file_name}
           />
-          <div className="mt-4 flex items-center gap-4 text-[0.65rem] text-muted-foreground">
-            <span>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+            <span className="tabular-nums">
               {new Date(data.requested_at).toLocaleDateString('en-US', {
                 month: 'long',
                 day: 'numeric',
@@ -359,27 +378,19 @@ export default function AnalysisDetailClient({
             </span>
             {data.model && <span>{data.model}</span>}
             {data.player_count ? (
-              <span>
+              <span className="tabular-nums">
                 {data.player_count} player{data.player_count > 1 ? 's' : ''}
               </span>
             ) : null}
           </div>
         </div>
-        <span
-          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1.5 border rounded-full ${
-            data.complete
-              ? 'border-border text-muted-foreground'
-              : ec
-                ? 'border-danger/30 text-destructive'
-                : 'border-primary/40 text-primary'
-          }`}
-        >
+        <StatusPill tone={data.complete ? 'green' : ec ? 'red' : 'blue'}>
           {data.complete ? 'Complete' : ec ? 'Failed' : 'In Progress'}
-        </span>
+        </StatusPill>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3 mb-8">
+      <div className="flex flex-wrap items-center gap-2 mb-8">
         {!data.complete && !ec && (
           <HoldToConfirm
             onConfirm={async () => {
@@ -389,9 +400,7 @@ export default function AnalysisDetailClient({
             confirmLabel="Analysis cancelled"
             className="[&_*]:!text-foreground"
           >
-            <span className="px-4 py-2 border border-border text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground cursor-pointer">
-              Cancel
-            </span>
+            <span className={CHIP_CLASS}>Cancel</span>
           </HoldToConfirm>
         )}
         {data.complete && data.video_ready && (
@@ -401,7 +410,7 @@ export default function AnalysisDetailClient({
             }}
             pendingLabel="Downloading..."
             successLabel="Started!"
-            className="!border !border-border !bg-transparent !px-4 !py-2 !text-[0.65rem] !uppercase tracking-[0.15em] !text-muted-foreground hover:!text-foreground"
+            className="!rounded-[6px] !border !border-border !bg-transparent !px-3 !py-1.5 !text-[13px] !font-medium !text-muted-foreground hover:!bg-accent hover:!text-foreground"
           >
             Download Video
           </LoadingButton>
@@ -423,7 +432,7 @@ export default function AnalysisDetailClient({
         <CopyButton
           value={data.engine_job_id}
           label="Copy Job ID"
-          className="!border !border-border !bg-transparent !px-4 !py-2 !text-[0.65rem] !uppercase tracking-[0.15em] !text-muted-foreground hover:!text-foreground"
+          className="!rounded-[6px] !border !border-border !bg-transparent !px-3 !py-1.5 !text-[13px] !font-medium !text-muted-foreground hover:!bg-accent hover:!text-foreground"
         />
         <Button
           variant="outline"
@@ -451,7 +460,7 @@ export default function AnalysisDetailClient({
           confirmLabel="Analysis deleted"
           className="[&_*]:!text-foreground"
         >
-          <span className="px-4 py-2 border border-danger/30 text-destructive text-[0.65rem] uppercase tracking-[0.15em] cursor-pointer">
+          <span className="inline-flex items-center rounded-[6px] border border-destructive/30 px-3 py-1.5 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer">
             Delete
           </span>
         </HoldToConfirm>
@@ -464,17 +473,16 @@ export default function AnalysisDetailClient({
           className="[&_*]:!text-foreground"
         >
           <div className="p-6 space-y-4">
-            <h3 className="text-lg font-bold tracking-tight text-foreground">Share Analysis</h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[14px] text-muted-foreground">
               Anyone with this link can view the analysis — no login required.
             </p>
             {shareLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-[14px] text-muted-foreground">
                 <span className="size-4 border-border border-t-current inline-block animate-spin rounded-full border-2" />
                 Creating share link…
               </div>
             ) : shareError ? (
-              <p className="text-sm text-destructive">{shareError}</p>
+              <p className="text-[13px] text-destructive">{shareError}</p>
             ) : shareUrl ? (
               <>
                 <div className="flex gap-2">
@@ -482,16 +490,16 @@ export default function AnalysisDetailClient({
                     type="text"
                     value={shareUrl}
                     readOnly
-                    className="flex-1 bg-transparent border border-border px-3 py-2 text-sm text-foreground"
+                    className="flex-1 bg-background border border-border rounded-[6px] px-3 py-2 text-[14px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <CopyButton
                     value={shareUrl}
                     label="Copy link"
-                    className="!border !border-border !bg-transparent !px-4 !py-2 !text-sm"
+                    className="!rounded-[6px] !border !border-border !bg-transparent !px-3 !py-1.5 !text-[13px] !font-medium"
                   />
                 </div>
                 {shareExpires && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground tabular-nums">
                     Expires {new Date(shareExpires).toLocaleString()}
                   </p>
                 )}
@@ -503,11 +511,9 @@ export default function AnalysisDetailClient({
 
       {/* Error */}
       {ec && (
-        <div className="rounded-xl border border-danger/30 bg-danger/10 p-6 mb-8">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-destructive">
-            Error — {ec}
-          </p>
-          <p className="text-sm text-muted-foreground">{em}</p>
+        <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 p-5 mb-8">
+          <p className="mb-2 text-[13px] font-medium text-destructive">Error — {ec}</p>
+          <p className="text-[14px] text-muted-foreground">{em}</p>
         </div>
       )}
 
@@ -553,10 +559,12 @@ export default function AnalysisDetailClient({
                 'duration_sec' in summary ? `${Math.round(summary.duration_sec as number)}s` : '—',
             },
           ].map((card) => (
-            <div key={card.label} className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <p className="font-semibold text-3xl text-foreground">{card.value}</p>
-              <p className="mt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <div key={card.label} className="rounded-[6px] border border-border bg-card p-5">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {card.label}
+              </p>
+              <p className="mt-2 font-semibold text-[28px] leading-none tabular-nums text-foreground">
+                {card.value}
               </p>
               {card.label === 'Form Score' && (
                 <Popover
@@ -564,7 +572,7 @@ export default function AnalysisDetailClient({
                   label="Form score is calculated by AI based on technique, mechanics, and body position across all keyframes."
                   className="[&_*]:!text-foreground"
                 >
-                  <span className="mt-2 inline-block cursor-help text-[11px] text-muted-foreground underline decoration-dotted">
+                  <span className="mt-2 inline-block cursor-help text-[13px] text-muted-foreground underline decoration-dotted">
                     What is this?
                   </span>
                 </Popover>
@@ -579,10 +587,8 @@ export default function AnalysisDetailClient({
         'shot_events' in summary &&
         Array.isArray(summary.shot_events) &&
         shotEvents.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Event Priority (drag to reorder)
-            </p>
+          <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+            <CardHeading>Event Priority (drag to reorder)</CardHeading>
             <ReorderList
               items={shotEvents.slice(0, 5)}
               getId={(e) => (typeof e.event_type === 'string' ? e.event_type : 'event')}
@@ -594,20 +600,20 @@ export default function AnalysisDetailClient({
               {(event) => (
                 <div className="flex items-center gap-3 py-2">
                   <TimestampPill seconds={typeof event.timestamp === 'number' ? event.timestamp : 0} />
-                  <span className="text-sm text-foreground">
+                  <span className="text-[14px] text-foreground">
                     {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                   </span>
                   {typeof event.form_score === 'number' && (
                     <span
-                      className={`text-xs px-1.5 py-0.5 rounded-lg ${
+                      className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                         event.form_score >= 8
-                          ? 'text-foreground bg-muted'
+                          ? 'bg-success/15 text-success'
                           : event.form_score >= 5
-                            ? 'text-warning bg-warning/10'
-                            : 'text-destructive bg-destructive/10'
+                            ? 'bg-warning/15 text-warning'
+                            : 'bg-destructive/10 text-destructive'
                       }`}
                     >
-                      {event.form_score}/10
+                      <span className="tabular-nums">{event.form_score}/10</span>
                     </span>
                   )}
                 </div>
@@ -618,12 +624,12 @@ export default function AnalysisDetailClient({
 
       {/* Shot Events with Show More */}
       {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-          <p className="mb-6 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+          <CardHeading>
             Shot Events{' '}
             {shotEvents.length > visibleEventCount &&
               `(${visibleEventCount} of ${shotEvents.length})`}
-          </p>
+          </CardHeading>
           <div className="space-y-0">
             {shotEvents.slice(0, visibleEventCount).map((event, i) => (
               <div
@@ -637,28 +643,30 @@ export default function AnalysisDetailClient({
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-foreground">
+                    <p className="text-[14px] text-foreground">
                       {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                     </p>
                     {typeof event.form_score === 'number' && (
                       <span
-                        className={`text-xs px-1.5 py-0.5 rounded-lg ${
+                        className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                           event.form_score >= 8
-                            ? 'text-foreground bg-muted'
+                            ? 'bg-success/15 text-success'
                             : event.form_score >= 5
-                              ? 'text-warning bg-warning/10'
-                              : 'text-destructive bg-destructive/10'
+                              ? 'bg-warning/15 text-warning'
+                              : 'bg-destructive/10 text-destructive'
                         }`}
                       >
-                        {event.form_score}/10
+                        <span className="tabular-nums">{event.form_score}/10</span>
                       </span>
                     )}
                   </div>
                   {typeof event.feedback === 'string' && (
-                    <p className="mt-1 text-xs text-muted-foreground">{event.feedback}</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">{event.feedback}</p>
                   )}
                   {typeof event.key_observation === 'string' && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{event.key_observation}</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                      {event.key_observation}
+                    </p>
                   )}
                 </div>
               </div>
@@ -667,9 +675,9 @@ export default function AnalysisDetailClient({
           {shotEvents.length > visibleEventCount && (
             <button
               onClick={() => setShowAllEvents(true)}
-              className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-4 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
             >
-              Show all {shotEvents.length} events →
+              Show all <span className="tabular-nums">{shotEvents.length}</span> events →
             </button>
           )}
         </div>
@@ -681,15 +689,13 @@ export default function AnalysisDetailClient({
           {'top_tips' in summary &&
             Array.isArray(summary.top_tips) &&
             (summary.top_tips as string[]).length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-                <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Priority Focus
-                </p>
+              <div className="rounded-[6px] border border-border bg-card p-6">
+                <CardHeading>Priority Focus</CardHeading>
                 <ShowMore lines={3} className="[&_*]:!text-foreground">
                   <ul className="space-y-2">
                     {(summary.top_tips as string[]).map((tip, i) => (
-                      <li key={i} className="text-sm text-foreground flex items-start gap-2">
-                        <span className="text-muted-foreground shrink-0">{i + 1}.</span>
+                      <li key={i} className="text-[14px] text-foreground flex items-start gap-2">
+                        <span className="text-muted-foreground shrink-0 tabular-nums">{i + 1}.</span>
                         {tip}
                       </li>
                     ))}
@@ -701,13 +707,11 @@ export default function AnalysisDetailClient({
           {'strengths' in summary &&
             Array.isArray(summary.strengths) &&
             (summary.strengths as string[]).length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-                <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Strengths
-                </p>
+              <div className="rounded-[6px] border border-border bg-card p-6">
+                <CardHeading>Strengths</CardHeading>
                 <ul className="space-y-2">
                   {(summary.strengths as string[]).map((s, i) => (
-                    <li key={i} className="text-sm text-foreground flex items-start gap-2">
+                    <li key={i} className="text-[14px] text-foreground flex items-start gap-2">
                       <span className="text-success shrink-0">✓</span>
                       {s}
                     </li>
@@ -720,20 +724,16 @@ export default function AnalysisDetailClient({
 
       {/* Drill */}
       {drill && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Recommended Drill
-          </p>
-          <p className="text-sm text-foreground">{drill}</p>
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+          <CardHeading>Recommended Drill</CardHeading>
+          <p className="text-[14px] text-foreground">{drill}</p>
         </div>
       )}
 
       {/* Analysis Structure Tree */}
       {summary && (
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm mb-8">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Analysis Structure
-          </p>
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+          <CardHeading>Analysis Structure</CardHeading>
           <TreeView
             label="Analysis structure"
             nodes={[
@@ -760,39 +760,41 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Metadata */}
-      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Metadata
-        </p>
-        <dl className="grid grid-cols-2 gap-4 text-sm">
+      <div className="rounded-[6px] border border-border bg-card p-6">
+        <CardHeading>Metadata</CardHeading>
+        <dl className="grid grid-cols-2 gap-4 text-[14px]">
           <div>
-            <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
               Job ID
             </dt>
-            <dd className="text-foreground font-mono text-xs break-all">{data.engine_job_id}</dd>
+            <dd className="text-foreground font-mono text-[13px] break-all">{data.engine_job_id}</dd>
           </div>
           {data.session_token && (
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+              <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
                 Session Token
               </dt>
-              <dd className="text-foreground font-mono text-xs break-all">{data.session_token}</dd>
+              <dd className="text-foreground font-mono text-[13px] break-all">
+                {data.session_token}
+              </dd>
             </div>
           )}
           {data.completed_at && (
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+              <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
                 Completed
               </dt>
-              <dd className="text-foreground">{new Date(data.completed_at).toLocaleString()}</dd>
+              <dd className="text-foreground tabular-nums">
+                {new Date(data.completed_at).toLocaleString()}
+              </dd>
             </div>
           )}
           {data.download_count > 0 && (
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+              <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
                 Downloads
               </dt>
-              <dd className="text-foreground">{data.download_count}</dd>
+              <dd className="text-foreground tabular-nums">{data.download_count}</dd>
             </div>
           )}
         </dl>
@@ -801,11 +803,11 @@ export default function AnalysisDetailClient({
       {/* Chat */}
       {summary && (
         <div className="mt-8">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <h2 className="mb-3 text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
             Chat with AI
-          </p>
+          </h2>
           <div
-            className="rounded-xl border border-border bg-card overflow-hidden"
+            className="rounded-[6px] border border-border bg-card overflow-hidden"
             style={{ height: 'min(500px, 60vh)' }}
           >
             <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
@@ -815,10 +817,8 @@ export default function AnalysisDetailClient({
 
       {/* Feedback Poll Results */}
       {summary && (
-        <div className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Community Feedback
-          </p>
+        <div className="mt-8 rounded-[6px] border border-border bg-card p-6">
+          <CardHeading>Community Feedback</CardHeading>
           <PollResults
             label="Community feedback"
             options={[
@@ -841,42 +841,41 @@ export default function AnalysisDetailClient({
         className="[&_*]:!text-foreground"
       >
         <div className="p-6 space-y-4">
-          <h3 className="text-lg font-bold tracking-tight text-foreground">Metadata</h3>
-          <dl className="space-y-3 text-sm">
+          <dl className="space-y-3 text-[14px]">
             <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Job ID
               </dt>
-              <dd className="text-foreground font-mono text-xs break-all mt-1">
+              <dd className="text-foreground font-mono text-[13px] break-all mt-1">
                 {data.engine_job_id}
               </dd>
             </div>
             {data.session_token && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Session Token
                 </dt>
-                <dd className="text-foreground font-mono text-xs break-all mt-1">
+                <dd className="text-foreground font-mono text-[13px] break-all mt-1">
                   {data.session_token}
                 </dd>
               </div>
             )}
             {data.completed_at && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Completed
                 </dt>
-                <dd className="text-foreground mt-1">
+                <dd className="text-foreground mt-1 tabular-nums">
                   {new Date(data.completed_at).toLocaleString()}
                 </dd>
               </div>
             )}
             {data.download_count > 0 && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Downloads
                 </dt>
-                <dd className="text-foreground mt-1">{data.download_count}</dd>
+                <dd className="text-foreground mt-1 tabular-nums">{data.download_count}</dd>
               </div>
             )}
           </dl>

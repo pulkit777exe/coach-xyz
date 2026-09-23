@@ -34,6 +34,18 @@ const ROLE_DOT: Record<MyOrg['role'], string> = {
   player: 'bg-muted-foreground/60',
 }
 
+/**
+ * Notion popover pattern: hairline panel, radius 6, item hover accent,
+ * NO entrance animation — exit fade 120ms only.
+ */
+const MENU_CLASS =
+  'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
+const ITEM_CLASS =
+  'rounded-[4px] px-2 py-1.5 text-sm hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+const TRIGGER_CLASS =
+  'flex h-8 w-full items-center gap-2 rounded-[6px] px-2 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+const AVATAR_TILE = 'inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-muted'
+
 export default function OrgSwitcher({
   orgs,
   currentAuth0Id,
@@ -53,18 +65,16 @@ export default function OrgSwitcher({
   // Single-org: show static org context (no dropdown) — keep the sidebar tidy.
   if (orgs.length === 1) {
     return (
-      <div className="mb-4 rounded-md border border-sidebar-border bg-card/50 px-2.5 py-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex size-7 items-center justify-center rounded-md bg-muted">
-            <Building2 className="size-3.5 text-muted-foreground" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-none text-foreground">{label}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] capitalize leading-none text-muted-foreground">
-              <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[role])} />
-              {role}
-            </p>
-          </div>
+      <div className="mt-1 mb-1.5 flex items-center gap-2 rounded-[6px] px-2 py-1.5">
+        <span className={AVATAR_TILE}>
+          <Building2 className="size-3 text-muted-foreground" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm leading-none text-foreground/90">{label}</p>
+          <p className="mt-1 flex items-center gap-1.5 text-[11px] leading-none text-muted-foreground/60 capitalize">
+            <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[role])} />
+            {role}
+          </p>
         </div>
       </div>
     )
@@ -79,31 +89,20 @@ export default function OrgSwitcher({
   }
 
   return (
-    <div className="mb-4">
+    <div className="mt-1 mb-1.5">
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Switch organization"
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted',
-            isPending && 'opacity-60',
-          )}
+          className={cn(TRIGGER_CLASS, isPending && 'opacity-60')}
         >
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-muted">
-            <Building2 className="size-3.5 text-muted-foreground" />
+          <span className={AVATAR_TILE}>
+            <Building2 className="size-3 text-muted-foreground" />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium leading-none text-foreground">
-              {label}
-            </span>
-            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] capitalize leading-none text-muted-foreground">
-              <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[role])} />
-              {role}
-            </span>
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{label}</span>
+          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground/60" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="bottom" className="w-64">
-          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <DropdownMenuContent align="start" side="bottom" className={MENU_CLASS}>
+          <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
             Organizations
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -114,18 +113,18 @@ export default function OrgSwitcher({
               <DropdownMenuItem
                 key={org.org_auth0_id}
                 onClick={() => onSelect(org.org_auth0_id)}
-                className={cn('flex items-center gap-2', isActive && 'bg-accent/60')}
+                className={cn(ITEM_CLASS, isActive && 'bg-accent')}
               >
                 <span
                   className={cn('inline-block size-1.5 shrink-0 rounded-full', ROLE_DOT[org.role])}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm leading-none">{name}</span>
-                  <span className="block text-xs capitalize leading-none text-muted-foreground">
+                  <span className="block text-xs leading-none text-muted-foreground capitalize">
                     {org.role}
                   </span>
                 </span>
-                {isActive && <Check className="size-4 shrink-0 text-foreground" />}
+                {isActive && <Check className="size-4 shrink-0 text-foreground!" />}
               </DropdownMenuItem>
             )
           })}

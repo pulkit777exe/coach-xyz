@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +40,7 @@ import {
 } from '@/lib/org'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
 import EmptyState from './EmptyState'
+import Section from './Section'
 import type { Student } from '@/lib/org'
 
 interface TeamsClientProps {
@@ -59,7 +58,7 @@ function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
   }, [points])
   const max = Math.max(1, ...days.map(([, n]) => n))
   if (days.length === 0) {
-    return <p className="text-xs text-muted-foreground">No findings in this window.</p>
+    return <p className="text-[13px] text-muted-foreground">No findings in this window.</p>
   }
   return (
     <div className="flex items-end gap-1 h-16" role="img" aria-label="Findings per day">
@@ -173,177 +172,163 @@ export default function TeamsClient({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Seasons</CardTitle>
-          <CardDescription>Group matches and analyses by season.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {seasons.map((season) => (
-              <span
-                key={season.id}
-                className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-foreground"
-              >
-                {season.name}
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      await orgDeleteSeason(auth0Id, season.id)
-                      setSeasons((prev) => prev.filter((s) => s.id !== season.id))
-                    })
-                  }
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label={`Delete season ${season.name}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {seasons.length === 0 && (
-              <span className="text-xs text-muted-foreground">No seasons yet.</span>
-            )}
-          </div>
-          <div className="flex gap-2 mt-3">
-            <Input
-              value={seasonName}
-              onChange={(e) => setSeasonName(e.target.value)}
-              placeholder="2026 season"
-              aria-label="Season name"
-              className="h-9 max-w-56"
-            />
-            <Button
-              variant="outline"
-              disabled={busy || !seasonName.trim()}
-              onClick={() =>
-                run(async () => {
-                  const res = await orgCreateSeason(auth0Id, { name: seasonName.trim() })
-                  setSeasons((prev) => [res.season, ...prev])
-                  setSeasonName('')
-                })
-              }
+      <Section title="Seasons">
+        <div className="flex flex-wrap gap-2">
+          {seasons.map((season) => (
+            <span
+              key={season.id}
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
             >
-              Add season
-            </Button>
-          </div>
-          {error && <p className="text-xs text-destructive mt-2">{error}</p>}
-        </CardContent>
-      </Card>
+              {season.name}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    await orgDeleteSeason(auth0Id, season.id)
+                    setSeasons((prev) => prev.filter((s) => s.id !== season.id))
+                  })
+                }
+                className="text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
+                aria-label={`Delete season ${season.name}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {seasons.length === 0 && (
+            <span className="text-[13px] text-muted-foreground">No seasons yet.</span>
+          )}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <Input
+            value={seasonName}
+            onChange={(e) => setSeasonName(e.target.value)}
+            placeholder="2026 season"
+            aria-label="Season name"
+            className="h-9 max-w-56"
+          />
+          <Button
+            variant="outline"
+            disabled={busy || !seasonName.trim()}
+            onClick={() =>
+              run(async () => {
+                const res = await orgCreateSeason(auth0Id, { name: seasonName.trim() })
+                setSeasons((prev) => [res.season, ...prev])
+                setSeasonName('')
+              })
+            }
+          >
+            Add season
+          </Button>
+        </div>
+        {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
+      </Section>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Teams</CardTitle>
-            <CardDescription>Groups for coaching scope and trends.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        <Section title="Teams">
+          <div className="space-y-1">
             {teams.map((team) => (
               <button
                 key={team.id}
                 type="button"
                 onClick={() => setSelectedId(team.id)}
                 aria-pressed={team.id === selectedId}
-                className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${
+                className={`w-full text-left rounded-[4px] px-3 py-2 transition-colors ${
                   team.id === selectedId
-                    ? 'border-foreground bg-muted'
-                    : 'border-border hover:bg-muted'
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
-                <p className="text-sm font-semibold text-foreground">{team.name}</p>
+                <p className="text-[14px] font-medium text-foreground">{team.name}</p>
                 {team.sport && (
-                  <p className="text-xs text-muted-foreground capitalize">{team.sport}</p>
+                  <p className="text-[13px] text-muted-foreground capitalize">{team.sport}</p>
                 )}
               </button>
             ))}
-            {teams.length === 0 && (
-              <EmptyState title="No teams yet" description="Create your first team to scope coaching and trends." />
-            )}
-            <Button className="w-full mt-2" onClick={() => setCreateOpen(true)}>
-              New team
-            </Button>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-          </CardContent>
-        </Card>
+          </div>
+          {teams.length === 0 && (
+            <EmptyState compact title="No teams yet" description="Create your first team to scope coaching and trends." />
+          )}
+          <Button className="w-full mt-3" onClick={() => setCreateOpen(true)}>
+            New team
+          </Button>
+          {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
+        </Section>
 
         <div className="space-y-6">
           {selected ? (
             <>
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <CardTitle>{selected.name}</CardTitle>
-                      <CardDescription>
-                        {members.length} member{members.length === 1 ? '' : 's'}
-                        {selected.sport ? ` · ${selected.sport}` : ''}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        aria-label="Team name"
-                        className="h-9 w-44"
-                      />
-                      <Button
-                        variant="outline"
-                        disabled={busy || !renameValue.trim() || renameValue === selected.name}
-                        onClick={() =>
-                          run(async () => {
-                            await renameTeam(auth0Id, selected.id, renameValue.trim())
-                            await refreshTeams(selected.id)
-                          })
-                        }
-                      >
-                        Rename
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="text-destructive border-destructive/30"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await deleteTeam(auth0Id, selected.id)
-                            setSelectedId(null)
-                            await refreshTeams()
-                          })
-                        }
-                      >
-                        Delete
-                      </Button>
-                    </div>
+              <Section
+                title={selected.name}
+                actions={
+                  <div className="flex gap-2">
+                    <Input
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      aria-label="Team name"
+                      className="h-9 w-44"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={busy || !renameValue.trim() || renameValue === selected.name}
+                      onClick={() =>
+                        run(async () => {
+                          await renameTeam(auth0Id, selected.id, renameValue.trim())
+                          await refreshTeams(selected.id)
+                        })
+                      }
+                    >
+                      Rename
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await deleteTeam(auth0Id, selected.id)
+                          setSelectedId(null)
+                          await refreshTeams()
+                        })
+                      }
+                    >
+                      Delete
+                    </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                    Findings · last 14 days
-                  </p>
-                  <TrendBars points={trends} />
-                </CardContent>
-              </Card>
+                }
+              >
+                <p className="text-[13px] text-muted-foreground mb-3">
+                  {members.length} member{members.length === 1 ? '' : 's'}
+                  {selected.sport ? ` · ${selected.sport}` : ''}
+                </p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
+                  Findings · last 14 days
+                </p>
+                <TrendBars points={trends} />
+              </Section>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Members</CardTitle>
-                  <CardDescription>Coaches by account, players by roster row.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
+              <Section title="Members">
+                <p className="text-[13px] text-muted-foreground mb-3">
+                  Coaches by account, players by roster row.
+                </p>
+                <div className="space-y-1">
                   {members.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"
+                      className="flex items-center justify-between gap-3 rounded-[4px] px-3 py-2 hover:bg-accent transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
+                        <p className="text-[14px] font-medium text-foreground truncate">
                           {member.member_auth0_id ??
                             students.find((s) => s.id === member.student_id)?.full_name ??
                             'Unknown'}
                         </p>
-                        <Badge variant="outline" className="mt-1 capitalize">
+                        <span className="mt-1 inline-flex h-[20px] items-center rounded-full bg-muted px-2 text-[11px] font-medium leading-none text-muted-foreground capitalize">
                           {member.role}
-                        </Badge>
+                        </span>
                       </div>
                       <Button
                         variant="ghost"
@@ -361,9 +346,10 @@ export default function TeamsClient({
                       </Button>
                     </div>
                   ))}
-                  {members.length === 0 && (
-                    <EmptyState title="No members yet" description="Add coaches by account or players from the roster." />
-                  )}
+                </div>
+                {members.length === 0 && (
+                  <EmptyState compact title="No members yet" description="Add coaches by account or players from the roster." />
+                )}
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
                       items={{ coach: 'Coach (account)', player: 'Player (roster)' }}
@@ -431,29 +417,27 @@ export default function TeamsClient({
                       Add
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+              </Section>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Matches</CardTitle>
-                  <CardDescription>Fixtures and results for this team.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
+              <Section title="Matches">
+                <p className="text-[13px] text-muted-foreground mb-3">
+                  Fixtures and results for this team.
+                </p>
+                <div className="space-y-1">
                   {matches.length === 0 && (
-                  <EmptyState title="No matches scheduled" description="Add the next fixture for this team." />
+                  <EmptyState compact title="No matches scheduled" description="Add the next fixture for this team." />
                   )}
                   {matches.map((match) => (
                     <div
                       key={match.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] px-3 py-2.5 hover:bg-accent transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">
+                        <p className="text-[14px] font-medium text-foreground">
                           {match.opponent ? `vs ${match.opponent}` : 'Match'}
                           {match.result ? ` · ${match.result}` : ''}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[13px] text-muted-foreground tabular-nums">
                           {[match.match_on, match.location].filter(Boolean).join(' · ') ||
                             'Unscheduled'}
                         </p>
@@ -528,19 +512,17 @@ export default function TeamsClient({
                           setMatches(res.matches)
                         })
                       }
-                    >
-                      Add match
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
+                >
+                  Add match
+                </Button>
+              </div>
+            </div>
+          </Section>
+        </>
           ) : (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                Select a team to manage members and see trends.
-              </CardContent>
-            </Card>
+            <div className="rounded-[6px] border border-border bg-card py-10 text-center text-[14px] text-muted-foreground">
+              Select a team to manage members and see trends.
+            </div>
           )}
         </div>
       </div>
