@@ -53,6 +53,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [view, setView] = useState<'list' | 'board'>('board')
 
   useEffect(() => {
     let cancelled = false
@@ -150,6 +151,21 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
     }
   }
 
+  const removeObjective = async (id: string) => {
+    setBusy(true)
+    try {
+      await orgDeleteObjective(auth0Id, id)
+      setObjectives((prev) => prev.filter((o) => o.id !== id))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openNewObjective = () => {
+    setError(null)
+    setOpen(true)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -161,84 +177,101 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
               {reviewOpen > 0 ? ` · ${reviewOpen} need review` : ''}.
             </CardDescription>
           </div>
-          <Button
-            onClick={() => {
-              setError(null)
-              setOpen(true)
-            }}
-          >
-            New objective
-          </Button>
+          <div className="flex items-center gap-2">
+            <div
+              role="group"
+              aria-label="Objectives layout"
+              className="flex rounded-md border border-border bg-muted p-0.5"
+            >
+              {(['list', 'board'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  aria-pressed={view === v}
+                  className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                    view === v
+                      ? 'bg-card text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <Button onClick={openNewObjective}>New objective</Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {objectives.length === 0 && (
+        {objectives.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No objectives yet — create one from a recent finding below.
           </p>
-        )}
-        {objectives.map((objective) => (
-          <div
-            key={objective.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">{objective.title}</p>
-              {objective.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                  {objective.description}
+        ) : view === 'board' ? (
+          <ObjectiveBoard
+            objectives={objectives}
+            busy={busy}
+            onStatus={setStatus}
+            onDelete={removeObjective}
+            onNew={openNewObjective}
+          />
+        ) : (
+          objectives.map((objective) => (
+            <div
+              key={objective.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">{objective.title}</p>
+                {objective.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                    {objective.description}
+                  </p>
+                )}
+                <p className="mt-1 text-[0.65rem] text-muted-foreground">
+                  {objective.finding_id ? `from finding ${objective.finding_id.slice(-8)} · ` : ''}
+                  {objective.due_on ? `due ${objective.due_on} · ` : ''}
+                  {objective.status}
                 </p>
-              )}
-              <p className="mt-1 text-[0.65rem] text-muted-foreground">
-                {objective.finding_id ? `from finding ${objective.finding_id.slice(-8)} · ` : ''}
-                {objective.due_on ? `due ${objective.due_on} · ` : ''}
-                {objective.status}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="capitalize">
-                {objective.status}
-              </Badge>
-              {objective.status !== 'done' && (
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="capitalize">
+                  {objective.status}
+                </Badge>
+                {objective.status !== 'done' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setStatus(objective.id, 'done')}
+                  >
+                    Done
+                  </Button>
+                )}
+                {objective.status === 'done' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setStatus(objective.id, 'active')}
+                  >
+                    Reopen
+                  </Button>
+                )}
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
+                  className="text-destructive"
                   disabled={busy}
-                  onClick={() => setStatus(objective.id, 'done')}
+                  onClick={() => void removeObjective(objective.id)}
                 >
-                  Done
+                  Delete
                 </Button>
-              )}
-              {objective.status === 'done' && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setStatus(objective.id, 'active')}
-                >
-                  Reopen
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true)
-                  try {
-                    await orgDeleteObjective(auth0Id, objective.id)
-                    setObjectives((prev) => prev.filter((o) => o.id !== objective.id))
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              >
-                Delete
-              </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
 
         {weeks.length > 0 && (
           <div className="pt-3">
@@ -407,5 +440,124 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
         </DialogContent>
       </Dialog>
     </Card>
+  )
+}
+
+const BOARD_COLUMNS = [
+  { status: 'active', label: 'To do', dot: 'bg-primary' },
+  { status: 'done', label: 'Done', dot: 'bg-emerald-500' },
+  { status: 'archived', label: 'Archived', dot: 'bg-muted-foreground/60' },
+] as const
+
+/**
+ * Kanban board over training objectives (Ramp-HQ style): one column per
+ * status with counts, cards carry the same move/delete actions as the list
+ * view. No drag-and-drop — status changes are explicit button taps.
+ */
+function ObjectiveBoard({
+  objectives,
+  busy,
+  onStatus,
+  onDelete,
+  onNew,
+}: {
+  objectives: TrainingObjective[]
+  busy: boolean
+  onStatus: (id: string, status: 'active' | 'done' | 'archived') => void
+  onDelete: (id: string) => void
+  onNew: () => void
+}) {
+  return (
+    <div className="grid items-start gap-3 md:grid-cols-3">
+      {BOARD_COLUMNS.map((col) => {
+        const cards = objectives.filter((o) => o.status === col.status)
+        return (
+          <div key={col.status} className="rounded-xl bg-muted/60 p-2">
+            <p className="flex items-center gap-1.5 px-1.5 py-1 text-xs font-medium text-foreground">
+              <span className={`inline-block size-2 rounded-full ${col.dot}`} />
+              {col.label}
+              <span className="text-muted-foreground">{cards.length}</span>
+            </p>
+            <div className="mt-1 flex flex-col gap-1.5">
+              {cards.map((o) => (
+                <div key={o.id} className="rounded-lg border border-border bg-card px-3 py-2.5">
+                  <p className="text-[13px] font-medium leading-snug text-foreground">{o.title}</p>
+                  {o.description && (
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                      {o.description}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {o.finding_id ? `finding ${o.finding_id.slice(-8)} · ` : ''}
+                    {o.due_on ? `due ${o.due_on}` : 'no due date'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {o.status === 'active' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={busy}
+                        onClick={() => onStatus(o.id, 'done')}
+                      >
+                        Done
+                      </Button>
+                    )}
+                    {o.status === 'done' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={busy}
+                        onClick={() => onStatus(o.id, 'active')}
+                      >
+                        Reopen
+                      </Button>
+                    )}
+                    {o.status === 'archived' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={busy}
+                        onClick={() => onStatus(o.id, 'active')}
+                      >
+                        Restore
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-muted-foreground"
+                        disabled={busy}
+                        onClick={() => onStatus(o.id, 'archived')}
+                      >
+                        Archive
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-destructive"
+                      disabled={busy}
+                      onClick={() => void onDelete(o.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={onNew}
+                className="rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                + New page
+              </button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
