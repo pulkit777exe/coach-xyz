@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import { SentryProvider } from './sentry-provider'
 import AuthHeader from '@/components/AuthHeader'
+import { PreferencesProvider } from '@/lib/preferences'
 import { Toaster } from '@/components/9ui/ui/sonner'
 import './globals.css'
 
@@ -48,17 +49,19 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <SentryProvider>
-            <AuthHeader />
-            <a
-              href="#analyze"
-              className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
-            >
-              Skip to upload
-            </a>
-            <div className="root">{children}</div>
-            <Toaster position="bottom-right" richColors />
-          </SentryProvider>
+          <PreferencesProvider>
+            <SentryProvider>
+              <AuthHeader />
+              <a
+                href="#analyze"
+                className="sr-only focus:not-sr-only focus:absolute focus:z-[10000] focus:p-4 focus:bg-primary focus:text-primary-foreground focus:outline-none"
+              >
+                Skip to upload
+              </a>
+              <div className="root">{children}</div>
+              <Toaster position="bottom-right" richColors />
+            </SentryProvider>
+          </PreferencesProvider>
         </ThemeProvider>
       </body>
     </html>
