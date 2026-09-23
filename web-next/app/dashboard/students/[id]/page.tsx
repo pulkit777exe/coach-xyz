@@ -12,6 +12,7 @@ import {
   orgStudentAnalyses,
 } from '@/lib/serverData'
 import StudentProfile from '@/components/org/StudentProfile'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export async function generateMetadata({
@@ -53,9 +54,13 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <PageHeader
+        trail={['Students', student.full_name || 'Details']}
+        title={student.full_name || 'Student details'}
+      />
       <Link
         href="/dashboard/students"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         ← Back to roster
       </Link>

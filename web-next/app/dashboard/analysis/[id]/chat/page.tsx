@@ -21,6 +21,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   }
 
   const data: DashboardAnalysis = result!.analysis
+  const chatLabel = data.display_name || data.file_name || 'Untitled'
 
   const summaryRaw = data.summary_json
   const summary =
@@ -45,7 +46,15 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
         >
           &larr; Back to Analysis
         </Link>
-        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">Chat</span>
+        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+          History
+        </span>
+        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">/</span>
+        <span className="max-w-48 truncate text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+          {chatLabel}
+        </span>
+        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">/</span>
+        <span className="text-[0.6rem] uppercase tracking-[0.2em] text-foreground">Chat</span>
       </div>
       <div className="rounded-xl border border-border" style={{ height: 'calc(100% - 3rem)' }}>
         <HistoryChat auth0Id={auth0Id} jobId={id} summary={summary} />

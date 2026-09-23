@@ -27,6 +27,7 @@ import type { Student, OrgOverview } from '@/lib/org'
 import type { OrgMembersResponse } from '@/lib/members'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/9ui/ui/button'
+import PageHeader from '@/components/org/PageHeader'
 import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
 import MembersSection from '@/components/org/MembersSection'
@@ -147,13 +148,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="text-muted-foreground">Settings</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Settings</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Choose how you want CoachXYZ to look and behave.
-      </p>
+      <PageHeader
+        trail={['Home', 'Settings']}
+        title="Settings"
+        description="Choose how you want CoachXYZ to look and behave."
+      />
 
       {error && (
         <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">

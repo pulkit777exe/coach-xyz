@@ -26,7 +26,7 @@ export default async function StudentsPage() {
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
-        trail={['Organizations', 'Students']}
+        trail={['Home', 'Students']}
         title="Students"
         description="Manage your roster, attendance, and notes."
       />

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getOrgContext, orgStudents, orgAttendance } from '@/lib/serverData'
 import { toISODate } from '@/lib/date'
 import AttendanceGrid from '@/components/org/AttendanceGrid'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -30,13 +31,11 @@ export default async function AttendancePage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Organizations</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground font-medium">Attendance</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Attendance</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Track session attendance day by day.</p>
+      <PageHeader
+        trail={['Home', 'Attendance']}
+        title="Attendance"
+        description="Track session attendance day by day."
+      />
       <div className="mt-6">
         {active.length === 0 && studentsRes.students.length > 0 && (
           <p className="mt-4 rounded-lg border border-warning-border bg-warning/10 px-4 py-3 text-sm text-foreground">

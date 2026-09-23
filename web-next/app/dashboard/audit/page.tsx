@@ -28,7 +28,7 @@ export default async function AuditPage() {
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
-        trail={['Organizations', 'Audit Log']}
+        trail={['Home', 'Audit Log']}
         title="Audit Log"
         description="Sensitive organization actions, newest first."
       />

@@ -328,15 +328,11 @@ export default function AnalysisDetailClient({
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 mb-8 text-sm text-muted-foreground">
-        <Link href="/dashboard" className="hover:text-foreground transition-colors">
-          Dashboard
-        </Link>
+        <span>History</span>
         <span className="text-muted-foreground/50">/</span>
-        <Link href="/dashboard/history" className="hover:text-foreground transition-colors">
-          History
-        </Link>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="font-medium text-foreground">{data.engine_job_id.slice(0, 8)}</span>
+        <span className="font-medium text-foreground">
+          {data.display_name || data.file_name || 'Untitled'}
+        </span>
       </div>
 
       {/* Header */}

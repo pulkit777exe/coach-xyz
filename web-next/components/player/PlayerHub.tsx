@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 
 import { Spinner } from '@/components/org/Spinner'
+import PageHeader from '@/components/org/PageHeader'
 import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
 import { getJobStatus } from '@/lib/api'
@@ -127,12 +128,10 @@ export default function PlayerHub() {
   if (!profile.student) {
     return (
       <div className="mx-auto max-w-2xl p-8">
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          My Hub
-        </p>
-        <h1 className="mb-6 text-[28px] font-bold tracking-tight text-foreground">
-          Welcome{profile.user?.name ? `, ${profile.user.name.split(' ')[0]}` : ''}
-        </h1>
+        <PageHeader
+          trail={['My Hub']}
+          title={`Welcome${profile.user?.name ? `, ${profile.user.name.split(' ')[0]}` : ''}`}
+        />
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
           <p className="text-sm leading-6 text-muted-foreground">
             Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your email (
@@ -188,21 +187,23 @@ export default function PlayerHub() {
     },
   ]
 
+  const hubMeta = [
+    student.sport,
+    student.jersey_number !== null ? `#${student.jersey_number}` : null,
+    student.position,
+    student.status ? (STUDENT_STATUS_LABELS[student.status] ?? student.status) : null,
+  ].filter((v): v is string => Boolean(v))
+  const hubDescription = hubMeta.length > 0 ? hubMeta.join(' · ') : undefined
+
   return (
     <div className="max-w-5xl p-8 lg:p-12">
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-        My Hub
-      </p>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">{student.full_name}</h1>
-      <div className="mb-8 mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        {student.sport && <span>{student.sport}</span>}
-        {student.jersey_number !== null && <span>#{student.jersey_number}</span>}
-        {student.position && <span>{student.position}</span>}
-        {student.status && <span>{STUDENT_STATUS_LABELS[student.status] ?? student.status}</span>}
-      </div>
-
+      <PageHeader
+        trail={['My Hub', student.full_name || 'Details']}
+        title={student.full_name || 'My Hub'}
+        description={hubDescription}
+      />
       {/* KPI cards */}
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="mt-8 mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {kpis.map((kpi) => (
           <div key={kpi.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">

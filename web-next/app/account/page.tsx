@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session'
 import { syncUser } from '@/lib/api'
 import { redirect } from 'next/navigation'
 import UserAvatar from '@/components/UserAvatar'
+import PageHeader from '@/components/org/PageHeader'
 import { USER_ROLE_LABELS } from '@/lib/userRoles'
 
 export const metadata: Metadata = {
@@ -54,10 +55,7 @@ export default async function AccountPage() {
   return (
     <div className="min-h-screen bg-[var(--background)] pb-12">
       <div className="mx-auto max-w-[720px] px-6 py-6 lg:px-8">
-        <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="text-muted-foreground">Settings</span>
-        </div>
-        <h1 className="text-[28px] font-bold tracking-tight text-foreground">Account</h1>
+        <PageHeader trail={['Home', 'Account']} title="Account" />
 
         {syncError && (
           <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">

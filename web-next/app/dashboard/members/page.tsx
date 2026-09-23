@@ -26,7 +26,7 @@ export default async function MembersPage() {
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
-        trail={['Organizations', 'Members']}
+        trail={['Home', 'Members']}
         title="Members"
         description="Staff roles and single-use invitations."
       />

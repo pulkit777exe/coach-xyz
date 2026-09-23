@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { getOrgContext, orgReports, orgStudents } from '@/lib/serverData'
 import ReportsClient from '@/components/org/ReportsClient'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -20,15 +21,11 @@ export default async function ReportsPage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Organizations</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground font-medium">Reports</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Reports</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Generate and browse progress, attendance, and performance reports.
-      </p>
+      <PageHeader
+        trail={['Home', 'Reports']}
+        title="Reports"
+        description="Generate and browse progress, attendance, and performance reports."
+      />
       <div className="mt-6">
         <ReportsClient
           auth0Id={auth0Id}

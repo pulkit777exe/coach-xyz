@@ -26,7 +26,7 @@ export default async function TeamsPage() {
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
-        trail={['Organizations', 'Teams']}
+        trail={['Home', 'Teams']}
         title="Teams"
         description="Organize your roster into teams for scoped coaching and trends."
       />

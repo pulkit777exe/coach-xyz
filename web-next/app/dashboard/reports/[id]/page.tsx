@@ -9,6 +9,7 @@ import { formatDateMed } from '@/lib/date'
 import { unstable_noStore as noStore } from 'next/cache'
 import ReportBody from '@/components/org/ReportBody'
 import PrintReportButton from '@/components/org/PrintReportButton'
+import PageHeader from '@/components/org/PageHeader'
 
 export function generateMetadata(): Metadata {
   return { title: 'Report | CoachXYZ', description: 'Generated coach report.' }
@@ -26,22 +27,22 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto max-w-[800px] px-6 py-6 lg:px-8">
-      <p className="mb-1 text-sm text-muted-foreground">Reports / Detail</p>
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-bold tracking-tight text-foreground">{report.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {report.full_name || 'Organization'} ·{' '}
-            {REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type} ·{' '}
-            {report.period_start
-              ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}`
-              : 'All time'}
-          </p>
-        </div>
-        <PrintReportButton />
-      </div>
+      <PageHeader
+        trail={['Reports', report.title || 'Untitled']}
+        title={report.title || 'Untitled'}
+        description={`${report.full_name || 'Organization'} · ${
+          REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type
+        } · ${
+          report.period_start
+            ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}`
+            : 'All time'
+        }`}
+        actions={<PrintReportButton />}
+      />
 
-      <ReportBody report={report} showGenerated />
+      <div className="mt-6">
+        <ReportBody report={report} showGenerated />
+      </div>
 
       <style>{`@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`}</style>
     </div>

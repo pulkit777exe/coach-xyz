@@ -4,6 +4,7 @@ import { getDashboardAnalyses } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/9ui/ui/badge'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -44,13 +45,11 @@ export default async function HistoryPage({
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Analysis</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground font-medium">History</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">All Analyses</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Browse all your past video analyses.</p>
+      <PageHeader
+        trail={['Home', 'History']}
+        title="All Analyses"
+        description="Browse all your past video analyses."
+      />
 
       {error && (
         <div className="mt-6 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">

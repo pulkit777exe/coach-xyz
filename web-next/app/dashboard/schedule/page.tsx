@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getOrgContext, orgSchedule } from '@/lib/serverData'
 import { scheduleMonthWindow } from '@/lib/date'
 import ScheduleClient from '@/components/org/ScheduleClient'
+import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -27,13 +28,11 @@ export default async function SchedulePage() {
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-        <span>Organizations</span>
-        <span className="text-muted-foreground/50">/</span>
-        <span className="text-foreground font-medium">Schedule</span>
-      </div>
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Schedule</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Plan practices, matches, and events.</p>
+      <PageHeader
+        trail={['Home', 'Schedule']}
+        title="Schedule"
+        description="Plan practices, matches, and events."
+      />
       <div className="mt-6">
         <ScheduleClient auth0Id={auth0Id} initialEvents={res.events} />
       </div>
