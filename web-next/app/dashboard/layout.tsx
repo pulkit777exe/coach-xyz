@@ -3,17 +3,13 @@ import { getUserProfile } from '@/lib/api'
 import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, Settings } from 'lucide-react'
-import UserAvatar from '@/components/UserAvatar'
 import DashboardNav from '@/components/DashboardNav'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import SidebarSearch from '@/components/SidebarSearch'
 import OrgSwitcher from '@/components/org/OrgSwitcher'
 
-/** 28px sidebar ghost icon button — Notion footer/top row. */
-const SIDEBAR_ICON_BUTTON =
-  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
-/** Workspace mark row — same press/hover affordance as the icon buttons. */
+/** Workspace mark row — press/hover affordance for the workspace link. */
 const WORKSPACE_LINK =
   'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
@@ -79,28 +75,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <DashboardNav role={navRole} />
         </div>
 
-        {/* Footer block — avatar + account name, ghost icon actions */}
+        {/* Footer block — account menu (Notion opens it upward from here) */}
         <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">
-          <div className="flex items-center gap-2 rounded-[6px] px-1 py-1">
-            <UserAvatar
-              picture={session.user.picture}
-              name={session.user.name}
-              email={session.user.email}
-              size="sm"
-            />
-            <p
-              className="min-w-0 flex-1 truncate text-sm text-foreground/90"
-              title={session.user.email ?? undefined}
-            >
-              {session.user.name || session.user.email}
-            </p>
-            <Link href="/dashboard/settings" aria-label="Settings" className={SIDEBAR_ICON_BUTTON}>
-              <Settings className="size-4" />
-            </Link>
-            <a href="/auth/logout" aria-label="Log out" className={SIDEBAR_ICON_BUTTON}>
-              <LogOut className="size-4" />
-            </a>
-          </div>
+          <SidebarProfileMenu
+            name={session.user.name}
+            email={session.user.email}
+            picture={session.user.picture}
+            settingsHref="/dashboard/settings"
+            variant="dashboard"
+          />
         </div>
       </aside>
 

@@ -40,7 +40,7 @@ const QUICK_LINKS: { label: string; icon: React.ElementType; href: string }[] = 
   { label: 'Schedule', icon: CalendarDays, href: '/dashboard/schedule' },
   { label: 'Reports', icon: FileText, href: '/dashboard/reports' },
   { label: 'History', icon: History, href: '/dashboard/history' },
-  { label: 'Settings', icon: Settings, href: '/dashboard' },
+  { label: 'Settings', icon: Settings, href: '/dashboard/settings' },
 ]
 
 function SectionHeading({ children }: { children: React.ReactNode }) {

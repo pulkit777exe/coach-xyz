@@ -1,12 +1,10 @@
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { House, LogOut } from 'lucide-react'
-import UserAvatar from '@/components/UserAvatar'
+import { House } from 'lucide-react'
+import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 
-/** 28px sidebar ghost icon button — Notion footer row. */
-const SIDEBAR_ICON_BUTTON =
-  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+/** Workspace mark row — press/hover affordance for the workspace link. */
 const WORKSPACE_LINK =
   'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
@@ -47,25 +45,15 @@ export default async function PlayerLayout({ children }: { children: React.React
             </Link>
           </nav>
         </div>
-        {/* Footer block — avatar + account name, ghost logout action */}
+        {/* Footer block — account menu (Notion opens it upward from here) */}
         <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">
-          <div className="flex items-center gap-2 rounded-[6px] px-1 py-1">
-            <UserAvatar
-              picture={session.user.picture}
-              name={session.user.name}
-              email={session.user.email}
-              size="sm"
-            />
-            <p
-              className="min-w-0 flex-1 truncate text-sm text-foreground/90"
-              title={session.user.email ?? undefined}
-            >
-              {session.user.name || session.user.email}
-            </p>
-            <a href="/auth/logout" aria-label="Log out" className={SIDEBAR_ICON_BUTTON}>
-              <LogOut className="size-4" />
-            </a>
-          </div>
+          <SidebarProfileMenu
+            name={session.user.name}
+            email={session.user.email}
+            picture={session.user.picture}
+            settingsHref="/player/settings"
+            variant="player"
+          />
         </div>
       </aside>
       <main className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>

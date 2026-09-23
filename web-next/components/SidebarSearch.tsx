@@ -7,7 +7,12 @@ import { FileTextIcon, SearchIcon, UserIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/9ui/ui/dialog'
 import { Input } from '@/components/9ui/ui/input'
 import { Spinner } from '@/components/org/Spinner'
-import { AUDIT_NAV_ROLES, MEMBERS_NAV_ROLES, type NavRole } from '@/lib/nav'
+import {
+  ALL_NON_PLAYER_ROLES,
+  AUDIT_NAV_ROLES,
+  MEMBERS_NAV_ROLES,
+  type NavRole,
+} from '@/lib/nav'
 import { orgStudents } from '@/lib/org'
 import { cn } from '@/lib/utils'
 
@@ -20,13 +25,18 @@ type PageEntry = {
 
 const PAGES: PageEntry[] = [
   { label: 'Home', hint: 'Dashboard', href: '/dashboard' },
-  { label: 'Students', hint: 'Roster', href: '/dashboard/students' },
-  { label: 'Teams', hint: 'Roster', href: '/dashboard/teams' },
+  { label: 'Students', hint: 'Roster', href: '/dashboard/students', roles: ALL_NON_PLAYER_ROLES },
+  { label: 'Teams', hint: 'Roster', href: '/dashboard/teams', roles: ALL_NON_PLAYER_ROLES },
   { label: 'Members', hint: 'Roster', href: '/dashboard/members', roles: MEMBERS_NAV_ROLES },
-  { label: 'Attendance', hint: 'Roster', href: '/dashboard/attendance' },
-  { label: 'Schedule', hint: 'Planning', href: '/dashboard/schedule' },
-  { label: 'Reports', hint: 'Planning', href: '/dashboard/reports' },
-  { label: 'History', hint: 'Analysis', href: '/dashboard/history' },
+  {
+    label: 'Attendance',
+    hint: 'Roster',
+    href: '/dashboard/attendance',
+    roles: ALL_NON_PLAYER_ROLES,
+  },
+  { label: 'Schedule', hint: 'Planning', href: '/dashboard/schedule', roles: ALL_NON_PLAYER_ROLES },
+  { label: 'Reports', hint: 'Planning', href: '/dashboard/reports', roles: ALL_NON_PLAYER_ROLES },
+  { label: 'History', hint: 'Analysis', href: '/dashboard/history', roles: ALL_NON_PLAYER_ROLES },
   { label: 'New Analysis', hint: 'Analysis', href: '/' },
   { label: 'Account', hint: 'Account', href: '/account' },
   { label: 'Settings', hint: 'Account', href: '/dashboard/settings' },

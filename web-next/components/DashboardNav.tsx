@@ -17,7 +17,13 @@ import {
   User,
 } from 'lucide-react'
 
-import { AUDIT_NAV_ROLES, MEMBERS_NAV_ROLES, visibleNavGroups, type NavRole } from '@/lib/nav'
+import {
+  ALL_NON_PLAYER_ROLES,
+  AUDIT_NAV_ROLES,
+  MEMBERS_NAV_ROLES,
+  visibleNavGroups,
+  type NavRole,
+} from '@/lib/nav'
 import { cn } from '@/lib/utils'
 
 type NavItem = {
@@ -39,28 +45,38 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Roster',
     items: [
-      { href: '/dashboard/students', label: 'Students', icon: Users },
-      { href: '/dashboard/teams', label: 'Teams', icon: Shield },
+      { href: '/dashboard/students', label: 'Students', icon: Users, roles: ALL_NON_PLAYER_ROLES },
+      { href: '/dashboard/teams', label: 'Teams', icon: Shield, roles: ALL_NON_PLAYER_ROLES },
       {
         href: '/dashboard/members',
         label: 'Members',
         icon: UserCheck,
         roles: MEMBERS_NAV_ROLES,
       },
-      { href: '/dashboard/attendance', label: 'Attendance', icon: ClipboardCheck },
+      {
+        href: '/dashboard/attendance',
+        label: 'Attendance',
+        icon: ClipboardCheck,
+        roles: ALL_NON_PLAYER_ROLES,
+      },
     ],
   },
   {
     label: 'Planning',
     items: [
-      { href: '/dashboard/schedule', label: 'Schedule', icon: CalendarDays },
-      { href: '/dashboard/reports', label: 'Reports', icon: FileText },
+      {
+        href: '/dashboard/schedule',
+        label: 'Schedule',
+        icon: CalendarDays,
+        roles: ALL_NON_PLAYER_ROLES,
+      },
+      { href: '/dashboard/reports', label: 'Reports', icon: FileText, roles: ALL_NON_PLAYER_ROLES },
     ],
   },
   {
     label: 'Analysis',
     items: [
-      { href: '/dashboard/history', label: 'History', icon: History },
+      { href: '/dashboard/history', label: 'History', icon: History, roles: ALL_NON_PLAYER_ROLES },
       { href: '/', label: 'New Analysis', icon: Sparkles, exact: true },
     ],
   },

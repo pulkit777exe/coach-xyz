@@ -27,12 +27,13 @@ import type { Student, OrgOverview } from '@/lib/org'
 import type { OrgMembersResponse } from '@/lib/members'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/9ui/ui/button'
-import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
 import StatusPill from '@/components/org/StatusPill'
 import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
 import MembersSection from '@/components/org/MembersSection'
+import SettingRow from '@/components/org/SettingRow'
+import SettingsPanel, { type SettingsSection } from '@/components/org/SettingsPanel'
 
 export const metadata: Metadata = {
   title: 'Settings | CoachXYZ',
@@ -60,22 +61,6 @@ function changePasswordUrl(): string | null {
   return `https://${AUTH0_DOMAIN}/authorize?${params.toString()}`
 }
 
-// Settings row: 14px/500 label + 13px muted description on the left, control on the right.
-function SettingRow({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border py-4 last:border-b-0">
-      <span className="text-[14px] font-medium leading-[1.4] text-foreground">{label}</span>
-      <div className="shrink-0">{children}</div>
-    </div>
-  )
-}
-
 export default async function SettingsPage() {
   noStore()
   const session = await getSession()
@@ -101,6 +86,7 @@ export default async function SettingsPage() {
       orgStudents(auth0Id),
       orgOverview(auth0Id),
       orgMembers(auth0Id),
+      // orgSubscription 403s for non-owner/admin — degrade to no Plan section.
       orgSubscription(auth0Id).catch(() => null),
     ])
     profile = profileRes.user
@@ -164,185 +150,222 @@ export default async function SettingsPage() {
       ]
     : []
 
-  return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      <PageHeader
-        trail={['Home', 'Settings']}
-        title="Settings"
-        description="Choose how you want CoachXYZ to look and behave."
-      />
-
-      {error ? (
-        <div className="mb-6 rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
-          Failed to load some settings data. Try refreshing the page.
-        </div>
-      ) : null}
-
-      <div className="space-y-8">
-        <PreferencesSection />
-
-        <Section title="Profile">
-          <div className="flex items-center gap-4">
-            <UserAvatar
-              picture={profile?.picture ?? session.user.picture}
-              name={profile?.name ?? session.user.name}
-              email={profile?.email ?? session.user.email}
-              size="lg"
-            />
-            <div>
-              <p className="text-[16px] font-semibold leading-[1.4] text-foreground">
-                {profile?.name ?? session.user.name ?? 'No name'}
-              </p>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
-                {profile?.email ?? session.user.email}
-              </p>
+  const sections: SettingsSection[] = [
+    {
+      id: 'my-account',
+      label: 'My account',
+      icon: 'account',
+      content: (
+        <div className="flex flex-col gap-8">
+          <Section title="Profile">
+            <div className="flex items-center gap-4">
+              <UserAvatar
+                picture={profile?.picture ?? session.user.picture}
+                name={profile?.name ?? session.user.name}
+                email={profile?.email ?? session.user.email}
+                size="lg"
+              />
+              <div>
+                <p className="text-[16px] font-semibold leading-[1.4] text-foreground">
+                  {profile?.name ?? session.user.name ?? 'No name'}
+                </p>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  {profile?.email ?? session.user.email}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="mt-6 max-w-xl">
-            <ProfileForm
-              initialName={profile?.name ?? session.user.name ?? null}
-              initialNickname={profile?.nickname ?? session.user.nickname ?? null}
-              initialPicture={profile?.picture ?? session.user.picture ?? null}
-            />
-          </div>
-        </Section>
+            <div className="mt-6 max-w-xl">
+              <ProfileForm
+                initialName={profile?.name ?? session.user.name ?? null}
+                initialNickname={profile?.nickname ?? session.user.nickname ?? null}
+                initialPicture={profile?.picture ?? session.user.picture ?? null}
+              />
+            </div>
+          </Section>
 
-        <Section title="Security">
-          <div>
-            <SettingRow label="Email Verified">
-              {emailVerified ? (
-                <StatusPill tone="green">
-                  <Check className="mr-1 size-3" aria-hidden="true" />
-                  Verified
-                </StatusPill>
-              ) : (
-                <span className="text-[13px] text-muted-foreground">No</span>
-              )}
-            </SettingRow>
-            <SettingRow label="Password">
-              {passwordUrl ? (
+          <Section title="Security">
+            <div>
+              <SettingRow title="Email Verified">
+                {emailVerified ? (
+                  <StatusPill tone="green">
+                    <Check className="mr-1 size-3" aria-hidden="true" />
+                    Verified
+                  </StatusPill>
+                ) : (
+                  <span className="text-[13px] text-muted-foreground">No</span>
+                )}
+              </SettingRow>
+              <SettingRow title="Password">
+                {passwordUrl ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={<a href={passwordUrl} />}
+                  >
+                    <KeyRound className="size-3.5" />
+                    Change Password
+                  </Button>
+                ) : (
+                  <span className="text-[13px] text-muted-foreground">
+                    Ask your administrator to reset your password.
+                  </span>
+                )}
+              </SettingRow>
+              <SettingRow title="Session">
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   size="sm"
                   nativeButton={false}
-                  render={<a href={passwordUrl} />}
+                  render={<a href="/auth/logout" />}
                 >
-                  <KeyRound className="size-3.5" />
-                  Change Password
+                  <LogOut className="size-3.5" />
+                  Log Out
                 </Button>
-              ) : (
-                <span className="text-[13px] text-muted-foreground">
-                  Ask your administrator to reset your password.
-                </span>
-              )}
-            </SettingRow>
-            <SettingRow label="Session">
-              <Button
-                variant="destructive"
-                size="sm"
-                nativeButton={false}
-                render={<a href="/auth/logout" />}
-              >
-                <LogOut className="size-3.5" />
-                Log Out
-              </Button>
-            </SettingRow>
-          </div>
-        </Section>
+              </SettingRow>
+            </div>
+          </Section>
+        </div>
+      ),
+    },
+    {
+      id: 'preferences',
+      label: 'Preferences',
+      icon: 'preferences',
+      content: <PreferencesSection />,
+    },
+    {
+      id: 'members',
+      label: 'Members',
+      icon: 'members',
+      content: (
+        // MembersSection ships a page-level mt-8 — cancel it when it leads
+        // the panel section so headings align with the other nav sections.
+        <div className="flex flex-col gap-8 [&>div:first-child]:mt-0">
+          <MembersSection auth0Id={auth0Id} initialData={membersData} />
 
-        <MembersSection auth0Id={auth0Id} initialData={membersData} />
+          <Section title="Members">
+            {students && students.length > 0 ? (
+              <ul>
+                {students.map((s) => {
+                  const linked = Boolean(s.account_auth0_id)
+                  const contact = s.email || s.phone || 'No contact on file'
+                  return (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
+                    >
+                      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
+                        {initials(s.full_name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                          {s.full_name}
+                        </p>
+                        <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                          {contact}
+                          {s.sport ? ` · ${s.sport}` : ''}
+                        </p>
+                      </div>
+                      {linked ? (
+                        <StatusPill tone="primary">Player account linked</StatusPill>
+                      ) : (
+                        <span className="shrink-0 text-[13px] text-muted-foreground">
+                          Not linked yet
+                        </span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="py-8 text-center text-[14px] text-muted-foreground">
+                {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
+              </p>
+            )}
+          </Section>
+        </div>
+      ),
+    },
+  ]
 
-        {subscription ? (
-          <Section title="Plan & Usage">
-            <div className="flex flex-wrap items-center gap-8">
-              <div>
-                <p className="text-[24px] font-semibold capitalize leading-[1.1] tracking-[-0.01em] text-foreground">
-                  {subscription.tier}
-                </p>
-                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Plan
-                </p>
-              </div>
-              <div>
-                <p className="text-[24px] font-semibold leading-[1.1] tabular-nums text-foreground">
-                  {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
-                </p>
-                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Analyses today
-                </p>
-              </div>
-              <p className="text-[13px] text-muted-foreground">
-                Usage is metered per analysis for future billing tiers.
+  if (subscription) {
+    sections.push({
+      id: 'plan-usage',
+      label: 'Plan & usage',
+      icon: 'plan',
+      content: (
+        <Section title="Plan & Usage">
+          <div className="flex flex-wrap items-center gap-8">
+            <div>
+              <p className="text-[24px] font-semibold capitalize leading-[1.1] tracking-[-0.01em] text-foreground">
+                {subscription.tier}
+              </p>
+              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Plan
               </p>
             </div>
-          </Section>
-        ) : null}
-
-        <Section title="Members">
-          {students && students.length > 0 ? (
-            <ul>
-              {students.map((s) => {
-                const linked = Boolean(s.account_auth0_id)
-                const contact = s.email || s.phone || 'No contact on file'
-                return (
-                  <li
-                    key={s.id}
-                    className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
-                  >
-                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
-                      {initials(s.full_name)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
-                        {s.full_name}
-                      </p>
-                      <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                        {contact}
-                        {s.sport ? ` · ${s.sport}` : ''}
-                      </p>
-                    </div>
-                    {linked ? (
-                      <StatusPill tone="primary">Player account linked</StatusPill>
-                    ) : (
-                      <span className="shrink-0 text-[13px] text-muted-foreground">
-                        Not linked yet
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          ) : (
-            <p className="py-8 text-center text-[14px] text-muted-foreground">
-              {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
-            </p>
-          )}
-        </Section>
-
-        {tiles.length > 0 && (
-          <Section title="Records">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {tiles.map((t) => (
-                <Link
-                  key={t.label}
-                  href={t.href}
-                  className="rounded-[6px] border border-border bg-card p-5 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      {t.label}
-                    </span>
-                    <t.icon className="size-4 text-muted-foreground/60" />
-                  </div>
-                  <p className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
-                    {t.value}
-                  </p>
-                </Link>
-              ))}
+            <div>
+              <p className="text-[24px] font-semibold leading-[1.1] tabular-nums text-foreground">
+                {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
+              </p>
+              <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Analyses today
+              </p>
             </div>
-          </Section>
-        )}
-      </div>
-    </div>
+            <p className="text-[13px] text-muted-foreground">
+              Usage is metered per analysis for future billing tiers.
+            </p>
+          </div>
+        </Section>
+      ),
+    })
+  }
+
+  if (tiles.length > 0) {
+    sections.push({
+      id: 'records',
+      label: 'Records',
+      icon: 'records',
+      content: (
+        <Section title="Records">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {tiles.map((t) => (
+              <Link
+                key={t.label}
+                href={t.href}
+                className="rounded-[6px] border border-border bg-card p-5 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    {t.label}
+                  </span>
+                  <t.icon className="size-4 text-muted-foreground/60" />
+                </div>
+                <p className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
+                  {t.value}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </Section>
+      ),
+    })
+  }
+
+  return (
+    <SettingsPanel
+      title="Settings"
+      description="Choose how you want CoachXYZ to look and behave."
+      closeHref="/dashboard"
+      sections={sections}
+      notice={
+        error ? (
+          <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+            Failed to load some settings data. Try refreshing the page.
+          </div>
+        ) : null
+      }
+    />
   )
 }
