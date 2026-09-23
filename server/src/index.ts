@@ -21,10 +21,8 @@ import notificationsRoute from './routes/notifications'
 import aiReportsRoute from './routes/aiReports'
 import shareRoute from './routes/share'
 import { healthRoute } from './routes/health'
-import {
-  historyStoreEnabled,
-  initializeHistoryStore,
-} from './lib/historyStore'
+import { sportPositionsRoute } from './routes/sports'
+import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
 import { globalErrorHandler } from './lib/httpErrors'
 import { orgRoleGuard } from './lib/serviceGuard'
 import { MAX_FILE_SIZE_BYTES } from './types'
@@ -129,19 +127,34 @@ const app = new Elysia({
   })
   .use(swaggerPlugin)
   .use(healthRoute)
+  .use(sportPositionsRoute)
   .use(scanRoute)
   .use(analyzeRoute)
   .use(statusRoute)
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)
-  .use(orgRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical'])))
+  .use(
+    orgRoute.use(
+      orgRoleGuard([
+        'owner',
+        'admin',
+        'head_coach',
+        'assistant_coach',
+        'coach',
+        'analyst',
+        'medical',
+      ]),
+    ),
+  )
   .use(meRoute)
   .use(emailRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
   .use(membersRoute)
   .use(teamsRoute)
   .use(notificationsRoute)
-  .use(aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
+  .use(
+    aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])),
+  )
   .use(shareRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────

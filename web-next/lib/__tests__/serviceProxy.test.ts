@@ -44,6 +44,15 @@ describe('isIdentityPath', () => {
     expect(isIdentityPath(['api', 'auth', 'sync'])).toBe(true)
   })
 
+  test('accepts static sport vocab paths', () => {
+    expect(isIdentityPath(['api', 'sports', 'basketball', 'positions'])).toBe(true)
+    expect(isIdentityPath(['api', 'sports', 'Hockey', 'positions'])).toBe(true)
+    expect(isIdentityPath(['api', 'sports', 'basketball', 'angles'])).toBe(false)
+    expect(isIdentityPath(['api', 'sports', 'basketball'])).toBe(false)
+    expect(isIdentityPath(['api', 'sports', '..', 'positions'])).toBe(false)
+    expect(isIdentityPath(['api', 'sports', 'a/b', 'positions'])).toBe(false)
+  })
+
   test('rejects capability and unknown routes', () => {
     expect(isIdentityPath(['api', 'scan-video'])).toBe(false)
     expect(isIdentityPath(['api', 'analyze-video'])).toBe(false)

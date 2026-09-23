@@ -27,7 +27,25 @@ export function isSelfPath(path: string[]): boolean {
 export function isIdentityPath(path: string[]): boolean {
   const syncMatch =
     path.length === 3 && path[0] === 'api' && path[1] === 'auth' && path[2] === 'sync'
-  return syncMatch || resourceAuth0Id(path) !== undefined || isSelfPath(path)
+  return (
+    syncMatch || isStaticVocabPath(path) || resourceAuth0Id(path) !== undefined || isSelfPath(path)
+  )
+}
+
+/**
+ * Static vocab paths (no identity content — same bytes for every caller).
+ * Currently only sport vocabularies: /api/sports/:sport/positions. The
+ * backend still validates the sport segment; the session gate stays on
+ * (signed-in users only) even though nothing identity-bearing is served.
+ */
+export function isStaticVocabPath(path: string[]): boolean {
+  return (
+    path.length === 4 &&
+    path[0] === 'api' &&
+    path[1] === 'sports' &&
+    /^[a-z]+$/i.test(path[2]) &&
+    path[3] === 'positions'
+  )
 }
 
 /** Decode a percent-encoded identity path. */

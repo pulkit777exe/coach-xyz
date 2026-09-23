@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import {
@@ -26,6 +26,7 @@ import { NativeSelect } from './EventFormDialog'
 
 import type { Student, StudentFormValues } from '@/lib/org'
 import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from '@/lib/org'
+import { getSportPositions, type SportPosition } from '@/lib/sports'
 import type { CoachAIError } from '@/lib/api'
 
 const STATUSES = STUDENT_STATUSES
@@ -64,6 +65,19 @@ export default function StudentFormDialog({
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [positions, setPositions] = useState<SportPosition[]>([])
+  const [positionsForSport, setPositionsForSport] = useState('')
+  const positionsSeq = useRef(0)
+
+  const loadPositions = (sport: string) => {
+    const seq = ++positionsSeq.current
+    setPositionsForSport(sport)
+    setPositions([])
+    if (!sport) return
+    void getSportPositions(sport).then((list) => {
+      if (positionsSeq.current === seq) setPositions(list)
+    })
+  }
 
   const values: Partial<StudentFormValues> =
     form ??
@@ -78,8 +92,19 @@ export default function StudentFormDialog({
     if (!next) {
       setForm(null)
       setError(null)
+    } else {
+      // Load the position vocabulary for the current sport when the dialog
+      // opens (explicit event, not an effect — keeps lint's set-state rule
+      // happy and avoids refetch loops on keystrokes).
+      const sport = (form?.sport ?? student?.sport ?? sports[0] ?? '') as string
+      if (sport !== positionsForSport) loadPositions(sport)
     }
     onOpenChange(next)
+  }
+
+  const handleSportChange = (v: string) => {
+    set('sport', v)
+    if (v !== positionsForSport) loadPositions(v)
   }
 
   const submit = async () => {
@@ -144,10 +169,10 @@ export default function StudentFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
+        {' '}
         <DialogHeader>
           <DialogTitle>{editing ? 'Edit Student' : 'Add Student'}</DialogTitle>
         </DialogHeader>
-
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="full_name">Full name *</Label>
@@ -188,7 +213,7 @@ export default function StudentFormDialog({
               <NativeSelect
                 id="sport"
                 value={values.sport ?? ''}
-                onChange={(v) => set('sport', v)}
+                onChange={handleSportChange}
                 options={
                   sports.length
                     ? sports
@@ -199,12 +224,20 @@ export default function StudentFormDialog({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="position">Position</Label>
-              <Input
-                id="position"
-                value={values.position ?? ''}
-                onChange={(e) => set('position', e.target.value)}
-                placeholder="e.g. Goalkeeper"
-              />
+              {positions.length > 0 ? (
+                <PositionSelect
+                  positions={positions}
+                  value={(values.position as string | undefined) ?? ''}
+                  onChange={(v) => set('position', v)}
+                />
+              ) : (
+                <Input
+                  id="position"
+                  value={values.position ?? ''}
+                  onChange={(e) => set('position', e.target.value)}
+                  placeholder="e.g. Goalkeeper"
+                />
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="jersey_number">Jersey #</Label>
@@ -317,7 +350,6 @@ export default function StudentFormDialog({
 
           {error && <p className="text-sm text-(--danger)">{error}</p>}
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
@@ -328,5 +360,48 @@ export default function StudentFormDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Position picker backed by the sport-pack vocabulary. Stores the human
+ * label (what profiles display). A legacy/custom value absent from the
+ * vocab is kept as an extra option so editing never blanks it; __none
+ * clears back to free text on the next sport without vocab.
+ */
+function PositionSelect({
+  positions,
+  value,
+  onChange,
+}: {
+  positions: SportPosition[]
+  value: string
+  onChange: (v: string) => void
+}) {
+  const labels = positions.map((p) => p.label)
+  const items: Record<string, string> = Object.fromEntries([
+    ['__none', 'No position'],
+    ...labels.map((l): [string, string] => [l, l]),
+    ...(!value || value === '__none' || labels.includes(value)
+      ? []
+      : [[value, value] as [string, string]]),
+  ])
+  return (
+    <Select
+      items={items}
+      value={value || '__none'}
+      onValueChange={(v) => onChange(typeof v === 'string' && v !== '__none' ? v : '')}
+    >
+      <SelectTrigger id="position">
+        <SelectValue placeholder="Select position" />
+      </SelectTrigger>
+      <SelectContent>
+        {Object.keys(items).map((k) => (
+          <SelectItem key={k} value={k}>
+            {items[k]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

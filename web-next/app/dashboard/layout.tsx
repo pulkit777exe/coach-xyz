@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import UserAvatar from '@/components/UserAvatar'
 import DashboardNav from '@/components/DashboardNav'
+import NotificationBell from '@/components/notifications/NotificationBell'
 import OrgSwitcher from '@/components/org/OrgSwitcher'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -48,12 +49,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Sidebar — theme-aware (light: white, dark: near-black) */}
       <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-            <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
-              C
-            </span>
-            <span className="text-sm font-semibold tracking-tight text-foreground">coach.xyz</span>
-          </Link>
+          <div className="mb-6 flex items-center justify-between gap-2 px-2">
+            <Link href="/" className="flex items-center gap-2">
+              <span className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
+                C
+              </span>
+              <span className="text-sm font-semibold tracking-tight text-foreground">
+                coach.xyz
+              </span>
+            </Link>
+            <NotificationBell />
+          </div>
 
           {switcherOrgs.length > 0 && (
             <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
