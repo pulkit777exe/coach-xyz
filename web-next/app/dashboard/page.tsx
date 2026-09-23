@@ -1,35 +1,33 @@
 import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
-import { getOrgContext, getDashboardStats, getDashboardAnalyses } from '@/lib/serverData'
+import {
+  getOrgContext,
+  getDashboardStats,
+  getDashboardAnalyses,
+  getMySchedule,
+  getMyAnalyses,
+  getMyReports,
+  getMyObjectives,
+} from '@/lib/serverData'
 import { orgSchedule, orgReports, orgOverview } from '@/lib/serverData'
 import type { ScheduleEvent, ReportRecord, OrgOverview } from '@/lib/org'
+import type { DashboardPlayerAnalysis, MyObjectives } from '@/lib/meApi'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   CalendarIcon,
   FileTextIcon,
   ClockIcon,
-  UsersRound,
-  UserCheck,
-  ClipboardCheck,
   CalendarDays,
-  History,
-  Gauge,
-  Trophy,
+  ClipboardCheck,
+  UserPlus,
+  Users,
+  Plus,
   Video,
-  BookOpen,
-  Code2,
-  Database,
-  Layers,
-  ShieldCheck,
-  Zap,
-  Info,
 } from 'lucide-react'
 import { unstable_noStore as noStore } from 'next/cache'
 
-import { Card, CardHeader, CardTitle, CardContent, CardAction } from '@/components/9ui/ui/card'
 import { Badge } from '@/components/9ui/ui/badge'
-import { Button } from '@/components/9ui/ui/button'
 
 export const metadata: Metadata = {
   title: 'Dashboard | CoachXYZ',
@@ -39,22 +37,10 @@ export const metadata: Metadata = {
 function overviewTiles(overview: OrgOverview) {
   return [
     {
-      icon: UsersRound,
+      icon: Users,
       label: 'Students',
       value: overview.student_count,
       href: '/dashboard/students',
-    },
-    {
-      icon: UserCheck,
-      label: 'Active Students',
-      value: overview.active_students,
-      href: '/dashboard/students',
-    },
-    {
-      icon: ClipboardCheck,
-      label: 'Sessions This Month',
-      value: overview.sessions_this_month,
-      href: '/dashboard/attendance',
     },
     {
       icon: CalendarDays,
@@ -63,16 +49,10 @@ function overviewTiles(overview: OrgOverview) {
       href: '/dashboard/schedule',
     },
     {
-      icon: History,
-      label: 'Analyses Linked',
-      value: overview.analyses_linked,
-      href: '/dashboard/history',
-    },
-    {
-      icon: Gauge,
-      label: 'Avg Attendance Rate',
-      value: overview.avg_attendance_rate !== null ? `${overview.avg_attendance_rate}%` : '—',
-      href: '/dashboard/reports',
+      icon: ClipboardCheck,
+      label: 'Sessions This Month',
+      value: overview.sessions_this_month,
+      href: '/dashboard/attendance',
     },
   ]
 }
@@ -81,7 +61,20 @@ export default async function DashboardPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
+
+  // ── Personal view for players (org role) ───────────────────────────────
+  // Players see only their own data via the self-scoped /api/me/* APIs —
+  // never the org roster, stats, or admin surfaces.
+  if (role === 'player') {
+    return <PlayerHome />
+  }
+
+  const canInvite = role === 'owner' || role === 'admin'
+  // Scoped staff (assistant/analyst/medical) get the coaching workspace
+  // without org-admin surfaces (invites, organization counts).
+  const showOrgSection =
+    role === 'owner' || role === 'admin' || role === 'head_coach' || role === 'coach'
 
   let stats = null
   let analyses = null
@@ -126,348 +119,451 @@ export default async function DashboardPage() {
   const tiles = overview ? overviewTiles(overview) : []
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      {/* Getting Started header — Auth0 style */}
-      <h1 className="text-[24px] font-bold tracking-tight text-foreground">Getting Started</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Your coaching organization at a glance. Set up your roster, run your first analysis, and
-        invite your team.
-      </p>
-
-      {/* Banner — New to CoachXYZ */}
-      <div className="mt-6 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-        <span className="grid size-6 place-items-center rounded-full bg-info/10 text-info">
-          <Info className="size-4" />
-        </span>
-        <p className="text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">New to CoachXYZ?</span> Try our onboarding
-          guide to get started.{' '}
-          <Link
-            href="/features"
-            className="text-info underline decoration-info/30 hover:text-foreground"
-          >
-            Start the guide.
-          </Link>
-        </p>
-      </div>
+    <div className="mx-auto max-w-[760px] px-6 py-8">
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Home</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Your coaching organization at a glance.</p>
 
       {error && (
-        <div className="mt-6 rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mt-4 rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
           Failed to load dashboard data. Please try again later.
         </div>
       )}
 
-      {/* Start Building — large card */}
-      <h2 className="mt-8 text-[15px] font-semibold text-foreground">Start Building</h2>
-      <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card">
-        <div className="grid lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="p-6 lg:p-7">
-            <h3 className="text-[16px] font-semibold text-foreground">Analyze your first video</h3>
-            <p className="mt-2 max-w-[420px] text-sm leading-5 text-muted-foreground">
-              Integrate video analysis into your workflow or use one of our samples to get started
-              in minutes. Six sports, one pipeline.
-            </p>
-            <div className="mt-5 flex items-center gap-3">
-              <Button
-                nativeButton={false} render={<Link href="/#analyze" />}
-                className="h-8 rounded-md bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-              >
-                Upload Video
-              </Button>
-              <Link
-                href="/features"
-                className="text-xs font-medium text-info hover:text-foreground"
-              >
-                Learn More
-              </Link>
+      {statCards.length > 0 && (
+        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-x">
+          {statCards.map((stat) => (
+            <div key={stat.label} className="px-5 py-4">
+              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                {stat.label}
+              </p>
             </div>
-          </div>
-          <div className="relative flex items-center justify-center bg-muted p-6 border-t lg:border-t-0 lg:border-l border-border">
-            {/* sport icons cluster */}
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { l: 'BB', bg: 'bg-chart-3' },
-                { l: 'FB', bg: 'bg-success' },
-                { l: 'CR', bg: 'bg-info' },
-                { l: 'TN', bg: 'bg-warning' },
-                { l: 'BB', bg: 'bg-destructive' },
-                { l: 'HK', bg: 'bg-[var(--marketing-purple)]' },
-                { l: 'PY', bg: 'bg-warning' },
-                { l: 'GO', bg: 'bg-chart-5' },
-              ].map((s) => (
-                <span
-                  key={s.l + s.bg}
-                  className={`grid size-9 place-items-center rounded-full text-xs font-bold text-foreground ${s.bg}`}
-                >
-                  {s.l}
-                </span>
-              ))}
-            </div>
-            <div className="absolute bottom-3 right-3 rounded-md border border-border bg-card px-2 py-1 text-[10px] font-medium text-muted-foreground">
-              6 sports • 60s
-            </div>
-          </div>
+          ))}
         </div>
+      )}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <Link
+          href="/#analyze"
+          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+        >
+          <Plus className="size-4 shrink-0 text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">New analysis</span>
+        </Link>
+        <Link
+          href="/dashboard/students"
+          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+        >
+          <Users className="size-4 shrink-0 text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">Add student</span>
+        </Link>
+        <Link
+          href="/dashboard/schedule"
+          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+        >
+          <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">Schedule event</span>
+        </Link>
+        {canInvite && (
+          <Link
+            href="/dashboard/members"
+            className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          >
+            <UserPlus className="size-4 shrink-0 text-muted-foreground" />
+            <span className="text-[13px] font-medium text-foreground">Invite member</span>
+          </Link>
+        )}
       </div>
 
-      {/* Organization overview — Next Steps 2x2 */}
-      {tiles.length > 0 && (
-        <>
-          <h2 className="mt-8 text-[15px] font-semibold text-foreground">Next Steps</h2>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {tiles.slice(0, 4).map((t) => (
-              <div key={t.label} className="rounded-xl border border-border bg-card p-5">
-                <div className="flex items-start gap-3">
-                  <span className="grid size-8 place-items-center rounded-lg bg-muted text-info">
-                    <t.icon className="size-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground">{t.label}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {t.value} {t.label.toLowerCase()} —{' '}
-                      {t.label === 'Students'
-                        ? 'add athletes to your roster'
-                        : t.label === 'Active Students'
-                          ? 'track active roster'
-                          : t.label === 'Sessions This Month'
-                            ? 'sessions recorded'
-                            : 'events scheduled'}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    nativeButton={false} render={<Link href={t.href} />}
-                    className="h-7 rounded-md border-border bg-transparent px-3 text-xs text-foreground hover:bg-muted"
-                  >
-                    {t.value} view
-                  </Button>
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Recents</h2>
+          <Link
+            href="/dashboard/history"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            View all
+          </Link>
+        </div>
+        {!analyses || analyses.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            No analyses yet — run your first one above.
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {analyses.slice(0, 5).map((a) => {
+              const score =
+                a.summary_json &&
+                typeof a.summary_json === 'object' &&
+                'form_score' in a.summary_json
+                  ? (a.summary_json as { form_score: number }).form_score
+                  : null
+              return (
+                <li key={a.server_job_id} className="border-b border-border last:border-0">
                   <Link
-                    href={t.href}
-                    className="text-xs font-medium text-info hover:text-foreground"
+                    href={`/dashboard/analysis/${a.server_job_id}`}
+                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
                   >
-                    Learn More
+                    <Video className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                      {a.display_name || a.file_name || 'Untitled video'}
+                      {a.player_index !== null && (
+                        <span className="font-normal text-muted-foreground">
+                          {` — Player ${a.player_index}`}
+                        </span>
+                      )}
+                    </span>
+                    {score !== null && (
+                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                        {score}
+                      </span>
+                    )}
+                    <Badge variant={a.complete ? 'success' : a.error_code ? 'danger' : 'secondary'}>
+                      {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}
+                    </Badge>
                   </Link>
-                </div>
-              </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Upcoming events</h2>
+          <Link
+            href="/dashboard/schedule"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Schedule
+          </Link>
+        </div>
+        {!upcomingEvents || upcomingEvents.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            {upcomingEvents === null
+              ? 'Events failed to load.'
+              : 'No upcoming events in the next 30 days.'}
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {upcomingEvents.map((e) => (
+              <li key={e.id} className="border-b border-border last:border-0">
+                <Link
+                  href="/dashboard/schedule"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {e.title}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    <ClockIcon className="size-3" />
+                    {new Date(e.starts_at).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </Link>
+              </li>
             ))}
-          </div>
-        </>
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Recent reports</h2>
+          <Link
+            href="/dashboard/reports"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            All reports
+          </Link>
+        </div>
+        {!recentReports || recentReports.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            No reports generated yet.
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {recentReports.map((r) => (
+              <li key={r.id} className="border-b border-border last:border-0">
+                <Link
+                  href={`/dashboard/reports/${r.id}`}
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {r.title}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {r.full_name || 'Organization'}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {showOrgSection && tiles.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-1 text-[13px] font-semibold text-foreground">Organization</h2>
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {tiles.map((t) => (
+              <li key={t.label} className="border-b border-border last:border-0">
+                <Link
+                  href={t.href}
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <t.icon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {t.label}
+                  </span>
+                  <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                    {t.value}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
       {!overview && !error && (
         <p className="mt-6 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
           No organization data yet — add students to get started.
         </p>
       )}
+    </div>
+  )
+}
+
+// Player-scoped fields are a subset of the coach history row — the self-scoped
+// /api/me/analyses endpoint omits file_name/error_code, so those stay optional.
+type PlayerAnalysisRow = DashboardPlayerAnalysis & {
+  file_name?: string | null
+  error_code?: string | null
+}
+
+type PlayerObjective = MyObjectives['objectives'][number]
+
+function formatDueOn(dueOn: string | null): string {
+  if (!dueOn) return 'No due date'
+  const parsed = new Date(dueOn)
+  if (Number.isNaN(parsed.getTime())) return `Due ${dueOn}`
+  return `Due ${parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })}`
+}
+
+// ── Personal home for players (org role) ───────────────────────────────────
+// Self-scoped data only (via lib/serverData getMy* fetchers hitting /api/me/*).
+// Each source fails independently — one null source renders its own empty
+// state instead of breaking the page. Player detail lives in the hub, so every
+// row links to /player.
+async function PlayerHome() {
+  const [analysesRes, scheduleRes, reportsRes, objectivesRes] = await Promise.all([
+    getMyAnalyses().catch(() => null),
+    getMySchedule().catch(() => null),
+    getMyReports().catch(() => null),
+    getMyObjectives().catch(() => null),
+  ])
+
+  const analyses: PlayerAnalysisRow[] | null = analysesRes ? analysesRes.analyses : null
+  const now = new Date()
+  const upcoming: ScheduleEvent[] | null = scheduleRes
+    ? scheduleRes.events
+        .filter((e) => e.status === 'scheduled' && new Date(e.starts_at).getTime() >= now.getTime())
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+        .slice(0, 5)
+    : null
+  const objectives: PlayerObjective[] | null = objectivesRes
+    ? objectivesRes.objectives.filter((o) => o.status === 'active')
+    : null
+  const reports: ReportRecord[] | null = reportsRes ? reportsRes.reports.slice(0, 4) : null
+
+  const loaded = analyses !== null || upcoming !== null || objectives !== null || reports !== null
+  const statCards = loaded
+    ? [
+        { label: 'My Analyses', value: analyses?.length ?? 0 },
+        { label: 'Active Objectives', value: objectives?.length ?? 0 },
+        { label: 'Reports', value: reportsRes?.reports.length ?? 0 },
+      ]
+    : []
+
+  return (
+    <div className="mx-auto max-w-[760px] px-6 py-8">
+      <h1 className="text-[28px] font-bold tracking-tight text-foreground">My training</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Your analyses, schedule, and objectives.</p>
 
       {statCards.length > 0 && (
-        <>
-          <h2 className="mt-8 text-[15px] font-semibold text-foreground">Analyses</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {statCards.map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-border bg-card p-5">
-                <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                  {stat.label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-3 sm:divide-x">
+          {statCards.map((stat) => (
+            <div key={stat.label} className="px-5 py-4">
+              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
       )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card className="rounded-xl border-border bg-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-foreground">Upcoming Events</CardTitle>
-            <CardAction>
-              <Button
-                variant="link"
-                size="sm"
-                nativeButton={false} render={<Link href="/dashboard/schedule" />}
-                className="text-info"
-              >
-                Schedule
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {!upcomingEvents || upcomingEvents.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No upcoming events in the next 30 days.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {upcomingEvents.map((e) => (
-                  <li key={e.id} className="flex items-start justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        <CalendarIcon className="mr-2 inline size-3.5 text-muted-foreground" />
-                        {e.title}
-                      </p>
-                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <ClockIcon className="size-3" />
-                        {new Date(e.starts_at).toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                        {' · '}
-                        {new Date(e.starts_at).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-xl border-border bg-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-foreground">Recent Reports</CardTitle>
-            <CardAction>
-              <Button
-                variant="link"
-                size="sm"
-                nativeButton={false} render={<Link href="/dashboard/reports" />}
-                className="text-info"
-              >
-                All Reports
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            {!recentReports || recentReports.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No reports generated yet.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {recentReports.map((r) => (
-                  <li key={r.id}>
-                    <Link
-                      href={`/dashboard/reports/${r.id}`}
-                      className="flex items-center gap-2 -mx-2 rounded-md px-2 py-3 text-sm transition-colors hover:bg-muted"
-                    >
-                      <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate font-medium text-foreground">{r.title}</span>
-                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                        {r.full_name || 'Organization'}
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">My analyses</h2>
+          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+            Player hub
+          </Link>
+        </div>
+        {!analyses || analyses.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            {analyses === null ? 'Analyses failed to load.' : 'No analyses yet.'}
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {analyses.slice(0, 5).map((a) => {
+              const score =
+                a.summary_json &&
+                typeof a.summary_json === 'object' &&
+                'form_score' in a.summary_json
+                  ? (a.summary_json as { form_score: number }).form_score
+                  : null
+              return (
+                <li key={a.server_job_id} className="border-b border-border last:border-0">
+                  <Link
+                    href="/player"
+                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  >
+                    <Video className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                      {a.display_name || a.file_name || 'Untitled video'}
+                    </span>
+                    {score !== null && (
+                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                        {score}
                       </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                    )}
+                    <Badge variant={a.complete ? 'success' : a.error_code ? 'danger' : 'secondary'}>
+                      {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}
+                    </Badge>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
-      <Card className="mt-4 rounded-xl border-border bg-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-foreground">Recent Activity</CardTitle>
-          <CardAction>
-            <Button
-              variant="link"
-              size="sm"
-              nativeButton={false} render={<Link href="/dashboard/history" />}
-              className="text-info"
-            >
-              View All
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {!analyses || analyses.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="mb-4 text-sm text-muted-foreground">No analyses yet</p>
-              <Button
-                variant="outline"
-                nativeButton={false} render={<Link href="/" />}
-                className="border-border text-foreground hover:bg-muted"
-              >
-                Start Your First Analysis
-              </Button>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {analyses.slice(0, 5).map((a) => {
-                const score =
-                  a.summary_json &&
-                  typeof a.summary_json === 'object' &&
-                  'form_score' in a.summary_json
-                    ? (a.summary_json as { form_score: number }).form_score
-                    : null
-                return (
-                  <li key={a.server_job_id}>
-                    <Link
-                      href={`/dashboard/analysis/${a.server_job_id}`}
-                      className="flex items-center justify-between gap-3 -mx-2 rounded-md px-2 py-3 transition-colors hover:bg-muted"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {a.display_name || a.file_name || 'Untitled video'}
-                          {a.player_index !== null && ` — Player ${a.player_index}`}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {new Date(a.requested_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                      <div className="ml-4 flex shrink-0 items-center gap-3">
-                        {score !== null && (
-                          <span className="text-base font-semibold text-foreground">{score}</span>
-                        )}
-                        <Badge
-                          variant={a.complete ? 'success' : a.error_code ? 'danger' : 'secondary'}
-                        >
-                          {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}
-                        </Badge>
-                      </div>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Up next</h2>
+          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+            Player hub
+          </Link>
+        </div>
+        {!upcoming || upcoming.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            {upcoming === null ? 'Schedule failed to load.' : 'Nothing scheduled.'}
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {upcoming.map((e) => (
+              <li key={e.id} className="border-b border-border last:border-0">
+                <Link
+                  href="/player"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {e.title}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                    <ClockIcon className="size-3" />
+                    {new Date(e.starts_at).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {/* Developer Tools — small icons grid like Auth0 */}
-      <h2 className="mt-8 text-[15px] font-semibold text-foreground">Developer Tools</h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {[
-          { icon: Video, title: 'Player Hub', desc: 'Athlete video and report portal' },
-          { icon: Code2, title: 'API Reference', desc: 'Integrate analysis pipeline' },
-          { icon: Database, title: 'Bulk Import', desc: 'Roster CSV and sync' },
-          { icon: Layers, title: 'Pipeline Status', desc: 'Engine health and queue' },
-          { icon: ShieldCheck, title: 'Share Links', desc: 'Time-boxed video shares' },
-          { icon: Zap, title: 'Webhooks', desc: 'Notify on completion' },
-          { icon: BookOpen, title: 'Docs', desc: 'Guides and sport configs' },
-          { icon: Trophy, title: 'Leaderboard', desc: 'Top form scores' },
-        ].map((c) => (
-          <div key={c.title} className="flex gap-3 rounded-xl border border-border bg-card p-4">
-            <span className="grid size-8 place-items-center rounded-lg bg-muted text-muted-foreground">
-              <c.icon className="size-4" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{c.title}</p>
-              <p className="text-xs text-muted-foreground">{c.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Objectives</h2>
+          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+            Player hub
+          </Link>
+        </div>
+        {!objectives || objectives.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            {objectives === null ? 'Objectives failed to load.' : 'No active objectives.'}
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {objectives.slice(0, 5).map((o) => (
+              <li key={o.id} className="border-b border-border last:border-0">
+                <Link
+                  href="/player"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <ClipboardCheck className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {o.title}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatDueOn(o.due_on)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="text-[13px] font-semibold text-foreground">Reports</h2>
+          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+            Player hub
+          </Link>
+        </div>
+        {!reports || reports.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+            {reports === null ? 'Reports failed to load.' : 'No reports yet.'}
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+            {reports.map((r) => (
+              <li key={r.id} className="border-b border-border last:border-0">
+                <Link
+                  href="/player"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                >
+                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    {r.title}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {new Date(r.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

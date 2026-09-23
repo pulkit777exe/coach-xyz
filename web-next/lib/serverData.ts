@@ -1,7 +1,13 @@
 import { cache } from 'react'
 
 import { getSession } from './session'
-import { getMyOrgs } from './meApi'
+import {
+  getMyOrgs,
+  getMyAnalyses as libGetMyAnalyses,
+  getMyObjectives as libGetMyObjectives,
+  getMyReports as libGetMyReports,
+  getMySchedule as libGetMySchedule,
+} from './meApi'
 import { ORG_COOKIE } from './orgCookie'
 import {
   getUserProfile as apiGetUserProfile,
@@ -148,6 +154,14 @@ export function resolveOrgContext(
 
 /** Per-request cached /api/me/orgs (used by both the switcher and getOrgContext). */
 export const getMyOrgsCached = cache(() => getMyOrgs())
+
+export const getMySchedule = cache(() => libGetMySchedule())
+
+export const getMyAnalyses = cache(() => libGetMyAnalyses())
+
+export const getMyReports = cache(() => libGetMyReports())
+
+export const getMyObjectives = cache(() => libGetMyObjectives())
 
 /**
  * Resolves the CURRENT caller's org context (RSC only, session-aware and
