@@ -51,6 +51,31 @@ class TestSportPositions:
         assert sport_positions(None) == []
 
 
+class TestSportPositionsEndpoint:
+    def test_known_sport_serves_vocab(self):
+        from fastapi.testclient import TestClient
+
+        import main
+
+        with TestClient(main.app) as client:
+            res = client.get("/sports/basketball/positions")
+            assert res.status_code == 200
+            body = res.json()
+            assert body["sport"] == "basketball"
+            assert len(body["positions"]) >= 3
+            assert body["positions"][0]["id"].strip()
+
+    def test_unknown_sport_serves_empty_list(self):
+        from fastapi.testclient import TestClient
+
+        import main
+
+        with TestClient(main.app) as client:
+            res = client.get("/sports/quidditch/positions")
+            assert res.status_code == 200
+            assert res.json() == {"sport": "quidditch", "positions": []}
+
+
 class TestSportPackVersion:
     def test_every_sport_is_versioned(self):
         for sport in ("baseball", "basketball", "cricket", "football", "hockey", "tennis"):
