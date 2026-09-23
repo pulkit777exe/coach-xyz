@@ -4,8 +4,8 @@ Target: `Targeted Secure Architecture v2` (organization-first sports intelligenc
 evidence-traceable AI). This plan maps that doc onto the current codebase and
 sequences the work so every phase ships independently with baselines green.
 
-Baselines (must stay green every phase): server `bun test` 245 · web `vitest`
-144 · engine pytest 205 · `tsc --noEmit` both · eslint both · `next build`.
+Baselines (must stay green every phase): server `bun test` 248 · web `vitest`
+145 · engine pytest 207 · `tsc --noEmit` both · eslint both · `next build`.
 
 ## Where we already align
 
@@ -40,26 +40,27 @@ Baselines (must stay green every phase): server `bun test` 245 · web `vitest`
 
 ## Gap map (doc § → status → evidence)
 
-| § | Requirement | Status | Evidence |
-|---|---|---|---|
-| 3, 28 | Org-owned `organization_id` on every row; teams/seasons/matches | **Missing** — tables are `users, org_members, students, attendance, schedule_events, reports, performance_metrics, video_conversations, analysis_history, chat_messages, notifications`; no `teams`, no `organization_id` FK discipline | `supabaseHistory.ts:179-440`, `orgMembers.ts:58` |
-| 4 | Permission + scope (not just roles) | **Missing** — roles only (`owner/admin/coach/player`) | `serviceGuard.ts` (`verifyOrgRole`, `orgRoleGuard`) |
-| 19–21 | Finding objects w/ evidence frames, confidence, severity, model versions; human-review gate | **Missing** — `shot_events` have timestamps/scores but no finding id, severity, evidence frame refs, or review state | `gemini_client.py:normalize_gemini_result`, `validator.py` |
-| 22 | Model registry per analysis | **Partial** — `model` string persisted; no detector/tracker/prompt/sport-pack versions | `analysis_history.model`, `analyzer.py` |
-| 23 | Prompt-injection separation (system vs untrusted content) | **Missing** — chat concatenates raw user message into one prompt | `chat_prompt.py`, `prompt.py` |
-| 8, 10 | Signed-URL upload intents; storage buckets raw/normalized/frames/clips | **Missing** — multipart through server (buffered), engine local disk (`LOCAL_STORAGE_DIR`), uuid keys, no buckets | `scan.ts`, `engine.ts:scanVideo`, `storage.py` |
-| 9 | Hardened media workers (non-root, no shell strings, limits) | **Partial** — ffmpeg via structured args (`video_io.py`); no container policy in repo, no media validation beyond mime/size | `video_io.py:28-71`, `Dockerfile` |
-| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing | **Missing** — BullMQ + Redis job state is the truth; concurrency 1; no quotas/priority | `queue.ts`, `jobs.py` |
-| 29 | Audit logs | **Missing** — no audit table or writer | grep: no `audit_log` in `server/src` |
-| 7 | Single-use hashed invite tokens | **Missing** — invites are emails with a signup link; no token table | `email.ts:28`, `orgMembers.inviteOrgMember` |
-| 5 | Health/wellness boundary | **Missing** — `injury_risk` rides inside the normal summary, no extra permission | `injury_risk.py`, `analyzer.py` |
-| 24–26 | Permission-aware AI retrieval; longitudinal finding trends | **Missing** — chat gets one analysis summary; trends derived from scores, not findings | `chat.ts`, `chat_prompt.py` |
-| 32 | OpenTelemetry traces, correlation chain | **Partial** — correlation `job_id` logging exists; no traces/metrics | `logging_config.py`, `instrument.ts` |
-| 30–31 | Retention lifecycle + deletion propagation; tested restores | **Partial** — session-owned uploads with eviction deletion + shutdown sweep; no retention policy, no backup verification | `main.py` `_delete_session_files`, `storage.py` |
+| §      | Requirement                                                                                 | Status                                                                                                                                                                                                                                  | Evidence                                                   |
+| ------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 3, 28  | Org-owned `organization_id` on every row; teams/seasons/matches                             | **Missing** — tables are `users, org_members, students, attendance, schedule_events, reports, performance_metrics, video_conversations, analysis_history, chat_messages, notifications`; no `teams`, no `organization_id` FK discipline | `supabaseHistory.ts:179-440`, `orgMembers.ts:58`           |
+| 4      | Permission + scope (not just roles)                                                         | **Missing** — roles only (`owner/admin/coach/player`)                                                                                                                                                                                   | `serviceGuard.ts` (`verifyOrgRole`, `orgRoleGuard`)        |
+| 19–21  | Finding objects w/ evidence frames, confidence, severity, model versions; human-review gate | **Missing** — `shot_events` have timestamps/scores but no finding id, severity, evidence frame refs, or review state                                                                                                                    | `gemini_client.py:normalize_gemini_result`, `validator.py` |
+| 22     | Model registry per analysis                                                                 | **Partial** — `model` string persisted; no detector/tracker/prompt/sport-pack versions                                                                                                                                                  | `analysis_history.model`, `analyzer.py`                    |
+| 23     | Prompt-injection separation (system vs untrusted content)                                   | **Missing** — chat concatenates raw user message into one prompt                                                                                                                                                                        | `chat_prompt.py`, `prompt.py`                              |
+| 8, 10  | Signed-URL upload intents; storage buckets raw/normalized/frames/clips                      | **Missing** — multipart through server (buffered), engine local disk (`LOCAL_STORAGE_DIR`), uuid keys, no buckets                                                                                                                       | `scan.ts`, `engine.ts:scanVideo`, `storage.py`             |
+| 9      | Hardened media workers (non-root, no shell strings, limits)                                 | **Partial** — ffmpeg via structured args (`video_io.py`); no container policy in repo, no media validation beyond mime/size                                                                                                             | `video_io.py:28-71`, `Dockerfile`                          |
+| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing                          | **Missing** — BullMQ + Redis job state is the truth; concurrency 1; no quotas/priority                                                                                                                                                  | `queue.ts`, `jobs.py`                                      |
+| 29     | Audit logs                                                                                  | **Missing** — no audit table or writer                                                                                                                                                                                                  | grep: no `audit_log` in `server/src`                       |
+| 7      | Single-use hashed invite tokens                                                             | **Missing** — invites are emails with a signup link; no token table                                                                                                                                                                     | `email.ts:28`, `orgMembers.inviteOrgMember`                |
+| 5      | Health/wellness boundary                                                                    | **Missing** — `injury_risk` rides inside the normal summary, no extra permission                                                                                                                                                        | `injury_risk.py`, `analyzer.py`                            |
+| 24–26  | Permission-aware AI retrieval; longitudinal finding trends                                  | **Missing** — chat gets one analysis summary; trends derived from scores, not findings                                                                                                                                                  | `chat.ts`, `chat_prompt.py`                                |
+| 32     | OpenTelemetry traces, correlation chain                                                     | **Partial** — correlation `job_id` logging exists; no traces/metrics                                                                                                                                                                    | `logging_config.py`, `instrument.ts`                       |
+| 30–31  | Retention lifecycle + deletion propagation; tested restores                                 | **Partial** — session-owned uploads with eviction deletion + shutdown sweep; no retention policy, no backup verification                                                                                                                | `main.py` `_delete_session_files`, `storage.py`            |
 
 ## Phased plan
 
 ### Phase 0 — Foundations (no schema changes) — SHIPPED
+
 1. ~~Error vocabulary freeze~~ — already frozen + tested (`test_errors.py`
    pins `STATUS_BY_CODE`, retryability, fallbacks).
 2. Prompt-structure separation (`core/prompt_guard.py`): athlete turns and
@@ -72,6 +73,7 @@ Baselines (must stay green every phase): server `bun test` 245 · web `vitest`
    the queue worker by job id, echoed + logged by the engine).
 
 ### Phase 1 — Evidence model (§19–§21, §25–§26) — SHIPPED (core)
+
 1. `findings` table: per-analysis rows keyed `(server_job_id, id)`, scoped
    to accounts via the `analysis_history` join (no duplicated `auth0_id`).
 2. Engine `core/findings.py` derives one finding per scored event (stable
@@ -82,20 +84,21 @@ Baselines (must stay green every phase): server `bun test` 245 · web `vitest`
    read-only in results; chat prompts cite finding ids + timestamps (§25).
 4. `GET /api/auth/user/:auth0Id/findings/trends` — per-day counts by
    category with needs-review split (§26 precursor).
-Open: per-org quota aging beyond the daily cap (§17); K8s/GPU
-(explicitly out of scope). The measurement loop itself is closed:
-objectives carry completion state, profiles render weekly findings-vs-done,
-and players see their objectives in the hub.
-Full doc sweep: seasons, matches, training plans, wellness check-ins
-(medical-gated reads), subscriptions/usage ledger with tier-weighted queue
-priority, internal stage history, video/report/settings audit actions,
-no-diagnosis AI rules, deep dict-form criteria in all six sport packs
-(pack v2), stages debug endpoint.
-Uploads (§8) run intent-first: validated metadata mints a namespaced key,
-browsers upload direct-to-storage (presigned POST on S3, multipart proxy
-on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.
+   Open: per-org quota aging beyond the daily cap (§17); K8s/GPU
+   (explicitly out of scope). The measurement loop itself is closed:
+   objectives carry completion state, profiles render weekly findings-vs-done,
+   and players see their objectives in the hub.
+   Full doc sweep: seasons, matches, training plans, wellness check-ins
+   (medical-gated reads), subscriptions/usage ledger with tier-weighted queue
+   priority, internal stage history, video/report/settings audit actions,
+   no-diagnosis AI rules, deep dict-form criteria in all six sport packs
+   (pack v2), stages debug endpoint.
+   Uploads (§8) run intent-first: validated metadata mints a namespaced key,
+   browsers upload direct-to-storage (presigned POST on S3, multipart proxy
+   on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.
 
 ### Phase 2 — Org hardening (§3, §4, §7, §29, §5) — SHIPPED (core)
+
 1. `teams` + `team_memberships` tables; `students.team_id` with cross-org
    validation; team filter on student list; teams client in `web-next/lib`.
 2. `permissions.ts`: 14-permission vocabulary layered over roles
@@ -112,18 +115,19 @@ on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.
    summaries unless the caller is the owning account or holds the medical
    role (owner includes accountability); `maySeeMedical`/`redactWellness`
    tested.
-Hierarchy (§3: owner → coaches/medical → players): `resolveStudentScope`
-gives owners/admins the full roster and staff only their teams' students
-(list + detail-404, cross-team assignment blocked, single-team coaches
-auto-assign on create).
-Management UI (9ui): members page (staff + token invites with one-shot
-links), teams page (CRUD, membership, per-team finding trends), audit page
-(action filter), student team assignment + filter + column, `/invite`
-accept flow, finding approve/flag in chat, needs-review badge, working
-cancel/delete, per-org daily analysis quota (`ORG_DAILY_ANALYSIS_LIMIT`).
-Open: finding→training-objective link, student-profile trend views.
+   Hierarchy (§3: owner → coaches/medical → players): `resolveStudentScope`
+   gives owners/admins the full roster and staff only their teams' students
+   (list + detail-404, cross-team assignment blocked, single-team coaches
+   auto-assign on create).
+   Management UI (9ui): members page (staff + token invites with one-shot
+   links), teams page (CRUD, membership, per-team finding trends), audit page
+   (action filter), student team assignment + filter + column, `/invite`
+   accept flow, finding approve/flag in chat, needs-review badge, working
+   cancel/delete, per-org daily analysis quota (`ORG_DAILY_ANALYSIS_LIMIT`).
+   Open: finding→training-objective link, student-profile trend views.
 
 ### Phase 3 — Pipeline durability (§11–§18, §30) — SHIPPED (core)
+
 1. Stage resume (`_committed_summary`): retries reuse a committed summary
    (skip Gemini, re-track for fresh landmarks); a surviving render
    completes directly. Committed-artifact short-circuit, tested helpers.
@@ -135,10 +139,11 @@ Open: finding→training-objective link, student-profile trend views.
 4. User-visible control: job-level `needs_review` flag + badge; cancel
    (in-progress) and delete (history/findings/chat propagation, audited)
    wired end to end in the dashboard.
-Open: per-org quotas/aging (§17), retention policy config (§30), backup
-restore testing (§31) — Phase 4 items.
+   Open: per-org quotas/aging (§17), retention policy config (§30), backup
+   restore testing (§31) — Phase 4 items.
 
 ### Phase 4 — Storage & workers (§8–§10, §31, §34) — SHIPPED (core)
+
 1. Bucket layout on local disk (`storage.raw_upload_key` /
    `result_key`): immutable `raw/{session}/{angle}/{uuid}.mp4` sources,
    one `results/{job}.mp4` per analysis — maps 1:1 to future buckets.
@@ -146,10 +151,34 @@ restore testing (§31) — Phase 4 items.
    in scan (rejects corrupt/mislabeled uploads early); Dockerfiles already
    non-root; compose pins `no-new-privileges`, pids/mem ceilings.
 3. Retention: `RETENTION_DAYS` (default 365) daily prune of analyses +
-   findings + chat; backup/restore runbook in `docs/BACKUP_RESTORE.md`
+   findings + clips + player_events + chat; backup/restore runbook in `docs/BACKUP_RESTORE.md`
    (Supabase PITR, quarterly restore test, explicit gaps).
-Open: signed-URL direct uploads + versioned buckets (needs object
-storage); per-org quotas/aging (§17); K8s/GPU (not until workload).
+   Open: signed-URL direct uploads + versioned buckets (needs object
+   storage); per-org quotas/aging (§17); K8s/GPU (not until workload).
+
+### Post-Phase 4 — Roles, clips, evidence, quality, registry — SHIPPED
+
+1. Coaching tracks: `head_coach` (full coach) + `assistant_coach`
+   (scoped: no team/player/member management); `coach` kept as a legacy
+   alias. Guards, `AUTH_USER_ALLOWED_MEMBER_ROLES`, single-team
+   auto-assign, and the web mirror admit both; nav gating hides Members
+   (owner/admin/head_coach/coach) and Audit (owner/admin) by role.
+2. Clips: `clips` table (label + `[start_ms, end_ms)`, optional finding
+   link, 120s/100-per-analysis caps) + list/create/delete API
+   (`finding.review`-gated, audited, rate-limited); 9ui `ClipsSection`
+   with click-to-seek in the analysis room; delete/prune cascades cover
+   clips + player_events.
+3. Evidence + quality: engine `enforce_evidence_gate` (strong bands
+   without frames, inverted/out-of-duration ranges → `needs_review`)
+   plus server persist-time re-gate; pre-render `_stage_quality_check`
+   stamps `summary.quality` and forces review without blocking.
+4. Registry + vocab: `organizations`/`videos`/`player_events` tables and
+   `lib/registry.ts`; per-sport `positions` in all six packs served via
+   engine → guard-exempt server proxy → roster Select (free-text fallback).
+5. Findings CSV export (BOM, stable columns, formula guard) + Export
+   button; `AUDIT_ACTIONS` single list mirrored by the audit filter;
+   `escapeHtml` coerces Dates; shared `globalErrorHandler` on app + smoke.
+6. Docs: Auth0 tenant checklist (`docs/AUTH0_TENANT_CHECKLIST.md`).
 
 ## Suggested order
 
