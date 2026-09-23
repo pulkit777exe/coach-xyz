@@ -387,10 +387,10 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 ## 9. Implementation Phases
 
 ### Phase 1: Engine Chat Endpoint (Backend) — ✅ Done
-- Add `POST /chat` endpoint to engine (`engine/main.py:868`)
+- Add `POST /chat` endpoint to engine (`engine/api/chat.py:55`)
 - Build `get_chat_prompt()` with analysis context (`engine/core/chat_prompt.py`)
 - Add conversation_history support to Gemini calls
-- Also added `POST /chat/stream` (SSE) (`engine/main.py:953`)
+- Also added `POST /chat/stream` (SSE) (`engine/api/chat.py:88`)
 
 ### Phase 2: Server Chat Proxy + Storage — ✅ Done
 - Add `POST /api/chat` endpoint to server (`server/src/routes/chat.ts:26`)

@@ -55,8 +55,11 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 
 - Identity boundary: Elysia `onBeforeHandle` `as: "global"` in `src/lib/serviceGuard.ts`. Headers `x-service-token` + `x-verified-auth0-id`; missing/wrong/account mismatch → 403. Keep new org/email/auth/me routes under this guard.
 - Browser-direct capability routes (`scan.ts`, `analyze.ts`, `chat.ts`, `download.ts`, `status.ts`) never trust a raw `x-auth0-id`. For attribution, the web mints a signed token via `/api/me/attribution/mint` (`src/lib/attribution.ts`, HMAC-SHA256 over `sub.exp`, SERVICE_TOKEN keyed) and sends it as `x-attribution`; the server `verifyAttributionToken()`s it. Add endpoints for minting only under serviceGuard.
-- Row uniqueness for org tables is org-scoped: `attendance UNIQUE (auth0_id, student_id, session_date)` and `performance_metrics UNIQUE (auth0_id, student_id, metric_key, measured_at)`. Keep `ON CONFLICT (…)` targets in `orgData.ts` in sync with these constraint column lists (idempotent migration lives in `ensureInitialized` in `supabaseHistory.ts`).
-- Supabase helpers live in `src/lib/` (`orgData.ts`, `supabaseHistory.ts`). Data-layer functions take optional filter opts (e.g., `getUserAnalyses(…, { unlinked })`) rather than adding query params at the route layer.
+- Row uniqueness for org tables is org-scoped: `attendance UNIQUE (auth0_id, student_id, session_date)` and `performance_metrics UNIQUE (auth0_id, student_id, metric_key, measured_at)`. Keep `ON CONFLICT (…)` targets in `lib/org/*` (e.g. `org/attendance.ts:66`, `org/performance.ts:83`) in sync with these constraint column lists (idempotent migration lives in `ensureInitialized` in `src/lib/historyStore.ts`, the sole DDL owner).
+- Supabase helpers live in `src/lib/` (`orgData.ts` — a thin barrel over `lib/org/*`, one module per subdomain — and `historyStore.ts` for schema/DDL). Data-layer functions take optional filter opts (e.g., `getUserAnalyses(…, { unlinked })`) rather than adding query params at the route layer.
+- Rate limiting + ids:429s come from `rateLimited()` (`src/lib/ratelimit.ts`); validate ids against `UUID_RE` (`src/lib/uuid.ts`). Don't hand-roll either.
+- Engine HTTP surface: routes live under `engine/api/` (mounted by the thin `engine/main.py`); session-token mint/validation and upload cleanup live in `engine/sessions.py`.
+- Sport vocab SSOT is `engine/core/sport_config.py` (positions/aliases/pack versions) — served through the guard-exempt `GET /sports/{sport}/positions`.
 - Email: `src/lib/mailer.ts`. `RESEND_API_KEY` unset → routes return 501 `EMAIL_NOT_CONFIGURED` by design; smoke asserts it.
 - Env: documented in `server/.env.example` and `web-next/.env.example`; keep them in sync with `process.env` reads.
 

@@ -40,8 +40,12 @@ todo.md
 .playwright-mcp
 .vercel
 
+# Tool caches / agent state
+.kilo/
+.ruff_cache/
+.opencode/
+
 # Runtime logs
 .logs/
 
-.opencode
 node_modules

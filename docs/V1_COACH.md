@@ -171,7 +171,7 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 | `GET /health/deep` | Deep health (Redis, disk, MediaPipe) |
 
 > **Note:** `GET /chat-history/:jobId` was documented in an earlier revision but is **not implemented**
-> in `engine/main.py`. Chat history is served by the server from Redis/Supabase instead.
+> in the engine (`engine/api/chat.py` serves only `/chat` and `/chat/stream`). Chat history is served by the server from Redis/Supabase instead.
 
 ---
 

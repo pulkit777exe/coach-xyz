@@ -20,7 +20,7 @@
 ## Retention
 
 - Analyses + findings + chat prune after `RETENTION_DAYS` (default 365, min
-  30) via the server's daily sweep (`pruneRetention` in `supabaseHistory.ts`,
+  30) via the server's daily sweep (`pruneRetention` in `lib/analyses.ts`,
   scheduled in `queue.ts`).
 - Engine uploads die with their session (2h TTL / 10-session cap); rendered
   videos expire with the engine job record (2h TTL).

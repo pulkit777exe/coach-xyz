@@ -49,7 +49,7 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 | Queue | BullMQ + Redis | `server/src/lib/queue.ts:1` |
 | Job Storage | Upstash Redis (REST) | `engine/core/jobs.py:10-17` |
 | Server Redis | @upstash/redis (REST) or ioredis (TCP) | `server/src/lib/redis.ts:6-48` |
-| Database | Supabase PostgreSQL | `server/src/lib/supabaseHistory.ts:43-48` |
+| Database | Supabase PostgreSQL | `server/src/lib/historyStore.ts:13-17` |
 | Video Storage | Local filesystem | `engine/core/storage.py:25-26` |
 | Deployment | Render (free tier) | `render.yaml` |
 | Frontend Hosting | Vercel | `web-next/vercel.json` |
@@ -158,45 +158,74 @@ coach-xyz/
 ├── server/                    # Middleware server (Bun + Elysia)
 │   ├── src/index.ts           # Entry point, CORS, security headers, error handler
 │   ├── src/routes/
-│   │   ├── scan.ts            # POST /api/scan-video — upload + player detection
+│   │   ├── scan.ts            # POST /api/scan-video — upload + player detection (+ scan-intent/scan-from-key/progress proxy)
 │   │   ├── analyze.ts         # POST /api/analyze-video — enqueue analysis job
 │   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
 │   │   ├── download.ts        # GET /api/download/:jobId — stream result video
-│   │   ├── chat.ts            # POST /api/chat — V2 chat proxy to engine
+│   │   ├── chat.ts            # POST /api/chat{,/stream} — V2 chat proxy to engine
+│   │   ├── findings.ts        # /api/auth/.../findings{,/trends,/export} + review routes (split out of auth.ts)
+│   │   ├── clips.ts           # /api/auth/.../analyses/:jobId/clips — list/create/delete (split out of auth.ts)
+│   │   ├── chatHistory.ts     # /api/auth/.../analyses/:jobId/chat — transcript + ask (split out of auth.ts)
 │   │   ├── email.ts           # POST /api/email/:auth0Id/{invite|report|attendance} (Resend, guarded)
-│   │   ├── auth.ts            # /api/auth/* — user sync, analyses, chat history (guarded)
-│   │   ├── org.ts             # /api/org/:auth0Id/* — coach org CRUD (guarded)
+│   │   ├── auth.ts            # /api/auth/* composer — sync, user, analyses, stats, stages, rename/cancel/delete; mounts findings/clips/chatHistory sub-routers (guarded)
+│   │   ├── org/               # /api/org/:auth0Id/* — coach org subdomains, one module per subdomain (index.ts composes; guarded)
 │   │   ├── me.ts              # /api/me/* — player read-only hub (guarded, self-scoped) + mint endpoint
 │   │   └── health.ts          # GET /health, /health/deep
 │   ├── src/lib/
-│   │   ├── queue.ts           # BullMQ queue + worker + shutdown
+│   │   ├── queue.ts           # Single BullMQ wiring: queues + workers + stuck-job recovery + shutdown (notifications.ts consumes it)
 │   │   ├── redis.ts           # Redis client (Upstash REST or local ioredis)
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
-│   │   ├── ratelimit.ts       # IP-based rate limiting (scan: 10/min, analysis: 5/hr)
+│   │   ├── ratelimit.ts       # Rate limiting buckets + shared rateLimited() 429 rejection helper
 │   │   ├── attribution.ts     # Mint/verify signed attribution tokens (sub.exp.HMAC, SERVICE_TOKEN)
 │   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
+│   │   ├── uuid.ts            # Single UUID_RE — canonical UUID pattern for every id check
+│   │   ├── aiResponse.ts      # Analysis-chat fallback responder + system prompt (extracted from auth.ts)
 │   │   ├── orgEnums.ts        # Shared org vocab (values/order contract w/ web lib/org.ts)
-│   │   ├── orgData.ts         # Student/attendance/schedule/reports/performance queries
+│   │   ├── org/               # Domain modules: students, attendance, schedule, reports, performance, wellness, plans, compete, objectives, overview
+│   │   ├── orgData.ts         # 103-line named-re-export barrel over org/* (public import surface unchanged)
+│   │   ├── historyStore.ts    # Supabase connection + ALL DDL — sole schema owner (ensureInitialized)
 │   │   ├── userRoles.ts       # coach/player role vocab (contract w/ web lib/userRoles.ts)
-│   │   ├── supabaseHistory.ts # PostgreSQL history + user + chat persistence
 │   │   ├── conversation.ts    # Redis-backed conversation storage (V2)
 │   │   └── errors.ts          # Error types and builders
 │   └── src/types/index.ts     # Shared API types
 │
 ├── engine/                    # Video analysis engine (Python + FastAPI)
-│   ├── main.py                # FastAPI app, routes, session management
+│   ├── main.py                # Thin app (221 lines): env guard, Sentry, CORS, middlewares,
+│   │                          #   exception handlers, lifespan (eviction loop + shutdown sweep), 8 router includes
+│   ├── sessions.py            # In-memory session store + scan-progress + eviction
+│   │                          #   (SESSION_TTL/MAX_SESSIONS, delete_session_files)
+│   ├── api/                   # HTTP surface — one router per domain
+│   │   ├── scan.py            # POST /scan, /upload-intent, /scan-from-key; GET /scan-progress/{token} (SSE)
+│   │   ├── analyze.py         # POST /analyze — synchronous run_analysis in thread pool
+│   │   ├── chat.py            # POST /chat, /chat/stream (SSE)
+│   │   ├── report.py          # POST /report — one-click AI report
+│   │   ├── jobs.py            # GET /status/{id}, POST /fail/{id} + download router (GET /download/{id})
+│   │   ├── health.py          # GET /health, /health/deep
+│   │   ├── sports.py          # GET /sports/{sport}/positions (vocab from sport packs)
+│   │   └── errors.py          # error_response() — the one HTTP error-body shape
+│   ├── cli/                   # CLI-only modules (never imported by the API pipeline)
+│   │   ├── main.py / analyze_session.py / frame_selector.py
+│   │   ├── gemini.py          # CLI Gemini entry point (moved from core/)
+│   │   ├── chunker.py         # Video chunking (moved from core/)
+│   │   └── player_detector.py # Alternate player detection path (moved from core/)
 │   ├── core/
 │   │   ├── analyzer.py        # Main analysis pipeline (run_analysis)
 │   │   ├── detector.py        # Player detection (HOG + MediaPipe pose)
-│   │   ├── player_detector.py # Alternate player detection path
 │   │   ├── renderer.py        # Video annotation (HUD, landmarks, summary)
-│   │   ├── gemini.py          # Gemini API client (legacy entry point)
-│   │   ├── gemini_client.py   # Gemini call + normalize (active)
+│   │   ├── gemini_client.py   # Gemini call + normalize (active; shared client singleton)
 │   │   ├── gemini_common.py   # Shared Gemini helpers
+│   │   ├── chat_client.py     # Gemini invocation for /chat + /chat/stream (routers stay transport-only)
+│   │   ├── report_client.py   # Gemini invocation for /report
 │   │   ├── chat_prompt.py     # V2 chat prompt builder
+│   │   ├── report_prompt.py   # Report prompt builder
 │   │   ├── prompt.py          # Analysis system prompt for Gemini
+│   │   ├── prompt_guard.py    # UNTRUSTED/ORG-DATA prompt-injection delimiters
 │   │   ├── validator.py       # Gemini output schema validation
+│   │   ├── sport_config.py    # Sport vocabulary SSOT: SPORTS / SPORT_EMOJIS / sport_emoji() / sport_pack_ids() + pack loader
+│   │   ├── findings.py        # Per-event findings (ids, severity, evidence frames, provenance)
+│   │   ├── quality.py         # Pre-render stage quality gate
+│   │   ├── multicam.py        # Multi-angle session helpers + per-angle progress keys
 │   │   ├── jobs.py            # Engine-side job state machine (Redis)
 │   │   ├── cache.py           # Video hash + Redis caching
 │   │   ├── dedup.py           # Request deduplication
@@ -206,16 +235,13 @@ coach-xyz/
 │   │   ├── pose_backend.py    # MediaPipe pose detection abstraction
 │   │   ├── detection_utils.py # Shared detection helpers
 │   │   ├── stats.py           # Shot-event stat validation + correction
-│   │   ├── baseline.py        # Sport baseline metrics
 │   │   ├── injury_risk.py     # Injury-risk indicator computation
-│   │   ├── config.py          # Engine configuration constants
+│   │   ├── player_tracker.py  # Player tracking (CLI only — imported by cli/frame_selector.py)
+│   │   ├── config.py          # Engine configuration constants + ENGINE_VERSION
 │   │   ├── logging_config.py  # Structured logging setup
-│   │   ├── errors.py          # Error types hierarchy
-│   │   ├── player_tracker.py  # Player tracking (CLI only — engine/cli/frame_selector.py)
-│   │   ├── chunker.py         # Video chunking (CLI only)
-│   │   └── baseline.py        # Sport baseline metrics (dead code — unused by API pipeline)
-│   ├── tests/                 # pytest suite (103 tests in test_state_machine/test_errors/test_analysis_contract/test_storage/test_chunker/test_config/test_dedup/test_validator)
-│   └── requirements.txt       # Python dependencies
+│   │   └── errors.py          # Error types hierarchy
+│   ├── tests/                 # pytest suite (207 tests)
+│   └── requirements.txt       # Python dependencies (single runtime manifest — pyproject is tooling-only)
 │
 ├── docker-compose.yml         # Local development (engine + server)
 ├── docker-compose.prod.yml    # Production compose
@@ -267,7 +293,7 @@ coach-xyz/
 - Key: `coachai:analysis:{video_hash}:metadata`
 - Shape: `{ video_path, cached_at, access_count }`
 
-### Supabase Tables (CONFIRMED — `server/src/lib/supabaseHistory.ts`)
+### Supabase Tables (CONFIRMED — all DDL in `server/src/lib/historyStore.ts`, sole owner `ensureInitialized`)
 
 **video_conversations**
 - Primary key: `session_token`
@@ -284,12 +310,12 @@ coach-xyz/
 - Purpose: Auth0 user sync — upserted on every login via `POST /api/auth/sync`. `role` defaults to `coach` (first account is a coach); a player's role is flipped to `player` when their login email auto-links to a student row. `linked_auth0_ids` merges multiple providers on one account.
 
 **students** (org — scoped by owning coach `auth0_id`)
-- Fields (in `server/src/lib/orgData.ts`): full_name, email, phone, sport, position, jersey_number, date_of_birth, gender, guardian_name, guardian_phone, notes, status (CHECK: STUDENT_STATUSES), joined_on, `account_auth0_id` (player login link, indexed), created_at, updated_at
+- Fields (DDL in `server/src/lib/historyStore.ts`; queries in `server/src/lib/org/students.ts`): full_name, email, phone, sport, position, jersey_number, date_of_birth, gender, guardian_name, guardian_phone, notes, status (CHECK: STUDENT_STATUSES), joined_on, `account_auth0_id` (player login link, indexed), created_at, updated_at
 - Purpose: the coach's roster. A player's account is linked to their student row by email on first player login (`account_auth0_id` set, user `role` → 'player').
 
 **attendance** / **schedule_events** / **reports** / **performance_metrics** (org)
 - All scoped by owning coach `auth0_id`; attendance/performance also reference `student_id`. Player read-only views query these with the coach scope + the linked student. (CHECK constraints pin the shared vocab in `server/src/lib/orgEnums.ts`, mirrored contractually in `web-next/lib/org.ts`.)
-- **Uniqueness is org-scoped** (migrated 2026-09-21): `attendance` has a `UNIQUE (auth0_id, student_id, session_date)` constraint (`attendance_auth0_student_session_unique`) and `performance_metrics` a `UNIQUE (auth0_id, student_id, metric_key, measured_at)` (`performance_auth0_student_metric_unique`) — the legacy `UNIQUE (student_id, …)` keys were auto-dropped/migrated idempotently in `ensureInitialized` (`supabaseHistory.ts`), and the upsert `ON CONFLICT` targets in `orgData.ts` match. This stops one org's rows from colliding with another org's same-id student rows.
+- **Uniqueness is org-scoped** (migrated 2026-09-21): `attendance` has a `UNIQUE (auth0_id, student_id, session_date)` constraint (`attendance_auth0_student_session_unique`) and `performance_metrics` a `UNIQUE (auth0_id, student_id, metric_key, measured_at)` (`performance_auth0_student_metric_unique`) — the legacy `UNIQUE (student_id, …)` keys were auto-dropped/migrated idempotently in `ensureInitialized` (`historyStore.ts`), and the upsert `ON CONFLICT` targets in `lib/org/*` match. This stops one org's rows from colliding with another org's same-id student rows.
 
 **chat_messages**
 - Primary key: `id` (UUID)
@@ -298,7 +324,7 @@ coach-xyz/
 
 ### In-Memory State
 
-**Engine Sessions** (`engine/main.py`)
+**Engine Sessions** (`engine/sessions.py`)
 - Stored in Python dict with threading lock
 - TTL: 2 hours (aligned with job TTL), max 10 sessions
 - Multi-perspective: one session accumulates camera angles
@@ -310,7 +336,7 @@ coach-xyz/
   guidance (from `sports/*.json` `camera_angles`, loaded via
   `core/sport_config.py` — the single loader shared by analyzer + renderer).
 - Source uploads live until their session is evicted (files deleted per angle
-  in `_delete_session_files`), so re-analysis (other player, other angle,
+  in `delete_session_files`, `engine/sessions.py`), so re-analysis (other player, other angle,
   retry) keeps working; re-uploading an angle deletes its orphaned file.
 - Scan progress is tracked per angle (`{session_token}:{angle}`) and streamed
   via `GET /scan-progress/{session_token}?angle=…`, so parallel perspectives
@@ -338,17 +364,17 @@ coach-xyz/
    → server/src/lib/engine.ts:42-64 (60s timeout)
 
 4. Engine streams upload to local storage
-   → engine/main.py:291-315
+   → engine/api/scan.py:251 (stream-to-storage block)
 
 5. Engine runs player detection (HOG + MediaPipe)
-   → engine/main.py:320-321
+   → engine/api/scan.py:124-125
    → engine/core/detector.py
 
 6. Engine creates session (in-memory dict)
-   → engine/main.py:340-348
+   → engine/api/scan.py:245-248 (store in `engine/sessions.py`)
 
 7. Engine warms cache for video hash
-   → engine/main.py:351-356
+   → engine/api/scan.py:181-184
    → engine/core/cache.py:77-93
 
 8. Server persists to Supabase + returns session_token
@@ -356,7 +382,7 @@ coach-xyz/
 
 9. [Optional] Frontend subscribes to scan progress via SSE
    → GET /api/scan-progress/:sessionToken (server/src/routes/scan.ts:115, proxies raw SSE)
-   → GET /scan-progress/{session_token} (engine/main.py:526)
+   → GET /scan-progress/{session_token} (engine/api/scan.py:416)
 ```
 
 ### Flow 2: Analysis (CONFIRMED)
@@ -387,8 +413,8 @@ coach-xyz/
    → server/src/lib/queue.ts:76-88
 
 8. Engine runs analysis synchronously
-   → engine/main.py:415-432
-   → engine/core/analyzer.py:541-684
+   → engine/api/analyze.py:65 (run via thread pool at :128-135)
+   → engine/core/analyzer.py:807
    a. Download video from local storage
    b. Check Redis cache → return if hit
    c. Check deduplication → wait if in-progress
@@ -419,7 +445,7 @@ coach-xyz/
    → server/src/lib/engine.ts:118-136 (60s timeout)
 
 4. Engine serves file from local storage
-   → engine/main.py:557-579
+   → engine/api/jobs.py:80 (download router)
    → engine/core/storage.py:37-41, 74-83
 ```
 
@@ -434,7 +460,7 @@ Two server paths, both proxying to the engine's Gemini chat:
 2. Server loads conversation history from Redis (`coachai:conv:{server_job_id}`, TTL 2h)
    → server/src/lib/conversation.ts
 3. Server POSTs to engine `/chat` (60s timeout)
-   → engine/main.py:868 → engine/core/chat_prompt.py (analysis context + history)
+   → engine/api/chat.py:55 → engine/core/chat_client.py `generate_reply` → engine/core/chat_prompt.py (analysis context + history)
 4. Persists user + assistant messages to Redis; returns `{ reply, timestamp_refs, event_refs }`
 
 **Streaming (SSE)** (`POST /api/chat/stream`)
@@ -442,10 +468,10 @@ Two server paths, both proxying to the engine's Gemini chat:
    → web-next/lib/api.ts `sendChatMessageStream` (AsyncGenerator over SSE)
    → server/src/routes/chat.ts:101
 2. Server calls engine `POST /chat/stream` (120s timeout), `tee()`s the body
-   → engine/main.py:953 (SSE token stream with final `done` event)
+   → engine/api/chat.py:88 (SSE token stream with final `done` event; Gemini pump in core/chat_client.py)
 3. Client gets the stream; background parser saves the full assistant reply on completion
 
-**Auth-scoped chat** (`/api/auth/user/:auth0Id/analyses/:jobId/chat` — GET/POST, server/src/routes/auth.ts:182/201) persists messages to Supabase `chat_messages` and falls back to a keyword-based `generateSimpleResponse` when the engine is down.
+**Auth-scoped chat** (`/api/auth/user/:auth0Id/analyses/:jobId/chat` — GET/POST, server/src/routes/chatHistory.ts:14/34, split out of auth.ts) persists messages to Supabase `chat_messages` and falls back to the keyword-based `generateSimpleResponse` (`server/src/lib/aiResponse.ts`) when the engine is down.
 
 ---
 
@@ -512,15 +538,15 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Session Tokens (CONFIRMED)
 
-- **Generation:** `engine/main.py:340` — UUID4 on scan
-- **Storage:** In-memory dict (`engine/main.py:57`) with threading lock
-- **TTL:** 1 hour (`engine/main.py:25`), max 10 sessions (`engine/main.py:26`)
-- **Validation:** `engine/main.py:221-236` — checks session exists and has video_key
+- **Generation:** `engine/api/scan.py:248` — UUID4 on scan (unknown token starts a new session)
+- **Storage:** In-memory dict (`engine/sessions.py:24-25`) with threading lock
+- **TTL:** 2 hours (`engine/sessions.py:18` `SESSION_TTL = 7200`), max 10 sessions (`engine/sessions.py:19` `MAX_SESSIONS`)
+- **Validation:** `engine/api/analyze.py:36` — resolves session + angle video key; missing session → 404 `SESSION_EXPIRED`
 
 ### CORS (CONFIRMED)
 
 - **Server:** `server/src/index.ts:52-55` — allows `FRONTEND_URL` origin
-- **Engine:** `engine/main.py:99-105` — allows `SERVER_URL` origin
+- **Engine:** `engine/main.py:118-125` — allows `SERVER_URL` origin
 
 ---
 
@@ -529,7 +555,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 ### Google Gemini API (CONFIRMED)
 
 - **Client:** `engine/core/gemini_client.py` — `google-genai` SDK
-- **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:29`)
+- **Key env:** `GEMINI_API_KEY` (required, `engine/main.py:39` env guard)
 - **Model:** `gemini-2.5-flash` — used by the engine; stored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/api.ts`
 - **Usage:** Video analysis with structured JSON output
 - **Timeout:** 12 minutes per job (`server/src/lib/queue.ts:86`); the engine
@@ -547,10 +573,10 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Supabase PostgreSQL (CONFIRMED)
 
-- **Client:** `server/src/lib/supabaseHistory.ts` — Bun's `SQL` client
+- **Client:** `server/src/lib/historyStore.ts` — Bun's `SQL` client
 - **Env var:** `DATABASE_URL`
-- **Tables:** `video_conversations`, `analysis_history`, `users`, `chat_messages` (all auto-created on startup)
-- **Status:** Optional — graceful degradation if not configured (`supabaseHistory.ts:55-61`)
+- **Tables:** `video_conversations`, `analysis_history`, `users`, `chat_messages` plus all org tables (`students`, `attendance`, `schedule_events`, `reports`, `performance_metrics`, `teams`, `team_memberships`, `org_members`, `org_invites`, `audit_logs`, `findings`, `clips`, `seasons`, `matches`, …) — all auto-created in `ensureInitialized` on first use
+- **Status:** Optional — graceful degradation if not configured (`historyStore.ts:36-40`, `withHistoryStore` returns `null`)
 
 ### FFmpeg (CONFIRMED)
 
@@ -602,12 +628,12 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 - **Server:** `server/src/lib/queue.ts:90-127` — pings `/health` every 10 minutes in production (`KEEPALIVE_INTERVAL`, production only)
 - **Frontend:** `web-next/lib/usePipeline.ts:51-57` — pings server `/health` every 8 minutes
 
-### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:369-400`)
+### Graceful Shutdown (CONFIRMED — `server/src/lib/queue.ts:587-632`)
 
 - SIGTERM/SIGINT handlers
 - Closes: worker → queue → Redis connection → Supabase SQL
 - 10 second timeout before force exit
-- Engine: cleans up orphaned files on shutdown (`engine/main.py:84-94`)
+- Engine: cleans up orphaned files on shutdown (`engine/main.py:101-110` lifespan sweep)
 
 ---
 
@@ -621,13 +647,13 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Synchronous Engine Analysis (CONFIRMED)
 
-- `engine/main.py:415-419` — `run_analysis()` called synchronously in `/analyze`
+- `engine/api/analyze.py:65,128-135` — `run_analysis()` called synchronously in `/analyze` (thread pool; BullMQ worker waits for the response)
 - BullMQ worker waits for response (`server/src/lib/queue.ts:76-88`)
 - **Trade-off:** Simpler error handling, but single job at a time per engine instance
 
 ### In-Memory Sessions (CONFIRMED)
 
-- `engine/main.py:57-58` — Python dict with threading lock
+- `engine/sessions.py:24-25` — Python dict with threading lock
 - **Trade-off:** Fast, but sessions lost on restart, no horizontal scaling
 
 ### Two Redis Clients (CONFIRMED)
@@ -669,7 +695,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 138 tests / 15 files (`vitest run`); server 179 pass / 15 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt).
+- Web test suite: 138 tests / 15 files (`vitest run`); server 248 pass / 25 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt).
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -680,13 +706,15 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 None. The last two orphans — `engine/core/baseline.py` and `web-next/components/InlineRename.tsx` — were **deleted** (2026-09-17).
 
-**Not dead (CLI-only, not part of the API pipeline):** `engine/core/player_tracker.py` and `engine/core/chunker.py` are the engine CLI's workload (`engine/cli/main.py`, `frame_selector.py`, `analyze_session.py`); `chunker` additionally has a dedicated pytest file (`tests/test_chunker.py`). They live, they are tested, and only the API pipeline is unaware of them.
+**Not dead (CLI-only, not part of the API pipeline):** `engine/cli/gemini.py`, `engine/cli/chunker.py`, and `engine/cli/player_detector.py` (moved from `core/` on 2026-09-23) plus `engine/cli/main.py`, `frame_selector.py`, `analyze_session.py` are the engine CLI's workload; `chunker` additionally has a dedicated pytest file (`tests/test_chunker.py`, which imports `cli.chunker`). `engine/core/player_tracker.py` is likewise CLI-only (imported by `cli/frame_selector.py`). They live, they are tested, and only the API pipeline is unaware of them.
 
 ### Removed Dead Code (since last verification)
 
 Previously documented as dead and since **deleted** from the repo — `pipeline.py`, `connection_pool.py`, `compress.py`, `quality.py`, `analysis_validator.py`, `overlay.py`, `utils.py` (plus the `register_job_input` no-op stub). Not present in `engine/core/` anymore.
 
 Also deleted 2026-09-17: `engine/core/baseline.py` (sport baseline models, never imported) and `web-next/components/InlineRename.tsx` (never imported).
+
+Also deleted 2026-09-23: `engine/core/renderer.py::_sport_emoji` (zero call sites; its emoji map had diverged from the canonical `SPORT_EMOJIS` in `core/sport_config.py`).
 
 ### Inconsistencies
 
@@ -709,6 +737,14 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 10. ~~Two Redis libraries in `server/`~~ — redis is ioredis-only now. `server/src/lib/redis.ts` derives a `rediss://` URL from `UPSTASH_REDIS_REST_URL` + `_TOKEN` (same derivation as `queue.ts`, already proven in prod by BullMQ) or uses the local URL; the Upstash REST branch and both `@upstash/redis` and `@upstash/ratelimit` dependencies are gone.
 11. ~~`lib/notifications.ts` tsc errors~~ — `DashboardAnalysis` now carries `auth0_id` (matches the `analysis_history` row shape); `orgValidate.ts` status-set typed as `ReadonlySet<string>` (mirrors `routes/org.ts`); lint fixes in the notifications file.
 
+### Resolved (fixed 2026-09-23)
+
+12. ~~`server/src/lib/orgData.ts` god-module (1,737 lines)~~ — split into `lib/org/{students,attendance,schedule,reports,performance,wellness,plans,compete,objectives,overview}.ts` (one module per subdomain); `orgData.ts` is now a 103-line named-re-export barrel, so no consumer import paths changed. Billing/subscription reads stayed in `lib/analyses.ts` (`getOrgTier`, usage ledger).
+13. ~~Schema owned in three places (`ensureSchema` in orgMembers/teams/invites), duplicated `UUID_RE` literals, ~15 hand-rolled 429 bodies, duplicate BullMQ wiring~~ — all DDL now lives solely in `historyStore.ensureInitialized` (`ensureSchema` helpers removed); one `UUID_RE` in `lib/uuid.ts`; every rate-limit rejection goes through `rateLimited()` in `lib/ratelimit.ts`; single queue/worker wiring exported from `lib/queue.ts` (`notifications.ts` consumes `queueEvents` from it).
+14. ~~`routes/auth.ts` monolith~~ — now a composer that mounts split-out `routes/findings.ts`, `routes/clips.ts`, and `routes/chatHistory.ts`; the keyword fallback responder moved to `lib/aiResponse.ts`.
+15. ~~`engine/main.py` monolith (1,459 lines)~~ — thin app (221 lines: env guard, Sentry, CORS, middlewares, exception handlers, lifespan, 8 router includes) over a new `engine/api/` package (`scan`, `analyze`, `chat`, `report`, `jobs` (status/fail + download), `health`, `sports`, `errors`); session store + eviction extracted to `engine/sessions.py`; inline Gemini chat/report calls extracted to `core/chat_client.py` + `core/report_client.py`; CLI-only modules moved `core/`→`cli/` (`gemini.py`, `chunker.py`, `player_detector.py`) with import updates incl. `tests/test_chunker.py`; sport vocabulary centralized in `core/sport_config.py` (`SPORTS`/`SPORT_EMOJIS`/`sport_emoji()`/`sport_pack_ids()`), consumed by `prompt.py`, `validator.py`, and `cli/main.py`.
+16. ~~Dual dependency manifests for the engine~~ — `engine/requirements.txt` is the single runtime manifest; `pyproject.toml` carries tooling config only, with a pointer comment. Also removed the dead `_sport_emoji` map from `core/renderer.py` (see Removed Dead Code).
+
 ### Missing Features
 
 **CI/CD is active** — `.github/workflows/ci.yml` (tests), `deploy.yml` (Render deploys), `keepalive.yml` (GitHub Actions cron).
@@ -727,21 +763,21 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 | Elysia ^1.4.29 | `server/package.json:18` |
 | FastAPI 0.141.1 | `engine/requirements.txt:1` |
 | google-genai 2.15.0 | `engine/requirements.txt:3` |
-| BullMQ concurrency: 1 | `server/src/lib/queue.ts:222` |
-| Worker timeout: 12 min | `server/src/lib/queue.ts:162` |
-| Stuck job recovery: 13 min | `server/src/lib/queue.ts:340` |
-| Session TTL: 2 hours | `engine/main.py:45` |
+| BullMQ concurrency: 1 | `server/src/lib/queue.ts:131-133` ("BullMQ manages concurrency…", `new Worker`) |
+| Worker timeout: 12 min | `server/src/lib/engine.ts:228` (`analyzeVideo` `withTimeout(…, 12 * 60 * 1000)`) |
+| Stuck job recovery: 13 min | `server/src/lib/queue.ts:341-344` (`recoverStuckJobs`, `STUCK_MS = 13 * 60 * 1000`) |
+| Session TTL: 2 hours | `engine/sessions.py:18` (`SESSION_TTL = 7200`) |
 | Cache TTL: 24 hours | `engine/core/cache.py:25` |
-| Rate limit: scan 10/min | `server/src/lib/ratelimit.ts:83` |
-| Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:88` |
-| Local storage only | `engine/core/storage.py:24` (`is_local_backend()` always `True`) |
+| Rate limit: scan 10/min | `server/src/lib/ratelimit.ts:70-72` (`checkScanLimit`, `SCAN_RATE_LIMIT`) |
+| Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:75-77` (`checkAnalysisLimit`, `ANALYSIS_RATE_LIMIT`) |
+| Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
-| Test suite: 103 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 179 pass / 15 files | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 207 tests pass | `cd engine && ./.venv/bin/python -m pytest tests -q` |
+| Test suite: 248 pass / 25 files | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
 | Test suite: 138 tests pass (15 files) | `cd web-next && npx vitest run` |
-| Dead code deleted: baseline.py, InlineRename.tsx | `git rm`; `rg "baseline" engine/core engine/main.py` and `rg "InlineRename" web-next/` return nothing |
-| player_tracker.py/chunker.py are CLI-only (kept) | imported by `engine/cli/`; `tests/test_chunker.py` exists |
-| scan_progress pruned | `engine/main.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, `_evict_old_scan_progress()` called alongside `_evict_old_sessions()` |
+| Dead code deleted: baseline.py, InlineRename.tsx, renderer._sport_emoji | `git rm`; `rg "baseline" engine/core engine/main.py`, `rg "_sport_emoji" engine/`, and `rg "InlineRename" web-next/` return nothing |
+| CLI-only modules kept (chunker/gemini/player_detector under cli/) | imported by `engine/cli/`; `tests/test_chunker.py` imports `cli.chunker` |
+| scan_progress pruned | `engine/sessions.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, `evict_old_scan_progress()` called from `evict_old_sessions()` |
 | HOG singleton | `engine/core/detection_utils.py:25` module-level `_HOG_DESCRIPTOR` used by `detector.py` + `analyzer.py` |
 | Redis is ioredis-only | `server/src/lib/redis.ts`; `rg "@upstash" server/package.json` returns nothing |
 | Auth0 auth (beta gate removed) | `grep -rn "BETA_CODES" server/src/` returns nothing |
@@ -755,4 +791,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-09-21 (attribution + org-scoped uniqueness pass: signed `x-attribution` tokens on browser-direct scan/analyze, `/api/me/attribution/mint`, org-scoped `UNIQUE` keys on attendance/performance_metrics with idempotent migration)*
+*Last verified: 2026-09-23 (hygiene + documentation-sync pass after the server/engine restructure: engine `main.py` → thin app + `api/` package + `sessions.py`, `routes/auth.ts` → `findings`/`clips`/`chatHistory`, `orgData.ts` → `lib/org/*` barrel, single `ensureInitialized` DDL / `UUID_RE` / `rateLimited()` sources, sport vocab SSOT in `core/sport_config.py`, dead `_sport_emoji` removed, `.gitignore` tool-cache entries; server 248/25 + engine 207 re-confirmed, web rows untouched — web-next owned by a concurrent session)*

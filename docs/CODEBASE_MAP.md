@@ -1,9 +1,10 @@
 # Sports Performance Intelligence Platform — Current Codebase Map
 
-Large god-modules and the org route monolith were split (see report
-`/tmp/opencode/architecture-review-1758613600.html`, candidates 1–6, all
-shipped). This file records where the remaining domain modules live so new
-code lands in the right place.
+Large god-modules and the org route monolith were split (candidates 1–6 of an
+earlier architecture review, all shipped — the report itself no longer exists
+at its original location). This file records where the remaining domain
+modules live so new code lands in the right place. Last verified 2026-09-23,
+after the server routes/libs split and the engine `main.py` slim-down.
 
 ## Server (`server/src/`)
 
@@ -12,12 +13,12 @@ code lands in the right place.
 | Identity boundary         | `lib/serviceGuard.ts`, `lib/attribution.ts`, `lib/jobAccess.ts`, `lib/httpErrors.ts` (shared error handler: app + smoke)              | —                                                                                       |
 | Caller + permissions      | `lib/caller.ts` (`resolveCaller`), `lib/permissions.ts`                                                                               | `lib/orgMembers.ts` (roles), `lib/teams.ts`                                             |
 | History/analyses          | `routes/status.ts`, `routes/analyze.ts`, `routes/download.ts`                                                                         | `lib/analyses.ts`, `lib/jobs.ts`, `lib/queue.ts`, `lib/engine.ts`                       |
-| Findings                  | `routes/auth.ts` (trends/list/review/stages/export)                                                                                   | `lib/findings.ts` (persist gate, CSV)                                                   |
-| Clips                     | `routes/auth.ts` (list/create/delete)                                                                                                 | `lib/clips.ts` (validator + scoped CRUD)                                                |
+| Findings                  | `routes/findings.ts` (trends/list/export/review; analysis `stages` still in `routes/auth.ts`)                                         | `lib/findings.ts` (persist gate, CSV)                                                   |
+| Clips                     | `routes/clips.ts` (list/create/delete; mounted by `routes/auth.ts`)                                                                   | `lib/clips.ts` (validator + scoped CRUD)                                                |
 | Registry                  | `routes/scan.ts`, `routes/auth.ts` (sync)                                                                                             | `lib/registry.ts` (organizations, videos, player_events)                                |
 | Users                     | `routes/auth.ts` (sync), `routes/me.ts`                                                                                               | `lib/users.ts`                                                                          |
-| Chat                      | `routes/chat.ts`, `routes/auth.ts` (history)                                                                                          | `lib/chatMessages.ts`, `lib/conversation.ts`                                            |
-| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared) | `lib/orgData.ts`                                                                        |
+| Chat                      | `routes/chat.ts`, `routes/chatHistory.ts` (transcript GET/POST + ask-an-analysis; mounted by `routes/auth.ts`)                        | `lib/chatMessages.ts`, `lib/conversation.ts`, `lib/aiResponse.ts` (local fallback)      |
+| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared) | `lib/org/*` per domain, via the `lib/orgData.ts` barrel                                 |
 | Members/invites/audit     | `routes/members.ts`, `routes/teams.ts`                                                                                                | `lib/orgMembers.ts`, `lib/invites.ts`, `lib/audit.ts` (`AUDIT_ACTIONS`), `lib/teams.ts` |
 | Player hub                | `routes/me.ts`                                                                                                                        | `lib/orgData.ts` (scoped reads)                                                         |
 | Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                             | engine sport packs via `GET /sports/{sport}/positions`                                  |
@@ -28,13 +29,18 @@ code lands in the right place.
 
 | Stage                                    | Module                                                                                                                                    |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes/SSE/sessions/multicam/sport-vocab | `main.py` (incl. `GET /sports/{sport}/positions`)                                                                                         |
+| Routes/SSE               | `api/` (`scan.py`, `analyze.py`, `chat.py`, `report.py`, `jobs.py`, `health.py`, `sports.py`, `errors.py`), mounted by the thin `main.py` |
+| Sessions + cleanup       | `sessions.py` (2h-TTL session tokens, `delete_session_files`)                                                                             |
+| Multicam                 | `core/multicam.py`                                                                                                                        |
+| Sport vocab              | `core/sport_config.py` (vocab SSOT; served by `api/sports.py` → `GET /sports/{sport}/positions`)                                          |
 | Orchestrator + explicit stages           | `core/analyzer.py` (`AnalysisContext`, prepare/resume/tracking/reasoning/scoring/render)                                                  |
 | Detection/tracking/pose                  | `core/detector.py`, `core/tracking.py`, `core/pose_backend.py`, `core/detection_utils.py`                                                 |
 | Gemini + prompts + guards                | `core/gemini_client.py`, `core/prompt.py`, `core/chat_prompt.py`, `core/report_prompt.py`, `core/prompt_guard.py`                         |
 | Findings/validator/stats/quality         | `core/findings.py` (evidence gate), `core/quality.py` (pre-render check), `core/validator.py`, `core/stats.py`, `core/injury_risk.py`     |
 | Media/storage/sports                     | `core/video_io.py` (ffmpeg+ffprobe), `core/storage.py` (local/S3), `core/sport_config.py` (`sport_positions()` + loader), `sports/*.json` |
 | Jobs/cache/dedup                         | `core/jobs.py`, `core/cache.py`, `core/dedup.py`                                                                                          |
+| Chat/report engine clients              | `core/chat_client.py`, `core/report_client.py`                                                                                             |
+| CLI session tooling                     | `cli/` (`main.py`, `analyze_session.py`, `frame_selector.py`, `chunker.py`, `gemini.py`, `player_detector.py`)                            |
 
 ## Web (`web-next/`)
 
@@ -58,5 +64,9 @@ code lands in the right place.
 - `resolveCaller()` is the only way to derive role/teams/scope in a route.
 - Static vocab routes stay guard-exempt end to end (engine → `routes/sports.ts` → `isStaticVocabPath`); extend all three when adding one.
 - `auditRoute()` is the only way to write audit entries from a route.
+- All DDL lives in `historyStore.ensureInitialized()`; org row uniqueness is
+  org-scoped — keep `ON CONFLICT` targets in `lib/org/*` in sync.
+- 429s come from `rateLimited()` (`lib/ratelimit.ts`); ids validate against
+  `UUID_RE` (`lib/uuid.ts`).
 - Every page carries a `PageHeader` trail rooted at Home (detail pages use the record name); the analysis room keeps its interactive title with plain-text crumbs.
 - Engine streaming: no gzip; SSE deadlines + heartbeats; timeouts on Gemini.
