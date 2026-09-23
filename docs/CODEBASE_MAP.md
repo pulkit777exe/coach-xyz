@@ -38,17 +38,17 @@ code lands in the right place.
 
 ## Web (`web-next/`)
 
-| Area              | Entry                                                                                                                                                                                               |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pipeline (coach)  | `lib/usePipeline.ts` over `lib/useScanFlow.ts` (scan seam)                                                                                                                                          |
-| Pipeline (player) | `components/player/PlayerHub.tsx` over `lib/useScanFlow.ts`                                                                                                                                         |
-| Management pages  | `app/dashboard/{students,teams,members,audit,reports,schedule,attendance,history,settings}` + `components/org/*` (9ui; `PreferencesSection`, position vocab Select, Monday-first calendar)          |
-| Analysis views    | `components/{AppClient,AnalysisDetailClient,ResultsSummary,VideoPlayer,FindingsTimeline,ChatLayout,ClipsSection,...}`                                                                               |
-| Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion) |
-| Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                              |
-| Discovery         | `components/SidebarSearch.tsx` (⌘K palette: role-gated pages + player search)                                                                                                                       |
-| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `visibleNavGroups`)                                                                                                                           |
-| RSC data          | `lib/serverData.ts` (React.cache)                                                                                                                                                                   |
+| Area              | Entry                                                                                                                                                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pipeline (coach)  | `lib/usePipeline.ts` over `lib/useScanFlow.ts` (scan seam)                                                                                                                                                                                                   |
+| Pipeline (player) | `components/player/PlayerHub.tsx` over `lib/useScanFlow.ts`                                                                                                                                                                                                  |
+| Management pages  | `app/dashboard/{students,teams,members,audit,reports,schedule,attendance,history,settings}` + `components/org/*` (9ui; `PreferencesSection`, position vocab Select, Monday-first calendar; home is role-differentiated: full / staff / personal player view) |
+| Analysis views    | `components/{AppClient,AnalysisDetailClient,ResultsSummary,VideoPlayer,FindingsTimeline,ChatLayout,ClipsSection,...}`                                                                                                                                        |
+| Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion)                                                          |
+| Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                                                                                       |
+| Discovery         | `components/SidebarSearch.tsx` (⌘K palette: role-gated pages + player search)                                                                                                                                                                                |
+| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `visibleNavGroups`)                                                                                                                                                                                    |
+| RSC data          | `lib/serverData.ts` (React.cache)                                                                                                                                                                                                                            |
 
 ## Conventions (must keep)
 
@@ -58,4 +58,5 @@ code lands in the right place.
 - `resolveCaller()` is the only way to derive role/teams/scope in a route.
 - Static vocab routes stay guard-exempt end to end (engine → `routes/sports.ts` → `isStaticVocabPath`); extend all three when adding one.
 - `auditRoute()` is the only way to write audit entries from a route.
+- Every page carries a `PageHeader` trail rooted at Home (detail pages use the record name); the analysis room keeps its interactive title with plain-text crumbs.
 - Engine streaming: no gzip; SSE deadlines + heartbeats; timeouts on Gemini.
