@@ -28,6 +28,7 @@ import type { OrgMembersResponse } from '@/lib/members'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/9ui/ui/button'
 import ProfileForm from '@/components/org/ProfileForm'
+import PreferencesSection from '@/components/org/PreferencesSection'
 import MembersSection from '@/components/org/MembersSection'
 
 export const metadata: Metadata = {
@@ -150,12 +151,17 @@ export default async function SettingsPage() {
         <span className="text-muted-foreground">Settings</span>
       </div>
       <h1 className="text-[28px] font-bold tracking-tight text-foreground">Settings</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Choose how you want CoachXYZ to look and behave.
+      </p>
 
       {error && (
         <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           Failed to load some settings data. Try refreshing the page.
         </div>
       )}
+
+      <PreferencesSection />
 
       <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
         <div className="border-b border-border px-6 py-4">
@@ -215,7 +221,12 @@ export default async function SettingsPage() {
               Password
             </span>
             {passwordUrl ? (
-              <Button variant="outline" size="sm" nativeButton={false} render={<a href={passwordUrl} />}>
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<a href={passwordUrl} />}
+              >
                 <KeyRound className="size-3.5" />
                 Change Password
               </Button>
@@ -229,7 +240,12 @@ export default async function SettingsPage() {
             <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               Session
             </span>
-            <Button variant="destructive" size="sm" nativeButton={false} render={<a href="/auth/logout" />}>
+            <Button
+              variant="destructive"
+              size="sm"
+              nativeButton={false}
+              render={<a href="/auth/logout" />}
+            >
               <LogOut className="size-3.5" />
               Log Out
             </Button>

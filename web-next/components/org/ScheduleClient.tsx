@@ -40,6 +40,7 @@ import {
   EVENT_STATUS_LABELS,
 } from '@/lib/org'
 import { toISODate, scheduleMonthWindow } from '@/lib/date'
+import { usePreferences } from '@/lib/preferences'
 import type { CoachAIError } from '@/lib/api'
 
 const TYPE_META: Record<
@@ -87,6 +88,16 @@ function localDateTimeKey(iso: string) {
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+/** Rotate weekday labels + calendar offset so weeks can start on Monday. */
+export function orderedWeekdays(mondayFirst: boolean): string[] {
+  return mondayFirst ? [...WEEKDAY_LABELS.slice(1), WEEKDAY_LABELS[0]] : WEEKDAY_LABELS
+}
+
+export function weekStartOffset(date: Date, mondayFirst: boolean): number {
+  const day = date.getDay()
+  return mondayFirst ? (day + 6) % 7 : day
+}
+
 export default function ScheduleClient({
   auth0Id,
   initialEvents,
@@ -96,6 +107,8 @@ export default function ScheduleClient({
 }) {
   const today = new Date()
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  const { prefs } = usePreferences()
+  const weekStartsMonday = prefs.weekStartsMonday
   const [events, setEvents] = useState<ScheduleEvent[]>(initialEvents)
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -118,7 +131,7 @@ export default function ScheduleClient({
   const cells = useMemo(() => {
     const firstDay = new Date(year, monthNum, 1)
     const daysInMonth = new Date(year, monthNum + 1, 0).getDate()
-    const offset = firstDay.getDay()
+    const offset = weekStartOffset(firstDay, weekStartsMonday)
     const blanks = Array.from({ length: offset }, () => null)
     const dayCells = Array.from({ length: daysInMonth }, (_, i) => {
       const date = new Date(year, monthNum, i + 1)
@@ -129,7 +142,7 @@ export default function ScheduleClient({
       date: Date
       events: ScheduleEvent[]
     } | null)[]
-  }, [year, monthNum])
+  }, [year, monthNum, weekStartsMonday])
 
   const byDay = useMemo(() => {
     const map = new Map<string, ScheduleEvent[]>()
@@ -288,7 +301,7 @@ export default function ScheduleClient({
       {/* Calendar grid */}
       <div className="border-border overflow-hidden rounded-lg border">
         <div className="grid grid-cols-7 border-b border-border">
-          {WEEKDAY_LABELS.map((w) => (
+          {orderedWeekdays(weekStartsMonday).map((w) => (
             <div
               key={w}
               className="text-muted-foreground bg-muted/50 py-2 text-center text-[0.6rem] font-normal uppercase tracking-[0.15em]"

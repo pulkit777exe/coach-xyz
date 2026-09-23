@@ -6,6 +6,7 @@ import Link from 'next/link'
 import UserAvatar from '@/components/UserAvatar'
 import DashboardNav from '@/components/DashboardNav'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import SidebarSearch from '@/components/SidebarSearch'
 import OrgSwitcher from '@/components/org/OrgSwitcher'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {switcherOrgs.length > 0 && (
             <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
           )}
+
+          <SidebarSearch auth0Id={switcherCurrent} role={navRole} />
 
           <DashboardNav role={navRole} />
         </div>
