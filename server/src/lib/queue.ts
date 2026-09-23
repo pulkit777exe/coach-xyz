@@ -3,13 +3,8 @@ import { randomUUID } from 'crypto'
 import type { Redis } from 'ioredis'
 import { markEngineJobFailed, getEngineJobStatus } from './engine'
 import { saveJob, getJob } from './jobs'
-import {
-  shutdownHistoryStore,
-} from './historyStore'
-import {
-  persistAnalysisStatus,
-  pruneRetention,
-} from './analyses'
+import { shutdownHistoryStore } from './historyStore'
+import { persistAnalysisStatus, pruneRetention } from './analyses'
 import { wrapEngineError, isQueueRetryable, isCoachAIError } from './errors'
 import { analyzeVideo } from './engine'
 import { DEFAULT_MODEL } from '../types'
@@ -636,4 +631,4 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
-export { worker, aiReportWorker }
+export { worker, aiReportWorker, queueEvents }

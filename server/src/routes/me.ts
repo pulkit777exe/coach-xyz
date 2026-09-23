@@ -1,17 +1,8 @@
 import { Elysia } from 'elysia'
 
 import { buildError, type CoachAIError } from '../lib/errors'
-import {
-  getUserByAuth0Id,
-  updateUserProfile,
-  resolveAuth0Id,
-} from '../lib/users'
-import {
-  persistAnalysisStart,
-  checkOrgDailyQuota,
-  getOrgTier,
-  recordUsage,
-} from '../lib/analyses'
+import { getUserByAuth0Id, updateUserProfile, resolveAuth0Id } from '../lib/users'
+import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/analyses'
 import {
   getLinkedPlayer,
   listAttendance,
@@ -31,6 +22,8 @@ import { mintAttributionToken } from '../lib/attribution'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 import { enqueueAnalysis } from '../lib/queue'
+import { rateLimited } from '../lib/ratelimit'
+import { UUID_RE } from '../lib/uuid'
 import { DEFAULT_MODEL } from '../types'
 
 /**
@@ -353,7 +346,6 @@ export default new Elysia()
     const playerIndexRaw = body.player_index ?? null
     const videoKeyRaw = body.video_key ?? null
     const angleRaw = body.angle ?? null
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (sessionTokenRaw !== null && typeof sessionTokenRaw !== 'string') {
       set.status = 400
       return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
@@ -398,15 +390,11 @@ export default new Elysia()
     // Per-org daily quota (§17) on the owning coach's org.
     const quota = await checkOrgDailyQuota(decision.coachAuth0Id)
     if (!quota.allowed) {
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Organization daily analysis limit reached. Try again tomorrow.',
-          true,
-        ),
-        retry_after: quota.retryAfterSec,
-      }
+      return rateLimited(
+        set,
+        'Organization daily analysis limit reached. Try again tomorrow.',
+        quota.retryAfterSec,
+      )
     }
     const tier = await getOrgTier(decision.coachAuth0Id).catch(() => 'free' as const)
     const priority = 10 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
@@ -488,9 +476,17 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', result.error, false)
     }
-    auditRoute(request, result.orgAuth0Id, 'member.invite_accepted', 'org_invite', null, {
-      role: result.role,
-    }, verified)
+    auditRoute(
+      request,
+      result.orgAuth0Id,
+      'member.invite_accepted',
+      'org_invite',
+      null,
+      {
+        role: result.role,
+      },
+      verified,
+    )
     set.status = 200
     return { org_auth0_id: result.orgAuth0Id, role: result.role }
   })

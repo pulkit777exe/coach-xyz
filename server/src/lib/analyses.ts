@@ -274,7 +274,9 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
       record.serverJobId,
       owner?.auth0_id ?? null,
       owner?.student_id ?? null,
-      Array.isArray(summary?.shot_events) ? (summary?.shot_events as Array<Record<string, unknown>>) : [],
+      Array.isArray(summary?.shot_events)
+        ? (summary?.shot_events as Array<Record<string, unknown>>)
+        : [],
     )
   }
 
@@ -588,14 +590,20 @@ export const getAnalysisByServerJobId = async (
 /// Used on hot paths (status polls, event materialization). */
 export const getAnalysisOwner = async (
   serverJobId: string,
-): Promise<{ auth0_id: string | null; requested_by: string | null; student_id: string | null } | null> => {
+): Promise<{
+  auth0_id: string | null
+  requested_by: string | null
+  student_id: string | null
+} | null> => {
   return withHistoryStore(async (db) => {
     await ensureInitialized()
-    const rows = await db<{
-      auth0_id: string | null
-      requested_by: string | null
-      student_id: string | null
-    }[]>`
+    const rows = await db<
+      {
+        auth0_id: string | null
+        requested_by: string | null
+        student_id: string | null
+      }[]
+    >`
       select auth0_id, requested_by, student_id from analysis_history
       where server_job_id = ${serverJobId}
       limit 1;

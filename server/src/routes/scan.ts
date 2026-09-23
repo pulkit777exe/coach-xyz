@@ -10,11 +10,9 @@ import {
 import { buildError, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
 import { resolveJobCaller } from '../lib/jobAccess'
-import { checkScanLimit, checkScanProgressLimit, getIP } from '../lib/ratelimit'
+import { checkScanLimit, checkScanProgressLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { verifyAttributionToken } from '../lib/attribution'
-import {
-  persistVideoConversation,
-} from '../lib/analyses'
+import { persistVideoConversation } from '../lib/analyses'
 import { registerVideo, updateVideoProbe } from '../lib/registry'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
@@ -84,16 +82,11 @@ export default new Elysia()
     const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+      return rateLimited(
+        set,
+        'Too many scan requests. Wait a minute before trying again.',
+        Math.ceil((reset - Date.now()) / 1000),
+      )
     }
 
     // ── Reject oversized uploads before buffering into memory ─────────────
@@ -178,16 +171,11 @@ export default new Elysia()
     const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+      return rateLimited(
+        set,
+        'Too many scan requests. Wait a minute before trying again.',
+        Math.ceil((reset - Date.now()) / 1000),
+      )
     }
 
     let body: Record<string, unknown>
@@ -264,16 +252,11 @@ export default new Elysia()
     const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+      return rateLimited(
+        set,
+        'Too many scan requests. Wait a minute before trying again.',
+        Math.ceil((reset - Date.now()) / 1000),
+      )
     }
 
     let body: Record<string, unknown>
@@ -336,12 +319,11 @@ export default new Elysia()
 
     const { allowed, reset } = await checkScanProgressLimit(getIP(request))
     if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError('RATE_LIMITED', 'Too many scan-progress requests. Try again later.', true),
-        retry_after: retryAfter,
-      }
+      return rateLimited(
+        set,
+        'Too many scan-progress requests. Try again later.',
+        Math.ceil((reset - Date.now()) / 1000),
+      )
     }
 
     // Multi-angle sessions track each perspective separately — forward the

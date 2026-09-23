@@ -4,7 +4,7 @@ import { escapeHtml } from '../src/lib/mailer'
 
 describe('escapeHtml', () => {
   test('escapes markup characters', () => {
-    expect(escapeHtml('<b>"a"&\'b\'</b>')).toBe('&lt;b&gt;&quot;a&quot;&amp;\'b\'&lt;/b&gt;')
+    expect(escapeHtml('<b>"a"&\'b\'</b>')).toBe("&lt;b&gt;&quot;a&quot;&amp;'b'&lt;/b&gt;")
   })
 
   test('passes plain strings through', () => {

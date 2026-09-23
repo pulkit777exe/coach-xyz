@@ -1,12 +1,7 @@
-import { SERVICE_HEADERS } from "./serviceGuard"
-import { getMemberRole, type OrgMemberRole } from "./orgMembers"
-import { listMemberTeamIds } from "./teams"
-import {
-  canAccessTeam,
-  hasPermission,
-  resolveStudentScope,
-  type Permission,
-} from "./permissions"
+import { SERVICE_HEADERS } from './serviceGuard'
+import { getMemberRole, type OrgMemberRole } from './orgMembers'
+import { listMemberTeamIds } from './teams'
+import { canAccessTeam, hasPermission, resolveStudentScope, type Permission } from './permissions'
 
 // ── Caller resolution ────────────────────────────────────────────────────────
 // One interface for "who is calling this org route": identity, org role,
@@ -35,12 +30,12 @@ export async function resolveCaller(orgAuth0Id: string, request: Request): Promi
     !verified || !orgAuth0Id
       ? null
       : verified === orgAuth0Id
-        ? "owner"
+        ? 'owner'
         : await getMemberRole(orgAuth0Id, verified).catch(() => null)
   // Owners/admins bypass every scope check, so skip the membership lookup
   // for them (also keeps the owner fast-path DB-free).
   const teamIds =
-    verified && role !== null && role !== "owner" && role !== "admin"
+    verified && role !== null && role !== 'owner' && role !== 'admin'
       ? await listMemberTeamIds(verified).catch(() => [])
       : []
   return {

@@ -1,7 +1,4 @@
-import {
-  withHistoryStoreOrThrow as withHistoryStore,
-  ensureInitialized,
-} from './historyStore'
+import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
 import { SERVICE_HEADERS } from './serviceGuard'
 import { readRequestMeta } from './requestMeta'
 

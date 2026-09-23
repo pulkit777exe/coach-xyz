@@ -2,10 +2,7 @@
 // own rows. Uses a random suffix so it never touches real data.
 //
 //   cd server && bun run scripts/smokeTwoFaces.ts
-import {
-  ensureInitialized,
-  withHistoryStore,
-} from '../src/lib/historyStore'
+import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
 import { upsertUser, getUserByAuth0Id } from '../src/lib/users'
 import { createStudent, deleteStudent, getLinkedPlayer } from '../src/lib/orgData'
 

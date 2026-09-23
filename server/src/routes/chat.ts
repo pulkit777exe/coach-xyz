@@ -3,7 +3,7 @@ import { Elysia } from 'elysia'
 import { buildError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
-import { checkChatLimit, getIP } from '../lib/ratelimit'
+import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { getConversation, saveMessage } from '../lib/conversation'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
 
@@ -41,12 +41,11 @@ async function checkChatRateLimit(
 ): Promise<ReturnType<typeof buildError> | null> {
   const { allowed, reset } = await checkChatLimit(chatLimitKey(request))
   if (allowed) return null
-  const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-  set.status = 429
-  return {
-    ...buildError('RATE_LIMITED', 'Too many chat requests. Try again later.', true),
-    retry_after: retryAfter,
-  } as ReturnType<typeof buildError>
+  return rateLimited(
+    set,
+    'Too many chat requests. Try again later.',
+    Math.ceil((reset - Date.now()) / 1000),
+  )
 }
 
 export default new Elysia()

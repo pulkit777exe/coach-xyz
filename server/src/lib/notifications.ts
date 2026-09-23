@@ -1,13 +1,8 @@
 import { EventEmitter } from 'events'
 
-import type { Queue as BullQueue } from 'bullmq'
-import {
-  withHistoryStore,
-  ensureInitialized,
-} from './historyStore'
-import {
-  getAnalysisByServerJobId,
-} from './analyses'
+import { withHistoryStore, ensureInitialized } from './historyStore'
+import { getAnalysisByServerJobId } from './analyses'
+import { analysisQueue, queueEvents } from './queue'
 
 // ── In-process pub/sub ───────────────────────────────────────────────────────
 // Lightweight fan-out so SSE endpoints get notified when a new notification is
@@ -171,47 +166,8 @@ export async function unreadCount(auth0Id: string): Promise<number> {
 
 // ── BullMQ queue event hooks ─────────────────────────────────────────────────
 // Listens for completed/failed analysis jobs and creates notifications for the
-// owning coach.  Replicates the Redis connection setup from queue.ts without
-// importing or modifying it.
-
-function getQueueEventsConnection() {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
-
-  if (!restUrl || !token) return null
-
-  const urlObj = new URL(restUrl)
-  const host = urlObj.host
-  const redisUrl = `rediss://default:${token}@${host}:6379`
-
-  try {
-    const IORedis = require('ioredis') as typeof import('ioredis').default
-    const client = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      tls: {},
-      enableReadyCheck: false,
-      lazyConnect: true,
-      commandTimeout: 30000,
-      connectTimeout: 30000,
-      retryStrategy(times: number) {
-        if (times > 10) return null
-        return Math.min(times * 500, 5000)
-      },
-    })
-    client.on('error', (err: Error) => {
-      console.error(
-        JSON.stringify({
-          type: 'redis_error',
-          source: 'notifications-events',
-          message: err.message,
-        }),
-      )
-    })
-    return client
-  } catch {
-    return null
-  }
-}
+// owning coach.  Subscribes to the shared analysis queue + QueueEvents owned
+// by queue.ts — one Redis wiring for the whole server.
 
 /**
  * Resolves the owner (+ label) of an analysis. `getAnalysisByServerJobId` is the
@@ -239,30 +195,11 @@ async function resolveAnalysisOwner(serverJobId: string): Promise<AnalysisOwner 
   return owner ?? null
 }
 
-type AnalysisQueueJobData = {
-  server_job_id: string
-  engine_job_id: string
-  session_token: string | null
-  player_index: number | null
-  video_key: string | null
-}
-
-const queueEventsConnection = getQueueEventsConnection()
-let analysisQueue: BullQueue<AnalysisQueueJobData> | null = null
-
 function attachQueueEventListeners() {
-  if (!queueEventsConnection) return
+  if (!queueEvents || !analysisQueue) return
 
   try {
-    const { QueueEvents: QueueEventsClass, Queue } = require('bullmq')
-    const qe = new QueueEventsClass('coachai-analysis', {
-      connection: queueEventsConnection,
-    })
-    analysisQueue = new Queue('coachai-analysis', {
-      connection: queueEventsConnection,
-    }) as BullQueue<AnalysisQueueJobData>
-
-    qe.on('completed', async ({ jobId }: { jobId: string }) => {
+    queueEvents.on('completed', async ({ jobId }: { jobId: string }) => {
       try {
         const job = await analysisQueue!.getJob(jobId)
         if (!job?.data?.server_job_id) return
@@ -291,38 +228,41 @@ function attachQueueEventListeners() {
       }
     })
 
-    qe.on('failed', async ({ jobId, failedReason }: { jobId: string; failedReason?: string }) => {
-      try {
-        const job = await analysisQueue!.getJob(jobId)
-        if (!job?.data?.server_job_id) return
+    queueEvents.on(
+      'failed',
+      async ({ jobId, failedReason }: { jobId: string; failedReason?: string }) => {
+        try {
+          const job = await analysisQueue!.getJob(jobId)
+          if (!job?.data?.server_job_id) return
 
-        const isUnrecoverable = failedReason?.includes('UnrecoverableError')
-        const retriesExhausted = (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)
-        if (!retriesExhausted && !isUnrecoverable) return
+          const isUnrecoverable = failedReason?.includes('UnrecoverableError')
+          const retriesExhausted = (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)
+          if (!retriesExhausted && !isUnrecoverable) return
 
-        const analysis = await resolveAnalysisOwner(job.data.server_job_id)
-        if (!analysis) return
+          const analysis = await resolveAnalysisOwner(job.data.server_job_id)
+          if (!analysis) return
 
-        await createNotification({
-          auth0Id: analysis.auth0Id,
-          type: 'analysis_failed',
-          title: 'Analysis failed',
-          body: analysis.displayName || job.data.engine_job_id,
-          data: {
-            server_job_id: job.data.server_job_id,
-            engine_job_id: job.data.engine_job_id,
-          },
-        })
-      } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'notification_failed_handler_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
-      }
-    })
+          await createNotification({
+            auth0Id: analysis.auth0Id,
+            type: 'analysis_failed',
+            title: 'Analysis failed',
+            body: analysis.displayName || job.data.engine_job_id,
+            data: {
+              server_job_id: job.data.server_job_id,
+              engine_job_id: job.data.engine_job_id,
+            },
+          })
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              type: 'notification_failed_handler_error',
+              jobId,
+              error: err instanceof Error ? err.message : 'unknown',
+            }),
+          )
+        }
+      },
+    )
   } catch (err) {
     console.error(
       JSON.stringify({

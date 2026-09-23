@@ -7,12 +7,8 @@ import {
   upsertAttendance,
   type AttendanceStatus,
 } from '../../lib/orgData'
-import {
-  isDate,
-} from '../../lib/orgValidate'
-import {
-  ATTENDANCE_STATUS_SET,
-} from './shared'
+import { isDate } from '../../lib/orgValidate'
+import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

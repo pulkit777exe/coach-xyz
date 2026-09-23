@@ -9,13 +9,11 @@ import {
   attendanceEmail,
   escapeHtml,
 } from '../lib/mailer'
-import {
-  getUserByAuth0Id,
-} from '../lib/users'
+import { getUserByAuth0Id } from '../lib/users'
 import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
 import { serviceGuard } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
-import { checkEmailLimit } from '../lib/ratelimit'
+import { checkEmailLimit, rateLimited } from '../lib/ratelimit'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
 
@@ -45,11 +43,9 @@ export default new Elysia()
     const { allowed: emailOk, remaining } = await checkEmailLimit(auth0Id)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!emailOk) {
-      set.status = 429
-      return buildError(
-        'RATE_LIMITED',
+      return rateLimited(
+        set,
         'Daily email limit reached for this organization. Try again tomorrow.',
-        true,
       )
     }
     const { emails, student_ids } = body as {
@@ -135,11 +131,9 @@ export default new Elysia()
     const auth0Id = params.auth0Id as string
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
-      set.status = 429
-      return buildError(
-        'RATE_LIMITED',
+      return rateLimited(
+        set,
         'Daily email limit reached for this organization. Try again tomorrow.',
-        true,
       )
     }
     const { report_id, to } = body as { report_id?: unknown; to?: unknown }
@@ -217,11 +211,9 @@ export default new Elysia()
     const auth0Id = params.auth0Id as string
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
-      set.status = 429
-      return buildError(
-        'RATE_LIMITED',
+      return rateLimited(
+        set,
         'Daily email limit reached for this organization. Try again tomorrow.',
-        true,
       )
     }
     const { student_id, from, to, recipient } = body as {

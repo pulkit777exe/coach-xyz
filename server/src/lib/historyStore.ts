@@ -125,7 +125,7 @@ export const ensureInitialized = async () => {
         // Level: tables without foreign keys — independent, run together.
         await Promise.all([
           (async () => {
-  await sql`
+            await sql`
           create table if not exists video_conversations (
             session_token text primary key,
             file_name text not null,
@@ -144,7 +144,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists analysis_history (
             server_job_id text primary key,
             engine_job_id text not null,
@@ -177,7 +177,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists findings (
             id text not null,
             server_job_id text not null,
@@ -200,7 +200,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists training_objectives (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -220,7 +220,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists seasons (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -232,7 +232,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists matches (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -247,7 +247,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists training_plans (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -264,7 +264,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists wellness_checkins (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -280,7 +280,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists subscriptions (
             org_auth0_id text primary key,
             tier text not null default 'free'
@@ -291,7 +291,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists usage_records (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -303,7 +303,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists analysis_stages (
             id uuid primary key default gen_random_uuid(),
             server_job_id text not null,
@@ -314,7 +314,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists audit_logs (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text not null,
@@ -330,7 +330,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists organizations (
             auth0_id text primary key,
             name text,
@@ -341,7 +341,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists videos (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text,
@@ -362,7 +362,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists player_events (
             id uuid primary key default gen_random_uuid(),
             org_auth0_id text,
@@ -376,7 +376,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists clips (
             id uuid primary key default gen_random_uuid(),
             server_job_id text not null,
@@ -390,13 +390,13 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_clips_server_job_id
           on clips (server_job_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists users (
             id uuid primary key default gen_random_uuid(),
             auth0_id text unique not null,
@@ -414,7 +414,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists chat_messages (
             id uuid primary key default gen_random_uuid(),
             server_job_id text not null,
@@ -428,7 +428,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists students (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -453,7 +453,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists schedule_events (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -471,11 +471,104 @@ export const ensureInitialized = async () => {
           );
         `
           })(),
+          (async () => {
+            await sql`
+          create table if not exists teams (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text not null,
+            name text not null,
+            sport text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now()
+          );
+        `
+            await sql`
+          create index if not exists idx_teams_org_auth0_id
+          on teams (org_auth0_id);
+        `
+          })(),
+          // org_members: create + role-check migration must run in order
+          // (drop the stale four-role check, re-add the full-role version).
+          (async () => {
+            await sql`
+          create table if not exists org_members (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text not null,
+            member_auth0_id text,
+            member_email text,
+            role text not null check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player')),
+            status text not null default 'active',
+            invited_by text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now(),
+            constraint org_members_unique unique (org_auth0_id, member_auth0_id)
+          );
+        `
+            // Migrate pre-existing tables whose CHECK still lists only the four
+            // original roles: drop the old role check (name discovered dynamically)
+            // and re-add the full-role version. Idempotent.
+            await sql`
+          do $$
+          declare _conname text;
+          begin
+            select conname into _conname
+            from pg_constraint
+            where conrelid = 'org_members'::regclass
+              and contype = 'c'
+              and pg_get_constraintdef(oid) like '%role in%';
+            if _conname is not null and _conname <> 'org_members_role_check' then
+              execute format('alter table org_members drop constraint %I', _conname);
+            end if;
+          end
+          $$;
+        `
+            await sql`
+          alter table org_members
+            drop constraint if exists org_members_role_check;
+        `
+            await sql`
+          alter table org_members
+            add constraint org_members_role_check
+            check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player'));
+        `
+            await sql`
+          create index if not exists idx_org_members_org_auth0_id
+          on org_members (org_auth0_id);
+        `
+            await sql`
+          create index if not exists idx_org_members_member_auth0_id
+          on org_members (member_auth0_id);
+        `
+          })(),
+          (async () => {
+            await sql`
+          create table if not exists org_invites (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text not null,
+            email text not null,
+            role text not null,
+            token_hash text not null unique,
+            created_by text,
+            expires_at timestamptz not null,
+            accepted_at timestamptz,
+            revoked_at timestamptz,
+            created_at timestamptz not null default now()
+          );
+        `
+            await sql`
+          create index if not exists idx_org_invites_org_auth0_id
+          on org_invites (org_auth0_id);
+        `
+            await sql`
+          create index if not exists idx_org_invites_token_hash
+          on org_invites (token_hash);
+        `
+          })(),
         ])
-        // Level: tables referencing students — independent, run together.
+        // Level: tables referencing students or teams — independent, run together.
         await Promise.all([
           (async () => {
-  await sql`
+            await sql`
           create table if not exists attendance (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -492,7 +585,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists reports (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -509,7 +602,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create table if not exists performance_metrics (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -525,110 +618,134 @@ export const ensureInitialized = async () => {
           );
         `
           })(),
+          (async () => {
+            await sql`
+          create table if not exists team_memberships (
+            id uuid primary key default gen_random_uuid(),
+            team_id uuid not null references teams (id) on delete cascade,
+            member_auth0_id text,
+            student_id uuid,
+            role text not null default 'player'
+              check (role in ('coach', 'player')),
+            created_at timestamptz not null default now(),
+            constraint team_memberships_unique unique (team_id, member_auth0_id, student_id),
+            constraint team_memberships_target_check
+              check (member_auth0_id is not null or student_id is not null)
+          );
+        `
+            await sql`
+          create index if not exists idx_team_memberships_team_id
+          on team_memberships (team_id);
+        `
+            await sql`
+          create index if not exists idx_team_memberships_member
+          on team_memberships (member_auth0_id);
+        `
+          })(),
         ])
         // Level: indexes, columns, and idempotent migrations — independent, run together.
         await Promise.all([
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_video_conversations_created_at
           on video_conversations (created_at desc);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_analysis_history_requested_at
           on analysis_history (requested_at desc);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_analysis_history_session_token
           on analysis_history (session_token);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_findings_server_job_id
           on findings (server_job_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_findings_created_at
           on findings (created_at desc);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_objectives_org_student
           on training_objectives (org_auth0_id, student_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_wellness_org_student
           on wellness_checkins (org_auth0_id, student_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_usage_org_day
           on usage_records (org_auth0_id, period_day);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_stages_job
           on analysis_stages (server_job_id, created_at);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_audit_logs_org_created
           on audit_logs (org_auth0_id, created_at desc);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_videos_storage_key
           on videos (storage_key);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_videos_session
           on videos (session_token);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_player_events_job
           on player_events (server_job_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_player_events_student_time
           on player_events (student_id, event_at_s);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_users_auth0_id
           on users (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_users_email
           on users (email);
         `
           })(),
           (async () => {
-  await sql`alter table users add column if not exists role text not null default 'coach';`
+            await sql`alter table users add column if not exists role text not null default 'coach';`
           })(),
           (async () => {
-  await sql`
+            await sql`
           do $$
           begin
             if not exists (
@@ -641,115 +758,116 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`
+            await sql`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`
           })(),
           (async () => {
-  await sql`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
+            await sql`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
           })(),
           (async () => {
-  await sql`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`
+            await sql`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`
           })(),
           (async () => {
-  await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
+            await sql`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
           })(),
           (async () => {
-  await sql`alter table analysis_history add column if not exists display_name text;`
+            await sql`alter table analysis_history add column if not exists display_name text;`
           })(),
           (async () => {
-  await sql`alter table analysis_history add column if not exists requested_by text;`
+            await sql`alter table analysis_history add column if not exists requested_by text;`
           })(),
           (async () => {
-  await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`
+            await sql`alter table users add column if not exists linked_auth0_ids text[] default '{}';`
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_chat_messages_server_job_id
           on chat_messages (server_job_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_chat_messages_auth0_id
           on chat_messages (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_students_auth0_id
           on students (auth0_id);
         `
           })(),
           (async () => {
-  await sql`alter table students add column if not exists account_auth0_id text;`
+            await sql`alter table students add column if not exists account_auth0_id text;`
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_students_account_auth0_id
           on students (account_auth0_id);
         `
           })(),
           (async () => {
-  // Team assignment must exist before any student query runs — the teams
-  // module also carries this alter, but lazy DDL there loses the race when
-  // student routes are hit first (smoke caught it).
-  await sql`alter table students add column if not exists team_id uuid;`
+            // Team assignment must exist before any student query runs. The
+            // teams module's DDL moved here (single schema mechanism), so this
+            // alter is owned solely by ensureInitialized — no lazy-DDL race
+            // when student routes are hit first (smoke caught it).
+            await sql`alter table students add column if not exists team_id uuid;`
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_students_team_id
           on students (team_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_attendance_auth0_id
           on attendance (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_attendance_session_date
           on attendance (session_date);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_schedule_auth0_id
           on schedule_events (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_schedule_starts_at
           on schedule_events (starts_at);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_reports_auth0_id
           on reports (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_reports_student_id
           on reports (student_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_perf_auth0_id
           on performance_metrics (auth0_id);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_perf_student
           on performance_metrics (student_id, metric_key, measured_at desc);
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           do $$
           begin
             if not exists (
@@ -764,7 +882,7 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           do $$
           begin
             if not exists (
@@ -779,12 +897,12 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           alter table analysis_history add column if not exists student_id uuid;
         `
           })(),
           (async () => {
-  await sql`
+            await sql`
           create index if not exists idx_analysis_history_student_id
           on analysis_history (student_id);
         `

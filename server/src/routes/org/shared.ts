@@ -1,5 +1,6 @@
 import { getTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
+import { UUID_RE } from '../../lib/uuid'
 import {
   ATTENDANCE_STATUSES,
   EVENT_STATUSES,
@@ -15,7 +16,8 @@ export const EVENT_STATUS_SET: ReadonlySet<string> = new Set(EVENT_STATUSES)
 export const STUDENT_STATUS_SET: ReadonlySet<string> = new Set(STUDENT_STATUSES)
 export const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
 
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Re-export the single UUID pattern (lib/uuid) for org route modules.
+export { UUID_RE }
 
 /**
  * Hierarchy scope for roster reads (§3: owner → coaches → players).

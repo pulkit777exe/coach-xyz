@@ -16,6 +16,7 @@ import {
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { listInvites, mintInvite, revokeInvite } from '../lib/invites'
 import { auditRoute, listAuditLogs } from '../lib/audit'
+import { UUID_RE } from '../lib/uuid'
 
 // Org-member management routes. The identity (service) guard applies globally;
 // role gates are applied per route group via orgRoleGuard on dedicated (sub-)
@@ -23,7 +24,6 @@ import { auditRoute, listAuditLogs } from '../lib/audit'
 
 const INVITE_ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_INVITE_ROLES)
 const ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_ROLES)
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default new Elysia()
@@ -85,11 +85,19 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Cannot invite the org owner', false)
         }
-        auditRoute(request, auth0Id, 'member.invited', 'org_member', member.id, {
-          email: member.member_email,
-          role: member.role,
-          direct: true,
-        }, inviterAuth0Id)
+        auditRoute(
+          request,
+          auth0Id,
+          'member.invited',
+          'org_member',
+          member.id,
+          {
+            email: member.member_email,
+            role: member.role,
+            direct: true,
+          },
+          inviterAuth0Id,
+        )
         set.status = 201
         return { member }
       }),

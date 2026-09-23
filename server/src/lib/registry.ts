@@ -148,7 +148,8 @@ export const persistPlayerEvents = async (
     await ensureInitialized()
     await db`delete from player_events where server_job_id = ${serverJobId};`
     for (const e of rows) {
-      const ts = typeof e.timestamp === 'number' && Number.isFinite(e.timestamp) ? e.timestamp : null
+      const ts =
+        typeof e.timestamp === 'number' && Number.isFinite(e.timestamp) ? e.timestamp : null
       const score =
         typeof e.form_score === 'number' && Number.isFinite(e.form_score) ? e.form_score : null
       await db`

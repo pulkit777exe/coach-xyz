@@ -1,5 +1,6 @@
 import { redis } from './redis'
 import { readRequestMeta } from './requestMeta'
+import { buildError, type CoachAIError } from './errors'
 
 // Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
@@ -115,4 +116,22 @@ export async function checkClipLimit(key: string): Promise<RateLimitResult> {
 export function getIP(request: Request): string {
   const meta = readRequestMeta(request)
   return meta.clientIp ?? 'anonymous'
+}
+
+// ── Shared rejection (HTTP 429) ─────────────────────────────────────────────
+// One mechanism for every rate-limit rejection: sets status 429 and builds the
+// canonical envelope — a retryable RATE_LIMITED server error, plus an optional
+// `retry_after` (seconds) when the limiter exposes a reset time.
+
+export type RateLimitedBody = CoachAIError & { retry_after?: number }
+
+export function rateLimited(
+  set: { status?: number | string },
+  message: string,
+  retryAfterSeconds?: number,
+): RateLimitedBody {
+  set.status = 429
+  const body: RateLimitedBody = { ...buildError('RATE_LIMITED', message, true) }
+  if (retryAfterSeconds !== undefined) body.retry_after = retryAfterSeconds
+  return body
 }

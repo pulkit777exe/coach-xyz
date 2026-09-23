@@ -5,11 +5,7 @@ import { getJob } from '../lib/jobs'
 import { verifyJobAccess } from '../lib/jobAccess'
 import { getEngineJobStatus, requestIdFrom } from '../lib/engine'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
-import {
-  persistAnalysisStatus,
-  getAnalysisByServerJobId,
-  getAnalysisOwner,
-} from '../lib/analyses'
+import { persistAnalysisStatus, getAnalysisByServerJobId, getAnalysisOwner } from '../lib/analyses'
 
 type StatusResponse = {
   job_id: string

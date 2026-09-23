@@ -6,9 +6,7 @@ import {
   listPerformance,
   updatePerformanceMetric,
 } from '../../lib/orgData'
-import {
-  DEFAULT_COMPARISON_METRIC_KEY,
-} from '../../lib/orgValidate'
+import { DEFAULT_COMPARISON_METRIC_KEY } from '../../lib/orgValidate'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

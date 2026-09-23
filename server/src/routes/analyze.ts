@@ -3,15 +3,11 @@ import { Elysia } from 'elysia'
 import { buildError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
 import { enqueueAnalysis } from '../lib/queue'
-import { checkAnalysisLimit, getIP } from '../lib/ratelimit'
+import { checkAnalysisLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { verifyAttributionToken } from '../lib/attribution'
-import {
-  persistAnalysisStart,
-  checkOrgDailyQuota,
-  getOrgTier,
-  recordUsage,
-} from '../lib/analyses'
+import { UUID_RE } from '../lib/uuid'
+import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/analyses'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
 
@@ -27,12 +23,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
   const ip = getIP(request)
   const { allowed, reset } = await checkAnalysisLimit(resolveJobCaller(request) ?? ip)
   if (!allowed) {
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-    set.status = 429
-    return {
-      ...buildError('RATE_LIMITED', 'Analysis limit reached (5 per hour). Try again later.', true),
-      retry_after: retryAfter,
-    }
+    return rateLimited(
+      set,
+      'Analysis limit reached (5 per hour). Try again later.',
+      Math.ceil((reset - Date.now()) / 1000),
+    )
   }
 
   // ── Validate Request ───────────────────────────────────────────────────
@@ -52,7 +47,6 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
   const angle = typeof body.angle === 'string' ? body.angle : null
 
   // Validate session_token format (must be UUID if provided)
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   if (sessionToken !== null && (typeof sessionToken !== 'string' || !UUID_RE.test(sessionToken))) {
     set.status = 400
     return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
@@ -77,15 +71,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
       const orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
       const quota = await checkOrgDailyQuota(orgAuth0Id)
       if (!quota.allowed) {
-        set.status = 429
-        return {
-          ...buildError(
-            'RATE_LIMITED',
-            'Organization daily analysis limit reached. Try again tomorrow.',
-            true,
-          ),
-          retry_after: quota.retryAfterSec,
-        }
+        return rateLimited(
+          set,
+          'Organization daily analysis limit reached. Try again tomorrow.',
+          quota.retryAfterSec,
+        )
       }
       // Fair queueing (§17): authenticated jobs outrank anonymous ones,
       // paid tiers outrank free. FIFO within a priority (no starvation).

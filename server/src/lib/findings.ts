@@ -136,21 +136,22 @@ export const applyEvidenceGate = (finding: FindingRecord): FindingRecord => {
   return finding
 }
 
-/** Column order for the findings CSV export (stable for spreadsheets). */export const FINDINGS_CSV_COLUMNS = [
-  'id',
-  'server_job_id',
-  'category',
-  'start_ms',
-  'end_ms',
-  'confidence',
-  'confidence_band',
-  'severity',
-  'observation',
-  'feedback',
-  'form_score',
-  'review_state',
-  'created_at',
-] as const
+/** Column order for the findings CSV export (stable for spreadsheets). */ export const FINDINGS_CSV_COLUMNS =
+  [
+    'id',
+    'server_job_id',
+    'category',
+    'start_ms',
+    'end_ms',
+    'confidence',
+    'confidence_band',
+    'severity',
+    'observation',
+    'feedback',
+    'form_score',
+    'review_state',
+    'created_at',
+  ] as const
 
 const CSV_FORMULA_RE = /^[=+\-@\t\r]/
 
@@ -179,9 +180,7 @@ export const findingsToCsv = (findings: StoredFinding[]): string => {
     f.review_state,
     f.created_at,
   ])
-  return [FINDINGS_CSV_COLUMNS.join(','), ...rows.map((r) => r.map(csvCell).join(','))].join(
-    '\n',
-  )
+  return [FINDINGS_CSV_COLUMNS.join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\n')
 }
 
 /** Human review transition (approve/flag). Only from auto/needs_review. */

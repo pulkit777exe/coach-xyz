@@ -1,9 +1,6 @@
 import { SQL } from 'bun'
 
-import {
-  withHistoryStoreOrThrow as withHistoryStore,
-  ensureInitialized,
-} from './historyStore'
+import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
 
 // ── Org-member role vocabulary ──────────────────────────────────────────────
 // Single source of truth for org membership roles. Mirrored on the web
@@ -73,63 +70,10 @@ const MEMBER_SELECT_COLUMNS = `
   m.created_at
 `
 
-/** Creates the org_members table if it does not exist (idempotent). */
-const ensureSchema = async (db: SQL) => {
-  await ensureInitialized()
-  await db`
-    create table if not exists org_members (
-      id uuid primary key default gen_random_uuid(),
-      org_auth0_id text not null,
-      member_auth0_id text,
-      member_email text,
-      role text not null check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player')),
-      status text not null default 'active',
-      invited_by text,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      constraint org_members_unique unique (org_auth0_id, member_auth0_id)
-    );
-  `
-  // Migrate pre-existing tables whose CHECK still lists only the four
-  // original roles: drop the old role check (name discovered dynamically)
-  // and re-add the six-role version. Idempotent.
-  await db`
-    do $$
-    declare _conname text;
-    begin
-      select conname into _conname
-      from pg_constraint
-      where conrelid = 'org_members'::regclass
-        and contype = 'c'
-        and pg_get_constraintdef(oid) like '%role in%';
-      if _conname is not null and _conname <> 'org_members_role_check' then
-        execute format('alter table org_members drop constraint %I', _conname);
-      end if;
-    end
-    $$;
-  `
-  await db`
-    alter table org_members
-      drop constraint if exists org_members_role_check;
-  `
-  await db`
-    alter table org_members
-      add constraint org_members_role_check
-      check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player'));
-  `
-  await db`
-    create index if not exists idx_org_members_org_auth0_id
-    on org_members (org_auth0_id);
-  `
-  await db`
-    create index if not exists idx_org_members_member_auth0_id
-    on org_members (member_auth0_id);
-  `
-}
-
-/** Bootstraps the org_members schema inside the shared history-store setup. */
+// Schema lives in ensureInitialized (historyStore.ts); this only defers to it.
+/** Ensures the shared schema (incl. org_members) is initialized. */
 export const ensureOrgMembersInitialized = async (): Promise<void> => {
-  await withHistoryStore((db) => ensureSchema(db))
+  await withHistoryStore(() => ensureInitialized())
 }
 
 /**
@@ -138,7 +82,7 @@ export const ensureOrgMembersInitialized = async (): Promise<void> => {
  */
 export const ensureOrgOwner = async (auth0Id: string): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureSchema(db)
+    await ensureInitialized()
     await db`
       insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
       select ${auth0Id}, ${auth0Id}, u.email, 'owner', 'active'
@@ -172,7 +116,7 @@ const loadMemberById = async (
 export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
+      await ensureInitialized()
       await db`
       insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
       select ${orgAuth0Id}, ${orgAuth0Id}, u.email, 'owner', 'active'
@@ -217,7 +161,7 @@ export type OrgMembership = {
 export const listMembershipsForUser = async (memberAuth0Id: string): Promise<OrgMembership[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
+      await ensureInitialized()
       // Lazily seed owner-of-self so fresh solo coaches always see their own
       // org in the switcher (mirrors listOrgMembers seeding). Only for real
       // users — avoids creating phantom orgs for arbitrary ids.
@@ -248,7 +192,7 @@ export const listMembershipsForUser = async (memberAuth0Id: string): Promise<Org
 export const getOrgMember = async (orgAuth0Id: string, id: string): Promise<OrgMember | null> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
+      await ensureInitialized()
       return loadMemberById(db, orgAuth0Id, id)
     })) ?? null
   )
@@ -269,7 +213,7 @@ export const getMemberRole = async (
   if (memberAuth0Id === orgAuth0Id) return 'owner'
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
+      await ensureInitialized()
       const rows = await db<{ role: OrgMemberRole }[]>`
       select role from org_members
       where org_auth0_id = ${orgAuth0Id}
@@ -296,7 +240,7 @@ export const inviteOrgMember = async (
   const email = input.email.trim().toLowerCase()
   if (!email) return null
   return withHistoryStore(async (db) => {
-    await ensureSchema(db)
+    await ensureInitialized()
 
     const account = await db<{ auth0_id: string }[]>`
       select auth0_id from users where lower(email) = ${email} limit 1;
@@ -345,7 +289,7 @@ export const setOrgMemberRole = async (
   role: OrgMemberRole,
 ): Promise<OrgMember | null> => {
   return withHistoryStore(async (db) => {
-    await ensureSchema(db)
+    await ensureInitialized()
     const target = await db<{ role: string }[]>`
       select role from org_members
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
@@ -366,7 +310,7 @@ export const setOrgMemberRole = async (
 export const removeOrgMember = async (orgAuth0Id: string, memberId: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
+      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       delete from org_members
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
