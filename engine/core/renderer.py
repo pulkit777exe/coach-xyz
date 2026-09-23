@@ -79,18 +79,6 @@ def _sport_label(sport: str) -> str:
     return icon_map.get((sport or "").lower(), "Unknown Sport")
 
 
-def _sport_emoji(sport: str) -> str:
-    emoji_map = {
-        "basketball": "\u261f",
-        "football": "\u26bd",
-        "cricket": "\ud83c\udfd3",
-        "tennis": "\ud83c\udfbe",
-        "baseball": "\u26be",
-        "hockey": "\ud83c\udfd2",
-    }
-    return emoji_map.get((sport or "").lower(), "\ud83c\udfaf")
-
-
 def _lerp_color(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> tuple[int, int, int]:
     t = max(0.0, min(1.0, t))
     return (

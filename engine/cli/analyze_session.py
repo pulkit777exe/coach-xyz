@@ -19,8 +19,8 @@ sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 
-from core.gemini import analyze_video
-from core.chunker import analyze_long_video, needs_chunking
+from cli.gemini import analyze_video
+from cli.chunker import analyze_long_video, needs_chunking
 from core.config import GEMINI_MODEL
 
 
@@ -72,7 +72,7 @@ def main() -> None:
             raise ValueError(f"Invalid players payload: {exc}") from exc
 
     with contextlib.redirect_stdout(sys.stderr):
-        # Keep multi-player path in core.gemini.analyze_video().
+        # Keep multi-player path in cli.gemini.analyze_video().
         # For single-player / no players, reuse chunking behavior from CLI.
         if players:
             result = analyze_video(
@@ -98,11 +98,9 @@ def main() -> None:
                 )
 
         render_source, rendered_player_label = _pick_render_source(result, players)
-        rendered_video_path = None
 
     payload = {
         "analysis": result,
-        "rendered_video_path": rendered_video_path,
         "rendered_player_label": rendered_player_label,
     }
     print(json.dumps(payload, separators=(",", ":")))

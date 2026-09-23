@@ -1,5 +1,5 @@
 """
-core/chunker.py — Split long videos into overlapping chunks and run
+cli/chunker.py — Split long videos into overlapping chunks and run
 Gemini analysis on each, then merge the results.
 
 Uses LangChain Runnable primitives so the pipeline is composable and can be
@@ -185,7 +185,7 @@ def _analyze_all_chunks(
     Run analyze_video() on every chunk (sequentially to respect rate limits).
     Adjusts timestamps by adding each chunk's start offset.
     """
-    from core.gemini import analyze_video
+    from cli.gemini import analyze_video
 
     results = []
     n       = len(chunks)

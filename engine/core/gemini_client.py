@@ -29,13 +29,64 @@ except Exception:
     genai_errors = None
     genai_types = None
 
-# Module-level singleton — avoids re-creating the HTTP client on every call.
-# Initialised lazily on first use so import-time failures don't crash the engine.
-_gemini_client: "genai.Client | None" = None  # type: ignore[name-defined]
+
+# ── HTTP error mapping for the chat/report routes ────────────────────────────
+
+
+class GeminiServiceError(Exception):
+    """A Gemini call failed in a way the HTTP layer must render explicitly.
+
+    Carries the exact (status, code, message) triple /chat and /report have
+    always returned; the SSE route reuses `message` for its error event.
+    """
+
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+def is_quota_error(exc: BaseException) -> bool:
+    """True when an SDK exception is a rate/quota rejection (429-ish)."""
+    status_code = getattr(exc, "status_code", None)
+    message = str(exc)
+    return (
+        status_code == 429
+        or "RESOURCE_EXHAUSTED" in message
+        or "quota" in message.lower()
+    )
+
+
+# ── Shared client singleton ──────────────────────────────────────────────────
+# One client serves the analysis pipeline and the HTTP chat/report routes
+# (previously the app booted a second, separate client for chat/report).
+
+
+def _configured_client() -> "genai.Client | None":  # type: ignore[name-defined]
+    """Create the shared client when configured; None when unavailable.
+
+    Construction failures degrade to None (routes surface
+    GEMINI_NOT_CONFIGURED) instead of crashing the import.
+    """
+    if genai is None:
+        return None
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        return genai.Client(api_key=api_key)
+    except Exception:
+        return None
+
+
+# Created eagerly at import: the chat/report routes check for None
+# (→ GEMINI_NOT_CONFIGURED) as soon as the app boots.
+_gemini_client: "genai.Client | None" = _configured_client()  # type: ignore[name-defined]
 
 
 def _get_client() -> "genai.Client":  # type: ignore[name-defined]
-    """Return (or lazily create) the shared Gemini client."""
+    """Return (or lazily create) the shared Gemini client — the analysis path."""
     global _gemini_client
     if _gemini_client is None:
         if genai is None:
@@ -44,6 +95,16 @@ def _get_client() -> "genai.Client":  # type: ignore[name-defined]
         if not api_key:
             raise GeminiQuotaError("GEMINI_API_KEY is not configured")
         _gemini_client = genai.Client(api_key=api_key)
+    return _gemini_client
+
+
+def shared_client() -> "genai.Client | None":  # type: ignore[name-defined]
+    """The shared client for the HTTP chat/report routes — never auto-creates.
+
+    None means GEMINI_NOT_CONFIGURED (matching the app-boot behaviour the
+    routes had when the client lived in main); tests reset it to None to pin
+    that path.
+    """
     return _gemini_client
 
 

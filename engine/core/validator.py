@@ -2,7 +2,9 @@
 validator.py — Validates the JSON response from Gemini against the expected schema.
 """
 
-VALID_SPORTS = ['basketball', 'football', 'cricket', 'tennis', 'baseball', 'hockey']
+from core.sport_config import SPORTS
+
+VALID_SPORTS = list(SPORTS)
 
 REQUIRED_TOP_LEVEL = ['sport', 'shots']
 

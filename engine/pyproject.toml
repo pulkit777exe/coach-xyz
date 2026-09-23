@@ -2,6 +2,11 @@
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
+# NOTE: runtime dependencies are declared in exactly one place —
+# requirements.txt. Docker (pip install -r requirements.txt) and CI install
+# from it; this file only carries packaging/tooling config (no `dependencies`
+# list, on purpose).
+
 [project]
 name = "coachai-engine"
 version = "0.1.0"
@@ -19,4 +24,3 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "main.py" = ["E402"]
 "cli/*.py" = ["E402"]
-"core/chunker.py" = ["E402"]

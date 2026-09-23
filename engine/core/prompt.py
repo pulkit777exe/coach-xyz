@@ -2,8 +2,22 @@
 prompt.py — System prompt template for Gemini video analysis.
 
 The prompt instructs Gemini to act as an elite sports performance analyst,
-detect events, evaluate biomechanics, and return structured JSON.
+detect events, evaluate biomechanics, and return structured JSON. Per-sport
+prompt *content* (sections/checklists) lives here; the sport *list* itself
+comes from the canonical vocabulary in core.sport_config.
 """
+
+from core.sport_config import SPORTS
+
+# Canonical SPORTS rendered as prompt copy (see core.sport_config).
+_SPORTS_INLINE = ", ".join(SPORTS)   # basketball, football, cricket, tennis, baseball, hockey
+_SPORTS_PIPE = "|".join(SPORTS)      # basketball|football|cricket|tennis|baseball|hockey
+
+
+def _sport_prose_list() -> str:
+    """SPORTS as prose for the base prompt: `basketball, football (soccer), …, and hockey`."""
+    names = ["football (soccer)" if sport == "football" else sport for sport in SPORTS]
+    return ", ".join(names[:-1]) + f", and {names[-1]}"
 
 
 def get_system_prompt(
@@ -102,9 +116,9 @@ This video clip is **chunk {idx} of {total}** from a longer session.
 """
 
 
-_BASE_SYSTEM_PROMPT = """\
+_BASE_SYSTEM_PROMPT = f"""\
 You are an elite sports performance analyst and biomechanics coach with deep \
-expertise across basketball, football (soccer), cricket, tennis, baseball, and hockey. \
+expertise across {_sport_prose_list()}. \
 You analyze training and game session videos frame-by-frame to provide structured, \
 actionable coaching feedback.
 
@@ -117,7 +131,7 @@ You will be given a video of a player in a training or game session. Your job is
 ---
 """
 
-_SPORT_DETECTION = """\
+_SPORT_DETECTION = f"""\
 ## SPORT DETECTION
 
 First, identify the sport being played. Look for:
@@ -128,7 +142,7 @@ First, identify the sport being played. Look for:
 - **Baseball**: baseball bat, diamond field, pitcher's mound, batting stance, glove
 - **Hockey**: hockey stick, puck, rink boards, goals, skating motion
 
-Set "sport" in your output to one of: basketball, football, cricket, tennis, baseball, hockey
+Set "sport" in your output to one of: {_SPORTS_INLINE}
 
 ---
 """
@@ -480,7 +494,7 @@ _OUTPUT_FORMAT = """\
 Return ONLY valid JSON. No preamble, no explanation, no markdown fences. The JSON must match this exact schema:
 
 {
-  "sport": "<basketball|football|cricket|tennis|baseball|hockey>",
+  "sport": "<__SPORTS__>",
   "player_name": "<name if identifiable, else 'Player'>",
   "session_date": "<ISO date if determinable, else null>",
   "video_duration_seconds": <number>,
@@ -674,6 +688,9 @@ _SPORT_SPECIFIC_STATS_SPORTS = {
 
 # Set of valid sport names for lookup
 _SPORT_SECTIONS = set(_EVENT_DETECTION_SPORTS.keys())
+
+# Fill the canonical sport list into the output-format schema example.
+_OUTPUT_FORMAT = _OUTPUT_FORMAT.replace("__SPORTS__", _SPORTS_PIPE)
 
 _CRITICAL_RULES = """\
 ## CRITICAL RULES

@@ -1,5 +1,5 @@
 """
-core/player_detector.py — Detect all players in a video frame.
+cli/player_detector.py — Detect all players in a video frame.
 
 Uses OpenCV's built-in HOG + SVM people detector (no extra model downloads).
 Produces a numbered, colour-annotated JPEG saved to ~/Downloads so the

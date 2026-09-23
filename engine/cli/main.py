@@ -128,7 +128,7 @@ def _env_truthy(name: str) -> bool:
 
 
 def _estimate_chunk_count(duration_s: float) -> int:
-    from core.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S
+    from cli.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S
 
     step = max(1, CHUNK_DURATION_S - CHUNK_OVERLAP_S)
     effective = max(duration_s, CHUNK_OVERLAP_S + 1)
@@ -137,7 +137,7 @@ def _estimate_chunk_count(duration_s: float) -> int:
 
 def _estimate_analysis_eta_range(duration_s: float, should_chunk: bool) -> tuple[float, float]:
     if should_chunk:
-        from core.chunker import CHUNK_DURATION_S, CHUNK_WORKERS
+        from cli.chunker import CHUNK_DURATION_S, CHUNK_WORKERS
 
         chunks = _estimate_chunk_count(duration_s)
         workers = max(1, CHUNK_WORKERS)
@@ -233,7 +233,7 @@ def _validate_video(video_path: pathlib.Path, events_only: bool = False):
     info.add_row("Duration",    _fmt_dur(dur))
     info.add_row("FPS",         f"{fps:.1f}")
 
-    from core.chunker import CHUNK_THRESHOLD_S
+    from cli.chunker import CHUNK_THRESHOLD_S
     should_chunk = dur >= CHUNK_THRESHOLD_S
     if should_chunk:
         info.add_row(
@@ -272,7 +272,7 @@ def _detect_players_step(video_path: pathlib.Path) -> dict | None:
     console.print(Rule("[accent]Step 1 / 3  ·  Player Detection[/]", style="bright_blue"))
     console.print()
 
-    from core.player_detector import detect_players, save_player_frame
+    from cli.player_detector import detect_players, save_player_frame
 
     # ── Run detection with spinner ─────────────────────────────────────────
     with Progress(
@@ -400,7 +400,7 @@ def _run_analysis(
     player_focus: dict | None,
     duration_s:   float,
 ) -> dict:
-    from core.chunker import needs_chunking
+    from cli.chunker import needs_chunking
 
     console.print(Rule("[accent]Step 2 / 3  ·  Gemini AI Analysis[/]", style="bright_blue"))
     console.print()
@@ -417,7 +417,7 @@ def _run_analysis(
 
 
 def _warn_long_video(duration_s: float):
-    from core.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S, CHUNK_WORKERS
+    from cli.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S, CHUNK_WORKERS
 
     n_chunks = max(1, int((duration_s - CHUNK_OVERLAP_S) /
                            (CHUNK_DURATION_S - CHUNK_OVERLAP_S)) + 1)
@@ -450,7 +450,7 @@ def _warn_long_video(duration_s: float):
 
 
 def _run_chunked(video_path, model, strict, player_focus, duration_s: float):
-    from core.chunker import analyze_long_video
+    from cli.chunker import analyze_long_video
 
     messages: list[tuple[str, int]] = []
     eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=True)
@@ -513,7 +513,7 @@ def _run_chunked(video_path, model, strict, player_focus, duration_s: float):
 
 
 def _run_direct(video_path, model, strict, player_focus, duration_s: float):
-    from core.gemini import analyze_video
+    from cli.gemini import analyze_video
 
     steps = [
         "Uploading video to Gemini…",
@@ -579,8 +579,8 @@ def _show_results(result: dict, events_path: pathlib.Path, video_out: pathlib.Pa
     shots   = result.get("shots", [])
     sport   = result.get("sport", "?")
 
-    EMOJIS = {"basketball": "🏀", "football": "⚽", "cricket": "🏏", "tennis": "🎾", "baseball": "⚾", "hockey": "🏒"}
-    emoji  = EMOJIS.get(sport, "🎯")
+    from core.sport_config import sport_emoji
+    emoji  = sport_emoji(sport)
 
     console.print()
     console.print(Rule(
@@ -760,11 +760,10 @@ def _run_local(args):
         _show_results(result, events_path, None)
         return
 
-    # ── Render ────────────────────────────────────────────────────────────
-    video_out = None
-
     # ── Display results ───────────────────────────────────────────────────
-    _show_results(result, events_path, video_out)
+    # Local mode has no render step — there is no output video to show
+    # (only the API pipeline produces one).
+    _show_results(result, events_path, None)
 
 
 # ── Main pipeline: API-backed ─────────────────────────────────────────────────
@@ -780,7 +779,7 @@ def _run_api(args):
 
     video_path = pathlib.Path(args.video).resolve()
     duration_s = _validate_video(video_path, events_only=args.events_only)
-    from core.chunker import CHUNK_THRESHOLD_S
+    from cli.chunker import CHUNK_THRESHOLD_S
     should_chunk = duration_s >= CHUNK_THRESHOLD_S
     eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=should_chunk)
 

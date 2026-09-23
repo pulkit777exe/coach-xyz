@@ -1,8 +1,9 @@
 """Tests for the /report endpoint and report prompt/schema contract.
 
 Mirrors test_state_machine.py: main is imported with a dummy GEMINI_API_KEY
-(set before import so the module-level env check passes) and the module-level
-_gemini_client is monkeypatched so no network calls happen.
+(set before import so the module-level env check passes) and the shared
+client singleton in core.gemini_client is monkeypatched so no network calls
+happen.
 """
 
 import json
@@ -14,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from core import gemini_client
 from core.report_prompt import (
     REPORT_JSON_SCHEMA,
     REPORT_TYPES,
@@ -96,7 +98,7 @@ class _FakeGemini:
 def _reset_client():
     # GEMINI_API_KEY is set for import, so the module-level client gets created.
     # Reset to None per test so only tests that explicitly patch run a fake.
-    main._gemini_client = None
+    gemini_client._gemini_client = None
     yield
 
 
@@ -107,7 +109,7 @@ def client():
 
 
 def _patch_gemini(monkeypatch, responder):
-    monkeypatch.setattr(main, "_gemini_client", _FakeGemini(responder))
+    monkeypatch.setattr(gemini_client, "_gemini_client", _FakeGemini(responder))
 
 
 # ── Prompt / schema contract ─────────────────────────────────────────────────
@@ -182,7 +184,7 @@ def test_report_returns_structured_report(client, monkeypatch):
 
 def test_report_passes_gemini_config_through(client, monkeypatch):
     fake = _FakeGemini(lambda: _FakeResponse(json.dumps(VALID_REPORT)))
-    monkeypatch.setattr(main, "_gemini_client", fake)
+    monkeypatch.setattr(gemini_client, "_gemini_client", fake)
     client.post(
         "/report",
         json={"report_context": SAMPLE_CONTEXT, "report_type": "monthly"},
@@ -196,7 +198,7 @@ def test_report_passes_gemini_config_through(client, monkeypatch):
 
 def test_report_request_body_passed_to_prompt(client, monkeypatch):
     fake = _FakeGemini(lambda: _FakeResponse(json.dumps(VALID_REPORT)))
-    monkeypatch.setattr(main, "_gemini_client", fake)
+    monkeypatch.setattr(gemini_client, "_gemini_client", fake)
     client.post(
         "/report",
         json={

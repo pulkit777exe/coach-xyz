@@ -884,7 +884,7 @@ def run_analysis(
         # NOTE: the source upload is intentionally NOT deleted here. The same
         # upload backs re-analysis (another player, another angle, retry) and
         # the session owns its lifetime — files are deleted when the session
-        # is evicted (see _delete_session_files in main.py) or by the
+        # is evicted (see _delete_session_files in sessions.py) or by the
         # shutdown sweep. Deleting here broke every second analyze on one
         # upload with VideoExpiredError.
         # Exception: on the S3 backend local_path is a throwaway tmp copy

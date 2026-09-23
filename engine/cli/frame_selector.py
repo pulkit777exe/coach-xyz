@@ -54,7 +54,7 @@ def _frame_to_base64(video_path: str, frame_index: int) -> str:
 
 
 def _fallback_frames(video_path: str) -> list[dict]:
-    from core.player_detector import detect_players
+    from cli.player_detector import detect_players
 
     result = detect_players(video_path)
     frame_index = int(result.get("frame_index", 0))

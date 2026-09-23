@@ -1,8 +1,10 @@
 """Unit tests for core/sport_config.py — single sports/*.json loader."""
 
 from core.sport_config import (
+    SPORTS,
     load_sport_config,
     recommended_camera_angles,
+    sport_pack_ids,
     sport_pack_version,
     sport_positions,
 )
@@ -23,7 +25,7 @@ class TestLoadSportConfig:
 
 class TestRecommendedCameraAngles:
     def test_every_sport_has_guidance(self):
-        for sport in ("baseball", "basketball", "cricket", "football", "hockey", "tennis"):
+        for sport in SPORTS:
             angles = recommended_camera_angles(sport)
             assert len(angles) >= 2, sport
             for entry in angles:
@@ -37,7 +39,7 @@ class TestRecommendedCameraAngles:
 
 class TestSportPositions:
     def test_every_sport_has_positions(self):
-        for sport in ("baseball", "basketball", "cricket", "football", "hockey", "tennis"):
+        for sport in SPORTS:
             positions = sport_positions(sport)
             assert len(positions) >= 3, sport
             for entry in positions:
@@ -78,7 +80,9 @@ class TestSportPositionsEndpoint:
 
 class TestSportPackVersion:
     def test_every_sport_is_versioned(self):
-        for sport in ("baseball", "basketball", "cricket", "football", "hockey", "tennis"):
+        # The canonical vocabulary must mirror the packs on disk exactly.
+        assert set(SPORTS) == set(sport_pack_ids())
+        for sport in SPORTS:
             assert sport_pack_version(sport) >= 1, sport
 
     def test_unknown_sport_returns_zero(self):

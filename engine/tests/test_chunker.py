@@ -1,11 +1,11 @@
-"""Tests for the pure helpers in core/chunker.py.
+"""Tests for the pure helpers in cli/chunker.py.
 
 The chunk-timeline maths, shot dedup, and summary aggregation are all
 network/video-free, so they can be tested with plain in-memory inputs.
 """
 
 import pytest
-from core.chunker import (
+from cli.chunker import (
     _add_seconds,
     _compute_summary,
     _deduplicate_shots,
