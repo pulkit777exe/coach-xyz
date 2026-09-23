@@ -151,8 +151,10 @@ export const attendanceEmail = (
   }
 }
 
-export const escapeHtml = (value: string | null | undefined): string =>
-  (value ?? '')
+/** HTML-escape for email templates. Coerces Dates/numbers (Bun returns
+ *  date columns as Date objects) so template interpolation never throws. */
+export const escapeHtml = (value: unknown): string =>
+  String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

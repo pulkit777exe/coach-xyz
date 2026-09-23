@@ -16,6 +16,7 @@ import orgRoute from '../src/routes/org'
 import meRoute from '../src/routes/me'
 import emailRoute from '../src/routes/email'
 import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
+import { globalErrorHandler } from '../src/lib/httpErrors'
 import type { CoachAIError } from '../src/lib/errors'
 
 if (!process.env.SERVICE_TOKEN) {
@@ -23,7 +24,12 @@ if (!process.env.SERVICE_TOKEN) {
   process.exit(1)
 }
 
-const app = new Elysia().use(authRoute).use(orgRoute).use(meRoute).use(emailRoute)
+const app = new Elysia()
+  .use(globalErrorHandler)
+  .use(authRoute)
+  .use(orgRoute)
+  .use(meRoute)
+  .use(emailRoute)
 
 const base = 'http://smoke.test'
 const token = process.env.SERVICE_TOKEN

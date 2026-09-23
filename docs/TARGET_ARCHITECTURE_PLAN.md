@@ -4,8 +4,8 @@ Target: `Targeted Secure Architecture v2` (organization-first sports intelligenc
 evidence-traceable AI). This plan maps that doc onto the current codebase and
 sequences the work so every phase ships independently with baselines green.
 
-Baselines (must stay green every phase): server `bun test` 192 · web `vitest`
-138 · engine pytest 147 · `tsc --noEmit` both · eslint both · `next build`.
+Baselines (must stay green every phase): server `bun test` 245 · web `vitest`
+144 · engine pytest 205 · `tsc --noEmit` both · eslint both · `next build`.
 
 ## Where we already align
 
