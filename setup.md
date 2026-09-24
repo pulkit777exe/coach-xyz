@@ -150,9 +150,9 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ## Test suites
 
 ```bash
-cd engine   && python -m pytest tests/ -q   # 220 tests
-cd server   && bun test                      # 348 tests / 34 files
-cd web-next && npm test                      # 167 tests / 17 files (vitest)
+cd engine   && python -m pytest tests/ -q   # 225 tests
+cd server   && bun test                      # 355 tests / 34 files
+cd web-next && npm test                      # 185 tests / 18 files (vitest)
 ```
 
 Or run both TypeScript suites at once with `npm run check` from the repo root.
