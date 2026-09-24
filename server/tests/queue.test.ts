@@ -205,6 +205,19 @@ describe('classifyFailure (the shared retry-policy predicate)', () => {
     expect(verdict.isFinalFailure).toBe(true)
   })
 
+  test('production-shaped reason carries no class name — attempts left still means unrecoverable', () => {
+    // BullMQ stores err.message ONLY as failedReason, so production
+    // unrecoverable failures arrive as 'CODE: message' (see the worker
+    // template's `new UnrecoverableError(...)`). Terminal + attempts left
+    // is unrecoverable by construction — this is the regression test for
+    // the dropped-failure bug (markEngineJobFailed / history persist /
+    // notification never ran for these).
+    const verdict = classifyFailure('GEMINI_QUOTA_EXCEEDED: quota', 1, 3)
+    expect(verdict.isUnrecoverable).toBe(true)
+    expect(verdict.retriesExhausted).toBe(false)
+    expect(verdict.isFinalFailure).toBe(true)
+  })
+
   test('exhausted retries are final for an ordinary retryable error', () => {
     const verdict = classifyFailure('Connection reset', 3, 3)
     expect(verdict.isUnrecoverable).toBe(false)
@@ -212,18 +225,24 @@ describe('classifyFailure (the shared retry-policy predicate)', () => {
     expect(verdict.isFinalFailure).toBe(true)
   })
 
-  test('recoverable error with attempts left is not final', () => {
-    const verdict = classifyFailure('Connection reset', 1, 3)
-    expect(verdict.isFinalFailure).toBe(false)
+  test('every verdict at a terminal failed event is final (failed fires terminal-only)', () => {
+    // QueueEvents 'failed' never fires for a retryable failure with
+    // attempts left (those go back to delayed with no 'failed' event), so
+    // attempts-left at this predicate means early-terminal, i.e.
+    // unrecoverable — never "not final".
+    expect(classifyFailure('Connection reset', 1, 3).isFinalFailure).toBe(true)
+    expect(classifyFailure('Connection reset', 1, 3).isUnrecoverable).toBe(true)
   })
 
   test('defaults to 3 attempts when the job declares none', () => {
     expect(classifyFailure('Connection reset', 3, undefined).isFinalFailure).toBe(true)
-    expect(classifyFailure('Connection reset', 2, undefined).isFinalFailure).toBe(false)
+    expect(classifyFailure('Connection reset', 2, undefined).isFinalFailure).toBe(true)
+    expect(classifyFailure('Connection reset', 2, undefined).isUnrecoverable).toBe(true)
   })
 
-  test('missing failedReason is never treated as unrecoverable', () => {
-    expect(classifyFailure(undefined, 1, 3).isFinalFailure).toBe(false)
+  test('missing failedReason with attempts left is still unrecoverable-terminal', () => {
+    expect(classifyFailure(undefined, 1, 3).isFinalFailure).toBe(true)
+    expect(classifyFailure(undefined, 1, 3).isUnrecoverable).toBe(true)
   })
 })
 

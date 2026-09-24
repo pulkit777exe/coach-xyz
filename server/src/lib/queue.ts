@@ -114,7 +114,7 @@ export type FailureVerdict = {
   isUnrecoverable: boolean
   /** Every allowed attempt has been consumed. */
   retriesExhausted: boolean
-  /** Final iff retries are exhausted OR the error is unrecoverable. */
+  /** Always true: the QueueEvents 'failed' verdicts feed on fires terminal-only. */
   isFinalFailure: boolean
 }
 
@@ -123,12 +123,30 @@ export function classifyFailure(
   attemptsMade: number | undefined,
   maxAttempts: number | undefined,
 ): FailureVerdict {
-  const isUnrecoverable = failedReason?.includes('UnrecoverableError') ?? false
   const retriesExhausted = (attemptsMade ?? 0) >= (maxAttempts ?? 3)
+  // Ground truth, verified against the installed bullmq v5 Lua + job code
+  // (NOT the other way round — an earlier version of this predicate read
+  // the class name out of failedReason and silently dropped every
+  // unrecoverable terminal failure because of it):
+  // - QueueEvents 'failed' fires ONLY for terminal jobs. A retryable
+  //   failure with attempts left goes back to delayed (moveToDelayed /
+  //   retryJob publish active/waiting/delayed — never 'failed'; only
+  //   moveToFinished emits 'completed/failed').
+  // - failedReason carries err.message ONLY, never the error class name
+  //   (job.moveToFailed: `this.failedReason = err.message`).
+  // So a terminal failure with attempts remaining IS an unrecoverable
+  // error by construction (BullMQ parks early exclusively for
+  // UnrecoverableError — see shouldRetryJob — plus our own
+  // recoverStuckJobs moveToFailed, which is unrecoverable by intent).
+  // The marker check stays as defense-in-depth for producers that embed it.
+  const markedUnrecoverable = failedReason?.includes('UnrecoverableError') ?? false
+  const isUnrecoverable = markedUnrecoverable || !retriesExhausted
   return {
     isUnrecoverable,
     retriesExhausted,
-    isFinalFailure: retriesExhausted || isUnrecoverable,
+    // The 'failed' event implies terminality, so every verdict here is
+    // final; the field stays so both consumers keep one policy shape.
+    isFinalFailure: true,
   }
 }
 

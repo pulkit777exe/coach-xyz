@@ -105,10 +105,14 @@ describe('failed job detection logic', () => {
     expect(isFinalFailure).toBe(true)
   })
 
-  test('isFinalFailure returns false when retries remain and error is recoverable', () => {
+  test('isFinalFailure returns true when retries remain — terminal means unrecoverable', () => {
+    // QueueEvents 'failed' fires terminal-only (verified against bullmq v5:
+    // retryable failures with attempts left go back to delayed with no
+    // 'failed' event), so attempts-left here is early-terminal, i.e. an
+    // unrecoverable error — always final.
     const { isFinalFailure } = classifyFailure('Connection reset', 1, 3)
 
-    expect(isFinalFailure).toBe(false)
+    expect(isFinalFailure).toBe(true)
   })
 })
 
