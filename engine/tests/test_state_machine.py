@@ -15,7 +15,9 @@ from core.jobs import (
     JobStatus,
     transition_job,
     get_job,
+    update_job,
 )
+from core.jobs import _get_job_lock, _stripes
 from core.analyzer import _safe_transition_to_completed
 
 
@@ -257,3 +259,35 @@ class TestSafeTransitionToCompleted:
         assert job.state == "completed"
         assert job.complete is True
         assert job.summary == {"result": "ok"}
+
+
+# ── Lock striping (constant memory, no wholesale-clear race) ────────────────
+
+class TestStripedLocks:
+    def test_same_job_maps_to_same_stripe(self):
+        assert _get_job_lock("job-a") is _get_job_lock("job-a")
+
+    def test_stripes_are_real_locks(self):
+        import threading
+
+        assert isinstance(_get_job_lock("any-job"), threading.Lock)
+        assert len(_stripes) == 256
+
+    def test_distinct_jobs_spread_across_stripes(self):
+        seen = {_get_job_lock(f"job-{i}") for i in range(64)}
+        assert len(seen) > 1
+
+
+# ── update_job must not bypass transition validation ────────────────────────
+
+class TestUpdateJobStateGuard:
+    def test_state_kwarg_raises_with_current_state(self):
+        _make_job("guard-1", "analyzing")
+        with pytest.raises(InvalidStateTransition) as exc:
+            update_job("guard-1", state="completed")
+        assert "analyzing" in str(exc.value)
+
+    def test_field_updates_still_work(self):
+        _make_job("guard-2", "analyzing")
+        update_job("guard-2", video_key="raw/x.mp4")
+        assert get_job("guard-2").video_key == "raw/x.mp4"

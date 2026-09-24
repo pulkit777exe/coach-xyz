@@ -20,23 +20,20 @@ JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
 
 # ── Per-job Lock Management ──────────────────────────────────────────────────
+# Fixed stripe pool (constant memory) instead of one Lock per job_id.
+# The old unbounded dict leaked a Lock per job forever, and its >1000-entry
+# wholesale clear destroyed mutual exclusion for in-flight jobs exactly when
+# the system was busiest. Same job always maps to the same stripe, so
+# per-job exclusion is guaranteed; different jobs may share a stripe
+# (harmless short contention — critical sections are single Redis RTTs).
 
-_locks: dict[str, threading.Lock] = {}
-_locks_lock = threading.Lock()  # Protects _locks dict itself
+_NUM_STRIPES = 256
+_stripes: tuple[threading.Lock, ...] = tuple(threading.Lock() for _ in range(_NUM_STRIPES))
+
 
 def _get_job_lock(job_id: str) -> threading.Lock:
-    """Get or create a per-job lock. Thread-safe."""
-    with _locks_lock:
-        # Evict old locks if dict grows too large (cap at 1000)
-        if len(_locks) > 1000:
-            # Keep only the requested lock and clear the rest
-            lock = _locks.get(job_id)
-            _locks.clear()
-            if lock is not None:
-                _locks[job_id] = lock
-        if job_id not in _locks:
-            _locks[job_id] = threading.Lock()
-        return _locks[job_id]
+    """Map a job onto its stripe. Stable within the process."""
+    return _stripes[hash(job_id) % _NUM_STRIPES]
 
 # ── Explicit Pipeline States ──────────────────────────────────────────────────
 # Each state maps to a stage number and progress percentage.
@@ -187,6 +184,11 @@ def update_job(job_id: str, **kwargs) -> None:
         if not raw:
             raise JobNotFoundError()
         job = JobStatus.from_redis(raw)
+        if "state" in kwargs:
+            # State writes go through transition_job() so VALID_TRANSITIONS
+            # stays the single enforcement point — update_job silently
+            # accepting state= would be a validation bypass.
+            raise InvalidStateTransition(job.state, str(kwargs["state"]))
         for k, v in kwargs.items():
             if hasattr(job, k):
                 setattr(job, k, v)
