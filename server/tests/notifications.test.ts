@@ -145,6 +145,8 @@ describe('SSE event formatting', () => {
 })
 
 // ── Integration tests (require DATABASE_URL) ────────────────────────────────
+// 60s budgets: live Neon round trips (cold-pool handshakes, full-schema init
+// on first touch, 0.3-0.8s warm queries) all exceed bun's 5s unit default.
 ;(hasDb ? describe : describe.skip)('notifications DB integration', () => {
   test(
     'createNotification inserts a row and returns it',
@@ -167,7 +169,7 @@ describe('SSE event formatting', () => {
       const count = await unreadCount('test-notif-integration')
       expect(count).toBeGreaterThanOrEqual(1)
     },
-    { timeout: 20000 },
+    { timeout: 60000 },
   )
 
   test(
@@ -186,7 +188,7 @@ describe('SSE event formatting', () => {
       expect(updated).not.toBeNull()
       expect(updated!.read).toBe(true)
     },
-    { timeout: 20000 },
+    { timeout: 60000 },
   )
 
   test(
@@ -212,6 +214,6 @@ describe('SSE event formatting', () => {
       const unread = all.filter((n) => !n.read)
       expect(unread.length).toBe(0)
     },
-    { timeout: 20000 },
+    { timeout: 60000 },
   )
 })
