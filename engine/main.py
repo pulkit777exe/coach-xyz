@@ -47,12 +47,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-try:
-    from fastapi.responses import ORJSONResponse
-    _default_response_class = ORJSONResponse
-except ImportError:
-    _default_response_class = JSONResponse
-
 from api.analyze import analysis_executor, router as analyze_router
 from api.chat import router as chat_router
 from api.errors import error_response
@@ -110,11 +104,12 @@ async def lifespan(app: FastAPI):
                 pass
 
 
-app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan, default_response_class=_default_response_class)
+app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan)
 # NOTE: no GZipMiddleware by design. GZip buffers the full response body before
 # compressing, which stalls Server-Sent Events (scan-progress, chat/stream)
 # and wastes CPU re-compressing already-compressed mp4 bytes on /download.
-# JSON payloads stay small via ORJSON; videos are served as-is.
+# JSON payloads stay small (FastAPI's native Pydantic serialization); videos
+# are served as-is.
 _cors_origins = [o.strip() for o in os.environ.get("SERVER_URL", "http://localhost:8000").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,

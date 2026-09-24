@@ -109,7 +109,7 @@ def test_chat_missing_message_is_400(client):
 def test_chat_rejects_non_json_content_type(client, fake_job):
     res = client.post(
         "/chat",
-        data="job_id=job-1",
+        content="job_id=job-1",
         headers={"content-type": "text/plain"},
     )
     assert res.status_code == 415
