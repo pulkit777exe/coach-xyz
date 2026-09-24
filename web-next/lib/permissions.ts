@@ -120,6 +120,23 @@ export const TEAM_DELETE_ROLES: readonly OrgMemberRole[] = ['owner', 'admin']
  */
 export const MEMBER_INVITE_ROLES: readonly OrgMemberRole[] = ['owner', 'admin']
 
+/**
+ * Roles allowed to read another account's `/api/auth/user/*` trees (dashboard
+ * stats + analyses, which carry full summary_json). Pinned from
+ * `AUTH_USER_ALLOWED_MEMBER_ROLES` in server/src/lib/serviceGuard.ts — medical
+ * and players are excluded by design; the dashboard landing skips those two
+ * fetches outside this floor instead of letting one 403 reject its
+ * Promise.all and null every widget.
+ */
+export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
+  'owner',
+  'admin',
+  'head_coach',
+  'assistant_coach',
+  'coach',
+  'analyst',
+]
+
 // ── Dashboard quick actions ─────────────────────────────────────────────────
 // The landing-page action tiles (New analysis / Add student / Schedule event
 // / Invite member). Derived, never hand-listed: a tile must not appear when

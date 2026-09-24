@@ -112,20 +112,22 @@ UX-only — the server remains the enforcement point:
 
 **Server gaps (frontend-only for now — server fixes out of scope here):**
 
-- **Regression (blocks all non-owner members since `b9fca0f`, 2026-09-22):**
-  `serviceGuard` passes the ABSOLUTE `request.url` into
-  `resolveMemberRoleForPath` → `isOrgScopedPath` does `startsWith('/api/org/')`,
-  which never matches — so `memberRole` is always `null` and every caller whose
-  sub ≠ the org id gets **403 `FORBIDDEN` "Authenticated identity does not
+- **Regression (broken since `b9fca0f`, 2026-09-22 — FIXED, worktree):**
+  `serviceGuard` passed the ABSOLUTE `request.url` into
+  `resolveMemberRoleForPath` → `isOrgScopedPath` did `startsWith('/api/org/')`,
+  which never matches — `memberRole` was always `null` and every caller whose
+  sub ≠ the org id got **403 `FORBIDDEN` "Authenticated identity does not
   match the requested account"** on all `/api/org|email|auth/user/:id/*` routes
-  (verified: `getMemberRole(org, sub)` returns the right role; the path check is
-  the bug — `server/src/lib/serviceGuard.ts:146,315`). Consequences until fixed:
-  invited-coach/member data pages either `.catch`-degrade to empty (students,
-  teams, dashboard) or hit the RSC error boundary (reports, history body).
-  Mirrored UI gating (nav/page/capability) is unaffected and verified — the
-  blocked assertions are member-persona *data* renders only.
+  (member-persona data pages either `.catch`-degraded to empty or hit the RSC
+  error boundary). Fix: `isOrgScopedPath` normalizes its input
+  (`new URL(x).pathname`, raw string on parse failure) so absolute URLs and
+  bare pathnames both match the org prefixes — +6 hermetic regression tests in
+  `server/tests/serviceGuard.test.ts` pin the normalization and the
+  absolute-URL member fast path (`bun test` 348 pass / 0 fail / 34 files;
+  member `/reports`, `/students`, `/teams` verified 200). Shares files with
+  the concurrent winston-logging migration, so it commits with that server work.
 - `/api/org/:id/reports` CRUD runs on identity + the app-level non-player floor
-  only (once the guard regression above is fixed): `medical` can
+  only (guard now fixed): `medical` can
   create/update/delete reports server-side despite `report.read`-only (UI hides
   the affordances).
 - `attendance`/`schedule`/`performance`/`overview`/`students` writes have no
@@ -138,6 +140,21 @@ UX-only — the server remains the enforcement point:
   `compete` (`team.manage`), `teams` (+ owner/admin delete floor),
   `members` (`orgRoleGuard` per scope), `wellness` (read `medical.read`,
   write `player.manage`), `aiReports` (email-family floor).
+
+**Intentional server behavior the UI mirrors (verified 2026-09-24):**
+
+- `/api/auth/user/:id/*` cross-account reads floor to
+  `AUTH_USER_ALLOWED_MEMBER_ROLES` (`server/src/lib/serviceGuard.ts`:
+  owner/admin/head_coach/assistant_coach/coach/analyst) — `medical` and
+  `player` are excluded by design (analyses carry full `summary_json`). The
+  dashboard landing skips its stats + analyses fetches outside that floor
+  (pinned as `AUTH_USER_ALLOWED_MEMBER_ROLES` in `lib/permissions.ts`, tested),
+  so medical renders with zero stat tiles and no Recents section instead of a
+  single 403 nulling the whole Promise.all (the "Failed to load dashboard
+  data" banner medical used to show).
+- Org student lists scope to the caller's team hierarchy (`studentScope`):
+  members with no assigned team see `[]` even when the org has students — a
+  scoped empty list, not a failed fetch.
 
 ## Conventions (must keep)
 

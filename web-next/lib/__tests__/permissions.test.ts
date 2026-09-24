@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { ORG_MEMBER_ROLES, type OrgMemberRole } from '@/lib/members'
 import {
+  AUTH_USER_ALLOWED_MEMBER_ROLES,
   MEMBER_INVITE_ROLES,
   PERMISSIONS,
   REPORT_SEND_ROLES,
@@ -207,5 +208,26 @@ describe('dashboard quick actions (landing tiles stay honest)', () => {
       schedule: false,
       invite: false,
     })
+  })
+})
+
+describe('auth-user cross-account floor (dashboard stats + analyses)', () => {
+  test('mirrors the server list exactly', () => {
+    expect([...AUTH_USER_ALLOWED_MEMBER_ROLES]).toEqual([
+      'owner',
+      'admin',
+      'head_coach',
+      'assistant_coach',
+      'coach',
+      'analyst',
+    ])
+  })
+
+  test('every floor member holds analysis.read; medical and players never do', () => {
+    for (const role of AUTH_USER_ALLOWED_MEMBER_ROLES) {
+      expect(hasPermission(role, 'analysis.read'), `role: ${role}`).toBe(true)
+    }
+    expect(AUTH_USER_ALLOWED_MEMBER_ROLES.includes('medical')).toBe(false)
+    expect(AUTH_USER_ALLOWED_MEMBER_ROLES.includes('player')).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   ALL_NON_PLAYER_ROLES,
+  ANALYZE_NAV_ROLES,
   AUDIT_NAV_ROLES,
   MEMBERS_NAV_ROLES,
   visibleNavGroups,
@@ -32,7 +33,7 @@ const groups: GatedNavGroup<Item>[] = [
     label: 'Analysis',
     items: [
       { href: '/dashboard/history', label: 'History', roles: ALL_NON_PLAYER_ROLES },
-      { href: '/', label: 'New Analysis' },
+      { href: '/', label: 'New Analysis', roles: ANALYZE_NAV_ROLES },
     ],
   },
   {
@@ -105,5 +106,25 @@ describe('visibleNavGroups', () => {
     // Home, New Analysis, Account survive for players.
     expect(result.some((g) => g.label === null)).toBe(true)
     expect(result.some((g) => g.label === 'Account')).toBe(true)
+  })
+
+  test('New Analysis is offered to every role except medical', () => {
+    // Same floor as dashboardQuickActions.analyze (lib/permissions): medical
+    // can neither create analyses nor read results, so neither nav, palette,
+    // nor landing tile offers the link.
+    expect(ANALYZE_NAV_ROLES).not.toContain('medical')
+    for (const role of [
+      'owner',
+      'admin',
+      'head_coach',
+      'assistant_coach',
+      'coach',
+      'analyst',
+      'player',
+    ] as const) {
+      expect(ANALYZE_NAV_ROLES, `role: ${role}`).toContain(role)
+    }
+    expect(hrefs('medical')).not.toContain('/')
+    expect(hrefs('player')).toContain('/')
   })
 })

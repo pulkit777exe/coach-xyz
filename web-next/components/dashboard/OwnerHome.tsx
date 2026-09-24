@@ -238,7 +238,11 @@ export function RecentList({
   /** False for roles outside HISTORY_NAV_ROLES (no analysis.read → no History link). */
   showHistoryLink: boolean
 }) {
-  const rows = (analyses ?? []).slice(0, limit)
+  // null = the page skipped the fetch (role may not read analyses — medical)
+  // or it failed (the error banner shows): no section at all, rather than an
+  // empty card pointing at an analysis tile the role doesn't have.
+  if (analyses === null) return null
+  const rows = analyses.slice(0, limit)
   return (
     <section className="mt-8">
       <SectionHeading
@@ -246,7 +250,7 @@ export function RecentList({
         href={showHistoryLink ? '/dashboard/history' : undefined}
         linkLabel={showHistoryLink ? 'View all' : undefined}
       />
-      {analyses === null || analyses.length === 0 ? (
+      {analyses.length === 0 ? (
         <EmptyCard>No analyses yet — run your first one above.</EmptyCard>
       ) : (
         <ListShell>

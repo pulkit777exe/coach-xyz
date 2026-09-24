@@ -37,6 +37,18 @@ export const HISTORY_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
   (navRole) => navRole !== 'player' && navRole !== 'medical',
 )
 
+/**
+ * Roles offered the "New Analysis" link (sidebar + ⌘K palette): every staff
+ * role holding `analysis.create` in the permission matrix — all org roles
+ * except `medical` — plus players, whose self-service upload flow starts at
+ * Home. Medical can neither create analyses nor read results (no
+ * `analysis.read`), so the link would dead-end; the dashboard's New analysis
+ * tile derives the same floor via `dashboardQuickActions`.
+ */
+export const ANALYZE_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
+  (navRole) => navRole !== 'medical',
+)
+
 export type GatedNavItem = {
   roles?: readonly NavRole[]
 }

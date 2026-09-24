@@ -21,7 +21,7 @@ import {
 } from '@/lib/serverData'
 import { getSession } from '@/lib/session'
 import { HISTORY_NAV_ROLES } from '@/lib/nav'
-import { dashboardQuickActions } from '@/lib/permissions'
+import { AUTH_USER_ALLOWED_MEMBER_ROLES, dashboardQuickActions } from '@/lib/permissions'
 import type { Team } from '@/lib/teams'
 
 export const metadata: Metadata = {
@@ -55,10 +55,13 @@ export default async function DashboardPage() {
   const showHistoryLink = HISTORY_NAV_ROLES.includes(role)
   // Action tiles mirror each destination's write floors (lib/permissions).
   const quickActions = dashboardQuickActions(role)
-  // Medical holds medical.read but not analysis.read (permission matrix in
-  // lib/permissions.ts) — skip the org-analyses request entirely instead of
-  // fetching data this role should never surface.
-  const isMedical = role === 'medical'
+  // Stats + analyses live under the self-scoped /api/auth/user/:id/* tree; the
+  // server floors cross-account reads to AUTH_USER_ALLOWED_MEMBER_ROLES
+  // (server/src/lib/serviceGuard.ts) — medical is excluded by design, and its
+  // permission matrix already denies analysis.read (lib/permissions.ts). Skip
+  // both fetches outside the floor: a single 403 would reject the Promise.all
+  // and null every widget on the landing.
+  const canReadAccountData = AUTH_USER_ALLOWED_MEMBER_ROLES.includes(role)
   const displayName = session.user.name ?? session.user.email ?? ''
   const firstName = displayName.split('@')[0].split(' ')[0] || 'there'
 
@@ -86,8 +89,10 @@ export default async function DashboardPage() {
       membersRes,
       subscriptionRes,
     ] = await Promise.all([
-      getDashboardStats(auth0Id),
-      isMedical ? Promise.resolve({ analyses: null }) : getDashboardAnalyses(auth0Id, 20, 0),
+      canReadAccountData ? getDashboardStats(auth0Id) : Promise.resolve({ stats: null }),
+      canReadAccountData
+        ? getDashboardAnalyses(auth0Id, 20, 0)
+        : Promise.resolve({ analyses: null }),
       orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
       orgReports(auth0Id),
       orgOverview(auth0Id),

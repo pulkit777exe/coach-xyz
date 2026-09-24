@@ -9,6 +9,7 @@ import { Input } from '@/components/9ui/ui/input'
 import { Spinner } from '@/components/org/Spinner'
 import {
   ALL_NON_PLAYER_ROLES,
+  ANALYZE_NAV_ROLES,
   AUDIT_NAV_ROLES,
   HISTORY_NAV_ROLES,
   MEMBERS_NAV_ROLES,
@@ -38,7 +39,7 @@ const PAGES: PageEntry[] = [
   { label: 'Schedule', hint: 'Planning', href: '/dashboard/schedule', roles: ALL_NON_PLAYER_ROLES },
   { label: 'Reports', hint: 'Planning', href: '/dashboard/reports', roles: ALL_NON_PLAYER_ROLES },
   { label: 'History', hint: 'Analysis', href: '/dashboard/history', roles: HISTORY_NAV_ROLES },
-  { label: 'New Analysis', hint: 'Analysis', href: '/' },
+  { label: 'New Analysis', hint: 'Analysis', href: '/', roles: ANALYZE_NAV_ROLES },
   { label: 'Account', hint: 'Account', href: '/account' },
   { label: 'Settings', hint: 'Account', href: '/dashboard/settings' },
   { label: 'Audit Log', hint: 'Security', href: '/dashboard/audit', roles: AUDIT_NAV_ROLES },

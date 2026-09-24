@@ -19,6 +19,7 @@ import {
 
 import {
   ALL_NON_PLAYER_ROLES,
+  ANALYZE_NAV_ROLES,
   AUDIT_NAV_ROLES,
   HISTORY_NAV_ROLES,
   MEMBERS_NAV_ROLES,
@@ -78,7 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Analysis',
     items: [
       { href: '/dashboard/history', label: 'History', icon: History, roles: HISTORY_NAV_ROLES },
-      { href: '/', label: 'New Analysis', icon: Sparkles, exact: true },
+      { href: '/', label: 'New Analysis', icon: Sparkles, exact: true, roles: ANALYZE_NAV_ROLES },
     ],
   },
   {
