@@ -1,6 +1,6 @@
 # V1 — Current Application
 
-> A living document of what Coach-XYZ offers today. Last verified against source: 2026-09-11.
+> A living document of what Coach-XYZ offers today. Last verified against source: 2026-09-24 (route removals + error/status ownership sync: server `POST /api/chat` non-streaming, `…/stages`, `GET /teams/:teamId` removed; engine registry owns status/retryable; prior pass 2026-09-23).
 
 ---
 
@@ -126,8 +126,7 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 | `/api/analyze-video` | POST | Enqueue analysis job, return job ID | 30s |
 | `/api/job-status/:jobId` | GET | Poll job progress (state, stage, summary, video_ready); falls back to Supabase when Redis expires | 15s |
 | `/api/download/:jobId` | GET | Stream annotated video (served inline; via Next.js `/api/download` rewrite) | — |
-| `/api/chat` | POST | Send one message to AI coach (non-streaming) | 60s |
-| `/api/chat/stream` | POST | SSE streaming chat (token-by-token) | 120s |
+| `/api/chat/stream` | POST | SSE streaming chat (token-by-token) — the only chat wire route | 120s |
 | `/api/conversation/:jobId` | GET | Load in-memory (Redis) conversation history | 10s |
 | `/api/auth/sync` | POST | Upsert Auth0 user into `users` | 10s |
 | `/api/auth/user/:auth0Id` | GET | Fetch user record | 10s |
@@ -141,6 +140,9 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 > **Note:** `/api/rename/:jobId`, `/api/conversations` (list), `DELETE /api/conversations/:jobId`,
 > and `/api/dashboard` are documented in older revisions but **do not exist**. Rename is the
 > auth-scoped PATCH above; dashboard data comes from `/api/auth/user/:id/analyses` + `/stats`.
+> Server `POST /api/chat` (non-streaming) existed until 2026-09-24 and was removed — the web
+> only ever used `/api/chat/stream`. The engine's `POST /chat` still exists (below); the server
+> calls it from the auth-scoped chat via `askEngineChat`.
 
 ### 4.2 Server → Engine
 
@@ -152,7 +154,7 @@ The app uses Next.js App Router with server-rendered pages for dashboard/history
 | `GET /status/:jobId` | Read job status from engine Redis |
 | `GET /download/:jobId` | Stream video file from engine storage (inline) |
 | `POST /fail/:jobId` | Mark a job as failed |
-| `POST /chat` | Chat with AI coach (non-streaming) |
+| `POST /chat` | Non-streaming chat used by the server's auth-scoped dashboard chat (`askEngineChat`, 30s deadline) |
 | `POST /chat/stream` | SSE streaming chat |
 
 ### 4.3 Engine Endpoints
@@ -326,7 +328,7 @@ type CoachAIError = {
   (`.github/workflows/keepalive.yml` pings `/health` every 9 min) so the BullMQ worker never stalls —
   the engine is on a paid plan, so the server can use the full ~720 h/mo of the 750 h free budget.
   If the keep-alive is removed, expect ~1 min cold starts and stalled queued jobs until the next request.
-- **Render engine (starter):** Paid plan required — free tier's 15min spin-down kills in-flight background analyses and wipes `/tmp/storage`. Engine storage is local-only, so videos are still lost on deploy/restart.
+- **Render engine (starter):** Paid plan required — free tier's 15min spin-down kills in-flight background analyses and wipes `/tmp/storage`. Engine storage is local by default (S3 backend is opt-in via `STORAGE_BACKEND=s3`), so on the default setup videos are still lost on deploy/restart.
 - **Upstash free tier:** 10,000 commands/day, 256MB storage
 - **Supabase free tier:** 500MB database, pausing after inactivity
 - **Vercel free tier:** 100GB bandwidth/month
@@ -338,7 +340,7 @@ Only the **server** is kept alive (it hosts the queue worker); the engine is pai
 | Component | Interval | Target |
 |---|---|---|
 | keepalive → Server | 9 min | `GET /health` (GitHub Actions cron) |
-| Engine session eviction | 5 min | In-memory cleanup (`_evict_old_sessions`) |
+| Engine session eviction | 5 min | In-memory cleanup (`evict_old_sessions`) |
 | BullMQ stuck recovery | 10 min | Jobs active > 13 min → `moveToFailed` (1 min buffer over 12-min timeout) |
 
 ---
@@ -359,7 +361,7 @@ Only the **server** is kept alive (it hosts the queue worker); the engine is pai
 
 | Gap | Impact | Status |
 |---|---|---|
-| No conversational follow-up | User gets one analysis, can't ask questions | ✅ Implemented — chat with AI coach on analysis detail page (streaming + non-streaming + Supabase persistence) |
+| No conversational follow-up | User gets one analysis, can't ask questions | ✅ Implemented — chat with AI coach on analysis detail page (SSE streaming + Supabase persistence) |
 | No URL routing | Can't share results, back button broken | ✅ Implemented — full pipeline URL routing, refresh resilience, `/dashboard/analysis/[id]` |
 | No page transitions | Jarring state switches | ❌ Open |
 | Bare upload UX | Spinner only, no progress percentage | ✅ Implemented — SSE scan progress with rotating status lines + percentage |

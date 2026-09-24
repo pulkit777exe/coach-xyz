@@ -1,6 +1,6 @@
 # Coach-XYZ Scaling Plan
 
-> **Current Status:** Local storage only. S3/R2 integration required for horizontal scaling.
+> **Current Status:** S3-compatible storage backend shipped (`STORAGE_BACKEND=s3`, presigned upload/download in `engine/core/storage.py`); multi-engine routing (`ENGINE_URLS`) still missing. Horizontal scaling requires the queue-routing change below.
 
 ## Current Architecture (Single Instance)
 
@@ -21,7 +21,7 @@
 **Bottlenecks:**
 1. Engine: Single instance, ~512MB RAM limit (free tier)
 2. Worker: `concurrency: 1` (single job at a time, up to 12 min per job)
-3. Storage: Local filesystem only (no S3/R2 integration yet)
+3. Storage: local by default — S3 backend shipped (`STORAGE_BACKEND=s3`), but no multi-engine routing yet (`ENGINE_URLS` unimplemented; single `ENGINE_URL`)
 4. Redis: Free tier limits (10K commands/day)
 
 **Current Capacity (Free Tier):**
@@ -61,14 +61,14 @@ Scale the **Engine** and **Server** independently:
 
 **Changes Required:**
 
-#### 1. Engine: Stateless + Shared Storage
+#### 1. Engine: Stateless + Shared Storage (backend SHIPPED)
 ```dockerfile
-# Add S3/R2 storage backend
+# S3 backend exists in engine/core/storage.py — env provisioning only (names per engine/.env.sample)
 STORAGE_BACKEND=s3
 S3_BUCKET=coachai-videos
 S3_REGION=auto
-S3_ACCESS_KEY_ID=xxx
-S3_SECRET_ACCESS_KEY=xxx
+AWS_ACCESS_KEY_ID=xxx
+AWS_SECRET_ACCESS_KEY=xxx
 ```
 
 #### 2. Server: Multiple Workers
@@ -180,7 +180,7 @@ Use serverless functions for bursty workloads:
 | **Total** | | **~$20/mo** |
 
 **Changes:**
-1. Add S3/R2 storage backend to engine
+1. ~~Add S3/R2 storage backend to engine~~ — shipped (`STORAGE_BACKEND=s3` in `engine/core/storage.py`)
 2. Increase `WORKER_CONCURRENCY` to 4
 3. Upgrade Redis to pay-as-you-go
 
@@ -224,7 +224,16 @@ Use serverless functions for bursty workloads:
 
 ## Code Changes for Scaling
 
-### 1. Add S3/R2 Storage Backend
+### 1. Add S3/R2 Storage Backend — SHIPPED
+
+Shipped as module-level helpers in `engine/core/storage.py` (not a class):
+`STORAGE_BACKEND=s3` switches `_s3_client()` / `download_video_to_tmp` /
+`upload_result_video` / `delete_file` to the bucket, and powers browser-direct
+presigned upload (`presigned_upload:179-192`) and download
+(`presigned_download:195-201`). Env per `engine/.env.sample`: `S3_BUCKET`,
+`S3_REGION`, `S3_ENDPOINT_URL`, plus standard `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY`. Sketch below kept for illustration (env names corrected
+to the real ones):
 
 ```python
 # engine/core/storage.py
@@ -234,9 +243,9 @@ from botocore.config import Config
 class S3Storage:
     def __init__(self):
         self.s3 = boto3.client('s3',
-            endpoint_url=os.environ.get('S3_ENDPOINT'),
-            aws_access_key_id=os.environ.get('S3_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('S3_SECRET_ACCESS_KEY'),
+            endpoint_url=os.environ.get('S3_ENDPOINT_URL'),
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             config=Config(signature_version='s3v4')
         )
         self.bucket = os.environ.get('S3_BUCKET')
@@ -257,7 +266,10 @@ class S3Storage:
         )
 ```
 
-### 2. Add Queue-Based Routing
+### 2. Add Queue-Based Routing (FUTURE — verified absent)
+
+Not implemented: `ENGINE_URLS` is not read anywhere in `server/src/`; the server
+targets a single `ENGINE_URL`.
 
 ```typescript
 // server/src/lib/queue.ts
@@ -272,22 +284,14 @@ function getNextEngine(): string {
 }
 ```
 
-### 3. Add Job Prioritization
+### 3. Add Job Prioritization — SHIPPED
 
-```typescript
-// server/src/lib/queue.ts
-// Prioritize jobs based on user tier
-const priorityConfig = {
-  beta: 1,      // High priority
-  free: 5,      // Low priority
-  paid: 2,      // Medium priority
-}
-
-// Add to job options
-await analysisQueue.add('analysis', payload, {
-  priority: priorityConfig[userTier] ?? 5,
-})
-```
+Tier-weighted priority is decided in one place: `admitAnalysis`
+(`lib/analysisAdmission.ts`) — anonymous `0` (`queue.ts` `JOB_PRIORITY`),
+authenticated `5 + tier weight` (base 5 at `analyze.ts:75` — elite/pro add
+10/5 via `analysisPriority`), player-hub `10 + tier` (`me.ts:355`) — consumed
+by BullMQ inside `enqueueAnalysis`. The per-org daily quota is checked in the
+same admission call, before tier/priority/usage.
 
 ---
 
@@ -355,9 +359,9 @@ groups:
 # Engine
 STORAGE_BACKEND=s3
 S3_BUCKET=coachai-videos
-S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_ACCESS_KEY_ID=<token>
-S3_SECRET_ACCESS_KEY=<secret>
+S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=<token>
+AWS_SECRET_ACCESS_KEY=<secret>
 
 # Server
 ENGINE_URLS=http://engine1:8001,http://engine2:8001
@@ -398,4 +402,4 @@ docker compose -f docker-compose.prod.yml up -d --scale engine=2 --scale server=
 ### For Scale (3+ Months):
 1. **Migrate to Kubernetes** (EKS/GKE)
 2. **Add caching layer** (Redis for analysis results)
-3. **Implement job prioritization** (paid users first)
+3. ~~Implement job prioritization~~ — shipped (tier-weighted priority at enqueue; see Code Changes §3)

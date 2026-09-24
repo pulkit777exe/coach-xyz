@@ -15,7 +15,7 @@ The CLI tool lives at `engine/cli/`.
 
 - Docker (recommended) — dev setup is driven by `docker-compose.yml`
 - Python 3.11 (for non-Docker engine)
-- Bun 1.x (for non-Docker server + frontend)
+- Bun 1.x (for non-Docker server; web-next uses npm)
 
 ## Quick start (Docker)
 
@@ -119,8 +119,11 @@ Per-app: `npm run dev:server`, `npm run dev:web`. Server uses `bun`, web-next us
 | `NEXT_PUBLIC_API_URL` | web-next | `http://localhost:8000` | yes |
 | Auth0 vars (`AUTH0_*`, `APP_BASE_URL`) | web-next | — | yes (for auth) |
 
-Storage is **local-only** — the engine writes to `/app/tmp/storage` (Docker) or `engine/tmp/storage`.
-The only storage var is `LOCAL_STORAGE_DIR`; there is no S3/R2 integration.
+Storage defaults to **local disk** — the engine writes to `/app/tmp/storage` (Docker) or
+`engine/tmp/storage` (`LOCAL_STORAGE_DIR`). Opt into the S3-compatible backend with
+`STORAGE_BACKEND=s3` + `S3_BUCKET`/`S3_REGION`/`S3_ENDPOINT_URL` + standard
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (see `engine/.env.sample`); uploads/downloads
+then go through presigned URLs.
 
 ## VSCode Tasks
 
@@ -147,9 +150,9 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ## Test suites
 
 ```bash
-cd engine   && python -m pytest tests/ -q   # 103 tests
-cd server   && bun test                      # 72 tests / 8 files
-cd web-next && npm test                      # 107 tests / 14 files (vitest)
+cd engine   && python -m pytest tests/ -q   # 220 tests
+cd server   && bun test                      # 333 tests / 33 files
+cd web-next && npm test                      # 146 tests / 16 files (vitest)
 ```
 
 Or run both TypeScript suites at once with `npm run check` from the repo root.

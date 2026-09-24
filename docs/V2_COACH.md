@@ -5,6 +5,9 @@
 > **Status (2026-09-11): largely implemented.** Streaming SSE chat, Redis + Supabase persistence,
 > split-screen video + chat layout, timestamp seeking, and quick actions ship in the app. V2 features
 > that remain unbuilt are explicitly marked below. This doc keeps the original design text for reference.
+> **2026-09-24:** the server's non-streaming `POST /api/chat` was removed — the server now exposes only
+> `POST /api/chat/stream` (the web only ever called it); the engine keeps `POST /chat` for the
+> auth-scoped dashboard chat. Sections marked "original design" below are annotated accordingly.
 
 ---
 
@@ -207,9 +210,10 @@ The engine already stores analysis results in Redis (`coachai:job:<job_id>`). Th
 
 ### 5.2 Server Changes
 
-#### New Endpoint: `POST /api/chat`
+#### Server Endpoint: `POST /api/chat` — ~~shipped~~ **removed 2026-09-24**
 
-Proxies to engine's `/chat` endpoint with server job → engine job mapping.
+Original design (kept for reference): proxied to engine `/chat` with server job →
+engine job mapping.
 
 ```
 POST /api/chat
@@ -217,6 +221,12 @@ Body: { "message": "...", "conversation_id": "..." }
 
 Response: { "reply": "...", "timestamp_refs": [...], "event_refs": [...] }
 ```
+
+**Today:** the server exposes only `POST /api/chat/stream` (SSE) — the web never
+called the non-streaming route, so it was removed in the 2026-09-24 routing sync.
+The engine's `POST /chat` lives on: the auth-scoped dashboard chat
+(`routes/chatHistory.ts`) calls it through `askEngineChat(payload, requestId)`
+(`lib/engine.ts`).
 
 #### Conversation Storage
 
@@ -392,8 +402,8 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 - Add conversation_history support to Gemini calls
 - Also added `POST /chat/stream` (SSE) (`engine/api/chat.py:88`)
 
-### Phase 2: Server Chat Proxy + Storage — ✅ Done
-- Add `POST /api/chat` endpoint to server (`server/src/routes/chat.ts:26`)
+### Phase 2: Server Chat Proxy + Storage — ✅ Done (route since removed)
+- ~~Add `POST /api/chat` endpoint to server (`server/src/routes/chat.ts:26`)~~ — removed 2026-09-24 (dead: web only used the stream); `chat.ts` now serves `/api/chat/stream` + `/api/conversation/:jobId`
 - Create `conversation.ts` library for Redis storage (`server/src/lib/conversation.ts`)
 - Add conversation persistence on each message (`saveMessage` with Lua append)
 - Add `GET /api/conversation/:jobId` for history loading (`chat.ts:228`)
@@ -425,13 +435,13 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 
 | Endpoint | Method | Layer | Purpose | Status |
 |---|---|---|---|---|
-| `POST /api/chat` | POST | Server | Send message, get AI reply | ✅ implemented |
+| `POST /api/chat` | POST | Server | Send message, get AI reply | ❌ removed 2026-09-24 (use `/api/chat/stream`) |
 | `POST /api/chat/stream` | POST | Server | SSE streaming chat | ✅ implemented (beyond original plan) |
 | `GET /api/conversation/:jobId` | GET | Server | Load conversation history (Redis) | ✅ implemented |
 | `DELETE /api/conversation/:jobId` | DELETE | Server | Clear conversation | ❌ not implemented |
-| `POST /chat` | POST | Engine | Chat with AI (proxied by server) | ✅ implemented |
+| `POST /chat` | POST | Engine | Chat with AI (called by the server's auth-scoped chat; `/chat/stream` proxied to `/api/chat/stream`) | ✅ implemented |
 | `POST /chat/stream` | POST | Engine | SSE streaming chat | ✅ implemented |
-| `GET/POST /api/auth/user/:auth0Id/analyses/:jobId/chat` | GET/POST | Server | Auth-scoped chat persisted to Supabase `chat_messages` | ✅ implemented |
+| `GET/POST /api/auth/user/:auth0Id/analyses/:jobId/chat` | GET/POST | Server | Auth-scoped chat persisted to Supabase `chat_messages` (engine errors surface; keyword fallback only on connectivity loss) | ✅ implemented |
 
 ### Updated Types
 

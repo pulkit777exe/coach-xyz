@@ -4,8 +4,9 @@ Target: `Targeted Secure Architecture v2` (organization-first sports intelligenc
 evidence-traceable AI). This plan maps that doc onto the current codebase and
 sequences the work so every phase ships independently with baselines green.
 
-Baselines (must stay green every phase): server `bun test` 248 · web `vitest`
-145 · engine pytest 207 · `tsc --noEmit` both · eslint both · `next build`.
+Baselines (must stay green every phase; re-confirmed 2026-09-24): server
+`bun test` 333 · web `vitest` 146 · engine pytest 220 · `tsc --noEmit` both ·
+eslint both · `next build`.
 
 ## Where we already align
 
@@ -52,20 +53,21 @@ Statuses re-verified 2026-09-23 against the shipped phases below.
 | 23     | Prompt-injection separation (system vs untrusted content)                                   | **Shipped** — UNTRUSTED/ORG-DATA delimiters with data-only rules, guard tests pin the behavior                                                                                                                                            | `core/prompt_guard.py`                                                    |
 | 8, 10  | Signed-URL upload intents; storage buckets raw/normalized/frames/clips                      | **Partial (§8 shipped)** — intent-first: engine `POST /upload-intent` mints `raw/` keys, browser uploads direct (presigned POST on S3 via `STORAGE_BACKEND=s3`, multipart proxy on local), server `POST /api/scan-intent` + `/api/scan-from-key`, bytes re-probed at scan; buckets are `raw/` + `results/` only (no normalized/frames/clips split) | `api/scan.py:303,378`, `scan.ts:169,250`, `storage.py:51,179` |
 | 9      | Hardened media workers (non-root, no shell strings, limits)                                 | **Shipped (core)** — ffprobe probe before detection; Dockerfiles non-root; compose `no-new-privileges` + pids/mem/cpu ceilings (`read_only` in prod)                                                                                       | `api/scan.py:66-76`, `docker-compose.yml:20-22`, `docker-compose.prod.yml:20-43` |
-| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing                          | **Partial** — priority tilt (signed-in over anonymous) + per-org daily quota (`ORG_DAILY_ANALYSIS_LIMIT`); BullMQ/Redis job state is still the truth, default concurrency 1, no queue aging                                                | `queue.ts:95-127,210-211`, `analyses.ts:323`                              |
+| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing                          | **Partial** — priority tilt (signed-in over anonymous) + per-org daily quota (`ORG_DAILY_ANALYSIS_LIMIT`), both decided in one admission call; BullMQ/Redis job state is still the truth, default concurrency 1, no queue aging                                                | `lib/analysisAdmission.ts` (`admitAnalysis`), `queue.ts` (`JOB_PRIORITY`), `analyses.ts` (`checkOrgDailyQuota`)                              |
 | 29     | Audit logs                                                                                  | **Shipped** — `audit_logs` table + best-effort `auditRoute()` writer, owner/admin read                                                                                                                                                    | `historyStore.ts:318`, `lib/audit.ts:120`                                 |
 | 7      | Single-use hashed invite tokens                                                             | **Shipped** — `org_invites`: 256-bit random, hashed `token_hash`, 7-day TTL, single-use, revocable                                                                                                                                        | `historyStore.ts:545-564`, `lib/invites.ts`                               |
 | 5      | Health/wellness boundary                                                                    | **Shipped (core)** — `maySeeMedical`/`redactWellness` gate `injury_risk`/wellness on status/auth/me + player reads; clinical workflows stay out of scope                                                                                   | `lib/permissions.ts:134,155`                                               |
 | 24–26  | Permission-aware AI retrieval; longitudinal finding trends                                  | **Shipped (core)** — `GET /findings/trends` per-day counts with needs-review split; chat prompts cite finding ids + timestamps                                                                                                            | `routes/findings.ts:55`, `core/chat_prompt.py:74-83`                      |
 | 32     | OpenTelemetry traces, correlation chain                                                     | **Partial** — correlation `job_id` logging exists; no traces/metrics                                                                                                                                                                      | `logging_config.py`, `instrument.ts`                                       |
-| 30–31  | Retention lifecycle + deletion propagation; tested restores                                 | **Shipped (core)** — `RETENTION_DAYS` (default 365) daily prune of analyses + findings + clips + player_events + chat; session eviction + `delete_session_files`; restore runbook documented (quarterly test not yet executed)             | `lib/analyses.ts:417-427`, `engine/sessions.py`, `docs/BACKUP_RESTORE.md` |
+| 30–31  | Retention lifecycle + deletion propagation; tested restores                                 | **Shipped (core)** — `RETENTION_DAYS` (default 365) daily prune of analyses + findings + clips + player_events + chat (scheduling in `lib/retention.ts`); session eviction + `delete_session_files`; restore runbook documented (quarterly test not yet executed)             | `lib/retention.ts`, `lib/analyses.ts` (`pruneRetention`), `engine/sessions.py`, `docs/BACKUP_RESTORE.md` |
 
 ## Phased plan
 
 ### Phase 0 — Foundations (no schema changes) — SHIPPED
 
 1. ~~Error vocabulary freeze~~ — already frozen + tested (`test_errors.py`
-   pins `STATUS_BY_CODE`, retryability, fallbacks).
+   pins `STATUS_BY_CODE`, `RETRYABLE_BY_CODE` retryability, fallbacks; server
+   parity in `server/tests/errors.test.ts` + `engine/tests/test_api_errors.py`).
 2. Prompt-structure separation (`core/prompt_guard.py`): athlete turns and
    org data wrapped in UNTRUSTED/ORG-DATA delimiters with data-only rules;
    guard tests (`test_prompt_guard.py`, `test_chat_prompt.py`).
@@ -95,7 +97,8 @@ Statuses re-verified 2026-09-23 against the shipped phases below.
    (medical-gated reads), subscriptions/usage ledger with tier-weighted queue
    priority, internal stage history, video/report/settings audit actions,
    no-diagnosis AI rules, deep dict-form criteria in all six sport packs
-   (pack v2), stages debug endpoint.
+   (pack v2). Internal stage-history table stays; the stages debug endpoint
+   was retired 2026-09-24 as a dead route (zero consumers).
    Uploads (§8) run intent-first: validated metadata mints a namespaced key,
    browsers upload direct-to-storage (presigned POST on S3, multipart proxy
    on local), bytes re-probed at scan; backends switch via STORAGE_BACKEND.
@@ -134,8 +137,10 @@ Statuses re-verified 2026-09-23 against the shipped phases below.
 1. Stage resume (`_committed_summary`): retries reuse a committed summary
    (skip Gemini, re-track for fresh landmarks); a surviving render
    completes directly. Committed-artifact short-circuit, tested helpers.
-2. Priority tilt: player-hub jobs enqueue at priority 1 over anonymous 0
-   (BullMQ); per-org quotas remain open (need org resolution at enqueue).
+2. Priority tilt (shipped): decided in one place — `admitAnalysis`
+   (`lib/analysisAdmission.ts`): authenticated jobs enqueue at 5 + tier weight
+   (`analyze.ts:75`), player-hub at 10 + tier (`me.ts:355`), over anonymous
+   0; per-org daily quota is checked inside the same admission call.
 3. Supabase completion truth strengthened: worker + poll double-persist
    plus persisted-fallback reads (existing); cancelled rows are terminal —
    late completions can't resurrect them.
