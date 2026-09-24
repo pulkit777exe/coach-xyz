@@ -131,14 +131,14 @@ them. Gating layers, outermost first:
 Add student / Schedule event / Invite member) from the same permission
 source; pinned in `lib/__tests__/permissions.test.ts`.
 
-| Persona            | Landing                | Quick actions                       | Key affordances                                                                 | Denied treatment                                                                                     |
-| ------------------ | ---------------------- | ----------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| owner / admin      | `/dashboard` OwnerHome | all four tiles                      | full write toolbars everywhere                                                  | —                                                                                                    |
-| head_coach / coach | CoachHome              | New analysis, Add student, Schedule | team manage, report draft + AI send                                             | invite hidden on members page (floor)                                                                |
-| assistant_coach    | CoachHome              | New analysis, Schedule              | report draft + AI send, no team reshape                                         | add-student / team-manage hidden                                                                     |
-| analyst            | CoachHome              | New analysis, Schedule              | report draft (no AI/email), read-only roster                                    | members/audit → AccessDenied; invite/add/new-team hidden                                             |
-| medical            | CoachHome              | Schedule                            | read-only students/teams/reports; no stat tiles or Recents (account-data floor) | history/members/audit → AccessDenied; History + New Analysis absent from nav/palette; Recents hidden |
-| player             | `/player` PlayerHub    | Analyze My Video                    | own reports → detail pages                                                      | no staff nav; foreign report id → not-found                                                          |
+| Persona            | Landing                | Quick actions                       | Key affordances                                                                 | Denied treatment                                                                                                        |
+| ------------------ | ---------------------- | ----------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| owner / admin      | `/dashboard` OwnerHome | all four tiles                      | full write toolbars everywhere                                                  | —                                                                                                                       |
+| head_coach / coach | CoachHome              | New analysis, Add student, Schedule | team manage, report draft + AI send                                             | invite hidden on members page (floor)                                                                                   |
+| assistant_coach    | CoachHome              | New analysis, Schedule              | report draft + AI send, no team reshape                                         | add-student / team-manage hidden                                                                                        |
+| analyst            | CoachHome              | New analysis, Schedule              | report draft (no AI/email), read-only roster                                    | members/audit → AccessDenied; invite/add/new-team hidden                                                                |
+| medical            | CoachHome              | Schedule                            | read-only students/teams/reports; no stat tiles or Recents (account-data floor) | history/members/audit → AccessDenied; History + New Analysis absent from nav/palette; Recents hidden                    |
+| player             | `/player` PlayerHub    | Analyze My Video                    | own reports → detail pages                                                      | no staff nav; `/dashboard` bounces to `/player`; topbar has no org pill or Dashboard CTA; foreign report id → not-found |
 
 ### States contract (every data surface)
 
@@ -156,6 +156,8 @@ source; pinned in `lib/__tests__/permissions.test.ts`.
 - Contract tests pin the role matrix, route floors, and quick-action tiles
   (`web-next/lib/__tests__/permissions.test.ts`).
 - Per-persona browser assertion matrix (curl harness) in light + dark, with
-  screenshots for gated surfaces.
+  screenshots for gated surfaces — 33 rows across 5 personas (owner, analyst,
+  medical, player, realowner), 0 failed / 0 blocked; the page cache is
+  cleared per run so rows verify the current render.
 - **Not verified here**: browser resize pass at real content lengths (see
   Typography).

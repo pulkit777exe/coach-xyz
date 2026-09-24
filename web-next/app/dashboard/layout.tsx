@@ -20,13 +20,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/auth/login')
   }
 
-  // Player accounts belong on /player, not the coach dashboard.
+  // Player accounts belong on /player, not the coach dashboard. Only the
+  // profile fetch is guarded: redirect() throws a NEXT_REDIRECT digest that a
+  // surrounding try/catch would swallow (logging it as a failure and rendering
+  // the coach shell for players instead of redirecting).
+  let profileRole: string | null = null
   try {
     const { user } = await getUserProfile(session.user.sub)
-    if (user?.role === 'player') redirect('/player')
+    profileRole = user?.role ?? null
   } catch (error) {
     console.error('Failed to resolve dashboard role:', error)
   }
+  if (profileRole === 'player') redirect('/player')
 
   // Org context — per-request cached via React.cache (getMyOrgsCached /
   // getOrgContext share the same deduped fetch, also used by the topbar

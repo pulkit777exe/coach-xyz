@@ -273,14 +273,21 @@ export default function HeaderClient({
   user,
   orgs = [],
   currentOrgId = null,
+  role = null,
 }: {
   user: HeaderUser
   /** Orgs registered under the user (server-fed; [] when signed out/failed). */
   orgs?: MyOrg[]
   /** Org the current data context is scoped to (org-switcher selection). */
   currentOrgId?: string | null
+  /** Account role (users.role); null when unresolved → full topbar. */
+  role?: string | null
 }) {
   const pathname = usePathname()
+  // Players: no workspace to switch (only the owner-of-self phantom) and no
+  // dashboard to open (/dashboard redirects them to /player) — the sidebar's
+  // My Hub is their nav.
+  const isPlayer = role === 'player'
 
   // Marketing pages get their own theme-aware Notion nav
   if (isMarketing(pathname)) return <MarketingNav user={user} />
@@ -301,12 +308,12 @@ export default function HeaderClient({
           </Link>
           {/* Workspace context — the orgs registered under the user. The app
               brand lives only above; the sidebar stays nav-only. */}
-          {orgs.length > 0 && (
+          {!isPlayer && orgs.length > 0 && (
             <span className="hidden sm:inline text-muted-foreground/40" aria-hidden>
               |
             </span>
           )}
-          <OrgPill orgs={orgs} currentAuth0Id={currentOrgId} />
+          {!isPlayer && <OrgPill orgs={orgs} currentAuth0Id={currentOrgId} />}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <GlobalSearch sub={user?.sub ?? null} />
@@ -316,12 +323,14 @@ export default function HeaderClient({
           {user ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-[#2383e2] px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-[#1b6fb8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                Dashboard
-              </Link>
+              {!isPlayer && (
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-[#2383e2] px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-[#1b6fb8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  Dashboard
+                </Link>
+              )}
               <Link
                 href="/account"
                 className="rounded-[6px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"

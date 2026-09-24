@@ -61,7 +61,7 @@ plus `server/tests/errors.test.ts` (32) for status/retryable parity.
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Pipeline (coach)  | `lib/usePipeline.ts` over `lib/useScanFlow.ts` (scan seam)                                                                                                                                                                                                                                               |
 | Pipeline (player) | `components/player/PlayerHub.tsx` over `lib/useScanFlow.ts`                                                                                                                                                                                                                                              |
-| Management pages  | `app/dashboard/{students,teams,members,audit,reports,schedule,attendance,history,settings}` + `components/org/*` (9ui; `PreferencesSection`, position vocab Select, Monday-first calendar; home is role-differentiated: owner (org health + plan + staff preview) / coach-staff (teams + org ops) / player (`PlayerHub` rendered at `/dashboard`); objectives have a List/Board kanban toggle) |
+| Management pages  | `app/dashboard/{students,teams,members,audit,reports,schedule,attendance,history,settings}` + `components/org/*` (9ui; `PreferencesSection`, position vocab Select, Monday-first calendar; home is role-differentiated: owner (org health + plan + staff preview) / coach-staff (teams + org ops) / player (`users.role=player` is bounced by the `/dashboard` layout gate to the `/player` PlayerHub — never rendered at `/dashboard`); objectives have a List/Board kanban toggle) |
 | Analysis views    | `components/{AppClient,AnalysisDetailClient,ResultsSummary,VideoPlayer,FindingsTimeline,ChatLayout,ClipsSection,...}`                                                                                                                                                                                    |
 | Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion)                                                                                                      |
 | Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                                                                                                                                   |
@@ -92,6 +92,14 @@ UX-only — the server remains the enforcement point:
   plans, wellness — matching the server's `player.manage` writes).
 - **Player**: `/player/reports/[id]` reads only `/api/me/reports/:id`
   (self-scoped + row-checked server-side); hub rows link there.
+- **Shell**: `app/dashboard/layout.tsx` resolves `users.role` and bounces
+  `player` to `/player` — the redirect sits *outside* the profile try/catch
+  (a caught `NEXT_REDIRECT` digest used to log a failure and render the coach
+  shell for players). `AuthHeader` passes the same role to `HeaderClient`,
+  which drops the org pill and the Dashboard CTA for players: their only
+  "org" is the owner-of-self seed (labeled Owner), and `/dashboard` bounces
+  them — the sidebar's My Hub is their nav. Null/unresolved role keeps the
+  full topbar.
 
 | Permission         | owner | admin | head_coach | assistant_coach | coach | analyst | medical | player |
 | ------------------ | :---: | :---: | :--------: | :-------------: | :---: | :-----: | :-----: | :----: |
@@ -112,7 +120,7 @@ UX-only — the server remains the enforcement point:
 
 **Server gaps (frontend-only for now — server fixes out of scope here):**
 
-- **Regression (broken since `b9fca0f`, 2026-09-22 — FIXED, worktree):**
+- **Regression (broken since `b9fca0f`, 2026-09-22 — FIXED, `9314a14`):**
   `serviceGuard` passed the ABSOLUTE `request.url` into
   `resolveMemberRoleForPath` → `isOrgScopedPath` did `startsWith('/api/org/')`,
   which never matches — `memberRole` was always `null` and every caller whose
@@ -124,8 +132,8 @@ UX-only — the server remains the enforcement point:
   bare pathnames both match the org prefixes — +6 hermetic regression tests in
   `server/tests/serviceGuard.test.ts` pin the normalization and the
   absolute-URL member fast path (`bun test` 348 pass / 0 fail / 34 files;
-  member `/reports`, `/students`, `/teams` verified 200). Shares files with
-  the concurrent winston-logging migration, so it commits with that server work.
+  member `/reports`, `/students`, `/teams` verified 200). Landed in `9314a14`
+  — kept atomic with the winston-logging migration that shared these files.
 - `/api/org/:id/reports` CRUD runs on identity + the app-level non-player floor
   only (guard now fixed): `medical` can
   create/update/delete reports server-side despite `report.read`-only (UI hides
