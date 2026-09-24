@@ -314,6 +314,13 @@ export default function ReportsClient({
             icon={<FileTextIcon className="size-5" aria-hidden="true" />}
             title="No reports yet"
             description="Generate progress, attendance, or performance reports for your students."
+            action={
+              canWrite ? (
+                <Button size="sm" onClick={() => setGenerateOpen(true)}>
+                  <PlusIcon /> Generate report
+                </Button>
+              ) : undefined
+            }
           />
         </div>
       ) : (

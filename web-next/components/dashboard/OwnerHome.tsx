@@ -16,6 +16,7 @@ import type { DashboardAnalysis, DashboardStats } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { ORG_MEMBER_ROLE_LABELS, type OrgMembersResponse } from '@/lib/members'
 import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
+import type { DashboardQuickActions } from '@/lib/permissions'
 
 export const shellClass = 'mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
@@ -183,20 +184,36 @@ function ActionTile({
   )
 }
 
-export function QuickActions({ invite }: { invite: boolean }) {
+export function QuickActions({
+  analyze,
+  manageStudents,
+  schedule,
+  invite,
+}: DashboardQuickActions) {
+  const tiles = [
+    ...(analyze ? [{ href: '/#analyze', icon: Plus, label: 'New analysis' }] : []),
+    ...(manageStudents
+      ? [{ href: '/dashboard/students', icon: Users, label: 'Add student' }]
+      : []),
+    ...(schedule
+      ? [{ href: '/dashboard/schedule', icon: CalendarDays, label: 'Schedule event' }]
+      : []),
+    ...(invite ? [{ href: '/dashboard/members', icon: UserPlus, label: 'Invite member' }] : []),
+  ]
+  if (tiles.length === 0) return null
+  const grid =
+    tiles.length >= 4
+      ? 'sm:grid-cols-2 lg:grid-cols-4'
+      : tiles.length === 3
+        ? 'sm:grid-cols-2 lg:grid-cols-3'
+        : tiles.length === 2
+          ? 'sm:grid-cols-2'
+          : ''
   return (
-    <div
-      className={cn(
-        'mt-4 grid gap-2 sm:grid-cols-2',
-        invite ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
-      )}
-    >
-      <ActionTile href="/#analyze" icon={Plus} label="New analysis" />
-      <ActionTile href="/dashboard/students" icon={Users} label="Add student" />
-      <ActionTile href="/dashboard/schedule" icon={CalendarDays} label="Schedule event" />
-      {invite ? (
-        <ActionTile href="/dashboard/members" icon={UserPlus} label="Invite member" />
-      ) : null}
+    <div className={cn('mt-4 grid gap-2', grid)}>
+      {tiles.map((tile) => (
+        <ActionTile key={tile.href} {...tile} />
+      ))}
     </div>
   )
 }
@@ -472,6 +489,7 @@ export default function OwnerHome({
   members,
   subscription,
   showHistoryLink,
+  quickActions,
 }: {
   firstName: string
   error: string | null
@@ -483,6 +501,7 @@ export default function OwnerHome({
   members: OrgMembersResponse | null
   subscription: OrgSubscription | null
   showHistoryLink: boolean
+  quickActions: DashboardQuickActions
 }) {
   const statCards =
     stats !== null
@@ -509,7 +528,7 @@ export default function OwnerHome({
         <PlanCard subscription={subscription} />
       </div>
 
-      <QuickActions invite />
+      <QuickActions {...quickActions} />
 
       <StaffPreview members={members} />
 

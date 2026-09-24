@@ -21,6 +21,7 @@ import {
 } from '@/lib/serverData'
 import { getSession } from '@/lib/session'
 import { HISTORY_NAV_ROLES } from '@/lib/nav'
+import { dashboardQuickActions } from '@/lib/permissions'
 import type { Team } from '@/lib/teams'
 
 export const metadata: Metadata = {
@@ -52,6 +53,8 @@ export default async function DashboardPage() {
   const isOwnerAdmin = role === 'owner' || role === 'admin'
   // Recents "View all" links to History — only for roles that may open it.
   const showHistoryLink = HISTORY_NAV_ROLES.includes(role)
+  // Action tiles mirror each destination's write floors (lib/permissions).
+  const quickActions = dashboardQuickActions(role)
   // Medical holds medical.read but not analysis.read (permission matrix in
   // lib/permissions.ts) — skip the org-analyses request entirely instead of
   // fetching data this role should never surface.
@@ -123,6 +126,7 @@ export default async function DashboardPage() {
         members={members}
         subscription={subscription}
         showHistoryLink={showHistoryLink}
+        quickActions={quickActions}
       />
     )
   }
@@ -139,6 +143,7 @@ export default async function DashboardPage() {
       teams={teams}
       role={role}
       showHistoryLink={showHistoryLink}
+      quickActions={quickActions}
     />
   )
 }

@@ -119,3 +119,31 @@ export const TEAM_DELETE_ROLES: readonly OrgMemberRole[] = ['owner', 'admin']
  * only owners/admins may issue invitations.
  */
 export const MEMBER_INVITE_ROLES: readonly OrgMemberRole[] = ['owner', 'admin']
+
+// ── Dashboard quick actions ─────────────────────────────────────────────────
+// The landing-page action tiles (New analysis / Add student / Schedule event
+// / Invite member). Derived, never hand-listed: a tile must not appear when
+// the destination page would render read-only or denied for that role — tile
+// and destination share this one decision point.
+
+export type DashboardQuickActions = {
+  /** New analysis → needs the full loop: create results and read them back. */
+  analyze: boolean
+  /** Add student → same floor as the Students page's manage affordances. */
+  manageStudents: boolean
+  /** Schedule event → staff surface (no server floor yet — CODEBASE_MAP gaps). */
+  schedule: boolean
+  /** Invite member → members-route invite floor. */
+  invite: boolean
+}
+
+export function dashboardQuickActions(
+  role: OrgMemberRole | null | undefined,
+): DashboardQuickActions {
+  return {
+    analyze: hasPermission(role, 'analysis.create') && hasPermission(role, 'analysis.read'),
+    manageStudents: hasPermission(role, 'player.manage'),
+    schedule: role != null && role !== 'player',
+    invite: role != null && MEMBER_INVITE_ROLES.includes(role),
+  }
+}

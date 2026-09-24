@@ -6,6 +6,7 @@ import {
   REPORT_SEND_ROLES,
   ROLE_PERMISSIONS,
   TEAM_DELETE_ROLES,
+  dashboardQuickActions,
   hasPermission,
   type Permission,
 } from '@/lib/permissions'
@@ -170,5 +171,41 @@ describe('route floors pinned from server guards', () => {
     for (const role of TEAM_DELETE_ROLES) {
       expect(hasPermission(role, 'team.manage'), `role: ${role}`).toBe(true)
     }
+  })
+})
+
+describe('dashboard quick actions (landing tiles stay honest)', () => {
+  test('New analysis tile follows analysis.create + analysis.read', () => {
+    for (const role of ORG_MEMBER_ROLES) {
+      const expected =
+        hasPermission(role, 'analysis.create') && hasPermission(role, 'analysis.read')
+      expect(dashboardQuickActions(role).analyze, `role: ${role}`).toBe(expected)
+    }
+    expect(dashboardQuickActions('medical').analyze).toBe(false)
+    expect(dashboardQuickActions(null).analyze).toBe(false)
+  })
+
+  test('Add student tile follows player.manage; Invite tile follows the invite floor', () => {
+    for (const role of ORG_MEMBER_ROLES) {
+      const caps = dashboardQuickActions(role)
+      expect(caps.manageStudents, `role: ${role}`).toBe(hasPermission(role, 'player.manage'))
+      expect(caps.invite, `role: ${role}`).toBe(MEMBER_INVITE_ROLES.includes(role))
+    }
+    expect(dashboardQuickActions('owner').invite).toBe(true)
+    expect(dashboardQuickActions('admin').invite).toBe(true)
+    expect(dashboardQuickActions('head_coach').invite).toBe(false)
+    expect(dashboardQuickActions('analyst').manageStudents).toBe(false)
+  })
+
+  test('Schedule tile is staff-only; an unresolved role gets no tiles at all', () => {
+    for (const role of ORG_MEMBER_ROLES) {
+      expect(dashboardQuickActions(role).schedule, `role: ${role}`).toBe(role !== 'player')
+    }
+    expect(dashboardQuickActions(null)).toEqual({
+      analyze: false,
+      manageStudents: false,
+      schedule: false,
+      invite: false,
+    })
   })
 })

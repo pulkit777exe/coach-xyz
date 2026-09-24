@@ -141,6 +141,8 @@ UX-only — the server remains the enforcement point:
 
 ## Conventions (must keep)
 
+- Design foundations — type scale, 9ui/interior.dev library policy, motion
+  tokens, role-IA + states contract: `docs/DESIGN_FOUNDATIONS.md`.
 - No barrel imports; direct paths only. No components defined in components.
 - Identity: browser-direct capability routes use `x-attribution`; everything
   else transits the `/api/service` proxy with service headers.

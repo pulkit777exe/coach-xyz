@@ -16,6 +16,7 @@ import {
   shellClass,
 } from '@/components/dashboard/OwnerHome'
 import type { DashboardAnalysis, DashboardStats } from '@/lib/api'
+import type { DashboardQuickActions } from '@/lib/permissions'
 import type { OrgOverview, ReportRecord, ScheduleEvent } from '@/lib/org'
 import type { OrgRole } from '@/lib/serverData'
 import type { Team } from '@/lib/teams'
@@ -118,6 +119,7 @@ export default function CoachHome({
   teams,
   role,
   showHistoryLink,
+  quickActions,
 }: {
   firstName: string
   error: string | null
@@ -129,6 +131,7 @@ export default function CoachHome({
   teams: Team[] | null
   role: OrgRole
   showHistoryLink: boolean
+  quickActions: DashboardQuickActions
 }) {
   const statCards =
     stats !== null
@@ -148,7 +151,7 @@ export default function CoachHome({
       {statCards.length > 0 ? <StatTiles tiles={statCards} /> : null}
 
       {/* No invite tile here — inviting is owner/admin-only. */}
-      <QuickActions invite={false} />
+      <QuickActions {...quickActions} />
 
       <TeamsCard teams={teams} />
 

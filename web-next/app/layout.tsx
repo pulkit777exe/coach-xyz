@@ -21,6 +21,9 @@ export const metadata: Metadata = {
 
 const inter = Inter({
   subsets: ['latin'],
+  // Real italic face — the marketing blockquote renders italic; loading the
+  // style keeps it from being browser-synthesized (better-typography).
+  style: ['normal', 'italic'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-inter',
   display: 'swap',

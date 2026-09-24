@@ -30,12 +30,13 @@
 
 @layer base {
   html {
+    /* Smoothing declared once on the root (the body's Tailwind `antialiased`
+       class re-states the same two declarations — same values, no conflict). */
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body {
     font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
     text-wrap: pretty;
   }
