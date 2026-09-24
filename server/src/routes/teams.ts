@@ -129,22 +129,6 @@ export default new Elysia()
           'medical',
         ]),
       )
-      .get('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
-        const { auth0Id, teamId } = params
-        if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
-        const g = await guard(auth0Id, request, set, 'team.read', teamId)
-        if (!('caller' in g)) return g
-        const team = await getTeam(auth0Id, teamId)
-        if (!team) {
-          set.status = 404
-          return buildError('NOT_FOUND', 'Team not found', false)
-        }
-        set.status = 200
-        return { team }
-      })
       .patch('/api/org/:auth0Id/teams/:teamId', async ({ params, request, body, set }) => {
         const { auth0Id, teamId } = params
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {

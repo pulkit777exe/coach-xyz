@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { orDisabledDefault, withHistoryStore } from './historyStore'
 
 // ── Organization + video + event registries ────────────────────────────────
 // The org identity stays the Auth0 sub (org_auth0_id); the organizations
@@ -24,7 +24,6 @@ export const ensureOrg = async (
 ): Promise<Organization | null> => {
   if (!orgAuth0Id) return null
   return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     const rows = await db<Organization[]>`
       insert into organizations (auth0_id, name, created_by)
       values (${orgAuth0Id}, ${name?.trim().slice(0, 120) || null}, ${createdBy ?? null})
@@ -39,7 +38,6 @@ export const ensureOrg = async (
 
 export const getOrg = async (orgAuth0Id: string): Promise<Organization | null> => {
   return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     const rows = await db<Organization[]>`
       select auth0_id, name, created_by, created_at, updated_at
       from organizations where auth0_id = ${orgAuth0Id} limit 1;
@@ -77,7 +75,6 @@ export const registerVideo = async (input: {
   uploadedBy?: string | null
 }): Promise<VideoRecord | null> => {
   return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     const rows = await db<VideoRecord[]>`
       insert into videos (
         org_auth0_id, storage_key, session_token, file_name, mime_type,
@@ -110,7 +107,6 @@ export const updateVideoProbe = async (
   },
 ): Promise<void> => {
   await withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     await db`
       update videos set
         status = ${probe.status},
@@ -145,7 +141,6 @@ export const persistPlayerEvents = async (
     .filter((e) => e && typeof e === 'object')
     .slice(0, 200)
   await withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     await db`delete from player_events where server_job_id = ${serverJobId};`
     for (const e of rows) {
       const ts =
@@ -173,9 +168,8 @@ export const listPlayerEvents = async (
   limit = 100,
 ): Promise<PlayerEventRecord[]> => {
   const capped = Math.min(Math.max(limit, 1), 500)
-  return (
-    (await withHistoryStore(async (db: SQL) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db: SQL) => {
       const rows = await db<PlayerEventRecord[]>`
         select * from player_events
         where (${opts.orgAuth0Id ?? null}::text is null or org_auth0_id = ${opts.orgAuth0Id ?? null})
@@ -185,6 +179,7 @@ export const listPlayerEvents = async (
         limit ${capped};
       `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }

@@ -7,7 +7,8 @@ import { checkAnalysisLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { verifyAttributionToken } from '../lib/attribution'
 import { UUID_RE } from '../lib/uuid'
-import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/analyses'
+import { persistAnalysisStart } from '../lib/analyses'
+import { admitAnalysis } from '../lib/analysisAdmission'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
 
@@ -69,19 +70,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
     if (owner) {
       const memberships = await listMembershipsForUser(owner).catch(() => [])
       const orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
-      const quota = await checkOrgDailyQuota(orgAuth0Id)
-      if (!quota.allowed) {
-        return rateLimited(
-          set,
-          'Organization daily analysis limit reached. Try again tomorrow.',
-          quota.retryAfterSec,
-        )
-      }
-      // Fair queueing (§17): authenticated jobs outrank anonymous ones,
-      // paid tiers outrank free. FIFO within a priority (no starvation).
-      const tier = await getOrgTier(orgAuth0Id).catch(() => 'free' as const)
-      priority = 5 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
-      await recordUsage(orgAuth0Id, 'analysis').catch(() => {})
+      // Quota + fair-queue admission (§17): base 5 for attributed jobs, paid
+      // tiers outrank free (tier-weighted inside admitAnalysis).
+      const admission = await admitAnalysis({ orgAuth0Id, basePriority: 5, set })
+      if (!admission.ok) return admission.error
+      priority = admission.priority
     }
 
     // Save the server job mapping to Redis BEFORE enqueuing

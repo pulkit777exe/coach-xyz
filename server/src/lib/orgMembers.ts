@@ -1,6 +1,6 @@
 import { SQL } from 'bun'
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
+import { withHistoryStoreOrThrow, ensureInitialized } from './historyStore'
 
 // ── Org-member role vocabulary ──────────────────────────────────────────────
 // Single source of truth for org membership roles. Mirrored on the web
@@ -73,7 +73,7 @@ const MEMBER_SELECT_COLUMNS = `
 // Schema lives in ensureInitialized (historyStore.ts); this only defers to it.
 /** Ensures the shared schema (incl. org_members) is initialized. */
 export const ensureOrgMembersInitialized = async (): Promise<void> => {
-  await withHistoryStore(() => ensureInitialized())
+  await withHistoryStoreOrThrow(() => ensureInitialized())
 }
 
 /**
@@ -81,8 +81,7 @@ export const ensureOrgMembersInitialized = async (): Promise<void> => {
  * owner: the coach who created it (org_auth0_id === member_auth0_id).
  */
 export const ensureOrgOwner = async (auth0Id: string): Promise<void> => {
-  await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  await withHistoryStoreOrThrow(async (db) => {
     await db`
       insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
       select ${auth0Id}, ${auth0Id}, u.email, 'owner', 'active'
@@ -115,8 +114,7 @@ const loadMemberById = async (
  */
 export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       await db`
       insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
       select ${orgAuth0Id}, ${orgAuth0Id}, u.email, 'owner', 'active'
@@ -160,8 +158,7 @@ export type OrgMembership = {
  */
 export const listMembershipsForUser = async (memberAuth0Id: string): Promise<OrgMembership[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       // Lazily seed owner-of-self so fresh solo coaches always see their own
       // org in the switcher (mirrors listOrgMembers seeding). Only for real
       // users — avoids creating phantom orgs for arbitrary ids.
@@ -191,8 +188,7 @@ export const listMembershipsForUser = async (memberAuth0Id: string): Promise<Org
 
 export const getOrgMember = async (orgAuth0Id: string, id: string): Promise<OrgMember | null> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       return loadMemberById(db, orgAuth0Id, id)
     })) ?? null
   )
@@ -212,8 +208,7 @@ export const getMemberRole = async (
 ): Promise<OrgMemberRole | null> => {
   if (memberAuth0Id === orgAuth0Id) return 'owner'
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ role: OrgMemberRole }[]>`
       select role from org_members
       where org_auth0_id = ${orgAuth0Id}
@@ -239,9 +234,7 @@ export const inviteOrgMember = async (
 ): Promise<OrgMember | null> => {
   const email = input.email.trim().toLowerCase()
   if (!email) return null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-
+  return withHistoryStoreOrThrow(async (db) => {
     const account = await db<{ auth0_id: string }[]>`
       select auth0_id from users where lower(email) = ${email} limit 1;
     `
@@ -288,8 +281,7 @@ export const setOrgMemberRole = async (
   memberId: string,
   role: OrgMemberRole,
 ): Promise<OrgMember | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const target = await db<{ role: string }[]>`
       select role from org_members
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
@@ -309,8 +301,7 @@ export const setOrgMemberRole = async (
 /** Removes a member row. Returns false if it did not exist. */
 export const removeOrgMember = async (orgAuth0Id: string, memberId: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
       delete from org_members
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}

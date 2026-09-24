@@ -1,18 +1,32 @@
 import type { Redis as IORedis } from 'ioredis'
 
-const REST_URL = process.env.UPSTASH_REDIS_REST_URL || ''
-const isLocalRedis = REST_URL.includes('localhost') || REST_URL.includes('127.0.0.1')
+// ── The single Redis URL derivation ─────────────────────────────────────────
+// Every client (the KV helper below, the BullMQ connection in lib/queue.ts,
+// and — hypothetically — the engine's Python adapters) must derive its
+// connection URL from ONE of these functions. Two derivations previously
+// coexisted and diverged: queue.ts unconditionally built a TLS Upstash URL,
+// so a localhost Upstash-style env resolved to `rediss://…@localhost:6379`
+// with TLS instead of plain `redis://localhost:6379`.
+
+/** True when the REST URL points at a local Redis — no TLS applies. */
+export function isLocalRedis(): boolean {
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL || ''
+  return restUrl.includes('localhost') || restUrl.includes('127.0.0.1')
+}
 
 // Derive a Redis protocol URL from the Upstash REST URL and token.
 // REST URL format: https://<endpoint>.upstash.io
 // Redis protocol format: rediss://default:<token>@<endpoint>.upstash.io:6379
-function getRedisConnectionUrl(): string | null {
-  if (!REST_URL) return null
-  if (isLocalRedis) return process.env.UPSTASH_REDIS_IOREDIS_URL || 'redis://localhost:6379'
+// Localhost REST URL → UPSTASH_REDIS_IOREDIS_URL or redis://localhost:6379 (no TLS).
+// Returns null when the env is missing/malformed (callers fall back to noop/disabled).
+export function getRedisConnectionUrl(): string | null {
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL || ''
+  if (!restUrl) return null
+  if (isLocalRedis()) return process.env.UPSTASH_REDIS_IOREDIS_URL || 'redis://localhost:6379'
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!token) return null
   try {
-    const host = new URL(REST_URL).host // e.g., "neutral-urchin-104723.upstash.io"
+    const host = new URL(restUrl).host // e.g., "neutral-urchin-104723.upstash.io"
     return `rediss://default:${token}@${host}:6379`
   } catch {
     return null
@@ -37,7 +51,7 @@ function createRedisClient() {
       maxRetriesPerRequest: null,
       commandTimeout: 5000,
       connectTimeout: 5000,
-      ...(isLocalRedis ? {} : { tls: {}, lazyConnect: false }),
+      ...(isLocalRedis() ? {} : { tls: {}, lazyConnect: false }),
     })
     client.on('error', (err: Error) => {
       console.error(

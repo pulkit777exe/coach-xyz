@@ -1,6 +1,6 @@
 // Performance metrics data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { computeMetricTrends as computeTrends } from '../orgValidate'
 import type { MetricTrend } from '../orgValidate'
 import { getStudent } from './students'
@@ -35,8 +35,7 @@ export const listPerformance = async (
   opts: { metricKey?: string; from?: string; to?: string; limit?: number } = {},
 ): Promise<PerformanceMetric[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<PerformanceMetric[]>`
         select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
                source_analysis_id, measured_at, created_at
@@ -66,8 +65,7 @@ export const createPerformanceMetric = async (
   auth0Id: string,
   input: PerformanceInput,
 ): Promise<PerformanceMetric | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<PerformanceMetric[]>`
       insert into performance_metrics (
         auth0_id, student_id, metric_key, metric_value, unit, source_analysis_id, measured_at
@@ -93,8 +91,7 @@ export const updatePerformanceMetric = async (
   id: string,
   input: { metric_value: number; unit?: string | null },
 ): Promise<PerformanceMetric | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<PerformanceMetric[]>`
       update performance_metrics set
         metric_value = ${input.metric_value}::float8,
@@ -108,8 +105,7 @@ export const updatePerformanceMetric = async (
 }
 
 export const deletePerformanceMetric = async (auth0Id: string, id: string): Promise<boolean> => {
-  const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  const res = await withHistoryStoreOrThrow(async (db) => {
     const rows = await db<{ id: string }[]>`
       delete from performance_metrics where auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -128,8 +124,7 @@ export const getStudentPerformanceSeries = async (
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<PerformanceSeriesPoint[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const analyses = await db<
         {
           requested_at: string
@@ -220,9 +215,7 @@ export const compareStudents = async (
 ): Promise<ComparisonStudent[]> => {
   if (studentIds.length === 0) return []
 
-  return withHistoryStore(async (_db) => {
-    await ensureInitialized()
-
+  return withHistoryStoreOrThrow(async (_db) => {
     const result: ComparisonStudent[] = []
 
     for (const sid of studentIds) {

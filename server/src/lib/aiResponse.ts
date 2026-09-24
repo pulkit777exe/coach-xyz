@@ -1,6 +1,7 @@
 // ── Analysis chat response helpers ───────────────────────────────────────────
-// Fallback responder and system-prompt builder shared by the analysis chat
-// endpoint (routes/chatHistory.ts). Mechanical extraction from routes/auth.ts.
+// Deterministic fallback responder for the analysis chat endpoint
+// (routes/chatHistory.ts): used when the engine /chat call is unreachable.
+// Mechanical extraction from routes/auth.ts.
 
 export function generateSimpleResponse(
   question: string,
@@ -41,33 +42,4 @@ export function generateSimpleResponse(
   }
 
   return `${summary.summary || "Here's a summary of the analysis."} The form score was ${summary.form_score ?? 'N/A'}/10. Feel free to ask about specific events, tips, strengths, or drills.`
-}
-
-/** System prompt for the engine /chat call, built from the analysis summary. */
-export function buildChatSystemPrompt(summary: Record<string, unknown> | null): string {
-  const contextParts: string[] = []
-  if (summary) {
-    if (summary.sport) contextParts.push(`Sport: ${summary.sport}`)
-    if (summary.form_score) contextParts.push(`Form Score: ${summary.form_score}/10`)
-    if (summary.overall_rating) contextParts.push(`Rating: ${summary.overall_rating}`)
-    if (summary.summary) contextParts.push(`Summary: ${summary.summary}`)
-    if (summary.top_tips && Array.isArray(summary.top_tips)) {
-      contextParts.push(`Top Tips: ${(summary.top_tips as string[]).join('; ')}`)
-    }
-    if (summary.strengths && Array.isArray(summary.strengths)) {
-      contextParts.push(`Strengths: ${(summary.strengths as string[]).join('; ')}`)
-    }
-    if (summary.priority_drill) contextParts.push(`Priority Drill: ${summary.priority_drill}`)
-    if (summary.shot_events && Array.isArray(summary.shot_events)) {
-      const events = summary.shot_events as Array<Record<string, unknown>>
-      contextParts.push(`Shot Events (${events.length}):`)
-      events.forEach((e, i) => {
-        contextParts.push(
-          `  ${i + 1}. ${e.timestamp}s - ${e.event_type}: Score ${e.form_score}/10. ${e.feedback || ''}`,
-        )
-      })
-    }
-  }
-
-  return `You are a sports analysis AI assistant. You have previously analyzed a video and here is the analysis context:\n\n${contextParts.join('\n')}\n\nAnswer questions about this analysis. Be helpful, specific, and reference timestamps when relevant. Keep responses concise.`
 }

@@ -7,7 +7,7 @@ import {
   scanFromKey,
   requestIdFrom,
 } from '../lib/engine'
-import { buildError, isCoachAIError } from '../lib/errors'
+import { buildError, enginePassthroughStatus, errorBody, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
 import { resolveJobCaller } from '../lib/jobAccess'
 import { checkScanLimit, checkScanProgressLimit, getIP, rateLimited } from '../lib/ratelimit'
@@ -55,22 +55,11 @@ const persistScanResult = async (
   }).catch(() => null)
 }
 
-const scanErrorStatus = (code: string): number => {
-  switch (code) {
-    case 'NO_PLAYERS_DETECTED':
-      return 422
-    case 'VIDEO_DECODE_FAILED':
-      return 422
-    case 'ENGINE_UNAVAILABLE':
-      return 503
-    case 'MEDIAPIPE_UNAVAILABLE':
-      return 503
-    case 'INVALID_REQUEST':
-      return 400
-    default:
-      return 500
-  }
-}
+// ── Error status policy ───────────────────────────────────────────────────
+// The ENGINE owns code → HTTP status (engine/core/errors.py STATUS_BY_CODE).
+// lib/engine's throwNonOk stamps the response status on the thrown
+// CoachAIError, and enginePassthroughStatus (lib/errors) surfaces it here —
+// there is deliberately no per-route code → status map anymore.
 
 export default new Elysia()
   .post('/api/scan-video', async ({ request, set }) => {
@@ -141,10 +130,11 @@ export default new Elysia()
       set.status = 200
       return result
     } catch (error) {
-      // If the engine returned a structured error, pass it through
+      // The engine returned a structured error — pass its status and body
+      // through untouched (except the internal status stamp).
       if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
+        set.status = enginePassthroughStatus(error)
+        return errorBody(error)
       }
 
       // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes or messages)
@@ -233,8 +223,8 @@ export default new Elysia()
       return intent
     } catch (error) {
       if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
+        set.status = enginePassthroughStatus(error)
+        return errorBody(error)
       }
       set.status = 500
       return buildError(
@@ -293,8 +283,8 @@ export default new Elysia()
       return result
     } catch (error) {
       if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
+        set.status = enginePassthroughStatus(error)
+        return errorBody(error)
       }
       const routeError = error as { code?: string; message?: string }
       console.error(
@@ -343,8 +333,11 @@ export default new Elysia()
       })
     } catch (error) {
       if (isCoachAIError(error)) {
+        // Scan-progress keeps its SSE-specific posture (a retryable engine
+        // failure answers 503 so the client re-polls); only the body's
+        // internal status stamp is stripped.
         set.status = error.retryable ? 503 : 500
-        return error
+        return errorBody(error)
       }
 
       set.status = 500

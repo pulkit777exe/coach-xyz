@@ -1,6 +1,6 @@
 // Training plans data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { getStudent } from './students'
 import { getTeam } from '../teams'
 
@@ -24,8 +24,7 @@ export const listTrainingPlans = async (
   opts: { teamId?: string | null; studentId?: string | null } = {},
 ): Promise<TrainingPlan[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<TrainingPlan[]>`
       select * from training_plans
       where org_auth0_id = ${auth0Id}
@@ -58,8 +57,7 @@ export const createTrainingPlan = async (
     const team = await getTeam(auth0Id, input.team_id)
     if (!team) return null
   }
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TrainingPlan[]>`
       insert into training_plans (org_auth0_id, team_id, student_id, title, description, created_by)
       values (
@@ -82,8 +80,7 @@ export const setTrainingPlanStatus = async (
   status: string,
 ): Promise<TrainingPlan | null> => {
   if (status !== 'active' && status !== 'done' && status !== 'archived') return null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TrainingPlan[]>`
       update training_plans set status = ${status}, updated_at = now()
       where org_auth0_id = ${auth0Id} and id = ${id}
@@ -95,8 +92,7 @@ export const setTrainingPlanStatus = async (
 
 export const deleteTrainingPlan = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
       delete from training_plans where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `

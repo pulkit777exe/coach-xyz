@@ -1,7 +1,8 @@
 import { Elysia } from 'elysia'
 
 import { buildError } from '../lib/errors'
-import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
+import { serviceGuard } from '../lib/serviceGuard'
+import { requireVerifiedSelf } from '../lib/caller'
 import {
   listNotifications,
   unreadCount,
@@ -15,11 +16,8 @@ export default new Elysia()
 
   // ── GET /api/me/notifications — list + unread count ─────────────────────
   .get('/api/me/notifications', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     const url = new URL(request.url)
     const limit = Math.min(Number(url.searchParams.get('limit') || 20), 100)
@@ -36,11 +34,8 @@ export default new Elysia()
 
   // ── GET /api/me/notifications/sse — SSE stream ─────────────────────────
   .get('/api/me/notifications/sse', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     const stream = new ReadableStream({
       start(controller) {
@@ -96,11 +91,8 @@ export default new Elysia()
 
   // ── POST /api/me/notifications/:id/read — mark single read ─────────────
   .post('/api/me/notifications/:id/read', async ({ request, params, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     const updated = await markNotificationRead(verified, params.id)
     if (!updated) {
@@ -114,11 +106,8 @@ export default new Elysia()
 
   // ── POST /api/me/notifications/read-all — mark all read ─────────────────
   .post('/api/me/notifications/read-all', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     await markAllRead(verified)
     set.status = 200

@@ -1,15 +1,25 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { buildError, chatEngineStatus, errorBody, wrapEngineError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
-import { getConversation, saveMessage } from '../lib/conversation'
+import { playerTranscript } from '../lib/transcript'
+import { parseSseDataEvents } from '../lib/sse'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
+
+/** Events on the engine's chat/stream SSE feed (core.chat_client vocabulary). */
+type ChatStreamEvent = {
+  type?: string
+  text?: string
+  message?: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+}
 
 /**
  * Resolve the engine job ID and conversation history for a given server job.
- * Shared between /api/chat and /api/chat/stream.
+ * Used by the streaming chat route (/api/chat/stream — the only chat wire route).
  */
 async function resolveChatContext(jobId: string, request: Request) {
   const serverJob = await getJob(jobId)
@@ -21,7 +31,7 @@ async function resolveChatContext(jobId: string, request: Request) {
   const access = verifyJobAccess(request, serverJob)
   if (!access.ok) return { error: access.body as unknown, status: access.status }
 
-  const history = await getConversation(jobId)
+  const history = await playerTranscript.load({ serverJobId: jobId })
   const historyForEngine = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }))
@@ -49,100 +59,6 @@ async function checkChatRateLimit(
 }
 
 export default new Elysia()
-  // Send a chat message and get AI reply (non-streaming)
-  .post('/api/chat', async ({ body, request, set }) => {
-    const { job_id, message } = body as { job_id?: string; message?: string }
-
-    if (!job_id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'job_id is required.', false)
-    }
-    if (!message?.trim()) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'message is required.', false)
-    }
-
-    const limited = await checkChatRateLimit(request, set)
-    if (limited) return limited
-
-    const ctx = await resolveChatContext(job_id, request)
-    if ('error' in ctx) {
-      set.status = ctx.status ?? 404
-      return ctx.error
-    }
-    const { engineJobId, historyForEngine } = ctx
-
-    try {
-      const res = await withTimeout(
-        `${ENGINE_URL}/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...engineServiceHeaders(requestIdFrom(request)),
-          },
-          body: JSON.stringify({
-            job_id: engineJobId,
-            message: message.trim(),
-            conversation_history: historyForEngine,
-          }),
-        },
-        60_000,
-      )
-
-      if (!res.ok) {
-        const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>
-        const code = (errBody.code as string) ?? 'CHAT_FAILED'
-        const msg = (errBody.message as string) ?? 'AI service error.'
-        set.status = res.status >= 400 && res.status < 500 ? res.status : 502
-        return buildError(code, msg, res.status >= 500)
-      }
-
-      const data = (await res.json()) as {
-        reply: string
-        timestamp_refs?: number[]
-        event_refs?: number[]
-      }
-
-      await saveMessage(job_id, { role: 'user', content: message.trim() })
-      await saveMessage(job_id, {
-        role: 'assistant',
-        content: data.reply,
-        timestamp_refs: data.timestamp_refs,
-        event_refs: data.event_refs,
-      })
-
-      set.status = 200
-      return {
-        reply: data.reply,
-        timestamp_refs: data.timestamp_refs ?? [],
-        event_refs: data.event_refs ?? [],
-      }
-    } catch (error) {
-      const isTimeout = error instanceof DOMException && error.name === 'AbortError'
-      const isConnectivity = error instanceof TypeError || isTimeout
-
-      if (isConnectivity) {
-        set.status = 502
-        return buildError(
-          'ENGINE_UNAVAILABLE',
-          'Analysis engine is temporarily unavailable. Please try again.',
-          true,
-        )
-      }
-
-      console.error(
-        JSON.stringify({
-          type: 'chat_proxy_error',
-          message: error instanceof Error ? error.message : 'unknown',
-          timestamp: new Date().toISOString(),
-        }),
-      )
-      set.status = 500
-      return buildError('INTERNAL_ERROR', 'Chat service error.', true)
-    }
-  })
-
   // Streaming chat — proxies SSE from engine to frontend
   .post('/api/chat/stream', async ({ body, request, set }) => {
     const { job_id, message } = body as { job_id?: string; message?: string }
@@ -185,11 +101,19 @@ export default new Elysia()
       )
 
       if (!engineRes.ok) {
+        // Chat posture: engine-owned body, 4xx pass through, ≥500 → 502.
         const errBody = (await engineRes.json().catch(() => ({}))) as Record<string, unknown>
-        const code = (errBody.code as string) ?? 'CHAT_FAILED'
-        const msg = (errBody.message as string) ?? 'AI service error.'
-        set.status = engineRes.status >= 400 && engineRes.status < 500 ? engineRes.status : 502
-        return buildError(code, msg, engineRes.status >= 500)
+        const failure = {
+          ...wrapEngineError({
+            code: typeof errBody.code === 'string' ? errBody.code : 'CHAT_FAILED',
+            message: typeof errBody.message === 'string' ? errBody.message : 'AI service error.',
+            retryable:
+              typeof errBody.retryable === 'boolean' ? errBody.retryable : engineRes.status >= 500,
+          }),
+          status: engineRes.status,
+        }
+        set.status = chatEngineStatus(failure) ?? 502
+        return errorBody(failure)
       }
 
       // Tee the stream: one copy goes to the client, we parse the other
@@ -202,29 +126,18 @@ export default new Elysia()
       const userMsg = message.trim()
       const jobId = job_id
       ;(async () => {
-        const reader = parseStream.getReader()
-        const decoder = new TextDecoder()
         let fullText = ''
         let timestampRefs: number[] = []
         let eventRefs: number[] = []
 
         try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            const text = decoder.decode(value, { stream: true })
-            for (const line of text.split('\n')) {
-              if (!line.startsWith('data: ')) continue
-              try {
-                const event = JSON.parse(line.slice(6))
-                if (event.type === 'done') {
-                  fullText = event.text || ''
-                  timestampRefs = event.timestamp_refs || []
-                  eventRefs = event.event_refs || []
-                }
-              } catch {
-                /* partial JSON, ignore */
-              }
+          // Buffered SSE line parsing — a `data:` line straddling two chunks
+          // is reassembled before parsing (lib/sse.ts), not dropped.
+          for await (const event of parseSseDataEvents<ChatStreamEvent>(parseStream)) {
+            if (event.type === 'done') {
+              fullText = event.text || ''
+              timestampRefs = event.timestamp_refs || []
+              eventRefs = event.event_refs || []
             }
           }
         } catch (err) {
@@ -235,21 +148,22 @@ export default new Elysia()
               timestamp: new Date().toISOString(),
             }),
           )
-        } finally {
-          reader.releaseLock()
         }
 
         try {
           // Always save the user message
-          await saveMessage(jobId, { role: 'user', content: userMsg })
+          await playerTranscript.append({ serverJobId: jobId }, { role: 'user', content: userMsg })
           // Save assistant reply only if we got a complete response
           if (fullText) {
-            await saveMessage(jobId, {
-              role: 'assistant',
-              content: fullText,
-              timestamp_refs: timestampRefs,
-              event_refs: eventRefs,
-            })
+            await playerTranscript.append(
+              { serverJobId: jobId },
+              {
+                role: 'assistant',
+                content: fullText,
+                timestamp_refs: timestampRefs,
+                event_refs: eventRefs,
+              },
+            )
           }
         } catch (err) {
           console.error(
@@ -309,7 +223,7 @@ export default new Elysia()
       return access.body
     }
 
-    const messages = await getConversation(params.jobId)
+    const messages = await playerTranscript.load({ serverJobId: params.jobId })
     set.status = 200
     return { messages }
   })

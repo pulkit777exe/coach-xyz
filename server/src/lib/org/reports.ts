@@ -1,6 +1,6 @@
 // Reports data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { ANALYSES_SELECT_COLUMNS } from '../analyses'
 import type { DashboardAnalysis } from '../analyses'
 import { REPORT_TYPES } from '../orgEnums'
@@ -31,8 +31,7 @@ export const getStudentAnalyses = async (
   limit = 200,
 ): Promise<DashboardAnalysis[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<DashboardAnalysis[]>`
         select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
@@ -60,8 +59,7 @@ export const listReports = async (
   opts: { studentId?: string } = {},
 ): Promise<Array<ReportRecord & { full_name: string | null }>> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
         select r.*, s.full_name
         from reports r
@@ -79,8 +77,7 @@ export const getReport = async (
   auth0Id: string,
   id: string,
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       select r.*, s.full_name
       from reports r
@@ -96,8 +93,7 @@ export const createReportRecord = async (
   auth0Id: string,
   input: ReportInput,
 ): Promise<ReportRecord | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<ReportRecord[]>`
       insert into reports (
         auth0_id, student_id, report_type, title, period_start, period_end, content_json
@@ -117,8 +113,7 @@ export const createReportRecord = async (
 }
 
 export const deleteReport = async (auth0Id: string, id: string): Promise<boolean> => {
-  const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  const res = await withHistoryStoreOrThrow(async (db) => {
     const rows = await db<{ id: string }[]>`
       delete from reports where auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -132,8 +127,7 @@ export const listRecentAnalysisScores = async (
   limit = 20,
 ): Promise<DashboardAnalysis[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<DashboardAnalysis[]>`
         select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
         from analysis_history a
@@ -321,8 +315,7 @@ export const updateReportRecord = async (
     content_json: Record<string, unknown>
   },
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       update reports set
         report_type = ${input.report_type},

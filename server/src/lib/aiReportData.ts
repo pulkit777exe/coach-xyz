@@ -7,12 +7,8 @@
 import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from './engine'
 import { buildReportContent, createReportRecord } from './orgData'
 import type { ReportType } from './orgEnums'
-import type { CoachAIError } from '../types'
+import { engineFailure, wrapEngineError } from './errors'
 import { redis } from './redis'
-
-function engineError(code: string, message: string, retryable = true): CoachAIError {
-  return { code, message, layer: 'engine', retryable }
-}
 
 export type AiReportJobStatus = 'queued' | 'running' | 'done' | 'failed'
 
@@ -103,21 +99,31 @@ export const generateAiReport = async (
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
-      throw engineError(
-        typeof body.code === 'string'
-          ? body.code
-          : res.status === 429
-            ? 'GEMINI_QUOTA_EXCEEDED'
-            : 'UNKNOWN',
-        typeof body.message === 'string' ? body.message : 'AI report generation failed.',
-        res.status >= 500,
+      // The engine owns code/message/retryable; only synthesize when the body
+      // is missing them (e.g. a proxy stripped it). The HTTP status is
+      // stamped alongside so callers can apply a posture helper.
+      throw engineFailure(
+        {
+          code:
+            typeof body.code === 'string'
+              ? body.code
+              : res.status === 429
+                ? 'GEMINI_QUOTA_EXCEEDED'
+                : 'UNKNOWN',
+          message: typeof body.message === 'string' ? body.message : 'AI report generation failed.',
+          retryable: typeof body.retryable === 'boolean' ? body.retryable : res.status >= 500,
+        },
+        res.status,
       )
     }
 
     return (await res.json()) as EngineReportResult
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'AI engine is temporarily unavailable.')
+      throw wrapEngineError({
+        code: 'ENGINE_UNAVAILABLE',
+        message: 'AI engine is temporarily unavailable.',
+      })
     }
     throw error
   }

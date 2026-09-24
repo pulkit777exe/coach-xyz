@@ -1,4 +1,4 @@
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { orDisabledDefault, withHistoryStore } from './historyStore'
 export type FindingRecord = {
   id: string
   category?: string | null
@@ -34,7 +34,6 @@ const findingNumber = (value: unknown): number | null => {
       .map(applyEvidenceGate)
       .slice(0, 500)
     await withHistoryStore(async (db) => {
-      await ensureInitialized()
       await db`delete from findings where server_job_id = ${serverJobId};`
       for (const f of rows) {
         await db`
@@ -99,9 +98,8 @@ export const getStudentFindings = async (
   limit = 50,
 ): Promise<StoredFinding[]> => {
   const capped = Math.min(Math.max(limit, 1), 200)
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<StoredFinding[]>`
       select f.id, f.server_job_id, f.category, f.start_ms, f.end_ms,
         f.confidence, f.confidence_band, f.severity, f.observation,
@@ -114,7 +112,8 @@ export const getStudentFindings = async (
       limit ${capped};
     `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }
 
@@ -190,9 +189,8 @@ export const reviewFinding = async (
   findingId: string,
   reviewState: ReviewState,
 ): Promise<boolean> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<{ id: string }[]>`
       update findings set review_state = ${reviewState}
       where id = ${findingId}
@@ -203,7 +201,8 @@ export const reviewFinding = async (
       returning id;
     `
       return Boolean(rows?.[0])
-    })) ?? false
+    }),
+    false,
   )
 }
 
@@ -220,9 +219,8 @@ export const getFindingsTrend = async (
   } = {},
 ): Promise<FindingsTrendPoint[]> => {
   const days = Math.min(Math.max(opts.days ?? 30, 1), 365)
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<FindingsTrendPoint[]>`
       select
         to_char(date_trunc('day', f.created_at), 'YYYY-MM-DD') as day,
@@ -242,7 +240,8 @@ export const getFindingsTrend = async (
       order by 1 asc, 2 asc;
     `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }
 

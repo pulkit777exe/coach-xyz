@@ -1,4 +1,4 @@
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { UUID_RE } from './uuid'
 
 // ── Clips (subclip bookmarks) ───────────────────────────────────────────────
@@ -64,9 +64,8 @@ export const parseClipInput = (
 
 /** List an analysis's clips (newest first). Scoped by the caller's account. */
 export const listClips = async (auth0Id: string, serverJobId: string): Promise<ClipRecord[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<ClipRecord[]>`
         select c.id, c.server_job_id, c.finding_id, c.label,
           c.start_ms, c.end_ms, c.created_by, c.created_at
@@ -76,21 +75,21 @@ export const listClips = async (auth0Id: string, serverJobId: string): Promise<C
         order by c.created_at desc;
       `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }
 
 /** Count an analysis's clips (cap enforcement). */
 export const countClips = async (auth0Id: string, serverJobId: string): Promise<number> => {
   const rows = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     return db<{ n: number }[]>`
       select count(*)::int as n from clips c
       join analysis_history a on a.server_job_id = c.server_job_id
       where a.auth0_id = ${auth0Id} and c.server_job_id = ${serverJobId};
     `
   })
-  return rows?.[0]?.n ?? 0
+  return orDisabledDefault(rows?.[0]?.n, 0)
 }
 
 export const createClip = async (
@@ -103,7 +102,6 @@ export const createClip = async (
   if (!parsed.ok) return null
   // The analysis must belong to the caller's account — no cross-account clips.
   const owned = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     return db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where auth0_id = ${auth0Id} and server_job_id = ${serverJobId} limit 1;
@@ -113,7 +111,6 @@ export const createClip = async (
   // An attached finding must belong to the same analysis.
   if (parsed.cleaned.finding_id) {
     const match = await withHistoryStore(async (db) => {
-      await ensureInitialized()
       return db<{ id: string }[]>`
         select id from findings
         where server_job_id = ${serverJobId} and id = ${parsed.cleaned.finding_id} limit 1;
@@ -123,7 +120,6 @@ export const createClip = async (
   }
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<ClipRecord[]>`
         insert into clips (server_job_id, finding_id, label, start_ms, end_ms, created_by)
         values (
@@ -148,9 +144,8 @@ export const deleteClip = async (
   clipId: string,
 ): Promise<boolean> => {
   if (!UUID_RE.test(clipId)) return false
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<{ id: string }[]>`
         delete from clips c
         using analysis_history a
@@ -161,6 +156,7 @@ export const deleteClip = async (
         returning c.id;
       `
       return Boolean(rows?.[0])
-    })) ?? false
+    }),
+    false,
   )
 }

@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 
+import { classifyFailure } from '../src/lib/queue'
+
 // ── Notification row shape contract ─────────────────────────────────────────
 // These tests verify the data shapes and pure helpers that the notification
 // system depends on.  DB-touching functions are skipped when DATABASE_URL is
 // not set, keeping the baseline green in CI without external services.
+//
+// The failed-job detection cases below run against the REAL predicate
+// (classifyFailure, exported by queue.ts — the module that owns retry
+// policy), not a copy of the logic. queue.ts is side-effect-free to import.
 
 const hasDb = Boolean(process.env.DATABASE_URL)
 
@@ -84,37 +90,23 @@ describe('notification payload extraction', () => {
 
 describe('failed job detection logic', () => {
   test('isFinalFailure returns true for UnrecoverableError', () => {
-    const failedReason = 'UnrecoverableError: GEMINI_QUOTA_EXCEEDED: quota hit'
-    const attemptsMade = 1
-    const maxAttempts = 3
-
-    const isUnrecoverable = failedReason.includes('UnrecoverableError')
-    const retriesExhausted = attemptsMade >= maxAttempts
-    const isFinalFailure = retriesExhausted || isUnrecoverable
+    const { isFinalFailure } = classifyFailure(
+      'UnrecoverableError: GEMINI_QUOTA_EXCEEDED: quota hit',
+      1,
+      3,
+    )
 
     expect(isFinalFailure).toBe(true)
   })
 
   test('isFinalFailure returns true when retries exhausted', () => {
-    const failedReason = 'Some retryable error'
-    const attemptsMade = 3
-    const maxAttempts = 3
-
-    const isUnrecoverable = failedReason.includes('UnrecoverableError')
-    const retriesExhausted = attemptsMade >= maxAttempts
-    const isFinalFailure = retriesExhausted || isUnrecoverable
+    const { isFinalFailure } = classifyFailure('Some retryable error', 3, 3)
 
     expect(isFinalFailure).toBe(true)
   })
 
   test('isFinalFailure returns false when retries remain and error is recoverable', () => {
-    const failedReason = 'Connection reset'
-    const attemptsMade = 1
-    const maxAttempts = 3
-
-    const isUnrecoverable = failedReason.includes('UnrecoverableError')
-    const retriesExhausted = attemptsMade >= maxAttempts
-    const isFinalFailure = retriesExhausted || isUnrecoverable
+    const { isFinalFailure } = classifyFailure('Connection reset', 1, 3)
 
     expect(isFinalFailure).toBe(false)
   })
@@ -154,9 +146,6 @@ describe('SSE event formatting', () => {
     'createNotification inserts a row and returns it',
     async () => {
       const { createNotification, unreadCount } = await import('../src/lib/notifications')
-      const { ensureNotificationsInitialized } = await import('../src/lib/notifications')
-
-      await ensureNotificationsInitialized()
 
       const row = await createNotification({
         auth0Id: 'test-notif-integration',

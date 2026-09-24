@@ -1,6 +1,6 @@
 // Org overview + global search data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 
 export type OrgOverview = {
   student_count: number
@@ -15,8 +15,7 @@ export type OrgOverview = {
 
 export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<OrgOverview[]>`
         select
           (select count(*)::int from students where auth0_id = ${auth0Id}) as student_count,
@@ -78,9 +77,7 @@ export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSear
   if (!q) return { students: [], schedule: [], reports: [], analyses: [] }
   const like = `%${q}%`
 
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-
+  return withHistoryStoreOrThrow(async (db) => {
     const [students, schedule, reports, analyses] = await Promise.all([
       db<
         {

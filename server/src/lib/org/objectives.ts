@@ -1,6 +1,6 @@
 // Training objectives data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { getStudent } from './students'
 import { getTeam } from '../teams'
 
@@ -37,8 +37,7 @@ export const listObjectives = async (
   opts: { studentId?: string | null; teamId?: string | null; status?: string | null } = {},
 ): Promise<TrainingObjective[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<TrainingObjective[]>`
       select *
       from training_objectives
@@ -69,8 +68,7 @@ export const createObjective = async (
     const team = await getTeam(auth0Id, input.team_id)
     if (!team) return null
   }
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TrainingObjective[]>`
       insert into training_objectives (
         org_auth0_id, student_id, team_id, finding_id, analysis_job_id,
@@ -98,8 +96,7 @@ export const setObjectiveStatus = async (
   status: string,
 ): Promise<TrainingObjective | null> => {
   if (!(OBJECTIVE_STATUSES as readonly string[]).includes(status)) return null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TrainingObjective[]>`
       update training_objectives set status = ${status}, updated_at = now()
       where org_auth0_id = ${auth0Id} and id = ${id}
@@ -111,8 +108,7 @@ export const setObjectiveStatus = async (
 
 export const deleteObjective = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
       delete from training_objectives
       where org_auth0_id = ${auth0Id} and id = ${id}

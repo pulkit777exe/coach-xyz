@@ -1,4 +1,4 @@
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
+import { withHistoryStoreOrThrow } from './historyStore'
 
 // ── Teams ────────────────────────────────────────────────────────────────────
 // Teams scope students, analyses, and coaching permissions inside an org.
@@ -36,8 +36,7 @@ export const createTeam = async (
 ): Promise<Team | null> => {
   const name = input.name.trim().slice(0, 120)
   if (!name) return null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Team[]>`
       insert into teams (org_auth0_id, name, sport)
       values (${orgAuth0Id}, ${name}, ${input.sport?.trim().slice(0, 60) || null})
@@ -49,8 +48,7 @@ export const createTeam = async (
 
 export const listTeams = async (orgAuth0Id: string): Promise<Team[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<Team[]>`
       select id, org_auth0_id, name, sport, created_at, updated_at
       from teams
@@ -64,8 +62,7 @@ export const listTeams = async (orgAuth0Id: string): Promise<Team[]> => {
 
 export const getTeam = async (orgAuth0Id: string, teamId: string): Promise<Team | null> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<Team[]>`
       select id, org_auth0_id, name, sport, created_at, updated_at
       from teams
@@ -84,8 +81,7 @@ export const renameTeam = async (
 ): Promise<Team | null> => {
   const clean = name.trim().slice(0, 120)
   if (!clean) return null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Team[]>`
       update teams set name = ${clean}, updated_at = now()
       where org_auth0_id = ${orgAuth0Id} and id = ${teamId}
@@ -97,8 +93,7 @@ export const renameTeam = async (
 
 export const deleteTeam = async (orgAuth0Id: string, teamId: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       // Unassign students first (team_id is a loose link, not a FK).
       await db`update students set team_id = null where team_id = ${teamId};`
       const rows = await db<{ id: string }[]>`
@@ -113,8 +108,7 @@ export const deleteTeam = async (orgAuth0Id: string, teamId: string): Promise<bo
 
 export const listTeamMembers = async (teamId: string): Promise<TeamMember[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<TeamMember[]>`
       select id, team_id, member_auth0_id, student_id, role, created_at
       from team_memberships
@@ -129,8 +123,7 @@ export const listTeamMembers = async (teamId: string): Promise<TeamMember[]> => 
 /** Team ids a member belongs to (coach-side link). */
 export const listMemberTeamIds = async (memberAuth0Id: string): Promise<string[]> => {
   const rows =
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const ids = await db<{ team_id: string }[]>`
       select team_id from team_memberships
       where member_auth0_id = ${memberAuth0Id};
@@ -154,8 +147,7 @@ export const addTeamMember = async (
   const role: TeamMemberRole = TEAM_MEMBER_ROLES.includes(input.role as TeamMemberRole)
     ? (input.role as TeamMemberRole)
     : 'player'
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TeamMember[]>`
       insert into team_memberships (team_id, member_auth0_id, student_id, role)
       values (
@@ -174,8 +166,7 @@ export const addTeamMember = async (
 
 export const removeTeamMember = async (teamId: string, membershipId: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
       delete from team_memberships
       where team_id = ${teamId} and id = ${membershipId}

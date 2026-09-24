@@ -1,4 +1,4 @@
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
+import { withHistoryStoreOrThrow } from './historyStore'
 import { SERVICE_HEADERS } from './serviceGuard'
 import { readRequestMeta } from './requestMeta'
 
@@ -69,9 +69,8 @@ export const audit = async (entry: {
   clientIp?: string | null
 }): Promise<void> => {
   try {
-    await withHistoryStore(async (db) => {
+    await withHistoryStoreOrThrow(async (db) => {
       // Schema lives in ensureInitialized (historyStore.ts); this only writes.
-      await ensureInitialized()
       await db`
         insert into audit_logs (
           org_auth0_id, actor_auth0_id, action, resource_type, resource_id,
@@ -144,8 +143,7 @@ export const auditRoute = (
 export const listAuditLogs = async (orgAuth0Id: string, limit = 50): Promise<AuditLog[]> => {
   const capped = Math.min(Math.max(limit, 1), 200)
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<AuditLog[]>`
       select id, org_auth0_id, actor_auth0_id, action, resource_type,
         resource_id, result, meta, client_ip, created_at

@@ -9,8 +9,10 @@ export type { CoachAIError }
 // ── Error Code Messages ──────────────────────────────────────────────────────
 // Every error code used anywhere in the system has a user-friendly message here.
 // Engine errors pass through with their own messages; these are fallbacks.
+// Exported so contract tests (tests/errors.test.ts) can pin route messages to
+// the canonical text instead of re-literalizing it.
 
-const FALLBACK_MESSAGES: Record<string, string> = {
+export const FALLBACK_MESSAGES: Record<string, string> = {
   // Engine errors (passed through, these are fallbacks)
   NO_PLAYERS_DETECTED: 'No players detected. Try better lighting or a less crowded frame.',
   VIDEO_DECODE_FAILED: 'Could not read this video. Try MP4 or MOV format.',
@@ -78,6 +80,59 @@ export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
  */
 export function isQueueRetryable(error: Pick<CoachAIError, 'retryable'>): boolean {
   return error.retryable !== false
+}
+
+// ── Status policy helpers ─────────────────────────────────────────────────────
+// The ENGINE owns code → HTTP status (engine/core/errors.py STATUS_BY_CODE)
+// and stamps it on the error at the wire: lib/engine's throwNonOk attaches
+// the response's status to the thrown CoachAIError. The helpers below are the
+// only sanctioned derivations from that stamp — each encodes ONE route
+// posture, documented here, so routes never re-map codes to statuses
+// themselves (the old per-route code → status hand-maps are gone).
+
+/**
+ * Pass-through posture (scan + download routes): surface the engine's own
+ * HTTP status. When the engine never answered (connectivity loss → statusless
+ * ENGINE_UNAVAILABLE, see lib/engine) map to 503; any other statusless error
+ * takes `statuslessFallback` — the route's pre-parity default for
+ * unclassified failures (scan: 500, download: 503).
+ */
+export function enginePassthroughStatus(error: CoachAIError, statuslessFallback = 500): number {
+  if (error.status !== undefined) return error.status
+  return error.code === 'ENGINE_UNAVAILABLE' ? 503 : statuslessFallback
+}
+
+/**
+ * Chat posture (/api/chat/stream and chatHistory's
+ * ask-analysis): the engine answered — a 4xx passes through, anything else
+ * becomes 502 (a downstream failure is not the caller's). Returns null when
+ * the error is statusless (the engine never answered) so the route applies
+ * its own connectivity fallback instead.
+ */
+export function chatEngineStatus(error: CoachAIError): number | null {
+  if (error.status === undefined) return null
+  return error.status >= 400 && error.status < 500 ? error.status : 502
+}
+
+/**
+ * The response body for an error: the CoachAIError shape without the
+ * server-internal `status` stamp (the route sets the HTTP status from it
+ * separately, via the posture helpers above).
+ */
+export function errorBody(error: CoachAIError): CoachAIError {
+  const { status: _status, ...body } = error
+  return body
+}
+
+/**
+ * Build a wire failure for lib/engine's callers to THROW: the engine body
+ * wrapped, with the HTTP status the engine answered stamped on it (stripped
+ * from response bodies by errorBody, consumed by the posture helpers above).
+ * Built in a function so `throw engineFailure(...)` stays a shaped
+ * CoachAIError throw, not an object literal.
+ */
+export function engineFailure(body: Partial<CoachAIError>, status: number): CoachAIError {
+  return { ...wrapEngineError(body), status }
 }
 
 /**

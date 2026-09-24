@@ -1,6 +1,6 @@
 // Schedule (events) data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { EVENT_STATUSES, EVENT_TYPES } from '../orgEnums'
 
 export type ScheduleEvent = {
@@ -24,8 +24,7 @@ export const listSchedule = async (
   opts: { from?: string; to?: string } = {},
 ): Promise<ScheduleEvent[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<ScheduleEvent[]>`
         select * from schedule_events
         where auth0_id = ${auth0Id}
@@ -54,8 +53,7 @@ export const createScheduleEvent = async (
   auth0Id: string,
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const cols = Object.keys(scheduleInsertCols).filter(
       (k) => k in input && input[k] !== undefined && input[k] !== null && input[k] !== '',
     )
@@ -75,8 +73,7 @@ export const updateScheduleEvent = async (
   id: string,
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const cols = Object.keys(scheduleInsertCols).filter((k) => k in input)
     const setClause =
       cols.map((k, i) => `${k} = $${i + 1}::text`).join(', ') + (cols.length ? ', ' : '')
@@ -97,8 +94,7 @@ export const updateScheduleEvent = async (
 }
 
 export const deleteScheduleEvent = async (auth0Id: string, id: string): Promise<boolean> => {
-  const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  const res = await withHistoryStoreOrThrow(async (db) => {
     const rows = await db<{ id: string }[]>`
       delete from schedule_events where auth0_id = ${auth0Id} and id = ${id} returning id;
     `

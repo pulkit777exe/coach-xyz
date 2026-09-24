@@ -2,7 +2,7 @@ import { Elysia } from 'elysia'
 
 import { buildError, type CoachAIError } from '../lib/errors'
 import { getUserByAuth0Id, updateUserProfile, resolveAuth0Id } from '../lib/users'
-import { persistAnalysisStart, checkOrgDailyQuota, getOrgTier, recordUsage } from '../lib/analyses'
+import { persistAnalysisStart } from '../lib/analyses'
 import {
   getLinkedPlayer,
   listAttendance,
@@ -14,7 +14,9 @@ import {
   getReport,
   listObjectives,
 } from '../lib/orgData'
-import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
+import { serviceGuard } from '../lib/serviceGuard'
+import { missingVerifiedSelf, requireVerifiedSelf } from '../lib/caller'
+import { admitAnalysis } from '../lib/analysisAdmission'
 import { redactWellness } from '../lib/permissions'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
@@ -22,7 +24,6 @@ import { mintAttributionToken } from '../lib/attribution'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 import { enqueueAnalysis } from '../lib/queue'
-import { rateLimited } from '../lib/ratelimit'
 import { UUID_RE } from '../lib/uuid'
 import { DEFAULT_MODEL } from '../types'
 
@@ -62,13 +63,7 @@ export const decidePlayerAnalysis = (input: {
   playerScope: PlayerScopeResult
 }): PlayerAnalysisDecision => {
   const { verifiedAuth0Id, playerScope: scope } = input
-  if (!verifiedAuth0Id) {
-    return {
-      ok: false,
-      status: 403,
-      error: buildError('FORBIDDEN', 'Missing verified identity', false),
-    }
-  }
+  if (!verifiedAuth0Id) return missingVerifiedSelf()
   if (!scope.student || !scope.coachAuth0Id) {
     return {
       ok: false,
@@ -92,11 +87,8 @@ export default new Elysia()
   // /api/auth/user call, so invited coaches see the org they belong to instead
   // of an empty org keyed by their own sub.
   .get('/api/me/orgs', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     // Linked accounts: the caller may sign in via a secondary provider, but
     // memberships are keyed by the primary auth0_id.
     const primary = (await resolveAuth0Id(verified)) ?? verified
@@ -107,11 +99,8 @@ export default new Elysia()
 
   // Own profile: user record + linked student (if any)
   .get('/api/me/profile', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     const { accountAuth0Id, student, coachAuth0Id } = await playerScope(verified)
     const user = await getUserByAuth0Id(accountAuth0Id)
@@ -122,11 +111,8 @@ export default new Elysia()
 
   // Update own profile (name, nickname, picture)
   .put('/api/me/profile', async ({ body, request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     const { name, nickname, picture } = body as Record<string, unknown>
     if (
@@ -166,11 +152,8 @@ export default new Elysia()
 
   // Own attendance history + summary (joined with the linked player scope)
   .get('/api/me/attendance', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -192,11 +175,8 @@ export default new Elysia()
 
   // Team schedule (all events for the owning coach's org)
   .get('/api/me/schedule', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { coachAuth0Id } = await playerScope(verified)
     if (!coachAuth0Id) {
       set.status = 200
@@ -214,11 +194,8 @@ export default new Elysia()
 
   // Own performance trends (analysis form scores + any manual metrics)
   .get('/api/me/performance', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -239,11 +216,8 @@ export default new Elysia()
 
   // Own training objectives (read-only player view of the coaching loop)
   .get('/api/me/objectives', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -256,11 +230,8 @@ export default new Elysia()
 
   // Own analyses (analysis_history rows linked to the player's student row)
   .get('/api/me/analyses', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -284,11 +255,8 @@ export default new Elysia()
 
   // Reports that mention me (student-scoped)
   .get('/api/me/reports', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -301,11 +269,8 @@ export default new Elysia()
   })
 
   .get('/api/me/reports/:id', async ({ request, params, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
@@ -328,11 +293,8 @@ export default new Elysia()
   // dashboard history) with requested_by = the player, and is linked to the
   // player's student row so it shows up in /api/me/analyses.
   .post('/api/me/analyze', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
 
     let body: Record<string, unknown>
     try {
@@ -387,18 +349,16 @@ export default new Elysia()
       return decision.error
     }
 
-    // Per-org daily quota (§17) on the owning coach's org.
-    const quota = await checkOrgDailyQuota(decision.coachAuth0Id)
-    if (!quota.allowed) {
-      return rateLimited(
-        set,
-        'Organization daily analysis limit reached. Try again tomorrow.',
-        quota.retryAfterSec,
-      )
-    }
-    const tier = await getOrgTier(decision.coachAuth0Id).catch(() => 'free' as const)
-    const priority = 10 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
-    await recordUsage(decision.coachAuth0Id, 'analysis').catch(() => {})
+    // Per-org daily quota (§17) on the owning coach's org. Player-hub jobs are
+    // authenticated humans waiting on UX — base priority 10 outranks
+    // /api/analyze's base 5 (tier-weighted inside admitAnalysis).
+    const admission = await admitAnalysis({
+      orgAuth0Id: decision.coachAuth0Id,
+      basePriority: 10,
+      set,
+    })
+    if (!admission.ok) return admission.error
+    const priority = admission.priority
 
     const server_job_id = crypto.randomUUID()
     const engine_job_id = crypto.randomUUID()
@@ -454,11 +414,8 @@ export default new Elysia()
   // Accept an organization invitation: the verified caller redeems a
   // single-use token minted for their email. Links their account on success.
   .post('/api/me/invites/accept', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     let parsed: Record<string, unknown>
     try {
       parsed = (await request.json()) as Record<string, unknown>
@@ -497,11 +454,8 @@ export default new Elysia()
   // client header. Requires the identity boundary (x-verified-auth0-id), so an
   // attacker cannot mint tokens for a sub they are not signed in as.
   .get('/api/me/attribution/mint', async ({ request, set }) => {
-    const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-    if (!verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
     const minted = mintAttributionToken(verified)
     if (!minted) {
       set.status = 503

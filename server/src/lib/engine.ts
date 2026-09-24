@@ -1,3 +1,4 @@
+import { engineFailure, wrapEngineError } from './errors'
 import type { CoachAIError, JobStatus, ScanResult } from '../types'
 
 export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8001'
@@ -19,9 +20,10 @@ export const engineServiceHeaders = (requestId?: string | null): Record<string, 
 export const requestIdFrom = (request: Request): string =>
   request.headers.get('x-request-id')?.trim() || crypto.randomUUID()
 
-function engineError(code: string, message: string, retryable = true): CoachAIError {
-  return { code, message, layer: 'engine', retryable }
-}
+/** Connectivity mapping: the engine never answered, so this error is
+ * deliberately STATUSLESS — routes distinguish "engine said no" (stamped by
+ * throwNonOk) from "engine never answered" via the missing status. */
+const unavailableEngineError = (): CoachAIError => wrapEngineError({ code: 'ENGINE_UNAVAILABLE' })
 
 export const withTimeout = async (
   input: string,
@@ -41,12 +43,26 @@ export const withTimeout = async (
   }
 }
 
-const throwNonOk = async (res: Response): Promise<never> => {
+/**
+ * The keystone of pass-through status: parse the engine's error body AND
+ * stamp the HTTP status it answered with onto the thrown CoachAIError, so no
+ * route ever re-derives a status from the code. `defaults` fill a body the
+ * engine didn't send (e.g. a proxy-level failure) for endpoint-specific
+ * fallbacks. Wire `retryable` is the engine's flag; absent body → true
+ * (assume transient, the historical posture).
+ */
+const throwNonOk = async (
+  res: Response,
+  defaults: { code?: string; message?: string } = {},
+): Promise<never> => {
   const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
-  throw engineError(
-    body.code ?? 'UNKNOWN',
-    body.message ?? 'Something went wrong.',
-    body.retryable ?? true,
+  throw engineFailure(
+    {
+      code: body.code ?? defaults.code ?? 'UNKNOWN',
+      message: body.message ?? defaults.message ?? 'Something went wrong.',
+      retryable: body.retryable ?? true,
+    },
+    res.status,
   )
 }
 
@@ -94,7 +110,7 @@ export const scanVideo = async (
     return (await res.json()) as ScanResult
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
     }
 
     throw error
@@ -138,7 +154,7 @@ export const requestUploadIntent = async (
     return (await res.json()) as UploadIntent
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
     }
 
     throw error
@@ -167,7 +183,7 @@ export const scanFromKey = async (
     return (await res.json()) as ScanResult
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
     }
 
     throw error
@@ -189,13 +205,20 @@ export const getDownloadStream = async (
     )
 
     if (!res.ok) {
-      throw engineError('JOB_NOT_FOUND', 'Job not found or expired.')
+      // Pass the engine's body through (jobs.py /download answers
+      // JOB_NOT_FOUND / VIDEO_NOT_FOUND / VIDEO_EXPIRED with the canonical
+      // text) and stamp the status; the defaults only cover a body-less
+      // failure, where /download's historical answer was JOB_NOT_FOUND.
+      await throwNonOk(res, {
+        code: 'JOB_NOT_FOUND',
+        message: 'Job not found or expired.',
+      })
     }
 
     return res
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
     }
 
     throw error
@@ -233,7 +256,7 @@ export const analyzeVideo = async (
     }
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
     }
 
     throw error
@@ -336,7 +359,67 @@ export const getScanProgressStream = async (
     return res
   } catch (error) {
     if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+      throw unavailableEngineError()
+    }
+    throw error
+  }
+}
+
+// ── Chat ────────────────────────────────────────────────────────────────────
+
+export type EngineChatTurn = { role: string; content: string }
+
+export type EngineChatPayload = {
+  job_id: string
+  message: string
+  conversation_history: EngineChatTurn[]
+}
+
+export type EngineChatReply = {
+  reply: string
+  message?: string
+  timestamp_refs?: number[]
+  event_refs?: number[]
+}
+
+/**
+ * One non-streaming chat round-trip against the engine's /chat — same seam as
+ * every other engine call: timeout wrapper, connectivity classification, and
+ * CoachAIError-shaped failures through throwNonOk.
+ *
+ * Error-path discriminator: an engine ERROR RESPONSE (429/503/500 with a
+ * body) throws a CoachAIError carrying the HTTP `status`, so callers can
+ * surface it via the shared chat posture (errors.chatEngineStatus: 4xx pass
+ * through, ≥500 → 502). A connectivity failure or timeout throws a STATUSLESS
+ * ENGINE_UNAVAILABLE, so "the engine never answered" never reads as "the
+ * engine answered no".
+ */
+export const askEngineChat = async (
+  payload: EngineChatPayload,
+  requestId?: string | null,
+): Promise<EngineChatReply> => {
+  try {
+    const res = await withTimeout(
+      `${ENGINE_URL}/chat`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...engineServiceHeaders(requestId),
+        },
+        body: JSON.stringify(payload),
+      },
+      30_000, // dashboard-chat deadline (unchanged from the hand-rolled call)
+    )
+
+    if (!res.ok) {
+      await throwNonOk(res, { code: 'CHAT_FAILED', message: 'AI service error.' })
+    }
+
+    return (await res.json()) as EngineChatReply
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      throw unavailableEngineError()
     }
     throw error
   }

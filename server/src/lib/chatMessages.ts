@@ -1,4 +1,4 @@
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { orDisabledDefault, withHistoryStore } from './historyStore'
 export type ChatMessageRecord = {
   id: string
   server_job_id: string
@@ -19,7 +19,6 @@ export const saveChatMessage = async (msg: {
   eventRefs?: number[]
 }): Promise<ChatMessageRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<ChatMessageRecord[]>`
       insert into chat_messages (server_job_id, auth0_id, role, content, timestamp_refs, event_refs)
       values (
@@ -40,9 +39,8 @@ export const getChatMessages = async (
   serverJobId: string,
   auth0Id: string,
 ): Promise<ChatMessageRecord[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<ChatMessageRecord[]>`
       select * from chat_messages
       where server_job_id = ${serverJobId}
@@ -50,6 +48,7 @@ export const getChatMessages = async (
       order by created_at asc;
     `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }

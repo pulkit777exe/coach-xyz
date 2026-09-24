@@ -33,9 +33,6 @@ export const createTeam = async (
     body: JSON.stringify(input),
   })
 
-export const getTeam = async (auth0Id: string, teamId: string): Promise<{ team: Team }> =>
-  apiFetch<{ team: Team }>(team(auth0Id, `/${encodeURIComponent(teamId)}`))
-
 export const renameTeam = async (
   auth0Id: string,
   teamId: string,

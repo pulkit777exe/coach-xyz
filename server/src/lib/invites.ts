@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './historyStore'
+import { withHistoryStoreOrThrow } from './historyStore'
 import { inviteOrgMember, type OrgMemberInviteRole } from './orgMembers'
 
 // ── Organization invitations (§7) ───────────────────────────────────────────
@@ -35,8 +35,7 @@ export const mintInvite = async (
   const email = input.email.trim().toLowerCase()
   if (!email) return null
   const token = randomBytes(32).toString('hex')
-  const created = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  const created = await withHistoryStoreOrThrow(async (db) => {
     const rows = await db<OrgInvite[]>`
       insert into org_invites (org_auth0_id, email, role, token_hash, created_by, expires_at)
       values (
@@ -58,8 +57,7 @@ export const mintInvite = async (
 
 export const listInvites = async (orgAuth0Id: string): Promise<OrgInvite[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<OrgInvite[]>`
       select id, org_auth0_id, email, role, created_by, expires_at,
         accepted_at, revoked_at, created_at
@@ -74,8 +72,7 @@ export const listInvites = async (orgAuth0Id: string): Promise<OrgInvite[]> => {
 
 export const revokeInvite = async (orgAuth0Id: string, inviteId: string): Promise<boolean> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
       update org_invites set revoked_at = now()
       where org_auth0_id = ${orgAuth0Id}
@@ -104,8 +101,7 @@ export const acceptInvite = async (
   if (!token || typeof token !== 'string')
     return { ok: false, error: 'Invalid or expired invitation' }
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<OrgInvite[]>`
       update org_invites set accepted_at = now()
       where token_hash = ${hashToken(token)}

@@ -1,4 +1,5 @@
 import { SERVICE_HEADERS } from './serviceGuard'
+import { buildError, type CoachAIError } from './errors'
 import { getMemberRole, type OrgMemberRole } from './orgMembers'
 import { listMemberTeamIds } from './teams'
 import { canAccessTeam, hasPermission, resolveStudentScope, type Permission } from './permissions'
@@ -46,4 +47,54 @@ export async function resolveCaller(orgAuth0Id: string, request: Request): Promi
     can: (permission) => hasPermission(role, permission),
     canAccessTeam: (teamId) => canAccessTeam(role, teamIds, teamId),
   }
+}
+
+// ── Self-scope identity ─────────────────────────────────────────────────────
+// Self routes (/api/me/*) carry no auth0Id in path or body: the proxy-injected
+// verified header IS the resource owner, so a present verified id suffices.
+// When SERVICE_TOKEN is unset, serviceGuard is inert by design — this
+// handler-level check is then the ONLY enforcement of the identity boundary,
+// so its predicate must match verifyServiceIdentity's byte-for-byte: header
+// missing OR empty (falsy — not just null) → 403 Missing verified identity.
+
+export type MissingVerifiedSelf = {
+  ok: false
+  status: 403
+  error: CoachAIError
+}
+
+/**
+ * The canonical missing-identity rejection (403, non-retryable FORBIDDEN).
+ * Single owner of the literal message; pure decisions such as
+ * `decidePlayerAnalysis` return it without a request context.
+ */
+export function missingVerifiedSelf(): MissingVerifiedSelf {
+  return {
+    ok: false,
+    status: 403,
+    error: buildError('FORBIDDEN', 'Missing verified identity', false),
+  }
+}
+
+type SelfScopeContext = {
+  request: Request
+  set: { status?: number | string }
+}
+
+/**
+ * Resolve the verified caller for a self-scoped handler, or reject it.
+ * Returns the verified auth0Id; when the header is missing/empty, sets
+ * `set.status = 403` and returns the canonical error body:
+ *
+ *   const verified = requireVerifiedSelf({ request, set })
+ *   if (typeof verified !== 'string') return verified
+ */
+export function requireVerifiedSelf({ request, set }: SelfScopeContext): string | CoachAIError {
+  const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
+  if (!verified) {
+    const rejection = missingVerifiedSelf()
+    set.status = rejection.status
+    return rejection.error
+  }
+  return verified
 }

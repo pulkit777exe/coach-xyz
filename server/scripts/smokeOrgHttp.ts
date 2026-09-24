@@ -102,7 +102,6 @@ async function cleanup() {
   const ids: string[] = []
   if (studentId) ids.push(studentId)
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     if (analysisId) {
       await db`delete from clips where server_job_id = ${analysisId};`.catch(() => {})
       await db`delete from player_events where server_job_id = ${analysisId};`.catch(() => {})
@@ -308,7 +307,6 @@ async function main() {
   console.log('analyses')
   analysisId = `srv-smoke-${tag}`
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into analysis_history (server_job_id, engine_job_id, session_token, model, complete, video_ready, auth0_id, requested_at)
       values (${analysisId}, ${`eng-smoke-${tag}`}, ${`sess-smoke-${tag}`}, 'gemini-2.5-flash', true, false, ${coachId}, now())

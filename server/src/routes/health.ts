@@ -11,7 +11,10 @@ export const healthRoute = new Elysia({ prefix: '/health' })
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   }))
-  // Deep — used by monitoring and the frontend status badge
+  // Deep — ops/queue-health probe (Redis + engine + queue depth) for manual
+  // and external monitoring. No frontend consumer: the app pings shallow
+  // /health only (web-next usePipeline keep-alive), as does the Docker
+  // HEALTHCHECK.
   .get('/deep', async ({ set }) => {
     // Check Redis
     let redisOk = false

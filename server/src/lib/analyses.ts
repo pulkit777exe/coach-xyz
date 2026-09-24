@@ -1,6 +1,8 @@
+import type { SQL } from 'bun'
+
 import type { Player } from '../types'
 import type { RequestMeta } from './requestMeta'
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { persistFindings, type FindingRecord } from './findings'
 import { persistPlayerEvents } from './registry'
 type VideoConversationRecord = RequestMeta & {
@@ -83,7 +85,6 @@ const supabasePublishableKey =
 
 export const persistVideoConversation = async (record: VideoConversationRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into video_conversations (
         session_token,
@@ -130,7 +131,6 @@ export const persistVideoConversation = async (record: VideoConversationRecord):
 
 export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into analysis_history (
         server_job_id,
@@ -184,7 +184,6 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
   const completedAt = record.status.complete ? new Date().toISOString() : null
 
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     // A cancelled analysis stays cancelled: late worker completions must not
     // resurrect it (cancellation is an explicit terminal state).
     const existing = await db<{ complete: boolean; error_code: string | null }[]>`
@@ -282,7 +281,6 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
 
   // Internal stage history (§13): append only on transition, not per poll.
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const last = await db<{ stage: number | null }[]>`
       select stage from analysis_stages
       where server_job_id = ${record.serverJobId}
@@ -297,23 +295,43 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
   })
 }
 
+/** The five child tables of an analysis, deleted in this exact order —
+ * derived rows first so no orphans survive the history delete. Shared by
+ * deleteAnalysis (one job) and pruneRetention (batch); only the WHERE clause
+ * (`= $1` vs `any($1)`) differs between the two callers. */
+const ANALYSIS_CHILD_TABLES = [
+  'findings',
+  'clips',
+  'player_events',
+  'chat_messages',
+  'analysis_history',
+] as const
+
+const deleteAnalysisChildren = async (db: SQL, serverJobIds: string | string[]): Promise<void> => {
+  const many = Array.isArray(serverJobIds)
+  for (const table of ANALYSIS_CHILD_TABLES) {
+    await db.unsafe(
+      many
+        ? `delete from ${table} where server_job_id = any($1);`
+        : `delete from ${table} where server_job_id = $1;`,
+      [serverJobIds],
+    )
+  }
+}
+
 export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Promise<boolean> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const owned = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
       limit 1;
     `
       if (!owned?.[0]) return false
-      await db`delete from findings where server_job_id = ${serverJobId};`
-      await db`delete from clips where server_job_id = ${serverJobId};`
-      await db`delete from player_events where server_job_id = ${serverJobId};`
-      await db`delete from chat_messages where server_job_id = ${serverJobId};`
-      await db`delete from analysis_history where server_job_id = ${serverJobId};`
+      await deleteAnalysisChildren(db, serverJobId)
       return true
-    })) ?? false
+    }),
+    false,
   )
 }
 
@@ -328,7 +346,6 @@ export const orgDailyAnalysisLimit = (): number => {
 
 export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ count: number }[]>`
       select count(*)::int as count from analysis_history
       where auth0_id = ${orgAuth0Id}
@@ -363,7 +380,6 @@ export type OrgTier = 'free' | 'pro' | 'elite'
 
 export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
   const tier = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ tier: OrgTier }[]>`
       insert into subscriptions (org_auth0_id) values (${orgAuth0Id})
       on conflict (org_auth0_id) do nothing
@@ -375,7 +391,7 @@ export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
     `
     return existing?.[0]?.tier ?? 'free'
   })
-  return tier ?? 'free'
+  return orDisabledDefault(tier, 'free')
 }
 
 /** Append to the org usage ledger (§17 quotas, future billing). */
@@ -386,7 +402,6 @@ export const recordUsage = async (
   quantity = 1,
 ): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into usage_records (org_auth0_id, kind, quantity)
       values (${orgAuth0Id}, ${kind.slice(0, 60)}, ${quantity});
@@ -397,9 +412,8 @@ export const recordUsage = async (
 /** Usage totals per kind since midnight UTC (for quota + status views). */
 
 export const getTodayUsage = async (orgAuth0Id: string): Promise<Record<string, number>> => {
-  const rows =
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  const rows = orDisabledDefault(
+    await withHistoryStore(async (db) => {
       return (
         (await db<{ kind: string; total: number }[]>`
       select kind, sum(quantity)::int as total from usage_records
@@ -407,7 +421,9 @@ export const getTodayUsage = async (orgAuth0Id: string): Promise<Record<string, 
       group by kind;
     `) ?? []
       )
-    })) ?? []
+    }),
+    [],
+  )
   return Object.fromEntries(rows.map((r) => [r.kind, r.total]))
 }
 
@@ -426,28 +442,23 @@ export const retentionDays = (): number => {
 
 export const pruneRetention = async (): Promise<number> => {
   const days = retentionDays()
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const stale = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where requested_at < now() - (${days} || ' days')::interval;
     `
       if (!stale?.length) return 0
       const ids = stale.map((r) => r.server_job_id)
-      await db`delete from findings where server_job_id = any(${ids});`
-      await db`delete from clips where server_job_id = any(${ids});`
-      await db`delete from player_events where server_job_id = any(${ids});`
-      await db`delete from chat_messages where server_job_id = any(${ids});`
-      await db`delete from analysis_history where server_job_id = any(${ids});`
+      await deleteAnalysisChildren(db, ids)
       return ids.length
-    })) ?? 0
+    }),
+    0,
   )
 }
 
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       update analysis_history
       set
@@ -465,7 +476,6 @@ export const updateAnalysisDisplayName = async (
   displayName: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set display_name = ${displayName || null}, updated_at = now()
@@ -483,7 +493,6 @@ export const linkAnalysisToStudent = async (
   studentId: string | null,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set student_id = ${studentId ?? null}, updated_at = now()
@@ -535,9 +544,8 @@ export const getUserAnalyses = async (
   offset = 0,
   opts: { unlinked?: boolean } = {},
 ): Promise<DashboardAnalysis[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const unlinkedFilter = opts.unlinked ? 'and a.student_id is null' : ''
       const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
@@ -549,7 +557,8 @@ export const getUserAnalyses = async (
       limit ${limit} offset ${offset};
     `
       return rows ?? []
-    })) ?? []
+    }),
+    [],
   )
 }
 
@@ -558,7 +567,6 @@ export const getUserAnalysisById = async (
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
@@ -574,7 +582,6 @@ export const getAnalysisByServerJobId = async (
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
@@ -596,7 +603,6 @@ export const getAnalysisOwner = async (
   student_id: string | null
 } | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<
       {
         auth0_id: string | null
@@ -613,9 +619,8 @@ export const getAnalysisOwner = async (
 }
 
 export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
       const rows = await db<DashboardStats[]>`
       select
         count(*)::int as total_analyses,
@@ -635,41 +640,13 @@ export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => 
           total_downloads: 0,
         }
       )
-    })) ?? {
+    }),
+    {
       total_analyses: 0,
       completed_analyses: 0,
       in_progress_analyses: 0,
       failed_analyses: 0,
       total_downloads: 0,
-    }
-  )
-}
-
-// ── Chat Messages ────────────────────────────────────────────────────────────
-
-export type AnalysisStageEntry = {
-  stage: number | null
-  stage_name: string | null
-  created_at: string
-}
-
-/** Internal stage history for one analysis (debugging, §13/§32). */
-
-export const getAnalysisStages = async (
-  auth0Id: string,
-  serverJobId: string,
-): Promise<AnalysisStageEntry[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const rows = await db<AnalysisStageEntry[]>`
-      select s.stage, s.stage_name, s.created_at
-      from analysis_stages s
-      join analysis_history a on a.server_job_id = s.server_job_id
-      where a.auth0_id = ${auth0Id} and s.server_job_id = ${serverJobId}
-      order by s.created_at asc;
-    `
-      return rows ?? []
-    })) ?? []
+    },
   )
 }

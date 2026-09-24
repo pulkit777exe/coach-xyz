@@ -4,7 +4,7 @@ import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { swagger } from '@elysiajs/swagger'
 
-import './lib/queue'
+import { startQueueInfrastructure } from './lib/queue'
 
 import scanRoute from './routes/scan'
 import analyzeRoute from './routes/analyze'
@@ -26,6 +26,14 @@ import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
 import { globalErrorHandler } from './lib/httpErrors'
 import { orgRoleGuard } from './lib/serviceGuard'
 import { MAX_FILE_SIZE_BYTES } from './types'
+
+// ── Queue infrastructure ────────────────────────────────────────────────────
+// Explicitly started (previously an import side effect of lib/queue) so
+// importing the module stays inert in tests. First statement after imports —
+// same position in the boot sequence the import-time start occupied: queues,
+// workers, recovery/retention timers, and the shutdown signal handlers all
+// exist before anything else runs, exactly once.
+startQueueInfrastructure()
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {

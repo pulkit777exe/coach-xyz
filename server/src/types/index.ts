@@ -155,6 +155,14 @@ export type CoachAIError = {
   layer: 'engine' | 'server' | 'client'
   retryable: boolean
   retry_after?: number
+  /**
+   * Server-internal: the HTTP status the engine answered with, stamped by
+   * lib/engine (throwNonOk) so pass-through routes can surface the engine's
+   * status instead of re-deriving one. Absent = the engine never answered
+   * (connectivity/timeout). Routes strip it from response bodies via
+   * errorBody() — it is not part of the wire contract.
+   */
+  status?: number
 }
 
 // ── Chat Types ─────────────────────────────────────────────────────────────

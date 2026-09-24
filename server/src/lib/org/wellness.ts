@@ -1,6 +1,6 @@
 // Wellness check-ins (health data, §5) data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import { getStudent } from './students'
 
 // ── Wellness check-ins (health data, §5) ─────────────────────────────────────
@@ -25,8 +25,7 @@ export const listWellness = async (
 ): Promise<WellnessCheckin[]> => {
   const capped = Math.min(Math.max(limit, 1), 200)
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<WellnessCheckin[]>`
       select * from wellness_checkins
       where org_auth0_id = ${auth0Id} and student_id = ${studentId}::uuid
@@ -62,8 +61,7 @@ export const createWellnessCheckin = async (
     (input.fatigue as number) <= 5
       ? input.fatigue
       : null
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<WellnessCheckin[]>`
       insert into wellness_checkins (
         org_auth0_id, student_id, sleep_hours, fatigue, pain,

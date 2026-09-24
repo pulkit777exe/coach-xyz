@@ -4,7 +4,6 @@ import {
   getUserAnalyses,
   getUserAnalysisById,
   getUserStats,
-  getAnalysisStages,
   deleteAnalysis,
   persistAnalysisStatus,
   updateAnalysisDisplayName,
@@ -144,20 +143,6 @@ export default new Elysia()
   })
   .use(findingsReadRoutes)
   .use(clipsRoute)
-  .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
-    const { auth0Id, jobId } = params
-    if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
-    }
-    const analysis = await getUserAnalysisById(auth0Id, jobId)
-    if (!analysis) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Analysis not found', false)
-    }
-    set.status = 200
-    return { stages: await getAnalysisStages(auth0Id, jobId) }
-  })
   .patch('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, body, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {

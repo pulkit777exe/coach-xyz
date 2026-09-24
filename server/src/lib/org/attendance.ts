@@ -1,6 +1,6 @@
 // Attendance data layer — split from lib/orgData.ts.
 
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from '../historyStore'
+import { withHistoryStoreOrThrow } from '../historyStore'
 import type { AttendanceStatus } from '../orgEnums'
 
 export type AttendanceRecord = {
@@ -34,8 +34,7 @@ export const listAttendance = async (
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<AttendanceWithStudent[]> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<AttendanceWithStudent[]>`
         select a.*, s.full_name, s.sport
         from attendance a
@@ -58,8 +57,7 @@ export const upsertAttendance = async (
   status: AttendanceStatus,
   note?: string | null,
 ): Promise<AttendanceRecord | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
+  return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<AttendanceRecord[]>`
       insert into attendance (auth0_id, student_id, session_date, status, note)
       values (${auth0Id}, ${studentId}, ${sessionDate}::date, ${status}, ${note || null})
@@ -101,8 +99,7 @@ export const deleteAttendance = async (
   studentId: string,
   sessionDate: string,
 ): Promise<boolean> => {
-  const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
+  const res = await withHistoryStoreOrThrow(async (db) => {
     const rows = await db<{ id: string }[]>`
       delete from attendance
       where auth0_id = ${auth0Id} and student_id = ${studentId} and session_date = ${sessionDate}::date
@@ -118,8 +115,7 @@ export const attendanceSummary = async (
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<AttendanceSummary> => {
   return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
+    (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<AttendanceSummary[]>`
         select
           count(*)::int as total_records,
