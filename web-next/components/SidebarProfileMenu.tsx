@@ -33,7 +33,7 @@ type ProfileMenuItem = {
  */
 const TRIGGER_CLASS =
   'flex w-full items-center gap-2 rounded-[6px] px-1 py-1 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
-/** Notion popover pattern (shared with OrgSwitcher): exit fade only, no entrance. */
+/** Notion popover pattern (shared with OrgPill/SidebarProfileMenu): exit fade only, no entrance. */
 const MENU_CLASS =
   'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =

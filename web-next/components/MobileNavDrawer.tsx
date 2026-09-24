@@ -23,11 +23,11 @@ export default function MobileNavDrawer({
   footer,
   children,
 }: {
-  /** Workspace name shown in the bar + drawer header (e.g. "coach.xyz"). */
+  /** Workspace/org name shown in the bar + drawer header (e.g. "Owner A"). */
   label: string
   /** Account-menu block, pinned to the drawer bottom (mirrors the aside). */
   footer: React.ReactNode
-  /** Sidebar scroll-region content (workspace row, switcher, search, nav). */
+  /** Sidebar scroll-region content (search + nav; brand stays topbar-only). */
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)

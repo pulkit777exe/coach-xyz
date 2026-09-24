@@ -2,17 +2,10 @@ import { getSession } from '@/lib/session'
 import { getUserProfile } from '@/lib/api'
 import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import DashboardNav from '@/components/DashboardNav'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
-import NotificationBell from '@/components/notifications/NotificationBell'
 import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import SidebarSearch from '@/components/SidebarSearch'
-import OrgSwitcher from '@/components/org/OrgSwitcher'
-
-/** Workspace mark row — press/hover affordance for the workspace link. */
-const WORKSPACE_LINK =
-  'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   let session
@@ -35,38 +28,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
     console.error('Failed to resolve dashboard role:', error)
   }
 
-  // Org switcher data — per-request cached via React.cache (getMyOrgsCached /
-  // getOrgContext share the same deduped fetch). Failures fall back to no
-  // switcher so a single-coach never regresses.
-  let switcherOrgs: Awaited<ReturnType<typeof getMyOrgsCached>>['orgs'] = []
+  // Org context — per-request cached via React.cache (getMyOrgsCached /
+  // getOrgContext share the same deduped fetch, also used by the topbar
+  // OrgPill). Failures fall back to session identity so a single-coach never
+  // regresses. The sidebar itself is nav-only: brand stays in the topbar,
+  // org context lives in the topbar OrgPill + the mobile drawer bar.
   let switcherCurrent = session.user.sub
   let navRole: Parameters<typeof DashboardNav>[0]['role'] = null
+  let orgLabel: string | null = null
   try {
     const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
     switcherCurrent = ctx.auth0Id
-    switcherOrgs = myOrgs.orgs
     navRole = ctx.role
+    orgLabel =
+      myOrgs.orgs.find((o) => o.org_auth0_id === ctx.auth0Id)?.display_name ??
+      myOrgs.orgs[0]?.display_name ??
+      null
   } catch (error) {
-    console.error('Failed to resolve org switcher:', error)
+    console.error('Failed to resolve org context:', error)
   }
+
+  // Mobile drawer bar — workspace context (org name), never the app name
+  // (the brand lives in the topbar only).
+  const drawerLabel = orgLabel ?? session.user.name ?? 'CoachXYZ'
 
   // Sidebar body — one source rendered twice: desktop aside + mobile drawer.
   const sidebarTop = (
     <>
-      <div className="flex h-8 items-center justify-between gap-1 px-1">
-        <Link href="/" className={WORKSPACE_LINK}>
-          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-primary text-[11px] leading-none font-bold text-primary-foreground">
-            C
-          </span>
-          <span className="truncate text-sm font-medium text-foreground">coach.xyz</span>
-        </Link>
-        <NotificationBell />
-      </div>
-
-      {switcherOrgs.length > 0 && (
-        <OrgSwitcher orgs={switcherOrgs} currentAuth0Id={switcherCurrent} />
-      )}
-
       <SidebarSearch auth0Id={switcherCurrent} role={navRole} />
 
       <DashboardNav role={navRole} />
@@ -97,7 +85,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Main column — below md the sidebar collapses into the drawer bar. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileNavDrawer label="coach.xyz" footer={sidebarFooter}>
+        <MobileNavDrawer label={drawerLabel} footer={sidebarFooter}>
           {sidebarTop}
         </MobileNavDrawer>
         <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>

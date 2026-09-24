@@ -32,10 +32,8 @@ export default function ChatLayout({
     <div className="flex h-screen flex-col bg-background">
       {/* Header */}
       <header className="shrink-0 border-b border-border bg-background z-50">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 lg:px-6">
-          <Link href="/" className="font-semibold text-[15px] tracking-[-0.01em] text-foreground">
-            coach.xyz
-          </Link>
+        {/* No brand here — the global topbar owns the app name (one place). */}
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-end px-4 lg:px-6">
           <div className="flex items-center gap-4">
             <button
               onClick={onBackToResults}

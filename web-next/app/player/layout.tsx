@@ -5,10 +5,6 @@ import { House } from 'lucide-react'
 import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
 
-/** Workspace mark row — press/hover affordance for the workspace link. */
-const WORKSPACE_LINK =
-  'group flex min-w-0 items-center gap-1.5 rounded-[4px] px-1.5 py-1 outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
-
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
   let session
   try {
@@ -23,17 +19,11 @@ export default async function PlayerLayout({ children }: { children: React.React
   }
 
   // Sidebar body — one source rendered twice: desktop aside + mobile drawer.
+  // Nav-only: the app brand lives in the topbar; the mobile bar shows the
+  // player's own name (personal workspace), never an app name.
   const sidebarTop = (
     <>
-      <div className="flex h-8 items-center px-1">
-        <Link href="/player" className={WORKSPACE_LINK}>
-          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-primary text-[11px] leading-none font-bold text-primary-foreground">
-            P
-          </span>
-          <span className="truncate text-sm font-medium text-foreground">player.xyz</span>
-        </Link>
-      </div>
-      <nav className="mt-2 flex flex-col">
+      <nav className="flex flex-col">
         <Link
           href="/player"
           aria-current="page"
@@ -68,7 +58,7 @@ export default async function PlayerLayout({ children }: { children: React.React
 
       {/* Main column — below md the sidebar collapses into the drawer bar. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileNavDrawer label="player.xyz" footer={sidebarFooter}>
+        <MobileNavDrawer label={session.user.name ?? 'My hub'} footer={sidebarFooter}>
           {sidebarTop}
         </MobileNavDrawer>
         <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>

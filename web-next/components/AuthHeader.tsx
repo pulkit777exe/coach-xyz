@@ -1,4 +1,6 @@
 import { getSession } from '@/lib/session'
+import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
+import type { MyOrg } from '@/lib/meApi'
 import HeaderClient from './HeaderClient'
 
 export default async function AuthHeader() {
@@ -11,5 +13,33 @@ export default async function AuthHeader() {
         email: session.user.email ?? null,
       }
     : null
-  return <HeaderClient user={user} />
+
+  // Org switcher data for the topbar pill — per-request cached (the same
+  // getMyOrgsCached fetch backs the dashboard), so signed-in users pay for it
+  // once per request. Signed-out visits skip the fetch entirely. If the fetch
+  // fails or comes back empty (fresh account before the owner-of-self seed),
+  // fall back to the user's own workspace so the org context never vanishes.
+  let orgs: MyOrg[] = []
+  let currentOrgId: string | null = null
+  if (session) {
+    try {
+      const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
+      orgs = myOrgs.orgs
+      currentOrgId = ctx.auth0Id
+    } catch (error) {
+      console.error('Failed to resolve org switcher:', error)
+    }
+    if (!orgs.length) {
+      orgs = [
+        {
+          org_auth0_id: session.user.sub,
+          role: 'owner',
+          display_name: session.user.name ?? 'Your workspace',
+        },
+      ]
+      currentOrgId = session.user.sub
+    }
+  }
+
+  return <HeaderClient user={user} orgs={orgs} currentOrgId={currentOrgId} />
 }

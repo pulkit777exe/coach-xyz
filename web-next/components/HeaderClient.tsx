@@ -8,7 +8,9 @@ import UserAvatar from './UserAvatar'
 import ThemeToggle from './ThemeToggle'
 import GlobalSearch from './GlobalSearch'
 import NotificationBell from './notifications/NotificationBell'
+import OrgPill from '@/components/org/OrgPill'
 import { Button } from '@/components/9ui/ui/button'
+import type { MyOrg } from '@/lib/meApi'
 
 type HeaderUser = {
   picture?: string | null
@@ -267,7 +269,17 @@ function MarketingNav({ user }: { user: HeaderUser }) {
   )
 }
 
-export default function HeaderClient({ user }: { user: HeaderUser }) {
+export default function HeaderClient({
+  user,
+  orgs = [],
+  currentOrgId = null,
+}: {
+  user: HeaderUser
+  /** Orgs registered under the user (server-fed; [] when signed out/failed). */
+  orgs?: MyOrg[]
+  /** Org the current data context is scoped to (org-switcher selection). */
+  currentOrgId?: string | null
+}) {
   const pathname = usePathname()
 
   // Marketing pages get their own theme-aware Notion nav
@@ -287,31 +299,14 @@ export default function HeaderClient({ user }: { user: HeaderUser }) {
             </span>
             <span className="hidden sm:inline text-sm font-semibold text-foreground">CoachXYZ</span>
           </Link>
-          <span className="hidden sm:inline text-muted-foreground/40">|</span>
-          <div className="hidden md:flex items-center gap-2 min-w-0">
-            <span className="text-[11px]">🇺🇸</span>
-            <span className="text-sm text-muted-foreground truncate max-w-[160px]">
-              dev-0lpn2fkjia...
+          {/* Workspace context — the orgs registered under the user. The app
+              brand lives only above; the sidebar stays nav-only. */}
+          {orgs.length > 0 && (
+            <span className="hidden sm:inline text-muted-foreground/40" aria-hidden>
+              |
             </span>
-            <span className="inline-flex items-center rounded-full border border-primary/30 bg-success/15 px-2 py-0.5 text-[10px] font-semibold tracking-widest text-success dark:bg-primary/20 dark:text-primary">
-              DEV
-            </span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="text-muted-foreground"
-            >
-              <path
-                d="M6 9l6 6 6-6"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
+          )}
+          <OrgPill orgs={orgs} currentAuth0Id={currentOrgId} />
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <GlobalSearch sub={user?.sub ?? null} />
