@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getOrgContext, orgReports, orgStudents } from '@/lib/serverData'
 import ReportsClient from '@/components/org/ReportsClient'
 import PageHeader from '@/components/org/PageHeader'
+import { hasPermission, REPORT_SEND_ROLES } from '@/lib/permissions'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default async function ReportsPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
 
   const [reportsRes, studentsRes] = await Promise.all([orgReports(auth0Id), orgStudents(auth0Id)])
 
@@ -31,6 +32,8 @@ export default async function ReportsPage() {
           auth0Id={auth0Id}
           initialReports={reportsRes.reports}
           students={studentsRes.students}
+          canWrite={hasPermission(role, 'report.create')}
+          canSend={REPORT_SEND_ROLES.includes(role)}
         />
       </div>
     </div>

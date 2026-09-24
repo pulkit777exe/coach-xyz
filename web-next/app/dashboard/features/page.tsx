@@ -21,7 +21,7 @@ import {
 import { getSession } from '@/lib/session'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getOrgContext, type OrgRole } from '@/lib/serverData'
-import { AUDIT_NAV_ROLES, MEMBERS_NAV_ROLES, type NavRole } from '@/lib/nav'
+import { AUDIT_NAV_ROLES, HISTORY_NAV_ROLES, MEMBERS_NAV_ROLES, type NavRole } from '@/lib/nav'
 import { Button } from '@/components/9ui/ui/button'
 import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
@@ -61,6 +61,7 @@ const ANALYZE: Feature[] = [
     title: 'Analysis history',
     body: 'Every past job with a findings timeline, clip markers, timestamp pills, and AI chat about the analysis.',
     href: '/dashboard/history',
+    roles: HISTORY_NAV_ROLES,
   },
   {
     icon: FileText,
@@ -116,6 +117,7 @@ const COLLABORATE: Feature[] = [
     title: 'Share links',
     body: 'Issue a public, tokenized link to a slice of any analysis.',
     href: '/dashboard/history',
+    roles: HISTORY_NAV_ROLES,
   },
   {
     icon: GraduationCap,

@@ -1,12 +1,5 @@
 export type NavRole =
-  | 'owner'
-  | 'admin'
-  | 'head_coach'
-  | 'assistant_coach'
-  | 'coach'
-  | 'analyst'
-  | 'medical'
-  | 'player'
+  'owner' | 'admin' | 'head_coach' | 'assistant_coach' | 'coach' | 'analyst' | 'medical' | 'player'
 
 /** Roles that may open the Members page (invite + role management). */
 export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_coach', 'coach']
@@ -33,6 +26,15 @@ const ALL_NAV_ROLES: readonly NavRole[] = [
  */
 export const ALL_NON_PLAYER_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
   (navRole) => navRole !== 'player',
+)
+
+/**
+ * Roles that may open the analysis History page: every staff role holding
+ * analysis.read (permission matrix in lib/permissions.ts). Medical is
+ * read-scoped without analysis.read; players browse their own hub instead.
+ */
+export const HISTORY_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
+  (navRole) => navRole !== 'player' && navRole !== 'medical',
 )
 
 export type GatedNavItem = {

@@ -11,11 +11,13 @@ import Section from './Section'
 interface WellnessSectionProps {
   auth0Id: string
   studentId: string
+  /** Check-in writes — player.manage (reads stay medical-gated server-side). */
+  canWrite: boolean
 }
 
 const FATIGUE_LABELS = ['', 'Fresh', 'Good', 'Okay', 'Tired', 'Exhausted']
 
-export default function WellnessSection({ auth0Id, studentId }: WellnessSectionProps) {
+export default function WellnessSection({ auth0Id, studentId, canWrite }: WellnessSectionProps) {
   const [checkins, setCheckins] = useState<WellnessCheckin[] | null>(null)
   const [denied, setDenied] = useState(false)
   const [sleep, setSleep] = useState('')
@@ -76,6 +78,8 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
           </p>
         ) : (
           <>
+            {canWrite && (
+              <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="well-sleep">Sleep (h)</Label>
@@ -133,6 +137,8 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
             <Button size="sm" disabled={busy} onClick={submit}>
               {busy ? 'Recording…' : 'Record check-in'}
             </Button>
+              </>
+            )}
             <div className="pt-1">
               {(checkins ?? []).slice(0, 8).map((checkin) => (
                 <div

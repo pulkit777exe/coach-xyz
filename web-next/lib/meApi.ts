@@ -75,6 +75,11 @@ export type MyReports = {
   linked: boolean
 }
 
+export type MyReport = {
+  report: (ReportRecord & { full_name: string | null }) | null
+  linked: boolean
+}
+
 const me = (path: string) => `${IDENTITY_BASE}/api/me${path}`
 
 export async function getMyOrgs(): Promise<MyOrgs> {
@@ -140,8 +145,6 @@ export async function acceptInvite(token: string): Promise<{ org_auth0_id: strin
   })
 }
 
-export async function getMyReport(
-  id: string,
-): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
-  return apiFetch(me(`/reports/${encodeURIComponent(id)}`))
+export async function getMyReport(id: string): Promise<MyReport> {
+  return apiFetch<MyReport>(me(`/reports/${encodeURIComponent(id)}`))
 }

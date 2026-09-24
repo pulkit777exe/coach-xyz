@@ -341,11 +341,17 @@ export default function StudentsClient({
   initialStudents,
   sports,
   teams,
+  canManage,
+  canInvite,
 }: {
   auth0Id: string
   initialStudents: Student[]
   sports: string[]
   teams: { id: string; name: string }[]
+  /** Roster writes (create/edit/delete/import/bulk status) — player.manage. */
+  canManage: boolean
+  /** Player-signup invites — pinned to the email-route floor. */
+  canInvite: boolean
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
   const [search, setSearch] = useState('')
@@ -590,18 +596,24 @@ export default function StudentsClient({
               <DownloadIcon /> Export
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
-            <UserPlusIcon />
-            Invite
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-            <UploadIcon />
-            Import
-          </Button>
-          <Button size="sm" onClick={openCreate}>
-            <PlusIcon />
-            Add student
-          </Button>
+          {canInvite && (
+            <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
+              <UserPlusIcon />
+              Invite
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <UploadIcon />
+              Import
+            </Button>
+          )}
+          {canManage && (
+            <Button size="sm" onClick={openCreate}>
+              <PlusIcon />
+              Add student
+            </Button>
+          )}
         </div>
       </div>
 
@@ -612,54 +624,62 @@ export default function StudentsClient({
             {selectedIds.length} selected
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('active')}
-            >
-              Mark active
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('inactive')}
-            >
-              Mark inactive
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('transferred')}
-            >
-              Mark transferred
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => openInvite(true)}
-            >
-              <MailIcon /> Invite
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
-                  )
-                ) {
-                  confirmBulkDelete()
-                }
-              }}
-            >
-              <TrashIcon /> Delete
-            </Button>
+            {canManage && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('active')}
+                >
+                  Mark active
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('inactive')}
+                >
+                  Mark inactive
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('transferred')}
+                >
+                  Mark transferred
+                </Button>
+              </>
+            )}
+            {canInvite && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => openInvite(true)}
+              >
+                <MailIcon /> Invite
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
+                    )
+                  ) {
+                    confirmBulkDelete()
+                  }
+                }}
+              >
+                <TrashIcon /> Delete
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -683,7 +703,7 @@ export default function StudentsClient({
                 : 'Try clearing your search or filters.'
             }
             action={
-              students.length === 0 ? (
+              students.length === 0 && canManage ? (
                 <Button size="sm" onClick={openCreate}>
                   <PlusIcon />
                   Add student
@@ -797,36 +817,38 @@ export default function StudentsClient({
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon-sm" aria-label="Actions">
-                            <MoreHorizontalIcon />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
+                    {canManage && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
                           render={
-                            <Link href={`/dashboard/students/${s.id}`}>
-                              <span className="flex items-center gap-2">
-                                <MoreHorizontalIcon className="size-3.5" />
-                                View profile
-                              </span>
-                            </Link>
+                            <Button variant="ghost" size="icon-sm" aria-label="Actions">
+                              <MoreHorizontalIcon />
+                            </Button>
                           }
                         />
-                        <DropdownMenuItem onClick={() => openEdit(s)}>
-                          <PencilIcon className="size-3.5" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>
-                          <TrashIcon className="size-3.5" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/dashboard/students/${s.id}`}>
+                                <span className="flex items-center gap-2">
+                                  <MoreHorizontalIcon className="size-3.5" />
+                                  View profile
+                                </span>
+                              </Link>
+                            }
+                          />
+                          <DropdownMenuItem onClick={() => openEdit(s)}>
+                            <PencilIcon className="size-3.5" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>
+                            <TrashIcon className="size-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </td>
                 </tr>
               ))}

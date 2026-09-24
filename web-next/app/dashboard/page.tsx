@@ -20,6 +20,7 @@ import {
   orgTeams,
 } from '@/lib/serverData'
 import { getSession } from '@/lib/session'
+import { HISTORY_NAV_ROLES } from '@/lib/nav'
 import type { Team } from '@/lib/teams'
 
 export const metadata: Metadata = {
@@ -49,6 +50,12 @@ export default async function DashboardPage() {
   }
 
   const isOwnerAdmin = role === 'owner' || role === 'admin'
+  // Recents "View all" links to History — only for roles that may open it.
+  const showHistoryLink = HISTORY_NAV_ROLES.includes(role)
+  // Medical holds medical.read but not analysis.read (permission matrix in
+  // lib/permissions.ts) — skip the org-analyses request entirely instead of
+  // fetching data this role should never surface.
+  const isMedical = role === 'medical'
   const displayName = session.user.name ?? session.user.email ?? ''
   const firstName = displayName.split('@')[0].split(' ')[0] || 'there'
 
@@ -77,7 +84,7 @@ export default async function DashboardPage() {
       subscriptionRes,
     ] = await Promise.all([
       getDashboardStats(auth0Id),
-      getDashboardAnalyses(auth0Id, 20, 0),
+      isMedical ? Promise.resolve({ analyses: null }) : getDashboardAnalyses(auth0Id, 20, 0),
       orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
       orgReports(auth0Id),
       orgOverview(auth0Id),
@@ -115,6 +122,7 @@ export default async function DashboardPage() {
         overview={overview}
         members={members}
         subscription={subscription}
+        showHistoryLink={showHistoryLink}
       />
     )
   }
@@ -130,6 +138,7 @@ export default async function DashboardPage() {
       overview={overview}
       teams={teams}
       role={role}
+      showHistoryLink={showHistoryLink}
     />
   )
 }

@@ -20,6 +20,7 @@ import {
 import {
   ALL_NON_PLAYER_ROLES,
   AUDIT_NAV_ROLES,
+  HISTORY_NAV_ROLES,
   MEMBERS_NAV_ROLES,
   visibleNavGroups,
   type NavRole,
@@ -76,7 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Analysis',
     items: [
-      { href: '/dashboard/history', label: 'History', icon: History, roles: ALL_NON_PLAYER_ROLES },
+      { href: '/dashboard/history', label: 'History', icon: History, roles: HISTORY_NAV_ROLES },
       { href: '/', label: 'New Analysis', icon: Sparkles, exact: true },
     ],
   },

@@ -10,6 +10,7 @@ import { Spinner } from '@/components/org/Spinner'
 import {
   ALL_NON_PLAYER_ROLES,
   AUDIT_NAV_ROLES,
+  HISTORY_NAV_ROLES,
   MEMBERS_NAV_ROLES,
   type NavRole,
 } from '@/lib/nav'
@@ -36,7 +37,7 @@ const PAGES: PageEntry[] = [
   },
   { label: 'Schedule', hint: 'Planning', href: '/dashboard/schedule', roles: ALL_NON_PLAYER_ROLES },
   { label: 'Reports', hint: 'Planning', href: '/dashboard/reports', roles: ALL_NON_PLAYER_ROLES },
-  { label: 'History', hint: 'Analysis', href: '/dashboard/history', roles: ALL_NON_PLAYER_ROLES },
+  { label: 'History', hint: 'Analysis', href: '/dashboard/history', roles: HISTORY_NAV_ROLES },
   { label: 'New Analysis', hint: 'Analysis', href: '/' },
   { label: 'Account', hint: 'Account', href: '/account' },
   { label: 'Settings', hint: 'Account', href: '/dashboard/settings' },

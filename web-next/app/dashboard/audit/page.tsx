@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { getOrgContext, orgAuditLogs } from '@/lib/serverData'
+import AccessDenied from '@/components/AccessDenied'
 import AuditClient from '@/components/org/AuditClient'
 import PageHeader from '@/components/org/PageHeader'
+import { AUDIT_NAV_ROLES } from '@/lib/nav'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -15,7 +17,10 @@ export default async function AuditPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
+  if (!AUDIT_NAV_ROLES.includes(role)) {
+    return <AccessDenied page="Audit Log" allowedRoles={AUDIT_NAV_ROLES} />
+  }
 
   let logs = null
   try {

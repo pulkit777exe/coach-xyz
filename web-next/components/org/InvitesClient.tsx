@@ -32,11 +32,13 @@ import {
 interface InvitesClientProps {
   auth0Id: string
   initialInvites: OrgInvite[]
+  /** May issue + revoke invitations (server floors: owner/admin only). */
+  canInvite: boolean
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export default function InvitesClient({ auth0Id, initialInvites }: InvitesClientProps) {
+export default function InvitesClient({ auth0Id, initialInvites, canInvite }: InvitesClientProps) {
   const [invites, setInvites] = useState<OrgInvite[]>(initialInvites)
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
@@ -97,16 +99,18 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
     <Section
       title="Invitations"
       actions={
-        <Button
-          size="sm"
-          onClick={() => {
-            setLastToken(null)
-            setError(null)
-            setOpen(true)
-          }}
-        >
-          New invitation
-        </Button>
+        canInvite ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              setLastToken(null)
+              setError(null)
+              setOpen(true)
+            }}
+          >
+            New invitation
+          </Button>
+        ) : undefined
       }
     >
       <p className="mb-3 text-[13px] leading-[1.5] text-muted-foreground">
@@ -160,7 +164,7 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
                 >
                   {state}
                 </StatusPill>
-                {state === 'pending' && (
+                {state === 'pending' && canInvite && (
                   <Button
                     variant="ghost"
                     size="sm"

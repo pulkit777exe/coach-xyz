@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getOrgContext, orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
 import TeamsClient from '@/components/org/TeamsClient'
 import PageHeader from '@/components/org/PageHeader'
+import { hasPermission, TEAM_DELETE_ROLES } from '@/lib/permissions'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default async function TeamsPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
 
   const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
     orgTeams(auth0Id).catch(() => ({ teams: [] })),
@@ -37,6 +38,8 @@ export default async function TeamsPage() {
           initialTeams={teamsRes.teams}
           initialSeasons={seasonsRes.seasons}
           students={studentsRes.students}
+          canManage={hasPermission(role, 'team.manage')}
+          canDeleteTeam={TEAM_DELETE_ROLES.includes(role)}
         />
       </div>
     </div>

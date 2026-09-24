@@ -40,9 +40,15 @@ import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
 interface ObjectivesSectionProps {
   auth0Id: string
   studentId: string
+  /** Objective writes (create/status/delete) — player.manage, enforced server-side. */
+  canWrite: boolean
 }
 
-export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSectionProps) {
+export default function ObjectivesSection({
+  auth0Id,
+  studentId,
+  canWrite,
+}: ObjectivesSectionProps) {
   const [objectives, setObjectives] = useState<TrainingObjective[]>([])
   const [findings, setFindings] = useState<StoredFinding[]>([])
   const [trends, setTrends] = useState<FindingsTrendPoint[]>([])
@@ -193,9 +199,11 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
               </button>
             ))}
           </div>
-          <Button size="sm" onClick={openNewObjective}>
-            New objective
-          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={openNewObjective}>
+              New objective
+            </Button>
+          )}
         </div>
       }
     >
@@ -225,6 +233,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
             onStatus={setStatus}
             onDelete={removeObjective}
             onNew={openNewObjective}
+            canWrite={canWrite}
           />
         ) : (
           objectives.map((objective) => (
@@ -259,7 +268,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                 >
                   {objective.status}
                 </StatusPill>
-                {objective.status !== 'done' && (
+                {objective.status !== 'done' && canWrite && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -269,7 +278,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     Done
                   </Button>
                 )}
-                {objective.status === 'done' && (
+                {objective.status === 'done' && canWrite && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -279,6 +288,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     Reopen
                   </Button>
                 )}
+                {canWrite && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -288,6 +298,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                 >
                   Delete
                 </Button>
+                )}
               </div>
             </div>
           ))
@@ -369,6 +380,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     </span>
                     {finding.observation ? ` — ${finding.observation}` : ''}
                   </p>
+                  {canWrite && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -382,6 +394,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                   >
                     Make objective
                   </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -480,12 +493,14 @@ function ObjectiveBoard({
   onStatus,
   onDelete,
   onNew,
+  canWrite,
 }: {
   objectives: TrainingObjective[]
   busy: boolean
   onStatus: (id: string, status: 'active' | 'done' | 'archived') => void
   onDelete: (id: string) => void
   onNew: () => void
+  canWrite: boolean
 }) {
   return (
     <div className="grid items-start gap-4 md:grid-cols-3">
@@ -515,6 +530,7 @@ function ObjectiveBoard({
                     {o.finding_id ? `finding ${o.finding_id.slice(-8)} · ` : ''}
                     {o.due_on ? `due ${o.due_on}` : 'no due date'}
                   </p>
+                  {canWrite && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {o.status === 'active' && (
                       <Button
@@ -569,8 +585,10 @@ function ObjectiveBoard({
                       Delete
                     </Button>
                   </div>
+                  )}
                 </div>
               ))}
+              {canWrite && (
               <button
                 type="button"
                 onClick={onNew}
@@ -578,6 +596,7 @@ function ObjectiveBoard({
               >
                 <span aria-hidden="true">+</span> New page
               </button>
+              )}
             </div>
           </div>
         )

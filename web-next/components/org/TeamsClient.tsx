@@ -48,6 +48,10 @@ interface TeamsClientProps {
   initialTeams: Team[]
   initialSeasons: Season[]
   students: Student[]
+  /** Team-scoped writes (create/rename/members/seasons/matches) — team.manage. */
+  canManage: boolean
+  /** Team deletion — pinned to the server's owner/admin floor. */
+  canDeleteTeam: boolean
 }
 
 function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
@@ -79,6 +83,8 @@ export default function TeamsClient({
   initialTeams,
   initialSeasons,
   students,
+  canManage,
+  canDeleteTeam,
 }: TeamsClientProps) {
   const [teams, setTeams] = useState<Team[]>(initialTeams)
   const [seasons, setSeasons] = useState<Season[]>(initialSeasons)
@@ -180,48 +186,52 @@ export default function TeamsClient({
               className="inline-flex items-center gap-2 rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
             >
               {season.name}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    await orgDeleteSeason(auth0Id, season.id)
-                    setSeasons((prev) => prev.filter((s) => s.id !== season.id))
-                  })
-                }
-                className="text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
-                aria-label={`Delete season ${season.name}`}
-              >
-                ×
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      await orgDeleteSeason(auth0Id, season.id)
+                      setSeasons((prev) => prev.filter((s) => s.id !== season.id))
+                    })
+                  }
+                  className="text-muted-foreground hover:text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
+                  aria-label={`Delete season ${season.name}`}
+                >
+                  ×
+                </button>
+              )}
             </span>
           ))}
           {seasons.length === 0 && (
             <span className="text-[13px] text-muted-foreground">No seasons yet.</span>
           )}
         </div>
-        <div className="flex gap-2 mt-3">
-          <Input
-            value={seasonName}
-            onChange={(e) => setSeasonName(e.target.value)}
-            placeholder="2026 season"
-            aria-label="Season name"
-            className="h-9 max-w-56"
-          />
-          <Button
-            variant="outline"
-            disabled={busy || !seasonName.trim()}
-            onClick={() =>
-              run(async () => {
-                const res = await orgCreateSeason(auth0Id, { name: seasonName.trim() })
-                setSeasons((prev) => [res.season, ...prev])
-                setSeasonName('')
-              })
-            }
-          >
-            Add season
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex gap-2 mt-3">
+            <Input
+              value={seasonName}
+              onChange={(e) => setSeasonName(e.target.value)}
+              placeholder="2026 season"
+              aria-label="Season name"
+              className="h-9 max-w-56"
+            />
+            <Button
+              variant="outline"
+              disabled={busy || !seasonName.trim()}
+              onClick={() =>
+                run(async () => {
+                  const res = await orgCreateSeason(auth0Id, { name: seasonName.trim() })
+                  setSeasons((prev) => [res.season, ...prev])
+                  setSeasonName('')
+                })
+              }
+            >
+              Add season
+            </Button>
+          </div>
+        )}
         {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
       </Section>
 
@@ -250,9 +260,11 @@ export default function TeamsClient({
           {teams.length === 0 && (
             <EmptyState compact title="No teams yet" description="Create your first team to scope coaching and trends." />
           )}
-          <Button className="w-full mt-3" onClick={() => setCreateOpen(true)}>
-            New team
-          </Button>
+          {canManage && (
+            <Button className="w-full mt-3" onClick={() => setCreateOpen(true)}>
+              New team
+            </Button>
+          )}
           {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
         </Section>
 
@@ -262,42 +274,50 @@ export default function TeamsClient({
               <Section
                 title={selected.name}
                 actions={
-                  <div className="flex gap-2">
-                    <Input
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      aria-label="Team name"
-                      className="h-9 w-44"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || !renameValue.trim() || renameValue === selected.name}
-                      onClick={() =>
-                        run(async () => {
-                          await renameTeam(auth0Id, selected.id, renameValue.trim())
-                          await refreshTeams(selected.id)
-                        })
-                      }
-                    >
-                      Rename
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive border-destructive/30"
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => {
-                          await deleteTeam(auth0Id, selected.id)
-                          setSelectedId(null)
-                          await refreshTeams()
-                        })
-                      }
-                    >
-                      Delete
-                    </Button>
-                  </div>
+                  canManage || canDeleteTeam ? (
+                    <div className="flex gap-2">
+                      {canManage && (
+                        <>
+                          <Input
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            aria-label="Team name"
+                            className="h-9 w-44"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy || !renameValue.trim() || renameValue === selected.name}
+                            onClick={() =>
+                              run(async () => {
+                                await renameTeam(auth0Id, selected.id, renameValue.trim())
+                                await refreshTeams(selected.id)
+                              })
+                            }
+                          >
+                            Rename
+                          </Button>
+                        </>
+                      )}
+                      {canDeleteTeam && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive border-destructive/30"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await deleteTeam(auth0Id, selected.id)
+                              setSelectedId(null)
+                              await refreshTeams()
+                            })
+                          }
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  ) : undefined
                 }
               >
                 <p className="text-[13px] text-muted-foreground mb-3">
@@ -330,26 +350,29 @@ export default function TeamsClient({
                           {member.role}
                         </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await removeTeamMember(auth0Id, selected.id, member.id)
-                            const res = await listTeamMembers(auth0Id, selected.id)
-                            setMembers(res.members)
-                          })
-                        }
-                      >
-                        Remove
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await removeTeamMember(auth0Id, selected.id, member.id)
+                              const res = await listTeamMembers(auth0Id, selected.id)
+                              setMembers(res.members)
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
                 {members.length === 0 && (
                   <EmptyState compact title="No members yet" description="Add coaches by account or players from the roster." />
                 )}
+                  {canManage && (
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
                       items={{ coach: 'Coach (account)', player: 'Player (roster)' }}
@@ -417,6 +440,7 @@ export default function TeamsClient({
                       Add
                     </Button>
                   </div>
+                  )}
               </Section>
 
               <Section title="Matches">
@@ -442,22 +466,25 @@ export default function TeamsClient({
                             'Unscheduled'}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await orgDeleteMatch(auth0Id, match.id)
-                            const res = await orgMatches(auth0Id, { teamId: selected.id })
-                            setMatches(res.matches)
-                          })
-                        }
-                      >
-                        Remove
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await orgDeleteMatch(auth0Id, match.id)
+                              const res = await orgMatches(auth0Id, { teamId: selected.id })
+                              setMatches(res.matches)
+                            })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
                   ))}
+                  {canManage && (
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Input
                       value={matchOpponent}
@@ -516,6 +543,7 @@ export default function TeamsClient({
                   Add match
                 </Button>
               </div>
+              )}
             </div>
           </Section>
         </>

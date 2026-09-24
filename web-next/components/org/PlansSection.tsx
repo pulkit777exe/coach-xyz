@@ -26,6 +26,8 @@ import {
 interface PlansSectionProps {
   auth0Id: string
   studentId: string
+  /** Plan writes (create/status/delete) — player.manage, enforced server-side. */
+  canWrite: boolean
 }
 
 const PLAN_TONE: Record<TrainingPlan['status'], StatusTone> = {
@@ -34,7 +36,7 @@ const PLAN_TONE: Record<TrainingPlan['status'], StatusTone> = {
   archived: 'gray',
 }
 
-export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) {
+export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSectionProps) {
   const [plans, setPlans] = useState<TrainingPlan[]>([])
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -95,15 +97,17 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
       <Section
         title="Training plans"
         actions={
-          <Button
-            size="sm"
-            onClick={() => {
-              setError(null)
-              setOpen(true)
-            }}
-          >
-            New plan
-          </Button>
+          canWrite ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                setError(null)
+                setOpen(true)
+              }}
+            >
+              New plan
+            </Button>
+          ) : undefined
         }
       >
         <p className="mb-3 text-[13px] text-muted-foreground">
@@ -130,7 +134,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                 <StatusPill tone={PLAN_TONE[plan.status] ?? 'gray'}>
                   <span className="capitalize">{plan.status}</span>
                 </StatusPill>
-              {plan.status !== 'done' && (
+              {plan.status !== 'done' && canWrite && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -140,7 +144,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                   Done
                 </Button>
               )}
-              {plan.status === 'done' && (
+              {plan.status === 'done' && canWrite && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -150,6 +154,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                   Reopen
                 </Button>
               )}
+              {canWrite && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -167,6 +172,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
               >
                 Delete
               </Button>
+              )}
             </div>
             </div>
           ))}

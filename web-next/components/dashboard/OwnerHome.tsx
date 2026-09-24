@@ -77,18 +77,21 @@ export function SectionHeading({
   linkLabel,
 }: {
   title: string
-  href: string
-  linkLabel: string
+  /** When either is omitted the heading renders without its "View all"-style link. */
+  href?: string
+  linkLabel?: string
 }) {
   return (
     <div className="mb-1 flex items-baseline justify-between gap-4">
       <h2 className={headingClass}>{title}</h2>
-      <Link
-        href={href}
-        className={`text-[13px] text-muted-foreground ${linkFocusClass}`}
-      >
-        {linkLabel}
-      </Link>
+      {href && linkLabel ? (
+        <Link
+          href={href}
+          className={`text-[13px] text-muted-foreground ${linkFocusClass}`}
+        >
+          {linkLabel}
+        </Link>
+      ) : null}
     </div>
   )
 }
@@ -211,14 +214,21 @@ function formScore(summary: unknown): number | null {
 export function RecentList({
   analyses,
   limit,
+  showHistoryLink,
 }: {
   analyses: DashboardAnalysis[] | null
   limit: number
+  /** False for roles outside HISTORY_NAV_ROLES (no analysis.read → no History link). */
+  showHistoryLink: boolean
 }) {
   const rows = (analyses ?? []).slice(0, limit)
   return (
     <section className="mt-8">
-      <SectionHeading title="Recents" href="/dashboard/history" linkLabel="View all" />
+      <SectionHeading
+        title="Recents"
+        href={showHistoryLink ? '/dashboard/history' : undefined}
+        linkLabel={showHistoryLink ? 'View all' : undefined}
+      />
       {analyses === null || analyses.length === 0 ? (
         <EmptyCard>No analyses yet — run your first one above.</EmptyCard>
       ) : (
@@ -461,6 +471,7 @@ export default function OwnerHome({
   overview,
   members,
   subscription,
+  showHistoryLink,
 }: {
   firstName: string
   error: string | null
@@ -471,6 +482,7 @@ export default function OwnerHome({
   overview: OrgOverview | null
   members: OrgMembersResponse | null
   subscription: OrgSubscription | null
+  showHistoryLink: boolean
 }) {
   const statCards =
     stats !== null
@@ -501,7 +513,7 @@ export default function OwnerHome({
 
       <StaffPreview members={members} />
 
-      <RecentList analyses={analyses} limit={6} />
+      <RecentList analyses={analyses} limit={6} showHistoryLink={showHistoryLink} />
       <UpcomingList events={events} />
       <ReportsList reports={reports} limit={4} />
     </div>

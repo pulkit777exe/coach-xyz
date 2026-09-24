@@ -7,6 +7,7 @@ import {
   getMyAnalyses as libGetMyAnalyses,
   getMyObjectives as libGetMyObjectives,
   getMyReports as libGetMyReports,
+  getMyReport as libGetMyReport,
   getMySchedule as libGetMySchedule,
 } from './meApi'
 import { ORG_COOKIE } from './orgCookie'
@@ -123,6 +124,8 @@ export const getMySchedule = cache(() => libGetMySchedule())
 export const getMyAnalyses = cache(() => libGetMyAnalyses())
 
 export const getMyReports = cache(() => libGetMyReports())
+
+export const getMyReport = cache((id: string) => libGetMyReport(id))
 
 export const getMyObjectives = cache(() => libGetMyObjectives())
 

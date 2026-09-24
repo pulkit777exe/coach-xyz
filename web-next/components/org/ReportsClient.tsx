@@ -60,10 +60,16 @@ export default function ReportsClient({
   auth0Id,
   initialReports,
   students,
+  canWrite,
+  canSend,
 }: {
   auth0Id: string
   initialReports: ReportRecord[]
   students: Student[]
+  /** Report draft writes (create/edit/delete) — report.create. */
+  canWrite: boolean
+  /** Emailing + AI generation — pinned to the server's email/aiReports floor. */
+  canSend: boolean
 }) {
   const [reports, setReports] = useState<ReportRecord[]>(initialReports)
   const [generateOpen, setGenerateOpen] = useState(false)
@@ -283,17 +289,21 @@ export default function ReportsClient({
               <DownloadIcon /> Export
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setAiOpen(true)}
-            disabled={Boolean(aiPending)}
-          >
-            <SparklesIcon /> Generate with AI
-          </Button>
-          <Button size="sm" onClick={() => setGenerateOpen(true)}>
-            <PlusIcon /> Generate report
-          </Button>
+          {canSend && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAiOpen(true)}
+              disabled={Boolean(aiPending)}
+            >
+              <SparklesIcon /> Generate with AI
+            </Button>
+          )}
+          {canWrite && (
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <PlusIcon /> Generate report
+            </Button>
+          )}
         </div>
       </div>
 
@@ -347,33 +357,39 @@ export default function ReportsClient({
                   >
                     <EyeIcon />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    onClick={() => openEmail(r)}
-                    aria-label="Email report"
-                  >
-                    <MailIcon className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    onClick={() => openEdit(r)}
-                    aria-label="Edit report"
-                  >
-                    <PencilIcon className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleting(r)}
-                    aria-label="Delete report"
-                  >
-                    <TrashIcon className="size-3.5" />
-                  </Button>
+                  {canSend && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => openEmail(r)}
+                      aria-label="Email report"
+                    >
+                      <MailIcon className="size-3.5" />
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => openEdit(r)}
+                      aria-label="Edit report"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleting(r)}
+                      aria-label="Delete report"
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}
@@ -444,33 +460,39 @@ export default function ReportsClient({
                         >
                           <EyeIcon />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground"
-                          onClick={() => openEmail(r)}
-                          aria-label="Email report"
-                        >
-                          <MailIcon className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground"
-                          onClick={() => openEdit(r)}
-                          aria-label="Edit report"
-                        >
-                          <PencilIcon className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleting(r)}
-                          aria-label="Delete report"
-                        >
-                          <TrashIcon className="size-3.5" />
-                        </Button>
+                        {canSend && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground"
+                            onClick={() => openEmail(r)}
+                            aria-label="Email report"
+                          >
+                            <MailIcon className="size-3.5" />
+                          </Button>
+                        )}
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground"
+                            onClick={() => openEdit(r)}
+                            aria-label="Edit report"
+                          >
+                            <PencilIcon className="size-3.5" />
+                          </Button>
+                        )}
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleting(r)}
+                            aria-label="Delete report"
+                          >
+                            <TrashIcon className="size-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

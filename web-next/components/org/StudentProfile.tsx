@@ -112,6 +112,7 @@ export default function StudentProfile({
   initialReports,
   allAnalyses,
   sports,
+  canWrite,
 }: {
   auth0Id: string
   student: Student
@@ -120,6 +121,8 @@ export default function StudentProfile({
   initialReports: ReportRecord[]
   allAnalyses: DashboardAnalysis[]
   sports: string[]
+  /** Student-domain writes (edit/remove, metrics, links, objectives/plans) — player.manage. */
+  canWrite: boolean
 }) {
   const router = useRouter()
   const [student_, setStudent] = useState<Student>(student)
@@ -460,30 +463,34 @@ export default function StudentProfile({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <PencilIcon />
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() =>
-              setConfirm({
-                title: `Remove ${student_.full_name}?`,
-                description:
-                  'This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.',
-                action: async () => {
-                  await orgDeleteStudent(auth0Id, student_.id)
-                  toast.success(`${student_.full_name} removed`)
-                  router.push('/dashboard/students')
-                },
-              })
-            }
-          >
-            <TrashIcon />
-            Delete
-          </Button>
+          {canWrite && (
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <PencilIcon />
+              Edit
+            </Button>
+          )}
+          {canWrite && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() =>
+                setConfirm({
+                  title: `Remove ${student_.full_name}?`,
+                  description:
+                    'This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.',
+                  action: async () => {
+                    await orgDeleteStudent(auth0Id, student_.id)
+                    toast.success(`${student_.full_name} removed`)
+                    router.push('/dashboard/students')
+                  },
+                })
+              }
+            >
+              <TrashIcon />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
 
@@ -575,21 +582,23 @@ export default function StudentProfile({
 
         {/* Training objectives + finding trends (§26 loop) */}
         <div className="mt-8">
-          <ObjectivesSection auth0Id={auth0Id} studentId={student_.id} />
+          <ObjectivesSection auth0Id={auth0Id} studentId={student_.id} canWrite={canWrite} />
         </div>
 
         {/* Training plans */}
         <div className="mt-8">
-          <PlansSection auth0Id={auth0Id} studentId={student_.id} />
+          <PlansSection auth0Id={auth0Id} studentId={student_.id} canWrite={canWrite} />
         </div>
 
         {/* Wellness check-ins (health data, medical-gated) */}
         <div className="mt-8">
-          <WellnessSection auth0Id={auth0Id} studentId={student_.id} />
+          <WellnessSection auth0Id={auth0Id} studentId={student_.id} canWrite={canWrite} />
         </div>
 
-        {/* Log metric */}
+        {/* Log metric — form only for player.manage; the logged list stays readable */}
+        {(canWrite || manualPoints.length > 0) && (
         <div className="border-border bg-card mt-4 rounded-[6px] border p-4">
+          {canWrite && (
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="metric_key" className="text-[14px] font-medium">
@@ -659,6 +668,7 @@ export default function StudentProfile({
               </Button>
             )}
           </div>
+          )}
 
           {manualPoints.length > 0 && (
             <ul className="mt-4 space-y-1 border-t border-border pt-3">
@@ -678,7 +688,7 @@ export default function StudentProfile({
                     <span className="text-muted-foreground text-xs">
                       {formatDateShort(p.measured_at)}
                     </span>
-                    {p.id && (
+                    {p.id && canWrite && (
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -689,6 +699,7 @@ export default function StudentProfile({
                         <PencilIcon className="size-3.5" />
                       </Button>
                     )}
+                    {canWrite && (
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -709,12 +720,14 @@ export default function StudentProfile({
                     >
                       <TrashIcon className="size-3.5" />
                     </Button>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
           )}
         </div>
+        )}
       </div>
 
       {/* Trends summary */}
@@ -843,7 +856,7 @@ export default function StudentProfile({
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Linked Analyses
           </p>
-          {unlinked.length > 0 && (
+          {unlinked.length > 0 && canWrite && (
             <LinkAnalysisSelect
               unlinked={unlinked}
               onPick={(a) => setAnalysisLink(a, student_.id)}
@@ -906,6 +919,7 @@ export default function StudentProfile({
                         {analysisScore(a) ?? '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
+                      {canWrite && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -914,6 +928,7 @@ export default function StudentProfile({
                       >
                         <UnlinkIcon className="size-3.5" /> Unlink
                       </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -960,6 +975,7 @@ export default function StudentProfile({
                         year: 'numeric',
                       })}
                     </span>
+                    {canWrite && (
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -980,6 +996,7 @@ export default function StudentProfile({
                     >
                       <TrashIcon className="size-3.5" />
                     </Button>
+                    )}
                   </span>
                 </li>
               ))}

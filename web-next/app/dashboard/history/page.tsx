@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
-import { getDashboardAnalyses } from '@/lib/serverData'
+import { getDashboardAnalyses, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import AccessDenied from '@/components/AccessDenied'
 import PageHeader from '@/components/org/PageHeader'
 import EmptyState from '@/components/org/EmptyState'
 import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
+import { HISTORY_NAV_ROLES } from '@/lib/nav'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -23,6 +25,10 @@ export default async function HistoryPage({
   const session = await getSession()
   if (!session) {
     redirect('/auth/login')
+  }
+  const { role } = await getOrgContext()
+  if (!HISTORY_NAV_ROLES.includes(role)) {
+    return <AccessDenied page="History" allowedRoles={HISTORY_NAV_ROLES} />
   }
   const auth0Id = session.user.sub
   const params = await searchParams

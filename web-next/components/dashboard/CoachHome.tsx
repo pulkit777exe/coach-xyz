@@ -117,6 +117,7 @@ export default function CoachHome({
   overview,
   teams,
   role,
+  showHistoryLink,
 }: {
   firstName: string
   error: string | null
@@ -127,6 +128,7 @@ export default function CoachHome({
   overview: OrgOverview | null
   teams: Team[] | null
   role: OrgRole
+  showHistoryLink: boolean
 }) {
   const statCards =
     stats !== null
@@ -160,7 +162,7 @@ export default function CoachHome({
         </p>
       ) : null}
 
-      <RecentList analyses={analyses} limit={10} />
+      <RecentList analyses={analyses} limit={10} showHistoryLink={showHistoryLink} />
       <UpcomingList events={events} />
       <ReportsList reports={reports} limit={4} />
     </div>

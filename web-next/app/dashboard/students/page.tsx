@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getOrgContext, orgStudents, orgStudentsSports, orgTeams } from '@/lib/serverData'
 import StudentsClient from '@/components/org/StudentsClient'
 import PageHeader from '@/components/org/PageHeader'
+import { hasPermission, REPORT_SEND_ROLES } from '@/lib/permissions'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default async function StudentsPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
 
   const [studentsRes, sportsRes, teamsRes] = await Promise.all([
     orgStudents(auth0Id).catch(() => ({ students: [] })),
@@ -37,6 +38,8 @@ export default async function StudentsPage() {
           initialStudents={studentsRes.students}
           sports={sportsRes.sports}
           teams={teamsRes.teams}
+          canManage={hasPermission(role, 'player.manage')}
+          canInvite={REPORT_SEND_ROLES.includes(role)}
         />
       </div>
     </div>

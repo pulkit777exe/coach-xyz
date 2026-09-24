@@ -12,6 +12,7 @@ import {
   orgStudentAnalyses,
 } from '@/lib/serverData'
 import StudentProfile from '@/components/org/StudentProfile'
+import { hasPermission } from '@/lib/permissions'
 import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -37,7 +38,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const { id } = await params
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
 
   const studentRes = await orgStudent(auth0Id, id).catch(() => null)
   if (!studentRes) notFound()
@@ -73,6 +74,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         initialReports={reportsRes.reports}
         allAnalyses={[...unlinkedRes.analyses, ...linkedRes.analyses]}
         sports={sportsRes.sports}
+        canWrite={hasPermission(role, 'player.manage')}
       />
     </div>
   )

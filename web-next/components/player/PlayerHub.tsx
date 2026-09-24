@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   CalendarIcon,
   TrendingUpIcon,
@@ -382,7 +383,12 @@ export default function PlayerHub() {
             {reports.reports.slice(0, 8).map((report) => (
               <li key={report.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-[14px] font-medium text-foreground">{report.title}</p>
+                  <Link
+                    href={`/player/reports/${report.id}`}
+                    className="text-[14px] font-medium text-foreground hover:underline"
+                  >
+                    {report.title}
+                  </Link>
                   <p className="mt-0.5 text-[13px] text-muted-foreground tabular-nums">
                     {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} ·{' '}
                     {formatDateShort(report.created_at)}

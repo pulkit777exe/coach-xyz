@@ -2,9 +2,12 @@ import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { getOrgContext, orgInvites, orgMembers } from '@/lib/serverData'
+import AccessDenied from '@/components/AccessDenied'
 import MembersSection from '@/components/org/MembersSection'
 import InvitesClient from '@/components/org/InvitesClient'
 import PageHeader from '@/components/org/PageHeader'
+import { MEMBERS_NAV_ROLES } from '@/lib/nav'
+import { MEMBER_INVITE_ROLES } from '@/lib/permissions'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -16,7 +19,10 @@ export default async function MembersPage() {
   noStore()
   const session = await getSession()
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id, role } = await getOrgContext()
+  if (!MEMBERS_NAV_ROLES.includes(role)) {
+    return <AccessDenied page="Members" allowedRoles={MEMBERS_NAV_ROLES} />
+  }
 
   const [membersRes, invitesRes] = await Promise.all([
     orgMembers(auth0Id),
@@ -33,7 +39,11 @@ export default async function MembersPage() {
 
       <div className="mt-6 space-y-6">
         <MembersSection auth0Id={auth0Id} initialData={membersRes} />
-        <InvitesClient auth0Id={auth0Id} initialInvites={invitesRes.invites} />
+        <InvitesClient
+          auth0Id={auth0Id}
+          initialInvites={invitesRes.invites}
+          canInvite={MEMBER_INVITE_ROLES.includes(role)}
+        />
       </div>
     </div>
   )

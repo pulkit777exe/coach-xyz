@@ -66,8 +66,78 @@ plus `server/tests/errors.test.ts` (32) for status/retryable parity.
 | Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion)                                                                                                      |
 | Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                                                                                                                                   |
 | Discovery         | `components/SidebarSearch.tsx` (⌘K palette: role-gated pages + player search)                                                                                                                                                                                                                            |
-| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `visibleNavGroups`)                                                                                                                                                                                                                                |
+| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `HISTORY_NAV_ROLES`, `ALL_NON_PLAYER_ROLES`, `visibleNavGroups`) + `lib/permissions.ts` (role→permission mirror) + `components/AccessDenied.tsx` (page floor view)                                                                                                                                     |
 | RSC data          | `lib/serverData.ts` (React.cache)                                                                                                                                                                                                                                                                        |
+
+## Role matrix & UI gating (frontend)
+
+`web-next/lib/permissions.ts` mirrors `server/src/lib/permissions.ts` — same
+vocabulary and role→permission matrix, pinned by
+`web-next/lib/__tests__/permissions.test.ts` (single-sided edits break CI).
+Three literal guard floors are additionally pinned from where the server
+mounts them: `REPORT_SEND_ROLES` (email family, `server/src/index.ts`),
+`TEAM_DELETE_ROLES` (`server/src/routes/teams.ts`),
+`MEMBER_INVITE_ROLES` (`server/src/routes/members.ts`). Gating layers, all
+UX-only — the server remains the enforcement point:
+
+- **Nav**: `lib/nav.ts` role lists filter `DashboardNav`, `SidebarSearch`, and
+  the Features page.
+- **Pages**: `/dashboard/{members,audit,history}` render
+  `components/AccessDenied.tsx` before any fetch when the role is out of floor.
+- **Data**: the dashboard home skips the org-analyses fetch for `medical`
+  (granted `medical.read`, not `analysis.read`).
+- **Capabilities**: pages compute `canManage`/`canInvite`/`canWrite`/`canSend`/
+  `canDeleteTeam` from `lib/permissions.ts` and thread them into the
+  Students/Teams/Reports/Invites clients and StudentProfile (→ objectives,
+  plans, wellness — matching the server's `player.manage` writes).
+- **Player**: `/player/reports/[id]` reads only `/api/me/reports/:id`
+  (self-scoped + row-checked server-side); hub rows link there.
+
+| Permission         | owner | admin | head_coach | assistant_coach | coach | analyst | medical | player |
+| ------------------ | :---: | :---: | :--------: | :-------------: | :---: | :-----: | :-----: | :----: |
+| `org.invite`       |  ✓    |  ✓    |            |                 |       |         |         |        |
+| `org.manage_members`|  ✓   |  ✓    |            |                 |       |         |         |        |
+| `team.create`      |  ✓    |  ✓    |            |                 |       |         |         |        |
+| `team.manage`      |  ✓    |  ✓    |     ✓      |                 |  ✓    |         |         |        |
+| `team.manage_members`|  ✓  |  ✓    |     ✓      |                 |  ✓    |         |         |        |
+| `team.read`        |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |        |
+| `analysis.create`  |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
+| `analysis.read`    |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |   ✓    |
+| `player.read`      |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |        |
+| `player.manage`    |  ✓    |  ✓    |     ✓      |                 |  ✓    |         |         |        |
+| `report.read`      |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |   ✓    |
+| `report.create`    |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
+| `finding.review`   |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
+| `medical.read`     |  ✓    |       |            |                 |       |         |    ✓    |        |
+
+**Server gaps (frontend-only for now — server fixes out of scope here):**
+
+- **Regression (blocks all non-owner members since `b9fca0f`, 2026-09-22):**
+  `serviceGuard` passes the ABSOLUTE `request.url` into
+  `resolveMemberRoleForPath` → `isOrgScopedPath` does `startsWith('/api/org/')`,
+  which never matches — so `memberRole` is always `null` and every caller whose
+  sub ≠ the org id gets **403 `FORBIDDEN` "Authenticated identity does not
+  match the requested account"** on all `/api/org|email|auth/user/:id/*` routes
+  (verified: `getMemberRole(org, sub)` returns the right role; the path check is
+  the bug — `server/src/lib/serviceGuard.ts:146,315`). Consequences until fixed:
+  invited-coach/member data pages either `.catch`-degrade to empty (students,
+  teams, dashboard) or hit the RSC error boundary (reports, history body).
+  Mirrored UI gating (nav/page/capability) is unaffected and verified — the
+  blocked assertions are member-persona *data* renders only.
+- `/api/org/:id/reports` CRUD runs on identity + the app-level non-player floor
+  only (once the guard regression above is fixed): `medical` can
+  create/update/delete reports server-side despite `report.read`-only (UI hides
+  the affordances).
+- `attendance`/`schedule`/`performance`/`overview`/`students` writes have no
+  per-role floor beyond membership: any non-player member (incl. `medical`,
+  `analyst`) can invoke them over raw HTTP where the matrix grants read-only.
+- The email floor (`owner, admin, head_coach, assistant_coach, coach`) is
+  *stricter* than `report.create`: `analyst` can draft reports but not email
+  them — mirrored on both sides, recorded here so the asymmetry is conscious.
+- Enforced server-side today: `objectives`/`plans` (`player.manage`),
+  `compete` (`team.manage`), `teams` (+ owner/admin delete floor),
+  `members` (`orgRoleGuard` per scope), `wellness` (read `medical.read`,
+  write `player.manage`), `aiReports` (email-family floor).
 
 ## Conventions (must keep)
 
