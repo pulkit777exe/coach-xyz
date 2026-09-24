@@ -143,33 +143,6 @@ def bbox_from_landmarks(
     )
 
 
-def deduplicate_by_iou(
-    candidates: list[dict[str, Any]],
-    iou_threshold: float = 0.5,
-) -> list[dict[str, Any]]:
-    """
-    Remove duplicate candidates with IoU above threshold.
-    Keeps the candidate with higher visibility.
-    """
-    if not candidates:
-        return []
-
-    sorted_cands = sorted(candidates, key=lambda c: c.get("visibility", 0), reverse=True)
-    kept: list[dict[str, Any]] = []
-
-    for cand in sorted_cands:
-        bbox = cand["bbox"]
-        is_dup = False
-        for existing in kept:
-            if iou(bbox, existing["bbox"]) > iou_threshold:
-                is_dup = True
-                break
-        if not is_dup:
-            kept.append(cand)
-
-    return kept
-
-
 def landmark_angle(a: dict, b: dict, c: dict) -> float:
     """Interior angle at vertex b formed by points a-b-c in degrees."""
     v1 = (a["x"] - b["x"], a["y"] - b["y"])

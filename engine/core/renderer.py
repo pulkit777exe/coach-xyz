@@ -32,11 +32,6 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return font
 
 
-def _text_size(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> tuple[int, int]:
-    bbox = font.getbbox(text)
-    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
-
-
 # ── Sport config ──────────────────────────────────────────────────────────────
 # Loader lives in core.sport_config (single cached copy shared with analyzer).
 
@@ -77,15 +72,6 @@ def _sport_label(sport: str) -> str:
         "hockey": "Hockey",
     }
     return icon_map.get((sport or "").lower(), "Unknown Sport")
-
-
-def _lerp_color(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> tuple[int, int, int]:
-    t = max(0.0, min(1.0, t))
-    return (
-        int(c1[0] + (c2[0] - c1[0]) * t),
-        int(c1[1] + (c2[1] - c1[1]) * t),
-        int(c1[2] + (c2[2] - c1[2]) * t),
-    )
 
 
 # ── Rounded rectangle drawing ────────────────────────────────────────────────

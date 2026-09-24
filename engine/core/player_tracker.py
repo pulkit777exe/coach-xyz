@@ -1,15 +1,12 @@
 """
-player_tracker.py — Frame scoring + player/skeleton matching utilities.
+player_tracker.py — Frame scoring utilities.
 
-This module is used by multi-player analysis to:
-1) pick strong keyframes from a clip,
-2) map selected player boxes to detected skeletons, and
-3) crop player references for downstream model prompts.
+This module is used by multi-player analysis to pick strong keyframes from
+a clip (see `score_frames`, consumed by cli/frame_selector.py).
 """
 
 from __future__ import annotations
 
-import base64
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -155,71 +152,6 @@ def score_frames(video_path: str) -> list[ScoredFrame]:
     return scored[:5]
 
 
-def match_player_to_skeleton(
-    reference_bbox: dict[str, Any] | tuple[float, float, float, float],
-    detected_skeletons: list[dict[str, Any]],
-    frame_width: int,
-    frame_height: int,
-) -> int:
-    """
-    Return the nearest skeleton index to the reference bbox centroid.
-    Returns -1 when match confidence is below 0.7.
-    """
-    if not detected_skeletons:
-        return -1
-
-    x_min, y_min, x_max, y_max = _bbox_to_pixels(reference_bbox, frame_width, frame_height)
-    ref_cx = (x_min + x_max) / 2.0
-    ref_cy = (y_min + y_max) / 2.0
-    diag = max(1.0, float(np.hypot(frame_width, frame_height)))
-
-    best_idx = -1
-    best_conf = -1.0
-
-    for idx, skeleton in enumerate(detected_skeletons):
-        centroid = skeleton.get("centroid")
-        if not centroid or len(centroid) != 2:
-            continue
-
-        sx, sy = float(centroid[0]), float(centroid[1])
-        dist = float(np.hypot(ref_cx - sx, ref_cy - sy))
-        distance_conf = max(0.0, 1.0 - (dist / diag))
-        skeleton_conf = float(skeleton.get("confidence", 1.0))
-        combined_conf = distance_conf * skeleton_conf
-
-        if combined_conf > best_conf:
-            best_conf = combined_conf
-            best_idx = idx
-
-    if best_conf < 0.7:
-        return -1
-    return best_idx
-
-
-def crop_player(frame: np.ndarray, bbox: dict[str, Any] | tuple[float, float, float, float]) -> str:
-    """
-    Crop player region using normalized bbox coordinates and return base64 JPEG.
-    """
-    if frame is None or frame.size == 0:
-        return ""
-
-    fh, fw = frame.shape[:2]
-    x_min, y_min, x_max, y_max = _bbox_to_pixels(bbox, fw, fh)
-    x_min = max(0, min(fw - 1, x_min))
-    y_min = max(0, min(fh - 1, y_min))
-    x_max = max(1, min(fw, x_max))
-    y_max = max(1, min(fh, y_max))
-
-    if x_max <= x_min or y_max <= y_min:
-        return ""
-
-    crop = frame[y_min:y_max, x_min:x_max]
-    ok, encoded = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 92])
-    if not ok:
-        return ""
-    return base64.b64encode(encoded.tobytes()).decode("utf-8")
-
-
 def _extract_skeletons(
     pose_landmarks: list[Any] | None,
     frame_width: int,
@@ -292,26 +224,3 @@ def _blur_score(frame: np.ndarray) -> float:
     variance = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     # Saturate around 300 variance.
     return float(np.clip(variance / 300.0, 0.0, 1.0))
-
-
-def _bbox_to_pixels(
-    bbox: dict[str, Any] | tuple[float, float, float, float],
-    frame_width: int,
-    frame_height: int,
-) -> tuple[int, int, int, int]:
-    if isinstance(bbox, tuple):
-        x_min, y_min, x_max, y_max = bbox
-    else:
-        x_min = float(bbox.get("x_min", 0.0))
-        y_min = float(bbox.get("y_min", 0.0))
-        x_max = float(bbox.get("x_max", 0.0))
-        y_max = float(bbox.get("y_max", 0.0))
-
-    is_normalized = max(abs(x_min), abs(y_min), abs(x_max), abs(y_max)) <= 1.5
-    if is_normalized:
-        x_min *= frame_width
-        x_max *= frame_width
-        y_min *= frame_height
-        y_max *= frame_height
-
-    return int(x_min), int(y_min), int(x_max), int(y_max)

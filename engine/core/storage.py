@@ -156,24 +156,12 @@ def upload_result_video(local_path: str, job_id: str) -> str:
     return key
 
 
-def get_download_url(key: str, expires_in: int = 3600) -> str:
-    """Local storage doesn't support presigned URLs."""
-    raise RuntimeError("Presigned URL is not available in local storage mode")
-
-
 def delete_file(key: str) -> None:
     if is_local_backend():
         path = _key_to_local_path(key)
         path.unlink(missing_ok=True)
         return
     _s3_client().delete_object(Bucket=_s3_bucket(), Key=key)
-
-
-def get_local_file_path_or_none(key: str) -> str | None:
-    """Local path only when the backend is local and the file exists."""
-    if not is_local_backend():
-        return None
-    return get_local_file_path(key)
 
 
 def presigned_upload(key: str, mime_type: str, expires_in: int = 3600) -> dict[str, object]:
