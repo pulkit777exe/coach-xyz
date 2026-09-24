@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-import { orDisabledDefault, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 
 // ── Organization + video + event registries ────────────────────────────────
 // The org identity stays the Auth0 sub (org_auth0_id); the organizations
@@ -31,16 +31,6 @@ export const ensureOrg = async (
         name = coalesce(organizations.name, excluded.name),
         updated_at = now()
       returning auth0_id, name, created_by, created_at, updated_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
-
-export const getOrg = async (orgAuth0Id: string): Promise<Organization | null> => {
-  return withHistoryStore(async (db: SQL) => {
-    const rows = await db<Organization[]>`
-      select auth0_id, name, created_by, created_at, updated_at
-      from organizations where auth0_id = ${orgAuth0Id} limit 1;
     `
     return rows?.[0] ?? null
   })
@@ -161,25 +151,4 @@ export const persistPlayerEvents = async (
       `
     }
   })
-}
-
-export const listPlayerEvents = async (
-  opts: { orgAuth0Id?: string | null; studentId?: string | null; jobId?: string | null },
-  limit = 100,
-): Promise<PlayerEventRecord[]> => {
-  const capped = Math.min(Math.max(limit, 1), 500)
-  return orDisabledDefault(
-    await withHistoryStore(async (db: SQL) => {
-      const rows = await db<PlayerEventRecord[]>`
-        select * from player_events
-        where (${opts.orgAuth0Id ?? null}::text is null or org_auth0_id = ${opts.orgAuth0Id ?? null})
-          and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid)
-          and (${opts.jobId ?? null}::text is null or server_job_id = ${opts.jobId ?? null})
-        order by event_at_s asc nulls last, created_at asc
-        limit ${capped};
-      `
-      return rows ?? []
-    }),
-    [],
-  )
 }

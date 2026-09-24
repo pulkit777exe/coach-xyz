@@ -1,6 +1,6 @@
 import { SQL } from 'bun'
 
-import { withHistoryStoreOrThrow, ensureInitialized } from './historyStore'
+import { withHistoryStoreOrThrow } from './historyStore'
 
 // ── Org-member role vocabulary ──────────────────────────────────────────────
 // Single source of truth for org membership roles. Mirrored on the web
@@ -69,12 +69,6 @@ const MEMBER_SELECT_COLUMNS = `
   u.picture,
   m.created_at
 `
-
-// Schema lives in ensureInitialized (historyStore.ts); this only defers to it.
-/** Ensures the shared schema (incl. org_members) is initialized. */
-export const ensureOrgMembersInitialized = async (): Promise<void> => {
-  await withHistoryStoreOrThrow(() => ensureInitialized())
-}
 
 /**
  * Idempotently seeds the owner row for a coach's org. Each org gets exactly one
