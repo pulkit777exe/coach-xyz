@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 import { Button } from '@/components/9ui/ui/button'
+import TypewriterHighlight from '@/components/TypewriterHighlight'
 import { ArrowRight, Check, Play, ChevronDown, Globe } from 'lucide-react'
 
 interface LandingPageProps {
@@ -164,10 +165,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
         <div className="mx-auto max-w-[1120px] text-center">
           <p className={eyebrow}>AI-powered coaching</p>
           <h1 className="mx-auto mt-5 max-w-[900px] text-balance text-[38px] font-bold leading-[1.05] tracking-[-0.02em] text-[#37352f] sm:text-[56px] lg:text-[68px] dark:text-[#ececec]">
-            Analyze, protect &amp; elevate every{' '}
-            <span className="inline-block rounded-full bg-[#2383e2]/10 px-3 text-[#2383e2] sm:px-4 dark:bg-[#2383e2]/15 dark:text-[#4da3ec]">
-              athlete&apos;s journey
-            </span>
+            Analyze, protect &amp; elevate every <TypewriterHighlight />
           </h1>
           <p className="mx-auto mt-6 max-w-[640px] text-balance text-[18px] leading-7 text-[#787774] lg:text-[20px] dark:text-[#9b9b9b]">
             CoachXYZ makes high-performance video analysis effortless — from upload to annotated

@@ -9,6 +9,7 @@ import {
   useCallback,
   useMemo,
 } from 'react'
+import { Slide } from 'loading-dev'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
@@ -362,7 +363,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       )}
       {isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-transparent" />
+          <Slide size={24} className="text-white/85" />
         </div>
       )}
       <video

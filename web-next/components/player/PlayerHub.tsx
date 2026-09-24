@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 
 import { Spinner } from '@/components/org/Spinner'
+import { ProgressBar } from '@/components/interior/progress-bar'
 import PageHeader from '@/components/org/PageHeader'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
@@ -592,18 +593,18 @@ function AnalyzeVideoCard({
       <div className="flex items-center gap-3">
         <Spinner />
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-foreground">{STAGE_LABELS[stage]}</p>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out"
-              style={{ width: `${Math.max(2, Math.min(displayPercent, 99))}%` }}
-            />
-          </div>
-          <p className="mt-1 text-[13px] text-muted-foreground tabular-nums">
-            {stage === 'analyzing'
-              ? 'This usually takes under a minute. The result will appear under Analyses.'
-              : `${Math.round(displayPercent)}%`}
-          </p>
+          <ProgressBar
+            value={displayPercent > 0 ? Math.min(displayPercent, 99) : null}
+            label={STAGE_LABELS[stage] ?? 'Working'}
+            pendingLabel="Starting"
+            completeLabel="Analysis complete"
+            className="min-w-0 flex-1"
+          />
+          {stage === 'analyzing' && (
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              This usually takes under a minute. The result will appear under Analyses.
+            </p>
+          )}
         </div>
       </div>
     )

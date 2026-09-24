@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useMemo, useState } from 'react'
+import { ProgressBar } from '@/components/interior/progress-bar'
 import type { JobStatus } from '@/types'
 
 interface AnalysisProgressProps {
@@ -100,54 +101,37 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
         <div className="flex flex-col gap-8 border border-border bg-card rounded-[6px] p-6 sm:p-8">
           <div className="flex flex-col gap-5 border border-border bg-muted rounded-[6px] p-5 sm:p-6">
-            <div
-              className="flex min-h-10 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
-              aria-live="polite"
-            >
-              {boundedProgress === 100 ? (
-                <span className="inline-flex items-center gap-2 text-foreground">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="size-6"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span>Analysis complete</span>
-                </span>
-              ) : (
-                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Current stage
-                </span>
-              )}
-              <span className="font-semibold text-[28px] leading-none tabular-nums text-foreground">
-                {Math.trunc(boundedProgress)}%
-              </span>
-            </div>
+            {boundedProgress === 100 && (
+              <div className="flex items-center gap-2 text-foreground" aria-live="polite">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="size-6 shrink-0"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>Analysis complete</span>
+              </div>
+            )}
 
-            <div className="flex h-2 w-full items-center overflow-hidden bg-muted rounded-full">
-              <div
-                role="progressbar"
-                className="flex items-center justify-center self-stretch bg-primary transition-[width] duration-300 ease-out"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={boundedProgress}
-                style={{ width: `${boundedProgress}%` }}
-              ></div>
-            </div>
+            <ProgressBar
+              value={boundedProgress}
+              label={stageName}
+              completeLabel="Analysis complete"
+            />
 
-            <div
-              className="flex flex-col gap-2 text-[13px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
-              aria-live="polite"
-            >
-              <span>{stageName}</span>
+            <div className="flex justify-end text-[13px] text-muted-foreground" aria-live="polite">
               <span className="tabular-nums">
-                {estimatedSeconds > 0 ? `ETA ${estimatedSeconds}s` : 'Timing estimate pending'}
+                {boundedProgress >= 100
+                  ? 'Finished'
+                  : estimatedSeconds > 0
+                    ? `ETA ${estimatedSeconds}s`
+                    : 'Timing estimate pending'}
               </span>
             </div>
           </div>

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Slide } from 'loading-dev'
+import { ProgressBar } from '@/components/interior/progress-bar'
 import LandingPage from '@/components/LandingPage'
 import PlayerSelector from '@/components/PlayerSelector'
 import AnalysisProgress from '@/components/AnalysisProgress'
@@ -50,7 +52,13 @@ function RotatingMessage({ messages, percent }: { messages: string[]; percent: n
       >
         {messages[index]}
       </p>
-      <span className="text-muted-foreground text-[13px] tabular-nums">{Math.round(percent)}%</span>
+      <ProgressBar
+        value={percent > 0 ? percent : null}
+        label="Progress"
+        pendingLabel="Starting"
+        completeLabel="Upload complete"
+        className="mt-1 w-full max-w-[320px]"
+      />
     </div>
   )
 }
@@ -87,7 +95,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
     case 'scanning':
       return (
         <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-muted border-t-primary rounded-full animate-spin mb-6" />
+          <Slide size={48} className="mb-6" />
           <RotatingMessage
             messages={pipelineState === 'uploading' ? UPLOAD_MESSAGES : SCANNING_MESSAGES}
             percent={progressPercent}

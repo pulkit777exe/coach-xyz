@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Slide } from 'loading-dev'
 import { getHistoryChatMessages, sendHistoryChatMessage } from '@/lib/api'
 import type { ChatMessage } from '@/types'
 import { Button } from '@/components/9ui/ui/button'
@@ -101,7 +102,8 @@ export default function HistoryChat({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {initialLoading ? (
-          <div className="text-center text-muted-foreground text-sm py-8">
+          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground text-sm py-8">
+            <Slide size={24} />
             Loading conversation...
           </div>
         ) : historyError ? (

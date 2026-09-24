@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Slide } from 'loading-dev'
 import AnalysisTitle from '@/components/AnalysisTitle'
 import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
@@ -191,7 +192,7 @@ export default function AnalysisDetailClient({
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
-        <div className="size-10 animate-spin rounded-full border-[3px] border-muted border-t-primary mb-4" />
+        <Slide size={48} className="mb-4 text-muted-foreground" />
         <p className="text-muted-foreground text-[14px]">Loading analysis...</p>
       </div>
     )
@@ -235,7 +236,7 @@ export default function AnalysisDetailClient({
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">
-          <div className="size-10 animate-spin rounded-full border-[3px] border-muted border-t-primary mb-4" />
+          <Slide size={40} className="mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground text-[14px] mb-2">Loading analysis...</p>
           <p className="text-destructive text-[13px]">{pollError}</p>
         </div>
@@ -478,7 +479,7 @@ export default function AnalysisDetailClient({
             </p>
             {shareLoading ? (
               <div className="flex items-center gap-2 text-[14px] text-muted-foreground">
-                <span className="size-4 border-border border-t-current inline-block animate-spin rounded-full border-2" />
+                <Slide size={16} className="inline-block" />
                 Creating share link…
               </div>
             ) : shareError ? (

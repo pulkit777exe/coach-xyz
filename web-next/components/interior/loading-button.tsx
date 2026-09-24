@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { Slide } from 'loading-dev'
 import { cn } from '@/lib/utils'
 
 interface LoadingButtonProps {
@@ -49,7 +50,7 @@ export function LoadingButton({
     >
       {state === 'pending' ? (
         <>
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-muted border-t-primary" />
+          <Slide size={12} />
           {pendingLabel}
         </>
       ) : state === 'success' ? (

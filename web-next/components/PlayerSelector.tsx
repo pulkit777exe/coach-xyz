@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Image from 'next/image'
+import { Slide } from 'loading-dev'
 import { Button } from '@/components/9ui/ui/button'
 import {
   Select,
@@ -54,7 +55,7 @@ function PlayerImage({ player }: { player: Player }) {
     <>
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+          <Slide size={24} className="text-foreground" />
         </div>
       )}
       <Image
