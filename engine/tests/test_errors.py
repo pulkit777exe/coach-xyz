@@ -1,6 +1,7 @@
 """Tests for core/errors.py — canonical engine error shape and codes."""
 
 from core.errors import (
+    RETRYABLE_BY_CODE,
     STATUS_BY_CODE,
     EngineError,
     InvalidRequestError,
@@ -8,6 +9,7 @@ from core.errors import (
     JobNotFoundError,
     NoPlayersDetectedError,
     VideoDecodeError,
+    error_retryable,
     error_status,
 )
 
@@ -121,3 +123,89 @@ class TestStatusRegistry:
             assert 400 <= status < 600, err.code
             expected = STATUS_BY_CODE.get(err.code, 422 if err.retryable else 500)
             assert status == expected, err.code
+
+
+class TestRetryabilityRegistry:
+    """RETRYABLE_BY_CODE is the single source for code → retryable.
+
+    Both rendering paths agree because they read the same table: the error
+    classes pass RETRYABLE_BY_CODE[...] to super().__init__, and
+    api/errors.py renders the wire field via error_retryable().
+
+    Keep this mirror in sync with the server's contract expectations in
+    server/tests/errors.test.ts (ENGINE_RETRYABLE_BY_CODE).
+    """
+
+    KNOWN = {
+        "NO_PLAYERS_DETECTED": True,
+        "VIDEO_DECODE_FAILED": False,
+        "VIDEO_EXPIRED": False,
+        "VIDEO_NOT_FOUND": False,
+        "JOB_NOT_FOUND": False,
+        "INVALID_REQUEST": False,
+        "INVALID_STATE_TRANSITION": False,
+        "GEMINI_QUOTA_EXCEEDED": True,
+        "GEMINI_TIMEOUT": True,
+        "GEMINI_PARSE_FAILED": True,
+        "GEMINI_PROCESSING_FAILED": True,
+        "MEDIAPIPE_UNAVAILABLE": False,
+        "REDIS_UNAVAILABLE": False,
+        "STORAGE_ERROR": True,
+        "ENGINE_UNAVAILABLE": True,
+    }
+
+    def test_registry_matches_mirrored_table(self):
+        # Full-table equality, both directions — a new/removed/changed code
+        # fails here (and on the server side against the same literal).
+        assert RETRYABLE_BY_CODE == self.KNOWN
+
+    def test_every_error_class_agrees_with_the_registry(self):
+        # Full-table loop over every concrete error class: the class flag and
+        # the registry can never disagree, whichever path renders the body.
+        from core.errors import (
+            GeminiParseError,
+            GeminiProcessingError,
+            GeminiQuotaError,
+            GeminiTimeoutError,
+            MediaPipeUnavailableError,
+            RedisUnavailableError,
+            StorageError,
+            VideoDecodeError,
+            VideoExpiredError,
+            VideoNotFoundError,
+        )
+
+        actual = [
+            InvalidRequestError(),
+            NoPlayersDetectedError(),
+            VideoDecodeError(),
+            GeminiQuotaError(),
+            GeminiTimeoutError(),
+            GeminiProcessingError(),
+            GeminiParseError(),
+            JobNotFoundError(),
+            InvalidStateTransition("uploading", "rendering"),
+            RedisUnavailableError(),
+            MediaPipeUnavailableError(),
+            StorageError(),
+            VideoNotFoundError(),
+            VideoExpiredError(),
+        ]
+        for err in actual:
+            assert RETRYABLE_BY_CODE[err.code] == err.retryable, err.code
+        # Every class code is registry-covered; the only registry code without
+        # a class is the connectivity sentinel (raised ad hoc, never a class).
+        assert {err.code for err in actual} == set(self.KNOWN) - {"ENGINE_UNAVAILABLE"}
+
+    def test_error_retryable_is_status_independent_for_registered_codes(self):
+        for code, retryable in RETRYABLE_BY_CODE.items():
+            for status in (400, 404, 422, 429, 500, 503, 504):
+                assert error_retryable(code, status) is retryable, (code, status)
+
+    def test_unregistered_codes_fall_back_to_the_status_rule(self):
+        # Codes with no engine intent keep the historical 5xx-transient rule.
+        assert error_retryable("GEMINI_NOT_CONFIGURED", 500) is True
+        assert error_retryable("GEMINI_ERROR", 500) is True
+        assert error_retryable("FORBIDDEN", 403) is False
+        assert error_retryable("FILE_TOO_LARGE", 413) is False
+        assert error_retryable("SESSION_EXPIRED", 404) is False
