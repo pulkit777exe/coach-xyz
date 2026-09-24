@@ -60,6 +60,9 @@ def get_cached_analysis(video_hash: str, player_index: int | None = None) -> Opt
         try:
             return json.loads(cached)
         except Exception:
+            # Poisoned entry would fail parsing on every read (permanent
+            # recompute); evict it so the next read re-caches cleanly.
+            r.delete(key)
             return None
     return None
 

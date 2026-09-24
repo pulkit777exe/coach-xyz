@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
@@ -28,6 +28,13 @@ except Exception:
     genai = None
     genai_errors = None
     genai_types = None
+
+if TYPE_CHECKING:
+    # Static view of the optional SDK for the annotations below (which are
+    # strings via `from __future__ import annotations` and never evaluated
+    # at runtime, where `genai` may be None). Replaces four
+    # `# type: ignore[name-defined]` suppressions.
+    from google import genai as genai
 
 
 # ── HTTP error mapping for the chat/report routes ────────────────────────────
@@ -63,7 +70,7 @@ def is_quota_error(exc: BaseException) -> bool:
 # (previously the app booted a second, separate client for chat/report).
 
 
-def _configured_client() -> "genai.Client | None":  # type: ignore[name-defined]
+def _configured_client() -> "genai.Client | None":
     """Create the shared client when configured; None when unavailable.
 
     Construction failures degrade to None (routes surface
@@ -82,10 +89,10 @@ def _configured_client() -> "genai.Client | None":  # type: ignore[name-defined]
 
 # Created eagerly at import: the chat/report routes check for None
 # (→ GEMINI_NOT_CONFIGURED) as soon as the app boots.
-_gemini_client: "genai.Client | None" = _configured_client()  # type: ignore[name-defined]
+_gemini_client: "genai.Client | None" = _configured_client()
 
 
-def _get_client() -> "genai.Client":  # type: ignore[name-defined]
+def _get_client() -> "genai.Client":
     """Return (or lazily create) the shared Gemini client — the analysis path."""
     global _gemini_client
     if _gemini_client is None:
@@ -98,7 +105,7 @@ def _get_client() -> "genai.Client":  # type: ignore[name-defined]
     return _gemini_client
 
 
-def shared_client() -> "genai.Client | None":  # type: ignore[name-defined]
+def shared_client() -> "genai.Client | None":
     """The shared client for the HTTP chat/report routes — never auto-creates.
 
     None means GEMINI_NOT_CONFIGURED (matching the app-boot behaviour the

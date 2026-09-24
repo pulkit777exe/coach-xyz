@@ -20,6 +20,12 @@ load_dotenv()
 # Initialize Sentry (must be early in lifecycle)
 import sentry_sdk
 
+# Logging comes first so a Sentry-init failure is visible instead of silent:
+# error monitoring that fails closed with zero signal is worse than none.
+from core.logging_config import setup_logging
+setup_logging()
+_engine_log = logging.getLogger("coachai-engine")
+
 try:
     sentry_sdk.init(
         dsn=os.environ.get("SENTRY_DSN"),
@@ -28,12 +34,8 @@ try:
         environment=os.environ.get("ENVIRONMENT", "development"),
         integrations=[],
     )
-except Exception:
-    pass
-
-# Set up structured logging
-from core.logging_config import setup_logging
-setup_logging()
+except Exception as e:
+    _engine_log.warning(f"sentry_init_failed — error monitoring disabled: {e}")
 
 # ── Validate Required Environment Variables ──────────────────────────────────
 _required_env_vars = ["GEMINI_API_KEY"]

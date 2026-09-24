@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 import main
 
-client = TestClient(main.app, raise_server_exceptions=False)
+client = TestClient(main.app)
 
 
 def _intent(payload):

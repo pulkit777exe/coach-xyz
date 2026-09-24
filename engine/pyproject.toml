@@ -19,8 +19,11 @@ entrypoint = "main.py"
 filterwarnings = [
     # google-genai 2.25 still constructs typing._UnionGenericAlias (private
     # API, deprecated on py3.14, removal slated for 3.17) at import time.
-    # Scoped to google.genai only — warnings from our code and every other
-    # dependency still surface. Drop this when google-genai ships a fix.
+    # Proven unfixable in-repo: their types.py:28 does
+    # `from typing import ... _UnionGenericAlias`, and 2.25.0 is the newest
+    # release — importing the SDK necessarily executes it. Scoped to
+    # google.genai only — warnings from our code and every other dependency
+    # still surface. Drop this when google-genai ships a fix.
     'ignore:.*_UnionGenericAlias.*:DeprecationWarning:google\.genai.*',
 ]
 

@@ -109,7 +109,10 @@ async def stream_chat_sse(messages: list[dict[str, str]]) -> AsyncIterator[str]:
                 if text:
                     loop.call_soon_threadsafe(queue.put_nowait, ("token", text))
             loop.call_soon_threadsafe(queue.put_nowait, ("end", None))
-        except Exception as exc:  # noqa: BLE001 — forwarded to the SSE consumer
+        except Exception as exc:
+            # Broad by design: every pump failure (network, quota, SDK) is
+            # forwarded to the SSE consumer as an error event, never raised
+            # through the thread boundary.
             loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
 
     pump_task = asyncio.create_task(asyncio.to_thread(_pump))

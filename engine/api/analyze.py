@@ -115,12 +115,13 @@ async def analyze(request: Request) -> JSONResponse:
     else:
         return error_response(400, "INVALID_REQUEST", "session_token or video_key required")
 
-    # Persist video_key in Redis job so retry can find it after session expires
+    # Persist video_key in Redis job so retry can find it after session expires.
+    # A persistence failure here breaks later retries — never silent.
     if video_key:
         try:
             update_job(engine_job_id, video_key=video_key)
-        except Exception:
-            pass  # Best effort — don't fail analysis over this
+        except Exception as e:
+            logging.warning(f"video_key persistence failed for job {engine_job_id}: {e}")
 
     # Run in thread pool to avoid blocking the event loop
     # BullMQ worker waits for this response, so we await the result

@@ -174,8 +174,9 @@ async def _scan_stored_file(
         if previous and previous != r2_key:
             try:
                 storage.delete_file(previous)
-            except Exception:
-                pass
+            except Exception as e:
+                # Orphaned upload leaks storage — visible, not silent.
+                logging.warning(f"orphaned upload cleanup failed for {previous}: {e}")
         # Warm cache for this video (makes subsequent analyses faster)
         # Must happen before local_path is deleted
         try:

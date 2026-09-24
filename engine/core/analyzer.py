@@ -368,8 +368,10 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
         update_job(job_id, summary=cached_result)
         try:
             transition_job(job_id, "completed")
-        except Exception:
-            pass
+        except Exception as e:
+            # Without Redis the transition is unrecordable; the summary write
+            # above already failed the same way — log once, don't loop.
+            logging.warning(f"job completion transition failed for {job_id}: {e}")
         return
 
     state = current.state
@@ -394,8 +396,8 @@ def _safe_transition_to_completed(job_id: str, cached_result: dict) -> None:
         # failed or unknown state — reset to scanning so we can walk forward
         try:
             transition_job(job_id, "scanning")
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning(f"job state reset failed for {job_id}: {e}")
         idx = state_order.index("scanning")
 
     # Transition forward through intermediate states
