@@ -179,6 +179,7 @@ coach-xyz/
 │   │   ├── ratelimit.ts       # Rate limiting buckets + shared rateLimited() 429 rejection helper
 │   │   ├── attribution.ts     # Mint/verify signed attribution tokens (sub.exp.HMAC, SERVICE_TOKEN)
 │   │   ├── logger.ts           # winston singleton (LOG_LEVEL/LOG_FORMAT, key-based redaction, Sentry bridge) — the only logging seam
+│   │   ├── requestLog.ts       # Pure access-log helpers — shouldLogRequest (/health skip) + formatAccessLog (pathname-only)
 │   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
 │   │   ├── uuid.ts            # Single UUID_RE — canonical UUID pattern for every id check
 │   │   ├── aiResponse.ts      # Analysis-chat fallback responder + system prompt (extracted from auth.ts)
@@ -720,7 +721,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 146 tests / 16 files; server 333 pass / 33 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-24.
+- Web test suite: 167 tests / 17 files; server 348 pass / 34 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-24.
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -811,11 +812,11 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
 | Test suite: 220 tests pass (CONFIRMED 2026-09-24) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 333 pass / 33 files (CONFIRMED 2026-09-24) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
-| Test suite: 146 tests / 16 files (CONFIRMED 2026-09-24) | `cd web-next && npx vitest run` |
+| Test suite: 348 pass / 34 files (CONFIRMED 2026-09-24) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 167 tests / 17 files (CONFIRMED 2026-09-24) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
-| New contract tests (2026-09-24 candidates) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine}.test.ts`, `engine/tests/test_chat_route.py` |
+| New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |
 | No dead / unconsumed routes | `rg "stages" server/src/routes` and `rg "'/api/chat'" server/src/routes` return nothing; `routes/chat.ts` serves only `/api/chat/stream` + `/api/conversation/:jobId` |
 | JOB_NOT_FOUND retryable: false on all paths | `server/tests` status/chat/download tests pin both the 404 and 200-expired answers |
 | Dead code deleted: baseline.py, InlineRename.tsx, renderer._sport_emoji | `git rm`; `rg "baseline" engine/core engine/main.py`, `rg "_sport_emoji" engine/`, and `rg "InlineRename" web-next/` return nothing |

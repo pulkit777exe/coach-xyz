@@ -26,6 +26,7 @@ three dead routes removed).
 | Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                             | engine sport packs via `GET /sports/{sport}/positions`                                  |
 | Email/share/notifications | `routes/email.ts`, `routes/share.ts`, `routes/notifications.ts`, `routes/aiReports.ts`                                                | `lib/mailer.ts`, `lib/shareTokens.ts`, `lib/notifications.ts`, `lib/aiReportData.ts`    |
 | Schema + connection       | —                                                                                                                                     | `lib/historyStore.ts` (all DDL, 3 parallel levels — sole owner; no-DB fallbacks via `orDisabledDefault`) |
+| Observability             | —                                                                                                                                     | `lib/logger.ts` (winston singleton, key-based redaction, Sentry bridge — the only logging seam), `lib/requestLog.ts` (access-log helpers) |
 
 Routes removed 2026-09-24 (dead): `GET …/analyses/:jobId/stages` (+ orphaned
 `getAnalysisStages`/`AnalysisStageEntry`), server `POST /api/chat`
@@ -33,7 +34,7 @@ Routes removed 2026-09-24 (dead): `GET …/analyses/:jobId/stages` (+ orphaned
 and `GET /api/org/:auth0Id/teams/:teamId` (+ dead web `getTeam`).
 `GET /health/deep` stays (ops-only; frontend only pings `/health`).
 New contract tests the same day: `server/tests/{historyStore,identityGuards,
-analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine}.test.ts`
+analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`
 plus `server/tests/errors.test.ts` (32) for status/retryable parity.
 
 ## Engine (`engine/`)
