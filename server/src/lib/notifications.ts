@@ -4,6 +4,7 @@ import type { QueueEvents } from 'bullmq'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { getAnalysisByServerJobId } from './analyses'
 import { analysisQueue, queueEvents, classifyFailure, onQueueInfrastructureReady } from './queue'
+import { logger } from './logger'
 
 // ── In-process pub/sub ───────────────────────────────────────────────────────
 // Lightweight fan-out so SSE endpoints get notified when a new notification is
@@ -196,13 +197,11 @@ function attachQueueEventListeners() {
           },
         })
       } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'notification_completed_handler_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
+        logger.error('notification_completed_handler_error', {
+          type: 'notification_completed_handler_error',
+          jobId,
+          error: err instanceof Error ? err.message : 'unknown',
+        })
       }
     })
 
@@ -236,23 +235,19 @@ function attachQueueEventListeners() {
             },
           })
         } catch (err) {
-          console.error(
-            JSON.stringify({
-              type: 'notification_failed_handler_error',
-              jobId,
-              error: err instanceof Error ? err.message : 'unknown',
-            }),
-          )
+          logger.error('notification_failed_handler_error', {
+            type: 'notification_failed_handler_error',
+            jobId,
+            error: err instanceof Error ? err.message : 'unknown',
+          })
         }
       },
     )
   } catch (err) {
-    console.error(
-      JSON.stringify({
-        type: 'notification_queue_events_init_error',
-        error: err instanceof Error ? err.message : 'unknown',
-      }),
-    )
+    logger.error('notification_queue_events_init_error', {
+      type: 'notification_queue_events_init_error',
+      error: err instanceof Error ? err.message : 'unknown',
+    })
   }
 }
 

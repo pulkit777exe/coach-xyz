@@ -18,6 +18,7 @@ import { serviceGuard } from '../lib/serviceGuard'
 import { missingVerifiedSelf, requireVerifiedSelf } from '../lib/caller'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { redactWellness } from '../lib/permissions'
+import { logger } from '../lib/logger'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
 import { mintAttributionToken } from '../lib/attribution'
@@ -399,13 +400,10 @@ export default new Elysia()
         set.status = 503
         return buildError('QUEUE_UNAVAILABLE', 'Job queue is not configured.', true)
       }
-      console.error(
-        JSON.stringify({
-          type: 'me_analyze_enqueue_error',
-          message: (error as Error)?.message,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('me_analyze_enqueue_error', {
+        type: 'me_analyze_enqueue_error',
+        error: (error as Error)?.message,
+      })
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Failed to enqueue analysis job. Please try again.', true)
     }

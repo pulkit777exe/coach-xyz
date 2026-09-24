@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 import { ENGINE_URL } from '../lib/engine'
 import { analysisQueue } from '../lib/queue'
 import { redis } from '../lib/redis'
+import { logger } from '../lib/logger'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
   // Shallow — used by Render health check probe
@@ -28,13 +29,11 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       redisOk = true
       redisLatency = Date.now() - t
     } catch (err) {
-      console.warn(
-        JSON.stringify({
-          type: 'health_check_degraded',
-          component: 'redis',
-          error: err instanceof Error ? err.message : 'unknown',
-        }),
-      )
+      logger.warn('health_check_degraded', {
+        type: 'health_check_degraded',
+        component: 'redis',
+        error: err instanceof Error ? err.message : 'unknown',
+      })
     }
 
     // Check engine
@@ -48,13 +47,11 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       engineOk = res.ok
       engineLatency = Date.now() - t
     } catch (err) {
-      console.warn(
-        JSON.stringify({
-          type: 'health_check_degraded',
-          component: 'engine',
-          error: err instanceof Error ? err.message : 'unknown',
-        }),
-      )
+      logger.warn('health_check_degraded', {
+        type: 'health_check_degraded',
+        component: 'engine',
+        error: err instanceof Error ? err.message : 'unknown',
+      })
     }
 
     // Check queue depth
@@ -66,13 +63,11 @@ export const healthRoute = new Elysia({ prefix: '/health' })
         failed = await analysisQueue.getFailedCount()
       }
     } catch (err) {
-      console.warn(
-        JSON.stringify({
-          type: 'health_check_degraded',
-          component: 'queue',
-          error: err instanceof Error ? err.message : 'unknown',
-        }),
-      )
+      logger.warn('health_check_degraded', {
+        type: 'health_check_degraded',
+        component: 'queue',
+        error: err instanceof Error ? err.message : 'unknown',
+      })
     }
 
     const status = !redisOk

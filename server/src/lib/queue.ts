@@ -19,6 +19,7 @@ import { analyzeVideo } from './engine'
 import { getRedisConnectionUrl, isLocalRedis } from './redis'
 import { startRetentionSweep, stopRetentionSweep } from './retention'
 import { DEFAULT_MODEL } from '../types'
+import { logger } from './logger'
 import {
   initAiReportJob,
   updateAiReportJob,
@@ -79,31 +80,25 @@ function createQueueRedisClient(): Redis | null {
       },
     })
     client.on('error', (err: Error) => {
-      console.error(
-        JSON.stringify({
-          type: 'redis_error',
-          source: 'queue',
-          message: err.message,
-        }),
-      )
+      logger.error('redis_error', {
+        type: 'redis_error',
+        source: 'queue',
+        error: err.message,
+      })
     })
     client.on('reconnecting', (delay: number) => {
-      console.warn(
-        JSON.stringify({
-          type: 'redis_reconnecting',
-          source: 'queue',
-          delay_ms: delay,
-        }),
-      )
+      logger.warn('redis_reconnecting', {
+        type: 'redis_reconnecting',
+        source: 'queue',
+        delay_ms: delay,
+      })
     })
     return client
   } catch {
-    console.error(
-      JSON.stringify({
-        type: 'queue_unavailable',
-        message: 'ioredis not available, queue disabled',
-      }),
-    )
+    logger.error('queue_unavailable', {
+      type: 'queue_unavailable',
+      detail: 'ioredis not available, queue disabled',
+    })
     return null
   }
 }
@@ -339,14 +334,11 @@ const analysisProcessor = createWorkerProcessor<AnalysisPayload>({
       }
     } catch (persistErr) {
       // Non-fatal — client polling will catch up; log and continue
-      console.error(
-        JSON.stringify({
-          type: 'worker_completion_persist_error',
-          engine_job_id,
-          error: persistErr instanceof Error ? persistErr.message : 'unknown',
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('worker_completion_persist_error', {
+        type: 'worker_completion_persist_error',
+        engine_job_id,
+        error: persistErr instanceof Error ? persistErr.message : 'unknown',
+      })
     }
   },
 })
@@ -415,13 +407,11 @@ async function recoverStuckJobs(): Promise<void> {
     for (const job of active) {
       const age = Date.now() - (job.processedOn ?? Date.now())
       if (age > STUCK_MS) {
-        console.error(
-          JSON.stringify({
-            type: 'stuck_job',
-            engine_job_id: job.data.engine_job_id,
-            age_minutes: Math.round(age / 60000),
-          }),
-        )
+        logger.error('stuck_job', {
+          type: 'stuck_job',
+          engine_job_id: job.data.engine_job_id,
+          age_minutes: Math.round(age / 60000),
+        })
         await job.moveToFailed(
           new UnrecoverableError('Job exceeded 13 minute timeout'),
           job.token ?? '0',
@@ -430,12 +420,10 @@ async function recoverStuckJobs(): Promise<void> {
       }
     }
   } catch (err) {
-    console.error(
-      JSON.stringify({
-        type: 'stuck_job_recovery_error',
-        error: String(err),
-      }),
-    )
+    logger.error('stuck_job_recovery_error', {
+      type: 'stuck_job_recovery_error',
+      error: String(err),
+    })
   }
 }
 
@@ -469,22 +457,16 @@ function startAnalysisInfrastructure(): void {
   // Worker health event handlers
   if (worker) {
     worker.on('error', (err) => {
-      console.error(
-        JSON.stringify({
-          type: 'worker_error',
-          message: err.message,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('worker_error', {
+        type: 'worker_error',
+        error: err.message,
+      })
     })
     worker.on('stalled', (jobId) => {
-      console.warn(
-        JSON.stringify({
-          type: 'worker_stalled',
-          jobId,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.warn('worker_stalled', {
+        type: 'worker_stalled',
+        jobId,
+      })
     })
   }
 
@@ -543,46 +525,36 @@ function startAnalysisInfrastructure(): void {
               }),
             })
           } catch (persistErr) {
-            console.error(
-              JSON.stringify({
-                type: 'failed_persist_history_error',
-                engine_job_id: bullJob.data.engine_job_id,
-                error: persistErr instanceof Error ? persistErr.message : 'unknown',
-                timestamp: new Date().toISOString(),
-              }),
-            )
+            logger.error('failed_persist_history_error', {
+              type: 'failed_persist_history_error',
+              engine_job_id: bullJob.data.engine_job_id,
+              error: persistErr instanceof Error ? persistErr.message : 'unknown',
+            })
           }
 
-          console.error(
-            JSON.stringify({
-              type: isUnrecoverable ? 'job_unrecoverable' : 'job_exhausted',
-              engine_job_id: bullJob.data.engine_job_id,
-              attempts: bullJob.attemptsMade,
-              error_code: errorCode,
-            }),
-          )
+          const failureEvent = isUnrecoverable ? 'job_unrecoverable' : 'job_exhausted'
+          logger.error(failureEvent, {
+            type: failureEvent,
+            engine_job_id: bullJob.data.engine_job_id,
+            attempts: bullJob.attemptsMade,
+            error_code: errorCode,
+          })
         }
       } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'failed_event_handler_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-            timestamp: new Date().toISOString(),
-          }),
-        )
+        logger.error('failed_event_handler_error', {
+          type: 'failed_event_handler_error',
+          jobId,
+          error: err instanceof Error ? err.message : 'unknown',
+        })
       }
     })
 
     // Queue-level error handler
     analysisQueue.on('error', (err) => {
-      console.error(
-        JSON.stringify({
-          type: 'queue_error',
-          message: err.message,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('queue_error', {
+        type: 'queue_error',
+        error: err.message,
+      })
     })
 
     // Stuck job recovery — every 10 minutes, first run 30s after start.
@@ -623,13 +595,10 @@ function startReportInfrastructure(): void {
 
   if (aiReportWorker) {
     aiReportWorker.on('error', (err) => {
-      console.error(
-        JSON.stringify({
-          type: 'ai_report_worker_error',
-          message: err.message,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('ai_report_worker_error', {
+        type: 'ai_report_worker_error',
+        error: err.message,
+      })
     })
   }
 
@@ -657,25 +626,19 @@ function startReportInfrastructure(): void {
           })
         }
       } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'ai_report_failed_event_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-            timestamp: new Date().toISOString(),
-          }),
-        )
+        logger.error('ai_report_failed_event_error', {
+          type: 'ai_report_failed_event_error',
+          jobId,
+          error: err instanceof Error ? err.message : 'unknown',
+        })
       }
     })
 
     aiReportQueue.on('error', (err) => {
-      console.error(
-        JSON.stringify({
-          type: 'ai_report_queue_error',
-          message: err.message,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('ai_report_queue_error', {
+        type: 'ai_report_queue_error',
+        error: err.message,
+      })
     })
   }
 }
@@ -756,36 +719,28 @@ let shuttingDown = false
 const gracefulShutdown = async (signal: string) => {
   if (shuttingDown) return
   shuttingDown = true
-  console.log(
-    JSON.stringify({
-      type: 'shutdown_start',
-      signal,
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.info('shutdown_start', {
+    type: 'shutdown_start',
+    signal,
+  })
 
   const forceExit = setTimeout(() => {
-    console.error(JSON.stringify({ type: 'shutdown_timeout', signal }))
+    logger.error('shutdown_timeout', { type: 'shutdown_timeout', signal })
     process.exit(1)
   }, SHUTDOWN_TIMEOUT_MS)
   forceExit.unref()
 
   try {
     await stopQueueInfrastructure()
-    console.log(
-      JSON.stringify({
-        type: 'shutdown_complete',
-        signal,
-        timestamp: new Date().toISOString(),
-      }),
-    )
+    logger.info('shutdown_complete', {
+      type: 'shutdown_complete',
+      signal,
+    })
   } catch (err) {
-    console.error(
-      JSON.stringify({
-        type: 'shutdown_error',
-        error: err instanceof Error ? err.message : 'unknown',
-      }),
-    )
+    logger.error('shutdown_error', {
+      type: 'shutdown_error',
+      error: err instanceof Error ? err.message : 'unknown',
+    })
   }
   process.exit(0)
 }

@@ -3,6 +3,7 @@ import { buildError } from './errors'
 import { getMemberRole, listOrgMembers } from './orgMembers'
 import type { OrgMemberRole } from './orgMembers'
 import { timingSafeEqual } from 'node:crypto'
+import { logger } from './logger'
 
 // ── Service-to-service identity guard ────────────────────────────────────────
 // The web app (Next.js) sits between the browser and this server. The proxy
@@ -27,14 +28,11 @@ let warnedAboutDisabledGuard = false
 function maybeLogDisabled() {
   if (serviceGuardEnabled() || warnedAboutDisabledGuard) return
   warnedAboutDisabledGuard = true
-  console.warn(
-    JSON.stringify({
-      type: 'service_guard_disabled',
-      message:
-        'SERVICE_TOKEN not set — browser is expected to call this server directly. Set it on both server and web app to enforce the identity boundary.',
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.warn('service_guard_disabled', {
+    type: 'service_guard_disabled',
+    detail:
+      'SERVICE_TOKEN not set — browser is expected to call this server directly. Set it on both server and web app to enforce the identity boundary.',
+  })
 }
 
 export type ServiceIdentityCheck =
@@ -129,8 +127,17 @@ export function verifyServiceIdentity(
   }
 }
 
-/** True for identity-bearing paths whose resource id names an ORG (not a self route). */
-function isOrgScopedPath(pathname: string): boolean {
+/** True for identity-bearing paths whose resource id names an ORG (not a self
+ *  route). Accepts either a pathname or an absolute request URL — the global
+ *  guard calls resolveMemberRoleForPath with request.url, so normalize first
+ *  (mirrors isSelfPath below); a bare pathname passes through the catch. */
+export function isOrgScopedPath(pathnameOrUrl: string): boolean {
+  let pathname = pathnameOrUrl
+  try {
+    pathname = new URL(pathnameOrUrl).pathname
+  } catch {
+    // Not a URL — already a pathname.
+  }
   return (
     pathname.startsWith('/api/org/') ||
     pathname.startsWith('/api/email/') ||

@@ -178,6 +178,7 @@ coach-xyz/
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
 │   │   ├── ratelimit.ts       # Rate limiting buckets + shared rateLimited() 429 rejection helper
 │   │   ├── attribution.ts     # Mint/verify signed attribution tokens (sub.exp.HMAC, SERVICE_TOKEN)
+│   │   ├── logger.ts           # winston singleton (LOG_LEVEL/LOG_FORMAT, key-based redaction, Sentry bridge) — the only logging seam
 │   │   ├── serviceGuard.ts    # SERVICE_TOKEN + verified-auth0-id identity guard
 │   │   ├── uuid.ts            # Single UUID_RE — canonical UUID pattern for every id check
 │   │   ├── aiResponse.ts      # Analysis-chat fallback responder + system prompt (extracted from auth.ts)

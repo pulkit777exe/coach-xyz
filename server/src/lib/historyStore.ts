@@ -8,6 +8,7 @@ import {
   STUDENT_STATUSES,
 } from './orgEnums'
 import { USER_ROLES } from './userRoles'
+import { logger } from './logger'
 const databaseUrl = (process.env.DATABASE_URL ?? '').trim()
 
 // `let` (not `const`) solely so the test seam below can swap a stub connection
@@ -27,12 +28,10 @@ const isEnabled = (): boolean => sql !== null
 const warnDisabled = () => {
   if (warnedDisabled) return
   warnedDisabled = true
-  console.warn(
-    JSON.stringify({
-      type: 'history_store_disabled',
-      message: 'DATABASE_URL not set',
-    }),
-  )
+  logger.warn('history_store_disabled', {
+    type: 'history_store_disabled',
+    detail: 'DATABASE_URL not set',
+  })
 }
 
 /**
@@ -61,7 +60,7 @@ const runWithHistoryStore = async <T>(
     const message = error instanceof Error ? error.message : 'Unknown database error'
 
     if (message.includes('Connection closed')) {
-      console.warn(JSON.stringify({ type: 'history_store_reconnecting' }))
+      logger.warn('history_store_reconnecting', { type: 'history_store_reconnecting' })
       initPromise = null
       try {
         await ensureInitialized()
@@ -69,23 +68,19 @@ const runWithHistoryStore = async <T>(
       } catch (retryError) {
         const retryMessage =
           retryError instanceof Error ? retryError.message : 'Unknown database error'
-        console.error(
-          JSON.stringify({
-            type: 'history_store_retry_failed',
-            error: retryMessage,
-          }),
-        )
+        logger.error('history_store_retry_failed', {
+          type: 'history_store_retry_failed',
+          error: retryMessage,
+        })
         if (throwOnFailure) throw retryError
         return null
       }
     }
 
-    console.error(
-      JSON.stringify({
-        type: 'history_store_operation_failed',
-        error: message,
-      }),
-    )
+    logger.error('history_store_operation_failed', {
+      type: 'history_store_operation_failed',
+      error: message,
+    })
     if (throwOnFailure) throw error
     return null
   }

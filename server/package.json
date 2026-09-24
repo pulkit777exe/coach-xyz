@@ -17,7 +17,8 @@
     "@sentry/node": "^10.74.0",
     "bullmq": "^5.81.5",
     "elysia": "^1.4.30",
-    "ioredis": "^5.11.1"
+    "ioredis": "^5.11.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

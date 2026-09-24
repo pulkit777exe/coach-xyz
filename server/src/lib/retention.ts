@@ -6,6 +6,7 @@
 // run 60 seconds after start. Cadence and first-run delay are unchanged.
 
 import { pruneRetention } from './analyses'
+import { logger } from './logger'
 
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000
 const FIRST_RUN_DELAY_MS = 60_000
@@ -14,10 +15,13 @@ async function pruneOldAnalyses(): Promise<void> {
   try {
     const pruned = await pruneRetention()
     if (pruned > 0) {
-      console.log(JSON.stringify({ type: 'retention_pruned', analyses: pruned }))
+      logger.info('retention_pruned', { type: 'retention_pruned', analyses: pruned })
     }
   } catch (err) {
-    console.error(JSON.stringify({ type: 'retention_prune_error', error: String(err) }))
+    logger.error('retention_prune_error', {
+      type: 'retention_prune_error',
+      error: String(err),
+    })
   }
 }
 

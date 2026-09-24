@@ -7,6 +7,7 @@ import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { playerTranscript } from '../lib/transcript'
 import { parseSseDataEvents } from '../lib/sse'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
+import { logger } from '../lib/logger'
 
 /** Events on the engine's chat/stream SSE feed (core.chat_client vocabulary). */
 type ChatStreamEvent = {
@@ -141,13 +142,10 @@ export default new Elysia()
             }
           }
         } catch (err) {
-          console.error(
-            JSON.stringify({
-              type: 'chat_stream_parse_error',
-              message: err instanceof Error ? err.message : 'unknown',
-              timestamp: new Date().toISOString(),
-            }),
-          )
+          logger.error('chat_stream_parse_error', {
+            type: 'chat_stream_parse_error',
+            error: err instanceof Error ? err.message : 'unknown',
+          })
         }
 
         try {
@@ -166,13 +164,10 @@ export default new Elysia()
             )
           }
         } catch (err) {
-          console.error(
-            JSON.stringify({
-              type: 'chat_stream_save_error',
-              message: err instanceof Error ? err.message : 'unknown',
-              timestamp: new Date().toISOString(),
-            }),
-          )
+          logger.error('chat_stream_save_error', {
+            type: 'chat_stream_save_error',
+            error: err instanceof Error ? err.message : 'unknown',
+          })
         }
       })()
 
@@ -197,13 +192,10 @@ export default new Elysia()
         )
       }
 
-      console.error(
-        JSON.stringify({
-          type: 'chat_stream_proxy_error',
-          message: error instanceof Error ? error.message : 'unknown',
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('chat_stream_proxy_error', {
+        type: 'chat_stream_proxy_error',
+        error: error instanceof Error ? error.message : 'unknown',
+      })
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Chat service error.', true)
     }

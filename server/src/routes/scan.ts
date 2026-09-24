@@ -17,6 +17,7 @@ import { registerVideo, updateVideoProbe } from '../lib/registry'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
 import type { ScanResult } from '../types'
+import { logger } from '../lib/logger'
 
 /** Best-effort org attribution for uploads (primary membership, else the sub). */
 const resolveUploadOrg = async (request: Request): Promise<string | null> => {
@@ -140,14 +141,11 @@ export default new Elysia()
       // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes or messages)
       const routeError = error as { code?: string; message?: string }
       const code = 'INTERNAL_ERROR'
-      console.error(
-        JSON.stringify({
-          type: 'scan_unknown_error',
-          code: String(routeError?.code ?? 'UNKNOWN'),
-          message: String(routeError?.message ?? 'unknown'),
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('scan_unknown_error', {
+        type: 'scan_unknown_error',
+        code: String(routeError?.code ?? 'UNKNOWN'),
+        error: String(routeError?.message ?? 'unknown'),
+      })
       set.status = 500
       return buildError(code, 'Video scan failed. Please try again.')
     }
@@ -287,14 +285,11 @@ export default new Elysia()
         return errorBody(error)
       }
       const routeError = error as { code?: string; message?: string }
-      console.error(
-        JSON.stringify({
-          type: 'scan_from_key_error',
-          code: String(routeError?.code ?? 'UNKNOWN'),
-          message: String(routeError?.message ?? 'unknown'),
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('scan_from_key_error', {
+        type: 'scan_from_key_error',
+        code: String(routeError?.code ?? 'UNKNOWN'),
+        error: String(routeError?.message ?? 'unknown'),
+      })
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Video scan failed. Please try again.', true)
     }

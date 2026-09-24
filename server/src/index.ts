@@ -1,10 +1,14 @@
 import './instrument'
 
+import * as Sentry from '@sentry/node'
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { swagger } from '@elysiajs/swagger'
 
 import { startQueueInfrastructure } from './lib/queue'
+import { logger } from './lib/logger'
+import { formatAccessLog, shouldLogRequest } from './lib/requestLog'
+import { requestIdFrom } from './lib/engine'
 
 import scanRoute from './routes/scan'
 import analyzeRoute from './routes/analyze'
@@ -37,25 +41,21 @@ startQueueInfrastructure()
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {
-  console.error(
-    JSON.stringify({
-      type: 'unhandled_rejection',
-      reason: reason instanceof Error ? reason.message : String(reason),
-      stack: reason instanceof Error ? reason.stack : undefined,
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.error('unhandled_rejection', {
+    type: 'unhandled_rejection',
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  })
+  Sentry.captureException(reason)
 })
 
 process.on('uncaughtException', (error) => {
-  console.error(
-    JSON.stringify({
-      type: 'uncaught_exception',
-      message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.error('uncaught_exception', {
+    type: 'uncaught_exception',
+    error: error.message,
+    stack: error.stack,
+  })
+  Sentry.captureException(error)
   // Give in-flight requests time to drain, then exit
   setTimeout(() => process.exit(1), 1000)
 })
@@ -64,22 +64,34 @@ process.on('uncaughtException', (error) => {
 const requiredEnvVars = ['ENGINE_URL']
 const missingEnvVars = requiredEnvVars.filter((k) => !process.env[k])
 if (missingEnvVars.length > 0) {
-  console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`)
+  logger.error('missing_required_env', {
+    type: 'missing_required_env',
+    missing: missingEnvVars,
+  })
   process.exit(1)
 }
 
 const maxRequestBodySize = Math.max(MAX_FILE_SIZE_BYTES + 10 * 1024 * 1024, 64 * 1024 * 1024)
 
+// ── Request/access logging ─────────────────────────────────────────────────
+// Start time + correlation id are stashed per Request in module-scope
+// WeakMaps: onRequest seeds them (and echoes x-request-id), onAfterResponse
+// emits the access line. onAfterResponse fires on EVERY response — success,
+// error-hook, and unmatched-route 404 paths (verified against the installed
+// Elysia 1.4 compose: the error paths schedule afterResponse hooks, and with
+// app-level error hooks registered the general 404 routes through
+// app.handleError). It runs via setImmediate after the response flushed —
+// handler return values are never touched. `path` is the pathname ONLY.
+const requestStartTimes = new WeakMap<Request, number>()
+const requestIds = new WeakMap<Request, string>()
+
 try {
   await initializeHistoryStore()
 } catch (err) {
-  console.error(
-    JSON.stringify({
-      type: 'history_store_init_failed',
-      error: err instanceof Error ? err.message : 'unknown',
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.error('history_store_init_failed', {
+    type: 'history_store_init_failed',
+    error: err instanceof Error ? err.message : 'unknown',
+  })
   // Continue — history is non-critical
 }
 
@@ -109,6 +121,36 @@ const app = new Elysia({
       credentials: true,
     }),
   )
+  // ── Access log ─────────────────────────────────────────────────────
+  // Root no-op onError: Elysia's unmatched-route 404 branch skips
+  // afterResponse hooks unless app.event.error is non-empty (compose.js
+  // checks `!app.event.error`, and an empty [] from .use()-transferring a
+  // plugin onError counts as present-but-falsy). Registering directly here
+  // makes length === 1 so 404s run the access hook below too. Must return
+  // undefined — a defined return would replace the 404 body (verified: the
+  // body stays "NOT_FOUND" either way). Registered inline, not .use()'d.
+  .onError(() => {})
+  .onRequest(({ request, set }) => {
+    const requestId = requestIdFrom(request)
+    requestIds.set(request, requestId)
+    requestStartTimes.set(request, Date.now())
+    set.headers['x-request-id'] = requestId
+  })
+  .onAfterResponse(({ request, set }) => {
+    const pathname = new URL(request.url).pathname
+    if (!shouldLogRequest(pathname)) return
+    const startedAt = requestStartTimes.get(request)
+    logger.info(
+      'request',
+      formatAccessLog({
+        method: request.method,
+        path: pathname,
+        status: set.status ?? 200,
+        durationMs: startedAt === undefined ? 0 : Date.now() - startedAt,
+        requestId: requestIds.get(request) ?? requestIdFrom(request),
+      }),
+    )
+  })
   // ── Security Headers ───────────────────────────────────────────
   .onAfterHandle(({ set, request }) => {
     set.headers['X-Content-Type-Options'] = 'nosniff'
@@ -172,17 +214,13 @@ const app = new Elysia({
     maxRequestBodySize,
   })
 
-console.log(
-  JSON.stringify({
-    type: 'server_started',
-    port: app.server?.port,
-    maxRequestBodySize,
-  }),
-)
-console.log(
-  JSON.stringify({
-    type: 'history_store_status',
-    enabled: historyStoreEnabled(),
-  }),
-)
-console.log(JSON.stringify({ type: 'worker_started' }))
+logger.info('server_started', {
+  type: 'server_started',
+  port: app.server?.port,
+  maxRequestBodySize,
+})
+logger.info('history_store_status', {
+  type: 'history_store_status',
+  enabled: historyStoreEnabled(),
+})
+logger.info('worker_started', { type: 'worker_started' })

@@ -1,5 +1,7 @@
 import type { Redis as IORedis } from 'ioredis'
 
+import { logger } from './logger'
+
 // ── The single Redis URL derivation ─────────────────────────────────────────
 // Every client (the KV helper below, the BullMQ connection in lib/queue.ts,
 // and — hypothetically — the engine's Python adapters) must derive its
@@ -36,12 +38,10 @@ export function getRedisConnectionUrl(): string | null {
 function createRedisClient() {
   const url = getRedisConnectionUrl()
   if (!url) {
-    console.error(
-      JSON.stringify({
-        type: 'redis_unavailable',
-        message: 'UPSTASH_REDIS_REST_URL unset, using noop client',
-      }),
-    )
+    logger.error('redis_unavailable', {
+      type: 'redis_unavailable',
+      detail: 'UPSTASH_REDIS_REST_URL unset, using noop client',
+    })
     return createNoopClient()
   }
 
@@ -54,22 +54,18 @@ function createRedisClient() {
       ...(isLocalRedis() ? {} : { tls: {}, lazyConnect: false }),
     })
     client.on('error', (err: Error) => {
-      console.error(
-        JSON.stringify({
-          type: 'redis_error',
-          source: 'redis',
-          message: err.message,
-        }),
-      )
+      logger.error('redis_error', {
+        type: 'redis_error',
+        source: 'redis',
+        error: err.message,
+      })
     })
     client.on('reconnecting', (delay: number) => {
-      console.warn(
-        JSON.stringify({
-          type: 'redis_reconnecting',
-          source: 'redis',
-          delay_ms: delay,
-        }),
-      )
+      logger.warn('redis_reconnecting', {
+        type: 'redis_reconnecting',
+        source: 'redis',
+        delay_ms: delay,
+      })
     })
 
     return {
@@ -126,12 +122,10 @@ function createRedisClient() {
       },
     }
   } catch {
-    console.error(
-      JSON.stringify({
-        type: 'redis_unavailable',
-        message: 'ioredis module not available, using noop client',
-      }),
-    )
+    logger.error('redis_unavailable', {
+      type: 'redis_unavailable',
+      detail: 'ioredis module not available, using noop client',
+    })
     return createNoopClient()
   }
 }

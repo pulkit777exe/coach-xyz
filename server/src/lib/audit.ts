@@ -1,6 +1,7 @@
 import { withHistoryStoreOrThrow } from './historyStore'
 import { SERVICE_HEADERS } from './serviceGuard'
 import { readRequestMeta } from './requestMeta'
+import { logger } from './logger'
 
 // ── Audit logs (§29) ─────────────────────────────────────────────────────────
 // Append-only record of sensitive organizational actions. Writes are
@@ -88,13 +89,11 @@ export const audit = async (entry: {
       `
     })
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        type: 'audit_write_failed',
-        action: entry.action,
-        error: error instanceof Error ? error.message : 'unknown',
-      }),
-    )
+    logger.error('audit_write_failed', {
+      type: 'audit_write_failed',
+      action: entry.action,
+      error: error instanceof Error ? error.message : 'unknown',
+    })
   }
 }
 

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { SERVICE_HEADERS, verifyServiceIdentity } from '../src/lib/serviceGuard'
+import {
+  SERVICE_HEADERS,
+  isOrgScopedPath,
+  resolveMemberRoleForPath,
+  verifyServiceIdentity,
+} from '../src/lib/serviceGuard'
 
 const TOKEN = 'test-service-token'
 const SUB = 'auth0|user-123'
@@ -149,5 +154,58 @@ describe('verifyServiceIdentity', () => {
       memberRole: 'coach',
     })
     expect(outcome.ok).toBe(false)
+  })
+})
+
+// ── URL → pathname normalization (regression for b9fca0f) ───────────────────
+// The global guard calls resolveMemberRoleForPath with the ABSOLUTE
+// request.url, so the org-prefix check must normalize first — otherwise
+// memberRole resolves to null for every caller and verifyServiceIdentity
+// 403s all non-owner org members on /api/org|email|auth/user/:id/*.
+
+describe('isOrgScopedPath (URL → pathname normalization)', () => {
+  test('matches the org-scoped prefixes on an absolute request URL', () => {
+    expect(isOrgScopedPath('http://localhost:8000/api/org/auth0|org-1/reports')).toBe(true)
+    expect(isOrgScopedPath('http://localhost:8000/api/email/auth0|org-1/invite')).toBe(true)
+    expect(isOrgScopedPath('http://localhost:8000/api/auth/user/auth0|coach-1/analyses')).toBe(true)
+  })
+
+  test('still matches a bare pathname (already-normalized callers)', () => {
+    expect(isOrgScopedPath('/api/org/auth0|org-1/reports')).toBe(true)
+    expect(isOrgScopedPath('/api/email/auth0|org-1/invite')).toBe(true)
+    expect(isOrgScopedPath('/api/auth/user/auth0|coach-1/analyses')).toBe(true)
+  })
+
+  test('rejects absolute URLs outside the org-scoped trees', () => {
+    expect(isOrgScopedPath('http://localhost:8000/api/me/profile')).toBe(false)
+    expect(isOrgScopedPath('http://localhost:8000/api/scan/job-1')).toBe(false)
+    expect(isOrgScopedPath('/api/me/profile')).toBe(false)
+  })
+
+  test('unparseable input falls back to raw prefix matching without throwing', () => {
+    expect(isOrgScopedPath('not a url')).toBe(false)
+    expect(isOrgScopedPath('')).toBe(false)
+  })
+})
+
+describe('resolveMemberRoleForPath (absolute request.url input)', () => {
+  test('owner on an absolute org URL returns null via the self fast-path (no DB hit)', async () => {
+    await expect(
+      resolveMemberRoleForPath(
+        'http://localhost:8000/api/org/auth0|org-1/reports',
+        'auth0|org-1',
+        'auth0|org-1',
+      ),
+    ).resolves.toBeNull()
+  })
+
+  test('verified ≠ org on a non-org absolute URL stays null without querying membership', async () => {
+    await expect(
+      resolveMemberRoleForPath(
+        'http://localhost:8000/api/me/profile',
+        'auth0|org-1',
+        'auth0|member-1',
+      ),
+    ).resolves.toBeNull()
   })
 })

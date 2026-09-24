@@ -1,4 +1,5 @@
 import { redis } from './redis'
+import { logger } from './logger'
 
 const KEY = 'coachai:srv:'
 const JOB_TTL = 7200
@@ -28,13 +29,10 @@ export async function getJob(serverJobId: string): Promise<ServerJob | null> {
     try {
       return JSON.parse(raw)
     } catch {
-      console.error(
-        JSON.stringify({
-          type: 'job_json_corrupt',
-          serverJobId,
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('job_json_corrupt', {
+        type: 'job_json_corrupt',
+        serverJobId,
+      })
       return null
     }
   }

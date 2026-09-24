@@ -14,6 +14,7 @@ import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgD
 import { serviceGuard } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { checkEmailLimit, rateLimited } from '../lib/ratelimit'
+import { logger } from '../lib/logger'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
 
@@ -102,13 +103,11 @@ export default new Elysia()
         sent.push({ to: email, ok: true })
       } catch (err) {
         sent.push({ to: email, ok: false })
-        console.error(
-          JSON.stringify({
-            type: 'email_invite_failed',
-            to: email,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        )
+        logger.error('email_invite_failed', {
+          type: 'email_invite_failed',
+          to: email,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
 
@@ -193,13 +192,11 @@ export default new Elysia()
       set.status = 200
       return { sent }
     } catch (err) {
-      console.error(
-        JSON.stringify({
-          type: 'email_report_failed',
-          report_id,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      )
+      logger.error('email_report_failed', {
+        type: 'email_report_failed',
+        report_id,
+        error: err instanceof Error ? err.message : String(err),
+      })
       set.status = 502
       return buildError('EMAIL_SEND_FAILED', 'Report could not be emailed.', true)
     }
@@ -293,12 +290,10 @@ export default new Elysia()
       set.status = 200
       return { sent, records: records.length }
     } catch (err) {
-      console.error(
-        JSON.stringify({
-          type: 'email_attendance_failed',
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      )
+      logger.error('email_attendance_failed', {
+        type: 'email_attendance_failed',
+        error: err instanceof Error ? err.message : String(err),
+      })
       set.status = 502
       return buildError('EMAIL_SEND_FAILED', 'Attendance sheet could not be emailed.', true)
     }

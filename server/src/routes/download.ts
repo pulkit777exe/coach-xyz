@@ -8,6 +8,7 @@ import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkDownloadLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { markAnalysisDownloaded, getAnalysisByServerJobId } from '../lib/analyses'
 import { auditRoute } from '../lib/audit'
+import { logger } from '../lib/logger'
 
 /** Everything this route needs, so tests can stub the job store. */
 export type DownloadRouteDeps = {
@@ -81,14 +82,11 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
       }
 
       const routeError = error as { code?: string; message?: string }
-      console.error(
-        JSON.stringify({
-          type: 'download_error',
-          code: routeError?.code ?? 'UNKNOWN',
-          message: routeError?.message ?? 'unknown',
-          timestamp: new Date().toISOString(),
-        }),
-      )
+      logger.error('download_error', {
+        type: 'download_error',
+        code: routeError?.code ?? 'UNKNOWN',
+        error: routeError?.message ?? 'unknown',
+      })
       set.status = 503
       return buildError('ENGINE_UNAVAILABLE', 'Could not download video. Please try again.', true)
     }

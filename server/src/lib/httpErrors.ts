@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 
 import { buildError, isCoachAIError } from './errors'
+import { logger } from './logger'
 
 // ── Global error handler (shared) ───────────────────────────────────────────
 // Mounted on the production app (src/index.ts) AND the live smoke harness
@@ -27,15 +28,12 @@ export const globalErrorHandler = new Elysia({ name: 'globalErrorHandler' }).onE
       return buildError('NOT_FOUND', undefined, false)
     }
     const e = error as { message?: string; stack?: string }
-    console.error(
-      JSON.stringify({
-        type: 'unhandled_error',
-        message: e?.message,
-        stack: e?.stack,
-        path: new URL(request.url).pathname,
-        timestamp: new Date().toISOString(),
-      }),
-    )
+    logger.error('unhandled_error', {
+      type: 'unhandled_error',
+      error: e?.message,
+      stack: e?.stack,
+      path: new URL(request.url).pathname,
+    })
     set.status = 500
     return buildError('INTERNAL_ERROR', undefined, true)
   },

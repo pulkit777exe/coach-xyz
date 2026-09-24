@@ -11,6 +11,7 @@ import { persistAnalysisStart } from '../lib/analyses'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { DEFAULT_MODEL } from '../types'
+import { logger } from '../lib/logger'
 
 type AnalyzeBody = {
   session_token: string | null
@@ -106,14 +107,11 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
       set.status = 503
       return buildError('QUEUE_UNAVAILABLE', 'Job queue is not configured.', true)
     }
-    console.error(
-      JSON.stringify({
-        type: 'analyze_enqueue_error',
-        message: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-        timestamp: new Date().toISOString(),
-      }),
-    )
+    logger.error('analyze_enqueue_error', {
+      type: 'analyze_enqueue_error',
+      error: (error as Error)?.message,
+      stack: (error as Error)?.stack,
+    })
     set.status = 500
     return buildError('INTERNAL_ERROR', 'Failed to enqueue analysis job. Please try again.', true)
   }
