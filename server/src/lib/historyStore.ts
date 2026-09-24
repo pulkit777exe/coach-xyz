@@ -25,6 +25,54 @@ let warnedDisabled = false
 
 const isEnabled = (): boolean => sql !== null
 
+// Connection-level failures worth one reconnect + retry. Bun.SQL surfaces
+// them as PostgresError.code in the ERR_POSTGRES_CONNECTION_* family
+// (verified against the runtime: *_CLOSED / *_FAILED / *_REFUSED /
+// *_TIMEOUT, plus idle/lifetime timeouts), and the Postgres server itself
+// reports restarts and broken connections as 57P01/57P02/57P03 and
+// 08000/08003/08006. Query errors (constraint violations, syntax, …)
+// carry statement codes and must NEVER retry here — callbacks are not
+// all idempotent, so a blind retry could double-apply a write that
+// already landed.
+const CONNECTION_ERROR_CODES = new Set([
+  'ERR_POSTGRES_CONNECTION_CLOSED',
+  'ERR_POSTGRES_CONNECTION_FAILED',
+  'ERR_POSTGRES_CONNECTION_REFUSED',
+  'ERR_POSTGRES_CONNECTION_TIMEOUT',
+  'ERR_POSTGRES_IDLE_TIMEOUT',
+  'ERR_POSTGRES_LIFETIME_TIMEOUT',
+  '57P01',
+  '57P02',
+  '57P03',
+  '08000',
+  '08003',
+  '08006',
+])
+
+/**
+ * True when a query failure means the connection died (retry once on a
+ * fresh init) as opposed to the statement failing (surface immediately).
+ * Prefers the machine-readable code; falls back to a case-insensitive
+ * message sniff for foreign pool/driver errors without codes. The old
+ * `message.includes('Connection closed')` check was case- and
+ * driver-fragile — e.g. Bun reports timeouts as
+ * ERR_POSTGRES_CONNECTION_TIMEOUT / 'Connection timeout after 3s',
+ * which the old check never matched.
+ */
+export const isConnectionError = (error: unknown): boolean => {
+  const code = error instanceof Error ? (error as { code?: unknown }).code : undefined
+  if (typeof code === 'string') {
+    if (CONNECTION_ERROR_CODES.has(code)) return true
+    // A known code that is NOT a connection code (query-statement codes,
+    // auth/cancelled/timeout statement errors) — never retry.
+    if (code.startsWith('ERR_POSTGRES_') || /^[0-9A-Z]{5}$/.test(code)) return false
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return /connection (closed|terminated|reset|refused|lost|timeout)|terminat|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EPIPE/i.test(
+    message,
+  )
+}
+
 const warnDisabled = () => {
   if (warnedDisabled) return
   warnedDisabled = true
@@ -59,7 +107,7 @@ const runWithHistoryStore = async <T>(
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown database error'
 
-    if (message.includes('Connection closed')) {
+    if (isConnectionError(error)) {
       logger.warn('history_store_reconnecting', { type: 'history_store_reconnecting' })
       initPromise = null
       try {

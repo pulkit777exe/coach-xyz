@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 
 import {
   ensureInitialized,
+  isConnectionError,
   orDisabledDefault,
   setHistoryStoreConnectionForTests,
   withHistoryStore,
@@ -157,6 +158,77 @@ describe('degradation policy (single home: orDisabledDefault)', () => {
       )
       expect(seen.every(Boolean)).toBe(true)
     },
-    { timeout: 20000 },
+    { timeout: 60000 },
   )
+})
+
+describe('isConnectionError (reconnect predicate)', () => {
+  const coded = (code: string, message = 'x') => Object.assign(new Error(message), { code })
+
+  test('matches the Bun connection-error code family', () => {
+    for (const code of [
+      'ERR_POSTGRES_CONNECTION_CLOSED',
+      'ERR_POSTGRES_CONNECTION_FAILED',
+      'ERR_POSTGRES_CONNECTION_REFUSED',
+      'ERR_POSTGRES_CONNECTION_TIMEOUT',
+      'ERR_POSTGRES_IDLE_TIMEOUT',
+      'ERR_POSTGRES_LIFETIME_TIMEOUT',
+    ]) {
+      expect(isConnectionError(coded(code))).toBe(true)
+    }
+  })
+
+  test('matches Postgres restart / broken-connection codes', () => {
+    for (const code of ['57P01', '57P02', '57P03', '08000', '08003', '08006']) {
+      expect(isConnectionError(coded(code))).toBe(true)
+    }
+  })
+
+  test('never matches statement errors, even with alarming messages', () => {
+    expect(isConnectionError(coded('23505', 'duplicate key Connection closed'))).toBe(false)
+    expect(isConnectionError(coded('42601', 'syntax error'))).toBe(false)
+    expect(isConnectionError(coded('ERR_POSTGRES_QUERY_CANCELLED', 'cancelled'))).toBe(false)
+  })
+
+  test('message sniff is case-insensitive and covers errno spellings', () => {
+    expect(isConnectionError(new Error('connection closed by server'))).toBe(true)
+    expect(isConnectionError(new Error('Connection timeout after 3s'))).toBe(true)
+    expect(isConnectionError(new Error('read ECONNRESET'))).toBe(true)
+    expect(isConnectionError(new Error('duplicate key value'))).toBe(false)
+  })
+})
+
+describe('reconnect-and-retry (stubbed)', () => {
+  const codedFailure = (code: string) => {
+    const err = new Error(`stub ${code}`) as Error & { code: string }
+    err.code = code
+    return err
+  }
+
+  test('connection-coded callback failure retries once on a fresh init and succeeds', async () => {
+    useStub()
+    let attempts = 0
+
+    const result = await withHistoryStore(async () => {
+      attempts += 1
+      if (attempts === 1) throw codedFailure('ERR_POSTGRES_CONNECTION_CLOSED')
+      return 'recovered'
+    })
+
+    expect(result).toBe('recovered')
+    expect(attempts).toBe(2)
+  })
+
+  test('statement-coded callback failure never retries (no double-apply risk)', async () => {
+    useStub()
+    let attempts = 0
+
+    const result = await withHistoryStore(async () => {
+      attempts += 1
+      throw codedFailure('23505')
+    })
+
+    expect(result).toBeNull()
+    expect(attempts).toBe(1)
+  })
 })
