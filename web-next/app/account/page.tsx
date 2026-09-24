@@ -54,7 +54,7 @@ export default async function AccountPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-12">
+    <main id="main" tabIndex={-1} className="min-h-screen bg-background pb-12">
       <div className="mx-auto max-w-[720px] px-6 py-6 lg:px-8">
         <PageHeader trail={['Home', 'Account']} title="Account" />
 
@@ -155,6 +155,6 @@ export default async function AccountPage() {
           </a>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

@@ -47,7 +47,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   if (problem || !data) {
     return (
-      <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-6 py-16 text-center">
+      <main
+        id="main"
+        tabIndex={-1}
+        className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-6 py-16 text-center"
+      >
         <div className="border-border bg-card w-full rounded-[6px] border p-10">
           <div className="text-muted-foreground mx-auto mb-4 flex size-14 items-center justify-center rounded-full border border-border">
             {problem?.expired ? <ClockIcon className="size-6" /> : <LinkIcon className="size-6" />}
@@ -60,7 +64,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
             Ask the coach who shared it to create a new link.
           </p>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -69,7 +73,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const label = data.analysis.display_name || data.server_job_id.slice(0, 8)
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
+    <main id="main" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
       {/* Header */}
       <div className="mb-10">
         <p className="text-muted-foreground mb-3 text-[11px] font-medium uppercase tracking-[0.08em]">
@@ -223,7 +227,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       <p className="text-muted-foreground text-center text-[13px] tabular-nums">
         Shared via CoachXYZ · expires {formatDateLong(data.expires_at)}
       </p>
-    </div>
+    </main>
   )
 }
 

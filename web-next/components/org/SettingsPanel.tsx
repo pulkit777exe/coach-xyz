@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { BarChart3, Gauge, SlidersHorizontal, User, Users, X } from 'lucide-react'
+import { BarChart3, Gauge, Shield, SlidersHorizontal, User, Users, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -11,10 +11,17 @@ import { cn } from '@/lib/utils'
  * pages must not pass lucide components across the RSC boundary into this
  * client shell. The keys resolve to icons imported here.
  */
-export type SettingsSectionIcon = 'account' | 'preferences' | 'members' | 'plan' | 'records'
+export type SettingsSectionIcon =
+  | 'account'
+  | 'security'
+  | 'preferences'
+  | 'members'
+  | 'plan'
+  | 'records'
 
 const SECTION_ICONS: Record<SettingsSectionIcon, React.ElementType> = {
   account: User,
+  security: Shield,
   preferences: SlidersHorizontal,
   members: Users,
   plan: Gauge,

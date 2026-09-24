@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/9ui/ui/button'
@@ -10,20 +10,36 @@ import { Spinner } from '@/components/org/Spinner'
 
 import { updateMyProfile } from '@/lib/meApi'
 import type { CoachAIError } from '@/lib/api'
+import type { UserRecord } from '@/lib/api'
 
 export default function ProfileForm({
   initialName,
   initialNickname,
   initialPicture,
+  fresh = undefined,
 }: {
   initialName: string | null
   initialNickname: string | null
   initialPicture: string | null
+  /**
+   * Fresh profile record fetched after mount (the session copy goes stale
+   * after a save). Applied only while the form is untouched — edits already
+   * in flight are never clobbered.
+   */
+  fresh?: UserRecord | null
 }) {
   const [name, setName] = useState(initialName ?? '')
   const [nickname, setNickname] = useState(initialNickname ?? '')
   const [picture, setPicture] = useState(initialPicture ?? '')
   const [saving, setSaving] = useState(false)
+  const dirtyRef = useRef(false)
+
+  useEffect(() => {
+    if (!fresh || dirtyRef.current) return
+    setName(fresh.name ?? '')
+    setNickname(fresh.nickname ?? '')
+    setPicture(fresh.picture ?? '')
+  }, [fresh])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -50,7 +66,10 @@ export default function ProfileForm({
           <Input
             id="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              dirtyRef.current = true
+              setName(e.target.value)
+            }}
             placeholder="Your full name"
           />
         </div>
@@ -59,7 +78,10 @@ export default function ProfileForm({
           <Input
             id="nickname"
             value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            onChange={(e) => {
+              dirtyRef.current = true
+              setNickname(e.target.value)
+            }}
             placeholder="Coach, boss, Gaffer…"
           />
         </div>
@@ -70,7 +92,10 @@ export default function ProfileForm({
           id="picture"
           type="url"
           value={picture}
-          onChange={(e) => setPicture(e.target.value)}
+          onChange={(e) => {
+            dirtyRef.current = true
+            setPicture(e.target.value)
+          }}
           placeholder="https://…/avatar.jpg"
         />
       </div>

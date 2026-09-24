@@ -159,7 +159,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
   const open = () => fileInputRef.current?.click()
 
   return (
-    <main className={`antialiased selection:bg-[#2383e2]/15 ${surface} ${textMain}`}>
+    <main id="main" tabIndex={-1} className={`antialiased selection:bg-[#2383e2]/15 ${surface} ${textMain}`}>
       {/* ── Hero — Notion: huge centered headline, plain surface ─────────── */}
       <section className={`${surface} px-6 pt-16 pb-14 lg:px-8`}>
         <div className="mx-auto max-w-[1120px] text-center">

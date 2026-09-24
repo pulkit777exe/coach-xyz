@@ -83,7 +83,9 @@ const STATUS_STYLE: Record<string, string> = {
 
 const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
-  loading: () => <div className="aspect-[16/7] w-full animate-pulse rounded-[6px] bg-muted" />,
+  // Static block, not a shimmer — the chart chunk lands in one frame; a
+  // pulsing skeleton only adds visual noise under it.
+  loading: () => <div className="aspect-[16/7] w-full rounded-[6px] bg-muted" />,
 })
 
 const METRIC_COLORS = [

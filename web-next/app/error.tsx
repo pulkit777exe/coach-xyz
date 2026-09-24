@@ -21,7 +21,7 @@ export default function Error({
   }, [error])
 
   return (
-    <main className="flex min-h-[70vh] items-center justify-center bg-background px-6">
+    <main id="main" tabIndex={-1} className="flex min-h-[70vh] items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm rounded-[8px] border border-border bg-card p-8 text-center">
         <TriangleAlert className="mx-auto size-10 text-muted-foreground" aria-hidden />
         <p className="mt-3 text-[11px] font-medium tracking-wider text-destructive uppercase">

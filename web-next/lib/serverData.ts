@@ -1,6 +1,7 @@
 import { cache } from 'react'
 
 import { getSession } from './session'
+import { resolveOrgContext, type OrgContext } from './orgContext'
 import {
   getMyOrgs,
   getMyAnalyses as libGetMyAnalyses,
@@ -110,47 +111,9 @@ export const orgTeams = cache((auth0Id: string) => libListTeams(auth0Id))
 
 export const orgSeasons = cache((auth0Id: string) => libOrgSeasons(auth0Id))
 
-export type OrgRole =
-  | 'owner'
-  | 'admin'
-  | 'head_coach'
-  | 'assistant_coach'
-  | 'coach'
-  | 'analyst'
-  | 'medical'
-  | 'player'
-
-export type OrgContext = {
-  /** The auth0Id to scope every org/email/auth-user call against. */
-  auth0Id: string
-  /** The caller's role within that org (owner fast-path default). */
-  role: OrgRole
-}
-
 export { ORG_COOKIE } from './orgCookie'
-
-/**
- * Pure org-context decision: given the caller's own sub and their memberships,
- * pick the primary org. An explicit cookie preference wins when it names an
- * org the caller actually belongs to; otherwise owner-of-self wins; otherwise
- * the first membership. Empty memberships → owner-of-self fallback (fresh
- * coach, or memberships unavailable). Never trusts the cookie blindly — the
- * caller's role always comes from the membership row.
- */
-export function resolveOrgContext(
-  ownSub: string | undefined,
-  orgs: Array<{ org_auth0_id: string; role: OrgRole }>,
-  preferredOrgId?: string | null,
-): OrgContext {
-  if (preferredOrgId) {
-    const preferred = orgs.find((o) => o.org_auth0_id === preferredOrgId)
-    if (preferred) return { auth0Id: preferred.org_auth0_id, role: preferred.role }
-  }
-  const owned = orgs.find((o) => o.org_auth0_id === ownSub && o.role === 'owner')
-  const primary = owned ?? orgs[0]
-  if (primary) return { auth0Id: primary.org_auth0_id, role: primary.role }
-  return { auth0Id: ownSub ?? '', role: 'owner' }
-}
+export type { OrgContext, OrgRole } from './orgContext'
+export { resolveOrgContext } from './orgContext'
 
 /** Per-request cached /api/me/orgs (used by both the switcher and getOrgContext). */
 export const getMyOrgsCached = cache(() => getMyOrgs())

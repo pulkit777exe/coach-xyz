@@ -5,7 +5,7 @@ export const metadata = { title: 'Blog | CoachXYZ' }
 
 export default function BlogPage() {
   return (
-    <main className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
+    <main id="main" tabIndex={-1} className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
       {/* themed banner */}
       <section className="border-b border-[rgba(55,53,47,0.09)] bg-[#f7f7f5] px-6 py-14 text-center lg:px-8 dark:border-[rgba(255,255,255,0.08)] dark:bg-[#202020]">
         <p className="text-[12px] font-medium tracking-[0.08em] text-[#787774] uppercase dark:text-[#9b9b9b]">

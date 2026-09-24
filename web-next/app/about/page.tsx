@@ -43,7 +43,7 @@ const sectionTitle =
 
 export default function AboutPage() {
   return (
-    <main className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
+    <main id="main" tabIndex={-1} className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
       {/* ── Hero + stats ────────────────────────────────────────────────── */}
       <section className="border-b border-[rgba(55,53,47,0.09)] px-6 py-16 lg:px-8 dark:border-[rgba(255,255,255,0.08)]">
         <div className="mx-auto max-w-[1120px] text-center">

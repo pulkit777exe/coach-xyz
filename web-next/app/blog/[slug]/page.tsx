@@ -11,7 +11,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
   const p = postsBySlug[slug]
   if (!p) notFound()
   return (
-    <main className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
+    <main id="main" tabIndex={-1} className="bg-white text-[#37352f] antialiased dark:bg-[#191919] dark:text-[#ececec]">
       {/* themed banner */}
       <div className="border-b border-[rgba(55,53,47,0.09)] bg-[#f7f7f5] px-6 py-12 text-center lg:px-8 dark:border-[rgba(255,255,255,0.08)] dark:bg-[#202020]">
         <Link
