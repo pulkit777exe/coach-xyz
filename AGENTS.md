@@ -29,7 +29,7 @@ npm run smoke        # server live HTTP smoke (needs .env + running server + Neo
 
 Per-app: server uses `bun`, engine uses `pip`/`python`, web-next uses `npm` (CI also uses npm).
 
-Test baselines (keep green; re-confirmed 2026-09-24): server `bun test` = 333 pass / 33 files (3 notification DB-integration tests skip unless `DATABASE_URL` reaches a live DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 146 tests / 16 files; engine `pytest tests -q` = 220 tests; `tsc --noEmit` + eslint + `prettier --check` clean both TS apps (2 pre-existing `scan.ts` lint warnings); `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks (not re-run this pass).
+Test baselines (keep green; re-confirmed 2026-09-24): server `bun test` = 348 pass / 34 files (3 notification DB-integration tests skip unless `DATABASE_URL` reaches a live DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 167 tests / 17 files; engine `pytest tests -q` = 220 tests; `tsc --noEmit` + eslint + `prettier --check` clean both TS apps (zero lint warnings); `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks (not re-run this pass).
 
 Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (React.cache-wrapped) and the session via `lib/session.ts` (`getSession`, React.cache) — never call `lib/org`/`lib/api` fetchers or `auth0.getSession()` directly from pages. `lib/api`/`lib/org` stay for client components, middleware (`proxy.ts`), and route handlers. Heavy client visuals (recharts) load via `next/dynamic` with `ssr: false`.
 
