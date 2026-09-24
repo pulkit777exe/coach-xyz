@@ -11,6 +11,7 @@ import {
 import { markEngineJobFailed } from '../lib/engine'
 import { getJob } from '../lib/jobs'
 import { buildError } from '../lib/errors'
+import { logger } from '../lib/logger'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
@@ -61,9 +62,21 @@ export default new Elysia()
     // Resolve to primary auth0_id in case this is a linked account
     const primaryAuth0Id = await resolveAuth0Id(sub)
 
-    // First login forms the org: ensure its registry row exists.
+    // First login forms the org: ensure its registry row exists. A failure
+    // here is a 500, not a 200 — returning success without the org row
+    // leaves a broken account (every org-scoped call fails downstream).
     const { ensureOrg } = await import('../lib/registry')
-    await ensureOrg(primaryAuth0Id, name ?? nickname ?? null, sub).catch(() => null)
+    try {
+      await ensureOrg(primaryAuth0Id, name ?? nickname ?? null, sub)
+    } catch (error) {
+      logger.error('org_ensure_failed', {
+        type: 'org_ensure_failed',
+        auth0Id: primaryAuth0Id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to form organization', true)
+    }
 
     set.status = 200
     return { user: { ...user, auth0_id: primaryAuth0Id } }

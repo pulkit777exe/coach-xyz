@@ -69,7 +69,18 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
     // attributed; anonymous callers keep only the IP rate limit.
     let priority = 0
     if (owner) {
-      const memberships = await listMembershipsForUser(owner).catch(() => [])
+      let memberships: Awaited<ReturnType<typeof listMembershipsForUser>>
+      try {
+        memberships = await listMembershipsForUser(owner)
+      } catch (error) {
+        // Fail-open to owner-as-org (the ADR no-DB policy) — but the miss
+        // also drops the org daily quota, so log it.
+        logger.warn('analyze_org_lookup_failed', {
+          type: 'analyze_org_lookup_failed',
+          error: error instanceof Error ? error.message : String(error),
+        })
+        memberships = []
+      }
       const orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
       // Quota + fair-queue admission (§17): base 5 for attributed jobs, paid
       // tiers outrank free (tier-weighted inside admitAnalysis).

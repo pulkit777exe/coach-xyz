@@ -53,7 +53,7 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 
 ## Server/API conventions
 
-- Logging: winston via `lib/logger.ts` — never bare `console.*` in server src; keep the `type` event field; redaction is key-based in the logger format; access logs skip `/health` and log pathname only.
+- Logging: winston via `lib/logger.ts` — never bare `console.*` in server src; keep the `type` event field; redaction is key-based in the logger format; access logs skip `/health` and log pathname only. Degradation fallbacks always log (no silent `.catch(() => …)`) — fail-open stays observable.
 - Identity boundary: Elysia `onBeforeHandle` `as: "global"` in `src/lib/serviceGuard.ts`. Headers `x-service-token` + `x-verified-auth0-id`; missing/wrong/account mismatch → 403. Keep new org/email/auth/me routes under this guard.
 - Browser-direct capability routes (`scan.ts`, `analyze.ts`, `chat.ts`, `download.ts`, `status.ts`) never trust a raw `x-auth0-id`. For attribution, the web mints a signed token via `/api/me/attribution/mint` (`src/lib/attribution.ts`, HMAC-SHA256 over `sub.exp`, SERVICE_TOKEN keyed) and sends it as `x-attribution`; the server `verifyAttributionToken()`s it. Add endpoints for minting only under serviceGuard.
 - Row uniqueness for org tables is org-scoped: `attendance UNIQUE (auth0_id, student_id, session_date)` and `performance_metrics UNIQUE (auth0_id, student_id, metric_key, measured_at)`. Keep `ON CONFLICT (…)` targets in `lib/org/*` (e.g. `org/attendance.ts:66`, `org/performance.ts:83`) in sync with these constraint column lists (idempotent migration lives in `ensureInitialized` in `src/lib/historyStore.ts`, the sole DDL owner).

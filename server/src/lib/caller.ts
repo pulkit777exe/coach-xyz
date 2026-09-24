@@ -1,6 +1,7 @@
 import { SERVICE_HEADERS } from './serviceGuard'
 import { buildError, type CoachAIError } from './errors'
 import { getMemberRole, type OrgMemberRole } from './orgMembers'
+import { logger } from './logger'
 import { listMemberTeamIds } from './teams'
 import { canAccessTeam, hasPermission, resolveStudentScope, type Permission } from './permissions'
 
@@ -27,18 +28,36 @@ export type Caller = {
 
 export async function resolveCaller(orgAuth0Id: string, request: Request): Promise<Caller> {
   const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
-  const role: OrgMemberRole | null =
-    !verified || !orgAuth0Id
-      ? null
-      : verified === orgAuth0Id
-        ? 'owner'
-        : await getMemberRole(orgAuth0Id, verified).catch(() => null)
+  // A lookup throw means the DB errored (getMemberRole returns null for
+  // non-members without throwing) — fail closed to null, but log it: an
+  // invisible outage here silently denies every non-owner caller.
+  let role: OrgMemberRole | null = null
+  if (verified && orgAuth0Id && verified !== orgAuth0Id) {
+    try {
+      role = await getMemberRole(orgAuth0Id, verified)
+    } catch (error) {
+      logger.warn('member_role_lookup_failed', {
+        type: 'member_role_lookup_failed',
+        orgAuth0Id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  } else if (verified && orgAuth0Id) {
+    role = 'owner'
+  }
   // Owners/admins bypass every scope check, so skip the membership lookup
   // for them (also keeps the owner fast-path DB-free).
-  const teamIds =
-    verified && role !== null && role !== 'owner' && role !== 'admin'
-      ? await listMemberTeamIds(verified).catch(() => [])
-      : []
+  let teamIds: string[] = []
+  if (verified && role !== null && role !== 'owner' && role !== 'admin') {
+    try {
+      teamIds = await listMemberTeamIds(verified)
+    } catch (error) {
+      logger.warn('member_team_lookup_failed', {
+        type: 'member_team_lookup_failed',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
   return {
     verified,
     role,

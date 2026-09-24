@@ -7,6 +7,7 @@
 // an explicit parameter. Quota rejection reuses rateLimited (429) verbatim.
 
 import { checkOrgDailyQuota, getOrgTier, recordUsage, type OrgTier } from './analyses'
+import { logger } from './logger'
 import { rateLimited, type RateLimitedBody } from './ratelimit'
 
 /**
@@ -63,8 +64,32 @@ export async function admitAnalysis({
       ),
     }
   }
-  const tier = await deps.getOrgTier(orgAuth0Id).catch(() => 'free' as const)
+  let tier: OrgTier
+  try {
+    tier = await deps.getOrgTier(orgAuth0Id)
+  } catch (error) {
+    // Fail CLOSED to free-tier priority: never grant paid priority on a
+    // lookup error. But log it — a payer silently demoted on every
+    // admission is a billing-visibility bug, not a policy.
+    logger.warn('org_tier_lookup_failed', {
+      type: 'org_tier_lookup_failed',
+      orgAuth0Id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    tier = 'free'
+  }
   const priority = analysisPriority(basePriority, tier)
-  await deps.recordUsage(orgAuth0Id, 'analysis').catch(() => {})
+  try {
+    await deps.recordUsage(orgAuth0Id, 'analysis')
+  } catch (error) {
+    // Usage-ledger loss under-counts the daily quota while the fail-open
+    // admission above already granted access — a quota-integrity signal,
+    // never silent.
+    logger.error('usage_record_failed', {
+      type: 'usage_record_failed',
+      orgAuth0Id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
   return { ok: true, priority }
 }

@@ -23,7 +23,15 @@ import { logger } from '../lib/logger'
 const resolveUploadOrg = async (request: Request): Promise<string | null> => {
   const owner = verifyAttributionToken(request.headers.get('x-attribution'))
   if (!owner) return null
-  const memberships = await listMembershipsForUser(owner).catch(() => [])
+  const memberships = await listMembershipsForUser(owner).catch((error) => {
+    // Fail-open to owner-as-org (the ADR no-DB policy) — but a membership
+    // miss here also drops the org daily quota, so log it.
+    logger.warn('upload_org_lookup_failed', {
+      type: 'upload_org_lookup_failed',
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return []
+  })
   return memberships?.[0]?.org_auth0_id ?? owner
 }
 
@@ -53,7 +61,16 @@ const persistScanResult = async (
     width: result.media?.width ?? null,
     height: result.media?.height ?? null,
     has_audio: result.media?.has_audio ?? null,
-  }).catch(() => null)
+  }).catch((error) => {
+    // Probe metadata loss leaves the registry row without media facts —
+    // log it; the scan result itself already persisted above.
+    logger.error('video_probe_update_failed', {
+      type: 'video_probe_update_failed',
+      videoKey: result.video_key,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  })
 }
 
 // ── Error status policy ───────────────────────────────────────────────────
@@ -215,7 +232,17 @@ export default new Elysia()
         mimeType,
         sizeBytes,
         uploadedBy: verifyAttributionToken(request.headers.get('x-attribution')),
-      }).catch(() => null)
+      }).catch((error) => {
+        // Registration is bookkeeping after the key is minted (failing the
+        // intent would orphan the key AND the upload) — but an unregistered
+        // video is invisible, so never silent.
+        logger.error('video_register_failed', {
+          type: 'video_register_failed',
+          storageKey: intent.key,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return null
+      })
       set.status = 200
       return intent
     } catch (error) {
