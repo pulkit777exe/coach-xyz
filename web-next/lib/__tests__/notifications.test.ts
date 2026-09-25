@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchNotifications, subscribeNotifications } from '../notifications'
+import {
+  fetchNotifications,
+  fetchNotificationsWithRetry,
+  subscribeNotifications,
+} from '../notifications'
 
 const pendingFetch = (_url: string, init?: RequestInit) =>
   new Promise<Response>((_, reject) => {
@@ -13,6 +17,24 @@ afterEach(() => {
 })
 
 describe('notification snapshots', () => {
+  it('retries a transient snapshot failure within the recovery budget', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ notifications: [], unread_count: 0 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const request = fetchNotificationsWithRetry(new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(500)
+    await expect(request).resolves.toEqual({ notifications: [], unread_count: 0 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects a failed snapshot instead of returning an empty list', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })))
     await expect(fetchNotifications()).rejects.toThrow('503')

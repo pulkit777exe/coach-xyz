@@ -13,7 +13,7 @@ import {
 } from '@/components/9ui/ui/dropdown-menu'
 import { Button } from '@/components/9ui/ui/button'
 import {
-  fetchNotifications,
+  fetchNotificationsWithRetry,
   markRead,
   markAllRead,
   subscribeNotifications,
@@ -77,7 +77,9 @@ export default function NotificationBell() {
     }
     const fetchSnapshot = () => {
       const revisionAtStart = localRevisionRef.current
-      return fetchNotifications().then((state) => mergeSnapshot(state, revisionAtStart))
+      return fetchNotificationsWithRetry(controller.signal).then((state) =>
+        mergeSnapshot(state, revisionAtStart),
+      )
     }
 
     unsubscribe = subscribeNotifications(

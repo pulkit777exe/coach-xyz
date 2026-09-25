@@ -56,14 +56,50 @@ function rememberDelivered(id: string): boolean {
  * Fetch the current notification list + unread count from the self-scoped API.
  * No auth0Id needed — the proxy injects identity via the session.
  */
-export async function fetchNotifications(): Promise<NotificationsState> {
+export async function fetchNotifications(signal?: AbortSignal): Promise<NotificationsState> {
   const res = await fetch(`${IDENTITY_BASE}/api/me/notifications?limit=20`, {
     credentials: 'include',
+    signal,
   })
   if (!res.ok) {
     throw new Error(`Failed to fetch notifications (${res.status})`)
   }
   return res.json()
+}
+
+const SNAPSHOT_RETRY_DELAYS_MS = [500, 1_500, 3_000] as const
+
+function waitForSnapshotRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/** Fetch a notification snapshot with a short, bounded recovery budget. */
+export async function fetchNotificationsWithRetry(
+  signal?: AbortSignal,
+  maxAttempts = SNAPSHOT_RETRY_DELAYS_MS.length + 1,
+): Promise<NotificationsState> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await fetchNotifications(signal)
+    } catch (error) {
+      lastError = error
+      if (signal?.aborted || attempt >= maxAttempts - 1) throw error
+      await waitForSnapshotRetry(SNAPSHOT_RETRY_DELAYS_MS[attempt]!, signal)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Failed to fetch notifications')
 }
 
 /**
