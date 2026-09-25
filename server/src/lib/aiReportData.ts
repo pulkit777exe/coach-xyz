@@ -4,12 +4,12 @@
 // in queue.ts imports persistAiReportRecord; routes import the job record
 // helpers and the engine adapter below.
 
-import { EventEmitter } from 'events'
-
+import { publishReportJob, subscribeReportJob } from './serverEvents'
 import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from './engine'
 import { buildReportContent, createReportRecord } from './orgData'
 import type { ReportType } from './orgEnums'
 import { engineFailure, wrapEngineError } from './errors'
+import { logger } from './logger'
 import { redis } from './redis'
 
 export type AiReportJobStatus = 'queued' | 'running' | 'done' | 'failed'
@@ -28,26 +28,24 @@ export type AiReportJob = {
 const KEY_PREFIX = 'coachai:reportjob:'
 const JOB_TTL = 7200 // 2h — aligned with server job TTL
 
-// Report jobs are created and completed in this server process, so an
-// in-process event bus is sufficient for the authenticated SSE route. The
-// Redis record remains the durable source of truth; the bus only wakes
-// connected clients after each state write.
-const reportEventBus = new EventEmitter()
-reportEventBus.setMaxListeners(200)
-
+// Report records are durable in Redis. The shared bus only wakes connected
+// SSE routes after a state write, including when the worker and route live on
+// different server replicas.
 export function subscribeAiReportJob(
   reportJobId: string,
   handler: (job: AiReportJob) => void,
 ): () => void {
-  const listener = (job: AiReportJob) => {
-    if (job.report_job_id === reportJobId) handler(job)
-  }
-  reportEventBus.on('report-job', listener)
-  return () => reportEventBus.off('report-job', listener)
+  return subscribeReportJob(reportJobId, handler)
 }
 
 function publishAiReportJob(job: AiReportJob): void {
-  reportEventBus.emit('report-job', job)
+  void publishReportJob(job).catch((error: unknown) => {
+    logger.error('report_event_publish_error', {
+      type: 'report_event_publish_error',
+      report_job_id: job.report_job_id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
 }
 
 export const reportJobKey = (reportJobId: string) => `${KEY_PREFIX}${reportJobId}`

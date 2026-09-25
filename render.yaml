@@ -24,6 +24,9 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      # Must match the server and web SERVICE_TOKEN.
+      - key: SERVICE_TOKEN
+        sync: false
       - key: SENTRY_DSN
         sync: false
       - key: ENVIRONMENT
@@ -43,15 +46,21 @@ services:
     plan: free
     healthCheckPath: /health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: ENGINE_URL
         fromService:
+          type: web
           name: coachai-engine
-          property: host
+          property: hostport
       - key: FRONTEND_URL
         sync: false
+      # Set these operator-managed secrets in Render before the first deploy.
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: SERVICE_TOKEN
         sync: false
       - key: DATABASE_URL
         sync: false
@@ -59,5 +68,3 @@ services:
         sync: false
       - key: WORKER_CONCURRENCY
         value: "1"
-      - key: NODE_ENV
-        value: production

@@ -615,6 +615,7 @@ Removed 2026-09-24 (dead routes): `GET …/analyses/:jobId/stages` (orphaned `ge
 - **Engine:** `engine/core/jobs.py:10-17` — REST client (`upstash-redis` Python)
 - **Server:** `server/src/lib/redis.ts:6-48` — ioredis only (TCP; `rediss://` URL derived from the Upstash REST creds)
 - **Queue:** `server/src/lib/queue.ts` — TCP connection (`ioredis`) for BullMQ, using the ONE URL derivation exported by `lib/redis.ts` (`getRedisConnectionUrl()` / `isLocalRedis()` — queue.ts's divergent localhost-TLS derivation is deleted); built by `startQueueInfrastructure()` called from `src/index.ts`, never as an import side effect (`new Queue` inside)
+- **Shared server events:** `server/src/lib/serverEvents.ts` — versioned Redis pub/sub wake-up channels for AI report and notification SSE delivery across replicas. Redis/Postgres snapshots remain authoritative; local dispatch is retained for single-process development.
 - **Env vars:** `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_IOREDIS_URL`
 
 ### Supabase PostgreSQL (CONFIRMED)
@@ -660,7 +661,9 @@ Removed 2026-09-24 (dead routes): `GET …/analyses/:jobId/stages` (orphaned `ge
 
 - Engine: Free tier web service, Dockerfile build from GitHub repo (`runtime: docker`, `rootDir: engine`)
 - Server: Free tier web service, Dockerfile build from GitHub repo (`runtime: docker`, `rootDir: server`)
-- Env vars synced from Render dashboard (secrets)
+- `ENGINE_URL` is resolved from the engine web service; the server explicitly runs with `NODE_ENV=production`
+- Set operator-managed `sync: false` secrets (notably Gemini, Upstash Redis, and `SERVICE_TOKEN`) in the Render dashboard before deploying; never commit their values
+- The engine image intentionally does not run `pip cache purge` because Render disables the pip cache; dependency installation is the build gate
 
 ### Vercel Deployment (CONFIRMED — `web-next/vercel.json`)
 
@@ -751,7 +754,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 204 tests / 19 files; server 360 pass / 34 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-24.
+- Web test suite: 231 tests / 23 files; server 418 pass / 42 files (`bun test`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-25. These are current-worktree counts; the notification-preference integration remains intentionally unstaged while the event-transport change is isolated.
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -843,8 +846,8 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Pipeline states | `engine/core/jobs.py` |
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
 | Test suite: 228 tests pass (CONFIRMED 2026-09-25) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 387 pass / 37 files (CONFIRMED 2026-09-25) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
-| Test suite: 226 tests / 22 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
+| Test suite: 418 pass / 42 files (CONFIRMED 2026-09-25) | `cd server && bun test` (live DB checks run when `DATABASE_URL` is reachable) |
+| Test suite: 231 tests / 23 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
 | New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |

@@ -20,9 +20,14 @@ import type { ReportRecord } from '../lib/orgData'
 import { enqueueAiReport } from '../lib/queue'
 import type { AiReportPayload } from '../lib/queue'
 import { logger } from '../lib/logger'
+import { onServerEventBusDisconnect, startServerEventBus } from '../lib/serverEvents'
 
 const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
 const REPORT_EVENT_LOOKUP_TIMEOUT_MS = 10_000
+// A lost cross-replica event must not leave a browser on heartbeats forever.
+// Closing after a bounded lifetime makes the client perform its single
+// one-shot status reconciliation and surface a retryable error if still running.
+const REPORT_EVENT_MAX_DURATION_MS = 5 * 60 * 1000
 
 async function withReportLookupTimeout<T>(promise: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -132,6 +137,8 @@ export type AiReportsDeps = {
   getJob?: (reportJobId: string) => Promise<AiReportJob | null>
   getReportById?: GetReportById
   subscribeJob?: typeof subscribeAiReportJob
+  startBus?: typeof startServerEventBus
+  onBusDisconnect?: typeof onServerEventBusDisconnect
 }
 
 export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
@@ -140,6 +147,8 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
   const getJob = deps.getJob ?? getAiReportJob
   const fetchReport = deps.getReportById ?? getReport
   const subscribeJob = deps.subscribeJob ?? subscribeAiReportJob
+  const startBus = deps.startBus ?? startServerEventBus
+  const subscribeToDisconnect = deps.onBusDisconnect ?? onServerEventBusDisconnect
 
   return new Elysia({ name: 'aiReports' })
     .use(serviceGuard)
@@ -220,6 +229,31 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         return buildError('NOT_FOUND', 'Report job not found', false)
       }
 
+      // Register before starting so a subscriber that drops during startup
+      // cannot leave a newly-created stream attached to a dead bus.
+      let busDisconnected = false
+      let closeStream = () => {}
+      const unsubscribeDisconnect = subscribeToDisconnect(() => {
+        busDisconnected = true
+        closeStream()
+      })
+      let busAvailable: boolean
+      try {
+        busAvailable = await startBus()
+      } catch (error) {
+        unsubscribeDisconnect()
+        throw error
+      }
+      if (!busAvailable) {
+        unsubscribeDisconnect()
+        set.status = 503
+        return buildError(
+          'REPORT_EVENT_STREAM_UNAVAILABLE',
+          'Live report updates are temporarily unavailable.',
+          true,
+        )
+      }
+
       // Subscribe before taking the snapshot used by the stream. The durable
       // record is still the source of truth, but a transition racing this
       // read is retained in `latest` instead of being lost.
@@ -234,18 +268,31 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         snapshot = await getJob(reportJobId)
       } catch (error) {
         unsubscribe()
+        unsubscribeDisconnect()
         throw error
       }
       if (!snapshot || snapshot.auth0_id !== auth0Id) {
         unsubscribe()
+        unsubscribeDisconnect()
         set.status = 404
         return buildError('NOT_FOUND', 'Report job not found', false)
+      }
+      if (busDisconnected) {
+        unsubscribe()
+        unsubscribeDisconnect()
+        set.status = 503
+        return buildError(
+          'REPORT_EVENT_STREAM_UNAVAILABLE',
+          'Live report updates are temporarily unavailable.',
+          true,
+        )
       }
       const latestJob = latest as AiReportJob | null
       const initial =
         latestJob && latestJob.updated_at >= snapshot.updated_at ? latestJob : snapshot
       if (request.signal.aborted) {
         unsubscribe()
+        unsubscribeDisconnect()
         return new Response(null, { status: 499 })
       }
 
@@ -255,14 +302,17 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
           const encoder = new TextEncoder()
           let closed = false
           let heartbeat: ReturnType<typeof setInterval> | null = null
+          let maxDurationTimer: ReturnType<typeof setTimeout> | null = null
           let sequence = Promise.resolve()
 
           const close = () => {
             if (closed) return
             closed = true
             if (heartbeat) clearInterval(heartbeat)
+            if (maxDurationTimer) clearTimeout(maxDurationTimer)
             activeListener = null
             unsubscribe()
+            unsubscribeDisconnect()
             try {
               controller.close()
             } catch {
@@ -270,6 +320,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
             }
           }
 
+          closeStream = close
           cancelStream = close
 
           const enqueue = (job: AiReportJob) => {
@@ -306,7 +357,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
           enqueue(initial)
           // Cover the tiny gap between snapshot selection and listener
           // assignment without replaying the same record twice.
-          if (latest && latest !== initial) enqueue(latest)
+          if (latest && latest.updated_at > initial.updated_at) enqueue(latest)
           heartbeat = setInterval(() => {
             if (closed) return
             try {
@@ -317,6 +368,8 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
               close()
             }
           }, 30_000)
+          maxDurationTimer = setTimeout(close, REPORT_EVENT_MAX_DURATION_MS)
+          maxDurationTimer.unref?.()
           request.signal.addEventListener('abort', close, { once: true })
         },
         cancel() {

@@ -21,6 +21,7 @@ import { startRetentionSweep, stopRetentionSweep } from './retention'
 import { DEFAULT_MODEL } from '../types'
 import { logger } from './logger'
 import { startJobEventBus, stopJobEventBus } from './jobEvents'
+import { startServerEventBus, stopServerEventBus } from './serverEvents'
 import {
   initAiReportJob,
   updateAiReportJob,
@@ -119,12 +120,30 @@ export type FailureVerdict = {
   isFinalFailure: boolean
 }
 
+const attemptsLimit = (maxAttempts: number | undefined): number => maxAttempts ?? 3
+const attemptsExhausted = (
+  attemptsMade: number,
+  maxAttempts: number | undefined,
+  includeCurrentAttempt = false,
+): boolean => attemptsMade + (includeCurrentAttempt ? 1 : 0) >= attemptsLimit(maxAttempts)
+
+/**
+ * Whether a processor failure is terminal. BullMQ exposes `attemptsMade`
+ * before it increments the counter for the attempt that just failed, unlike
+ * QueueEvents' post-failure snapshot, so the current attempt is included here.
+ */
+export const isFinalReportFailure = (
+  retryable: boolean,
+  attemptsMadeBeforeFailure: number,
+  maxAttempts?: number,
+): boolean => !retryable || attemptsExhausted(attemptsMadeBeforeFailure, maxAttempts, true)
+
 export function classifyFailure(
   failedReason: string | undefined,
   attemptsMade: number | undefined,
   maxAttempts: number | undefined,
 ): FailureVerdict {
-  const retriesExhausted = (attemptsMade ?? 0) >= (maxAttempts ?? 3)
+  const retriesExhausted = attemptsExhausted(attemptsMade ?? 0, maxAttempts)
   // Ground truth, verified against the installed bullmq v5 Lua + job code
   // (NOT the other way round — an earlier version of this predicate read
   // the class name out of failedReason and silently dropped every
@@ -362,6 +381,34 @@ const analysisProcessor = createWorkerProcessor<AnalysisPayload>({
   },
 })
 
+async function createAiReportNotification(input: {
+  auth0Id: string
+  title: string
+  body: string
+  data: Record<string, unknown>
+  dedupeKey: string
+}): Promise<void> {
+  try {
+    // Dynamic import avoids a static queue <-> notifications cycle: the
+    // notification module owns the shared analysis QueueEvents listeners.
+    const { createNotification } = await import('./notifications')
+    await createNotification({
+      auth0Id: input.auth0Id,
+      type: 'ai_report',
+      title: input.title,
+      body: input.body,
+      data: input.data,
+      dedupeKey: input.dedupeKey,
+    })
+  } catch (error) {
+    logger.error('ai_report_notification_error', {
+      type: 'ai_report_notification_error',
+      auth0Id: input.auth0Id,
+      error: error instanceof Error ? error.message : 'unknown',
+    })
+  }
+}
+
 const reportProcessor = createWorkerProcessor<AiReportPayload>({
   unknownErrorMessage: 'Unknown AI report error.',
   step: async (job) => {
@@ -406,8 +453,22 @@ const reportProcessor = createWorkerProcessor<AiReportPayload>({
       progress: 100,
       report_id: persisted.id,
     })
+    await createAiReportNotification({
+      auth0Id: auth0_id,
+      title: 'AI report ready',
+      body: title ?? 'AI Report',
+      data: {
+        report_job_id,
+        report_id: persisted.id,
+        status: 'done',
+        href: '/dashboard/reports',
+      },
+      dedupeKey: `ai_report:${report_job_id}:done`,
+    })
   },
   onClassifiedError: async (job, engineError) => {
+    if (!isFinalReportFailure(isQueueRetryable(engineError), job.attemptsMade, job.opts?.attempts))
+      return
     await updateAiReportJob(job.data.report_job_id, {
       status: 'failed',
       error: `${engineError.code}: ${engineError.message}`,
@@ -638,12 +699,32 @@ function startReportInfrastructure(): void {
           bullJob.attemptsMade,
           bullJob.opts?.attempts,
         )
+
+        const errorMessage = failedReason ?? 'AI report failed after retries.'
         if (retriesExhausted) {
           await updateAiReportJob(reportJobId, {
             status: 'failed',
-            error: failedReason ?? 'AI report failed after retries.',
+            error: errorMessage,
           })
         }
+        // Keep the raw engine failure in the server-side job record, but do
+        // not copy provider messages or connection details into a user-facing
+        // notification payload.
+        const notificationError = retriesExhausted
+          ? 'AI report failed after retries.'
+          : 'AI report could not be generated.'
+        await createAiReportNotification({
+          auth0Id: bullJob.data.auth0_id,
+          title: 'AI report failed',
+          body: notificationError,
+          data: {
+            report_job_id: reportJobId,
+            status: 'failed',
+            error: notificationError,
+            href: '/dashboard/reports',
+          },
+          dedupeKey: `ai_report:${reportJobId}:failed`,
+        })
       } catch (err) {
         logger.error('ai_report_failed_event_error', {
           type: 'ai_report_failed_event_error',
@@ -680,6 +761,8 @@ export function startQueueInfrastructure(): void {
   // Dedicated subscriber for engine-published analysis events. It is
   // independent of BullMQ's queue connection and safely no-ops without Redis.
   void startJobEventBus()
+  // Shared report/notification event bus for multi-replica SSE delivery.
+  void startServerEventBus()
 
   // Graceful shutdown — registered with the infrastructure, not at import.
   process.on('SIGTERM', onSigterm)
@@ -716,6 +799,7 @@ export async function stopQueueInfrastructure(): Promise<void> {
   // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
   if (queueEvents) await queueEvents.close()
   if (reportQueueEvents) await reportQueueEvents.close()
+  await stopServerEventBus()
   await stopJobEventBus()
   if (worker) await worker.close()
   if (aiReportWorker) await aiReportWorker.close()

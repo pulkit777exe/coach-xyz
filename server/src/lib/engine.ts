@@ -2,7 +2,23 @@ import { engineFailure, wrapEngineError } from './errors'
 import { logger } from './logger'
 import type { CoachAIError, JobStatus, ScanResult } from '../types'
 
-export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8001'
+const configuredEngineUrl = (process.env.ENGINE_URL || 'http://localhost:8001').trim()
+const engineUrlHasScheme = /^https?:\/\//i.test(configuredEngineUrl)
+const engineUrlIsLocal = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::|$)/i.test(
+  configuredEngineUrl,
+)
+// Render's `hostport` property is a private-network address such as
+// `coachai-engine:10000`; it is plain HTTP even though it has no dot in its
+// hostname. Public Render hosts use HTTPS, so keep that the default for
+// scheme-less public names.
+const engineUrlIsPrivateRenderHost =
+  !engineUrlIsLocal &&
+  (!configuredEngineUrl.includes('.') || /:10000(?:\/|$)/.test(configuredEngineUrl))
+export const ENGINE_URL = (
+  engineUrlHasScheme
+    ? configuredEngineUrl
+    : `${engineUrlIsLocal || engineUrlIsPrivateRenderHost ? 'http' : 'https'}://${configuredEngineUrl}`
+).replace(/\/+$/, '')
 
 /**
  * Raw engine status payload. Same wire shape as JobStatus (the response type)

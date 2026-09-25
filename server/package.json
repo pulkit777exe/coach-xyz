@@ -9,7 +9,9 @@
     "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
     "test": "bun test --timeout 30000",
     "lint": "eslint .",
-    "smoke": "bun scripts/smokeOrgHttp.ts"
+    "smoke": "bun scripts/smokeOrgHttp.ts",
+    "smoke:events": "bun scripts/smokeJobEvents.ts && bun scripts/smokeServerEvents.ts",
+    "smoke:server-events": "bun scripts/smokeServerEvents.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.2",

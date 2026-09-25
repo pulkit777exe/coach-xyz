@@ -13,6 +13,7 @@
       "format:check": "prettier --check server web-next",
       "build": "cd web-next && npm run build",
       "smoke": "cd server && bun run smoke",
+      "smoke:events": "cd server && bun run smoke:events",
       "check": "npm run typecheck && npm run lint && npm run test && npm run format:check"
   },
   "devDependencies": {

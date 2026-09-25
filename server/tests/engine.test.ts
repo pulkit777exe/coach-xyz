@@ -29,6 +29,24 @@ describe('ENGINE_URL', () => {
     const mod = await loadEngine()
     expect(mod.ENGINE_URL).toBe('http://engine.internal:8001')
   })
+
+  test('adds https to a scheme-less Render service host', async () => {
+    process.env.ENGINE_URL = 'coachai-engine.onrender.com/'
+    const mod = await loadEngine()
+    expect(mod.ENGINE_URL).toBe('https://coachai-engine.onrender.com')
+  })
+
+  test('keeps a scheme-less local engine on http', async () => {
+    process.env.ENGINE_URL = 'localhost:8001/'
+    const mod = await loadEngine()
+    expect(mod.ENGINE_URL).toBe('http://localhost:8001')
+  })
+
+  test('uses http for Render private hostport values', async () => {
+    process.env.ENGINE_URL = 'coachai-engine:10000/'
+    const mod = await loadEngine()
+    expect(mod.ENGINE_URL).toBe('http://coachai-engine:10000')
+  })
 })
 
 describe('withTimeout', () => {

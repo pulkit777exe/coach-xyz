@@ -22,6 +22,7 @@ The CLI tool lives at `engine/cli/`.
 ```bash
 cp .env.prod.example .env
 # Fill in GEMINI_API_KEY, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
+# Production/Render also requires the operator-managed secrets below.
 docker compose up --build
 ```
 
@@ -62,8 +63,10 @@ bun run dev                    # or bun run start
 ```
 
 Required env: `ENGINE_URL` (`http://localhost:8001` by default). `DATABASE_URL` is optional —
-history/chat persistence degrades gracefully when absent. Rate limits are configured with
-`SCAN_RATE_LIMIT` (default 10/min) and `ANALYSIS_RATE_LIMIT` (default 5/hour).
+history/chat persistence degrades gracefully when absent. In production (`NODE_ENV=production`),
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are required for BullMQ and the
+cross-replica report/notification event bus. Rate limits are configured with `SCAN_RATE_LIMIT`
+(default 10/min) and `ANALYSIS_RATE_LIMIT` (default 5/hour).
 
 ### 3. Frontend (Next.js)
 
@@ -96,6 +99,7 @@ npm run lint         # server eslint + web eslint
 npm run test         # server bun test + web vitest
 npm run build        # web next build
 npm run smoke        # server live HTTP smoke (needs .env + running server + Neon DB)
+npm run smoke:events # live Redis/SSE analysis + two-replica report/notification bus smoke
 ```
 
 Per-app: `npm run dev:server`, `npm run dev:web`. Server uses `bun`, web-next uses `npm`.
@@ -105,7 +109,7 @@ Per-app: `npm run dev:server`, `npm run dev:web`. Server uses `bun`, web-next us
 | Variable | Where | Default | Required |
 |---|---|---|---|
 | `GEMINI_API_KEY` | engine | — | yes |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | engine + server | — | recommended |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | engine + server | — | production server: yes; local: recommended |
 | `ENGINE_URL` | server | `http://localhost:8001` | yes |
 | `FRONTEND_URL` | server | `http://localhost:3000` (CORS) | no |
 | `PORT` | server | `8000` | no |
@@ -124,6 +128,16 @@ Storage defaults to **local disk** — the engine writes to `/app/tmp/storage` (
 `STORAGE_BACKEND=s3` + `S3_BUCKET`/`S3_REGION`/`S3_ENDPOINT_URL` + standard
 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (see `engine/.env.sample`); uploads/downloads
 then go through presigned URLs.
+
+### Render deployment
+
+`render.yaml` wires `ENGINE_URL` to the engine service and sets `NODE_ENV=production` for the
+server. Before the first deploy, set the operator-managed `sync: false` values in the Render
+dashboard: `GEMINI_API_KEY`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`,
+`FRONTEND_URL`, `SERVICE_TOKEN`, and any optional Auth0, database, email, and Sentry values. Set
+`SERVICE_TOKEN` to the same secret on the engine and server (and web) services. The server fails
+fast in production if `ENGINE_URL`, the Redis REST credentials, or the service identity secret are
+missing; secrets must never be committed to the repository.
 
 ## VSCode Tasks
 
@@ -150,10 +164,12 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ## Test suites
 
 ```bash
-cd engine   && python -m pytest tests/ -q   # 227 tests
-cd server   && bun test                      # 360 tests / 34 files
-cd web-next && npm test                      # 204 tests / 19 files (vitest)
+cd engine   && .venv/bin/python -m pytest tests/ -q   # 228 tests
+cd server   && bun test                             # 418 tests / 42 files
+cd web-next && npm test                             # 231 tests / 23 files (vitest)
 ```
+
+These counts are for the current worktree, including the notification-preference integration that is intentionally kept unstaged while the event-transport work is isolated.
 
 Or run both TypeScript suites at once with `npm run check` from the repo root.
 

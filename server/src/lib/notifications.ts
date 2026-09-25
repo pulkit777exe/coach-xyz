@@ -1,16 +1,14 @@
-import { EventEmitter } from 'events'
 import type { QueueEvents } from 'bullmq'
 
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { getAnalysisByServerJobId } from './analyses'
 import { analysisQueue, queueEvents, classifyFailure, onQueueInfrastructureReady } from './queue'
 import { logger } from './logger'
+import { publishNotification, subscribeNotification } from './serverEvents'
 
-// ── In-process pub/sub ───────────────────────────────────────────────────────
-// Lightweight fan-out so SSE endpoints get notified when a new notification is
-// created.  In production a Redis PUBLISH could replace this, but an in-memory
-// EventEmitter is sufficient for single-instance dev and keeps the codebase
-// dependency-free.
+// Notification rows are durable in Postgres. The shared Redis bus is only a
+// wake-up signal for authenticated SSE routes; each replica dispatches locally
+// and the browser reconciles a snapshot after every event/reconnect.
 
 export type NotificationRow = {
   id: string
@@ -20,30 +18,12 @@ export type NotificationRow = {
   body: string | null
   data: Record<string, unknown>
   read: boolean
+  dedupe_key?: string | null
   created_at: string
 }
 
-type NotificationEvent = {
-  auth0Id: string
-  notification: NotificationRow
-}
-
-const bus = new EventEmitter()
-bus.setMaxListeners(200)
-
 export function onNotification(auth0Id: string, handler: (n: NotificationRow) => void): () => void {
-  const listener = (evt: NotificationEvent) => {
-    if (evt.auth0Id === auth0Id) handler(evt.notification)
-  }
-  bus.on('notification', listener)
-  return () => bus.off('notification', listener)
-}
-
-function publish(auth0Id: string, notification: NotificationRow) {
-  bus.emit('notification', {
-    auth0Id,
-    notification,
-  } satisfies NotificationEvent)
+  return subscribeNotification(auth0Id, handler)
 }
 
 // ── CRUD helpers ─────────────────────────────────────────────────────────────
@@ -51,12 +31,33 @@ function publish(auth0Id: string, notification: NotificationRow) {
 // single schema mechanism, so every wrapped query below can assume the
 // notifications table exists (the wrapper initializes before the callback).
 
+function normalizeNotificationData(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  if (typeof value !== 'string') return {}
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch (error) {
+    logger.error('notification_data_parse_failed', {
+      type: 'notification_data_parse_failed',
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return {}
+}
+
 export type CreateNotificationInput = {
   auth0Id: string
   type: string
   title: string
   body?: string | null
   data?: Record<string, unknown>
+  /** Internal idempotency key for queue-derived notifications. */
+  dedupeKey?: string | null
 }
 
 export async function createNotification(
@@ -64,20 +65,40 @@ export async function createNotification(
 ): Promise<NotificationRow | null> {
   const result = await withHistoryStore(async (db) => {
     const rows = await db<NotificationRow[]>`
-      insert into notifications (auth0_id, type, title, body, data)
+      insert into notifications (auth0_id, type, title, body, data, dedupe_key)
       values (
         ${input.auth0Id},
         ${input.type},
         ${input.title},
         ${input.body ?? null},
-        ${JSON.stringify(input.data ?? {})}::jsonb
+        ${JSON.stringify(input.data ?? {})}::jsonb,
+        ${input.dedupeKey ?? null}
       )
+      on conflict do nothing
       returning *;
     `
     return rows?.[0] ?? null
   })
 
-  if (result) publish(input.auth0Id, result)
+  if (result) {
+    const createdAt = new Date(result.created_at as unknown as string | number | Date).toISOString()
+    const data = normalizeNotificationData(result.data)
+    void publishNotification({
+      id: result.id,
+      auth0_id: result.auth0_id,
+      type: result.type,
+      title: result.title,
+      body: result.body,
+      data,
+      read: result.read,
+      created_at: createdAt,
+    }).catch((error: unknown) => {
+      logger.error('notification_event_publish_error', {
+        type: 'notification_event_publish_error',
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+  }
   return result
 }
 
@@ -195,6 +216,7 @@ function attachQueueEventListeners() {
             server_job_id: job.data.server_job_id,
             engine_job_id: job.data.engine_job_id,
           },
+          dedupeKey: `analysis_complete:${job.data.server_job_id}:${analysis.auth0Id}`,
         })
       } catch (err) {
         logger.error('notification_completed_handler_error', {
@@ -233,6 +255,7 @@ function attachQueueEventListeners() {
               server_job_id: job.data.server_job_id,
               engine_job_id: job.data.engine_job_id,
             },
+            dedupeKey: `analysis_failed:${job.data.server_job_id}:${analysis.auth0Id}`,
           })
         } catch (err) {
           logger.error('notification_failed_handler_error', {

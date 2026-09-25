@@ -62,7 +62,12 @@ process.on('uncaughtException', (error) => {
 })
 
 // ── Validate Required Environment Variables ────────────────────────────────
-const requiredEnvVars = ['ENGINE_URL']
+const requiredEnvVars = [
+  'ENGINE_URL',
+  ...(process.env.NODE_ENV === 'production'
+    ? ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'SERVICE_TOKEN']
+    : []),
+]
 const missingEnvVars = requiredEnvVars.filter((k) => !process.env[k])
 if (missingEnvVars.length > 0) {
   logger.error('missing_required_env', {

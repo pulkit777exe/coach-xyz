@@ -340,11 +340,66 @@ describe('GET /api/org/:auth0Id/reports/ai/:reportJobId/events', () => {
     process.env.SERVICE_TOKEN = TEST_SERVICE_TOKEN
   })
 
+  test('returns a bounded 503 when the shared report bus is unavailable', async () => {
+    const route = aiReportsRoute({
+      getJob: async () => fakeJob({ status: 'queued' }),
+      startBus: async () => false,
+    })
+    const response = await route.handle(
+      new Request('http://localhost/api/org/auth-coach-1/reports/ai/job-1/events', {
+        headers: headersFor('auth-coach-1'),
+      }),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      code: 'REPORT_EVENT_STREAM_UNAVAILABLE',
+      retryable: true,
+    })
+  })
+
+  test('closes an open report stream when the shared bus disconnects', async () => {
+    let listener: ((job: AiReportJob) => void) | null = null
+    let disconnect: (() => void) | null = null
+    const route = aiReportsRoute({
+      getJob: async () => fakeJob({ status: 'queued' }),
+      startBus: async () => true,
+      onBusDisconnect: (handler) => {
+        disconnect = handler
+        return () => {
+          disconnect = null
+        }
+      },
+      subscribeJob: (_jobId, handler) => {
+        listener = handler
+        return () => {
+          listener = null
+        }
+      },
+    })
+    const response = await route.handle(
+      new Request('http://localhost/api/org/auth-coach-1/reports/ai/job-1/events', {
+        headers: headersFor('auth-coach-1'),
+      }),
+    )
+    expect(response.status).toBe(200)
+    const reader = response.body!.getReader()
+    expect((await reader.read()).done).toBe(false)
+    expect(listener).not.toBeNull()
+    expect(disconnect).not.toBeNull()
+
+    disconnect!()
+    expect((await reader.read()).done).toBe(true)
+    expect(listener).toBeNull()
+  })
+
   test('streams queued/progress/done updates without a client poll loop', async () => {
     let listener: ((job: AiReportJob) => void) | null = null
     const route = aiReportsRoute({
       getJob: async () => fakeJob({ status: 'queued' }),
       getReportById: async () => fakeReport,
+      startBus: async () => true,
+      onBusDisconnect: () => () => {},
       subscribeJob: (_jobId, handler) => {
         listener = handler
         return () => {
