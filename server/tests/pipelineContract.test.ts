@@ -14,8 +14,12 @@ const CANONICAL_FORWARD_FLOW = [
 ]
 
 describe('pipeline state contract', () => {
+  // JSON-stringified comparison: pins values AND order exactly while staying
+  // immune to readonly-tuple vs mutable-array variance between the layers.
   test('engine forward flow matches the canonical order', () => {
-    expect(ENGINE_PIPELINE_STATES.filter((s) => s !== 'failed')).toEqual(CANONICAL_FORWARD_FLOW)
+    expect(JSON.stringify(ENGINE_PIPELINE_STATES.filter((s) => s !== 'failed'))).toBe(
+      JSON.stringify(CANONICAL_FORWARD_FLOW),
+    )
   })
 
   test('failed is a terminal state outside the forward flow', () => {
@@ -24,6 +28,8 @@ describe('pipeline state contract', () => {
   })
 
   test('union covers exactly the documented set', () => {
-    expect(ENGINE_PIPELINE_STATES).toEqual([...CANONICAL_FORWARD_FLOW, 'failed'])
+    expect(JSON.stringify([...ENGINE_PIPELINE_STATES])).toBe(
+      JSON.stringify([...CANONICAL_FORWARD_FLOW, 'failed']),
+    )
   })
 })

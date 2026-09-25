@@ -8,6 +8,7 @@ import {
   inviteOrgMember,
   listMembershipsForUser,
   removeOrgMember,
+  type OrgMemberRole,
 } from '../src/lib/orgMembers'
 import { verifyOrgRole } from '../src/lib/serviceGuard'
 import { upsertUser } from '../src/lib/users'
@@ -46,7 +47,7 @@ const CANONICAL = {
 
 describe('org-member role vocabulary contract', () => {
   test('server values and order match the canonical list', () => {
-    expect([...ORG_MEMBER_ROLES]).toEqual(CANONICAL.orgMemberRoles)
+    expect([...ORG_MEMBER_ROLES]).toEqual([...CANONICAL.orgMemberRoles])
   })
 
   test('server exports exactly the canonical roles', () => {
@@ -58,8 +59,8 @@ describe('org-member role vocabulary contract', () => {
   })
 
   test('invite roles are the canonical subset and never include the owner', () => {
-    expect([...ORG_MEMBER_INVITE_ROLES]).toEqual(CANONICAL.inviteRoles)
-    expect(ORG_MEMBER_INVITE_ROLES.includes('owner')).toBe(false)
+    expect([...ORG_MEMBER_INVITE_ROLES]).toEqual([...CANONICAL.inviteRoles])
+    expect(([...ORG_MEMBER_INVITE_ROLES] as string[]).includes('owner')).toBe(false)
   })
 })
 
@@ -69,7 +70,7 @@ describe('verifyOrgRole decision table', () => {
   const COACH = 'auth0|coach'
   const OK = { ok: true } as const
 
-  const member = (memberAuth0Id: string, role: string) => ({
+  const member = (memberAuth0Id: string | null, role: OrgMemberRole) => ({
     member_auth0_id: memberAuth0Id,
     role,
   })
@@ -228,8 +229,8 @@ describe('verifyOrgRole decision table', () => {
         sub: MEMBER,
         email: EMAIL,
         name: 'Member Test',
-        nickname: null,
-        picture: null,
+        nickname: undefined,
+        picture: undefined,
         email_verified: false,
       })
       const invited = await inviteOrgMember(ORG, ORG, {
@@ -250,8 +251,8 @@ describe('verifyOrgRole decision table', () => {
         sub: MEMBER,
         email: EMAIL,
         name: 'Member Test',
-        nickname: null,
-        picture: null,
+        nickname: undefined,
+        picture: undefined,
         email_verified: false,
       })
       const invited = await inviteOrgMember(ORG, ORG, {
@@ -279,8 +280,8 @@ describe('verifyOrgRole decision table', () => {
         sub: ORG_A,
         email: OWNER_EMAIL_A,
         name: 'Owner A',
-        nickname: null,
-        picture: null,
+        nickname: undefined,
+        picture: undefined,
         email_verified: false,
       })
       await ensureOrgOwner(ORG_A)
@@ -307,8 +308,8 @@ describe('verifyOrgRole decision table', () => {
         sub: MEMBER,
         email: MEMBER_EMAIL,
         name: 'Member Test',
-        nickname: null,
-        picture: null,
+        nickname: undefined,
+        picture: undefined,
         email_verified: false,
       })
       await inviteOrgMember(ORG_B, ORG_B, {

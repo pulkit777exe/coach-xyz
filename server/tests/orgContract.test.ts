@@ -32,23 +32,23 @@ const CANONICAL_REPORT_TYPE_LABELS: Record<string, string> = {
 
 describe('server org enum contract (mirrors web-next/lib/org.ts)', () => {
   test('student statuses match canonical values and order', () => {
-    expect([...STUDENT_STATUSES]).toEqual(CANONICAL.studentStatuses)
+    expect([...STUDENT_STATUSES]).toEqual([...CANONICAL.studentStatuses])
   })
 
   test('attendance statuses match canonical values and order', () => {
-    expect([...ATTENDANCE_STATUSES]).toEqual(CANONICAL.attendanceStatuses)
+    expect([...ATTENDANCE_STATUSES]).toEqual([...CANONICAL.attendanceStatuses])
   })
 
   test('event types match canonical values and order', () => {
-    expect([...EVENT_TYPES]).toEqual(CANONICAL.eventTypes)
+    expect([...EVENT_TYPES]).toEqual([...CANONICAL.eventTypes])
   })
 
   test('event statuses match canonical values and order', () => {
-    expect([...EVENT_STATUSES]).toEqual(CANONICAL.eventStatuses)
+    expect([...EVENT_STATUSES]).toEqual([...CANONICAL.eventStatuses])
   })
 
   test('report types match canonical values and order', () => {
-    expect([...REPORT_TYPES]).toEqual(CANONICAL.reportTypes)
+    expect([...REPORT_TYPES]).toEqual([...CANONICAL.reportTypes])
   })
 
   test('report type labels match the shared display vocabulary', () => {

@@ -187,6 +187,8 @@ describe('POST .../analyses/:jobId/chat engine call', () => {
     expect(body.role).toBe('assistant')
     expect(body.message).toBe(generateSimpleResponse('How was my serve?', SUMMARY))
     expect(store.appended.map((a) => a.message.role)).toEqual(['user', 'assistant'])
-    expect(store.appended[1].message.content).toBe(body.message)
+    expect(store.appended[1].message.content).toBe(
+      generateSimpleResponse('How was my serve?', SUMMARY),
+    )
   })
 })

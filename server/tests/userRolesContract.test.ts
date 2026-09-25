@@ -11,7 +11,7 @@ const CANONICAL = {
 
 describe('role vocabulary contract', () => {
   test('server values and order match the canonical list', () => {
-    expect([...USER_ROLES]).toEqual(CANONICAL.userRoles)
+    expect([...USER_ROLES]).toEqual([...CANONICAL.userRoles])
   })
 
   test('server exports exactly the canonical roles', () => {

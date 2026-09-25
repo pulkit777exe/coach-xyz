@@ -156,7 +156,7 @@ describe('POST /api/org/:auth0Id/analyses/:jobId/share-token', () => {
       }),
     )
     expect(res.status).toBe(201)
-    const body = await res.json()
+    const body = (await res.json()) as { token: string; expires_at: string; url: string }
     expect(typeof body.token).toBe('string')
     expect(body.expires_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(body.url).toBe(`/share/${body.token}`)
@@ -177,7 +177,7 @@ describe('POST /api/org/:auth0Id/analyses/:jobId/share-token', () => {
       }),
     )
     expect(res.status).toBe(404)
-    expect((await res.json()).code).toBe('NOT_FOUND')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('NOT_FOUND')
   })
 
   test('403s when the analysis belongs to a different account', async () => {
@@ -195,7 +195,7 @@ describe('POST /api/org/:auth0Id/analyses/:jobId/share-token', () => {
       }),
     )
     expect(res.status).toBe(403)
-    expect((await res.json()).code).toBe('FORBIDDEN')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('FORBIDDEN')
   })
 
   test('DELETE revokes an owned token and 403s for foreign tokens', async () => {
@@ -260,7 +260,7 @@ describe('POST /api/org/:auth0Id/analyses/:jobId/share-token', () => {
       }),
     )
     expect(noHeaders.status).toBe(403)
-    expect((await noHeaders.json()).code).toBe('FORBIDDEN')
+    expect(((await noHeaders.json()) as { code?: unknown }).code).toBe('FORBIDDEN')
 
     // Mismatched verified id → 403
     const mismatch = await app.handle(
@@ -304,7 +304,15 @@ describe('GET /api/share/:token', () => {
 
     const res = await app.handle(new Request(`http://localhost/api/share/${token}`))
     expect(res.status).toBe(200)
-    const body = await res.json()
+    const body = (await res.json()) as {
+      server_job_id: string
+      auth0_id?: unknown
+      analysis: {
+        display_name: string
+        summary_json: { form_score: number }
+        video_ready: boolean
+      }
+    }
     expect(body.server_job_id).toBe('job-1')
     expect(body.auth0_id).toBeUndefined()
     expect(body.analysis.display_name).toBe('Serve practice')
@@ -321,7 +329,7 @@ describe('GET /api/share/:token', () => {
     )
     const res = await app.handle(new Request('http://localhost/api/share/does-not-exist'))
     expect(res.status).toBe(404)
-    expect((await res.json()).code).toBe('NOT_FOUND')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('NOT_FOUND')
   })
 
   test('410s for an expired token', async () => {
@@ -340,7 +348,7 @@ describe('GET /api/share/:token', () => {
     )
     const res = await app.handle(new Request('http://localhost/api/share/expired-route'))
     expect(res.status).toBe(410)
-    expect((await res.json()).code).toBe('SHARE_EXPIRED')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('SHARE_EXPIRED')
   })
 
   test('404s when the underlying analysis is gone', async () => {
@@ -352,7 +360,7 @@ describe('GET /api/share/:token', () => {
     const app = new Elysia().use(publicShareRoute({ store, getAnalysis: async () => null }))
     const res = await app.handle(new Request(`http://localhost/api/share/${token}`))
     expect(res.status).toBe(404)
-    expect((await res.json()).code).toBe('NOT_FOUND')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('NOT_FOUND')
   })
 
   test('never requires service headers', async () => {

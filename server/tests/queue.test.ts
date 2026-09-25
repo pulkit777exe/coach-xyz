@@ -154,7 +154,10 @@ console.log(
 
 describe('start/stop lifecycle (fresh process, no Redis configured)', () => {
   test('start wires signals + ready callbacks once; stop closes them all back down', () => {
-    const env: Record<string, string> = { ...process.env }
+    const env: Record<string, string> = {}
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) env[key] = value
+    }
     // Strip Redis/DB config so construction stays connectionless here.
     env.UPSTASH_REDIS_REST_URL = ''
     env.UPSTASH_REDIS_REST_TOKEN = ''

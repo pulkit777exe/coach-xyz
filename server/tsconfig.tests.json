@@ -1,0 +1,11 @@
+{
+  "$comment": "Type-checks src + tests (the main tsconfig covers src only: its rootDir/outDir pair is for builds). Run: bunx tsc --noEmit -p tsconfig.tests.json. Kept green alongside the build config.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./dist-tests",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules"]
+}

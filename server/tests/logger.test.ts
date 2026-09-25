@@ -26,7 +26,8 @@ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 5))
 
 /** The JSON line winston serialized (symbol-keyed, invisible to JSON.stringify
  *  of the record object itself). */
-const jsonLine = (record: LogRecord): string => String(record[Symbol.for('message')])
+const jsonLine = (record: LogRecord): string =>
+  String((record as unknown as Record<symbol, unknown>)[Symbol.for('message')])
 
 describe('json format output', () => {
   test('serializes to one parseable JSON object with level/message/timestamp + type passthrough', async () => {

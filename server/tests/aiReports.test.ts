@@ -151,7 +151,7 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
       }),
     )
     expect(res.status).toBe(201)
-    const body = await res.json()
+    const body = (await res.json()) as { report_job_id: string; status: string }
     expect(body.report_job_id).toBe('job-1')
     expect(body.status).toBe('queued')
 
@@ -218,7 +218,7 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
       }),
     )
     expect(res.status).toBe(400)
-    expect((await res.json()).code).toBe('INVALID_REQUEST')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('INVALID_REQUEST')
   })
 
   test('returns 503 QUEUE_UNAVAILABLE when no worker is configured', async () => {
@@ -237,7 +237,7 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
       }),
     )
     expect(res.status).toBe(503)
-    expect((await res.json()).code).toBe('QUEUE_UNAVAILABLE')
+    expect(((await res.json()) as { code?: unknown }).code).toBe('QUEUE_UNAVAILABLE')
   })
 
   test('rejects requests without valid service identity', async () => {
@@ -275,7 +275,7 @@ describe('GET /api/org/:auth0Id/reports/ai/:reportJobId', () => {
       }),
     )
     expect(res.status).toBe(200)
-    const body = await res.json()
+    const body = (await res.json()) as { status: string; report: { id: string } }
     expect(body.status).toBe('done')
     expect(body.report.id).toBe('report-1')
   })
@@ -290,7 +290,7 @@ describe('GET /api/org/:auth0Id/reports/ai/:reportJobId', () => {
       }),
     )
     expect(res.status).toBe(200)
-    const body = await res.json()
+    const body = (await res.json()) as { status: string; report: unknown }
     expect(body.status).toBe('running')
     expect(body.report).toBeNull()
   })
@@ -309,7 +309,7 @@ describe('GET /api/org/:auth0Id/reports/ai/:reportJobId', () => {
       }),
     )
     expect(res.status).toBe(200)
-    const body = await res.json()
+    const body = (await res.json()) as { status: string; report: unknown }
     expect(body.status).toBe('failed')
     expect(body.report).toBeNull()
   })

@@ -20,7 +20,7 @@ const MISSING_IDENTITY_BODY = {
   message: 'Missing verified identity',
   layer: 'server',
   retryable: false,
-}
+} as const
 
 const setToken = (value?: string) => {
   if (value === undefined) {
@@ -113,7 +113,7 @@ describe('route-level verified-identity guards', () => {
 })
 
 describe('requireVerifiedSelf / missingVerifiedSelf predicate', () => {
-  const ctx = (headers: HeadersInit = {}) => ({
+  const ctx = (headers: Record<string, string> = {}) => ({
     request: new Request('http://localhost/api/me/profile', { headers }),
     set: {} as { status?: number | string },
   })

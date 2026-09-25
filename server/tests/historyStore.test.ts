@@ -24,18 +24,20 @@ const makeStubConnection = (state: StubState): SQL => {
     state.ddlStatements += 1
     return Promise.resolve([])
   }) as unknown as SQL
-  const stub = tag as SQL & {
-    connect: () => Promise<void>
-    unsafe: (query: string, params?: unknown[]) => Promise<unknown>
-    close: () => Promise<void>
-  }
-  stub.connect = async () => {
-    state.connects += 1
-    // Yield so concurrent wrapper calls interleave the way they do in prod.
-    await new Promise((resolve) => setTimeout(resolve, 5))
-  }
-  stub.unsafe = async () => []
-  stub.close = async () => {}
+  const stub = tag as unknown as SQL
+  // Attached via Object.assign (not property assignment) so the stub's
+  // intentionally-partial members aren't checked against SQL's overloaded
+  // signatures — the stub implements exactly what ensureInitialized uses
+  // (template call, connect, unsafe, close), nothing more.
+  Object.assign(stub, {
+    connect: async () => {
+      state.connects += 1
+      // Yield so concurrent wrapper calls interleave the way they do in prod.
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    },
+    unsafe: async () => [],
+    close: async () => {},
+  })
   return stub
 }
 
