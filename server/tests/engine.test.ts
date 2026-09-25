@@ -36,7 +36,7 @@ describe('withTimeout', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response('{"ok":true}', { status: 200 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     const res = await mod.withTimeout('http://engine.test/scan', { method: 'POST' }, 5_000)
     expect(res.status).toBe(200)
@@ -55,7 +55,7 @@ describe('withTimeout', () => {
             { once: true },
           )
         }),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     try {
       await mod.withTimeout('http://engine.test/slow', {}, 20)
@@ -104,12 +104,12 @@ describe('scanVideo', () => {
           { status: 200 },
         ),
       ),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     const result = await mod.scanVideo(new File(['data'], 'clip.mp4'))
     expect(result.session_token).toBe('tok')
 
-    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>
     const [input, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(input).toBe('http://engine.test/scan')
     expect(init.method).toBe('POST')
@@ -118,7 +118,9 @@ describe('scanVideo', () => {
   test('maps connectivity failures to ENGINE_UNAVAILABLE', async () => {
     process.env.ENGINE_URL = 'http://engine.test'
     const mod = await loadEngine()
-    globalThis.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch
+    globalThis.fetch = mock(() =>
+      Promise.reject(new TypeError('fetch failed')),
+    ) as unknown as typeof fetch
 
     try {
       await mod.scanVideo(new File(['data'], 'clip.mp4'))
@@ -138,7 +140,7 @@ describe('getEngineJobStatus', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 404 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     const result = await mod.getEngineJobStatus('j1')
     expect(result).toEqual({ status: 'not_found' })
@@ -153,7 +155,7 @@ describe('getEngineJobStatus', () => {
           status: 200,
         }),
       ),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     const result = await mod.getEngineJobStatus('j1')
     expect(result.status).toBe('found')
@@ -163,7 +165,9 @@ describe('getEngineJobStatus', () => {
   test('returns transient_error on connectivity failures', async () => {
     process.env.ENGINE_URL = 'http://engine.test'
     const mod = await loadEngine()
-    globalThis.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch
+    globalThis.fetch = mock(() =>
+      Promise.reject(new TypeError('fetch failed')),
+    ) as unknown as typeof fetch
 
     const result = await mod.getEngineJobStatus('j1')
     expect(result).toEqual({ status: 'transient_error' })
@@ -176,7 +180,7 @@ describe('getDownloadStream', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response('video', { status: 200 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     const res = await mod.getDownloadStream('j1')
     expect(res.status).toBe(200)
@@ -187,7 +191,7 @@ describe('getDownloadStream', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 404 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     try {
       await mod.getDownloadStream('gone')
@@ -204,7 +208,7 @@ describe('analyzeVideo', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 200 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     await mod.analyzeVideo({
       engine_job_id: 'j1',
@@ -213,7 +217,7 @@ describe('analyzeVideo', () => {
       video_key: 'k',
     })
 
-    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>
     const [input, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(input).toBe('http://engine.test/analyze')
     expect(init.method).toBe('POST')
@@ -240,7 +244,7 @@ describe('analyzeVideo', () => {
           { status: 404 },
         ),
       ),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     try {
       await mod.analyzeVideo({
@@ -262,7 +266,9 @@ describe('analyzeVideo', () => {
   test('maps connectivity failures to retryable ENGINE_UNAVAILABLE', async () => {
     process.env.ENGINE_URL = 'http://engine.test'
     const mod = await loadEngine()
-    globalThis.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch
+    globalThis.fetch = mock(() =>
+      Promise.reject(new TypeError('fetch failed')),
+    ) as unknown as typeof fetch
 
     try {
       await mod.analyzeVideo({
@@ -288,7 +294,7 @@ describe('markEngineJobFailed', () => {
     const mod = await loadEngine()
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response(null, { status: 200 })),
-    ) as typeof fetch
+    ) as unknown as typeof fetch
 
     await mod.markEngineJobFailed('j1', 'boom', 'INTERNAL_ERROR', true)
   })
@@ -296,8 +302,51 @@ describe('markEngineJobFailed', () => {
   test('swallows connectivity errors (best-effort failure reporting)', async () => {
     process.env.ENGINE_URL = 'http://engine.test'
     const mod = await loadEngine()
-    globalThis.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch
+    globalThis.fetch = mock(() =>
+      Promise.reject(new TypeError('fetch failed')),
+    ) as unknown as typeof fetch
 
     await mod.markEngineJobFailed('j1', 'boom', 'INTERNAL_ERROR', true)
+  })
+})
+
+describe('throwNonOk opaque bodies (fingerprint, never content)', () => {
+  const driveOpaque = async (bodyText: string | null, status: number) => {
+    process.env.ENGINE_URL = 'http://engine.test'
+    const mod = await loadEngine()
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(bodyText, { status })),
+    ) as unknown as typeof fetch
+
+    try {
+      await mod.getDownloadStream('j1')
+      expect.unreachable('getDownloadStream should have thrown')
+    } catch (error) {
+      return error as { code?: unknown; layer?: unknown; retryable?: unknown; status?: unknown }
+    }
+    throw new Error('unreachable')
+  }
+
+  // NOTE: getDownloadStream passes defaults { code: 'JOB_NOT_FOUND' }, so opaque
+  // bodies surface the endpoint default (not UNKNOWN) — the assertions pin
+  // that the error is SHAPED with the stamped status rather than crashing.
+  test('literal null JSON body shapes with the stamped status (never a TypeError crash)', async () => {
+    const error = await driveOpaque('null', 502)
+    expect(error).toMatchObject({
+      code: 'JOB_NOT_FOUND',
+      layer: 'engine',
+      retryable: true,
+      status: 502,
+    })
+  })
+
+  test('proxy HTML body shapes with the stamped status', async () => {
+    const error = await driveOpaque('<html><body>Bad Gateway</body></html>', 502)
+    expect(error).toMatchObject({ code: 'JOB_NOT_FOUND', layer: 'engine', status: 502 })
+  })
+
+  test('JSON array body shapes without crashing', async () => {
+    const error = await driveOpaque('[1,2]', 500)
+    expect(error).toMatchObject({ code: 'JOB_NOT_FOUND', layer: 'engine', status: 500 })
   })
 })

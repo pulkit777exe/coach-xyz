@@ -1,4 +1,5 @@
 import { engineFailure, wrapEngineError } from './errors'
+import { logger } from './logger'
 import type { CoachAIError, JobStatus, ScanResult } from '../types'
 
 export const ENGINE_URL = process.env.ENGINE_URL ?? 'http://localhost:8001'
@@ -55,7 +56,47 @@ const throwNonOk = async (
   res: Response,
   defaults: { code?: string; message?: string } = {},
 ): Promise<never> => {
-  const body = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
+  // Clone BEFORE consuming: the fingerprint below reads the raw bytes when
+  // the body proves opaque. Typed structurally (text() only) — clone() types
+  // don't line up with the global Response exactly.
+  const copy: { text(): Promise<string> } | null = (() => {
+    try {
+      return res.clone()
+    } catch {
+      // A disturbed body can't be fingerprinted — fall through to shaped error.
+      return null
+    }
+  })()
+  const parsed = (await res.json().catch(() => ({}))) as Partial<CoachAIError>
+  // res.json() can resolve to null / a string / an array for garbage
+  // bodies — normalize to {} so field access below never throws (a null
+  // body previously crashed HERE with TypeError, which isConnectivityError
+  // then misread as a connectivity loss; an answered status is a
+  // pass-through, not a connectivity failure).
+  const body = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  if (copy && Object.keys(body).length === 0) {
+    // Opaque upstream body (empty or unparsable): log transport forensics
+    // for triage — status, content type, size, shape — but NEVER the
+    // content itself. Proxy error pages can echo request URLs carrying
+    // tokens, and key-based redaction cannot scrub raw text.
+    const raw = await copy.text().catch(() => '')
+    const trimmed = raw.trimStart()
+    const bodyKind =
+      trimmed === ''
+        ? 'empty'
+        : trimmed.startsWith('<')
+          ? 'html'
+          : /^[{[]/.test(trimmed)
+            ? 'json-fragment'
+            : 'text'
+    logger.warn('engine_opaque_error_body', {
+      type: 'engine_opaque_error_body',
+      status: res.status,
+      contentType: res.headers.get('content-type'),
+      bodyBytes: raw.length,
+      bodyKind,
+    })
+  }
   throw engineFailure(
     {
       code: body.code ?? defaults.code ?? 'UNKNOWN',
