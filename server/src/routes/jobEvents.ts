@@ -137,7 +137,15 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
         else void emitEvent(event)
       })
 
-      const initial = await resolveWithDeadline(resolve, request, jobId)
+      let initial: Awaited<ReturnType<typeof resolveWithDeadline>>
+      try {
+        initial = await resolveWithDeadline(resolve, request, jobId)
+      } catch (error) {
+        unsubscribe()
+        unsubscribeDisconnect()
+        request.signal.removeEventListener('abort', onRequestAbort)
+        throw error
+      }
       if (!initial.ok) {
         unsubscribe()
         unsubscribeDisconnect()
