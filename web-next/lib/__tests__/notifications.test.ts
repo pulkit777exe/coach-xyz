@@ -28,12 +28,14 @@ describe('subscribeNotifications reconnect policy', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const controller = new AbortController()
-    const stop = subscribeNotifications(vi.fn(), controller.signal)
+    const onReconnect = vi.fn()
+    const stop = subscribeNotifications(vi.fn(), controller.signal, onReconnect)
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(15_000)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onReconnect).toHaveBeenCalledTimes(1)
 
     stop()
   })

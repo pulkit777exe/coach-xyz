@@ -30,7 +30,7 @@ export function notificationHref(notification: Pick<AppNotification, 'data'>): s
   return null
 }
 
-type NotificationsState = {
+export type NotificationsState = {
   notifications: AppNotification[]
   unread_count: number
 }
@@ -98,6 +98,7 @@ export async function markAllRead(): Promise<void> {
 export function subscribeNotifications(
   onEvent: (n: AppNotification) => void,
   signal: AbortSignal,
+  onReconnect?: () => void,
 ): () => void {
   const outerSignal = signal
   let attemptController: AbortController | null = null
@@ -135,6 +136,7 @@ export function subscribeNotifications(
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
+      onReconnect?.()
       void connect()
     }, delay)
   }
@@ -192,6 +194,7 @@ export function subscribeNotifications(
     if (outerSignal.aborted || isConnecting || isStreaming) return
     reconnectAttempt = 0
     clearReconnect()
+    onReconnect?.()
     void connect()
   }
   const onVisibilityChange = () => {

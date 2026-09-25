@@ -18,7 +18,7 @@ import {
   markAllRead,
   subscribeNotifications,
 } from '@/lib/notifications'
-import type { AppNotification } from '@/lib/notifications'
+import type { AppNotification, NotificationsState } from '@/lib/notifications'
 import { cn } from '@/lib/utils'
 
 function formatTime(iso: string): string {
@@ -56,23 +56,37 @@ export default function NotificationBell() {
     let unsubscribe: (() => void) | null = null
     const controller = new AbortController()
 
-    fetchNotifications()
-      .then((state) => {
-        setNotifications(state.notifications)
-        setUnreadCount(state.unread_count)
+    const mergeSnapshot = (state: NotificationsState) => {
+      setNotifications((prev) => {
+        const byId = new Map(prev.map((item) => [item.id, item]))
+        for (const item of state.notifications) byId.set(item.id, item)
+        return [...byId.values()]
       })
+      // A reconnect snapshot can race a live event; never let it erase that
+      // event's unread increment.
+      setUnreadCount((prev) => Math.max(prev, state.unread_count))
+    }
+    const fetchSnapshot = () => fetchNotifications().then(mergeSnapshot)
+
+    void fetchSnapshot()
       .catch(() => {
         // Non-fatal — empty bell still works
       })
       .finally(() => setIsLoading(false))
 
-    unsubscribe = subscribeNotifications((n) => {
-      setNotifications((prev) => {
-        if (prev.some((existing) => existing.id === n.id)) return prev
-        return [n, ...prev]
-      })
-      setUnreadCount((prev) => prev + 1)
-    }, controller.signal)
+    unsubscribe = subscribeNotifications(
+      (n) => {
+        setNotifications((prev) => {
+          if (prev.some((existing) => existing.id === n.id)) return prev
+          return [n, ...prev]
+        })
+        setUnreadCount((prev) => prev + 1)
+      },
+      controller.signal,
+      () => {
+        void fetchSnapshot().catch(() => {})
+      },
+    )
 
     return () => {
       unsubscribe?.()
