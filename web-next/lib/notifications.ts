@@ -13,6 +13,23 @@ export type AppNotification = {
   created_at: string
 }
 
+/**
+ * Resolve the destination for a notification without coupling routing to the
+ * bell UI. New server rows carry a recipient-correct href; older rows fall back
+ * to the analysis route that the bell used before hrefs were added.
+ */
+export function notificationHref(notification: Pick<AppNotification, 'data'>): string | null {
+  const href = notification.data.href
+  if (typeof href === 'string' && href.length > 0) return href
+
+  const serverJobId = notification.data.server_job_id
+  if (typeof serverJobId === 'string' && serverJobId.length > 0) {
+    return `/dashboard/analysis/${encodeURIComponent(serverJobId)}`
+  }
+
+  return null
+}
+
 type NotificationsState = {
   notifications: AppNotification[]
   unread_count: number
@@ -71,8 +88,9 @@ export async function markAllRead(): Promise<void> {
 /**
  * Subscribe to the SSE notification stream. Each event is a full
  * `AppNotification` object. The signal controls connection lifecycle — aborting
- * it closes the SSE connection. Stream errors and closes are both handled with
- * a 10-second backoff before reconnecting (never a tight loop).
+ * it closes the SSE connection. Stream errors and closes use bounded
+ * exponential backoff (10s, 20s, 40s, then 60s); after the outage budget the
+ * stream waits for connectivity/visibility instead of reconnecting forever.
  *
  * Returns an unsubscribe function that also aborts the stream.
  */
@@ -88,13 +106,30 @@ export function subscribeNotifications(
   outerSignal.addEventListener('abort', onAbort)
 
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectAttempt = 0
+  let isConnecting = false
+  let isStreaming = false
+  const maxReconnectAttempts = 6
+  const reconnectDelays = [10_000, 20_000, 40_000, 60_000]
+
+  const clearReconnect = () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
 
   const scheduleReconnect = () => {
-    if (controller.signal.aborted) return
-    reconnectTimer = setTimeout(connect, 10_000)
+    if (controller.signal.aborted || reconnectAttempt >= maxReconnectAttempts) return
+    const delay = reconnectDelays[Math.min(reconnectAttempt, reconnectDelays.length - 1)]
+    reconnectAttempt += 1
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      void connect()
+    }, delay)
   }
 
   async function connect() {
+    if (controller.signal.aborted || isConnecting || isStreaming) return
+    isConnecting = true
     try {
       const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/sse`, {
         signal: controller.signal,
@@ -102,6 +137,8 @@ export function subscribeNotifications(
       })
 
       if (!res.ok || !res.body) return
+      isStreaming = true
+      reconnectAttempt = 0
 
       for await (const event of parseEventStream<NotificationEvent>(res)) {
         // Skip connected handshake
@@ -109,20 +146,37 @@ export function subscribeNotifications(
         if (!('id' in event)) continue
 
         const n = event as AppNotification
+        reconnectAttempt = 0
         if (rememberDelivered(n.id)) continue
         onEvent(n)
       }
     } catch {
-      // Fall through — scheduleReconnect handles the reconnection backoff
+      // Fall through — scheduleReconnect handles the bounded reconnection policy.
+    } finally {
+      isConnecting = false
+      isStreaming = false
     }
     scheduleReconnect()
   }
 
-  connect()
+  const onOnline = () => {
+    if (controller.signal.aborted || isConnecting || isStreaming) return
+    reconnectAttempt = 0
+    clearReconnect()
+    void connect()
+  }
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') onOnline()
+  }
+  window.addEventListener('online', onOnline)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void connect()
 
   return () => {
-    if (reconnectTimer) clearTimeout(reconnectTimer)
+    clearReconnect()
     outerSignal.removeEventListener('abort', onAbort)
+    window.removeEventListener('online', onOnline)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
     controller.abort()
   }
 }

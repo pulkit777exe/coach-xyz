@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
 import { engineError, toCoachAIError } from '@/lib/errors'
-import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
+import { startAnalysisStatus } from '@/lib/analysisEvents'
+import type { JobPollingController } from '@/lib/jobPolling'
 import { mapEngineStateToPipeline } from '@/lib/pipelineState'
 import { useScanFlow } from '@/lib/useScanFlow'
 import type { PipelineState, ScanResult, JobStatus, UploadProgress } from '@/types'
@@ -79,15 +80,14 @@ export function usePipeline(
   }, [])
 
   const startPolling = useCallback(
-    (pollJobId: string) => {
+    (pollJobId: string, signal?: AbortSignal) => {
       stopPolling()
-      pollControllerRef.current = startJobPolling({
+      pollControllerRef.current = startAnalysisStatus({
         jobId: pollJobId,
         fetchStatus: getJobStatus,
         isComplete: (status) => status.complete,
-        intervalMs: 2000,
         timeoutMs: 12 * 60 * 1000,
-        maxFailures: 5,
+        signal,
         // Job still in progress — safe to update status and stage display.
         // Cap the displayed progress at 99 while the job is not yet
         // complete, so the bar never reaches 100% on the loading screen.
@@ -191,7 +191,7 @@ export function usePipeline(
       // flight. Its signal fences this callback; never resurrect job state.
       if (signal.aborted) return
       setJobId(job_id)
-      startPolling(job_id)
+      startPolling(job_id, signal)
       if (pathname !== `/dashboard/analysis/${job_id}`) {
         router.push(`/dashboard/analysis/${job_id}`)
       }
@@ -298,7 +298,7 @@ export function usePipeline(
               return
             }
             setJobId(job_id)
-            startPolling(job_id)
+            startPolling(job_id, controller.signal)
             if (pathname !== `/dashboard/analysis/${job_id}`) {
               router.push(`/dashboard/analysis/${job_id}`)
             }

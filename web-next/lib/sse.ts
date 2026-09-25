@@ -17,6 +17,15 @@ export async function* parseEventStream<T>(res: Response): AsyncGenerator<T, voi
   let buffer = ''
 
   try {
+    const emitLine = function* (line: string): Generator<T> {
+      if (!line.startsWith(DATA_PREFIX)) return
+      try {
+        yield JSON.parse(line.slice(DATA_PREFIX.length)) as T
+      } catch {
+        // Malformed JSON — skip this event rather than killing the stream.
+      }
+    }
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -24,16 +33,12 @@ export async function* parseEventStream<T>(res: Response): AsyncGenerator<T, voi
 
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        if (!line.startsWith(DATA_PREFIX)) continue
-        try {
-          yield JSON.parse(line.slice(DATA_PREFIX.length)) as T
-        } catch {
-          // Partial/Malformed JSON — skip this event
-        }
-      }
+      for (const line of lines) yield* emitLine(line.endsWith('\r') ? line.slice(0, -1) : line)
     }
+
+    // Flush a final data line that arrived without its terminating newline.
+    buffer += decoder.decode()
+    if (buffer) yield* emitLine(buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer)
   } finally {
     reader.releaseLock()
   }

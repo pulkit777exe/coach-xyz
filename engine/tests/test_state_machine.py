@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -28,12 +29,17 @@ class FakeRedis:
 
     def __init__(self) -> None:
         self.store: dict[str, str] = {}
+        self.published: list[tuple[str, str]] = []
 
     def get(self, key: str) -> str | None:
         return self.store.get(key)
 
     def set(self, key: str, value: str, ex: int | None = None) -> None:
         self.store[key] = value
+
+    def publish(self, channel: str, message: str) -> int:
+        self.published.append((channel, message))
+        return 1
 
 
 @pytest.fixture(autouse=True)
@@ -88,6 +94,18 @@ def test_valid_transition_succeeds(from_state: str, to_state: str):
         assert job.complete is True
     if to_state == "failed":
         assert job.complete is True
+
+
+def test_state_transition_publishes_public_event_without_video_paths():
+    # The autouse fixture exposes the same fake through jobs.redis.
+    _make_job("job-event", "uploading")
+    transition_job("job-event", "scanning", video_key="raw/private.mp4")
+    event = json.loads(jobs.redis.published[-1][1])
+    assert jobs.redis.published[-1][0] == jobs.JOB_EVENT_CHANNEL
+    assert event["job_id"] == "job-event"
+    assert event["status"]["state"] == "scanning"
+    assert "video_key" not in event["status"]
+    assert "video_path" not in event["status"]
 
 
 def test_retry_transition_clears_failed_terminal_fields():

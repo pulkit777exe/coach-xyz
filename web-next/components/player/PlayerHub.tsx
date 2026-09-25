@@ -22,9 +22,10 @@ import type { CoachAIError } from '@/lib/api'
 import { getJobStatus } from '@/lib/api'
 import { meStartAnalysis } from '@/lib/playerUpload'
 import { useScanFlow } from '@/lib/useScanFlow'
-import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
+import { startAnalysisStatus } from '@/lib/analysisEvents'
+import type { JobPollingController } from '@/lib/jobPolling'
 import { toCoachAIError } from '@/lib/errors'
-import { type JobStatus, type ScanResult } from '@/types'
+import type { ScanResult } from '@/types'
 import {
   getMyProfile,
   getMyAttendance,
@@ -533,13 +534,12 @@ function AnalyzeVideoCard({
           })
           if (!liveRef.current || signal.aborted) return
           pollRef.current?.stop()
-          pollRef.current = startJobPolling<JobStatus>({
+          pollRef.current = startAnalysisStatus({
             jobId: job_id,
             fetchStatus: getJobStatus,
             isComplete: (status) => status.complete,
-            intervalMs: 2000,
             timeoutMs: 12 * 60 * 1000,
-            maxFailures: 5,
+            signal,
             onStatus: (status) => {
               if (!liveRef.current || signal.aborted) return
               setPercent(Math.min(status.progress, 99))

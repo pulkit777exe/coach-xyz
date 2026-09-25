@@ -459,6 +459,19 @@ describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () 
   const req = (): Request => new Request('http://localhost/api/job-status/srv-nf')
   type PersistArgs = Parameters<NonNullable<StatusRouteDeps['persistAnalysisStatus']>>
 
+  test('engine connectivity loss answers retryable 503 instead of a synthetic 200', async () => {
+    mockFetchReject()
+    const route = statusRoute({ getJob: async () => job })
+    const res = await route.handle(req())
+    expect(res.status).toBe(503)
+    expect(await res.json()).toEqual({
+      code: 'ENGINE_UNAVAILABLE',
+      message: 'Analysis engine is temporarily unavailable.',
+      layer: 'server',
+      retryable: true,
+    })
+  })
+
   test('unknown job answers 404 with retryable: false', async () => {
     const route = statusRoute({
       getJob: async () => null,

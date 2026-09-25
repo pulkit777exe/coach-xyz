@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -18,6 +19,39 @@ redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token
 
 JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
+# Cross-process event channel consumed by the server's authenticated SSE
+# route. The status key remains the source of truth; pub/sub is a wake-up
+# signal so reconnecting clients can reconcile from that key.
+JOB_EVENT_CHANNEL = "coachai:job-events"
+
+
+def _publish_job_event(job: JobStatus) -> None:
+    """Best-effort publish a public status snapshot after a Redis write.
+
+    Never let event delivery turn a successful state transition into a failed
+    job: the persisted job key is authoritative, and the server sends a fresh
+    snapshot when a client connects. Video keys/paths are intentionally omitted
+    from the wire payload.
+    """
+    if redis is None:
+        return
+    publisher = getattr(redis, "publish", None)
+    if not callable(publisher):
+        return
+    status = asdict(job)
+    status.pop("video_key", None)
+    status.pop("video_path", None)
+    try:
+        publisher(
+            JOB_EVENT_CHANNEL,
+            json.dumps({"job_id": job.job_id, "status": status}, separators=(",", ":")),
+        )
+    except Exception as exc:  # event fan-out must not break the state machine
+        logging.warning(
+            "job_event_publish_failed job_id=%s error=%s",
+            job.job_id,
+            exc,
+        )
 
 # ── Per-job Lock Management ──────────────────────────────────────────────────
 # Fixed stripe pool (constant memory) instead of one Lock per job_id.
@@ -117,6 +151,7 @@ def create_job(job_id: str, initial_state: str = "uploading", video_key: str | N
         video_key=video_key,
     )
     redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+    _publish_job_event(job)
     return job
 
 
@@ -167,6 +202,7 @@ def transition_job(job_id: str, new_state: str, **kwargs) -> None:
             job.retryable = True
 
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        _publish_job_event(job)
 
 
 def update_job(job_id: str, **kwargs) -> None:
@@ -196,6 +232,7 @@ def update_job(job_id: str, **kwargs) -> None:
         if "stage" in kwargs:
             job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        _publish_job_event(job)
 
 
 def get_job(job_id: str) -> JobStatus:
@@ -237,3 +274,4 @@ def fail_job(job_id: str, error: EngineError) -> None:
         job.video_key = None
         job.video_path = None
         redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        _publish_job_event(job)

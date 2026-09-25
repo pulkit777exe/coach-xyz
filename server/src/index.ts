@@ -13,6 +13,7 @@ import { requestIdFrom } from './lib/engine'
 import scanRoute from './routes/scan'
 import analyzeRoute from './routes/analyze'
 import statusRoute from './routes/status'
+import jobEventsRoute from './routes/jobEvents'
 import downloadRoute from './routes/download'
 import chatRoute from './routes/chat'
 import authRoute from './routes/auth'
@@ -181,6 +182,7 @@ const app = new Elysia({
   .use(scanRoute)
   .use(analyzeRoute)
   .use(statusRoute)
+  .use(jobEventsRoute)
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)

@@ -13,12 +13,13 @@ import { checkAiReportLimit, rateLimited } from '../lib/ratelimit'
 import { REPORT_TYPES } from '../lib/orgEnums'
 import type { ReportType } from '../lib/orgEnums'
 import { isDate, defaultReportTitle } from '../lib/orgValidate'
-import { buildReportContent, getAiReportJob } from '../lib/aiReportData'
+import { buildReportContent, getAiReportJob, subscribeAiReportJob } from '../lib/aiReportData'
 import type { AiReportJob } from '../lib/aiReportData'
 import { getReport } from '../lib/orgData'
 import type { ReportRecord } from '../lib/orgData'
 import { enqueueAiReport } from '../lib/queue'
 import type { AiReportPayload } from '../lib/queue'
+import { logger } from '../lib/logger'
 
 const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
 
@@ -112,6 +113,7 @@ export type AiReportsDeps = {
   enqueue?: (payload: Omit<AiReportPayload, 'report_job_id'>) => Promise<string | null>
   getJob?: (reportJobId: string) => Promise<AiReportJob | null>
   getReportById?: GetReportById
+  subscribeJob?: typeof subscribeAiReportJob
 }
 
 export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
@@ -119,6 +121,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
   const enqueue = deps.enqueue ?? enqueueAiReport
   const getJob = deps.getJob ?? getAiReportJob
   const fetchReport = deps.getReportById ?? getReport
+  const subscribeJob = deps.subscribeJob ?? subscribeAiReportJob
 
   return new Elysia({ name: 'aiReports' })
     .use(serviceGuard)
@@ -182,6 +185,95 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
 
       set.status = 201
       return { report_job_id: reportJobId, status: 'queued' }
+    })
+    .get('/api/org/:auth0Id/reports/ai/:reportJobId/events', async ({ params, request, set }) => {
+      const { auth0Id, reportJobId } = params as {
+        auth0Id: string
+        reportJobId: string
+      }
+      if (!auth0Id || !reportJobId) {
+        set.status = 400
+        return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
+      }
+
+      const initial = await getJob(reportJobId)
+      if (!initial || initial.auth0_id !== auth0Id) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Report job not found', false)
+      }
+
+      const stream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder()
+          let closed = false
+          let heartbeat: ReturnType<typeof setInterval> | null = null
+          let unsubscribe = () => {}
+          let sequence = Promise.resolve()
+
+          const close = () => {
+            if (closed) return
+            closed = true
+            if (heartbeat) clearInterval(heartbeat)
+            unsubscribe()
+            try {
+              controller.close()
+            } catch {
+              // The client may already have closed the stream.
+            }
+          }
+
+          const enqueue = (job: typeof initial) => {
+            sequence = sequence
+              .then(async () => {
+                if (closed) return
+                const report =
+                  job.status === 'done' && job.report_id
+                    ? await fetchReport(auth0Id, job.report_id)
+                    : null
+                if (closed) return
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      report_job_id: job.report_job_id,
+                      status: job.status,
+                      report,
+                    })}\n\n`,
+                  ),
+                )
+                if (job.status === 'done' || job.status === 'failed') close()
+              })
+              .catch((error: unknown) => {
+                logger.error('ai_report_event_stream_error', {
+                  type: 'ai_report_event_stream_error',
+                  report_job_id: reportJobId,
+                  error: error instanceof Error ? error.message : String(error),
+                })
+                close()
+              })
+          }
+
+          unsubscribe = subscribeJob(reportJobId, enqueue)
+          enqueue(initial)
+          heartbeat = setInterval(() => {
+            if (closed) return
+            try {
+              controller.enqueue(encoder.encode(': heartbeat\n\n'))
+            } catch {
+              close()
+            }
+          }, 30_000)
+          request.signal.addEventListener('abort', close, { once: true })
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        },
+      })
     })
     .get('/api/org/:auth0Id/reports/ai/:reportJobId', async ({ params, set }) => {
       const { auth0Id, reportJobId } = params as {

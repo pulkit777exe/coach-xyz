@@ -20,6 +20,7 @@ import { getRedisConnectionUrl, isLocalRedis } from './redis'
 import { startRetentionSweep, stopRetentionSweep } from './retention'
 import { DEFAULT_MODEL } from '../types'
 import { logger } from './logger'
+import { startJobEventBus, stopJobEventBus } from './jobEvents'
 import {
   initAiReportJob,
   updateAiReportJob,
@@ -676,6 +677,9 @@ export function startQueueInfrastructure(): void {
 
   startAnalysisInfrastructure()
   startReportInfrastructure()
+  // Dedicated subscriber for engine-published analysis events. It is
+  // independent of BullMQ's queue connection and safely no-ops without Redis.
+  void startJobEventBus()
 
   // Graceful shutdown — registered with the infrastructure, not at import.
   process.on('SIGTERM', onSigterm)
@@ -712,6 +716,7 @@ export async function stopQueueInfrastructure(): Promise<void> {
   // Per BullMQ docs: must close both worker AND queue (each creates own Redis connection)
   if (queueEvents) await queueEvents.close()
   if (reportQueueEvents) await reportQueueEvents.close()
+  await stopJobEventBus()
   if (worker) await worker.close()
   if (aiReportWorker) await aiReportWorker.close()
   if (analysisQueue) await analysisQueue.close()

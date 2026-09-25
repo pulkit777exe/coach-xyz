@@ -334,3 +334,44 @@ describe('GET /api/org/:auth0Id/reports/ai/:reportJobId', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('GET /api/org/:auth0Id/reports/ai/:reportJobId/events', () => {
+  beforeEach(() => {
+    process.env.SERVICE_TOKEN = TEST_SERVICE_TOKEN
+  })
+
+  test('streams queued/progress/done updates without a client poll loop', async () => {
+    let listener: ((job: AiReportJob) => void) | null = null
+    const route = aiReportsRoute({
+      getJob: async () => fakeJob({ status: 'queued' }),
+      getReportById: async () => fakeReport,
+      subscribeJob: (_jobId, handler) => {
+        listener = handler
+        return () => {
+          listener = null
+        }
+      },
+    })
+    const response = await route.handle(
+      new Request('http://localhost/api/org/auth-coach-1/reports/ai/job-1/events', {
+        headers: headersFor('auth-coach-1'),
+      }),
+    )
+    expect(response.status).toBe(200)
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    const first = await reader.read()
+    expect(decoder.decode(first.value)).toContain('"status":"queued"')
+
+    listener!(fakeJob({ status: 'running', progress: 50 }))
+    const second = await reader.read()
+    expect(decoder.decode(second.value)).toContain('"status":"running"')
+
+    listener!(fakeJob({ status: 'done', report_id: 'report-1', progress: 100 }))
+    const third = await reader.read()
+    expect(decoder.decode(third.value)).toContain('"status":"done"')
+    expect(decoder.decode(third.value)).toContain('"id":"report-1"')
+    expect((await reader.read()).done).toBe(true)
+    expect(listener).toBeNull()
+  })
+})

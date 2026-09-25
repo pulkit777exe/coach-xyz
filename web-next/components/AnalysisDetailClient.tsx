@@ -20,7 +20,8 @@ import {
 import type { CoachAIError } from '@/lib/api'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
-import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
+import { startAnalysisStatus } from '@/lib/analysisEvents'
+import type { JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/api'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
@@ -41,8 +42,7 @@ import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
 
-const POLL_INTERVAL = 2000
-const MAX_POLL_RETRIES = 3
+const FALLBACK_POLL_ATTEMPTS = 4
 const STUCK_WARNING_MS = 5 * 60 * 1000
 
 /** Card heading: 16px/600 over a hairline rule that bleeds to the card edges. */
@@ -113,16 +113,11 @@ export default function AnalysisDetailClient({
   useEffect(() => {
     let cancelled = false
 
-    const controller = startJobPolling({
+    const controller = startAnalysisStatus({
       jobId,
       fetchStatus: getJobStatus,
       isComplete: (s) => s.complete,
-      intervalMs: POLL_INTERVAL,
-      // The detail page is driven by server-side data when available; a job
-      // that does not respond before ever succeeding is treated as expired.
-      giveUpOnFirstFailure: true,
-      maxFailures: MAX_POLL_RETRIES,
-      backoffFactor: 1,
+      timeoutMs: 12 * 60 * 1000,
       warnAfterMs: STUCK_WARNING_MS,
       onStatus: (s) => {
         if (cancelled) return
@@ -141,7 +136,9 @@ export default function AnalysisDetailClient({
       onTransient: (failure) => {
         if (cancelled) return
         setLoading(false)
-        setPollError(`Connection issue. Retrying... (${failure.attempts}/${MAX_POLL_RETRIES})`)
+        setPollError(
+          `Connection issue. Retrying... (${failure.attempts}/${FALLBACK_POLL_ATTEMPTS})`,
+        )
       },
       onError: (failure) => {
         if (cancelled) return

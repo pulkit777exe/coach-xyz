@@ -41,7 +41,7 @@ import {
   REPORT_TYPES,
   REPORT_TYPE_LABELS,
 } from '@/lib/org'
-import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
+import { orgGenerateAiReport, orgAiReportStatus, subscribeAiReportEvents } from '@/lib/aiReports'
 import type { AiReportJobPoll } from '@/lib/aiReports'
 import type { CoachAIError } from '@/lib/api'
 
@@ -109,16 +109,6 @@ export default function ReportsClient({
     title: '',
   })
 
-  const resetAiForm = () => {
-    setAiForm({
-      student_id: 'all',
-      report_type: 'progress',
-      period_start: '',
-      period_end: '',
-      title: '',
-    })
-  }
-
   const closeAi = () => {
     setAiOpen(false)
     setAiPending(null)
@@ -129,36 +119,71 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!aiPending) return
-    let cancelled = false
+    const controller = new AbortController()
+    let finished = false
 
-    const poll = async () => {
-      try {
-        const res = await orgAiReportStatus(auth0Id, aiPending.report_job_id)
-        if (cancelled) return
-        setAiJob(res)
-        if (res.status === 'done' && res.report) {
-          setReports((prev) =>
-            prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
-          )
-          toast.success('AI report generated')
-          setAiPending(null)
-          setAiOpen(false)
-          resetAiForm()
-        } else if (res.status === 'failed') {
-          setAiPending(null)
-          setAiError('AI report generation failed. Please try again.')
-        }
-      } catch (err) {
-        if (cancelled) return
+    const applyStatus = (res: AiReportJobPoll) => {
+      if (finished) return
+      setAiJob(res)
+      if (res.status === 'done' && res.report) {
+        setReports((prev) =>
+          prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
+        )
+        toast.success('AI report generated')
+        finished = true
         setAiPending(null)
-        setAiError((err as CoachAIError).message ?? 'Failed to check AI report status')
+        setAiOpen(false)
+        setAiForm({
+          student_id: 'all',
+          report_type: 'progress',
+          period_start: '',
+          period_end: '',
+          title: '',
+        })
+      } else if (res.status === 'failed') {
+        finished = true
+        setAiPending(null)
+        setAiError('AI report generation failed. Please try again.')
       }
     }
 
-    const interval = setInterval(poll, 2500)
+    const stop = subscribeAiReportEvents(
+      auth0Id,
+      aiPending.report_job_id,
+      applyStatus,
+      (error) => {
+        if (finished) return
+        // One bounded reconciliation replaces the old 2.5s interval. If the
+        // job is still running, stop rather than creating a polling loop.
+        void orgAiReportStatus(auth0Id, aiPending.report_job_id)
+          .then((res) => {
+            if (res.status === 'done' || res.status === 'failed') {
+              applyStatus(res)
+            } else {
+              finished = true
+              setAiPending(null)
+              setAiError(
+                (error as CoachAIError).message ??
+                  'Live report updates are unavailable. Please try again.',
+              )
+            }
+          })
+          .catch((statusError: unknown) => {
+            if (finished) return
+            finished = true
+            setAiPending(null)
+            setAiError(
+              (statusError as CoachAIError).message ??
+                'Failed to check AI report status. Please try again.',
+            )
+          })
+      },
+      controller.signal,
+    )
+
     return () => {
-      cancelled = true
-      clearInterval(interval)
+      finished = true
+      stop()
     }
   }, [auth0Id, aiPending])
 
@@ -281,7 +306,8 @@ export default function ReportsClient({
       {/* Toolbar */}
       <div className="mb-6 flex items-center justify-between">
         <p className="text-body text-muted-foreground">
-          <span className="tabular-nums">{reports.length}</span> generated {reports.length === 1 ? 'report' : 'reports'}
+          <span className="tabular-nums">{reports.length}</span> generated{' '}
+          {reports.length === 1 ? 'report' : 'reports'}
         </p>
         <div className="flex items-center gap-2">
           {reports.length > 0 && (

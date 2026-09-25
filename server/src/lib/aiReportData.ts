@@ -4,6 +4,8 @@
 // in queue.ts imports persistAiReportRecord; routes import the job record
 // helpers and the engine adapter below.
 
+import { EventEmitter } from 'events'
+
 import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from './engine'
 import { buildReportContent, createReportRecord } from './orgData'
 import type { ReportType } from './orgEnums'
@@ -26,6 +28,28 @@ export type AiReportJob = {
 const KEY_PREFIX = 'coachai:reportjob:'
 const JOB_TTL = 7200 // 2h — aligned with server job TTL
 
+// Report jobs are created and completed in this server process, so an
+// in-process event bus is sufficient for the authenticated SSE route. The
+// Redis record remains the durable source of truth; the bus only wakes
+// connected clients after each state write.
+const reportEventBus = new EventEmitter()
+reportEventBus.setMaxListeners(200)
+
+export function subscribeAiReportJob(
+  reportJobId: string,
+  handler: (job: AiReportJob) => void,
+): () => void {
+  const listener = (job: AiReportJob) => {
+    if (job.report_job_id === reportJobId) handler(job)
+  }
+  reportEventBus.on('report-job', listener)
+  return () => reportEventBus.off('report-job', listener)
+}
+
+function publishAiReportJob(job: AiReportJob): void {
+  reportEventBus.emit('report-job', job)
+}
+
 export const reportJobKey = (reportJobId: string) => `${KEY_PREFIX}${reportJobId}`
 
 export async function initAiReportJob(input: {
@@ -44,6 +68,7 @@ export async function initAiReportJob(input: {
     updated_at: ts,
   }
   await redis.set(reportJobKey(input.report_job_id), record, { ex: JOB_TTL })
+  publishAiReportJob(record)
   return record
 }
 
@@ -56,6 +81,7 @@ export async function updateAiReportJob(
   const record = raw as AiReportJob
   const next: AiReportJob = { ...record, ...patch, updated_at: Date.now() }
   await redis.set(reportJobKey(reportJobId), next, { ex: JOB_TTL })
+  publishAiReportJob(next)
   return next
 }
 
