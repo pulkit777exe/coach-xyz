@@ -95,10 +95,10 @@ function MemberRow({ member }: { member: OrgMember }) {
 
 export default async function OrgPage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const ownAuth0Id = session.user.sub
-  const { auth0Id, role } = await getOrgContext()
+  const { auth0Id, role } = orgCtx
 
   const [profileRes, overviewRes, membersRes, subscriptionRes, orgsRes] = await Promise.all([
     getUserProfile(ownAuth0Id).catch(() => null),

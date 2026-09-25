@@ -22,10 +22,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
   const { id } = await params
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) return { title: 'Student | CoachXYZ' }
+
   try {
-    const { auth0Id } = await getOrgContext()
+    const { auth0Id } = orgCtx
     const res = await orgStudent(auth0Id, id)
     return { title: `${res.student.full_name} | CoachXYZ` }
   } catch {
@@ -36,9 +37,9 @@ export async function generateMetadata({
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
   const { id } = await params
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id, role } = await getOrgContext()
+  const { auth0Id, role } = orgCtx
 
   const studentRes = await orgStudent(auth0Id, id).catch(() => null)
   if (!studentRes) notFound()

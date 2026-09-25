@@ -17,9 +17,9 @@ export function generateMetadata(): Metadata {
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id } = orgCtx
   const { id } = await params
 
   const { report } = await orgReport(auth0Id, id).catch(() => ({ report: null }))

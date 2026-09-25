@@ -9,11 +9,11 @@ import HistoryChat from '@/components/HistoryChat'
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
     redirect('/auth/login')
   }
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id } = orgCtx
 
   const result = await getDashboardAnalysisDetail(auth0Id, id).catch(() => null)
   if (!result?.analysis) {

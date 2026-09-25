@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 
 export default async function SchedulePage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id } = orgCtx
 
   // Widen the window by one day on each side so month-boundary events are
   // captured regardless of the server timezone vs. the browser timezone.

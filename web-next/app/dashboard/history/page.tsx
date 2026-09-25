@@ -22,11 +22,11 @@ export default async function HistoryPage({
   searchParams: Promise<{ page?: string }>
 }) {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
     redirect('/auth/login')
   }
-  const { role } = await getOrgContext()
+  const { role } = orgCtx
   if (!HISTORY_NAV_ROLES.includes(role)) {
     return <AccessDenied page="History" allowedRoles={HISTORY_NAV_ROLES} />
   }

@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 
 export default async function AttendancePage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id } = orgCtx
 
   const today = new Date()
   const first = new Date(today.getFullYear(), today.getMonth(), 1)

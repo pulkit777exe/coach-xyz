@@ -183,9 +183,9 @@ function FeatureGrid({ features }: { features: Feature[] }) {
 
 export default async function FeaturesPage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { role } = await getOrgContext()
+  const { role } = orgCtx
 
   const analyze = visible(ANALYZE, role)
   const coach = visible(COACH, role)
