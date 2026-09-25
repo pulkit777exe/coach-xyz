@@ -488,7 +488,7 @@ function AnalyzeVideoCard({
   }, [])
 
   const runAnalysis = useCallback(
-    (scan: ScanResult, playerIndex: number) => {
+    async (scan: ScanResult, playerIndex: number, signal: AbortSignal) => {
       setFinished(false)
       setLocalError(null)
       setPercent(0)
@@ -500,8 +500,9 @@ function AnalyzeVideoCard({
             player_index: playerIndex,
             video_key: scan.video_key,
             angle: scan.angle ?? null,
+            signal,
           })
-          if (!liveRef.current) return
+          if (!liveRef.current || signal.aborted) return
           pollRef.current?.stop()
           pollRef.current = startJobPolling<JobStatus>({
             jobId: job_id,
@@ -510,8 +511,12 @@ function AnalyzeVideoCard({
             intervalMs: 2000,
             timeoutMs: 12 * 60 * 1000,
             maxFailures: 5,
-            onStatus: (status) => setPercent(Math.min(status.progress, 99)),
+            onStatus: (status) => {
+              if (!liveRef.current || signal.aborted) return
+              setPercent(Math.min(status.progress, 99))
+            },
             onComplete: (status) => {
+              if (!liveRef.current || signal.aborted) return
               if (status.error) {
                 setLocalError(status.error)
                 flowResetRef.current()
@@ -523,6 +528,7 @@ function AnalyzeVideoCard({
               }
             },
             onError: (failure) => {
+              if (!liveRef.current || signal.aborted) return
               setLocalError(failure.error.message)
               flowResetRef.current()
               toastOnce(failure.error.code, failure.error.message)
@@ -530,13 +536,13 @@ function AnalyzeVideoCard({
           })
         } catch (e: unknown) {
           const err = toCoachAIError(e)
-          if (!liveRef.current) return
+          if (!liveRef.current || signal.aborted) return
           setLocalError(err.message)
           flowResetRef.current()
           toastOnce(err.code, err.message)
         }
       }
-      void kickoff()
+      await kickoff()
     },
     [onCompleted, toastOnce],
   )

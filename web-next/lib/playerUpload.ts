@@ -5,6 +5,8 @@ export type MeAnalyzeInput = {
   player_index?: number | null
   video_key?: string | null
   angle?: string | null
+  /** Cancel the enqueue when the scan flow is reset or superseded. */
+  signal?: AbortSignal
 }
 
 /**
@@ -18,6 +20,11 @@ export type MeAnalyzeInput = {
  */
 export async function meStartAnalysis(params: MeAnalyzeInput): Promise<{ job_id: string }> {
   const controller = new AbortController()
+  const abortFromCaller = () => controller.abort()
+  if (params.signal) {
+    if (params.signal.aborted) controller.abort()
+    else params.signal.addEventListener('abort', abortFromCaller, { once: true })
+  }
   const timeout = setTimeout(() => controller.abort(), 30_000)
   try {
     return await apiFetch<{ job_id: string }>(`${IDENTITY_BASE}/api/me/analyze`, {
@@ -33,5 +40,6 @@ export async function meStartAnalysis(params: MeAnalyzeInput): Promise<{ job_id:
     })
   } finally {
     clearTimeout(timeout)
+    params.signal?.removeEventListener('abort', abortFromCaller)
   }
 }

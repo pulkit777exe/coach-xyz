@@ -19,10 +19,15 @@ export type ScanPhase = 'idle' | 'uploading' | 'scanning' | 'selecting' | 'analy
 
 export interface ScanFlowOptions {
   auth0Id: string | null
-  /** Kick off analysis for a scanned perspective + player. Rejections are
-   * reported back to this module (error state) AND rethrown so callers can
-   * react (their own error/toast handling). */
-  onAnalyze: (scan: ScanResult, playerIndex: number) => void | Promise<void>
+  /** Kick off analysis for a scanned perspective + player. The signal is
+   * aborted when a newer scan, reset, or unmount supersedes the request.
+   * Rejections are reported back to this module (error state) AND rethrown
+   * so callers can react (their own error/toast handling). */
+  onAnalyze: (
+    scan: ScanResult,
+    playerIndex: number,
+    signal: AbortSignal,
+  ) => void | Promise<void>
 }
 
 export interface ScanFlow {
@@ -65,10 +70,12 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
   const [errorStatus, setErrorStatus] = useState<CoachAIError | null>(null)
 
   const mountedRef = useRef(true)
+  const analysisAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      analysisAbortRef.current?.abort()
     }
   }, [])
 
@@ -76,7 +83,9 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
   // in-flight run — double file-selects and reset-during-upload no longer
   // interleave state (stale success/error clobbering the live run). The
   // fenced run still finishes its upload silently in the background; only
-  // state writes are fenced, via the live() check below.
+  // state writes are fenced, via the live() check below. The same generation
+  // also gates the analysis enqueue, and its AbortController cancels the
+  // request when a newer scan/reset supersedes it.
   const scanGenerationRef = useRef(0)
 
   const fail = useCallback((e: unknown) => {
@@ -96,6 +105,8 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
       file: File,
       append?: { sessionToken: string; angle: string },
     ): Promise<ScanResult | null> => {
+      analysisAbortRef.current?.abort()
+      analysisAbortRef.current = null
       const gen = ++scanGenerationRef.current
       const live = () => mountedRef.current && scanGenerationRef.current === gen
       setPhase(append ? 'scanning' : 'uploading')
@@ -167,19 +178,30 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
   /** Enter the analyzing phase and delegate kickoff to the caller. */
   const beginAnalyze = useCallback(
     async (scan: ScanResult, playerIndex: number) => {
-      if (mountedRef.current) {
-        setSelectedPlayerIndex(playerIndex)
-        setPhase('analyzing')
-        setUploadProgress(null)
-      }
+      const gen = scanGenerationRef.current
+      const controller = new AbortController()
+      const live = () =>
+        mountedRef.current && scanGenerationRef.current === gen && !controller.signal.aborted
+      analysisAbortRef.current?.abort()
+      analysisAbortRef.current = controller
+
+      if (!live()) return
+      setSelectedPlayerIndex(playerIndex)
+      setPhase('analyzing')
+      setUploadProgress(null)
+
       try {
-        await onAnalyze(scan, playerIndex)
+        await onAnalyze(scan, playerIndex, controller.signal)
       } catch (e: unknown) {
-        if (mountedRef.current) {
-          setErrorStatus(toCoachAIError(e))
-          setPhase('error')
-        }
+        // A reset/new scan/unmount owns the UI now. Do not let its cancelled
+        // enqueue write a stale error or resurrect job state; importantly, the
+        // signal above also lets the HTTP request itself stop early.
+        if (!live()) return
+        setErrorStatus(toCoachAIError(e))
+        setPhase('error')
         throw e
+      } finally {
+        if (analysisAbortRef.current === controller) analysisAbortRef.current = null
       }
     },
     [onAnalyze],
@@ -271,8 +293,11 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
 
   const reset = useCallback(() => {
     // Fence in-flight runs first: their late completions must not
-    // repopulate the cleared state.
+    // repopulate the cleared state. Abort an enqueue that is still waiting
+    // on the network as well as guarding its eventual state writes.
     scanGenerationRef.current += 1
+    analysisAbortRef.current?.abort()
+    analysisAbortRef.current = null
     setPhase('idle')
     setScanResult(null)
     setAngleScans([])

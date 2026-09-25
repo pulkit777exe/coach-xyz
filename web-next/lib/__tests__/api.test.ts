@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apiFetch } from '../api'
+import { apiFetch, startAnalysis } from '../api'
+import { meStartAnalysis } from '../playerUpload'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -71,5 +72,50 @@ describe('apiFetch', () => {
       layer: 'server',
       retryable: true,
     })
+  })
+})
+
+describe('startAnalysis cancellation', () => {
+  it('propagates caller cancellation to the enqueue request', async () => {
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | null = null
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal
+      controller.abort()
+      expect(requestSignal.aborted).toBe(true)
+      return jsonResponse({ job_id: 'job-1' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      startAnalysis({
+        session_token: 'session-1',
+        player_index: 1,
+        signal: controller.signal,
+      }),
+    ).resolves.toEqual({ job_id: 'job-1' })
+
+    expect(requestSignal).not.toBeNull()
+  })
+
+  it('propagates caller cancellation to the player enqueue request', async () => {
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | null = null
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal
+      controller.abort()
+      expect(requestSignal.aborted).toBe(true)
+      return jsonResponse({ job_id: 'job-player-1' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    // Make apiFetch take its browser branch; the self-scoped route does not
+    // need server-side session lookup in this unit test.
+    vi.stubGlobal('window', {})
+
+    await expect(
+      meStartAnalysis({ session_token: 'session-1', signal: controller.signal }),
+    ).resolves.toEqual({ job_id: 'job-player-1' })
+
+    expect(requestSignal).not.toBeNull()
   })
 })

@@ -416,9 +416,16 @@ export async function startAnalysis(params: {
   video_key?: string | null
   angle?: string | null
   auth0Id?: string | null
+  /** Cancel the enqueue when the scan flow is reset or superseded. */
+  signal?: AbortSignal
 }): Promise<{ job_id: string }> {
-  const { auth0Id, ...rest } = params
+  const { auth0Id, signal: callerSignal, ...rest } = params
   const controller = new AbortController()
+  const abortFromCaller = () => controller.abort()
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort()
+    else callerSignal.addEventListener('abort', abortFromCaller, { once: true })
+  }
   const timeout = setTimeout(() => controller.abort(), 30_000) // 30s for enqueue
   try {
     const attribution = auth0Id ? await getAttributionToken() : null
@@ -433,6 +440,7 @@ export async function startAnalysis(params: {
     })
   } finally {
     clearTimeout(timeout)
+    callerSignal?.removeEventListener('abort', abortFromCaller)
   }
 }
 

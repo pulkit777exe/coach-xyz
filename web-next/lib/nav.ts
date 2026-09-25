@@ -1,4 +1,4 @@
-import type { OrgMemberRole } from './members'
+import { ORG_MEMBER_ROLES, type OrgMemberRole } from './members'
 
 // Nav visibility roles — an alias of the single membership vocabulary
 // (ORG_MEMBER_ROLES in lib/members.ts), not a second list to keep in sync.
@@ -12,17 +12,8 @@ export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_co
 /** Roles that may open the Audit Log page. */
 export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner', 'admin']
 
-/** Every org-role vocabulary value — used to derive the non-player set. */
-const ALL_NAV_ROLES: readonly NavRole[] = [
-  'owner',
-  'admin',
-  'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
-  'medical',
-  'player',
-]
+/** Every org-role vocabulary value — sourced from the canonical membership set. */
+const ALL_NAV_ROLES: readonly NavRole[] = ORG_MEMBER_ROLES
 
 /**
  * Roles that may open the org roster, planning, and history pages. Players are

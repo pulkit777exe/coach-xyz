@@ -55,6 +55,10 @@ export function usePipeline(
   const [jobError, setJobError] = useState<CoachAIError | null>(null)
 
   const retryGenerationRef = useRef(0)
+  const retryAbortRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    return () => retryAbortRef.current?.abort()
+  }, [])
 
   // ── Keep-alive ping ────────────────────────────────────────────────────
   useEffect(() => {
@@ -174,14 +178,18 @@ export function usePipeline(
 
   /** Kick off analysis for one scanned perspective + player. */
   const startAnalysisForScan = useCallback(
-    async (scan: ScanResult, playerIndex: number) => {
+    async (scan: ScanResult, playerIndex: number, signal: AbortSignal) => {
       const { job_id } = await startAnalysis({
         session_token: scan.session_token,
         player_index: playerIndex,
         video_key: scan.video_key,
         angle: scan.angle ?? null,
         auth0Id,
+        signal,
       })
+      // The scan flow may have been reset/superseded while the enqueue was in
+      // flight. Its signal fences this callback; never resurrect job state.
+      if (signal.aborted) return
       setJobId(job_id)
       startPolling(job_id)
       if (pathname !== `/dashboard/analysis/${job_id}`) {
@@ -210,6 +218,8 @@ export function usePipeline(
 
   const handleRetry = useCallback(() => {
     stopPolling()
+    retryAbortRef.current?.abort()
+    retryAbortRef.current = null
 
     if (flow.scanResult && errorStatus?.retryable && errorStatus?.layer !== 'client') {
       setJobStatus(null)
@@ -218,6 +228,8 @@ export function usePipeline(
       if (flow.selectedPlayerIndex !== null) {
         setJobPhase('analyzing')
         const gen = ++retryGenerationRef.current
+        const controller = new AbortController()
+        retryAbortRef.current = controller
         const scan = flow.scanResult
         const playerIndex = flow.selectedPlayerIndex
         startAnalysis({
@@ -226,10 +238,17 @@ export function usePipeline(
           video_key: scan.video_key,
           angle: scan.angle ?? null,
           auth0Id,
+          signal: controller.signal,
         })
           .then(({ job_id }) => {
             // Don't start polling if pipeline was reset or another retry started
-            if (pipelineStateRef.current === 'idle' || retryGenerationRef.current !== gen) return
+            if (
+              controller.signal.aborted ||
+              pipelineStateRef.current === 'idle' ||
+              retryGenerationRef.current !== gen
+            ) {
+              return
+            }
             setJobId(job_id)
             startPolling(job_id)
             if (pathname !== `/dashboard/analysis/${job_id}`) {
@@ -237,9 +256,12 @@ export function usePipeline(
             }
           })
           .catch((e: unknown) => {
-            if (retryGenerationRef.current !== gen) return
+            if (controller.signal.aborted || retryGenerationRef.current !== gen) return
             setJobError(toCoachAIError(e))
             setJobPhase('error')
+          })
+          .finally(() => {
+            if (retryAbortRef.current === controller) retryAbortRef.current = null
           })
       } else {
         flow.revive()
@@ -255,6 +277,9 @@ export function usePipeline(
 
   const handleReset = useCallback(() => {
     stopPolling()
+    retryGenerationRef.current += 1
+    retryAbortRef.current?.abort()
+    retryAbortRef.current = null
     flow.reset()
     setJobId(null)
     setJobStatus(null)

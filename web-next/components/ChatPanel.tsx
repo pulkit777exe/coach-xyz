@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { sendChatMessageStream } from '@/lib/api'
+import { toCoachAIError } from '@/lib/errors'
 import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -119,11 +120,16 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         }
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
         setStreamingText('')
-      } catch {
+      } catch (error: unknown) {
+        // A user-cancelled request has no UI error to show. For transport
+        // failures, preserve the canonical message produced by apiFetch /
+        // errorFromResponse (quota, quota/timeout details, etc.) instead of
+        // replacing it with an unrelated generic sentence.
+        if (controller.signal.aborted) return
         const errorMsg: ChatMessage = {
           id: `err-${Date.now()}`,
           role: 'system',
-          content: 'Failed to get response. Please try again.',
+          content: toCoachAIError(error).message,
           created_at: Date.now(),
         }
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
+import { ORG_MEMBER_ROLES } from '../members'
 import {
   ALL_NON_PLAYER_ROLES,
   ANALYZE_NAV_ROLES,
@@ -51,6 +52,15 @@ const groups: GatedNavGroup<Item>[] = [
 
 const hrefs = (role: NavRole | null): string[] =>
   visibleNavGroups(groups, role).flatMap((g) => g.items.map((i) => i.href))
+
+describe('role vocabulary', () => {
+  test('nav derives its complete role set from the membership vocabulary', () => {
+    expect(ALL_NON_PLAYER_ROLES).toEqual(
+      ORG_MEMBER_ROLES.filter((role) => role !== 'player'),
+    )
+    expect(ANALYZE_NAV_ROLES).toEqual(ORG_MEMBER_ROLES.filter((role) => role !== 'medical'))
+  })
+})
 
 describe('visibleNavGroups', () => {
   test('owner and admin see members and audit', () => {
