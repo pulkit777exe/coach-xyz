@@ -1,5 +1,6 @@
 import { apiFetch, IDENTITY_BASE, type UserRecord } from './api'
 import type { OrgMemberRole } from './members'
+import type { ThemeChoice } from './preferences'
 import type {
   AttendanceWithStudent,
   AttendanceSummary,
@@ -139,6 +140,29 @@ export async function updateNotificationPrefs(
   patch: NotificationPrefsPatch,
 ): Promise<NotificationPrefs> {
   return apiFetch<NotificationPrefs>(me('/notification-preferences'), {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+// ── Synced user settings (theme, motion, week start) ─────────────────────────
+// Device-local first (instant, works signed-out), mirrored to the account so
+// the same choices follow the user to another browser.
+export type UserSettings = {
+  theme: ThemeChoice
+  reduceMotion: boolean
+  weekStartsMonday: boolean
+  updatedAt: string | null
+}
+
+export type UserSettingsPatch = Omit<UserSettings, 'updatedAt'>
+
+export async function getUserSettings(): Promise<UserSettings> {
+  return apiFetch<UserSettings>(me('/preferences'))
+}
+
+export async function updateUserSettings(patch: UserSettingsPatch): Promise<UserSettings> {
+  return apiFetch<UserSettings>(me('/preferences'), {
     method: 'PUT',
     body: JSON.stringify(patch),
   })

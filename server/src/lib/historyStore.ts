@@ -626,6 +626,33 @@ export const ensureInitialized = async () => {
           on org_invites (token_hash);
         `
           })(),
+          (async () => {
+            await store`
+          create table if not exists notification_preferences (
+            auth0_id text primary key,
+            in_app boolean not null default true,
+            cadence text not null default 'instant'
+              check (cadence in ('instant', 'daily', 'weekly')),
+            events jsonb not null default '{"analysis_complete":true,"analysis_failed":true,"report_ready":true,"attendance":true,"ai_report":true,"membership":true}'::jsonb,
+            updated_at timestamptz not null default now()
+          );
+        `
+          })(),
+          // Account display settings (theme, reduce motion, week start). Self-scoped
+          // for every role — no org, no FK — so they sync across devices without
+          // depending on an organization membership.
+          (async () => {
+            await store`
+          create table if not exists user_settings (
+            auth0_id text primary key,
+            theme text not null default 'system'
+              check (theme in ('system', 'light', 'dark')),
+            reduce_motion boolean not null default false,
+            week_starts_monday boolean not null default false,
+            updated_at timestamptz not null default now()
+          );
+        `
+          })(),
           // notifications: moved here from lib/notifications.ts so every table's
           // DDL is owned by this single schema mechanism (see teams note below).
           (async () => {

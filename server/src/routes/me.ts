@@ -31,6 +31,7 @@ import {
   upsertNotificationPrefs,
   validateNotificationPrefsPatch,
 } from '../lib/notificationPrefs'
+import { userSettings, upsertUserSettings, validateUserSettingsPatch } from '../lib/userSettings'
 import { DEFAULT_MODEL } from '../types'
 
 /**
@@ -184,6 +185,37 @@ export default new Elysia()
     auditRoute(request, verified, 'settings.changed', 'notification_preferences', verified)
     set.status = 200
     return preferences
+  })
+
+  // Own display preferences (theme, reduce motion, week start). Self-scoped for
+  // every role, so a player's device syncs the same settings as a coach's.
+  .get('/api/me/preferences', async ({ request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const settings = await userSettings(verified)
+    set.status = 200
+    return settings
+  })
+  .put('/api/me/preferences', async ({ request, body, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const validated = validateUserSettingsPatch(body)
+    if (!validated.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', validated.message, false)
+    }
+
+    const settings = await upsertUserSettings(verified, validated.value)
+    if (!settings) {
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to update preferences', true)
+    }
+
+    auditRoute(request, verified, 'settings.changed', 'user_settings', verified)
+    set.status = 200
+    return settings
   })
 
   // Own attendance history + summary (joined with the linked player scope)
