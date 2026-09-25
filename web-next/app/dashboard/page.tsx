@@ -39,9 +39,13 @@ export const metadata: Metadata = {
  */
 export default async function DashboardPage() {
   noStore()
-  const session = await getSession()
+  // Session + org context resolve in parallel (getOrgContext reads the
+  // session through its own cached call). Unauthenticated requests pay one
+  // wasted org fetch before the redirect below — negligible against the
+  // round trip saved on every authenticated load.
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id, role } = await getOrgContext()
+  const { auth0Id, role } = orgCtx
 
   // ── Personal view for players (org role) ───────────────────────────────
   // Players see only their own data via the self-scoped /api/me/* APIs —

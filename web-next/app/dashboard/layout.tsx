@@ -23,13 +23,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // profile fetch is guarded: redirect() throws a NEXT_REDIRECT digest that a
   // surrounding try/catch would swallow (logging it as a failure and rendering
   // the coach shell for players instead of redirecting).
-  let profileRole: string | null = null
-  try {
-    const { user } = await getUserProfile(session.user.sub)
-    profileRole = user?.role ?? null
-  } catch (error) {
-    console.error('Failed to resolve dashboard role:', error)
-  }
+  //
+  // Profile + org context resolve in parallel: neither depends on the
+  // other's result (getOrgContext reads the session through its own cached
+  // call), so serializing them costs a full round trip on every dashboard
+  // navigation. Redirect order is unchanged (session → player → render).
+  const profilePromise = getUserProfile(session.user.sub).then(
+    ({ user }) => user?.role ?? null,
+    (error: unknown) => {
+      console.error('Failed to resolve dashboard role:', error)
+      return null
+    },
+  )
+  const orgPromise = Promise.all([getOrgContext(), getMyOrgsCached()]).then(
+    ([ctx, myOrgs]) => ({ ctx, myOrgs }),
+    (error: unknown) => {
+      console.error('Failed to resolve org context:', error)
+      return null
+    },
+  )
+  const profileRole = await profilePromise
   if (profileRole === 'player') redirect('/player')
 
   // Org context — per-request cached via React.cache (getMyOrgsCached /
@@ -40,16 +53,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let switcherCurrent = session.user.sub
   let navRole: Parameters<typeof DashboardNav>[0]['role'] = null
   let orgLabel: string | null = null
-  try {
-    const [ctx, myOrgs] = await Promise.all([getOrgContext(), getMyOrgsCached()])
+  const orgData = await orgPromise
+  if (orgData) {
+    const { ctx, myOrgs } = orgData
     switcherCurrent = ctx.auth0Id
     navRole = ctx.role
     orgLabel =
       myOrgs.orgs.find((o) => o.org_auth0_id === ctx.auth0Id)?.display_name ??
       myOrgs.orgs[0]?.display_name ??
       null
-  } catch (error) {
-    console.error('Failed to resolve org context:', error)
   }
 
   // Mobile drawer bar — workspace context (org name), never the app name

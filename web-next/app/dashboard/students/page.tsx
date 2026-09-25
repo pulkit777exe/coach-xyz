@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 
 export default async function StudentsPage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id, role } = await getOrgContext()
+  const { auth0Id, role } = orgCtx
 
   const [studentsRes, sportsRes, teamsRes] = await Promise.all([
     orgStudents(auth0Id).catch(() => ({ students: [] })),
