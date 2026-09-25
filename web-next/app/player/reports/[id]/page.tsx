@@ -22,11 +22,17 @@ export const metadata: Metadata = {
  */
 export default async function PlayerReportPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
   const { id } = await params
 
-  const { report } = await getMyReport(id).catch(() => ({ report: null, linked: false }))
+  // Session + report resolve in parallel (the report fetch is self-scoped
+  // and takes only the id). Unauthenticated requests pay one wasted fetch
+  // before the redirect below.
+  const [session, reportRes] = await Promise.all([
+    getSession(),
+    getMyReport(id).catch(() => ({ report: null, linked: false })),
+  ])
+  if (!session) redirect('/auth/login')
+  const { report } = reportRes
   if (!report) notFound()
 
   return (

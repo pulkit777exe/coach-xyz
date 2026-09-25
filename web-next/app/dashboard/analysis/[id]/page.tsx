@@ -11,11 +11,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
   const { id } = await params
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) return { title: 'Analysis | CoachXYZ' }
 
   try {
-    const { auth0Id } = await getOrgContext()
+    const { auth0Id } = orgCtx
     const res = await getDashboardAnalysisDetail(auth0Id, id)
     const a = res.analysis
     const label = a.display_name || a.file_name || id.slice(0, 8)
@@ -35,11 +35,11 @@ export async function generateMetadata({
 export default async function AnalysisDetailPage({ params }: { params: Promise<{ id: string }> }) {
   noStore()
   const { id } = await params
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
     redirect('/auth/login')
   }
-  const { auth0Id } = await getOrgContext()
+  const { auth0Id } = orgCtx
 
   let data = null
   try {
