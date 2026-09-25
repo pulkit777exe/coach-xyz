@@ -87,9 +87,7 @@ export default function PricingPage() {
               <div
                 key={p.name}
                 className={`relative flex flex-col rounded-[8px] border bg-background p-6 transition-colors duration-150 ${
-                  p.highlight
-                    ? 'border-primary/40'
-                    : 'border-border hover:border-border-hover'
+                  p.highlight ? 'border-primary/40' : 'border-border hover:border-border-hover'
                 }`}
               >
                 <div
@@ -111,9 +109,7 @@ export default function PricingPage() {
                 <p className="text-[40px] font-bold leading-none tracking-[-0.02em] tabular-nums">
                   {p.price}
                   {p.name === 'Pro' && (
-                    <span className="ml-1 text-sm font-normal text-muted-foreground">
-                      / mo
-                    </span>
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">/ mo</span>
                   )}
                 </p>
                 <p className="mt-2 text-meta text-muted-foreground">{p.note}</p>
@@ -149,6 +145,9 @@ export default function PricingPage() {
           <h2 className="text-center text-[28px] font-bold tracking-[-0.01em] text-balance sm:text-[34px]">
             Compare plans
           </h2>
+          <p className="text-caption text-muted-foreground sm:hidden">
+            Swipe to compare all plans →
+          </p>
           <div className="mt-8 overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead>

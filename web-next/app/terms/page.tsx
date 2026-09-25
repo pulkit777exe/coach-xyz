@@ -117,16 +117,11 @@ export default function TermsPage() {
               </section>
             ))}
           </div>
-          <div
-            className={`mt-10 rounded-[8px] border bg-muted p-6 ${hairline}`}
-          >
+          <div className={`mt-10 rounded-[8px] border bg-muted p-6 ${hairline}`}>
             <h2 className="text-lead font-semibold">Contact</h2>
             <p className="mt-2 text-title leading-[1.6] text-foreground-strong/80">
               Questions about these terms? Email{' '}
-              <span className="font-medium text-foreground-strong">
-                help@coachxyz.app
-              </span>
-              .
+              <span className="font-medium text-foreground-strong">help@coachxyz.app</span>.
             </p>
           </div>
         </div>

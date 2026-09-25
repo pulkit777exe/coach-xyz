@@ -114,8 +114,11 @@ and comment references.
   in prose / straight in code; store copy in natural case and style with
   `text-transform`.
 
-**Not verified**: a browser resize pass at real content lengths (widows,
-wrapping) — do it before calling a surface final.
+**Verified (round 11)**: a programmatic resize pass over 8 surfaces × {375,
+768} × {light, dark} — 32/32 with zero page-level horizontal overflow, zero
+console/page errors, and no unintended text clipping (the only hits are
+`.sr-only` content and deliberate `truncate`). Real-content widows/wrapping
+still deserve a human eye on long org names and long athlete names.
 
 ## UI libraries
 
@@ -237,5 +240,10 @@ vocabulary.
   screenshots for gated surfaces — 33 rows across 5 personas (owner, analyst,
   medical, player, realowner), 0 failed / 0 blocked; the page cache is
   cleared per run so rows verify the current render.
-- **Not verified here**: browser resize pass at real content lengths (see
-  Typography).
+- **Resize pass (round 11)**: 8 surfaces × {375, 768} × {light, dark} —
+  0 page overflow, 0 console errors; see Typography.
+- **Interaction states (round 11)**: header/CTA hover sampled from rendered
+  pixels — `rgb(26,115,201)` light and `rgb(74,148,224)` dark (both
+  `--primary-hover`), sidebar hover and keyboard focus ring captured.
+- **Still open**: real-persona Auth0 records for the coach and player test
+  accounts (synthetic subs cover every matrix row until then).

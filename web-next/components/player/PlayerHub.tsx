@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 
 import { Spinner } from '@/components/org/Spinner'
+import { Skeleton } from '@/components/9ui/ui/skeleton'
 import { ProgressBar } from '@/components/interior/progress-bar'
 import PageHeader from '@/components/org/PageHeader'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
@@ -112,8 +113,34 @@ export default function PlayerHub() {
 
   if (state.status === 'loading') {
     return (
-      <div className="flex items-center gap-3 p-8 text-muted-foreground">
-        <Spinner /> Loading your hub…
+      <div className="p-8" aria-busy="true">
+        <div className="mx-auto max-w-[1080px]">
+          <div className="mb-8 space-y-3">
+            <Skeleton className="h-8 w-48 max-w-full" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </div>
+
+          <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} className="h-28 w-full rounded-[6px]" />
+            ))}
+          </div>
+
+          <div className="space-y-8">
+            <div>
+              <Skeleton className="mb-3 h-4 w-32" />
+              <Skeleton className="h-24 w-full rounded-[6px]" />
+            </div>
+            <div>
+              <Skeleton className="mb-3 h-4 w-40" />
+              <Skeleton className="h-32 w-full rounded-[6px]" />
+            </div>
+            <div>
+              <Skeleton className="mb-3 h-4 w-36" />
+              <Skeleton className="h-40 w-full rounded-[6px]" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -394,7 +421,9 @@ export default function PlayerHub() {
                     {formatDateShort(report.created_at)}
                   </p>
                 </div>
-                <StatusPill tone="gray">{periodLabel(report.period_start, report.period_end)}</StatusPill>
+                <StatusPill tone="gray">
+                  {periodLabel(report.period_start, report.period_end)}
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -576,8 +605,7 @@ function AnalyzeVideoCard({
   }, [flowError, toastOnce])
 
   const activeScan =
-    flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ??
-    flow.scanResult
+    flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ?? flow.scanResult
 
   const pick = useCallback(
     (file?: File) => {
@@ -597,8 +625,7 @@ function AnalyzeVideoCard({
   const error = localError ?? flow.errorStatus?.message ?? null
   const scanPlayers = activeScan?.players ?? []
   // Upload/scan percent comes from the flow; analyzing percent from polling.
-  const displayPercent =
-    stage === 'analyzing' ? percent : (flow.uploadProgress?.percent ?? percent)
+  const displayPercent = stage === 'analyzing' ? percent : (flow.uploadProgress?.percent ?? percent)
 
   if (stage === 'uploading' || stage === 'scanning' || stage === 'analyzing') {
     return (

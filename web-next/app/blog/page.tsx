@@ -38,9 +38,7 @@ export default function BlogPage() {
                 <h2 className="mt-2 text-title font-semibold leading-snug group-hover:text-link group-hover:underline">
                   {p.title}
                 </h2>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                  {p.excerpt}
-                </p>
+                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{p.excerpt}</p>
               </div>
             </Link>
           ))}

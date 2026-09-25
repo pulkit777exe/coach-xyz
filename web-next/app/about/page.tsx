@@ -36,8 +36,7 @@ const values = [
 const hairline = 'border-border'
 const card =
   'rounded-[8px] border bg-background transition-colors duration-[180ms] hover:bg-surface-hover border-border hover:border-border-hover'
-const eyebrow =
-  'text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase'
+const eyebrow = 'text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase'
 const sectionTitle =
   'text-[26px] font-bold tracking-[-0.01em] text-balance sm:text-[34px] text-foreground-strong'
 
@@ -114,9 +113,7 @@ export default function AboutPage() {
                   <v.icon className="size-[18px]" aria-hidden />
                 </div>
                 <h3 className="mt-4 text-title font-semibold">{v.title}</h3>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                  {v.desc}
-                </p>
+                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{v.desc}</p>
               </div>
             ))}
           </div>

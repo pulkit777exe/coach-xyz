@@ -86,10 +86,7 @@ export function SectionHeading({
     <div className="mb-1 flex items-baseline justify-between gap-4">
       <h2 className={headingClass}>{title}</h2>
       {href && linkLabel ? (
-        <Link
-          href={href}
-          className={`text-meta text-muted-foreground ${linkFocusClass}`}
-        >
+        <Link href={href} className={`text-meta text-muted-foreground ${linkFocusClass}`}>
           {linkLabel}
         </Link>
       ) : null}
@@ -138,7 +135,7 @@ export function StatTiles({
   tiles: { label: string; value: number | string; meta?: string }[]
 }) {
   return (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
       {tiles.map((stat) => (
         <div key={stat.label} className="rounded-[6px] border border-border bg-card px-5 py-4">
           <p className={metricLabelClass}>{stat.label}</p>
@@ -184,17 +181,10 @@ function ActionTile({
   )
 }
 
-export function QuickActions({
-  analyze,
-  manageStudents,
-  schedule,
-  invite,
-}: DashboardQuickActions) {
+export function QuickActions({ analyze, manageStudents, schedule, invite }: DashboardQuickActions) {
   const tiles = [
     ...(analyze ? [{ href: '/#analyze', icon: Plus, label: 'New analysis' }] : []),
-    ...(manageStudents
-      ? [{ href: '/dashboard/students', icon: Users, label: 'Add student' }]
-      : []),
+    ...(manageStudents ? [{ href: '/dashboard/students', icon: Users, label: 'Add student' }] : []),
     ...(schedule
       ? [{ href: '/dashboard/schedule', icon: CalendarDays, label: 'Schedule event' }]
       : []),
@@ -290,9 +280,7 @@ export function UpcomingList({ events }: { events: ScheduleEvent[] | null }) {
       <SectionHeading title="Upcoming events" href="/dashboard/schedule" linkLabel="Schedule" />
       {events === null || events.length === 0 ? (
         <EmptyCard>
-          {events === null
-            ? 'Events failed to load.'
-            : 'No upcoming events in the next 30 days.'}
+          {events === null ? 'Events failed to load.' : 'No upcoming events in the next 30 days.'}
         </EmptyCard>
       ) : (
         <ListShell>
@@ -320,13 +308,7 @@ export function UpcomingList({ events }: { events: ScheduleEvent[] | null }) {
   )
 }
 
-export function ReportsList({
-  reports,
-  limit,
-}: {
-  reports: ReportRecord[] | null
-  limit: number
-}) {
+export function ReportsList({ reports, limit }: { reports: ReportRecord[] | null; limit: number }) {
   const rows = (reports ?? []).slice(0, limit)
   return (
     <section className="mt-8">
@@ -442,11 +424,7 @@ function StaffPreview({ members }: { members: OrgMembersResponse | null }) {
   const rows = members !== null ? members.members.slice(0, 5) : []
   return (
     <section className="mt-8">
-      <SectionHeading
-        title="Staff"
-        href="/dashboard/members"
-        linkLabel="Manage members →"
-      />
+      <SectionHeading title="Staff" href="/dashboard/members" linkLabel="Manage members →" />
       {rows.length > 0 ? (
         <ListShell>
           {rows.map((member) => {

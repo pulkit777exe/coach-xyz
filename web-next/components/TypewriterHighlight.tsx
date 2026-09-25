@@ -84,8 +84,10 @@ export default function TypewriterHighlight() {
       {/* Visible animation — hidden from AT; sr-only carries the stable phrase. */}
       <span
         aria-hidden="true"
-        className={`inline-block rounded-full bg-primary/10 px-3 text-link transition-opacity duration-[220ms] sm:px-4 dark:bg-primary/15 ${
-          isFading ? 'opacity-0 [transition-timing-function:ease-in]' : 'opacity-100 [transition-timing-function:ease-out]'
+        className={`inline-block rounded-full bg-primary/10 px-2.5 text-[0.92em] text-link transition-opacity duration-[220ms] sm:px-4 sm:text-[1em] dark:bg-primary/15 ${
+          isFading
+            ? 'opacity-0 [transition-timing-function:ease-in]'
+            : 'opacity-100 [transition-timing-function:ease-out]'
         }`}
       >
         {display}

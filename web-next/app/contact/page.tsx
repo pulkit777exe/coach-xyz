@@ -62,9 +62,7 @@ export default function ContactPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{c.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    {c.desc}
-                  </p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{c.desc}</p>
                   <a
                     href={`mailto:${c.value}`}
                     className="mt-1.5 inline-block rounded-[6px] text-sm font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -88,9 +86,7 @@ export default function ContactPage() {
               </a>
             </div>
           </div>
-          <div
-            className={`rounded-[8px] border bg-background p-6 sm:p-8 ${hairline}`}
-          >
+          <div className={`rounded-[8px] border bg-background p-6 sm:p-8 ${hairline}`}>
             <p className="text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase">
               Send a note
             </p>

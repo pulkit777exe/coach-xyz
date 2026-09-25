@@ -113,16 +113,12 @@ export default function PrivacyPage() {
               </section>
             ))}
           </div>
-          <div
-            className={`mt-10 rounded-[8px] border bg-muted p-6 ${hairline}`}
-          >
+          <div className={`mt-10 rounded-[8px] border bg-muted p-6 ${hairline}`}>
             <h2 className="text-lead font-semibold">Questions?</h2>
             <p className="mt-2 text-title leading-[1.6] text-foreground-strong/80">
               Email our Data Protection contact at{' '}
-              <span className="font-medium text-foreground-strong">
-                help@coachxyz.app
-              </span>{' '}
-              — we typically answer within one business day.
+              <span className="font-medium text-foreground-strong">help@coachxyz.app</span> — we
+              typically answer within one business day.
             </p>
           </div>
         </div>

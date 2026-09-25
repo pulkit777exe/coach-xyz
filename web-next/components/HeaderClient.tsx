@@ -61,8 +61,7 @@ const NAV_DIRECT = [
 /* Notion palette via semantic tokens — ink, hover fill and CTA colors all
    resolve through globals.css (docs/DESIGN_FOUNDATIONS.md, Tokens). */
 const NAV_TEXT = 'text-foreground hover:text-foreground-strong'
-const NAV_FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
+const NAV_FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 const BLUE_CTA =
   'bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:ring-ring/40'
 
@@ -98,10 +97,10 @@ function NavGroup({
       </button>
       {isOpen && (
         <div className="absolute top-full left-1/2 z-50 w-56 -translate-x-1/2 pt-2">
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="rounded-[8px] border border-border bg-background p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
-        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="rounded-[8px] border border-border bg-background p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+          >
             {items.map((it) => (
               <Link
                 key={it.href}
@@ -178,10 +177,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
   return (
     <nav className="sticky top-0 z-40 border-b border-topbar-border bg-topbar">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-4 px-5 lg:px-8">
-        <Link
-          href="/"
-          className={`flex shrink-0 items-center gap-2 rounded-[6px] ${NAV_FOCUS}`}
-        >
+        <Link href="/" className={`flex shrink-0 items-center gap-2 rounded-[6px] ${NAV_FOCUS}`}>
           <span className="grid size-6 place-items-center rounded-[6px] bg-primary text-label font-bold text-primary-foreground">
             C
           </span>
@@ -295,7 +291,7 @@ export default function HeaderClient({
   // Dashboard / app — theme-aware (light/dark) with spacer so body doesn't need pt
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between gap-4 bg-topbar border-b border-topbar-border px-3 sm:px-4">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center justify-between gap-2 sm:gap-3 lg:gap-4 bg-topbar border-b border-topbar-border px-3 sm:px-4">
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/"

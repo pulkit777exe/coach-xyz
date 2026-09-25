@@ -63,9 +63,7 @@ export default function FeaturesPage() {
                   <f.icon className="size-[18px]" aria-hidden />
                 </div>
                 <h2 className="mt-4 text-title font-semibold">{f.title}</h2>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                  {f.desc}
-                </p>
+                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -86,14 +84,15 @@ export default function FeaturesPage() {
             <p className="text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
               For coaches
             </p>
-            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">One place to run it all</h2>
+            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
+              One place to run it all
+            </h2>
             <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
               <li className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-check" /> Unlimited roster
               </li>
               <li className="flex gap-2">
-                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Attendance &amp;
-                schedule
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Attendance &amp; schedule
               </li>
               <li className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-check" /> One-click reports
@@ -104,7 +103,9 @@ export default function FeaturesPage() {
             <p className="text-label font-medium tracking-[0.08em] text-link uppercase">
               For athletes
             </p>
-            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">Your hub, your progress</h2>
+            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
+              Your hub, your progress
+            </h2>
             <ul className="mt-4 space-y-2.5 text-sm text-foreground-strong">
               <li className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-check" /> Personal hub
