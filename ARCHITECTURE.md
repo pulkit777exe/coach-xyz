@@ -364,7 +364,7 @@ coach-xyz/
 
 ```
 1. Frontend POST /api/scan-video (FormData with video file)
-   → web-next/lib/api.ts:182
+   → web-next/lib/api.ts scanVideoWithProgress
    → server/src/routes/scan.ts:76
 
 2. Server validates (rate limit, file type, size < 500MB)
@@ -399,7 +399,7 @@ coach-xyz/
 
 ```
 1. Frontend POST /api/analyze-video { session_token, player_index }
-   → web-next/lib/api.ts:106-117
+   → web-next/lib/api.ts startAnalysis
    → server/src/routes/analyze.ts:21
 
 2. Server creates server_job_id + engine_job_id
@@ -454,7 +454,7 @@ coach-xyz/
 
 ```
 1. Frontend GET /api/download/:jobId
-   → web-next/lib/api.ts:123-125
+   → web-next/lib/api.ts getDownloadUrl / getAuthorizedDownloadUrl
    → server/src/routes/download.ts:11
 
 2. Server looks up engine_job_id from Redis
@@ -508,6 +508,8 @@ The backend never trusts a client-supplied auth0Id. The Next app is the identity
 - **Guard** (`server/src/lib/serviceGuard.ts`): an Elysia `onBeforeHandle` plugin applied to `auth.ts`/`org.ts`/`me.ts`. When `SERVICE_TOKEN` is set on the server it requires `x-service-token` to match and `x-verified-auth0-id` to equal the path `:auth0Id` (or `body.sub` for `/api/auth/sync`, or be present for self-scoped `/api/me/*`). Returns 403 otherwise. When `SERVICE_TOKEN` is unset the guard is inert (local dev back-compat) and logs a one-time warning.
 - **Proxy** (`web-next/app/api/service/[[...path]]/route.ts`): same-origin handler for identity-bearing routes only (`/api/org/*`, `/api/auth/user/*`, `/api/auth/sync`, `/api/me/*`). Reads the Auth0 session, rejects a verified sub that doesn't match the path resource owner, then injects `x-service-token` + `x-verified-auth0-id` before forwarding. Requires `auth0.getSession()` (401 otherwise).
 - **Client routing** (`web-next/lib/api.ts` `IDENTITY_BASE`, `web-next/lib/org.ts`, `web-next/lib/serverData.ts`): client components call the proxy via `lib/api`/`lib/org`; RSC pages call React.cache'd fetchers in `lib/serverData.ts` (which use `lib/api` internally with service headers when called server-side). Middleware (`proxy.ts`) and route handlers keep using raw `auth0`/`lib/api`.
+- **Web error mapping** (`web-next/lib/errors.ts`): one rule for every transport — `errorFromResponse()` narrows the any-typed wire body (non-string message/code falls back, `retry_after` must be numeric), 429 → `RATE_LIMITED`, structured engine bodies pass through, `engineError()` shapes engine-layer failures. `apiFetch`, both XHR upload paths, and the chat/SSE streams all funnel through it; no hand literals. Query params go through the shared `qs()` (`lib/api.ts`); form payloads through `pickDefined()` (`lib/org.ts`, `''` → null so cleared fields clear).
+- **Web role vocabulary**: one set — `NavRole`/`OrgRole`/`MyOrg['role']` are aliases of `ORG_MEMBER_ROLES` (`lib/members.ts`); `userRoles` (coach/player) is the separate account-level set.
 - **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite. These routes never trust a raw `auth0_id` — attribution comes from the signed `x-attribution` token minted at `/api/me/attribution/mint` (see §6 Auth0).
 
 ### Roles (two-faces)
