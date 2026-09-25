@@ -80,7 +80,7 @@ export default function AnalysisLinkControl({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 rounded-[6px] border px-3 py-1.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+        className={`flex items-center gap-2 rounded-[6px] border px-3 py-1.5 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
           linkedStudent
             ? 'border-transparent bg-success/10 text-success'
             : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -117,7 +117,7 @@ export default function AnalysisLinkControl({
 
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg">
-          <div className="border-b border-border px-4 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <div className="border-b border-border px-4 py-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {linkedStudent ? 'Linked to' : 'Choose a student'}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
@@ -125,7 +125,7 @@ export default function AnalysisLinkControl({
               <button
                 type="button"
                 onClick={() => applyLink(null)}
-                className="flex w-full items-center justify-between px-4 py-2 text-left text-[13px] text-destructive hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="flex w-full items-center justify-between px-4 py-2 text-left text-meta text-destructive hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Unlink {linkedStudent.full_name}
               </button>
@@ -138,10 +138,10 @@ export default function AnalysisLinkControl({
                   type="button"
                   disabled={isLinked}
                   onClick={() => applyLink(s.id)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-[14px] text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-50"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-body text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-50"
                 >
                   <span className="truncate">{s.full_name}</span>
-                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     {s.sport || ''}
                     {isLinked ? ' · linked' : ''}
                   </span>

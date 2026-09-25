@@ -26,9 +26,9 @@ const rowLinkClass =
 const cardClass = 'rounded-[6px] border border-border bg-card p-5'
 
 const metricLabelClass =
-  'text-[11px] font-medium uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground'
+  'text-label font-medium uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground'
 
-const headingClass = 'text-[13px] font-semibold leading-[1.4] text-foreground'
+const headingClass = 'text-meta font-semibold leading-[1.4] text-foreground'
 
 const linkFocusClass =
   'transition-colors duration-150 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
@@ -54,7 +54,7 @@ export function GreetingHeader({ firstName }: { firstName: string }) {
       <h1 className="text-[30px] font-bold leading-[1.2] tracking-[-0.015em] text-foreground">
         {greeting(now)}, {firstName}.
       </h1>
-      <p className="mt-1.5 text-[14px] leading-[1.5] tabular-nums text-muted-foreground">
+      <p className="mt-1.5 text-body leading-[1.5] tabular-nums text-muted-foreground">
         {dateLine}
       </p>
     </header>
@@ -66,7 +66,7 @@ export function GreetingHeader({ firstName }: { firstName: string }) {
 export function ErrorBanner({ show }: { show: boolean }) {
   if (!show) return null
   return (
-    <div className="mb-2 rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+    <div className="mb-2 rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body text-destructive">
       Failed to load dashboard data. Please try again later.
     </div>
   )
@@ -88,7 +88,7 @@ export function SectionHeading({
       {href && linkLabel ? (
         <Link
           href={href}
-          className={`text-[13px] text-muted-foreground ${linkFocusClass}`}
+          className={`text-meta text-muted-foreground ${linkFocusClass}`}
         >
           {linkLabel}
         </Link>
@@ -120,11 +120,11 @@ export function ListRow({
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
           {icon}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[14px] leading-[1.4] text-foreground">
+        <span className="min-w-0 flex-1 truncate text-body leading-[1.4] text-foreground">
           {label}
         </span>
         {meta ? (
-          <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">{meta}</span>
+          <span className="shrink-0 text-meta tabular-nums text-muted-foreground">{meta}</span>
         ) : null}
         {trailing}
       </Link>
@@ -146,7 +146,7 @@ export function StatTiles({
             {stat.value}
           </p>
           {stat.meta ? (
-            <p className="mt-1 text-[12px] text-muted-foreground">{stat.meta}</p>
+            <p className="mt-1 text-caption text-muted-foreground">{stat.meta}</p>
           ) : null}
         </div>
       ))}
@@ -156,7 +156,7 @@ export function StatTiles({
 
 export function EmptyCard({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-[6px] border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+    <p className="rounded-[6px] border border-border bg-card px-4 py-6 text-center text-meta text-muted-foreground">
       {children}
     </p>
   )
@@ -391,7 +391,7 @@ function HealthCard({
           ))}
         </div>
       ) : (
-        <p className="mt-3 text-[13px] text-muted-foreground">
+        <p className="mt-3 text-meta text-muted-foreground">
           No organization data yet — add students to get started.
         </p>
       )}
@@ -425,7 +425,7 @@ function PlanCard({ subscription }: { subscription: OrgSubscription | null }) {
           </div>
         </>
       ) : (
-        <p className="mt-4 text-[13px] text-muted-foreground">Plan details are visible to owners.</p>
+        <p className="mt-4 text-meta text-muted-foreground">Plan details are visible to owners.</p>
       )}
     </section>
   )
@@ -454,15 +454,15 @@ function StaffPreview({ members }: { members: OrgMembersResponse | null }) {
             const email = member.member_email
             return (
               <li key={member.id} className="flex h-9 items-center gap-2.5 px-2">
-                <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-[11px] font-medium text-muted-foreground">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-label font-medium text-muted-foreground">
                   {initialsOf(name)}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[14px] leading-[1.4] text-foreground">
+                <span className="min-w-0 flex-1 truncate text-body leading-[1.4] text-foreground">
                   {name}
                 </span>
                 {email ? (
                   <span
-                    className="hidden w-[220px] shrink-0 truncate text-[13px] text-muted-foreground sm:block"
+                    className="hidden w-[220px] shrink-0 truncate text-meta text-muted-foreground sm:block"
                     title={email}
                   >
                     {email}

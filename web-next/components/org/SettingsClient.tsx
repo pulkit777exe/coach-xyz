@@ -58,7 +58,7 @@ function CenterSpin() {
 
 function LoadFailed() {
   return (
-    <p className="py-8 text-center text-[14px] text-muted-foreground">Members failed to load.</p>
+    <p className="py-8 text-center text-body text-muted-foreground">Members failed to load.</p>
   )
 }
 
@@ -166,10 +166,10 @@ export default function SettingsClient({
               size="lg"
             />
             <div>
-              <p className="text-[16px] font-semibold leading-[1.4] text-foreground">
+              <p className="text-lead font-semibold leading-[1.4] text-foreground">
                 {profile?.name ?? identity.name ?? 'No name'}
               </p>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">
+              <p className="mt-0.5 text-meta text-muted-foreground">
                 {profile?.email ?? identity.email}
               </p>
             </div>
@@ -199,7 +199,7 @@ export default function SettingsClient({
                   Verified
                 </StatusPill>
               ) : (
-                <span className="text-[13px] text-muted-foreground">No</span>
+                <span className="text-meta text-muted-foreground">No</span>
               )}
             </SettingRow>
             <SettingRow title="Password">
@@ -214,7 +214,7 @@ export default function SettingsClient({
                   Change Password
                 </Button>
               ) : (
-                <span className="text-[13px] text-muted-foreground">
+                <span className="text-meta text-muted-foreground">
                   Ask your administrator to reset your password.
                 </span>
               )}
@@ -271,14 +271,14 @@ export default function SettingsClient({
                         key={s.id}
                         className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
                       >
-                        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
+                        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground">
                           {initials(s.full_name)}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                          <p className="truncate text-body font-medium leading-[1.4] text-foreground">
                             {s.full_name}
                           </p>
-                          <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                          <p className="mt-0.5 truncate text-meta text-muted-foreground">
                             {contact}
                             {s.sport ? ` · ${s.sport}` : ''}
                           </p>
@@ -286,7 +286,7 @@ export default function SettingsClient({
                         {linked ? (
                           <StatusPill tone="primary">Player account linked</StatusPill>
                         ) : (
-                          <span className="shrink-0 text-[13px] text-muted-foreground">
+                          <span className="shrink-0 text-meta text-muted-foreground">
                             Not linked yet
                           </span>
                         )}
@@ -295,7 +295,7 @@ export default function SettingsClient({
                   })}
                 </ul>
               ) : (
-                <p className="py-8 text-center text-[14px] text-muted-foreground">
+                <p className="py-8 text-center text-body text-muted-foreground">
                   No players on the roster yet.
                 </p>
               )
@@ -321,7 +321,7 @@ export default function SettingsClient({
                 <p className="text-[24px] font-semibold capitalize leading-[1.1] tracking-[-0.01em] text-foreground">
                   {subscription.subscription.tier}
                 </p>
-                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="mt-1.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Plan
                 </p>
               </div>
@@ -329,11 +329,11 @@ export default function SettingsClient({
                 <p className="text-[24px] font-semibold leading-[1.1] tabular-nums text-foreground">
                   {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
                 </p>
-                <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="mt-1.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Analyses today
                 </p>
               </div>
-              <p className="text-[13px] text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 Usage is metered per analysis for future billing tiers.
               </p>
             </div>
@@ -358,7 +358,7 @@ export default function SettingsClient({
                 className="rounded-[6px] border border-border bg-card p-5 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     {t.label}
                   </span>
                   <t.icon className="size-4 text-muted-foreground/60" />
@@ -384,7 +384,7 @@ export default function SettingsClient({
       sections={sections}
       notice={
         loadError ? (
-          <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+          <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body text-destructive">
             Failed to load some settings data. Try refreshing the page.
           </div>
         ) : null

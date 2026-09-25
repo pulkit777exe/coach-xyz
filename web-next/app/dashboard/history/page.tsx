@@ -60,7 +60,7 @@ export default async function HistoryPage({
       />
 
       {error ? (
-        <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-[14px] text-destructive">
+        <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body text-destructive">
           Failed to load history. Please try again later.
         </div>
       ) : null}
@@ -87,11 +87,11 @@ export default async function HistoryPage({
                 className="flex h-[72px] items-center justify-between gap-4 border-b border-border px-4 transition-colors duration-150 last:border-b-0 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                  <p className="truncate text-body font-medium leading-[1.4] text-foreground">
                     {a.display_name || a.file_name || 'Untitled'}
                     {a.player_index !== null && ` — Player ${a.player_index}`}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-3 text-[13px] text-muted-foreground">
+                  <div className="mt-0.5 flex items-center gap-3 text-meta text-muted-foreground">
                     <span>
                       {new Date(a.requested_at).toLocaleDateString('en-US', {
                         month: 'short',
@@ -120,7 +120,7 @@ export default async function HistoryPage({
                       <p className="text-[18px] font-semibold leading-none tabular-nums text-foreground">
                         {(a.summary_json as { form_score: number }).form_score}
                       </p>
-                      <p className="mt-1 text-[11px] font-medium uppercase leading-none tracking-[0.08em] text-muted-foreground">
+                      <p className="mt-1 text-label font-medium uppercase leading-none tracking-[0.08em] text-muted-foreground">
                         Score
                       </p>
                     </div>

@@ -47,7 +47,7 @@ function RotatingMessage({ messages, percent }: { messages: string[]; percent: n
   return (
     <div className="flex flex-col items-center gap-2">
       <p
-        className="text-foreground text-[15px] font-medium transition-opacity duration-200 ease-in-out"
+        className="text-foreground text-title font-medium transition-opacity duration-200 ease-in-out"
         style={{ opacity }}
       >
         {messages[index]}

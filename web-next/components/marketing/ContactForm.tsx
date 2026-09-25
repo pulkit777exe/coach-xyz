@@ -8,10 +8,10 @@ import { Label } from '@/components/9ui/ui/label'
 
 const CONTACT_EMAIL = 'hello@coachxyz.app'
 
-const hairline = 'border-[rgba(55,53,47,0.09)] dark:border-[rgba(255,255,255,0.08)]'
-const inputClass = `h-9 rounded-[6px] bg-white text-sm text-[#37352f] placeholder:text-[#787774]/60 dark:bg-[#191919] dark:text-[#ececec] dark:placeholder:text-[#9b9b9b]/60 ${hairline}`
-const labelClass = 'text-sm font-medium text-[#37352f] dark:text-[#ececec]'
-const errorText = 'text-xs text-[#e03e3e]'
+const hairline = 'border-border'
+const inputClass = `h-9 rounded-[6px] bg-background text-sm text-foreground-strong placeholder:text-muted-foreground/60 ${hairline}`
+const labelClass = 'text-sm font-medium text-foreground-strong'
+const errorText = 'text-xs text-destructive'
 
 type FieldErrors = { name?: string; email?: string; message?: string }
 
@@ -103,7 +103,7 @@ export default function ContactForm() {
           placeholder="Tell us what you’re building and how we can help."
           rows={5}
           aria-invalid={Boolean(errors.message)}
-          className={`w-full rounded-[6px] border bg-white px-3 py-2 text-sm leading-6 text-[#37352f] transition-[border-color,box-shadow] outline-none placeholder:text-[#787774]/60 focus-visible:ring-2 focus-visible:ring-ring/40 dark:bg-[#191919] dark:text-[#ececec] dark:placeholder:text-[#9b9b9b]/60 ${hairline}`}
+          className={`w-full rounded-[6px] border bg-background px-3 py-2 text-sm leading-6 text-foreground-strong transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/40 ${hairline}`}
         />
         {errors.message && (
           <p role="alert" className={errorText}>
@@ -114,12 +114,12 @@ export default function ContactForm() {
       <div>
         <Button
           type="submit"
-          className="h-10 rounded-[6px] bg-[#2383e2] px-5 text-sm font-medium text-white hover:bg-[#1b6fb8]"
+          className="h-10 rounded-[6px] bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
         >
           <Send className="size-4" />
           Send message
         </Button>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-[#787774] dark:text-[#9b9b9b]">
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           <Mail className="size-3.5" aria-hidden />
           Opens in your email app — or write to {CONTACT_EMAIL}
         </p>

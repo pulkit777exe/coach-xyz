@@ -37,13 +37,13 @@ export default function ChatLayout({
           <div className="flex items-center gap-4">
             <button
               onClick={onBackToResults}
-              className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
+              className="text-meta font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
             >
               ← Results
             </button>
             <Link
               href="/"
-              className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="text-meta font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               New Analysis
             </Link>
@@ -65,7 +65,7 @@ export default function ChatLayout({
             <div className="shrink-0 border-t border-border px-6 py-3">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Score
                   </span>
                   <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
@@ -74,7 +74,7 @@ export default function ChatLayout({
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Events
                   </span>
                   <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
@@ -83,7 +83,7 @@ export default function ChatLayout({
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Rating
                   </span>
                   <span className="font-semibold text-[20px] leading-none text-foreground capitalize">
@@ -124,7 +124,7 @@ export default function ChatLayout({
             </div>
             {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
               <details className="border-t border-border px-4 py-2">
-                <summary className="cursor-pointer text-[13px] font-medium text-muted-foreground py-1">
+                <summary className="cursor-pointer text-meta font-medium text-muted-foreground py-1">
                   Key findings (<span className="tabular-nums">{jobStatus.summary.findings.length}</span>)
                 </summary>
                 <div className="py-2 max-h-64 overflow-y-auto">
@@ -142,7 +142,7 @@ export default function ChatLayout({
               </details>
             )}
             <details className="border-t border-border px-4 py-2">
-              <summary className="cursor-pointer text-[13px] font-medium text-muted-foreground py-1">
+              <summary className="cursor-pointer text-meta font-medium text-muted-foreground py-1">
                 Clips
               </summary>
               <div className="py-2 max-h-64 overflow-y-auto">

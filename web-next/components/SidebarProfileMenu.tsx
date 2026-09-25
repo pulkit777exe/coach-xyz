@@ -96,7 +96,7 @@ export default function SidebarProfileMenu({
         {/* Signed-in email — informational, not a menu action. */}
         <div className="px-2 py-1.5">
           <span
-            className="block truncate text-[13px] text-muted-foreground"
+            className="block truncate text-meta text-muted-foreground"
             title={email ?? undefined}
           >
             {email}

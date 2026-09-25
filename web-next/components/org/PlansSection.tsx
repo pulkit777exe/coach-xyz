@@ -110,12 +110,12 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
           ) : undefined
         }
       >
-        <p className="mb-3 text-[13px] text-muted-foreground">
+        <p className="mb-3 text-meta text-muted-foreground">
           Longer-running programs above day-to-day objectives.
         </p>
         <div>
           {plans.length === 0 && (
-            <p className="text-[13px] text-muted-foreground">No training plans yet.</p>
+            <p className="text-meta text-muted-foreground">No training plans yet.</p>
           )}
           {plans.map((plan) => (
             <div
@@ -123,9 +123,9 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
               className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0 hover:bg-accent/50 transition-colors"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-medium text-foreground">{plan.title}</p>
+                <p className="text-body font-medium text-foreground">{plan.title}</p>
                 {plan.description && (
-                  <p className="mt-0.5 text-[13px] text-muted-foreground line-clamp-2">
+                  <p className="mt-0.5 text-meta text-muted-foreground line-clamp-2">
                     {plan.description}
                   </p>
                 )}
@@ -204,7 +204,7 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
                 rows={2}
               />
             </div>
-            {error && <p className="text-[13px] text-destructive">{error}</p>}
+            {error && <p className="text-meta text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

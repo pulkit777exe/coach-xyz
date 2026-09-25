@@ -54,7 +54,7 @@ function OrgSection({ overview }: { overview: OrgOverview }) {
   return (
     <section className="mt-8">
       <div className="mb-1">
-        <h2 className="text-[13px] font-semibold leading-[1.4] text-foreground">Organization</h2>
+        <h2 className="text-meta font-semibold leading-[1.4] text-foreground">Organization</h2>
       </div>
       <ListShell>
         {tiles.map((tile) => (
@@ -79,7 +79,7 @@ function TeamsCard({ teams }: { teams: Team[] | null }) {
       {teams === null ? (
         <EmptyCard>Teams failed to load.</EmptyCard>
       ) : rows.length === 0 ? (
-        <p className="rounded-[6px] border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+        <p className="rounded-[6px] border border-border bg-card px-4 py-6 text-center text-meta text-muted-foreground">
           No teams yet.{' '}
           <Link
             href="/dashboard/teams"
@@ -160,7 +160,7 @@ export default function CoachHome({
       ) : null}
 
       {!overview && !error ? (
-        <p className="mt-6 rounded-[6px] border border-border bg-card p-6 text-center text-[14px] text-muted-foreground">
+        <p className="mt-6 rounded-[6px] border border-border bg-card p-6 text-center text-body text-muted-foreground">
           No organization data yet — add students to get started.
         </p>
       ) : null}

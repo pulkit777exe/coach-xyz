@@ -59,8 +59,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           <h1 className="text-foreground mt-4 text-[26px] font-bold tracking-[-0.015em]">
             {problem?.expired ? 'Share link expired' : 'Link not found'}
           </h1>
-          <p className="text-muted-foreground mt-2 text-[14px]">{problem?.message}</p>
-          <p className="text-muted-foreground mt-1 text-[13px]">
+          <p className="text-muted-foreground mt-2 text-body">{problem?.message}</p>
+          <p className="text-muted-foreground mt-1 text-meta">
             Ask the coach who shared it to create a new link.
           </p>
         </div>
@@ -76,11 +76,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     <main id="main" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
       {/* Header */}
       <div className="mb-10">
-        <p className="text-muted-foreground mb-3 text-[11px] font-medium uppercase tracking-[0.08em]">
+        <p className="text-muted-foreground mb-3 text-label font-medium uppercase tracking-[0.08em]">
           Shared Analysis
         </p>
         <h1 className="text-foreground text-[30px] font-bold tracking-[-0.015em]">{label}</h1>
-        <div className="text-muted-foreground mt-2 flex items-center gap-3 text-[13px] tabular-nums">
+        <div className="text-muted-foreground mt-2 flex items-center gap-3 text-meta tabular-nums">
           <span>{formatDateLong(data.analysis.requested_at)}</span>
           {data.analysis.model && <span>{data.analysis.model}</span>}
         </div>
@@ -111,7 +111,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
               key={card.label}
               className="border-border bg-card rounded-[6px] border p-5"
             >
-              <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-[0.08em]">
+              <p className="text-muted-foreground text-label font-medium uppercase tracking-[0.08em]">
                 {card.label}
               </p>
               <p className="text-foreground mt-2 text-[28px] font-semibold leading-none tabular-nums">
@@ -128,11 +128,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           {strArray(summary.top_tips).length > 0 && (
             <div className="border-border bg-card rounded-[6px] border">
               <div className="border-b border-border px-5 py-3.5">
-                <p className="text-[16px] font-semibold text-foreground">Priority Focus</p>
+                <p className="text-lead font-semibold text-foreground">Priority Focus</p>
               </div>
               <ul className="space-y-2 p-5">
                 {strArray(summary.top_tips).map((tip, i) => (
-                  <li key={i} className="text-foreground flex items-start gap-2 text-[14px]">
+                  <li key={i} className="text-foreground flex items-start gap-2 text-body">
                     <span className="text-muted-foreground shrink-0 tabular-nums">{i + 1}.</span>
                     {tip}
                   </li>
@@ -143,11 +143,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           {strArray(summary.strengths).length > 0 && (
             <div className="border-border bg-card rounded-[6px] border">
               <div className="border-b border-border px-5 py-3.5">
-                <p className="text-[16px] font-semibold text-foreground">Strengths</p>
+                <p className="text-lead font-semibold text-foreground">Strengths</p>
               </div>
               <ul className="space-y-2 p-5">
                 {strArray(summary.strengths).map((s, i) => (
-                  <li key={i} className="text-foreground flex items-start gap-2 text-[14px]">
+                  <li key={i} className="text-foreground flex items-start gap-2 text-body">
                     <span className="text-success shrink-0">✓</span>
                     {s}
                   </li>
@@ -161,9 +161,9 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       {summary && str(summary.priority_drill) && (
         <div className="border-border bg-card mb-8 rounded-[6px] border">
           <div className="border-b border-border px-5 py-3.5">
-            <p className="text-[16px] font-semibold text-foreground">Recommended Drill</p>
+            <p className="text-lead font-semibold text-foreground">Recommended Drill</p>
           </div>
-          <p className="text-foreground p-5 text-[14px]">{str(summary.priority_drill)}</p>
+          <p className="text-foreground p-5 text-body">{str(summary.priority_drill)}</p>
         </div>
       )}
 
@@ -171,7 +171,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       {shotEvents.length > 0 && (
         <div className="border-border bg-card mb-8 rounded-[6px] border">
           <div className="border-b border-border px-5 py-3.5">
-            <p className="text-[16px] font-semibold text-foreground">Shot Events</p>
+            <p className="text-lead font-semibold text-foreground">Shot Events</p>
           </div>
           <ul className="p-5 pt-4">
             {shotEvents.slice(0, 10).map((event, i) => (
@@ -182,16 +182,16 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                 }`}
               >
                 {typeof event.timestamp === 'number' && (
-                  <span className="text-muted-foreground font-mono text-[13px] tabular-nums w-16 shrink-0">
+                  <span className="text-muted-foreground font-mono text-meta tabular-nums w-16 shrink-0">
                     {mmss(event.timestamp)}
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-foreground text-[14px]">{str(event.event_type) ?? 'Event'}</p>
+                    <p className="text-foreground text-body">{str(event.event_type) ?? 'Event'}</p>
                     {typeof event.form_score === 'number' && (
                       <span
-                        className={`rounded-full px-2 text-[11px] font-medium leading-[18px] tabular-nums ${
+                        className={`rounded-full px-2 text-label font-medium leading-[18px] tabular-nums ${
                           event.form_score >= 8
                             ? 'text-success bg-success/15'
                             : event.form_score >= 5
@@ -204,10 +204,10 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                     )}
                   </div>
                   {str(event.feedback) && (
-                    <p className="text-muted-foreground mt-1 text-[13px]">{str(event.feedback)}</p>
+                    <p className="text-muted-foreground mt-1 text-meta">{str(event.feedback)}</p>
                   )}
                   {str(event.key_observation) && (
-                    <p className="text-muted-foreground mt-0.5 text-[13px]">
+                    <p className="text-muted-foreground mt-0.5 text-meta">
                       {str(event.key_observation)}
                     </p>
                   )}
@@ -219,12 +219,12 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       )}
 
       {!summary && (
-        <div className="border-border bg-card rounded-[6px] border p-6 text-[14px]">
+        <div className="border-border bg-card rounded-[6px] border p-6 text-body">
           <p className="text-muted-foreground">This analysis has no summary to display.</p>
         </div>
       )}
 
-      <p className="text-muted-foreground text-center text-[13px] tabular-nums">
+      <p className="text-muted-foreground text-center text-meta tabular-nums">
         Shared via CoachXYZ · expires {formatDateLong(data.expires_at)}
       </p>
     </main>

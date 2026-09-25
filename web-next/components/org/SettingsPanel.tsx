@@ -159,11 +159,11 @@ export default function SettingsPanel({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 md:px-6">
               <div className="min-w-0">
-                <h1 className="truncate text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
+                <h1 className="truncate text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
                   {title}
                 </h1>
                 {description ? (
-                  <p className="mt-0.5 truncate text-[13px] leading-[1.5] text-muted-foreground">
+                  <p className="mt-0.5 truncate text-meta leading-[1.5] text-muted-foreground">
                     {description}
                   </p>
                 ) : null}

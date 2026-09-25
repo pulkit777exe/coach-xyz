@@ -48,7 +48,7 @@ function PrepRow({ title, meta, href }: PrepRowProps) {
   const content = (
     <>
       <span className="text-sm text-foreground">{title}</span>
-      <span className="flex shrink-0 items-center gap-2 text-[13px] text-muted-foreground">
+      <span className="flex shrink-0 items-center gap-2 text-meta text-muted-foreground">
         {meta}
         {href ? <ArrowRight className="size-3.5" aria-hidden="true" /> : null}
       </span>
@@ -96,10 +96,10 @@ function ChannelCard({
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-foreground">{title}</span>
-        <span className="mt-1 block text-[13px] leading-relaxed text-muted-foreground">
+        <span className="mt-1 block text-meta leading-relaxed text-muted-foreground">
           {description}
         </span>
-        <span className="mt-2 block text-[13px] font-medium text-primary group-hover:underline">
+        <span className="mt-2 block text-meta font-medium text-primary group-hover:underline">
           {cta}
         </span>
       </span>
@@ -145,7 +145,7 @@ export default async function SupportPage() {
             <PrepRow
               title="Search with the command palette"
               meta={
-                <kbd className="rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                <kbd className="rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-label text-muted-foreground">
                   ⌘ / Ctrl + K
                 </kbd>
               }
@@ -158,11 +158,11 @@ export default async function SupportPage() {
           <p className="text-xs text-muted-foreground">
             Support hours: Mon–Fri, 9:00–18:00 UTC
           </p>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-meta leading-relaxed text-muted-foreground">
             Reports, invites and attendance sheets are emailed from CoachXYZ — add us to your
             address book so they land in your inbox, not spam.
           </p>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
+          <p className="text-meta leading-relaxed text-muted-foreground">
             Questions about plans or trials? See <Link href="/pricing" className="font-medium text-primary hover:underline">pricing</Link>.
           </p>
         </div>

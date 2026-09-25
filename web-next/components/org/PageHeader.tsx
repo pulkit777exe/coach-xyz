@@ -20,8 +20,8 @@ export default function PageHeader({ trail, title, description, actions }: PageH
                 <span
                   className={
                     isLast
-                      ? 'text-[13px] leading-5 text-foreground'
-                      : 'text-[13px] leading-5 text-muted-foreground transition-colors hover:text-foreground hover:underline'
+                      ? 'text-meta leading-5 text-foreground'
+                      : 'text-meta leading-5 text-muted-foreground transition-colors hover:text-foreground hover:underline'
                   }
                 >
                   {crumb}
@@ -37,7 +37,7 @@ export default function PageHeader({ trail, title, description, actions }: PageH
             {title}
           </h1>
           {description ? (
-            <p className="mt-1.5 max-w-[640px] text-[14px] leading-[1.5] text-muted-foreground">
+            <p className="mt-1.5 max-w-[640px] text-body leading-[1.5] text-muted-foreground">
               {description}
             </p>
           ) : null}

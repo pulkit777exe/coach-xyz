@@ -119,7 +119,7 @@ export default function ResultsSummary({
                 </span>
               </h2>
               {summary.angle && summary.angle !== 'primary' && (
-                <p className="mt-2 text-[14px] text-muted-foreground">
+                <p className="mt-2 text-body text-muted-foreground">
                   Analyzed perspective:{' '}
                   <span className="font-medium text-foreground capitalize">{summary.angle}</span>
                 </p>
@@ -128,14 +128,14 @@ export default function ResultsSummary({
             <div className="space-y-6 pt-6">
               <div className="grid md:grid-cols-2 gap-6 items-center bg-muted rounded-[6px] p-6 border border-border">
                 <div className="text-center md:text-left">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
+                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                     Total Form Score
                   </p>
                   <div className="flex items-baseline justify-center md:justify-start gap-1.5">
                     <div className={`text-[32px] font-semibold leading-none tabular-nums ${formScoreColor}`}>
                       {summary.form_score}
                     </div>
-                    <span className="text-[15px] text-muted-foreground font-medium tabular-nums">
+                    <span className="text-title text-muted-foreground font-medium tabular-nums">
                       / 10
                     </span>
                   </div>
@@ -146,22 +146,22 @@ export default function ResultsSummary({
                     {summary.needs_review && <StatusPill tone="amber">Needs review</StatusPill>}
                   </div>
                   {summary.quality && !summary.quality.passed && (
-                    <p className="mt-2 text-[13px] text-muted-foreground">
+                    <p className="mt-2 text-meta text-muted-foreground">
                       Quality check: {summary.quality.issues.map(humanizeQualityIssue).join(' · ')}
                     </p>
                   )}
                 </div>
                 <div className="text-center md:text-left border-l-0 md:border-l border-border md:pl-8">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
+                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-3">
                     Overall Assessment
                   </p>
-                  <p className="text-muted-foreground text-[14px] leading-[1.6]">{summary.summary}</p>
+                  <p className="text-muted-foreground text-body leading-[1.6]">{summary.summary}</p>
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-card rounded-[6px] p-6 border border-border">
-                  <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
+                  <h3 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
                     <svg
                       className="w-5 h-5 text-warning"
                       fill="none"
@@ -180,26 +180,26 @@ export default function ResultsSummary({
                   <ol className="space-y-3">
                     {summary.top_tips?.map((tip, index) => (
                       <li key={index} className="flex gap-3 text-muted-foreground">
-                        <span className="shrink-0 size-7 rounded-full bg-muted border border-border flex items-center justify-center text-[12px] font-medium tabular-nums text-muted-foreground">
+                        <span className="shrink-0 size-7 rounded-full bg-muted border border-border flex items-center justify-center text-caption font-medium tabular-nums text-muted-foreground">
                           {index + 1}
                         </span>
-                        <span className="leading-relaxed text-[14px]">{tip}</span>
+                        <span className="leading-relaxed text-body">{tip}</span>
                       </li>
                     ))}
                   </ol>
                   {summary.priority_drill && (
                     <div className="mt-6 p-4 rounded-[6px] border border-border bg-muted">
-                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-[0.08em] mb-1">
+                      <p className="text-label font-medium text-muted-foreground uppercase tracking-[0.08em] mb-1">
                         Recommended Drill
                       </p>
-                      <p className="text-[14px] text-foreground">{summary.priority_drill}</p>
+                      <p className="text-body text-foreground">{summary.priority_drill}</p>
                     </div>
                   )}
                 </div>
 
                 {summary.strengths && summary.strengths.length > 0 && (
                   <div className="bg-card rounded-[6px] p-6 border border-border flex flex-col justify-start">
-                    <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
+                    <h3 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-4 flex items-center gap-2">
                       <svg
                         className="w-5 h-5 text-success"
                         fill="none"
@@ -219,7 +219,7 @@ export default function ResultsSummary({
                       {summary.strengths.map((strength, index) => (
                         <li key={index} className="flex gap-3 text-muted-foreground items-start">
                           <span className="text-success mt-1 shrink-0">•</span>
-                          <span className="leading-relaxed text-[14px]">{strength}</span>
+                          <span className="leading-relaxed text-body">{strength}</span>
                         </li>
                       ))}
                     </ul>
@@ -231,7 +231,7 @@ export default function ResultsSummary({
 
           {summary.recommended_angles && summary.recommended_angles.length > 0 && (
             <div className="gsap-item mb-8 rounded-[6px] border border-border bg-card p-6">
-              <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground mb-2 flex items-center gap-2">
+              <h3 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-muted-foreground"
                   fill="none"
@@ -249,7 +249,7 @@ export default function ResultsSummary({
               </h3>
               <ul className="space-y-3 mt-4">
                 {summary.recommended_angles.map((angle) => (
-                  <li key={angle.id} className="flex gap-3 text-[14px]">
+                  <li key={angle.id} className="flex gap-3 text-body">
                     <span className="shrink-0 rounded-full bg-accent px-2.5 py-0.5 font-medium text-foreground capitalize h-fit">
                       {angle.label}
                     </span>
@@ -273,7 +273,7 @@ export default function ResultsSummary({
           >
             {onStartChat && (
               <Button
-                className="h-12 rounded-[6px] text-[14px] font-medium transition-colors active:scale-[0.98]"
+                className="h-12 rounded-[6px] text-body font-medium transition-colors active:scale-[0.98]"
                 onClick={onStartChat}
               >
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -291,7 +291,7 @@ export default function ResultsSummary({
             <Button
               nativeButton={false}
               render={<a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group" />}
-              className="w-full h-12 rounded-[6px] text-[14px] font-medium transition-colors active:scale-[0.98]"
+              className="w-full h-12 rounded-[6px] text-body font-medium transition-colors active:scale-[0.98]"
             >
                 <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -306,7 +306,7 @@ export default function ResultsSummary({
 
             <Button
               variant="outline"
-              className="h-12 rounded-[6px] text-[14px] font-medium transition-colors hover:bg-accent active:scale-[0.98]"
+              className="h-12 rounded-[6px] text-body font-medium transition-colors hover:bg-accent active:scale-[0.98]"
               onClick={onReset}
             >
               <svg
@@ -350,17 +350,17 @@ export default function ResultsSummary({
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-foreground leading-none">
+                      <h3 className="text-lead font-semibold tracking-[-0.01em] text-foreground leading-none">
                         Event Timeline
                       </h3>
-                      <p className="text-muted-foreground text-[13px] mt-1.5">
+                      <p className="text-muted-foreground text-meta mt-1.5">
                         <span className="tabular-nums">{summary.shot_events.length}</span> events
                         analyzed
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-[13px] font-medium text-muted-foreground group-open:hidden">
+                    <span className="text-meta font-medium text-muted-foreground group-open:hidden">
                       Tap to view breakdown
                     </span>
                     <svg
@@ -400,11 +400,11 @@ export default function ResultsSummary({
                         </div>
                         <div className="flex-1 pb-1">
                           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                            <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">
+                            <span className="rounded-full bg-accent px-2 py-0.5 text-label font-medium capitalize text-muted-foreground">
                               {event.event_type?.replace('_', ' ') || 'Action'}
                             </span>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${toneClass}`}
+                              className={`rounded-full px-2 py-0.5 text-label font-medium ${toneClass}`}
                             >
                               Score:{' '}
                               <span className="tabular-nums">
@@ -413,11 +413,11 @@ export default function ResultsSummary({
                             </span>
                           </div>
                           {event.key_observation && (
-                            <p className="text-[14px] font-medium text-foreground mb-2 border-l-2 border-border pl-3">
+                            <p className="text-body font-medium text-foreground mb-2 border-l-2 border-border pl-3">
                               {event.key_observation}
                             </p>
                           )}
-                          <p className="text-muted-foreground text-[14px] leading-[1.55] pl-3">
+                          <p className="text-muted-foreground text-body leading-[1.55] pl-3">
                             {event.feedback}
                           </p>
                         </div>

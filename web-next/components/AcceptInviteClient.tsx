@@ -39,7 +39,7 @@ export default function AcceptInviteClient() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-[16px]">Organization invitation</CardTitle>
+          <CardTitle className="text-lead">Organization invitation</CardTitle>
           <CardDescription>
             {state === 'done'
               ? `Accepted — you joined as ${role}.`
@@ -48,14 +48,14 @@ export default function AcceptInviteClient() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!token && (
-            <p className="text-[13px] text-destructive">
+            <p className="text-meta text-destructive">
               Missing invitation token. Ask your coach for a fresh link.
             </p>
           )}
           {state === 'working' && (
-            <p className="text-[14px] text-muted-foreground">Accepting invitation…</p>
+            <p className="text-body text-muted-foreground">Accepting invitation…</p>
           )}
-          {state === 'error' && <p className="text-[13px] text-destructive">{message}</p>}
+          {state === 'error' && <p className="text-meta text-destructive">{message}</p>}
           {state === 'done' && <Button nativeButton={false} render={<Link href="/dashboard" />}>Open dashboard</Button>}
           {state === 'error' && token && (
             <Button onClick={() => setState('working')}>Try again</Button>

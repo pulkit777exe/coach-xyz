@@ -141,7 +141,7 @@ function visible(features: Feature[], role: OrgRole): Feature[] {
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[6px] border border-border bg-card p-5">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
       <p className="mt-2 text-[28px] font-semibold leading-[1.1] tracking-[-0.01em] tabular-nums text-foreground">
@@ -161,8 +161,8 @@ function FeatureCard({ icon: Icon, title, body, href }: Feature) {
         <Icon className="size-4" aria-hidden="true" />
       </span>
       <p className="mt-3 text-sm font-semibold text-foreground">{title}</p>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{body}</p>
-      <span className="mt-auto flex items-center gap-1 pt-4 text-[13px] font-medium text-primary group-hover:underline">
+      <p className="mt-1.5 text-meta leading-relaxed text-muted-foreground">{body}</p>
+      <span className="mt-auto flex items-center gap-1 pt-4 text-meta font-medium text-primary group-hover:underline">
         Open
         <ArrowRight className="size-3" aria-hidden="true" />
       </span>
@@ -220,7 +220,7 @@ export default async function FeaturesPage() {
 
         <div className="rounded-[6px] bg-muted p-6 text-center">
           <p className="text-base font-semibold text-foreground">New here?</p>
-          <p className="mt-1.5 text-[13px] text-muted-foreground">
+          <p className="mt-1.5 text-meta text-muted-foreground">
             Upload a clip and see the annotated findings for yourself.
           </p>
           <Button className="mt-4" nativeButton={false} render={<Link href="/#analyze" />}>

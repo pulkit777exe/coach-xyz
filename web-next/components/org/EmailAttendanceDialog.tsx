@@ -95,7 +95,7 @@ export default function EmailAttendanceDialog({
           {(from || to) && (
             <div className="grid gap-1.5">
               <Label>Date range</Label>
-              <p className="text-muted-foreground bg-muted rounded-[6px] border border-border px-3 py-2 text-[13px] tabular-nums">
+              <p className="text-muted-foreground bg-muted rounded-[6px] border border-border px-3 py-2 text-meta tabular-nums">
                 {from ?? '—'} → {to ?? '—'}
               </p>
             </div>

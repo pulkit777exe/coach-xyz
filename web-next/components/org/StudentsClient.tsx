@@ -232,7 +232,7 @@ function StudentImportDialog({
           <div className="flex items-center gap-2">
             <Label
               htmlFor="import-file"
-              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-[6px] border px-3 text-[14px]"
+              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-[6px] border px-3 text-body"
             >
               <UploadIcon className="size-4" />
               Choose CSV file
@@ -250,7 +250,7 @@ function StudentImportDialog({
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="import-paste" className="text-[14px] font-medium">
+            <Label htmlFor="import-paste" className="text-body font-medium">
               …or paste CSV
             </Label>
             <Textarea
@@ -265,13 +265,13 @@ function StudentImportDialog({
 
           {rows.length > 0 && (
             <div>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {rows.length} row(s) parsed — first {Math.min(rows.length, 8)} shown
               </p>
               <div className="border-border max-h-48 overflow-auto rounded-[6px] border">
-                <table className="w-full text-[13px]">
+                <table className="w-full text-meta">
                   <thead>
-                    <tr className="border-b border-border text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <tr className="border-b border-border text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       <th className="px-3 py-2 text-left">Name</th>
                       <th className="px-3 py-2 text-left">Email</th>
                       <th className="px-3 py-2 text-left">Sport</th>
@@ -293,10 +293,10 @@ function StudentImportDialog({
             </div>
           )}
 
-          {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
+          {error ? <p className="text-meta text-destructive">{error}</p> : null}
 
           {result ? (
-            <div className="border-border bg-muted/40 space-y-1 rounded-[6px] border p-3 text-[13px]">
+            <div className="border-border bg-muted/40 space-y-1 rounded-[6px] border p-3 text-meta">
               <p className="text-foreground font-medium">{result.imported} imported</p>
               {result.duplicates_skipped > 0 ? (
                 <p className="text-muted-foreground">
@@ -620,7 +620,7 @@ export default function StudentsClient({
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
         <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-[6px] border px-3 py-2">
-          <span className="text-[13px] tabular-nums text-muted-foreground">
+          <span className="text-meta tabular-nums text-muted-foreground">
             {selectedIds.length} selected
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -712,7 +712,7 @@ export default function StudentsClient({
             }
           />
         ) : (
-          <table className="w-full text-[14px]">
+          <table className="w-full text-body">
             <thead>
               <tr className="border-b border-border">
                 <th className="px-4 py-2.5">
@@ -723,25 +723,25 @@ export default function StudentsClient({
                     aria-label="Select all students"
                   />
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Student
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Sport
                 </th>
-                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Team
                 </th>
-                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Position
                 </th>
-                <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Joined
                 </th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Actions
                 </th>
               </tr>
@@ -763,17 +763,17 @@ export default function StudentsClient({
                     <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
                       <Avatar className="border-border size-9 border">
                         <AvatarImage src={undefined} alt="" />
-                        <AvatarFallback className="bg-muted text-muted-foreground text-[12px]">
+                        <AvatarFallback className="bg-muted text-muted-foreground text-caption">
                           {initials(s.full_name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
                         <p className="truncate font-medium text-foreground">{s.full_name}</p>
-                        <p className="truncate text-[13px] text-muted-foreground">
+                        <p className="truncate text-meta text-muted-foreground">
                           {s.email || s.phone || '—'}
                         </p>
                         {s.account_auth0_id && (
-                          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
+                          <p className="mt-0.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
                             • linked to player account
                           </p>
                         )}
@@ -787,7 +787,7 @@ export default function StudentsClient({
                       <span className="text-muted-foreground">—</span>
                     )}
                     {s.jersey_number ? (
-                      <span className="ml-1 text-[13px] tabular-nums text-muted-foreground">
+                      <span className="ml-1 text-meta tabular-nums text-muted-foreground">
                         #{s.jersey_number}
                       </span>
                     ) : null}

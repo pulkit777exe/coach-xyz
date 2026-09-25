@@ -25,9 +25,9 @@ export default function EmptyState({
       <div className="mb-3.5 flex h-10 w-10 items-center justify-center rounded-[8px] bg-muted text-muted-foreground/70">
         {icon ?? <FileText className="h-5 w-5" aria-hidden="true" />}
       </div>
-      <p className="text-[15px] font-medium leading-[1.4] text-foreground">{title}</p>
+      <p className="text-title font-medium leading-[1.4] text-foreground">{title}</p>
       {description ? (
-        <p className="mt-1.5 max-w-[360px] text-[14px] leading-[1.5] text-muted-foreground">
+        <p className="mt-1.5 max-w-[360px] text-body leading-[1.5] text-muted-foreground">
           {description}
         </p>
       ) : null}

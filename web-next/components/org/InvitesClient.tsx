@@ -113,24 +113,24 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
         ) : undefined
       }
     >
-      <p className="mb-3 text-[13px] leading-[1.5] text-muted-foreground">
+      <p className="mb-3 text-meta leading-[1.5] text-muted-foreground">
         Single-use links, valid 7 days. <span className="tabular-nums">{pending.length}</span>{' '}
         pending.
       </p>
       <div className="space-y-2">
         {lastToken && inviteLink && (
           <div className="rounded-[6px] border border-primary/30 bg-primary/5 p-3">
-            <p className="mb-1 text-[13px] font-medium text-foreground">
+            <p className="mb-1 text-meta font-medium text-foreground">
               Share this link (shown once)
             </p>
-            <p className="break-all text-[13px] text-muted-foreground">{inviteLink}</p>
+            <p className="break-all text-meta text-muted-foreground">{inviteLink}</p>
             <Button size="sm" variant="outline" className="mt-2 h-7" onClick={copyLink}>
               {copied ? 'Copied' : 'Copy link'}
             </Button>
           </div>
         )}
         {invites.length === 0 && (
-          <p className="text-[14px] text-muted-foreground">No invitations yet.</p>
+          <p className="text-body text-muted-foreground">No invitations yet.</p>
         )}
         {invites.map((invite) => {
           const state = invite.accepted_at
@@ -144,10 +144,10 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
               className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-border px-3 py-2.5"
             >
               <div className="min-w-0">
-                <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                <p className="truncate text-body font-medium leading-[1.4] text-foreground">
                   {invite.email}
                 </p>
-                <p className="text-[13px] text-muted-foreground">
+                <p className="text-meta text-muted-foreground">
                   Expires {new Date(invite.expires_at).toLocaleDateString()}
                 </p>
               </div>

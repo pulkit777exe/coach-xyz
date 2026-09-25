@@ -113,7 +113,7 @@ export default function NotificationBell() {
       <DropdownMenuTrigger aria-label="Notifications" className={TRIGGER_CLASS}>
         <BellIcon className="size-4" />
         {unreadCount > 0 ? (
-          <span className="pointer-events-none absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#2383e2] px-1 text-[11px] leading-none font-semibold text-white">
+          <span className="pointer-events-none absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-label leading-none font-semibold text-primary-foreground">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         ) : null}
@@ -127,7 +127,7 @@ export default function NotificationBell() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-6! gap-1! rounded-[4px]! px-1.5! text-[11px]!"
+              className="h-6! gap-1! rounded-[4px]! px-1.5! text-label!"
               onClick={handleMarkAllRead}
             >
               <CheckCheckIcon className="size-3" />
@@ -148,7 +148,7 @@ export default function NotificationBell() {
               {i > 0 ? <DropdownMenuSeparator /> : null}
               <DropdownMenuItem className={ITEM_CLASS} onClick={() => handleOpen(n)}>
                 <span
-                  className={cn(DOT_BASE, n.read ? 'bg-transparent' : 'bg-[#2383e2]')}
+                  className={cn(DOT_BASE, n.read ? 'bg-transparent' : 'bg-primary')}
                   aria-hidden
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -161,7 +161,7 @@ export default function NotificationBell() {
                     >
                       {n.title}
                     </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground/60">
+                    <span className="shrink-0 text-label text-muted-foreground/60">
                       {formatTime(n.created_at)}
                     </span>
                   </div>

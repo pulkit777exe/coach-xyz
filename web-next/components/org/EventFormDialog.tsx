@@ -234,7 +234,7 @@ export default function EventFormDialog({
             />
           </div>
 
-          {error && <p className="text-[13px] text-destructive">{error}</p>}
+          {error && <p className="text-meta text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>
@@ -279,7 +279,7 @@ export function NativeSelect({
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-[6px] border px-3 py-1.5 text-[14px] outline-none focus-visible:ring-[3px]"
+      className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-[6px] border px-3 py-1.5 text-body outline-none focus-visible:ring-[3px]"
     >
       {placeholder !== undefined && <option value="">{placeholder}</option>}
       {options.map((opt) => (

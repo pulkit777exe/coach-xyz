@@ -250,7 +250,7 @@ export default function ScheduleClient({
             Today
           </Button>
         </div>
-        <p className="text-[16px] font-semibold tracking-[-0.01em] text-foreground">
+        <p className="text-lead font-semibold tracking-[-0.01em] text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
@@ -286,7 +286,7 @@ export default function ScheduleClient({
           {orderedWeekdays(weekStartsMonday).map((w) => (
             <div
               key={w}
-              className="py-2 text-center text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground"
+              className="py-2 text-center text-label font-medium uppercase tracking-[0.08em] text-muted-foreground"
             >
               {w}
             </div>
@@ -315,7 +315,7 @@ export default function ScheduleClient({
               >
                 <span
                   className={cn(
-                    'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-[12px] tabular-nums',
+                    'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-caption tabular-nums',
                     isToday
                       ? 'bg-accent font-medium text-foreground'
                       : 'text-muted-foreground'
@@ -332,7 +332,7 @@ export default function ScheduleClient({
                         onClick={(e) => openEdit(ev, e)}
                         title={ev.title}
                         className={cn(
-                          'truncate rounded-[4px] border px-1.5 py-0.5 text-[11px] font-medium leading-tight transition-colors',
+                          'truncate rounded-[4px] border px-1.5 py-0.5 text-label font-medium leading-tight transition-colors',
                           meta.text,
                           meta.bg,
                           meta.border,
@@ -345,7 +345,7 @@ export default function ScheduleClient({
                     )
                   })}
                   {dayEvents.length > 3 && (
-                    <span className="text-muted-foreground block px-1 text-[11px] tabular-nums">
+                    <span className="text-muted-foreground block px-1 text-label tabular-nums">
                       +{dayEvents.length - 3} more
                     </span>
                   )}
@@ -357,7 +357,7 @@ export default function ScheduleClient({
       </div>
 
       {visibleEvents.length === 0 && (
-        <p className="text-muted-foreground mt-4 text-[13px]">
+        <p className="text-muted-foreground mt-4 text-meta">
           {events.length === 0
             ? `No events in ${monthLabel}. Click any day to add one.`
             : 'No events match the selected status.'}
@@ -393,12 +393,12 @@ export default function ScheduleClient({
                   className="border-border hover:bg-accent/50 rounded-[6px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[14px] font-medium text-foreground">{ev.title}</span>
+                    <span className="text-body font-medium text-foreground">{ev.title}</span>
                     <StatusPill tone={STATUS_TONE[ev.status]}>
                       {EVENT_STATUS_LABELS[ev.status] ?? ev.status}
                     </StatusPill>
                   </div>
-                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-[13px]">
+                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-meta">
                     <span className="flex items-center gap-1 tabular-nums">
                       <ClockIcon className="size-3" />
                       {ev.starts_at.slice(11, 16)}

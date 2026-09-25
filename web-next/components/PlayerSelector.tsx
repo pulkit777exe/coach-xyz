@@ -46,7 +46,7 @@ function PlayerImage({ player }: { player: Player }) {
             d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
           />
         </svg>
-        <span className="text-[13px]">No preview</span>
+        <span className="text-meta">No preview</span>
       </div>
     )
   }
@@ -104,7 +104,7 @@ export default function PlayerSelector({
             <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3 leading-tight">
               Who do you want to analyze?
             </h1>
-            <p className="text-[14px] text-muted-foreground max-w-2xl mx-auto leading-[1.55]">
+            <p className="text-body text-muted-foreground max-w-2xl mx-auto leading-[1.55]">
               Our vision models detected{' '}
               <span className="text-foreground font-medium tabular-nums">{players.length}</span>{' '}
               potential subjects
@@ -133,7 +133,7 @@ export default function PlayerSelector({
                     role="tab"
                     aria-selected={angle === activeAngle}
                     onClick={() => switchAngle(angle)}
-                    className={`rounded-[4px] px-3.5 py-1.5 text-[14px] font-medium capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    className={`rounded-[4px] px-3.5 py-1.5 text-body font-medium capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                       angle === activeAngle
                         ? 'bg-card text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
@@ -191,14 +191,14 @@ export default function PlayerSelector({
                     </div>
 
                     <h3
-                      className={`text-[15px] font-semibold mb-3 transition-colors ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
+                      className={`text-title font-semibold mb-3 transition-colors ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
                     >
                       Subject {player.player_index}
                     </h3>
 
                     <div className="w-full flex justify-center">
                       <span
-                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                        className={`text-label font-medium px-2 py-0.5 rounded-full transition-colors ${
                           player.confidence >= 0.8
                             ? 'bg-primary/15 text-primary'
                             : player.confidence >= 0.6
@@ -220,7 +220,7 @@ export default function PlayerSelector({
 
           <div className="animate-[fadeInUp_0.3s_cubic-bezier(0.23,1,0.32,1)_0.25s_both] max-w-sm mx-auto">
             <Button
-              className="w-full h-12 rounded-[6px] text-[14px] font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]"
+              className="w-full h-12 rounded-[6px] text-body font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]"
               size="lg"
               disabled={selectedIndex === null}
               onClick={() => selectedIndex !== null && onSelect(selectedIndex)}
@@ -244,10 +244,10 @@ export default function PlayerSelector({
           </div>
 
           <div className="max-w-sm mx-auto mt-8 rounded-[6px] border border-border bg-card p-5">
-            <p className="text-[15px] font-semibold text-foreground mb-1">
+            <p className="text-title font-semibold text-foreground mb-1">
               Add another camera angle
             </p>
-            <p className="text-[13px] text-muted-foreground mb-4 leading-[1.5]">
+            <p className="text-meta text-muted-foreground mb-4 leading-[1.5]">
               Film the same drill from a second perspective (e.g. side + front) for a more complete
               read.
             </p>

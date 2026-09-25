@@ -101,7 +101,7 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
 
   return (
     <div className="px-4 py-3">
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
         Clips (<span className="tabular-nums">{clips.length}</span>)
       </p>
 
@@ -112,7 +112,7 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
       ) : (
         <>
           {clips.length === 0 ? (
-            <p className="py-2 text-[13px] text-muted-foreground">
+            <p className="py-2 text-meta text-muted-foreground">
               No clips yet — mark a time range to revisit it instantly.
             </p>
           ) : (
@@ -129,11 +129,11 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                     aria-label={`Play clip ${clip.label}`}
                   >
                     <PlayIcon className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" />
-                    <span className="truncate text-[13px] font-medium text-foreground">
+                    <span className="truncate text-meta font-medium text-foreground">
                       {clip.label}
                     </span>
                     <TimestampPill seconds={clip.start_ms / 1000} />
-                    <span className="shrink-0 text-[12px] text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-caption text-muted-foreground tabular-nums">
                       {formatRange(clip.start_ms, clip.end_ms)}
                     </span>
                   </button>
@@ -158,19 +158,19 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
           {auth0Id && (
             <div className="mt-3 grid grid-cols-[1fr_64px_64px_auto] items-end gap-2">
               <div className="grid gap-1">
-                <Label htmlFor="clip-label" className="text-[11px] font-medium text-muted-foreground">
+                <Label htmlFor="clip-label" className="text-label font-medium text-muted-foreground">
                   Label
                 </Label>
                 <Input
                   id="clip-label"
-                  className="h-8 text-[13px]"
+                  className="h-8 text-meta"
                   placeholder="Release sequence"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="clip-start" className="text-[11px] font-medium text-muted-foreground">
+                <Label htmlFor="clip-start" className="text-label font-medium text-muted-foreground">
                   Start (s)
                 </Label>
                 <Input
@@ -178,14 +178,14 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                   type="number"
                   min="0"
                   step="0.1"
-                  className="h-8 text-[13px] tabular-nums"
+                  className="h-8 text-meta tabular-nums"
                   placeholder="12.5"
                   value={start}
                   onChange={(e) => setStart(e.target.value)}
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="clip-end" className="text-[11px] font-medium text-muted-foreground">
+                <Label htmlFor="clip-end" className="text-label font-medium text-muted-foreground">
                   End (s)
                 </Label>
                 <Input
@@ -193,7 +193,7 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                   type="number"
                   min="0"
                   step="0.1"
-                  className="h-8 text-[13px] tabular-nums"
+                  className="h-8 text-meta tabular-nums"
                   placeholder="15.0"
                   value={end}
                   onChange={(e) => setEnd(e.target.value)}

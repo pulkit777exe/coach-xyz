@@ -72,7 +72,7 @@ export default function AuditClient({ initialLogs }: AuditClientProps) {
         </Select>
       }
     >
-      <p className="mb-3 text-[13px] text-muted-foreground">
+      <p className="mb-3 text-meta text-muted-foreground">
         Sensitive organization actions, newest first.{' '}
         <span className="tabular-nums">{logs.length}</span> shown.
       </p>
@@ -86,8 +86,8 @@ export default function AuditClient({ initialLogs }: AuditClientProps) {
             className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0 hover:bg-accent/50 transition-colors"
           >
             <div className="min-w-0">
-              <p className="text-[14px] font-medium text-foreground font-mono">{log.action}</p>
-              <p className="mt-0.5 truncate text-[13px] text-muted-foreground tabular-nums">
+              <p className="text-body font-medium text-foreground font-mono">{log.action}</p>
+              <p className="mt-0.5 truncate text-meta text-muted-foreground tabular-nums">
                 {log.actor_auth0_id ?? 'system'} · {log.resource_type}
                 {log.resource_id ? ` · ${log.resource_id.slice(0, 8)}` : ''} ·{' '}
                 {new Date(log.created_at).toLocaleString()}

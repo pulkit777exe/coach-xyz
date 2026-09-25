@@ -10,23 +10,23 @@ three dead routes removed).
 
 ## Server (`server/src/`)
 
-| Domain                    | Routes                                                                                                                                | Data layer                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Identity boundary         | `lib/serviceGuard.ts`, `lib/attribution.ts`, `lib/jobAccess.ts`, `lib/httpErrors.ts` (shared error handler: app + smoke)              | —                                                                                       |
-| Caller + permissions      | `lib/caller.ts` (`resolveCaller`, self-scope `requireVerifiedSelf`/`missingVerifiedSelf`), `lib/permissions.ts`                       | `lib/orgMembers.ts` (roles), `lib/teams.ts`                                             |
-| History/analyses          | `routes/status.ts`, `routes/analyze.ts`, `routes/download.ts`                                                                         | `lib/analyses.ts`, `lib/jobs.ts`, `lib/queue.ts` (lazy), `lib/engine.ts`, `lib/analysisAdmission.ts` (atomic quota admission via `tryReserveUsage` + `usage_counters`), `lib/retention.ts` (sweep) |
-| Findings                  | `routes/findings.ts` (trends/list/export/review)                                                                                      | `lib/findings.ts` (persist gate, CSV)                                                   |
-| Clips                     | `routes/clips.ts` (list/create/delete; mounted by `routes/auth.ts`)                                                                   | `lib/clips.ts` (validator + scoped CRUD)                                                |
-| Registry                  | `routes/scan.ts`, `routes/auth.ts` (sync)                                                                                             | `lib/registry.ts` (organizations, videos, player_events)                                |
-| Users                     | `routes/auth.ts` (sync), `routes/me.ts`                                                                                               | `lib/users.ts`                                                                          |
+| Domain                    | Routes                                                                                                                                   | Data layer                                                                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity boundary         | `lib/serviceGuard.ts`, `lib/attribution.ts`, `lib/jobAccess.ts`, `lib/httpErrors.ts` (shared error handler: app + smoke)                 | —                                                                                                                                                                                                                                  |
+| Caller + permissions      | `lib/caller.ts` (`resolveCaller`, self-scope `requireVerifiedSelf`/`missingVerifiedSelf`), `lib/permissions.ts`                          | `lib/orgMembers.ts` (roles), `lib/teams.ts`                                                                                                                                                                                        |
+| History/analyses          | `routes/status.ts`, `routes/analyze.ts`, `routes/download.ts`                                                                            | `lib/analyses.ts`, `lib/jobs.ts`, `lib/queue.ts` (lazy), `lib/engine.ts`, `lib/analysisAdmission.ts` (atomic quota admission via `tryReserveUsage` + `usage_counters`), `lib/retention.ts` (sweep)                                 |
+| Findings                  | `routes/findings.ts` (trends/list/export/review)                                                                                         | `lib/findings.ts` (persist gate, CSV)                                                                                                                                                                                              |
+| Clips                     | `routes/clips.ts` (list/create/delete; mounted by `routes/auth.ts`)                                                                      | `lib/clips.ts` (validator + scoped CRUD)                                                                                                                                                                                           |
+| Registry                  | `routes/scan.ts`, `routes/auth.ts` (sync)                                                                                                | `lib/registry.ts` (organizations, videos, player_events)                                                                                                                                                                           |
+| Users                     | `routes/auth.ts` (sync), `routes/me.ts`                                                                                                  | `lib/users.ts`                                                                                                                                                                                                                     |
 | Chat                      | `routes/chat.ts` (`/api/chat/stream` only), `routes/chatHistory.ts` (transcript GET/POST + ask-an-analysis; mounted by `routes/auth.ts`) | `lib/transcript.ts` (`Transcript` seam: `playerTranscript` Redis / `dashboardTranscript` Postgres), `lib/sse.ts` (buffered SSE parsing), `lib/chatMessages.ts`, `lib/conversation.ts`, `lib/aiResponse.ts` (connectivity fallback) |
-| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared) | `lib/org/*` per domain, via the `lib/orgData.ts` barrel                                 |
-| Members/invites/audit     | `routes/members.ts`, `routes/teams.ts`                                                                                                | `lib/orgMembers.ts`, `lib/invites.ts`, `lib/audit.ts` (`AUDIT_ACTIONS`), `lib/teams.ts` |
-| Player hub                | `routes/me.ts`                                                                                                                        | `lib/orgData.ts` (scoped reads)                                                         |
-| Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                             | engine sport packs via `GET /sports/{sport}/positions`                                  |
-| Email/share/notifications | `routes/email.ts`, `routes/share.ts`, `routes/notifications.ts`, `routes/aiReports.ts`                                                | `lib/mailer.ts`, `lib/shareTokens.ts`, `lib/notifications.ts`, `lib/aiReportData.ts`    |
-| Schema + connection       | —                                                                                                                                     | `lib/historyStore.ts` (all DDL, 3 parallel levels — sole owner; no-DB fallbacks via `orDisabledDefault`) |
-| Observability             | —                                                                                                                                     | `lib/logger.ts` (winston singleton, key-based redaction, Sentry bridge — the only logging seam), `lib/requestLog.ts` (access-log helpers) |
+| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared)    | `lib/org/*` per domain, via the `lib/orgData.ts` barrel                                                                                                                                                                            |
+| Members/invites/audit     | `routes/members.ts`, `routes/teams.ts`                                                                                                   | `lib/orgMembers.ts`, `lib/invites.ts`, `lib/audit.ts` (`AUDIT_ACTIONS`), `lib/teams.ts`                                                                                                                                            |
+| Player hub                | `routes/me.ts`                                                                                                                           | `lib/orgData.ts` (scoped reads)                                                                                                                                                                                                    |
+| Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                                | engine sport packs via `GET /sports/{sport}/positions`                                                                                                                                                                             |
+| Email/share/notifications | `routes/email.ts`, `routes/share.ts`, `routes/notifications.ts`, `routes/aiReports.ts`                                                   | `lib/mailer.ts`, `lib/shareTokens.ts`, `lib/notifications.ts`, `lib/aiReportData.ts`                                                                                                                                               |
+| Schema + connection       | —                                                                                                                                        | `lib/historyStore.ts` (all DDL, 3 parallel levels — sole owner; no-DB fallbacks via `orDisabledDefault`)                                                                                                                           |
+| Observability             | —                                                                                                                                        | `lib/logger.ts` (winston singleton, key-based redaction, Sentry bridge — the only logging seam), `lib/requestLog.ts` (access-log helpers)                                                                                          |
 
 Routes removed 2026-09-24 (dead): `GET …/analyses/:jobId/stages` (+ orphaned
 `getAnalysisStages`/`AnalysisStageEntry`), server `POST /api/chat`
@@ -39,36 +39,36 @@ plus `server/tests/errors.test.ts` (32) for status/retryable parity.
 
 ## Engine (`engine/`)
 
-| Stage                                    | Module                                                                                                                                    |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes/SSE               | `api/` (`scan.py`, `analyze.py`, `chat.py`, `report.py`, `jobs.py`, `health.py`, `sports.py`, `errors.py`), mounted by the thin `main.py` |
-| Sessions + cleanup       | `sessions.py` (2h-TTL session tokens, `delete_session_files`)                                                                             |
-| Multicam                 | `core/multicam.py`                                                                                                                        |
-| Sport vocab              | `core/sport_config.py` (vocab SSOT; served by `api/sports.py` → `GET /sports/{sport}/positions`)                                          |
-| Orchestrator + explicit stages           | `core/analyzer.py` (`AnalysisContext`, prepare/resume/tracking/reasoning/scoring/render)                                                  |
-| Detection/tracking/pose                  | `core/detector.py`, `core/tracking.py`, `core/pose_backend.py`, `core/detection_utils.py`                                                 |
-| Gemini + prompts + guards                | `core/gemini_client.py`, `core/prompt.py`, `core/chat_prompt.py`, `core/report_prompt.py`, `core/prompt_guard.py`                         |
-| Findings/validator/stats/quality         | `core/findings.py` (evidence gate), `core/quality.py` (pre-render check), `core/validator.py`, `core/stats.py`, `core/injury_risk.py`     |
-| Media/storage/sports                     | `core/video_io.py` (ffmpeg+ffprobe), `core/storage.py` (local/S3), `core/sport_config.py` (`sport_positions()` + loader), `sports/*.json` |
-| Jobs/cache/dedup                         | `core/jobs.py`, `core/cache.py`, `core/dedup.py`                                                                                          |
-| Error/status registry                    | `core/errors.py` (`STATUS_BY_CODE` + `RETRYABLE_BY_CODE` — engine owns code → status/retryable), rendered by `api/errors.py` (`error_response`/`error_retryable`) |
-| New contract tests (2026-09-24)          | `tests/test_api_errors.py` (registry/wire parity), `tests/test_chat_route.py` (`/chat` core fields; ignores dead `system_prompt`)        |
-| Chat/report engine clients              | `core/chat_client.py`, `core/report_client.py`                                                                                             |
-| CLI session tooling                     | `cli/` (`main.py`, `analyze_session.py`, `frame_selector.py`, `chunker.py`, `gemini.py`, `player_detector.py`)                            |
+| Stage                            | Module                                                                                                                                                            |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes/SSE                       | `api/` (`scan.py`, `analyze.py`, `chat.py`, `report.py`, `jobs.py`, `health.py`, `sports.py`, `errors.py`), mounted by the thin `main.py`                         |
+| Sessions + cleanup               | `sessions.py` (2h-TTL session tokens, `delete_session_files`)                                                                                                     |
+| Multicam                         | `core/multicam.py`                                                                                                                                                |
+| Sport vocab                      | `core/sport_config.py` (vocab SSOT; served by `api/sports.py` → `GET /sports/{sport}/positions`)                                                                  |
+| Orchestrator + explicit stages   | `core/analyzer.py` (`AnalysisContext`, prepare/resume/tracking/reasoning/scoring/render)                                                                          |
+| Detection/tracking/pose          | `core/detector.py`, `core/tracking.py`, `core/pose_backend.py`, `core/detection_utils.py`                                                                         |
+| Gemini + prompts + guards        | `core/gemini_client.py`, `core/prompt.py`, `core/chat_prompt.py`, `core/report_prompt.py`, `core/prompt_guard.py`                                                 |
+| Findings/validator/stats/quality | `core/findings.py` (evidence gate), `core/quality.py` (pre-render check), `core/validator.py`, `core/stats.py`, `core/injury_risk.py`                             |
+| Media/storage/sports             | `core/video_io.py` (ffmpeg+ffprobe), `core/storage.py` (local/S3), `core/sport_config.py` (`sport_positions()` + loader), `sports/*.json`                         |
+| Jobs/cache/dedup                 | `core/jobs.py`, `core/cache.py`, `core/dedup.py`                                                                                                                  |
+| Error/status registry            | `core/errors.py` (`STATUS_BY_CODE` + `RETRYABLE_BY_CODE` — engine owns code → status/retryable), rendered by `api/errors.py` (`error_response`/`error_retryable`) |
+| New contract tests (2026-09-24)  | `tests/test_api_errors.py` (registry/wire parity), `tests/test_chat_route.py` (`/chat` core fields; ignores dead `system_prompt`)                                 |
+| Chat/report engine clients       | `core/chat_client.py`, `core/report_client.py`                                                                                                                    |
+| CLI session tooling              | `cli/` (`main.py`, `analyze_session.py`, `frame_selector.py`, `chunker.py`, `gemini.py`, `player_detector.py`)                                                    |
 
 ## Web (`web-next/`)
 
-| Area              | Entry                                                                                                                                                                                                                                                                                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pipeline (coach)  | `lib/usePipeline.ts` over `lib/useScanFlow.ts` (scan seam)                                                                                                                                                                                                                                               |
-| Pipeline (player) | `components/player/PlayerHub.tsx` over `lib/useScanFlow.ts`                                                                                                                                                                                                                                              |
+| Area              | Entry                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pipeline (coach)  | `lib/usePipeline.ts` over `lib/useScanFlow.ts` (scan seam)                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Pipeline (player) | `components/player/PlayerHub.tsx` over `lib/useScanFlow.ts`                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Management pages  | `app/dashboard/{students,teams,members,audit,reports,schedule,attendance,history,settings}` + `components/org/*` (9ui; `PreferencesSection`, position vocab Select, Monday-first calendar; home is role-differentiated: owner (org health + plan + staff preview) / coach-staff (teams + org ops) / player (`users.role=player` is bounced by the `/dashboard` layout gate to the `/player` PlayerHub — never rendered at `/dashboard`); objectives have a List/Board kanban toggle) |
-| Analysis views    | `components/{AppClient,AnalysisDetailClient,ResultsSummary,VideoPlayer,FindingsTimeline,ChatLayout,ClipsSection,...}`                                                                                                                                                                                    |
-| Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion)                                                                                                      |
-| Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                                                                                                                                   |
-| Discovery         | `components/SidebarSearch.tsx` (⌘K palette: role-gated pages + player search)                                                                                                                                                                                                                            |
-| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `HISTORY_NAV_ROLES`, `ALL_NON_PLAYER_ROLES`, `visibleNavGroups`) + `lib/permissions.ts` (role→permission mirror) + `components/AccessDenied.tsx` (page floor view)                                                                                                                                     |
-| RSC data          | `lib/serverData.ts` (React.cache)                                                                                                                                                                                                                                                                        |
+| Analysis views    | `components/{AppClient,AnalysisDetailClient,ResultsSummary,VideoPlayer,FindingsTimeline,ChatLayout,ClipsSection,...}`                                                                                                                                                                                                                                                                                                                                                                |
+| Clients           | `lib/api.ts`, `lib/org.ts`, `lib/teams.ts`, `lib/members.ts`, `lib/meApi.ts`, `lib/sports.ts` (positions), `lib/serviceProxy.ts` (proxy allowlist), `lib/preferences.tsx` (theme/week-start/motion)                                                                                                                                                                                                                                                                                  |
+| Notifications     | `components/notifications/NotificationBell.tsx` (dashboard sidebar + marketing header)                                                                                                                                                                                                                                                                                                                                                                                               |
+| Discovery         | `components/SidebarSearch.tsx` (⌘K palette: role-gated pages + player search)                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Nav gating        | `lib/nav.ts` (`MEMBERS_NAV_ROLES`, `AUDIT_NAV_ROLES`, `HISTORY_NAV_ROLES`, `ALL_NON_PLAYER_ROLES`, `visibleNavGroups`) + `lib/permissions.ts` (role→permission mirror) + `components/AccessDenied.tsx` (page floor view)                                                                                                                                                                                                                                                             |
+| RSC data          | `lib/serverData.ts` (React.cache)                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## Role matrix & UI gating (frontend)
 
@@ -94,7 +94,7 @@ UX-only — the server remains the enforcement point:
 - **Player**: `/player/reports/[id]` reads only `/api/me/reports/:id`
   (self-scoped + row-checked server-side); hub rows link there.
 - **Shell**: `app/dashboard/layout.tsx` resolves `users.role` and bounces
-  `player` to `/player` — the redirect sits *outside* the profile try/catch
+  `player` to `/player` — the redirect sits _outside_ the profile try/catch
   (a caught `NEXT_REDIRECT` digest used to log a failure and render the coach
   shell for players). `AuthHeader` passes the same role to `HeaderClient`,
   which drops the org pill and the Dashboard CTA for players: their only
@@ -102,22 +102,22 @@ UX-only — the server remains the enforcement point:
   them — the sidebar's My Hub is their nav. Null/unresolved role keeps the
   full topbar.
 
-| Permission         | owner | admin | head_coach | assistant_coach | coach | analyst | medical | player |
-| ------------------ | :---: | :---: | :--------: | :-------------: | :---: | :-----: | :-----: | :----: |
-| `org.invite`       |  ✓    |  ✓    |            |                 |       |         |         |        |
-| `org.manage_members`|  ✓   |  ✓    |            |                 |       |         |         |        |
-| `team.create`      |  ✓    |  ✓    |            |                 |       |         |         |        |
-| `team.manage`      |  ✓    |  ✓    |     ✓      |                 |  ✓    |         |         |        |
-| `team.manage_members`|  ✓  |  ✓    |     ✓      |                 |  ✓    |         |         |        |
-| `team.read`        |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |        |
-| `analysis.create`  |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
-| `analysis.read`    |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |   ✓    |
-| `player.read`      |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |        |
-| `player.manage`    |  ✓    |  ✓    |     ✓      |                 |  ✓    |         |         |        |
-| `report.read`      |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |    ✓    |   ✓    |
-| `report.create`    |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
-| `finding.review`   |  ✓    |  ✓    |     ✓      |       ✓         |  ✓    |    ✓    |         |        |
-| `medical.read`     |  ✓    |       |            |                 |       |         |    ✓    |        |
+| Permission            | owner | admin | head_coach | assistant_coach | coach | analyst | medical | player |
+| --------------------- | :---: | :---: | :--------: | :-------------: | :---: | :-----: | :-----: | :----: |
+| `org.invite`          |   ✓   |   ✓   |            |                 |       |         |         |        |
+| `org.manage_members`  |   ✓   |   ✓   |            |                 |       |         |         |        |
+| `team.create`         |   ✓   |   ✓   |            |                 |       |         |         |        |
+| `team.manage`         |   ✓   |   ✓   |     ✓      |                 |   ✓   |         |         |        |
+| `team.manage_members` |   ✓   |   ✓   |     ✓      |                 |   ✓   |         |         |        |
+| `team.read`           |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |    ✓    |        |
+| `analysis.create`     |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |         |        |
+| `analysis.read`       |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |         |   ✓    |
+| `player.read`         |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |    ✓    |        |
+| `player.manage`       |   ✓   |   ✓   |     ✓      |                 |   ✓   |         |         |        |
+| `report.read`         |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |    ✓    |   ✓    |
+| `report.create`       |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |         |        |
+| `finding.review`      |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |         |        |
+| `medical.read`        |   ✓   |       |            |                 |       |         |    ✓    |        |
 
 **Server gaps (frontend-only for now — server fixes out of scope here):**
 
@@ -132,7 +132,7 @@ UX-only — the server remains the enforcement point:
   (`new URL(x).pathname`, raw string on parse failure) so absolute URLs and
   bare pathnames both match the org prefixes — +6 hermetic regression tests in
   `server/tests/serviceGuard.test.ts` pin the normalization and the
-  absolute-URL member fast path (`bun test` 348 pass / 0 fail / 34 files;
+  absolute-URL member fast path (`bun test` 360 pass / 0 fail / 34 files;
   member `/reports`, `/students`, `/teams` verified 200). Landed in `9314a14`
   — kept atomic with the winston-logging migration that shared these files.
 - `/api/org/:id/reports` CRUD runs on identity + the app-level non-player floor
@@ -143,7 +143,7 @@ UX-only — the server remains the enforcement point:
   per-role floor beyond membership: any non-player member (incl. `medical`,
   `analyst`) can invoke them over raw HTTP where the matrix grants read-only.
 - The email floor (`owner, admin, head_coach, assistant_coach, coach`) is
-  *stricter* than `report.create`: `analyst` can draft reports but not email
+  _stricter_ than `report.create`: `analyst` can draft reports but not email
   them — mirrored on both sides, recorded here so the asymmetry is conscious.
 - Enforced server-side today: `objectives`/`plans` (`player.manage`),
   `compete` (`team.manage`), `teams` (+ owner/admin delete floor),

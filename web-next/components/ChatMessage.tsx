@@ -15,7 +15,7 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
   if (isSystem) {
     return (
       <div className="text-center animate-[fadeIn_0.3s_ease-out]">
-        <span className="inline-block rounded-[8px] border border-border bg-muted px-4 py-3 text-[13px] text-muted-foreground">
+        <span className="inline-block rounded-[8px] border border-border bg-muted px-4 py-3 text-meta text-muted-foreground">
           {message.content}
         </span>
       </div>
@@ -35,14 +35,14 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
       >
         {!isUser && (
           <div className="mb-2 flex items-center gap-2">
-            <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
+            <span className="flex size-6 items-center justify-center rounded-full bg-muted text-label font-semibold text-muted-foreground">
               C
             </span>
-            <span className="text-[12px] font-medium text-muted-foreground">Coach</span>
+            <span className="text-caption font-medium text-muted-foreground">Coach</span>
           </div>
         )}
 
-        <div className="text-[14px] leading-[1.55] whitespace-pre-wrap">
+        <div className="text-body leading-[1.55] whitespace-pre-wrap">
           {renderContent(message.content, onSeekTo, message.timestamp_refs)}
         </div>
 
@@ -98,7 +98,7 @@ function renderContent(
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-[13px]">
+        <code key={i} className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-meta">
           {part.slice(1, -1)}
         </code>
       )
@@ -111,7 +111,7 @@ function renderContent(
           <button
             key={i}
             onClick={() => onSeekTo(ts)}
-            className="font-mono text-[13px] tabular-nums underline decoration-primary/50 underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
+            className="font-mono text-meta tabular-nums underline decoration-primary/50 underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
           >
             {formatTimestamp(ts)}
           </button>

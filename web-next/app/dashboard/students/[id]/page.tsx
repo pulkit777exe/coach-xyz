@@ -61,7 +61,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       />
       <Link
         href="/dashboard/students"
-        className="mt-4 inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground hover:underline"
+        className="mt-4 inline-flex items-center gap-1 text-meta text-muted-foreground transition-colors hover:text-foreground hover:underline"
       >
         ← Back to roster
       </Link>

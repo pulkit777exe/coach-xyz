@@ -24,7 +24,7 @@ export default function Error({
     <main id="main" tabIndex={-1} className="flex min-h-[70vh] items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm rounded-[8px] border border-border bg-card p-8 text-center">
         <TriangleAlert className="mx-auto size-10 text-muted-foreground" aria-hidden />
-        <p className="mt-3 text-[11px] font-medium tracking-wider text-destructive uppercase">
+        <p className="mt-3 text-label font-medium tracking-wider text-destructive uppercase">
           Error
         </p>
         <h1 className="mt-2 text-base font-medium text-foreground">Something went wrong</h1>

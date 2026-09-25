@@ -58,13 +58,13 @@ const NAV_DIRECT = [
   { href: '/contact', label: 'Request a demo' },
 ] as const
 
-/* Notion palette — explicit hex + dark: pairs (never --marketing-* vars). */
-const NAV_TEXT =
-  'text-[#37352f] dark:text-[#d4d4d4] hover:text-[#37352f] dark:hover:text-[#ececec]'
+/* Notion palette via semantic tokens — ink, hover fill and CTA colors all
+   resolve through globals.css (docs/DESIGN_FOUNDATIONS.md, Tokens). */
+const NAV_TEXT = 'text-foreground hover:text-foreground-strong'
 const NAV_FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 const BLUE_CTA =
-  'bg-[#2383e2] text-white hover:bg-[#1b6fb8] focus-visible:ring-ring/40'
+  'bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:ring-ring/40'
 
 function NavGroup({
   label,
@@ -88,7 +88,7 @@ function NavGroup({
           e.stopPropagation()
           onToggle()
         }}
-        className={`inline-flex h-9 items-center gap-1 rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center gap-1 rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         {label}
         <ChevronDown
@@ -100,14 +100,14 @@ function NavGroup({
         <div className="absolute top-full left-1/2 z-50 w-56 -translate-x-1/2 pt-2">
         <div
           onClick={(e) => e.stopPropagation()}
-          className="rounded-[8px] border border-[rgba(55,53,47,0.09)] bg-white p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[rgba(255,255,255,0.08)] dark:bg-[#191919] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+          className="rounded-[8px] border border-border bg-background p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
         >
             {items.map((it) => (
               <Link
                 key={it.href}
                 href={it.href}
                 onClick={onClose}
-                className={`block rounded-[6px] px-3 py-2 text-sm transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+                className={`block rounded-[6px] px-3 py-2 text-sm transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
               >
                 {it.label}
               </Link>
@@ -142,7 +142,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
       <Link
         href="/dashboard"
         onClick={() => setOpen(false)}
-        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         Dashboard
       </Link>
@@ -160,7 +160,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
       <Link
         href="/login"
         onClick={() => setOpen(false)}
-        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         Log in
       </Link>
@@ -176,16 +176,16 @@ function MarketingNav({ user }: { user: HeaderUser }) {
   )
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-[rgba(55,53,47,0.09)] bg-white dark:border-[rgba(255,255,255,0.08)] dark:bg-[#191919]">
+    <nav className="sticky top-0 z-40 border-b border-topbar-border bg-topbar">
       <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-4 px-5 lg:px-8">
         <Link
           href="/"
           className={`flex shrink-0 items-center gap-2 rounded-[6px] ${NAV_FOCUS}`}
         >
-          <span className="grid size-6 place-items-center rounded-[6px] bg-[#2383e2] text-[11px] font-bold text-white">
+          <span className="grid size-6 place-items-center rounded-[6px] bg-primary text-label font-bold text-primary-foreground">
             C
           </span>
-          <span className="text-sm font-semibold text-[#37352f] dark:text-[#ececec]">CoachXYZ</span>
+          <span className="text-sm font-semibold text-foreground-strong">CoachXYZ</span>
         </Link>
 
         {/* Center links — 14px/500 */}
@@ -204,7 +204,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
             <Link
               key={l.href}
               href={l.href}
-              className={`inline-flex h-9 items-center rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+              className={`inline-flex h-9 items-center rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
             >
               {l.label}
             </Link>
@@ -221,18 +221,18 @@ function MarketingNav({ user }: { user: HeaderUser }) {
             setOpenGroup(null)
             setOpen((v) => !v)
           }}
-          className={`inline-flex size-8 items-center justify-center rounded-[6px] text-[#37352f] transition-colors duration-150 hover:bg-[#f7f7f5] dark:text-[#d4d4d4] dark:hover:bg-[#202020] lg:hidden ${NAV_FOCUS}`}
+          className={`inline-flex size-8 items-center justify-center rounded-[6px] text-foreground transition-colors duration-150 hover:bg-muted lg:hidden ${NAV_FOCUS}`}
         >
           {open ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>
       </div>
 
       {open && (
-        <div className="border-t border-[rgba(55,53,47,0.09)] bg-white dark:border-[rgba(255,255,255,0.08)] dark:bg-[#191919] lg:hidden">
+        <div className="border-t border-topbar-border bg-topbar lg:hidden">
           <div className="mx-auto flex max-w-[1200px] flex-col px-5 py-3">
             {NAV_GROUPS.map((g) => (
               <div key={g.label} className="py-1">
-                <p className="px-2 pb-1 text-[11px] font-medium tracking-[0.08em] text-[#787774] uppercase dark:text-[#9b9b9b]">
+                <p className="px-2 pb-1 text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
                   {g.label}
                 </p>
                 {g.items.map((it) => (
@@ -240,26 +240,26 @@ function MarketingNav({ user }: { user: HeaderUser }) {
                     key={it.href}
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+                    className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
                   >
                     {it.label}
                   </Link>
                 ))}
               </div>
             ))}
-            <div className="mt-1 border-t border-[rgba(55,53,47,0.09)] pt-1 dark:border-[rgba(255,255,255,0.08)]">
+            <div className="mt-1 border-t border-topbar-border pt-1">
               {NAV_DIRECT.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-[#f7f7f5] dark:hover:bg-[#202020] ${NAV_TEXT} ${NAV_FOCUS}`}
+                  className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
                 >
                   {l.label}
                 </Link>
               ))}
             </div>
-            <div className="mt-2 flex items-center gap-2 border-t border-[rgba(55,53,47,0.09)] pt-3 dark:border-[rgba(255,255,255,0.08)]">
+            <div className="mt-2 flex items-center gap-2 border-t border-topbar-border pt-3">
               {authActions}
             </div>
           </div>
@@ -326,7 +326,7 @@ export default function HeaderClient({
               {!isPlayer && (
                 <Link
                   href="/dashboard"
-                  className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-[#2383e2] px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-[#1b6fb8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   Dashboard
                 </Link>
@@ -348,7 +348,7 @@ export default function HeaderClient({
               </a>
               <a
                 href="/auth/login?screen_hint=signup"
-                className="inline-flex h-9 items-center rounded-[6px] bg-[#2383e2] px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-[#1b6fb8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Sign up
               </a>

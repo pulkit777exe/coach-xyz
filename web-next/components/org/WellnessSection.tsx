@@ -67,13 +67,13 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
 
   return (
     <Section title="Wellness">
-      <p className="mb-4 text-[13px] leading-[1.5] text-muted-foreground">
+      <p className="mb-4 text-meta leading-[1.5] text-muted-foreground">
         Health data — visible only to medical staff and the owner. Reported as observed, never
         diagnosed.
       </p>
       <div className="space-y-3">
         {denied ? (
-          <p className="text-[14px] text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             Reading wellness data requires the medical permission.
           </p>
         ) : (
@@ -107,7 +107,7 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
                   className="h-9 tabular-nums"
                 />
                 {fatigue !== '' && (
-                  <p className="text-[13px] text-muted-foreground">
+                  <p className="text-meta text-muted-foreground">
                     {FATIGUE_LABELS[Number(fatigue)] ?? ''}
                   </p>
                 )}
@@ -133,7 +133,7 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
                 placeholder="Player-reported observation…"
               />
             </div>
-            {error && <p className="text-[13px] text-destructive">{error}</p>}
+            {error && <p className="text-meta text-destructive">{error}</p>}
             <Button size="sm" disabled={busy} onClick={submit}>
               {busy ? 'Recording…' : 'Record check-in'}
             </Button>
@@ -143,7 +143,7 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
               {(checkins ?? []).slice(0, 8).map((checkin) => (
                 <div
                   key={checkin.id}
-                  className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-[13px] last:border-b-0 hover:bg-accent/50 transition-colors"
+                  className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-meta last:border-b-0 hover:bg-accent/50 transition-colors"
                 >
                   <span className="text-muted-foreground tabular-nums">
                     {new Date(checkin.created_at).toLocaleDateString()}
@@ -163,7 +163,7 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
                 </div>
               ))}
               {checkins?.length === 0 && (
-                <p className="text-[13px] text-muted-foreground">No check-ins yet.</p>
+                <p className="text-meta text-muted-foreground">No check-ins yet.</p>
               )}
             </div>
           </>

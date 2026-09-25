@@ -192,7 +192,7 @@ export default function StudentFormDialog({
                 value={values.email ?? ''}
                 onChange={(e) => set('email', e.target.value)}
               />
-              <p className="text-muted-foreground text-[13px]">
+              <p className="text-muted-foreground text-meta">
                 Use the student’s login email to auto-link their player account.
               </p>
             </div>
@@ -347,7 +347,7 @@ export default function StudentFormDialog({
             />
           </div>
 
-          {error && <p className="text-[13px] text-destructive">{error}</p>}
+          {error && <p className="text-meta text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>

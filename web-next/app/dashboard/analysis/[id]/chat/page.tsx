@@ -42,19 +42,19 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
       <div className="mb-6 flex items-center gap-4">
         <Link
           href={`/dashboard/analysis/${id}`}
-          className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors"
+          className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground transition-colors"
         >
           &larr; Back to Analysis
         </Link>
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           History
         </span>
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
-        <span className="max-w-48 truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
+        <span className="max-w-48 truncate text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {chatLabel}
         </span>
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
-        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-foreground">Chat</span>
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-foreground">Chat</span>
       </div>
       <div className="rounded-[6px] border border-border" style={{ height: 'calc(100% - 3rem)' }}>
         <HistoryChat auth0Id={auth0Id} jobId={id} summary={summary} />

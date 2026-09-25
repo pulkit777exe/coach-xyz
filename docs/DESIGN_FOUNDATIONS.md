@@ -7,6 +7,51 @@ are **9ui** (structural primitives) and **interior.dev**
 (micro-interactions). Rules below derive from the `better-typography` skill
 (see "Verification" for what was and wasn't machine-checked).
 
+## Tokens — color SSOT
+
+`app/globals.css` is the only place raw color values may live: light on
+`:root`, dark on `.dark`, surfaced to Tailwind via `@theme inline`. Groups:
+
+| Group      | Tokens                                                                          | Notes                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Surfaces   | `background`, `card`, `popover`, `muted`, `sidebar`, `topbar`                   | one token per structural surface                                                                        |
+| Ink        | `foreground`, `foreground-strong`, `muted-foreground`                           | strong = emphasis ink (`#ececec` in dark) — marketing headings/bold run one step hotter than body ink   |
+| Brand      | `primary` (+ `-hover`), `link`, `score`                                         | `link` is the text-blue (`#2383e2` light / `#4da3ec` dark); fills and dots use `primary` in both themes |
+| Borders    | `border`, `input`, `border-hover`, `sidebar-border`, `topbar-border`            | hairline ladder; topbar/sidebar carry their own exact hairlines                                         |
+| Hover fill | `accent`, `surface-hover`, `fill-quiet`, `fill-quiet-hover`                     | `surface-hover` = card hover fill (`#fafafa` / `#1e1e1e`); quiet fills are the ⌘K search affordance     |
+| States     | `danger` / `warning` / `info` / `success` (+ `-foreground`, `-border`), `check` | badges, banners, denied/empty states; `check` = static tick green (identical both themes)               |
+| Charts     | `chart-1…5`                                                                     | data-viz only                                                                                           |
+
+Call-site rules:
+
+- **No hex/rgba colors in `.tsx`.** Allowed literals: shadow specifications
+  and media/canvas drawing (e.g. `VideoPlayer` score fills — media-space, not
+  theme-space).
+- **Never hand-write a `dark:` pair.** If a value differs by theme it is a
+  token; if the pair has no token yet, add one value-exact (that is how
+  `link`, `foreground-strong`, `surface-hover` and `border-hover` landed).
+- **Resting states stay pixel-exact — sole exceptions: the hairline
+  reconciliations below, all ≤ 5/255 alpha; interactive states unify on the
+  hover ladder.** Documented reconciliations from the hex migration:
+  `#1b6fb8` hand-rolled CTA hovers (background **and text**) →
+  `--primary-hover` — light becomes #1a73c9 (Δ17/255) and dark flips from
+  #1b6fb8 to #4a94e0, so both themes hover like every 9ui Button (the
+  hand-rolled hover had no `dark:` variant); border hairlines move ≤
+  5/255 alpha (marketing dark `.08` → `border` `.09`, outline-button dark
+  `.15` → `input` `.14`); blog card hover `.20/.18` → `border-hover`
+  `.18/.16`.
+- Tinted blue (pills, icon chips) is `primary` at opacity, never `link` —
+  `primary` is identical in both themes, so `/10` `/20` `/30` mods never
+  shift between light and dark.
+- The legacy `--marketing-*` alias layer was deleted (zero call sites);
+  semantic tokens are the safety net.
+- Color migration status (round 10, 2026-09-25): **zero** raw hex/rgba
+  classes remain in first-party `web-next/**.tsx` — marketing was the last
+  holdout (~360 substitutions this round, on top of the earlier app/dashboard
+  sweep). Remaining literal colors are exactly the allowed cases above,
+  plus token opacity halves like `dark:bg-white/8` (`white` is a theme
+  color, not a leftover).
+
 ## Typography
 
 Notion pixel-matched, light + dark. Faces via `next/font` (self-hosted woff2):
@@ -26,6 +71,24 @@ renders italic — never let the browser synthesize it), JetBrains Mono 400/500.
 | 13px           | breadcrumb, section heading, meta   | `PageHeader` / `SectionHeading` |
 | 12px           | captions, stat meta                 | `StatTiles`                     |
 | 11px uppercase | metric labels, `tracking-[0.08em]`  | `metricLabelClass`              |
+
+### Semantic size utilities
+
+Six **font-size-only** utilities in `globals.css` (`@utility`, driven by the
+`--text-*` vars): `text-label` (11px), `text-caption` (12px), `text-meta`
+(13px), `text-body` (14px), `text-title` (15px), `text-lead` (16px). They
+emit font-size alone — line-height, weight and tracking stay per the rules
+below at the call site, so `text-meta` is pixel-identical to `text-[13px]`
+while the scale itself moves from one place. Prefer them over `text-[Npx]`
+whenever the size is one of the six; pinned by
+`lib/__tests__/typeScale.test.ts`. Sizes outside the six (28–40px headings,
+56/68px marketing display) stay bespoke in the components that own them
+(`PageHeader`, `StatTiles`, hero sections), and vendored files
+(`components/9ui/**`, `components/interior/**`) stay registry-faithful and
+keep their own sizes. Round 10 adopted them first-party-wide — **538
+swaps** (430 core + 108 marketing/settings tail); the only literal
+`text-[Npx]` left in the repo are vendored `components/interior/**` (16)
+and comment references.
 
 ### Rules
 
@@ -60,8 +123,8 @@ wrapping) — do it before calling a surface final.
 
 Base UI + Tailwind, copy-paste, themed entirely by our semantic tokens.
 
-- **Vendored (14)**: avatar, badge, button, card, chart, checkbox, dialog,
-  dropdown-menu, input, label, select, sonner, switch, textarea.
+- **Vendored (15)**: avatar, badge, button, card, chart, checkbox, dialog,
+  dropdown-menu, input, label, select, skeleton, sonner, switch, textarea.
   Usage leaders: `button` (×48), `input` (×19), `label`/`dialog` (×17),
   `select` (×11).
 - **Offered, not yet vendored**: accordion, alert, alert-dialog, aspect-ratio,
@@ -69,14 +132,15 @@ Base UI + Tailwind, copy-paste, themed entirely by our semantic tokens.
   command, context-menu, date-picker, drawer, emoji-picker, form, input-otp,
   kbd, menubar, meter, navigation-menu, number-field, pagination, phone-input,
   popover, preview-card, progress, radio-group, resizable, scroll-area, sheet,
-  skeleton, slider, table, tabs, toast, toggle, toggle-group, toolbar,
+  slider, table, tabs, toast, toggle, toggle-group, toolbar,
   tooltip.
 - **Rule**: never hand-roll a primitive 9ui offers. Vendor it
   (`npx shadcn@latest add @9ui/<name>`, output into `components/9ui/ui/` —
   never legacy `components/ui/`) and theme through tokens only.
-- **Next to vendor**: `skeleton` (loading states in `MobileNavDrawer`,
-  `StudentProfile`, `SettingsClient` are ad-hoc today), `tooltip` (generic
-  hints). Bespoke overlays in `PerformanceChart` / `VideoPlayer` are
+- **Next to vendor**: `tooltip` (generic hints). Loading states use the
+  vendored `skeleton` (`org/StudentProfile` chart fallback); spinners and
+  em-dash placeholders are deliberate choices in `SettingsClient` and stay.
+  Bespoke overlays in `PerformanceChart` / `VideoPlayer` are
   chart/player-specific and stay hand-rolled.
 
 ### interior.dev — micro-interactions (`components/interior/`)
@@ -105,6 +169,7 @@ Navigation, Scroll, Data, Gesture, Content.
 | Menus (account, org switcher)                | 9ui `dropdown-menu` (the shared pattern)                                      |
 | Loading button, progress, hold-to-confirm,   | interior                                                                      |
 | copy, segmented control                      |                                                                               |
+| Content placeholder while data loads         | 9ui `skeleton` (never a hand-rolled pulsing div)                              |
 | Theming                                      | semantic tokens only (`bg-card`, `border-border`, `text-muted-foreground`, …) |
 
 ## Motion
@@ -142,12 +207,25 @@ source; pinned in `lib/__tests__/permissions.test.ts`.
 
 ### States contract (every data surface)
 
-1. **Loading** — skeleton or progress (9ui `skeleton` once vendored;
-   interior `progress-bar` for async jobs).
+1. **Loading** — skeleton or progress (9ui `skeleton` for content
+   placeholders; interior `progress-bar` for async jobs).
 2. **Empty** — `EmptyState` describing the page's purpose + a role-gated CTA
    (`action` prop) when the role may act (students/teams/reports do this).
 3. **Error** — inline banner or error text; never a blank card.
 4. **Denied** — `AccessDenied`, in the page gate, before fetching.
+
+## Surfaces & flows (what the foundation serves)
+
+| Flow               | Surfaces                                                                 | Foundation in play                                                                                   |
+| ------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Discover → sign up | `/`, `/pricing`, `/features`, `/blog`, `/login`, `/signup` (topbar only) | theme-aware token pairs, CTA ladder `primary → primary-hover`, bespoke display type (26–68px)        |
+| Coach work session | `/dashboard/*` — sidebar shell, tables, dialogs, forms                   | 9ui primitives, `tabular-nums` metrics, states contract, `dashboardQuickActions(role)` gating        |
+| Player session     | `/player` — topbar-only shell (no org pill, no Dashboard CTA)            | `PlayerHub` + interior `progress-bar`, analyze CTA                                                   |
+| Analysis run       | upload → `AnalysisProgress` → `ResultsSummary` → `VideoPlayer` → chat    | interior `progress-bar`/`loading-button`, `--dur-*` motion, media-space colors (player overlay only) |
+| Report & share     | org reports → email → `/share/[token]` (read-only, shell-less)           | same tokens without sidebar/topbar; `background` surface reads light in print-like contexts          |
+
+Every flow lands on a themed, tokenized surface; no flow has its own color
+vocabulary.
 
 ## Verification
 

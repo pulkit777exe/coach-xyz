@@ -244,18 +244,18 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
             {details.title}
           </h1>
 
-          <p className="text-[14px] text-muted-foreground mb-2">{details.description}</p>
+          <p className="text-body text-muted-foreground mb-2">{details.description}</p>
 
           {details.action && (
-            <p className="text-[14px] text-muted-foreground mb-2">{details.action}</p>
+            <p className="text-body text-muted-foreground mb-2">{details.action}</p>
           )}
 
-          <p className="text-[13px] text-muted-foreground/60 mb-8 tabular-nums">
+          <p className="text-meta text-muted-foreground/60 mb-8 tabular-nums">
             Error: {error.code} | Layer: {error.layer}
           </p>
 
           {countdown !== null && (
-            <p className="text-[14px] text-foreground mb-4 tabular-nums animate-pulse">
+            <p className="text-body text-foreground mb-4 tabular-nums animate-pulse">
               Retrying in {countdown} seconds...
             </p>
           )}
@@ -265,7 +265,7 @@ export default function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
               {countdown !== null ? `Wait ${countdown}s...` : 'Try Again'}
             </Button>
           ) : (
-            <p className="text-[14px] text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               This error cannot be retried. Please{' '}
               <a
                 href="mailto:help@coachxyz.app"

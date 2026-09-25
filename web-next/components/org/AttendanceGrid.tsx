@@ -345,12 +345,12 @@ export default function AttendanceGrid({
   if (roster.length === 0) {
     return (
       <div className="border-border bg-card rounded-[6px] border p-16 text-center">
-        <p className="mb-2 text-[14px] text-muted-foreground">
+        <p className="mb-2 text-body text-muted-foreground">
           Add students to your roster before marking attendance.
         </p>
         <Link
           href="/dashboard/students"
-          className="text-[13px] text-primary transition-colors hover:text-primary hover:underline"
+          className="text-meta text-primary transition-colors hover:text-primary hover:underline"
         >
           Go to roster →
         </Link>
@@ -385,12 +385,12 @@ export default function AttendanceGrid({
             Today
           </Button>
         </div>
-        <p className="text-[16px] font-semibold text-foreground">
+        <p className="text-lead font-semibold text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
         </p>
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 text-[13px] sm:flex">
+          <div className="hidden items-center gap-3 text-meta sm:flex">
             {STATUSES.map((s) => (
               <span key={s} className="flex items-center gap-1.5 text-muted-foreground">
                 <span
@@ -411,10 +411,10 @@ export default function AttendanceGrid({
       </div>
 
       <div className="border-border overflow-x-auto rounded-[6px] border">
-        <table className="w-full text-[14px]">
+        <table className="w-full text-body">
           <thead>
             <tr className="border-b border-border">
-              <th className="sticky left-0 z-10 bg-background/95 px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <th className="sticky left-0 z-10 bg-background/95 px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Student
               </th>
               {days.map((d) => {
@@ -457,7 +457,7 @@ export default function AttendanceGrid({
                   </th>
                 )
               })}
-              <th className="px-3 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <th className="px-3 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Month
               </th>
             </tr>
@@ -474,7 +474,7 @@ export default function AttendanceGrid({
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
                       <span className="truncate font-medium text-foreground">{s.full_name}</span>
                       {s.sport ? (
-                        <span className="text-muted-foreground ml-1 truncate text-[13px]">
+                        <span className="text-muted-foreground ml-1 truncate text-meta">
                           {s.sport}
                         </span>
                       ) : null}
@@ -497,7 +497,7 @@ export default function AttendanceGrid({
                               : 'Click to mark present'
                           }
                           disabled={savingKey === k}
-                          className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-[11px] font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40"
+                          className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40"
                           style={
                             meta
                               ? {
@@ -526,7 +526,7 @@ export default function AttendanceGrid({
                   })}
                   <td className="px-3 py-1.5 text-right">
                     <span
-                      className="text-[13px] tabular-nums text-muted-foreground"
+                      className="text-meta tabular-nums text-muted-foreground"
                       title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}
                     >
                       {counts.present}/{daysInMonth}
@@ -538,7 +538,7 @@ export default function AttendanceGrid({
           </tbody>
         </table>
       </div>
-      <p className="text-muted-foreground mt-3 text-[13px]">
+      <p className="text-muted-foreground mt-3 text-meta">
         Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
         mark the day or add per-student notes.
       </p>
@@ -579,7 +579,7 @@ export default function AttendanceGrid({
                 const st = records.get(k)
                 return (
                   <div key={s.id} className="grid gap-1.5">
-                    <div className="flex items-center gap-2 text-[14px]">
+                    <div className="flex items-center gap-2 text-body">
                       <select
                         value={statusDraft[s.id] ?? ''}
                         onChange={(e) => {
@@ -591,7 +591,7 @@ export default function AttendanceGrid({
                             return next
                           })
                         }}
-                        className={`h-7 rounded-[6px] border px-1.5 text-[11px] font-semibold ${
+                        className={`h-7 rounded-[6px] border px-1.5 text-label font-semibold ${
                           st
                             ? 'text-background'
                             : 'text-muted-foreground border-border/60 bg-transparent'
@@ -614,7 +614,7 @@ export default function AttendanceGrid({
                         ))}
                       </select>
                       <span className="text-foreground">{s.full_name}</span>
-                      {!st && <span className="text-muted-foreground text-[13px]">not yet marked</span>}
+                      {!st && <span className="text-muted-foreground text-meta">not yet marked</span>}
                     </div>
                     <Input
                       value={noteDraft[s.id] ?? ''}
@@ -622,7 +622,7 @@ export default function AttendanceGrid({
                         setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
                       }
                       placeholder="Add a note (e.g. injured, arrived late)…"
-                      className="h-8 text-[14px]"
+                      className="h-8 text-body"
                     />
                   </div>
                 )

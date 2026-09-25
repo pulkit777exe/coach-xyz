@@ -49,12 +49,12 @@ type Result = { key: string; label: string; hint: string; href: string; icon: 'p
 
 /**
  * Notion search trigger: 32px inset field, 14px muted placeholder, kbd chip
- * right. Inset fill is not a token — explicit light/dark rgba pair.
+ * right. Inset fill = the quiet-fill tokens (globals: --fill-quiet / -hover).
  */
 const TRIGGER_CLASS =
-  'mb-2 flex h-8 w-full items-center gap-2 rounded-[6px] bg-[rgba(55,53,47,0.06)] px-2 text-left text-sm text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-[rgba(55,53,47,0.09)] focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] dark:bg-[rgba(255,255,255,0.06)] dark:hover:bg-[rgba(255,255,255,0.09)]'
+  'mb-2 flex h-8 w-full items-center gap-2 rounded-[6px] bg-fill-quiet px-2 text-left text-sm text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-fill-quiet-hover focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 const KBD_CHIP_CLASS =
-  'shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 text-[11px] leading-none font-medium text-muted-foreground'
+  'shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 text-label leading-none font-medium text-muted-foreground'
 /** Panel: radius 8 + hairline; enter 200ms opacity+scale(.98→1) ease-out, exit 150ms ease-in. */
 const PANEL_CLASS =
   'max-w-lg gap-0! rounded-[8px]! border border-border bg-popover p-0! shadow-lg duration-200! ease-[cubic-bezier(0.23,1,0.32,1)]! data-starting-style:scale-[0.98]! data-ending-style:duration-150! data-ending-style:ease-in! data-ending-style:scale-[0.98]!'
@@ -238,7 +238,7 @@ export default function SidebarSearch({
                       />
                     )}
                     <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground/60">{r.hint}</span>
+                    <span className="shrink-0 text-label text-muted-foreground/60">{r.hint}</span>
                   </button>
                 </li>
               ))

@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
+import { Skeleton } from '@/components/9ui/ui/skeleton'
 import dynamic from 'next/dynamic'
 import {
   Dialog,
@@ -83,9 +84,8 @@ const STATUS_STYLE: Record<string, string> = {
 
 const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
-  // Static block, not a shimmer — the chart chunk lands in one frame; a
-  // pulsing skeleton only adds visual noise under it.
-  loading: () => <div className="aspect-[16/7] w-full rounded-[6px] bg-muted" />,
+  // Aspect box while the chart chunk lands — sized by the Skeleton.
+  loading: () => <Skeleton className="aspect-[16/7] w-full rounded-[6px]" />,
 })
 
 const METRIC_COLORS = [
@@ -436,13 +436,13 @@ export default function StudentProfile({
                 {student_.status}
               </span>
             </div>
-            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px]">
+            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body">
               {student_.sport && <span>{student_.sport}</span>}
               {student_.position && <span>{student_.position}</span>}
               {student_.jersey_number && <span>#{student_.jersey_number}</span>}
               {student_.gender && <span className="capitalize">{student_.gender}</span>}
             </div>
-            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
+            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-meta">
               {student_.email && (
                 <span className="flex items-center gap-1.5">
                   <MailIcon className="size-3" /> {student_.email}
@@ -496,7 +496,7 @@ export default function StudentProfile({
 
       {/* Profile details */}
       <div className="mt-8">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Profile Details
         </p>
         <div className="border-border bg-card grid gap-px rounded-[6px] border sm:grid-cols-2">
@@ -508,8 +508,8 @@ export default function StudentProfile({
           <DetailRow label="Guardian" value={student_.guardian_name || '—'} />
           <DetailRow label="Guardian phone" value={student_.guardian_phone || '—'} />
           <div className="border-border border-t p-4 sm:col-span-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Notes</p>
-            <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-[14px]">
+            <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Notes</p>
+            <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-body">
               {student_.notes || 'No notes recorded.'}
             </p>
           </div>
@@ -518,13 +518,13 @@ export default function StudentProfile({
 
       {/* Attendance summary */}
       <div className="mt-8">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Attendance Overview
         </p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {attStats.map((s) => (
             <div key={s.label} className="rounded-[6px] border border-border bg-card p-5">
-              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 <span
                   className="inline-block size-1.5 rounded-full"
                   style={{ backgroundColor: s.color }}
@@ -538,7 +538,7 @@ export default function StudentProfile({
             </div>
           ))}
           <div className="rounded-[6px] border border-border bg-card p-5">
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Attendance Rate
             </p>
             <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums text-foreground">
@@ -551,7 +551,7 @@ export default function StudentProfile({
       {/* Performance chart */}
       <div className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Performance Trend
           </p>
           {keys.length > 1 && (
@@ -573,7 +573,7 @@ export default function StudentProfile({
             <PerformanceChart data={chartData} config={chartConfig} keys={shownKeys} />
           ) : (
             <div className="flex h-40 items-center justify-center">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 No performance metrics yet — log one below
               </p>
             </div>
@@ -601,7 +601,7 @@ export default function StudentProfile({
           {canWrite && (
           <div className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_key" className="text-[14px] font-medium">
+              <Label htmlFor="metric_key" className="text-body font-medium">
                 Metric
               </Label>
               <Input
@@ -614,7 +614,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_value" className="text-[14px] font-medium">
+              <Label htmlFor="metric_value" className="text-body font-medium">
                 Value *
               </Label>
               <Input
@@ -627,7 +627,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_unit" className="text-[14px] font-medium">
+              <Label htmlFor="metric_unit" className="text-body font-medium">
                 Unit
               </Label>
               <Input
@@ -639,7 +639,7 @@ export default function StudentProfile({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="metric_at" className="text-[14px] font-medium">
+              <Label htmlFor="metric_at" className="text-body font-medium">
                 Date
               </Label>
               <Input
@@ -732,7 +732,7 @@ export default function StudentProfile({
 
       {/* Trends summary */}
       <div className="mt-8">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Performance Trends
         </p>
         {trends.length === 0 ? (
@@ -745,20 +745,20 @@ export default function StudentProfile({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {trends.map((t) => (
               <div key={t.metric_key} className="rounded-[6px] border border-border bg-card p-5">
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   {formatKey(t.metric_key)}
                 </p>
                 <p className="text-foreground mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums">
                   {t.latest ?? '—'}
                   {t.points[0]?.unit ? (
-                    <span className="text-muted-foreground text-[13px] font-normal"> {t.points[0].unit}</span>
+                    <span className="text-muted-foreground text-meta font-normal"> {t.points[0].unit}</span>
                   ) : null}
                 </p>
-                <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-[13px]">
+                <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-meta">
                   <span className="tabular-nums">avg {t.avg ?? '—'}</span>
                   <TrendDelta change={t.change} />
                 </div>
-                <p className="text-muted-foreground mt-1 text-[13px] tabular-nums">
+                <p className="text-muted-foreground mt-1 text-meta tabular-nums">
                   {t.points.length} point(s)
                 </p>
               </div>
@@ -770,7 +770,7 @@ export default function StudentProfile({
       {/* Compare with teammates */}
       <div className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Compare with Teammates
           </p>
           <div className="flex items-center gap-2">
@@ -814,7 +814,7 @@ export default function StudentProfile({
                     key={s.id}
                     type="button"
                     onClick={() => toggleCompare(s.id)}
-                    className={`rounded-[6px] border border-border px-2.5 py-1 text-[13px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    className={`rounded-[6px] border border-border px-2.5 py-1 text-meta transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                       selected
                         ? 'border-transparent bg-accent text-foreground'
                         : 'text-muted-foreground border-border hover:text-foreground'
@@ -853,7 +853,7 @@ export default function StudentProfile({
       {/* Linked analyses */}
       <div className="mt-8">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Linked Analyses
           </p>
           {unlinked.length > 0 && canWrite && (
@@ -877,19 +877,19 @@ export default function StudentProfile({
           </div>
         ) : (
           <div className="border-border overflow-hidden rounded-[6px] border">
-            <table className="w-full text-[14px]">
+            <table className="w-full text-body">
               <thead>
                   <tr className="border-b border-border">
-                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Analysis
                     </th>
-                    <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Date
                     </th>
-                    <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                    <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                       Form
                     </th>
-                    <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Action
                     </th>
                   </tr>
@@ -900,7 +900,7 @@ export default function StudentProfile({
                       key={a.server_job_id}
                       className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50"
                     >
-                      <td className="px-4 py-2.5 text-[14px]">
+                      <td className="px-4 py-2.5 text-body">
                         <Link
                           href={`/dashboard/analysis/${a.server_job_id}`}
                           className="hover:underline"
@@ -908,14 +908,14 @@ export default function StudentProfile({
                           {a.display_name || a.file_name || 'Untitled video'}
                         </Link>
                       </td>
-                      <td className="px-4 py-2.5 text-[14px] text-muted-foreground">
+                      <td className="px-4 py-2.5 text-body text-muted-foreground">
                         {new Date(a.requested_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
                         })}
                       </td>
-                      <td className="hidden px-4 py-2.5 text-[14px] tabular-nums md:table-cell">
+                      <td className="hidden px-4 py-2.5 text-body tabular-nums md:table-cell">
                         {analysisScore(a) ?? '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -940,7 +940,7 @@ export default function StudentProfile({
 
       {/* Reports */}
       <div className="mt-8">
-        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           Reports
         </p>
         {reports.length === 0 ? (
@@ -959,7 +959,7 @@ export default function StudentProfile({
               {reports.map((r) => (
                 <li
                   key={r.id}
-                  className="hover:bg-accent/50 border-b border-border flex items-center justify-between gap-3 px-4 py-2.5 text-[14px] transition-colors duration-150 last:border-b-0"
+                  className="hover:bg-accent/50 border-b border-border flex items-center justify-between gap-3 px-4 py-2.5 text-body transition-colors duration-150 last:border-b-0"
                 >
                   <Link
                     href={`/dashboard/reports/${r.id}`}
@@ -1044,8 +1044,8 @@ export default function StudentProfile({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-border border-t p-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      <p className="text-foreground mt-1 text-[14px]">{value}</p>
+      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-foreground mt-1 text-body">{value}</p>
     </div>
   )
 }
@@ -1063,7 +1063,7 @@ function MetricPill({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[6px] border border-border px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+      className={`rounded-[6px] border border-border px-2.5 py-1 text-label font-medium uppercase tracking-[0.08em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
         active
           ? 'border-transparent bg-accent text-foreground'
           : 'text-muted-foreground hover:text-foreground'

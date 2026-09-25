@@ -77,12 +77,12 @@ function MemberRow({ member }: { member: OrgMember }) {
   const name = member.display_name ?? member.member_email ?? 'Member'
   return (
     <li className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
-      <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-[11px] font-medium text-muted-foreground">
+      <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-label font-medium text-muted-foreground">
         {initials(name)}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{name}</p>
-        <p className="truncate text-[13px] text-muted-foreground">
+        <p className="truncate text-meta text-muted-foreground">
           {member.member_email ?? 'No email on file'}
         </p>
       </div>

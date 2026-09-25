@@ -75,7 +75,7 @@ function StepCard({ n, title, body }: { n: string; title: string; body: string }
         {n}
       </span>
       <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{body}</p>
+      <p className="mt-1.5 text-meta leading-relaxed text-muted-foreground">{body}</p>
     </div>
   )
 }
@@ -84,7 +84,7 @@ function ShortcutRow({ label, combo }: { label: string; combo: string }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
       <span className="text-sm text-foreground">{label}</span>
-      <kbd className="rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+      <kbd className="rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-label text-muted-foreground">
         {combo}
       </kbd>
     </div>
@@ -133,7 +133,7 @@ export default async function HelpPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] bg-muted p-5">
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">Still stuck?</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+              <p className="mt-1 text-meta leading-relaxed text-muted-foreground">
                 The support page lists every way to reach the CoachXYZ team.
               </p>
             </div>

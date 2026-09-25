@@ -51,7 +51,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
   return (
     <div className="rounded-[6px] border border-border bg-card">
       <div className="px-5 pt-4 pb-2">
-        <h3 className="text-[13px] font-medium text-muted-foreground">
+        <h3 className="text-meta font-medium text-muted-foreground">
           Key findings · <span className="tabular-nums">{findings.length}</span>
         </h3>
       </div>
@@ -80,28 +80,28 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <TimestampPill seconds={seconds} />
                     <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${severityClass}`}
+                      className={`text-label font-medium px-2 py-0.5 rounded-full ${severityClass}`}
                     >
                       {finding.severity ?? 'medium'}
                     </span>
-                    <span className="text-[12px] text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band}
                     </span>
                     {state === 'needs_review' && (
-                      <span className="text-[12px] font-medium text-warning">Needs review</span>
+                      <span className="text-caption font-medium text-warning">Needs review</span>
                     )}
                     {state === 'approved' && (
-                      <span className="text-[12px] font-medium text-primary">Approved</span>
+                      <span className="text-caption font-medium text-primary">Approved</span>
                     )}
                     {state === 'flagged' && (
-                      <span className="text-[12px] font-medium text-destructive">Flagged</span>
+                      <span className="text-caption font-medium text-destructive">Flagged</span>
                     )}
                   </div>
-                  <p className="text-[14px] text-foreground leading-snug capitalize">
+                  <p className="text-body text-foreground leading-snug capitalize">
                     {(finding.category ?? 'technique').replace(/_/g, ' ')}
                   </p>
                   {finding.observation && (
-                    <p className="text-[13px] text-muted-foreground leading-[1.5] mt-0.5">
+                    <p className="text-meta text-muted-foreground leading-[1.5] mt-0.5">
                       {finding.observation}
                     </p>
                   )}
@@ -111,7 +111,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 rounded-[6px] text-[12px] font-medium"
+                      className="h-7 rounded-[6px] text-caption font-medium"
                       disabled={isPending}
                       onClick={() => review(finding.id, 'approved')}
                     >
@@ -120,7 +120,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 rounded-[6px] text-[12px] font-medium text-destructive border-destructive/30"
+                      className="h-7 rounded-[6px] text-caption font-medium text-destructive border-destructive/30"
                       disabled={isPending}
                       onClick={() => review(finding.id, 'flagged')}
                     >

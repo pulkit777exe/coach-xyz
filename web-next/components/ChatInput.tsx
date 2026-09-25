@@ -55,7 +55,7 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         placeholder={placeholder}
         rows={1}
         maxLength={2000}
-        className="flex-1 resize-none rounded-[8px] border border-border bg-background px-4 py-2.5 text-[14px] text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+        className="flex-1 resize-none rounded-[8px] border border-border bg-background px-4 py-2.5 text-body text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
       />
       <button
         onClick={handleSubmit}

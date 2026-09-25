@@ -70,6 +70,16 @@
   --dur-base: 180ms;
   --dur-slow: 240ms;
 
+  /* type scale — semantic role names for the documented sizes
+     (docs/DESIGN_FOUNDATIONS.md §Typography). font-size only: line-height,
+     weight and tracking stay per the typography rules at the call site. */
+  --text-label: 11px;
+  --text-caption: 12px;
+  --text-meta: 13px;
+  --text-body: 14px;
+  --text-title: 15px;
+  --text-lead: 16px;
+
   --background: #ffffff;
   --foreground: #37352f;
   --card: #ffffff;
@@ -120,39 +130,22 @@
   --success: #0f7b6c;
   --success-foreground: #ffffff;
   --success-border: rgba(15, 123, 108, 0.25);
+  /* static check-mark green — theme-invariant so icons read identically */
+  --check: #0f7b6c;
   --score: #2383e2;
+
+  /* brand text + emphasis ink — exact values call sites hand-wrote as
+     light/dark hex pairs (the link blue brightens in dark; marketing ink
+     runs one step hotter than body ink). See docs/DESIGN_FOUNDATIONS.md. */
+  --link: #2383e2;
+  --foreground-strong: #37352f;
+  --surface-hover: #fafafa;
+  --border-hover: rgba(55, 53, 47, 0.18);
+  --fill-quiet: rgba(55, 53, 47, 0.06);
+  --fill-quiet-hover: rgba(55, 53, 47, 0.09);
 
   /* stacked dialogs scale back; default 0 so var() always resolves */
   --nested-dialogs: 0;
-
-  /* legacy aliases → repointed to Notion equivalents (stale usages stay safe) */
-  --bg: var(--background);
-  --fg: var(--foreground);
-  --cream-40: var(--muted-foreground);
-  --cream-20: var(--border);
-  --cream-10: var(--border);
-  --cream-05: var(--muted);
-  --cream-03: var(--card);
-  --red: var(--destructive);
-
-  /* marketing — theme-aware safety net (no longer always-dark; call sites
-     migrate to semantic tokens, these keep stale usages harmless) */
-  --marketing-dark: var(--background);
-  --marketing-dark-card: var(--muted);
-  --marketing-light: var(--background);
-  --marketing-beige: var(--foreground);
-  --marketing-brown: var(--foreground);
-  --marketing-white: var(--card);
-  --marketing-lime: var(--primary);
-  --marketing-green: #0f7b6c;
-  --marketing-rust: #e03e3e;
-  --marketing-hero: var(--background);
-  --marketing-glow-lime: transparent;
-  --marketing-glow-purple: transparent;
-  --marketing-purple: var(--primary);
-  --marketing-purple-light: var(--primary);
-  --marketing-orange: #d9730d;
-  --marketing-violet: #337ea9;
 }
 
 /* ── Dark — Notion night mode: #191919 canvas, #202020 surfaces,
@@ -208,26 +201,15 @@
   --success: #4d9078;
   --success-foreground: #ffffff;
   --success-border: rgba(77, 144, 120, 0.35);
+  --check: #0f7b6c;
   --score: #2383e2;
 
-  /* marketing — theme-aware safety net (same re-pointers as light;
-     they resolve through the dark tokens above) */
-  --marketing-dark: var(--background);
-  --marketing-dark-card: var(--muted);
-  --marketing-light: var(--background);
-  --marketing-beige: var(--foreground);
-  --marketing-brown: var(--foreground);
-  --marketing-white: var(--card);
-  --marketing-lime: var(--primary);
-  --marketing-green: #0f7b6c;
-  --marketing-rust: #e03e3e;
-  --marketing-hero: var(--background);
-  --marketing-glow-lime: transparent;
-  --marketing-glow-purple: transparent;
-  --marketing-purple: var(--primary);
-  --marketing-purple-light: var(--primary);
-  --marketing-orange: #d9730d;
-  --marketing-violet: #337ea9;
+  --link: #4da3ec;
+  --foreground-strong: #ececec;
+  --surface-hover: #1e1e1e;
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --fill-quiet: rgba(255, 255, 255, 0.06);
+  --fill-quiet-hover: rgba(255, 255, 255, 0.09);
 }
 
 @theme inline {
@@ -267,6 +249,7 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-border: var(--success-border);
+  --color-check: var(--check);
   --color-score: var(--score);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -274,6 +257,38 @@
   --color-topbar: var(--topbar);
   --color-topbar-foreground: var(--topbar-foreground);
   --color-topbar-border: var(--topbar-border);
+  --color-link: var(--link);
+  --color-foreground-strong: var(--foreground-strong);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-hover: var(--border-hover);
+  --color-fill-quiet: var(--fill-quiet);
+  --color-fill-quiet-hover: var(--fill-quiet-hover);
+  /* hover ladder for bg-primary — 9ui buttons reference --primary-hover via
+     arbitrary var(); the utility class needs the color mapping too */
+  --color-primary-hover: var(--primary-hover);
+}
+
+/* ── Type-scale utilities — semantic names for the documented scale ──────
+   Font-size ONLY (line-height keeps inheriting): `text-meta` ≡ `text-[13px]`
+   pixel-for-pixel, while the scale itself moves from one place (--text-*
+   above). Adoption is opt-in; the px sizes stay in globals, never in tsx. */
+@utility text-label {
+  font-size: var(--text-label);
+}
+@utility text-caption {
+  font-size: var(--text-caption);
+}
+@utility text-meta {
+  font-size: var(--text-meta);
+}
+@utility text-body {
+  font-size: var(--text-body);
+}
+@utility text-title {
+  font-size: var(--text-title);
+}
+@utility text-lead {
+  font-size: var(--text-lead);
 }
 
 /* ── Shared surfaces — neutral Notion panels (no glass, no purple) ──────
@@ -312,7 +327,7 @@
 }
 
 /* Hero band: the page surface itself — light plain white, dark #191919
-   (no radial gradients; --marketing-hero resolves to --background). */
+   (no radial gradients; it resolves to the canvas token). */
 .marketing-hero {
   background: var(--background);
 }

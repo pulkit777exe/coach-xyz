@@ -30,17 +30,17 @@ export default function ReportBody({
   const order = TYPE_ORDER[report.report_type] ?? TYPE_ORDER.progress
 
   if (!c) {
-    return <p className="text-muted-foreground text-[14px]">This report has no content.</p>
+    return <p className="text-muted-foreground text-body">This report has no content.</p>
   }
 
   return (
-    <div className="space-y-5 text-[14px]">
+    <div className="space-y-5 text-body">
       {showGenerated &&
         (() => {
           const gen = c.generated_at
           if (!gen) return null
           return (
-            <p className="text-muted-foreground text-[13px] tabular-nums">
+            <p className="text-muted-foreground text-meta tabular-nums">
               Generated{' '}
               {new Date(gen).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
             </p>
@@ -48,7 +48,7 @@ export default function ReportBody({
         })()}
 
       {c.period?.label && c.period.label !== 'All time' && (
-        <p className="text-muted-foreground text-[13px]">{c.period.label}</p>
+        <p className="text-muted-foreground text-meta">{c.period.label}</p>
       )}
 
       {order.map((k) => {
@@ -67,7 +67,7 @@ export default function ReportBody({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-[0.08em]">{title}</p>
+      <p className="text-muted-foreground mb-2 text-label font-medium uppercase tracking-[0.08em]">{title}</p>
       {children}
     </div>
   )
@@ -78,7 +78,7 @@ function StatCells({ items }: { items: [string, string][] }) {
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[6px] border border-border bg-border sm:grid-cols-3 lg:grid-cols-4">
       {items.map(([label, value]) => (
         <div key={label} className="bg-card p-4">
-          <p className="text-muted-foreground text-[11px] font-medium uppercase tracking-[0.08em]">
+          <p className="text-muted-foreground text-label font-medium uppercase tracking-[0.08em]">
             {label}
           </p>
           <p className="mt-1.5 text-[28px] font-semibold leading-none tabular-nums text-foreground">
@@ -93,10 +93,10 @@ function StatCells({ items }: { items: [string, string][] }) {
 function SummaryBlock({ c }: { c: ReportContent }) {
   return (
     <div className="rounded-[6px] border border-border bg-muted p-4">
-      <p className="text-muted-foreground mb-1.5 text-[11px] font-medium uppercase tracking-[0.08em]">
+      <p className="text-muted-foreground mb-1.5 text-label font-medium uppercase tracking-[0.08em]">
         Summary
       </p>
-      <p className="text-foreground text-[14px] leading-[1.55]">{c.summary}</p>
+      <p className="text-foreground text-body leading-[1.55]">{c.summary}</p>
     </div>
   )
 }
@@ -167,7 +167,7 @@ function AnalysesBlock({ c }: { c: ReportContent }) {
         {analyses.map((a) => (
           <li
             key={a.server_job_id}
-            className="flex justify-between border-b border-border py-2 text-[14px] last:border-b-0"
+            className="flex justify-between border-b border-border py-2 text-body last:border-b-0"
           >
             <span className="text-foreground">{a.display_name || 'Untitled video'}</span>
             <span className="text-muted-foreground tabular-nums">

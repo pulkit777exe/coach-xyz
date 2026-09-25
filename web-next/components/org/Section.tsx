@@ -18,7 +18,7 @@ export default function Section({
   return (
     <section className={className}>
       <div className="flex items-center justify-between gap-4 border-b border-border pb-2.5">
-        <h2 className="text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
+        <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
           {title}
         </h2>
         {actions}

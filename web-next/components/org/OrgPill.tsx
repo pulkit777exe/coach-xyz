@@ -72,7 +72,7 @@ export default function OrgPill({
         <Building2 className="size-3 text-muted-foreground" />
       </span>
       <span className="min-w-0 truncate text-sm text-foreground/90">{label}</span>
-      <span className="hidden shrink-0 items-center gap-1 text-[11px] leading-none text-muted-foreground capitalize md:inline-flex">
+      <span className="hidden shrink-0 items-center gap-1 text-label leading-none text-muted-foreground capitalize md:inline-flex">
         <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[current.role])} />
         {roleLabel(current.role)}
       </span>

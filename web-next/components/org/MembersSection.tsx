@@ -173,7 +173,7 @@ export default function MembersSection({
   return (
     <div className="mt-8">
       <div className="flex items-center justify-between gap-4 border-b border-border pb-2.5">
-        <h2 className="text-[16px] font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
+        <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
           Staff
         </h2>
         {canInvite && (
@@ -185,13 +185,13 @@ export default function MembersSection({
       </div>
 
       {error ? (
-        <p className="py-8 text-center text-[14px] text-muted-foreground">{error}</p>
+        <p className="py-8 text-center text-body text-muted-foreground">{error}</p>
       ) : loading ? (
         <div className="flex items-center justify-center py-10">
           <Spinner className="text-muted-foreground" />
         </div>
       ) : members.length === 0 ? (
-        <p className="py-8 text-center text-[14px] text-muted-foreground">
+        <p className="py-8 text-center text-body text-muted-foreground">
           No staff on the team yet.
         </p>
       ) : (
@@ -204,15 +204,15 @@ export default function MembersSection({
                 key={member.id}
                 className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
               >
-                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-medium text-muted-foreground">
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground">
                   {name === 'No name' ? '?' : initials(name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium leading-[1.4] text-foreground">
+                  <p className="truncate text-body font-medium leading-[1.4] text-foreground">
                     {name}
                   </p>
                   {member.member_email && (
-                    <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                    <p className="mt-0.5 truncate text-meta text-muted-foreground">
                       {member.member_email}
                     </p>
                   )}
@@ -264,7 +264,7 @@ export default function MembersSection({
       )}
 
       {owner && (
-        <p className="border-t border-border pt-3 text-[13px] text-muted-foreground">
+        <p className="border-t border-border pt-3 text-meta text-muted-foreground">
           Staff with a Coach or Admin role gain access to this organization when they sign in with
           their email. {canManageRoles ? 'Only the owner' : 'The owner'} can change roles or remove
           staff.

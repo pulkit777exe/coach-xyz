@@ -23,7 +23,7 @@ export default function PreferencesSection() {
 
   return (
     <Section title="Preferences">
-      <p className="mb-1 text-[13px] font-medium leading-[1.4] text-foreground">Appearance</p>
+      <p className="mb-1 text-meta font-medium leading-[1.4] text-foreground">Appearance</p>
       <div>
         <SettingRow
           title="Theme"
@@ -58,7 +58,7 @@ export default function PreferencesSection() {
           />
         </SettingRow>
       </div>
-      <p className="mb-1 mt-6 text-[13px] font-medium leading-[1.4] text-foreground">Calendar</p>
+      <p className="mb-1 mt-6 text-meta font-medium leading-[1.4] text-foreground">Calendar</p>
       <div>
         <SettingRow
           title="Start week on Monday"

@@ -159,13 +159,13 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-3xl space-y-6">
           {isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-[14px] py-8">
+            <div className="text-center text-muted-foreground text-body py-8">
               Loading conversation...
             </div>
           )}
 
           {historyError && !isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-[13px] py-4">
+            <div className="text-center text-muted-foreground text-meta py-4">
               Could not load previous messages
             </div>
           )}
@@ -179,14 +179,14 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                     <h3 className="text-[17px] font-semibold tracking-[-0.01em] text-foreground capitalize">
                       {summary.sport} Analysis Complete
                     </h3>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground tabular-nums">
+                    <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground tabular-nums">
                       {summary.total_events ?? 0} events detected
                     </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Form Score
                     </p>
                     <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground">
@@ -194,7 +194,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Rating
                     </p>
                     <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground capitalize">
@@ -202,7 +202,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                       Success Rate
                     </p>
                     <p className="mt-1.5 font-semibold text-[28px] leading-none tabular-nums text-foreground">

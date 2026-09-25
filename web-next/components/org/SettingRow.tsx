@@ -20,9 +20,9 @@ export default function SettingRow({
   return (
     <div className="flex flex-col gap-3 border-b border-border py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0">
-        <p className="text-[14px] font-medium leading-[1.4] text-foreground">{title}</p>
+        <p className="text-body font-medium leading-[1.4] text-foreground">{title}</p>
         {description ? (
-          <p className="mt-0.5 text-[13px] leading-[1.5] text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-meta leading-[1.5] text-muted-foreground">{description}</p>
         ) : null}
       </div>
       <div className="shrink-0">{children}</div>

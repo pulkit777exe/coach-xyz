@@ -280,7 +280,7 @@ export default function ReportsClient({
     <div>
       {/* Toolbar */}
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-[14px] text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           <span className="tabular-nums">{reports.length}</span> generated {reports.length === 1 ? 'report' : 'reports'}
         </p>
         <div className="flex items-center gap-2">
@@ -333,17 +333,17 @@ export default function ReportsClient({
                   <div className="min-w-0">
                     <Link
                       href={`/dashboard/reports/${r.id}`}
-                      className="text-[14px] font-medium text-foreground hover:underline"
+                      className="text-body font-medium text-foreground hover:underline"
                     >
                       {r.title}
                     </Link>
-                    <p className="mt-1 text-[13px] text-muted-foreground">
+                    <p className="mt-1 text-meta text-muted-foreground">
                       {r.full_name || 'Organization'} ·{' '}
                       {r.period_start
                         ? `${formatDateMed(r.period_start)} → ${formatDateMed(r.period_end ?? r.period_start)}`
                         : 'All time'}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    <p className="mt-0.5 text-meta text-muted-foreground">
                       {new Date(r.created_at).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -403,25 +403,25 @@ export default function ReportsClient({
           </ul>
 
           <div className="hidden border-border overflow-hidden rounded-[6px] border md:block">
-            <table className="w-full text-[14px]">
+            <table className="w-full text-body">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em]">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Report
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em]">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Type
                   </th>
-                  <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] md:table-cell">
+                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] md:table-cell">
                     Student
                   </th>
-                  <th className="hidden px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em] lg:table-cell">
+                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] lg:table-cell">
                     Period
                   </th>
-                  <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.08em]">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Generated
                   </th>
-                  <th className="px-4 py-2.5 text-right text-[11px] font-medium uppercase tracking-[0.08em]">
+                  <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em]">
                     Actions
                   </th>
                 </tr>
@@ -535,7 +535,7 @@ export default function ReportsClient({
                         : 'organization report'}
                     …
                   </p>
-                  <p className="text-muted-foreground text-[13px]">
+                  <p className="text-muted-foreground text-meta">
                     {aiJob?.status === 'running'
                       ? 'Writing the report'
                       : aiJob?.status === 'queued'
@@ -544,10 +544,10 @@ export default function ReportsClient({
                   </p>
                 </div>
               </div>
-              <p className="text-muted-foreground text-[13px]">
+              <p className="text-muted-foreground text-meta">
                 Keep this dialog open — the finished report lands in your list automatically.
               </p>
-              {aiError && <p className="text-[13px] text-destructive">{aiError}</p>}
+              {aiError && <p className="text-meta text-destructive">{aiError}</p>}
             </div>
           ) : (
             <div className="grid gap-4">
@@ -567,7 +567,7 @@ export default function ReportsClient({
                     </option>
                   ))}
                 </select>
-                <p className="text-muted-foreground text-[13px]">
+                <p className="text-muted-foreground text-meta">
                   {aiForm.student_id === 'all'
                     ? 'Covers the whole organization.'
                     : 'Scoped to a single student.'}
@@ -617,7 +617,7 @@ export default function ReportsClient({
                   placeholder="e.g. Q3 Mid-season Review"
                 />
               </div>
-              {aiError && <p className="text-[13px] text-destructive">{aiError}</p>}
+              {aiError && <p className="text-meta text-destructive">{aiError}</p>}
             </div>
           )}
           <DialogFooter>
@@ -667,7 +667,7 @@ export default function ReportsClient({
                   </option>
                 ))}
               </select>
-              <p className="text-muted-foreground text-[13px]">
+              <p className="text-muted-foreground text-meta">
                 {form.student_id === 'all'
                   ? 'Covers the whole organization.'
                   : 'Scoped to a single student.'}
@@ -717,7 +717,7 @@ export default function ReportsClient({
                 placeholder="e.g. Q3 Mid-season Review"
               />
             </div>
-            {error && <p className="text-[13px] text-destructive">{error}</p>}
+            {error && <p className="text-meta text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerateOpen(false)}>
@@ -807,7 +807,7 @@ export default function ReportsClient({
                   />
                 </div>
               </div>
-              {editError && <p className="text-[13px] text-destructive">{editError}</p>}
+              {editError && <p className="text-meta text-destructive">{editError}</p>}
             </div>
           )}
           <DialogFooter>

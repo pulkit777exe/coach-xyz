@@ -62,7 +62,7 @@ function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
   }, [points])
   const max = Math.max(1, ...days.map(([, n]) => n))
   if (days.length === 0) {
-    return <p className="text-[13px] text-muted-foreground">No findings in this window.</p>
+    return <p className="text-meta text-muted-foreground">No findings in this window.</p>
   }
   return (
     <div className="flex items-end gap-1 h-16" role="img" aria-label="Findings per day">
@@ -183,7 +183,7 @@ export default function TeamsClient({
           {seasons.map((season) => (
             <span
               key={season.id}
-              className="inline-flex items-center gap-2 rounded-full bg-accent px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-2.5 py-1 text-label font-medium text-muted-foreground"
             >
               {season.name}
               {canManage && (
@@ -205,7 +205,7 @@ export default function TeamsClient({
             </span>
           ))}
           {seasons.length === 0 && (
-            <span className="text-[13px] text-muted-foreground">No seasons yet.</span>
+            <span className="text-meta text-muted-foreground">No seasons yet.</span>
           )}
         </div>
         {canManage && (
@@ -232,7 +232,7 @@ export default function TeamsClient({
             </Button>
           </div>
         )}
-        {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
+        {error && <p className="text-meta text-destructive mt-2">{error}</p>}
       </Section>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -250,9 +250,9 @@ export default function TeamsClient({
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
-                <p className="text-[14px] font-medium text-foreground">{team.name}</p>
+                <p className="text-body font-medium text-foreground">{team.name}</p>
                 {team.sport && (
-                  <p className="text-[13px] text-muted-foreground capitalize">{team.sport}</p>
+                  <p className="text-meta text-muted-foreground capitalize">{team.sport}</p>
                 )}
               </button>
             ))}
@@ -265,7 +265,7 @@ export default function TeamsClient({
               New team
             </Button>
           )}
-          {error && <p className="text-[13px] text-destructive mt-2">{error}</p>}
+          {error && <p className="text-meta text-destructive mt-2">{error}</p>}
         </Section>
 
         <div className="space-y-6">
@@ -320,18 +320,18 @@ export default function TeamsClient({
                   ) : undefined
                 }
               >
-                <p className="text-[13px] text-muted-foreground mb-3">
+                <p className="text-meta text-muted-foreground mb-3">
                   {members.length} member{members.length === 1 ? '' : 's'}
                   {selected.sport ? ` · ${selected.sport}` : ''}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
+                <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                   Findings · last 14 days
                 </p>
                 <TrendBars points={trends} />
               </Section>
 
               <Section title="Members">
-                <p className="text-[13px] text-muted-foreground mb-3">
+                <p className="text-meta text-muted-foreground mb-3">
                   Coaches by account, players by roster row.
                 </p>
                 <div className="space-y-1">
@@ -341,12 +341,12 @@ export default function TeamsClient({
                       className="flex items-center justify-between gap-3 rounded-[4px] px-3 py-2 hover:bg-accent transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-[14px] font-medium text-foreground truncate">
+                        <p className="text-body font-medium text-foreground truncate">
                           {member.member_auth0_id ??
                             students.find((s) => s.id === member.student_id)?.full_name ??
                             'Unknown'}
                         </p>
-                        <span className="mt-1 inline-flex h-[20px] items-center rounded-full bg-muted px-2 text-[11px] font-medium leading-none text-muted-foreground capitalize">
+                        <span className="mt-1 inline-flex h-[20px] items-center rounded-full bg-muted px-2 text-label font-medium leading-none text-muted-foreground capitalize">
                           {member.role}
                         </span>
                       </div>
@@ -444,7 +444,7 @@ export default function TeamsClient({
               </Section>
 
               <Section title="Matches">
-                <p className="text-[13px] text-muted-foreground mb-3">
+                <p className="text-meta text-muted-foreground mb-3">
                   Fixtures and results for this team.
                 </p>
                 <div className="space-y-1">
@@ -457,11 +457,11 @@ export default function TeamsClient({
                       className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] px-3 py-2.5 hover:bg-accent transition-colors"
                     >
                       <div className="min-w-0">
-                        <p className="text-[14px] font-medium text-foreground">
+                        <p className="text-body font-medium text-foreground">
                           {match.opponent ? `vs ${match.opponent}` : 'Match'}
                           {match.result ? ` · ${match.result}` : ''}
                         </p>
-                        <p className="text-[13px] text-muted-foreground tabular-nums">
+                        <p className="text-meta text-muted-foreground tabular-nums">
                           {[match.match_on, match.location].filter(Boolean).join(' · ') ||
                             'Unscheduled'}
                         </p>
@@ -548,7 +548,7 @@ export default function TeamsClient({
           </Section>
         </>
           ) : (
-            <div className="rounded-[6px] border border-border bg-card py-10 text-center text-[14px] text-muted-foreground">
+            <div className="rounded-[6px] border border-border bg-card py-10 text-center text-body text-muted-foreground">
               Select a team to manage members and see trends.
             </div>
           )}

@@ -31,7 +31,7 @@ export default function TimestampPill({
   const label = format === 'clock' ? formatTimestampClock(seconds) : formatTimestampShort(seconds)
   // Notion-style reference pill: soft primary tint, full radius, 11px/500.
   const styles =
-    'inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary'
+    'inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-label font-medium tabular-nums text-primary'
   if (!onSeek) {
     return <span className={cn(styles, className)}>{label}</span>
   }

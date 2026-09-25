@@ -74,7 +74,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center pt-20">
       <div className="w-full max-w-3xl">
         <div className="mb-9 text-center">
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Analysis in progress
           </p>
           <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground">
@@ -95,7 +95,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
         {isWaitingForQuota && (
           <div className="mb-5 border border-destructive/20 bg-destructive/10 rounded-[6px] p-4">
-            <p className="text-[14px] text-destructive">AI capacity is busy. Retrying automatically.</p>
+            <p className="text-body text-destructive">AI capacity is busy. Retrying automatically.</p>
           </div>
         )}
 
@@ -125,7 +125,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
               completeLabel="Analysis complete"
             />
 
-            <div className="flex justify-end text-[13px] text-muted-foreground" aria-live="polite">
+            <div className="flex justify-end text-meta text-muted-foreground" aria-live="polite">
               <span className="tabular-nums">
                 {boundedProgress >= 100
                   ? 'Finished'
@@ -164,7 +164,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
                     {isCompleted ? 'OK' : stage.label}
                   </div>
                   <span
-                    className={`text-[14px] ${
+                    className={`text-body ${
                       isActive
                         ? 'text-foreground font-semibold'
                         : isCompleted

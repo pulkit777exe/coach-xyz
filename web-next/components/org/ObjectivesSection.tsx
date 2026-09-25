@@ -189,7 +189,7 @@ export default function ObjectivesSection({
                 type="button"
                 onClick={() => setView(v)}
                 aria-pressed={view === v}
-                className={`rounded-[4px] px-2.5 py-1 text-[13px] font-medium capitalize transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                className={`rounded-[4px] px-2.5 py-1 text-meta font-medium capitalize transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                   view === v
                     ? 'bg-card text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -207,7 +207,7 @@ export default function ObjectivesSection({
         </div>
       }
     >
-      <p className="mb-3 text-[13px] leading-[1.5] text-muted-foreground">
+      <p className="mb-3 text-meta leading-[1.5] text-muted-foreground">
         Findings → objectives → training → measurement.{' '}
         <span className="tabular-nums">{total}</span> findings in 30 days
         {reviewOpen > 0 ? (
@@ -242,15 +242,15 @@ export default function ObjectivesSection({
               className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-border px-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-medium leading-[1.4] text-foreground">
+                <p className="text-body font-medium leading-[1.4] text-foreground">
                   {objective.title}
                 </p>
                 {objective.description && (
-                  <p className="mt-0.5 line-clamp-2 text-[13px] text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-2 text-meta text-muted-foreground">
                     {objective.description}
                   </p>
                 )}
-                <p className="mt-1 text-[13px] text-muted-foreground/60">
+                <p className="mt-1 text-meta text-muted-foreground/60">
                   {objective.finding_id ? `from finding ${objective.finding_id.slice(-8)} · ` : ''}
                   {objective.due_on ? `due ${objective.due_on} · ` : ''}
                   {objective.status}
@@ -306,7 +306,7 @@ export default function ObjectivesSection({
 
         {weeks.length > 0 && (
           <div className="pt-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Weekly measurement · findings vs objectives done
             </p>
             <div
@@ -331,7 +331,7 @@ export default function ObjectivesSection({
                 </div>
               ))}
             </div>
-            <div className="mt-1.5 flex gap-4 text-[13px] text-muted-foreground">
+            <div className="mt-1.5 flex gap-4 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span className="inline-block size-2 rounded-[2px] bg-primary/70" /> findings
               </span>
@@ -346,13 +346,13 @@ export default function ObjectivesSection({
         {findings.length > 0 && (
           <div className="pt-3">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Recent findings
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 text-[13px]"
+                className="h-7 text-meta"
                 disabled={exporting}
                 onClick={() => {
                   setExporting(true)
@@ -373,7 +373,7 @@ export default function ObjectivesSection({
                   key={finding.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-muted px-3 py-2"
                 >
-                  <p className="min-w-0 flex-1 text-[13px] text-foreground">
+                  <p className="min-w-0 flex-1 text-meta text-foreground">
                     <TimestampPill seconds={(finding.start_ms ?? 0) / 1000} />{' '}
                     <span className="capitalize">
                       {(finding.category ?? 'technique').replace(/_/g, ' ')}
@@ -384,7 +384,7 @@ export default function ObjectivesSection({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-[13px]"
+                    className="h-7 text-meta"
                     onClick={() => {
                       setFindingId(finding.id)
                       setTitle(finding.observation ?? '')
@@ -460,7 +460,7 @@ export default function ObjectivesSection({
                 </Select>
               </div>
             </div>
-            {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
+            {error ? <p className="text-meta text-destructive">{error}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
@@ -510,7 +510,7 @@ function ObjectiveBoard({
           <div key={col.status}>
             <div className="mb-2 flex items-center gap-2 px-0.5">
               <StatusPill tone={col.tone}>{col.label}</StatusPill>
-              <span className="text-[13px] tabular-nums text-muted-foreground">
+              <span className="text-meta tabular-nums text-muted-foreground">
                 {cards.length}
               </span>
             </div>
@@ -520,13 +520,13 @@ function ObjectiveBoard({
                   key={o.id}
                   className="rounded-[6px] border border-border bg-card p-3"
                 >
-                  <p className="text-[14px] font-medium leading-snug text-foreground">{o.title}</p>
+                  <p className="text-body font-medium leading-snug text-foreground">{o.title}</p>
                   {o.description && (
-                    <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
+                    <p className="mt-1 text-meta leading-relaxed text-muted-foreground line-clamp-2">
                       {o.description}
                     </p>
                   )}
-                  <p className="mt-1.5 text-[13px] text-muted-foreground/60">
+                  <p className="mt-1.5 text-meta text-muted-foreground/60">
                     {o.finding_id ? `finding ${o.finding_id.slice(-8)} · ` : ''}
                     {o.due_on ? `due ${o.due_on}` : 'no due date'}
                   </p>
@@ -536,7 +536,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[13px]"
+                        className="h-7 text-meta"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'done')}
                       >
@@ -547,7 +547,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[13px]"
+                        className="h-7 text-meta"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'active')}
                       >
@@ -558,7 +558,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-[13px]"
+                        className="h-7 text-meta"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'active')}
                       >
@@ -568,7 +568,7 @@ function ObjectiveBoard({
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-[13px] text-muted-foreground"
+                        className="h-7 text-meta text-muted-foreground"
                         disabled={busy}
                         onClick={() => onStatus(o.id, 'archived')}
                       >
@@ -578,7 +578,7 @@ function ObjectiveBoard({
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-7 text-[13px] text-destructive"
+                      className="h-7 text-meta text-destructive"
                       disabled={busy}
                       onClick={() => void onDelete(o.id)}
                     >
@@ -592,7 +592,7 @@ function ObjectiveBoard({
               <button
                 type="button"
                 onClick={onNew}
-                className="flex h-9 items-center gap-1 rounded-[4px] px-2 text-left text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="flex h-9 items-center gap-1 rounded-[4px] px-2 text-left text-meta text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <span aria-hidden="true">+</span> New page
               </button>
