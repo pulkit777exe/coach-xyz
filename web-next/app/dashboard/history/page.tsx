@@ -30,7 +30,10 @@ export default async function HistoryPage({
   if (!HISTORY_NAV_ROLES.includes(role)) {
     return <AccessDenied page="History" allowedRoles={HISTORY_NAV_ROLES} />
   }
-  const auth0Id = session.user.sub
+  // Scope the account-data route to the resolved org identity. An invited
+  // coach's session sub is their own account, while the org context may point
+  // at the owner/org id that owns the analysis rows.
+  const auth0Id = orgCtx.auth0Id
   const params = await searchParams
   const rawPage = Number(params.page)
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1

@@ -55,9 +55,7 @@ const hrefs = (role: NavRole | null): string[] =>
 
 describe('role vocabulary', () => {
   test('nav derives its complete role set from the membership vocabulary', () => {
-    expect(ALL_NON_PLAYER_ROLES).toEqual(
-      ORG_MEMBER_ROLES.filter((role) => role !== 'player'),
-    )
+    expect(ALL_NON_PLAYER_ROLES).toEqual(ORG_MEMBER_ROLES.filter((role) => role !== 'player'))
     expect(ANALYZE_NAV_ROLES).toEqual(ORG_MEMBER_ROLES.filter((role) => role !== 'medical'))
   })
 })

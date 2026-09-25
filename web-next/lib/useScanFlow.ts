@@ -23,11 +23,7 @@ export interface ScanFlowOptions {
    * aborted when a newer scan, reset, or unmount supersedes the request.
    * Rejections are reported back to this module (error state) AND rethrown
    * so callers can react (their own error/toast handling). */
-  onAnalyze: (
-    scan: ScanResult,
-    playerIndex: number,
-    signal: AbortSignal,
-  ) => void | Promise<void>
+  onAnalyze: (scan: ScanResult, playerIndex: number, signal: AbortSignal) => void | Promise<void>
 }
 
 export interface ScanFlow {
