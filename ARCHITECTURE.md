@@ -844,7 +844,7 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
 | Test suite: 228 tests pass (CONFIRMED 2026-09-25) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
 | Test suite: 387 pass / 37 files (CONFIRMED 2026-09-25) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
-| Test suite: 225 tests / 22 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
+| Test suite: 226 tests / 22 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
 | New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |
