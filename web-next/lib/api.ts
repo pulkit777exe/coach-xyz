@@ -1,5 +1,6 @@
 import type { ScanResult, JobStatus, CoachAIError, UploadProgress, ChatMessage } from '@/types'
 import { parseEventStream } from '@/lib/sse'
+import { errorFromResponse } from '@/lib/errors'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
@@ -112,41 +113,17 @@ export async function apiFetch<T>(
   }
 
   if (res.status === 429) {
-    const body = await res.json().catch(() => ({}))
-    throw {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
       code: 'RATE_LIMITED',
-      message: body.message ?? 'Too many requests. Please wait.',
-      layer: 'server',
-      retryable: true,
-      retry_after: body.retry_after,
-    } as CoachAIError
+      message: 'Too many requests. Please wait.',
+    })
   }
 
   if (!res.ok) {
-    let body: Record<string, unknown> = {}
-    try {
-      body = await res.json()
-    } catch {
-      // Response wasn't JSON
-    }
-
-    // If the server returned a structured error, use it
-    if (body?.code && body?.message) {
-      throw {
-        code: body.code,
-        message: body.message,
-        layer: body.layer ?? 'server',
-        retryable: body.retryable ?? true,
-      } as CoachAIError
-    }
-
-    // Fallback for non-structured errors
-    throw {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
       code: 'REQUEST_FAILED',
       message: `Request failed (${res.status})`,
-      layer: 'server',
-      retryable: res.status >= 500,
-    } as CoachAIError
+    })
   }
 
   return res.json() as Promise<T>
@@ -162,21 +139,31 @@ export async function apiFetch<T>(
  * expiry to avoid an extra round-trip per scan/analyze pair.
  */
 let attributionTokenCache: { token: string; exp: number } | null = null
-export async function getAttributionToken(): Promise<string | null> {
-  if (attributionTokenCache && attributionTokenCache.exp > Date.now()) {
-    return attributionTokenCache.token
-  }
-  attributionTokenCache = null
+async function mintAttributionToken(): Promise<{ token: string; exp: number } | null> {
   try {
-    const res = await apiFetch<{ token: string; exp: number }>(
+    return await apiFetch<{ token: string; exp: number }>(
       `${IDENTITY_BASE}/api/me/attribution/mint`,
       { method: 'GET' },
     )
-    attributionTokenCache = res
-    return res.token
   } catch {
     return null
   }
+}
+export async function getAttributionToken(): Promise<string | null> {
+  // The cache is module-scoped: on the server that means shared across
+  // requests (and therefore across USERS) — never read or write it there.
+  // Server-side callers always mint fresh; only the browser reuses tokens.
+  // Today every caller is client-side (XHR/upload flows, client hooks);
+  // this guard keeps a future server-component call from silently serving
+  // another user's signed token.
+  if (typeof window === 'undefined') {
+    return (await mintAttributionToken())?.token ?? null
+  }
+  if (attributionTokenCache && attributionTokenCache.exp > Date.now()) {
+    return attributionTokenCache.token
+  }
+  attributionTokenCache = await mintAttributionToken()
+  return attributionTokenCache?.token ?? null
 }
 
 export async function scanVideoWithProgress(
@@ -198,100 +185,103 @@ export async function scanVideoWithProgress(
   const intent = await requestScanIntent(file, auth0Id, opts, headers)
   if (intent.upload.mode === 'presigned') {
     await postPresigned(file, intent.upload.url, intent.upload.fields, onProgress)
-    return scanFromKey(intent, auth0Id, headers)
+    return scanFromKey(intent, headers)
   }
 
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${BASE}/api/scan-video`)
-    xhr.setRequestHeader('x-request-id', crypto.randomUUID())
-
-    if (token) {
-      xhr.setRequestHeader('x-attribution', token)
-    }
-
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100)
-        onProgress({ phase: 'uploading', percent })
-      }
-    })
-
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText) as ScanResult)
-        } catch {
-          reject({
-            code: 'PARSE_ERROR',
-            message: 'Invalid response from server.',
-            layer: 'server',
-            retryable: false,
-          } as CoachAIError)
-        }
-      } else if (xhr.status === 429) {
-        let body: Record<string, unknown> = {}
-        try {
-          body = JSON.parse(xhr.responseText)
-        } catch {
-          /* ignore */
-        }
-        reject({
-          code: 'RATE_LIMITED',
-          message: (body.message as string) ?? 'Too many requests. Please wait.',
-          layer: 'server',
-          retryable: true,
-          retry_after: body.retry_after as number | undefined,
-        } as CoachAIError)
-      } else {
-        let body: Record<string, unknown> = {}
-        try {
-          body = JSON.parse(xhr.responseText)
-        } catch {
-          /* ignore */
-        }
-        if (body.code && body.message) {
-          reject({
-            code: body.code as string,
-            message: body.message as string,
-            layer: (body.layer as string) ?? 'server',
-            retryable: (body.retryable as boolean) ?? true,
-          } as CoachAIError)
-        } else {
-          reject({
-            code: 'REQUEST_FAILED',
-            message: `Request failed (${xhr.status})`,
-            layer: 'server',
-            retryable: xhr.status >= 500,
-          } as CoachAIError)
-        }
-      }
-    })
-
-    xhr.addEventListener('error', () => {
-      reject({
-        code: 'NETWORK_ERROR',
-        message: 'Cannot connect to server. Check your connection.',
-        layer: 'client',
-        retryable: true,
-      } as CoachAIError)
-    })
-
-    xhr.addEventListener('abort', () => {
-      reject({
-        code: 'REQUEST_TIMEOUT',
-        message: 'Request timed out.',
-        layer: 'client',
-        retryable: true,
-      } as CoachAIError)
-    })
-
     const formData = new FormData()
     formData.append('video', file)
     // Multi-angle flow: append to an existing session under a labeled angle.
     if (opts.sessionToken) formData.append('session_token', opts.sessionToken)
     if (opts.angle) formData.append('angle', opts.angle)
-    xhr.send(formData)
+    xhrPost(`${BASE}/api/scan-video`, {
+      headers: token ? { 'x-attribution': token } : {},
+      form: formData,
+      onProgress,
+    }).then(
+      ({ status, responseText }) => {
+        if (status >= 200 && status < 300) {
+          try {
+            resolve(JSON.parse(responseText) as ScanResult)
+          } catch {
+            reject({
+              code: 'PARSE_ERROR',
+              message: 'Invalid response from server.',
+              layer: 'server',
+              retryable: false,
+            } satisfies CoachAIError)
+          }
+          return
+        }
+        let body: unknown = {}
+        try {
+          body = JSON.parse(responseText)
+        } catch {
+          // Not JSON — the builder falls back.
+        }
+        reject(
+          errorFromResponse(status, body, {
+            code: 'REQUEST_FAILED',
+            message: `Request failed (${status})`,
+          }),
+        )
+      },
+      (error) => reject(error),
+    )
+  })
+}
+
+/**
+ * Raw XHR POST with upload progress. Resolves the status + body text; only
+ * NETWORK-level failures reject here (endpoint error mapping stays with the
+ * caller, next to its fallback codes). Shared by the multipart scan upload
+ * and the presigned S3 POST — previously two hand-rolled XHR blocks with
+ * duplicated progress wiring and error literals.
+ */
+function xhrPost(
+  url: string,
+  opts: {
+    headers?: Record<string, string>
+    form: FormData
+    onProgress?: (progress: UploadProgress) => void
+    networkMessage?: string
+  },
+): Promise<{ status: number; responseText: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.setRequestHeader('x-request-id', crypto.randomUUID())
+    for (const [key, value] of Object.entries(opts.headers ?? {})) {
+      xhr.setRequestHeader(key, value)
+    }
+    if (opts.onProgress) {
+      const onProgress = opts.onProgress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress({ phase: 'uploading', percent: Math.round((e.loaded / e.total) * 100) })
+        }
+      })
+    }
+    xhr.addEventListener('load', () =>
+      resolve({ status: xhr.status, responseText: xhr.responseText }),
+    )
+    xhr.addEventListener('error', () =>
+      reject({
+        code: 'NETWORK_ERROR',
+        message: opts.networkMessage ?? 'Cannot connect to server. Check your connection.',
+        layer: 'client',
+        retryable: true,
+      } satisfies CoachAIError),
+    )
+    xhr.addEventListener('abort', () =>
+      reject({
+        code: 'REQUEST_TIMEOUT',
+        message: 'Request timed out.',
+        layer: 'client',
+        retryable: true,
+      } satisfies CoachAIError),
+    )
+    xhr.send(opts.form)
   })
 }
 
@@ -328,12 +318,10 @@ export async function requestScanIntent(
   })
 }
 
-export async function scanFromKey(
+async function scanFromKey(
   intent: UploadIntent,
-  auth0Id?: string | null,
   extraHeaders: Record<string, string> = {},
 ): Promise<ScanResult> {
-  void auth0Id
   return apiFetch<ScanResult>(`${BASE}/api/scan-from-key`, {
     method: 'POST',
     body: JSON.stringify({
@@ -352,37 +340,22 @@ function postPresigned(
   fields: Record<string, string>,
   onProgress: (progress: UploadProgress) => void,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', url)
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        onProgress({ phase: 'uploading', percent: Math.round((e.loaded / e.total) * 100) })
-      }
-    })
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else {
-        reject({
-          code: 'UPLOAD_FAILED',
-          message: 'Direct upload failed. Please try again.',
-          layer: 'server',
-          retryable: true,
-        } as CoachAIError)
-      }
-    })
-    xhr.addEventListener('error', () => {
-      reject({
-        code: 'NETWORK_ERROR',
-        message: 'Cannot connect to storage. Check your connection.',
-        layer: 'client',
-        retryable: true,
-      } as CoachAIError)
-    })
-    const formData = new FormData()
-    for (const [key, value] of Object.entries(fields)) formData.append(key, value)
-    formData.append('file', file)
-    xhr.send(formData)
+  const formData = new FormData()
+  for (const [key, value] of Object.entries(fields)) formData.append(key, value)
+  formData.append('file', file)
+  return xhrPost(url, {
+    form: formData,
+    onProgress,
+    networkMessage: 'Cannot connect to storage. Check your connection.',
+  }).then(({ status }) => {
+    // S3 answers 2xx (usually 204 No Content) with no body to parse.
+    if (status >= 200 && status < 300) return
+    throw {
+      code: 'UPLOAD_FAILED',
+      message: 'Direct upload failed. Please try again.',
+      layer: 'server',
+      retryable: true,
+    } satisfies CoachAIError
   })
 }
 
@@ -413,13 +386,10 @@ export async function* streamScanProgress(
   })
 
   if (!res.ok) {
-    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
       code: 'SCAN_PROGRESS_FAILED',
-      message: (errBody.message as string) ?? 'Failed to get scan progress.',
-      layer: 'server',
-      retryable: true,
-    } as CoachAIError
+      message: 'Failed to get scan progress.',
+    })
   }
 
   yield* parseEventStream<ScanProgressEvent>(res)
@@ -515,13 +485,10 @@ export async function* sendChatMessageStream(
   })
 
   if (!res.ok) {
-    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    throw {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
       code: 'CHAT_FAILED',
-      message: (errBody.message as string) ?? 'Chat request failed.',
-      layer: 'server',
-      retryable: true,
-    } as CoachAIError
+      message: 'Chat request failed.',
+    })
   }
 
   yield* parseEventStream<StreamEvent>(res)

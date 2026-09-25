@@ -1,5 +1,6 @@
 import { cache } from 'react'
 
+import type { UserRecord } from './api'
 import { getSession } from './session'
 import { resolveOrgContext, type OrgContext } from './orgContext'
 import {
@@ -16,6 +17,7 @@ import {
   getDashboardStats as apiGetDashboardStats,
   getDashboardAnalyses as apiGetDashboardAnalyses,
   getDashboardAnalysisDetail as apiGetDashboardAnalysisDetail,
+  syncUser as apiSyncUser,
 } from './api'
 import {
   orgOverview as libOrgOverview,
@@ -161,3 +163,20 @@ export const getOrgContext = cache(async (): Promise<OrgContext> => {
 
   return resolveOrgContext(ownSub, [], preferred)
 })
+
+/**
+ * Auth sync mutation for RSC pages. Deliberately NOT React.cache-wrapped:
+ * mutations must never be deduped. Lives here (rather than a direct
+ * `@/lib/api` import in pages) so the page layer has a single server
+ * import surface — cached reads above, uncached writes below.
+ */
+export async function syncUser(user: {
+  sub: string
+  email?: string
+  name?: string
+  nickname?: string
+  picture?: string
+  email_verified?: boolean
+}): Promise<{ user: UserRecord }> {
+  return apiSyncUser(user)
+}

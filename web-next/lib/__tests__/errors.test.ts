@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isCoachAIError, isTransientError, toCoachAIError } from '../errors'
+import { errorFromResponse, isCoachAIError, isTransientError, toCoachAIError } from '../errors'
 import type { CoachAIError } from '@/types'
 
 const RETRYABLE: CoachAIError = {
@@ -55,5 +55,62 @@ describe('isTransientError', () => {
     expect(isCoachAIError(RETRYABLE)).toBe(true)
     expect(isCoachAIError(null)).toBe(false)
     expect(isCoachAIError('string')).toBe(false)
+  })
+})
+
+describe('errorFromResponse (single response-mapping rule)', () => {
+  const FALLBACK = { code: 'REQUEST_FAILED', message: 'Request failed (500)' }
+
+  it('maps 429 to RATE_LIMITED with the server message + numeric retry_after', () => {
+    expect(errorFromResponse(429, { message: 'Slow down', retry_after: 12 }, FALLBACK)).toEqual({
+      code: 'RATE_LIMITED',
+      message: 'Slow down',
+      layer: 'server',
+      retryable: true,
+      retry_after: 12,
+    })
+  })
+
+  it('falls back on 429 when the body message is missing', () => {
+    expect(errorFromResponse(429, {}, FALLBACK)).toMatchObject({
+      code: 'RATE_LIMITED',
+      message: 'Request failed (500)',
+      retryable: true,
+    })
+  })
+
+  it('passes structured engine bodies through (never re-derives)', () => {
+    expect(
+      errorFromResponse(
+        400,
+        { code: 'NO_PLAYERS', message: 'No players', layer: 'engine', retryable: false },
+        FALLBACK,
+      ),
+    ).toEqual({
+      code: 'NO_PLAYERS',
+      message: 'No players',
+      layer: 'engine',
+      retryable: false,
+    })
+  })
+
+  it('sanitizes non-string message/code and non-numeric retry_after', () => {
+    expect(errorFromResponse(400, { code: 42, message: 42 }, FALLBACK)).toMatchObject({
+      code: FALLBACK.code,
+    })
+    expect(
+      errorFromResponse(429, { message: 'x', retry_after: 'soon' }, FALLBACK),
+    ).not.toHaveProperty('retry_after')
+  })
+
+  it('falls back with status-derived retryability for opaque bodies', () => {
+    expect(errorFromResponse(503, null, FALLBACK)).toMatchObject({
+      code: 'REQUEST_FAILED',
+      retryable: true,
+    })
+    expect(errorFromResponse(404, '<html>gone</html>', FALLBACK)).toMatchObject({
+      code: 'REQUEST_FAILED',
+      retryable: false,
+    })
   })
 })

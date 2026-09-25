@@ -1,6 +1,5 @@
 import { getSession } from '@/lib/session'
-import { getUserProfile } from '@/lib/api'
-import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
+import { getUserProfile, getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import DashboardNav from '@/components/DashboardNav'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
