@@ -1,4 +1,5 @@
 import { apiFetch, IDENTITY_BASE } from './api'
+import { errorFromResponse } from './errors'
 import type { DashboardAnalysis } from './api'
 
 const org = (auth0Id: string, path: string) =>
@@ -263,12 +264,9 @@ export const orgStudents = async (
   auth0Id: string,
   opts: { search?: string; sport?: string; status?: string } = {},
 ): Promise<{ students: Student[] }> => {
-  const params = new URLSearchParams()
-  if (opts.search) params.set('search', opts.search)
-  if (opts.sport) params.set('sport', opts.sport)
-  if (opts.status) params.set('status', opts.status)
-  const qs = params.toString()
-  return apiFetch<{ students: Student[] }>(org(auth0Id, `/students${qs ? `?${qs}` : ''}`))
+  return apiFetch<{ students: Student[] }>(
+    org(auth0Id, `/students${qs({ search: opts.search, sport: opts.sport, status: opts.status })}`),
+  )
 }
 
 export const orgStudentsSports = async (auth0Id: string): Promise<{ sports: string[] }> => {
@@ -324,13 +322,11 @@ export const orgStudentTrends = async (
   studentId: string,
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<{ trends: MetricTrend[] }> => {
-  const params = new URLSearchParams()
-  if (opts.metricKey) params.set('metricKey', opts.metricKey)
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
-  const qs = params.toString()
   return apiFetch<{ trends: MetricTrend[] }>(
-    org(auth0Id, `/students/${encodeURIComponent(studentId)}/trends${qs ? `?${qs}` : ''}`),
+    org(
+      auth0Id,
+      `/students/${encodeURIComponent(studentId)}/trends${qs({ metricKey: opts.metricKey, from: opts.from, to: opts.to })}`,
+    ),
   )
 }
 
@@ -339,6 +335,10 @@ export const orgCompareStudents = async (
   ids: string[],
   metricKey?: string,
 ): Promise<{ comparison: ComparisonStudent[] }> => {
+  // Deliberately hand-rolled (not qs()): the wire format keeps RAW commas
+  // between ids, pinned by the comparison contract test below. Percent-
+  // encoded commas would decode identically server-side, but the raw form
+  // avoids the entire encoding-normalization class across proxies/CDNs.
   const qsParts = [`ids=${ids.map(encodeURIComponent).join(',')}`]
   if (metricKey) qsParts.push(`metricKey=${encodeURIComponent(metricKey)}`)
   return apiFetch<{ comparison: ComparisonStudent[] }>(
@@ -353,13 +353,11 @@ export const orgStudentPerformance = async (
   studentId: string,
   opts: { metricKey?: string; from?: string; to?: string } = {},
 ): Promise<{ series: PerformanceSeriesPoint[] }> => {
-  const params = new URLSearchParams()
-  if (opts.metricKey) params.set('metricKey', opts.metricKey)
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
-  const qs = params.toString()
   return apiFetch<{ series: PerformanceSeriesPoint[] }>(
-    org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance${qs ? `?${qs}` : ''}`),
+    org(
+      auth0Id,
+      `/students/${encodeURIComponent(studentId)}/performance${qs({ metricKey: opts.metricKey, from: opts.from, to: opts.to })}`,
+    ),
   )
 }
 
@@ -389,13 +387,8 @@ export const orgAttendance = async (
   auth0Id: string,
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<{ records: AttendanceWithStudent[] }> => {
-  const params = new URLSearchParams()
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
-  if (opts.studentId) params.set('studentId', opts.studentId)
-  const qs = params.toString()
   return apiFetch<{ records: AttendanceWithStudent[] }>(
-    org(auth0Id, `/attendance${qs ? `?${qs}` : ''}`),
+    org(auth0Id, `/attendance${qs({ from: opts.from, to: opts.to, studentId: opts.studentId })}`),
   )
 }
 
@@ -403,13 +396,11 @@ export const orgAttendanceSummary = async (
   auth0Id: string,
   opts: { from?: string; to?: string; studentId?: string } = {},
 ): Promise<{ summary: AttendanceSummary }> => {
-  const params = new URLSearchParams()
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
-  if (opts.studentId) params.set('studentId', opts.studentId)
-  const qs = params.toString()
   return apiFetch<{ summary: AttendanceSummary }>(
-    org(auth0Id, `/attendance/summary${qs ? `?${qs}` : ''}`),
+    org(
+      auth0Id,
+      `/attendance/summary${qs({ from: opts.from, to: opts.to, studentId: opts.studentId })}`,
+    ),
   )
 }
 
@@ -438,13 +429,9 @@ export const orgDeleteAttendance = async (
   studentId: string,
   date: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(
-    org(
-      auth0Id,
-      `/attendance?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(date)}`,
-    ),
-    { method: 'DELETE' },
-  )
+  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/attendance${qs({ studentId, date })}`), {
+    method: 'DELETE',
+  })
 }
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
@@ -453,11 +440,9 @@ export const orgSchedule = async (
   auth0Id: string,
   opts: { from?: string; to?: string } = {},
 ): Promise<{ events: ScheduleEvent[] }> => {
-  const params = new URLSearchParams()
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
-  const qs = params.toString()
-  return apiFetch<{ events: ScheduleEvent[] }>(org(auth0Id, `/schedule${qs ? `?${qs}` : ''}`))
+  return apiFetch<{ events: ScheduleEvent[] }>(
+    org(auth0Id, `/schedule${qs({ from: opts.from, to: opts.to })}`),
+  )
 }
 
 export const orgCreateEvent = async (
@@ -496,8 +481,9 @@ export const orgReports = async (
   auth0Id: string,
   opts: { studentId?: string } = {},
 ): Promise<{ reports: ReportRecord[] }> => {
-  const qs = opts.studentId ? `?studentId=${encodeURIComponent(opts.studentId)}` : ''
-  return apiFetch<{ reports: ReportRecord[] }>(org(auth0Id, `/reports${qs}`))
+  return apiFetch<{ reports: ReportRecord[] }>(
+    org(auth0Id, `/reports${qs({ studentId: opts.studentId })}`),
+  )
 }
 
 export const orgReport = async (auth0Id: string, id: string): Promise<{ report: ReportRecord }> => {
@@ -566,13 +552,11 @@ export const orgObjectives = async (
   auth0Id: string,
   opts: { studentId?: string; teamId?: string; status?: string } = {},
 ): Promise<{ objectives: TrainingObjective[] }> => {
-  const params = new URLSearchParams()
-  if (opts.studentId) params.set('student_id', opts.studentId)
-  if (opts.teamId) params.set('team_id', opts.teamId)
-  if (opts.status) params.set('status', opts.status)
-  const qs = params.toString()
   return apiFetch<{ objectives: TrainingObjective[] }>(
-    org(auth0Id, `/objectives${qs ? `?${qs}` : ''}`),
+    org(
+      auth0Id,
+      `/objectives${qs({ student_id: opts.studentId, team_id: opts.teamId, status: opts.status })}`,
+    ),
   )
 }
 
@@ -666,14 +650,10 @@ export const downloadStudentFindingsCsv = async (
     headers: { 'x-request-id': crypto.randomUUID() },
   })
   if (!res.ok) {
-    let message = `Export failed (${res.status})`
-    try {
-      const body = (await res.json()) as { message?: unknown }
-      if (typeof body.message === 'string' && body.message) message = body.message
-    } catch {
-      // non-JSON error — keep the status message
-    }
-    throw new Error(message)
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'EXPORT_FAILED',
+      message: `Export failed (${res.status})`,
+    })
   }
   const text = await res.text()
   const url = window.URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8;' }))
@@ -728,11 +708,9 @@ export const orgMatches = async (
   auth0Id: string,
   opts: { teamId?: string | null; seasonId?: string | null } = {},
 ): Promise<{ matches: Match[] }> => {
-  const params = new URLSearchParams()
-  if (opts.teamId) params.set('team_id', opts.teamId)
-  if (opts.seasonId) params.set('season_id', opts.seasonId)
-  const qs = params.toString()
-  return apiFetch<{ matches: Match[] }>(org(auth0Id, `/matches${qs ? `?${qs}` : ''}`))
+  return apiFetch<{ matches: Match[] }>(
+    org(auth0Id, `/matches${qs({ team_id: opts.teamId, season_id: opts.seasonId })}`),
+  )
 }
 
 export const orgCreateMatch = async (
@@ -775,11 +753,9 @@ export const orgPlans = async (
   auth0Id: string,
   opts: { teamId?: string | null; studentId?: string | null } = {},
 ): Promise<{ plans: TrainingPlan[] }> => {
-  const params = new URLSearchParams()
-  if (opts.teamId) params.set('team_id', opts.teamId)
-  if (opts.studentId) params.set('student_id', opts.studentId)
-  const qs = params.toString()
-  return apiFetch<{ plans: TrainingPlan[] }>(org(auth0Id, `/plans${qs ? `?${qs}` : ''}`))
+  return apiFetch<{ plans: TrainingPlan[] }>(
+    org(auth0Id, `/plans${qs({ team_id: opts.teamId, student_id: opts.studentId })}`),
+  )
 }
 
 export const orgCreatePlan = async (
@@ -867,12 +843,11 @@ export const orgPerformanceMetrics = async (
   auth0Id: string,
   opts: { studentId: string; metricKey?: string; from?: string; to?: string },
 ): Promise<{ metrics: PerformanceMetric[] }> => {
-  const params = new URLSearchParams({ studentId: opts.studentId })
-  if (opts.metricKey) params.set('metricKey', opts.metricKey)
-  if (opts.from) params.set('from', opts.from)
-  if (opts.to) params.set('to', opts.to)
   return apiFetch<{ metrics: PerformanceMetric[] }>(
-    org(auth0Id, `/performance?${params.toString()}`),
+    org(
+      auth0Id,
+      `/performance${qs({ studentId: opts.studentId, metricKey: opts.metricKey, from: opts.from, to: opts.to })}`,
+    ),
   )
 }
 
@@ -974,10 +949,33 @@ export const linkAnalysisToStudent = async (
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+/**
+ * Encode defined query params (skips undefined/null/''). Explicit triple
+ * check rather than truthiness so numeric 0 survives; key names are mapped
+ * per call site because the wire mixes camelCase and snake_case.
+ */
+function qs(params: Record<string, string | number | null | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value))
+  }
+  const s = search.toString()
+  return s ? `?${s}` : ''
+}
+
+/**
+ * Stripe undefined for transport, and normalize '' to null. Forms submit
+ * cleared fields as '' — dropping them (the old behavior) silently kept the
+ * stale server value on UPDATE, so fields could never be cleared; passing ''
+ * through verbatim would 500 on ::integer/::date/::uuid casts
+ * (jersey_number, dates, team_id) and store junk on text columns. null
+ * clears on update and matches column defaults on create.
+ */
+export function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Partial<T> = {}
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined && value !== '') out[key as keyof T] = value as T[keyof T]
+    if (value === undefined) continue
+    out[key as keyof T] = (value === '' ? null : value) as T[keyof T]
   }
   return out
 }

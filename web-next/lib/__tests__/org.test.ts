@@ -14,6 +14,7 @@ import {
   orgImportStudents,
   orgStudentTrends,
   orgCompareStudents,
+  pickDefined,
 } from '../org'
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -97,7 +98,7 @@ describe('linkAnalysisToStudent', () => {
 })
 
 describe('orgCreateStudent', () => {
-  it('drops undefined and empty-string fields before POSTing', async () => {
+  it('drops undefined fields and nulls empty strings before POSTing', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ student: {} }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -110,8 +111,11 @@ describe('orgCreateStudent', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(init.method).toBe('POST')
+    // Cleared fields travel as null (never dropped — dropping kept stale
+    // server values on update; verbatim '' would 500 on casts).
     expect(JSON.parse(init.body as string)).toEqual({
       full_name: 'Alex Rivera',
+      email: null,
       status: 'active',
     })
   })
@@ -230,5 +234,27 @@ describe('email helpers', () => {
     expect(url).toBe('http://localhost:3000/api/email/auth%7C123/attendance')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({ from: '2026-09-01', to: '2026-09-15' })
+  })
+})
+
+describe('pickDefined (form payload sanitation)', () => {
+  it('drops undefined, normalizes empty string to null, keeps falsy numbers', () => {
+    expect(pickDefined({ a: 'x', b: undefined, c: '', d: 0, e: null, f: false })).toEqual({
+      a: 'x',
+      c: null,
+      d: 0,
+      e: null,
+      f: false,
+    })
+  })
+
+  it('lets cleared fields clear: empty phone becomes null, not a dropped key', () => {
+    // Regression: the old ''-dropping behavior kept the stale server value
+    // on UPDATE, so fields could never be cleared; '' verbatim would 500 on
+    // ::integer/::date/::uuid casts server-side.
+    expect(pickDefined({ phone: '', jersey_number: '' })).toEqual({
+      phone: null,
+      jersey_number: null,
+    })
   })
 })
