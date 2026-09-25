@@ -203,6 +203,12 @@ export function usePipeline(
   // Scan-phase state (upload → SSE → select → angles) lives in useScanFlow;
   // this hook owns job-phase state (polling, resume, retry, navigation).
   const flow = useScanFlow({ auth0Id, onAnalyze: startAnalysisForScan })
+  // Pull the stable scan-flow callbacks out before wrapping them. Depending on
+  // the whole memoized `flow` object would recreate every public callback on
+  // each state update; the callbacks themselves are stable.
+  const flowHandleFileSelected = flow.handleFileSelected
+  const flowHandleAddAngle = flow.handleAddAngle
+  const flowHandlePlayerSelected = flow.handlePlayerSelected
 
   // Derived pipeline state: the poll loop owns analyzing/rendering/completed
   // (jobPhase set), otherwise the scan flow phase shows through. Scan errors
@@ -216,10 +222,52 @@ export function usePipeline(
     pipelineStateRef.current = pipelineState
   }, [pipelineState])
 
-  const handleRetry = useCallback(() => {
-    stopPolling()
+  // A new scan/player selection supersedes the retry lane as well as the
+  // scan-flow lane. Without this shared guard, a retry started through the
+  // error screen could enqueue and navigate after the user had already
+  // chosen a fresh file/player.
+  const cancelPendingRetry = useCallback(() => {
+    retryGenerationRef.current += 1
     retryAbortRef.current?.abort()
     retryAbortRef.current = null
+  }, [])
+
+  const supersedeJob = useCallback(() => {
+    stopPolling()
+    cancelPendingRetry()
+    setJobId(null)
+    setJobStatus(null)
+    setJobError(null)
+    setJobPhase(null)
+  }, [cancelPendingRetry, stopPolling])
+
+  const handleFileSelected = useCallback(
+    (file: File) => {
+      supersedeJob()
+      flowHandleFileSelected(file)
+    },
+    [flowHandleFileSelected, supersedeJob],
+  )
+
+  const handleAddAngle = useCallback(
+    (file: File, angle: string) => {
+      supersedeJob()
+      flowHandleAddAngle(file, angle)
+    },
+    [flowHandleAddAngle, supersedeJob],
+  )
+
+  const handlePlayerSelected = useCallback(
+    (playerIndex: number) => {
+      supersedeJob()
+      flowHandlePlayerSelected(playerIndex)
+    },
+    [flowHandlePlayerSelected, supersedeJob],
+  )
+
+  const handleRetry = useCallback(() => {
+    stopPolling()
+    cancelPendingRetry()
 
     if (flow.scanResult && errorStatus?.retryable && errorStatus?.layer !== 'client') {
       setJobStatus(null)
@@ -273,19 +321,17 @@ export function usePipeline(
       setJobError(null)
       setJobPhase(null)
     }
-  }, [flow, errorStatus, stopPolling, startPolling, auth0Id, router, pathname])
+  }, [flow, errorStatus, stopPolling, cancelPendingRetry, startPolling, auth0Id, router, pathname])
 
   const handleReset = useCallback(() => {
     stopPolling()
-    retryGenerationRef.current += 1
-    retryAbortRef.current?.abort()
-    retryAbortRef.current = null
+    cancelPendingRetry()
     flow.reset()
     setJobId(null)
     setJobStatus(null)
     setJobError(null)
     setJobPhase(null)
-  }, [stopPolling, flow])
+  }, [stopPolling, cancelPendingRetry, flow])
 
   const handleStartChat = useCallback(() => {
     setJobPhase('chatting')
@@ -305,9 +351,9 @@ export function usePipeline(
     jobStatus,
     errorStatus,
     uploadProgress: flow.uploadProgress,
-    handleFileSelected: flow.handleFileSelected,
-    handlePlayerSelected: flow.handlePlayerSelected,
-    handleAddAngle: flow.handleAddAngle,
+    handleFileSelected,
+    handlePlayerSelected,
+    handleAddAngle,
     handleAngleChange: flow.handleAngleChange,
     handleRetry,
     handleReset,

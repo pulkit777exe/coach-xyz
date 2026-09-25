@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
   // The monorepo has a root bun.lock plus web-next/package-lock.json. Pin
   // Turbopack to the Next app so Next does not infer the repository root and
   // emit a workspace-root warning on every build.
-  turbopack: { root: __dirname },
+  turbopack: { root: process.cwd() },
   async headers() {
     return [
       {
