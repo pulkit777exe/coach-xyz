@@ -68,7 +68,8 @@ export default function NotificationBell() {
         }
         return [...byId.values()]
       })
-      // A snapshot that predates a local event/read must not erase it.
+      // A snapshot that predates a local event/read must not erase it. The
+      // post-connect callback below is authoritative for the subscription gap.
       setUnreadCount((prev) =>
         hasLocalChanges ? Math.max(prev, state.unread_count) : state.unread_count,
       )
@@ -118,7 +119,8 @@ export default function NotificationBell() {
       router.push(`/dashboard/analysis/${serverJobId}`)
     }
     if (!n.read) {
-      liveNotificationIdsRef.current.delete(n.id)
+      // Keep the locally-read row authoritative over a late snapshot.
+      liveNotificationIdsRef.current.add(n.id)
       localRevisionRef.current += 1
       setUnreadCount((prev) => Math.max(0, prev - 1))
       setNotifications((prev) =>
@@ -130,7 +132,9 @@ export default function NotificationBell() {
   }
 
   const handleMarkAllRead = () => {
-    liveNotificationIdsRef.current.clear()
+    for (const notification of notifications) {
+      liveNotificationIdsRef.current.add(notification.id)
+    }
     localRevisionRef.current += 1
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     setUnreadCount(0)

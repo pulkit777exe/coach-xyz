@@ -93,6 +93,10 @@ export async function markAllRead(): Promise<void> {
  * exponential backoff (10s, 20s, 40s, then 60s); after the outage budget the
  * stream waits for connectivity/visibility instead of reconnecting forever.
  *
+ * `onReconnect` is called after every successfully established response,
+ * including the initial connection, so consumers can reconcile without racing
+ * the server-side subscription.
+ *
  * Returns an unsubscribe function that also aborts the stream.
  */
 export function subscribeNotifications(
