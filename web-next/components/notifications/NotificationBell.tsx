@@ -85,7 +85,6 @@ export default function NotificationBell() {
         const wasLocallyRead = locallyReadIdsRef.current.has(n.id)
         liveNotificationIdsRef.current.add(n.id)
         if (n.read) locallyReadIdsRef.current.add(n.id)
-        else locallyReadIdsRef.current.delete(n.id)
         localRevisionRef.current += 1
         setNotifications((prev) => {
           if (prev.some((existing) => existing.id === n.id)) return prev
