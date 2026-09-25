@@ -350,6 +350,22 @@ export const ensureInitialized = async () => {
           })(),
           (async () => {
             await store`
+          -- Atomic quota gate (§17): one counter row per org+kind+day. The
+          -- guarded UPDATE in tryReserveUsage serializes concurrent
+          -- admissions on the row lock, so the cap check and the increment
+          -- are one atomic step (see analyses.ts).
+          create table if not exists usage_counters (
+            org_auth0_id text not null,
+            kind text not null,
+            period_day date not null default current_date,
+            total integer not null default 0,
+            updated_at timestamptz not null default now(),
+            primary key (org_auth0_id, kind, period_day)
+          );
+        `
+          })(),
+          (async () => {
+            await store`
           create table if not exists analysis_stages (
             id uuid primary key default gen_random_uuid(),
             server_job_id text not null,

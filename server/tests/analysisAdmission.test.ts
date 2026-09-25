@@ -18,8 +18,8 @@ const QUOTA_MESSAGE = 'Organization daily analysis limit reached. Try again tomo
 
 const makeDeps = (
   opts: {
-    allowed?: boolean
-    retryAfterSec?: number
+    reserve?: { total: number } | 'capped' | null
+    reserveThrows?: boolean
     tier?: OrgTier
     tierThrows?: boolean
     usageRejects?: boolean
@@ -29,9 +29,12 @@ const makeDeps = (
   return {
     calls,
     deps: {
-      checkOrgDailyQuota: async (orgAuth0Id) => {
-        calls.push(`quota:${orgAuth0Id}`)
-        return { allowed: opts.allowed ?? true, retryAfterSec: opts.retryAfterSec ?? 0 }
+      tryReserveUsage: async (orgAuth0Id, kind) => {
+        calls.push(`reserve:${orgAuth0Id}:${kind}`)
+        if (opts.reserveThrows) throw new Error('reservation store unavailable')
+        if (opts.reserve === undefined) return { total: 1 }
+        if (opts.reserve === 'capped') return { capped: true }
+        return opts.reserve
       },
       getOrgTier: async (orgAuth0Id) => {
         calls.push(`tier:${orgAuth0Id}`)
@@ -63,12 +66,12 @@ describe('analysisPriority (pure formula)', () => {
 })
 
 describe('admitAnalysis', () => {
-  test('runs quota → tier → usage in order with base 5 (analyze lane)', async () => {
+  test('runs reserve → tier → usage in order with base 5 (analyze lane)', async () => {
     const { deps, calls } = makeDeps({ tier: 'pro' })
     const set = freshSet()
     const out = await admitAnalysis({ orgAuth0Id: ORG, basePriority: 5, set, deps })
     expect(out).toEqual({ ok: true, priority: 10 })
-    expect(calls).toEqual([`quota:${ORG}`, `tier:${ORG}`, `usage:${ORG}:analysis`])
+    expect(calls).toEqual([`reserve:${ORG}:analysis`, `tier:${ORG}`, `usage:${ORG}:analysis`])
     expect(set.status).toBeUndefined()
   })
 
@@ -77,24 +80,31 @@ describe('admitAnalysis', () => {
     const set = freshSet()
     const out = await admitAnalysis({ orgAuth0Id: ORG, basePriority: 10, set, deps })
     expect(out).toEqual({ ok: true, priority: 20 })
-    expect(calls).toEqual([`quota:${ORG}`, `tier:${ORG}`, `usage:${ORG}:analysis`])
+    expect(calls).toEqual([`reserve:${ORG}:analysis`, `tier:${ORG}`, `usage:${ORG}:analysis`])
   })
 
-  test('quota exceeded → identical 429 rejection; tier and usage never touched', async () => {
-    const { deps, calls } = makeDeps({ allowed: false, retryAfterSec: 4321 })
+  test('quota capped → identical 429 rejection; tier and usage never touched', async () => {
+    const { deps, calls } = makeDeps({ reserve: 'capped' })
     const set = freshSet()
     const out = await admitAnalysis({ orgAuth0Id: ORG, basePriority: 5, set, deps })
     expect(out.ok).toBe(false)
     if (out.ok) throw new Error('unreachable')
     expect(set.status).toBe(429)
-    expect(out.error).toEqual({
-      code: 'RATE_LIMITED',
-      message: QUOTA_MESSAGE,
-      layer: 'server',
-      retryable: true,
-      retry_after: 4321,
-    })
-    expect(calls).toEqual([`quota:${ORG}`])
+    expect(out.error.code).toBe('RATE_LIMITED')
+    expect(out.error.message).toBe(QUOTA_MESSAGE)
+    expect(out.error.layer).toBe('server')
+    expect(out.error.retryable).toBe(true)
+    expect(typeof out.error.retry_after).toBe('number')
+    expect(calls).toEqual([`reserve:${ORG}:analysis`])
+  })
+
+  test('reservation store unavailable → fail open at base priority (never 429)', async () => {
+    const { deps, calls } = makeDeps({ reserve: null })
+    const set = freshSet()
+    const out = await admitAnalysis({ orgAuth0Id: ORG, basePriority: 5, set, deps })
+    expect(out).toEqual({ ok: true, priority: 5 })
+    expect(set.status).toBeUndefined()
+    expect(calls).toEqual([`reserve:${ORG}:analysis`])
   })
 
   test('tier lookup failure falls back to free — priority is just the base', async () => {
@@ -108,4 +118,41 @@ describe('admitAnalysis', () => {
     const out = await admitAnalysis({ orgAuth0Id: ORG, basePriority: 5, set: freshSet(), deps })
     expect(out).toEqual({ ok: true, priority: 10 })
   })
+})
+
+// ── Live atomicity race (requires DATABASE_URL) ─────────────────────────────
+// Six concurrent admissions against a cap of 3 through the REAL stores must
+// admit exactly 3 — the row-lock-serialized increment cannot over-admit no
+// matter how the promises interleave. Unique org per run so parallel/repeat
+// runs never share a counter row.
+;(process.env.DATABASE_URL ? describe : describe.skip)('admitAnalysis live quota race', () => {
+  test(
+    '6 concurrent admissions at cap 3 → exactly 3 admitted',
+    async () => {
+      const { tryReserveUsage, getOrgTier, recordUsage } = await import('../src/lib/analyses')
+      const previousLimit = process.env.ORG_DAILY_ANALYSIS_LIMIT
+      process.env.ORG_DAILY_ANALYSIS_LIMIT = '3'
+      try {
+        const org = `test-quota-race-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+        const deps = { tryReserveUsage, getOrgTier, recordUsage }
+        const results = await Promise.all(
+          Array.from({ length: 6 }, () =>
+            admitAnalysis({ orgAuth0Id: org, basePriority: 5, set: {}, deps }),
+          ),
+        )
+        const admitted = results.filter((r) => r.ok)
+        const rejected = results.filter((r) => !r.ok)
+        expect(admitted).toHaveLength(3)
+        expect(rejected).toHaveLength(3)
+        for (const r of rejected) {
+          if (r.ok) throw new Error('unreachable')
+          expect(r.error.code).toBe('RATE_LIMITED')
+        }
+      } finally {
+        if (previousLimit === undefined) delete process.env.ORG_DAILY_ANALYSIS_LIMIT
+        else process.env.ORG_DAILY_ANALYSIS_LIMIT = previousLimit
+      }
+    },
+    { timeout: 60000 },
+  )
 })

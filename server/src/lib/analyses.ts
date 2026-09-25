@@ -335,44 +335,75 @@ export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Prom
   )
 }
 
-/** Daily per-org analysis cap (§17 precursor). */
+/** Daily per-org analysis cap (§17). */
 
 export const orgDailyAnalysisLimit = (): number => {
   const raw = Number(process.env.ORG_DAILY_ANALYSIS_LIMIT ?? 50)
   return Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 1), 10000) : 50
 }
 
-/** Analyses started by this org since midnight UTC. Fail-open without a DB. */
+export type UsageReservation = { total: number } | { capped: true } | null
 
-export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number | null> => {
+/**
+ * Atomically reserve `quantity` units of today's usage ledger for an org.
+ * Counter-row upsert plus a guarded increment: the UPDATE's row lock
+ * serializes concurrent admissions (the waiter re-evaluates
+ * `total + quantity <= limit` on the committed row — the standard Postgres
+ * atomic-counter pattern, correct under READ COMMITTED). The old
+ * check-then-act (count history rows, admit, insert usage later)
+ * over-admitted under burst concurrency; a single aggregate check could
+ * NOT fix it (statement snapshots go stale the same way, and fused
+ * data-modifying CTEs cannot see each other's effects — hence two
+ * statements, not one).
+ *
+ * Returns the post-reserve total, `{ capped: true }` when the cap is
+ * already reached (counter unmoved), or null when the store is
+ * unavailable — callers fail OPEN on null per the no-DB policy (the
+ * wrapper already logged the outage).
+ */
+export const tryReserveUsage = async (
+  orgAuth0Id: string,
+  kind: string,
+  limit: number,
+  quantity = 1,
+): Promise<UsageReservation> => {
+  const kindKey = kind.slice(0, 60)
   return withHistoryStore(async (db) => {
-    const rows = await db<{ count: number }[]>`
-      select count(*)::int as count from analysis_history
-      where auth0_id = ${orgAuth0Id}
-        and requested_at >= date_trunc('day', now());
+    // Two statements, deliberately NOT fused into one CTE: data-modifying
+    // CTEs share a snapshot and cannot see each other's effects, so a fused
+    // upsert+guarded-increment would miss a freshly inserted counter row
+    // and falsely report capped on every first reserve of the day. As
+    // separate statements the guarded UPDATE serializes concurrent
+    // admissions on the counter row lock (the waiter re-evaluates
+    // `total + quantity <= limit` on the committed row).
+    await db`
+      insert into usage_counters (org_auth0_id, kind, period_day, total)
+      values (${orgAuth0Id}, ${kindKey}, current_date, 0)
+      on conflict (org_auth0_id, kind, period_day) do nothing;
     `
-    return rows?.[0]?.count ?? 0
+    const rows = await db<{ total: number }[]>`
+      update usage_counters as c set total = c.total + ${quantity},
+        updated_at = now()
+      where c.org_auth0_id = ${orgAuth0Id}
+        and c.kind = ${kindKey}
+        and c.period_day = current_date
+        and c.total + ${quantity} <= ${limit}
+      returning c.total;
+    `
+    if (!rows || rows.length === 0) return { capped: true }
+    return { total: rows[0].total }
   })
 }
 
-/** Daily per-org quota verdict. Fail-open without org identity or DB. */ export const checkOrgDailyQuota =
-  async (orgAuth0Id: string | null): Promise<{ allowed: boolean; retryAfterSec: number }> => {
-    if (!orgAuth0Id) return { allowed: true, retryAfterSec: 0 }
-    const count = await countTodayOrgAnalyses(orgAuth0Id)
-    if (count === null || count < orgDailyAnalysisLimit()) {
-      return { allowed: true, retryAfterSec: 0 }
-    }
-    const now = Date.now()
-    const midnightUtc = Date.UTC(
-      new Date(now).getUTCFullYear(),
-      new Date(now).getUTCMonth(),
-      new Date(now).getUTCDate() + 1,
-    )
-    return {
-      allowed: false,
-      retryAfterSec: Math.max(1, Math.ceil((midnightUtc - now) / 1000)),
-    }
-  }
+/** Seconds until midnight UTC (quota retry-after). */
+export const secondsUntilMidnightUtc = (now = Date.now()): number => {
+  const midnightUtc = Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate() + 1,
+  )
+  return Math.max(1, Math.ceil((midnightUtc - now) / 1000))
+}
 
 export type OrgTier = 'free' | 'pro' | 'elite'
 
@@ -409,7 +440,7 @@ export const recordUsage = async (
   })
 }
 
-/** Usage totals per kind since midnight UTC (for quota + status views). */
+/** Usage totals per kind since midnight UTC (status views; the gate reads usage_counters). */
 
 export const getTodayUsage = async (orgAuth0Id: string): Promise<Record<string, number>> => {
   const rows = orDisabledDefault(

@@ -1,12 +1,20 @@
 // ── Analysis admission ──────────────────────────────────────────────────────
 // One owner for the §17 gate every non-anonymous analysis start passes
-// through: per-org daily quota → fair-queue priority → usage-ledger record.
-// Both admission sites (routes/analyze.ts and routes/me.ts) differed only in
-// their base priority (authenticated browser jobs base 5, player-hub jobs
-// base 10 — authenticated humans outrank the anonymous queue), so the base is
-// an explicit parameter. Quota rejection reuses rateLimited (429) verbatim.
+// through: atomic quota reservation → fair-queue priority → usage-ledger
+// record. Both admission sites (routes/analyze.ts and routes/me.ts) differed
+// only in their base priority (authenticated browser jobs base 5, player-hub
+// jobs base 10 — authenticated humans outrank the anonymous queue), so the
+// base is an explicit parameter. Quota rejection reuses rateLimited (429)
+// verbatim.
 
-import { checkOrgDailyQuota, getOrgTier, recordUsage, type OrgTier } from './analyses'
+import {
+  getOrgTier,
+  orgDailyAnalysisLimit,
+  recordUsage,
+  secondsUntilMidnightUtc,
+  tryReserveUsage,
+  type OrgTier,
+} from './analyses'
 import { logger } from './logger'
 import { rateLimited, type RateLimitedBody } from './ratelimit'
 
@@ -20,7 +28,7 @@ export function analysisPriority(basePriority: number, tier: OrgTier): number {
 }
 
 export type AnalysisAdmissionDeps = {
-  checkOrgDailyQuota: typeof checkOrgDailyQuota
+  tryReserveUsage: typeof tryReserveUsage
   getOrgTier: typeof getOrgTier
   recordUsage: typeof recordUsage
 }
@@ -38,12 +46,15 @@ export type AnalysisAdmissionInput = {
   deps?: AnalysisAdmissionDeps
 }
 
-const defaultDeps: AnalysisAdmissionDeps = { checkOrgDailyQuota, getOrgTier, recordUsage }
+const defaultDeps: AnalysisAdmissionDeps = { tryReserveUsage, getOrgTier, recordUsage }
 
 /**
- * Admit an analysis start: quota first (rejection renders the canonical 429
- * RATE_LIMITED via rateLimited and records nothing), then tier → priority →
- * usage record, in exactly that order. Tier/usage failures degrade (free tier,
+ * Admit an analysis start: atomically reserve quota first (rejection renders
+ * the canonical 429 RATE_LIMITED via rateLimited and records nothing), then
+ * tier → priority → usage-ledger record, in exactly that order. The
+ * reservation and the check are one atomic step, so concurrent admissions
+ * cannot over-admit. A null reservation means the store is unavailable —
+ * fail OPEN (free tier), never 429. Tier/usage failures degrade (free tier,
  * dropped usage row); quota failures propagate so call sites keep their own
  * catch context.
  */
@@ -53,14 +64,19 @@ export async function admitAnalysis({
   set,
   deps = defaultDeps,
 }: AnalysisAdmissionInput): Promise<AnalysisAdmission> {
-  const quota = await deps.checkOrgDailyQuota(orgAuth0Id)
-  if (!quota.allowed) {
+  const reservation = await deps.tryReserveUsage(orgAuth0Id, 'analysis', orgDailyAnalysisLimit())
+  if (reservation === null) {
+    // Store unavailable — fail open per the no-DB policy (the wrapper
+    // already logged the outage), at free-tier priority.
+    return { ok: true, priority: basePriority }
+  }
+  if ('capped' in reservation) {
     return {
       ok: false,
       error: rateLimited(
         set,
         'Organization daily analysis limit reached. Try again tomorrow.',
-        quota.retryAfterSec,
+        secondsUntilMidnightUtc(),
       ),
     }
   }
