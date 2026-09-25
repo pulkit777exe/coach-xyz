@@ -839,18 +839,6 @@ export const orgSubscription = async (auth0Id: string): Promise<OrgSubscription>
 
 // ── Performance metrics ──────────────────────────────────────────────────────
 
-export const orgPerformanceMetrics = async (
-  auth0Id: string,
-  opts: { studentId: string; metricKey?: string; from?: string; to?: string },
-): Promise<{ metrics: PerformanceMetric[] }> => {
-  return apiFetch<{ metrics: PerformanceMetric[] }>(
-    org(
-      auth0Id,
-      `/performance${qs({ studentId: opts.studentId, metricKey: opts.metricKey, from: opts.from, to: opts.to })}`,
-    ),
-  )
-}
-
 export const orgDeletePerformanceMetric = async (
   auth0Id: string,
   id: string,
