@@ -87,3 +87,17 @@ export function errorFromResponse(
     retryable: status >= 500,
   }
 }
+
+/**
+ * Shape an engine-layer failure: the engine (or its SSE feed) reported the
+ * problem, so layer is always 'engine' and retryability is the caller's
+ * explicit verdict — never re-derived here. Consumed by the analysis
+ * pipeline (completed-job errors, resume errors) and the scan SSE feed.
+ */
+export function engineError(
+  code: string,
+  message: string,
+  retryable?: boolean | null,
+): CoachAIError {
+  return { code, message, layer: 'engine', retryable: retryable ?? true }
+}

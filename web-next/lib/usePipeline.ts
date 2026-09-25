@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
-import { toCoachAIError } from '@/lib/errors'
+import { engineError, toCoachAIError } from '@/lib/errors'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import { mapEngineStateToPipeline } from '@/lib/pipelineState'
 import { useScanFlow } from '@/lib/useScanFlow'
@@ -38,7 +38,10 @@ export interface Pipeline extends PipelineActions {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
-export function usePipeline(auth0Id: string | null = null, initialJobId: string | null = null): Pipeline {
+export function usePipeline(
+  auth0Id: string | null = null,
+  initialJobId: string | null = null,
+): Pipeline {
   const router = useRouter()
   const pathname = usePathname()
   // Job-phase state, owned by the poll loop / resume / retry below. Null
@@ -56,7 +59,8 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   // ── Keep-alive ping ────────────────────────────────────────────────────
   useEffect(() => {
     if (!BASE) return
-    const ping = () => fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {})
+    const ping = () =>
+      fetch(`${BASE}/health`, { signal: AbortSignal.timeout(5000) }).catch(() => {})
     ping()
     const t = setInterval(ping, 8 * 60 * 1000)
     return () => clearInterval(t)
@@ -84,9 +88,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
         // Cap the displayed progress at 99 while the job is not yet
         // complete, so the bar never reaches 100% on the loading screen.
         onStatus: (status) => {
-          const displayStatus = status.progress >= 100
-            ? { ...status, progress: 99 }
-            : status
+          const displayStatus = status.progress >= 100 ? { ...status, progress: 99 } : status
           setJobStatus(displayStatus)
           if (status.state) {
             setJobPhase(mapEngineStateToPipeline(status.state))
@@ -97,12 +99,9 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
             // Store the error status first, then flip pipeline state.
             // Never store a complete/100% jobStatus while still on the
             // progress screen — that's what causes the 100% flash.
-            setJobError({
-              code: status.error_code ?? 'ANALYSIS_FAILED',
-              message: status.error,
-              layer: 'engine',
-              retryable: status.retryable ?? true,
-            })
+            setJobError(
+              engineError(status.error_code ?? 'ANALYSIS_FAILED', status.error, status.retryable),
+            )
             setJobStatus(status)
             setJobPhase('error')
           } else {
@@ -138,12 +137,9 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
         setJobId(initialJobId)
         if (status.complete) {
           if (status.error) {
-            setJobError({
-              code: status.error_code ?? 'ANALYSIS_FAILED',
-              message: status.error,
-              layer: 'engine',
-              retryable: status.retryable ?? true,
-            })
+            setJobError(
+              engineError(status.error_code ?? 'ANALYSIS_FAILED', status.error, status.retryable),
+            )
             setJobStatus(status)
             setJobPhase('error')
           } else {
@@ -171,7 +167,9 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
     }
 
     resume()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [initialJobId, startPolling])
 
   /** Kick off analysis for one scanned perspective + player. */
@@ -201,8 +199,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
   // Derived pipeline state: the poll loop owns analyzing/rendering/completed
   // (jobPhase set), otherwise the scan flow phase shows through. Scan errors
   // surface from the flow; job errors from the poll loop.
-  const pipelineState: PipelineState =
-    jobPhase ?? (flow.phase === 'error' ? 'error' : flow.phase)
+  const pipelineState: PipelineState = jobPhase ?? (flow.phase === 'error' ? 'error' : flow.phase)
   const errorStatus: CoachAIError | null = jobError ?? flow.errorStatus
 
   // Keep a ref of the derived state for the retry generation guard.
@@ -254,15 +251,7 @@ export function usePipeline(auth0Id: string | null = null, initialJobId: string 
       setJobError(null)
       setJobPhase(null)
     }
-  }, [
-    flow,
-    errorStatus,
-    stopPolling,
-    startPolling,
-    auth0Id,
-    router,
-    pathname,
-  ])
+  }, [flow, errorStatus, stopPolling, startPolling, auth0Id, router, pathname])
 
   const handleReset = useCallback(() => {
     stopPolling()

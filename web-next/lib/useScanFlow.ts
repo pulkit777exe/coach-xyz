@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { scanVideoWithProgress, streamScanProgress, type CoachAIError } from '@/lib/api'
-import { toCoachAIError } from '@/lib/errors'
+import { engineError, toCoachAIError } from '@/lib/errors'
 import type { ScanResult, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
@@ -72,6 +72,13 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
     }
   }, [])
 
+  // Supersede generation: starting a new scan (or reset) fences every
+  // in-flight run — double file-selects and reset-during-upload no longer
+  // interleave state (stale success/error clobbering the live run). The
+  // fenced run still finishes its upload silently in the background; only
+  // state writes are fenced, via the live() check below.
+  const scanGenerationRef = useRef(0)
+
   const fail = useCallback((e: unknown) => {
     if (!mountedRef.current) return
     setErrorStatus(toCoachAIError(e))
@@ -85,7 +92,12 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
    * polling — every state push arrives as an event.
    */
   const runScan = useCallback(
-    async (file: File, append?: { sessionToken: string; angle: string }): Promise<ScanResult> => {
+    async (
+      file: File,
+      append?: { sessionToken: string; angle: string },
+    ): Promise<ScanResult | null> => {
+      const gen = ++scanGenerationRef.current
+      const live = () => mountedRef.current && scanGenerationRef.current === gen
       setPhase(append ? 'scanning' : 'uploading')
       setUploadProgress({ phase: 'uploading', percent: 0 })
 
@@ -96,17 +108,16 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
         const result = await scanVideoWithProgress(
           file,
           (progress) => {
-            if (mountedRef.current) setUploadProgress(progress)
+            if (live()) setUploadProgress(progress)
           },
           auth0Id,
           append ? { sessionToken: append.sessionToken, angle: append.angle } : {},
         )
+        if (!live()) return null
 
         // Upload done — transition to scanning phase
-        if (mountedRef.current) {
-          setPhase('scanning')
-          setUploadProgress({ phase: 'scanning', percent: 0 })
-        }
+        setPhase('scanning')
+        setUploadProgress({ phase: 'scanning', percent: 0 })
 
         // Stream real scan progress from engine via SSE (per-angle slot)
         try {
@@ -115,18 +126,14 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
             scanAbort.signal,
             result.angle ?? append?.angle ?? null,
           )) {
+            if (!live()) return null
             if (event.total > 0) {
               const percent = Math.round((event.current / event.total) * 100)
-              if (mountedRef.current) setUploadProgress({ phase: 'scanning', percent })
+              setUploadProgress({ phase: 'scanning', percent })
             }
             if (event.complete) {
               if (event.error) {
-                throw {
-                  code: 'SCAN_FAILED',
-                  message: event.error,
-                  layer: 'engine',
-                  retryable: true,
-                } as CoachAIError
+                throw engineError('SCAN_FAILED', event.error)
               }
               break
             }
@@ -144,7 +151,12 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
           throw err
         }
 
-        return result
+        return live() ? result : null
+      } catch (err: unknown) {
+        // A fenced run's failure must not clobber the live run's state —
+        // swallow it here; the live run owns the UI from this point on.
+        if (!live()) return null
+        throw err
       } finally {
         scanAbort.abort()
       }
@@ -186,7 +198,9 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
 
       try {
         const result = await runScan(file)
-        if (!mountedRef.current) return
+        // Null means fenced (superseded or unmounted) — the live run (or
+        // nothing, if unmounted) owns the UI; write nothing here.
+        if (!result) return
 
         setScanResult(result)
         setAngleScans([result])
@@ -219,7 +233,7 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
           sessionToken: scanResult.session_token,
           angle,
         })
-        if (!mountedRef.current) return
+        if (!result) return
         const label = result.angle ?? angle
         setAngleScans((prev) => {
           const next = prev.filter((s) => (s.angle ?? 'primary') !== label)
@@ -243,8 +257,7 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
 
   const handlePlayerSelected = useCallback(
     async (playerIndex: number) => {
-      const active =
-        angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+      const active = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
       if (!active) return
       try {
         await beginAnalyze(active, playerIndex)
@@ -257,6 +270,9 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
   )
 
   const reset = useCallback(() => {
+    // Fence in-flight runs first: their late completions must not
+    // repopulate the cleared state.
+    scanGenerationRef.current += 1
     setPhase('idle')
     setScanResult(null)
     setAngleScans([])
@@ -275,19 +291,39 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
     setPhase((prev) => (prev === 'error' ? 'selecting' : prev))
   }, [])
 
-  return {
-    phase,
-    uploadProgress,
-    scanResult,
-    angleScans,
-    activeAngle,
-    selectedPlayerIndex,
-    errorStatus,
-    handleFileSelected,
-    handleAddAngle,
-    handleAngleChange,
-    handlePlayerSelected,
-    reset,
-    revive,
-  }
+  return useMemo<ScanFlow>(
+    () => ({
+      phase,
+      uploadProgress,
+      scanResult,
+      angleScans,
+      activeAngle,
+      selectedPlayerIndex,
+      errorStatus,
+      handleFileSelected,
+      handleAddAngle,
+      handleAngleChange,
+      handlePlayerSelected,
+      reset,
+      revive,
+    }),
+    // Every value above is state or a stable useCallback — the memoized
+    // identity keeps parent-constructed callbacks (handleRetry et al) and
+    // downstream memos from invalidating on unrelated renders.
+    [
+      phase,
+      uploadProgress,
+      scanResult,
+      angleScans,
+      activeAngle,
+      selectedPlayerIndex,
+      errorStatus,
+      handleFileSelected,
+      handleAddAngle,
+      handleAngleChange,
+      handlePlayerSelected,
+      reset,
+      revive,
+    ],
+  )
 }

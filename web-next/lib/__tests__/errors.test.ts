@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { errorFromResponse, isCoachAIError, isTransientError, toCoachAIError } from '../errors'
+import {
+  engineError,
+  errorFromResponse,
+  isCoachAIError,
+  isTransientError,
+  toCoachAIError,
+} from '../errors'
 import type { CoachAIError } from '@/types'
 
 const RETRYABLE: CoachAIError = {
@@ -112,5 +118,21 @@ describe('errorFromResponse (single response-mapping rule)', () => {
       code: 'REQUEST_FAILED',
       retryable: false,
     })
+  })
+})
+
+describe('engineError (engine-layer shaping)', () => {
+  it('pins layer engine with an explicit retryability verdict', () => {
+    expect(engineError('ANALYSIS_FAILED', 'boom', false)).toEqual({
+      code: 'ANALYSIS_FAILED',
+      message: 'boom',
+      layer: 'engine',
+      retryable: false,
+    })
+  })
+
+  it('defaults nullish retryability to true (wire nulls are transient)', () => {
+    expect(engineError('X', 'y')).toMatchObject({ retryable: true })
+    expect(engineError('X', 'y', null)).toMatchObject({ retryable: true })
   })
 })
