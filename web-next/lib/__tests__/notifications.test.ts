@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { subscribeNotifications } from '../notifications'
+import { fetchNotifications, subscribeNotifications } from '../notifications'
 
 const pendingFetch = (_url: string, init?: RequestInit) =>
   new Promise<Response>((_, reject) => {
@@ -10,6 +10,13 @@ const pendingFetch = (_url: string, init?: RequestInit) =>
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+})
+
+describe('notification snapshots', () => {
+  it('rejects a failed snapshot instead of returning an empty list', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })))
+    await expect(fetchNotifications()).rejects.toThrow('503')
+  })
 })
 
 describe('subscribeNotifications reconnect policy', () => {

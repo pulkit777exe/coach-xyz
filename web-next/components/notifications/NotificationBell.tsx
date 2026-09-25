@@ -50,6 +50,7 @@ export default function NotificationBell() {
   const loadedRef = useRef(false)
   const liveNotificationIdsRef = useRef<Set<string>>(new Set())
   const localRevisionRef = useRef(0)
+  const locallyReadIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (loadedRef.current) return
@@ -81,13 +82,16 @@ export default function NotificationBell() {
 
     unsubscribe = subscribeNotifications(
       (n) => {
+        const wasLocallyRead = locallyReadIdsRef.current.has(n.id)
         liveNotificationIdsRef.current.add(n.id)
+        if (n.read) locallyReadIdsRef.current.add(n.id)
+        else locallyReadIdsRef.current.delete(n.id)
         localRevisionRef.current += 1
         setNotifications((prev) => {
           if (prev.some((existing) => existing.id === n.id)) return prev
           return [n, ...prev]
         })
-        setUnreadCount((prev) => (n.read ? prev : prev + 1))
+        setUnreadCount((prev) => (n.read || wasLocallyRead ? prev : prev + 1))
       },
       controller.signal,
       () => {
@@ -121,6 +125,7 @@ export default function NotificationBell() {
     if (!n.read) {
       // Keep the locally-read row authoritative over a late snapshot.
       liveNotificationIdsRef.current.add(n.id)
+      locallyReadIdsRef.current.add(n.id)
       localRevisionRef.current += 1
       setUnreadCount((prev) => Math.max(0, prev - 1))
       setNotifications((prev) =>
@@ -134,6 +139,7 @@ export default function NotificationBell() {
   const handleMarkAllRead = () => {
     for (const notification of notifications) {
       liveNotificationIdsRef.current.add(notification.id)
+      locallyReadIdsRef.current.add(notification.id)
     }
     localRevisionRef.current += 1
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))

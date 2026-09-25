@@ -61,7 +61,7 @@ export async function fetchNotifications(): Promise<NotificationsState> {
     credentials: 'include',
   })
   if (!res.ok) {
-    return { notifications: [], unread_count: 0 }
+    throw new Error(`Failed to fetch notifications (${res.status})`)
   }
   return res.json()
 }
