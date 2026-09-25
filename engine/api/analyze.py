@@ -12,7 +12,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from api.errors import error_response
-from core.errors import EngineError, JobNotFoundError
+from core.errors import EngineError, JobNotFoundError, error_status
 from core.jobs import create_job, fail_job, get_job, update_job
 from core.logging_config import set_job_id
 from core.multicam import normalize_angle_label, resolve_angle_video_key
@@ -138,7 +138,10 @@ async def analyze(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True})
     except EngineError as e:
         fail_job(engine_job_id, e)
-        return JSONResponse(status_code=500, content=e.to_dict())
+        # The engine registry owns code → HTTP status. Keep this route aligned
+        # with the global EngineError handler and every other API surface:
+        # quota/timeout/validation failures must not all collapse to 500.
+        return JSONResponse(status_code=error_status(e), content=e.to_dict())
     except Exception:
         logging.error(traceback.format_exc())
         err = EngineError(
