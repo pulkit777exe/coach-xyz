@@ -1,5 +1,10 @@
-export type NavRole =
-  'owner' | 'admin' | 'head_coach' | 'assistant_coach' | 'coach' | 'analyst' | 'medical' | 'player'
+import type { OrgMemberRole } from './members'
+
+// Nav visibility roles — an alias of the single membership vocabulary
+// (ORG_MEMBER_ROLES in lib/members.ts), not a second list to keep in sync.
+// A server-side role addition flows here automatically; nav.test.ts pins the
+// page-gating subsets below, not the vocabulary itself.
+export type NavRole = OrgMemberRole
 
 /** Roles that may open the Members page (invite + role management). */
 export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_coach', 'coach']

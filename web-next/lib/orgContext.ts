@@ -1,14 +1,11 @@
 import { ORG_COOKIE } from './orgCookie'
+import type { OrgMemberRole } from './members'
 
-export type OrgRole =
-  | 'owner'
-  | 'admin'
-  | 'head_coach'
-  | 'assistant_coach'
-  | 'coach'
-  | 'analyst'
-  | 'medical'
-  | 'player'
+// Org-call scoping role — an alias of the single membership vocabulary
+// (ORG_MEMBER_ROLES in lib/members.ts). Kept as a named alias (not a
+// second literal union) so a server-side role addition cannot silently
+// desync scoping from membership.
+export type OrgRole = OrgMemberRole
 
 export type OrgContext = {
   /** The auth0Id to scope every org/email/auth-user call against. */

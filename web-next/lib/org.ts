@@ -1,4 +1,4 @@
-import { apiFetch, IDENTITY_BASE } from './api'
+import { apiFetch, IDENTITY_BASE, qs } from './api'
 import { errorFromResponse } from './errors'
 import type { DashboardAnalysis } from './api'
 
@@ -948,20 +948,6 @@ export const linkAnalysisToStudent = async (
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Encode defined query params (skips undefined/null/''). Explicit triple
- * check rather than truthiness so numeric 0 survives; key names are mapped
- * per call site because the wire mixes camelCase and snake_case.
- */
-function qs(params: Record<string, string | number | null | undefined>): string {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') search.set(key, String(value))
-  }
-  const s = search.toString()
-  return s ? `?${s}` : ''
-}
 
 /**
  * Stripe undefined for transport, and normalize '' to null. Forms submit

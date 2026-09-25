@@ -20,6 +20,10 @@ type NotificationsState = {
 
 type NotificationEvent = AppNotification
 
+// Delivery-dedup for the CLIENT notification stream (NotificationBell).
+// Module-scoped like the attribution cache: safe because subscription only
+// ever runs in the browser — a server-side subscriber would share dedup
+// state across requests. Never import this module's stream fns server-side.
 const dedupeSet = new Set<string>()
 
 const DEDUPE_CAP = 10_000

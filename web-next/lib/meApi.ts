@@ -1,4 +1,5 @@
 import { apiFetch, IDENTITY_BASE, type UserRecord } from './api'
+import type { OrgMemberRole } from './members'
 import type {
   AttendanceWithStudent,
   AttendanceSummary,
@@ -15,15 +16,9 @@ import type {
 
 export type MyOrg = {
   org_auth0_id: string
-  role:
-    | 'owner'
-    | 'admin'
-    | 'head_coach'
-    | 'assistant_coach'
-    | 'coach'
-    | 'analyst'
-    | 'medical'
-    | 'player'
+  // Membership role — the single vocabulary (ORG_MEMBER_ROLES), not a fifth
+  // spelling of the same 8 literals.
+  role: OrgMemberRole
   display_name: string | null
 }
 

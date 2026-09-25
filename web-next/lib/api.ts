@@ -73,6 +73,19 @@ async function serverIdentity(url: string, body?: BodyInit | null): Promise<stri
 
 export type { CoachAIError }
 
+// ── Query strings ────────────────────────────────────────────────────────────
+// One encoder for optional fetch params (api + org layers). Skips
+// undefined/null/'' explicitly rather than by truthiness so numeric 0
+// survives; key names map per call site (the wire mixes camel/snake case).
+export function qs(params: Record<string, string | number | null | undefined>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value))
+  }
+  const s = search.toString()
+  return s ? `?${s}` : ''
+}
+
 // ── API Client ───────────────────────────────────────────────────────────────
 
 export async function apiFetch<T>(
@@ -577,10 +590,8 @@ export async function getDashboardAnalyses(
   offset = 0,
   opts: { unlinked?: boolean } = {},
 ): Promise<{ analyses: DashboardAnalysis[] }> {
-  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-  if (opts.unlinked) params.set('unlinked', '1')
   return apiFetch<{ analyses: DashboardAnalysis[] }>(
-    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses?${params.toString()}`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/analyses${qs({ limit, offset, unlinked: opts.unlinked ? '1' : undefined })}`,
   )
 }
 
@@ -616,15 +627,8 @@ export async function getFindingsTrends(
     teamId?: string | null
   } = {},
 ): Promise<{ trends: FindingsTrendPoint[] }> {
-  const params = new URLSearchParams()
-  if (opts.days !== undefined) params.set('days', String(opts.days))
-  if (opts.category) params.set('category', opts.category)
-  if (opts.severity) params.set('severity', opts.severity)
-  if (opts.studentId) params.set('student_id', opts.studentId)
-  if (opts.teamId) params.set('team_id', opts.teamId)
-  const qs = params.toString()
   return apiFetch<{ trends: FindingsTrendPoint[] }>(
-    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings/trends${qs ? `?${qs}` : ''}`,
+    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings/trends${qs({ days: opts.days, category: opts.category, severity: opts.severity, student_id: opts.studentId, team_id: opts.teamId })}`,
   )
 }
 
