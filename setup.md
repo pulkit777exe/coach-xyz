@@ -152,7 +152,7 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ```bash
 cd engine   && python -m pytest tests/ -q   # 225 tests
 cd server   && bun test                      # 360 tests / 34 files
-cd web-next && npm test                      # 185 tests / 18 files (vitest)
+cd web-next && npm test                      # 201 tests / 19 files (vitest)
 ```
 
 Or run both TypeScript suites at once with `npm run check` from the repo root.
