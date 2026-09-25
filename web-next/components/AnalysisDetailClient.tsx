@@ -64,12 +64,16 @@ interface AnalysisDetailClientProps {
   auth0Id: string
   jobId: string
   initialData: DashboardAnalysis | null
+  canShareTokens?: boolean
+  canLinkToStudent?: boolean
 }
 
 export default function AnalysisDetailClient({
   auth0Id,
   jobId,
   initialData,
+  canShareTokens = true,
+  canLinkToStudent = true,
 }: AnalysisDetailClientProps) {
   const router = useRouter()
   const [status, setStatus] = useState<JobStatus | null>(null)
@@ -292,9 +296,7 @@ export default function AnalysisDetailClient({
           <h1 className="text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3">
             Analysis Expired
           </h1>
-          <p className="text-muted-foreground text-body mb-6">
-            Analysis not found or expired.
-          </p>
+          <p className="text-muted-foreground text-body mb-6">Analysis not found or expired.</p>
           <Link
             href="/"
             className="inline-block px-4 py-2 rounded-[6px] border border-border text-body font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -350,9 +352,7 @@ export default function AnalysisDetailClient({
       <div className="flex items-center gap-1.5 mb-6 text-meta text-muted-foreground">
         <span>History</span>
         <span className="text-muted-foreground/60">/</span>
-        <span className="text-foreground">
-          {data.display_name || data.file_name || 'Untitled'}
-        </span>
+        <span className="text-foreground">{data.display_name || data.file_name || 'Untitled'}</span>
       </div>
 
       {/* Header */}
@@ -432,24 +432,28 @@ export default function AnalysisDetailClient({
           label="Copy Job ID"
           className="!rounded-[6px] !border !border-border !bg-transparent !px-3 !py-1.5 !text-meta !font-medium !text-muted-foreground hover:!bg-accent hover:!text-foreground"
         />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setShareUrl(null)
-            setShareError(null)
-            setShareExpires(null)
-            setShareLoading(true)
-            setShowShareModal(true)
-          }}
-        >
-          Share
-        </Button>
-        <AnalysisLinkControl
-          auth0Id={auth0Id}
-          jobId={data.server_job_id}
-          initialStudentId={data.student_id}
-        />
+        {canShareTokens ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setShareUrl(null)
+              setShareError(null)
+              setShareExpires(null)
+              setShareLoading(true)
+              setShowShareModal(true)
+            }}
+          >
+            Share
+          </Button>
+        ) : null}
+        {canLinkToStudent ? (
+          <AnalysisLinkControl
+            auth0Id={auth0Id}
+            jobId={data.server_job_id}
+            initialStudentId={data.student_id}
+          />
+        ) : null}
         <HoldToConfirm
           onConfirm={async () => {
             await deleteAnalysis(auth0Id, data.server_job_id)
@@ -597,7 +601,9 @@ export default function AnalysisDetailClient({
             >
               {(event) => (
                 <div className="flex items-center gap-3 py-2">
-                  <TimestampPill seconds={typeof event.timestamp === 'number' ? event.timestamp : 0} />
+                  <TimestampPill
+                    seconds={typeof event.timestamp === 'number' ? event.timestamp : 0}
+                  />
                   <span className="text-body text-foreground">
                     {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                   </span>
@@ -636,9 +642,7 @@ export default function AnalysisDetailClient({
                   i < shotEvents.length - 1 ? 'border-b border-border' : ''
                 }`}
               >
-                {typeof event.timestamp === 'number' && (
-                  <TimestampPill seconds={event.timestamp} />
-                )}
+                {typeof event.timestamp === 'number' && <TimestampPill seconds={event.timestamp} />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-body text-foreground">
@@ -693,7 +697,9 @@ export default function AnalysisDetailClient({
                   <ul className="space-y-2">
                     {(summary.top_tips as string[]).map((tip, i) => (
                       <li key={i} className="text-body text-foreground flex items-start gap-2">
-                        <span className="text-muted-foreground shrink-0 tabular-nums">{i + 1}.</span>
+                        <span className="text-muted-foreground shrink-0 tabular-nums">
+                          {i + 1}.
+                        </span>
                         {tip}
                       </li>
                     ))}

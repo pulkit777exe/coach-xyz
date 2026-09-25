@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { BarChart3, Gauge, Shield, SlidersHorizontal, User, Users, X } from 'lucide-react'
+import { BarChart3, Bell, Gauge, Shield, SlidersHorizontal, User, Users, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -12,17 +12,13 @@ import { cn } from '@/lib/utils'
  * client shell. The keys resolve to icons imported here.
  */
 export type SettingsSectionIcon =
-  | 'account'
-  | 'security'
-  | 'preferences'
-  | 'members'
-  | 'plan'
-  | 'records'
+  'account' | 'security' | 'preferences' | 'notifications' | 'members' | 'plan' | 'records'
 
 const SECTION_ICONS: Record<SettingsSectionIcon, React.ElementType> = {
   account: User,
   security: Shield,
   preferences: SlidersHorizontal,
+  notifications: Bell,
   members: Users,
   plan: Gauge,
   records: BarChart3,
@@ -147,9 +143,7 @@ export default function SettingsPanel({
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate whitespace-nowrap">
-                    {section.label}
-                  </span>
+                  <span className="min-w-0 flex-1 truncate whitespace-nowrap">{section.label}</span>
                 </a>
               )
             })}
@@ -168,11 +162,7 @@ export default function SettingsPanel({
                   </p>
                 ) : null}
               </div>
-              <Link
-                href={closeHref}
-                aria-label="Close settings"
-                className={CLOSE_BUTTON_CLASS}
-              >
+              <Link href={closeHref} aria-label="Close settings" className={CLOSE_BUTTON_CLASS}>
                 <X className="size-4" aria-hidden="true" />
               </Link>
             </header>

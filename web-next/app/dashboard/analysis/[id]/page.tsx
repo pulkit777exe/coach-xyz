@@ -4,6 +4,7 @@ import { getOrgContext, getDashboardAnalysisDetail } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import { unstable_noStore as noStore } from 'next/cache'
 import AnalysisDetailClient from '@/components/AnalysisDetailClient'
+import { analysisDetailCapabilities } from '@/lib/permissions'
 
 export async function generateMetadata({
   params,
@@ -39,7 +40,8 @@ export default async function AnalysisDetailPage({ params }: { params: Promise<{
   if (!session) {
     redirect('/auth/login')
   }
-  const { auth0Id } = orgCtx
+  const { auth0Id, role } = orgCtx
+  const capabilities = analysisDetailCapabilities(role)
 
   let data = null
   try {
@@ -50,5 +52,13 @@ export default async function AnalysisDetailPage({ params }: { params: Promise<{
     data = null
   }
 
-  return <AnalysisDetailClient auth0Id={auth0Id} jobId={id} initialData={data} />
+  return (
+    <AnalysisDetailClient
+      auth0Id={auth0Id}
+      jobId={id}
+      initialData={data}
+      canShareTokens={capabilities.canShareTokens}
+      canLinkToStudent={capabilities.canLinkToStudent}
+    />
+  )
 }

@@ -32,6 +32,41 @@ export type MyProfile = {
   coach_auth0_id: string | null
 }
 
+export const NOTIFICATION_EVENTS = [
+  'analysis_complete',
+  'analysis_failed',
+  'report_ready',
+  'attendance',
+  'ai_report',
+  'membership',
+] as const
+export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number]
+export type NotificationEvents = Record<NotificationEvent, boolean>
+
+export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, string> = {
+  analysis_complete: 'Analysis complete',
+  analysis_failed: 'Analysis failed',
+  report_ready: 'Report ready',
+  attendance: 'Attendance recorded',
+  ai_report: 'AI report finished',
+  membership: 'Membership changes',
+}
+
+export type NotificationCadence = 'instant' | 'daily' | 'weekly'
+
+export type NotificationPrefs = {
+  inApp: boolean
+  cadence: NotificationCadence
+  events: NotificationEvents
+  updatedAt: string | null
+}
+
+export type NotificationPrefsPatch = {
+  inApp?: boolean
+  cadence?: NotificationCadence
+  events?: Partial<NotificationEvents>
+}
+
 export type MyAttendance = {
   records: AttendanceWithStudent[]
   summary: AttendanceSummary | null
@@ -93,6 +128,19 @@ export async function updateMyProfile(input: {
   return apiFetch<{ user: UserRecord }>(me('/profile'), {
     method: 'PUT',
     body: JSON.stringify(input),
+  })
+}
+
+export async function getNotificationPrefs(): Promise<NotificationPrefs> {
+  return apiFetch<NotificationPrefs>(me('/notification-preferences'))
+}
+
+export async function updateNotificationPrefs(
+  patch: NotificationPrefsPatch,
+): Promise<NotificationPrefs> {
+  return apiFetch<NotificationPrefs>(me('/notification-preferences'), {
+    method: 'PUT',
+    body: JSON.stringify(patch),
   })
 }
 

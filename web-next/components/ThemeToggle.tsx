@@ -4,10 +4,15 @@ import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { usePreferences } from '@/lib/preferences'
 import { cn } from '@/lib/utils'
 
 export default function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
+  // Route through the preferences store, not next-themes directly: the
+  // provider re-applies `coachxyz:preferences` on boot, so writing only to
+  // next-themes let a reload revert the choice made here.
+  const { setTheme } = usePreferences()
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true))

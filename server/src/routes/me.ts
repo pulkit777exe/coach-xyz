@@ -26,6 +26,11 @@ import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 import { enqueueAnalysis } from '../lib/queue'
 import { UUID_RE } from '../lib/uuid'
+import {
+  notificationPrefs,
+  upsertNotificationPrefs,
+  validateNotificationPrefsPatch,
+} from '../lib/notificationPrefs'
 import { DEFAULT_MODEL } from '../types'
 
 /**
@@ -149,6 +154,36 @@ export default new Elysia()
     auditRoute(request, verified, 'settings.changed', 'user_profile', verified)
     set.status = 200
     return { user }
+  })
+
+  // Own in-app notification preferences. No row means enabled defaults.
+  .get('/api/me/notification-preferences', async ({ request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const preferences = await notificationPrefs(verified)
+    set.status = 200
+    return preferences
+  })
+  .put('/api/me/notification-preferences', async ({ request, body, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const validated = validateNotificationPrefsPatch(body)
+    if (!validated.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', validated.message, false)
+    }
+
+    const preferences = await upsertNotificationPrefs(verified, validated.value)
+    if (!preferences) {
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to update notification preferences', true)
+    }
+
+    auditRoute(request, verified, 'settings.changed', 'notification_preferences', verified)
+    set.status = 200
+    return preferences
   })
 
   // Own attendance history + summary (joined with the linked player scope)

@@ -137,6 +137,26 @@ export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
   'analyst',
 ]
 
+export type AnalysisDetailCapabilities = {
+  canShareTokens: boolean
+  canLinkToStudent: boolean
+}
+
+/**
+ * UI capability decision for the org-owned analysis detail action bar. Sharing
+ * reuses the report/share floor; linking an analysis to a student is roster
+ * management. Deletion is intentionally absent because its server decision is
+ * resource-ownership/identity-based rather than a role-management capability.
+ */
+export function analysisDetailCapabilities(
+  role: OrgMemberRole | null | undefined,
+): AnalysisDetailCapabilities {
+  return {
+    canShareTokens: role != null && REPORT_SEND_ROLES.includes(role),
+    canLinkToStudent: hasPermission(role, 'player.manage'),
+  }
+}
+
 // ── Dashboard quick actions ─────────────────────────────────────────────────
 // The landing-page action tiles (New analysis / Add student / Schedule event
 // / Invite member). Derived, never hand-listed: a tile must not appear when

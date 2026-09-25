@@ -12,6 +12,8 @@ import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
+import { createNotification } from '../../lib/notifications'
+import { logger } from '../../lib/logger'
 import { Elysia } from 'elysia'
 
 export default new Elysia()
@@ -89,6 +91,30 @@ export default new Elysia()
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Failed to create report', true)
     }
+
+    if (student?.account_auth0_id) {
+      try {
+        await createNotification({
+          auth0Id: student.account_auth0_id,
+          type: 'report_ready',
+          title: 'Report ready',
+          body: report.title,
+          data: {
+            report_id: report.id,
+            href: `/player/reports/${report.id}`,
+          },
+          dedupeKey: `report_ready:${report.id}`,
+        })
+      } catch (error) {
+        logger.error('report_ready_notification_error', {
+          type: 'report_ready_notification_error',
+          auth0Id: student.account_auth0_id,
+          reportId: report.id,
+          error: error instanceof Error ? error.message : 'unknown',
+        })
+      }
+    }
+
     set.status = 201
     return { report }
   })

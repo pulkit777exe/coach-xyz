@@ -5,13 +5,65 @@ import {
   listAttendance,
   setAttendanceBatch,
   upsertAttendance,
+  type AttendanceRecord,
   type AttendanceStatus,
+  type Student,
 } from '../../lib/orgData'
 import { isDate } from '../../lib/orgValidate'
 import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
+import { createNotification, type CreateNotificationInput } from '../../lib/notifications'
+import { logger } from '../../lib/logger'
 import { Elysia } from 'elysia'
+
+type AttendanceNotificationStudent = Pick<Student, 'id' | 'full_name' | 'account_auth0_id'>
+type NotificationSender = (input: CreateNotificationInput) => Promise<unknown>
+
+/** Fan out one notification per affected student, never once per batch row. */
+export const fanOutAttendanceNotifications = async (
+  students: AttendanceNotificationStudent[],
+  records: AttendanceRecord[],
+  notify: NotificationSender = createNotification,
+): Promise<void> => {
+  const recordByStudentId = new Map<string, AttendanceRecord>()
+  for (const record of records) {
+    if (!recordByStudentId.has(record.student_id)) {
+      recordByStudentId.set(record.student_id, record)
+    }
+  }
+
+  const notifiedStudentIds = new Set<string>()
+  for (const student of students) {
+    if (notifiedStudentIds.has(student.id) || !student.account_auth0_id) continue
+    const record = recordByStudentId.get(student.id)
+    if (!record) continue
+    notifiedStudentIds.add(student.id)
+
+    try {
+      await notify({
+        auth0Id: student.account_auth0_id,
+        type: 'attendance',
+        title: 'Attendance recorded',
+        body: student.full_name,
+        data: {
+          attendance_id: record.id,
+          student_id: record.student_id,
+          session_date: record.session_date,
+          status: record.status,
+          href: '/player',
+        },
+      })
+    } catch (error) {
+      logger.error('attendance_notification_error', {
+        type: 'attendance_notification_error',
+        auth0Id: student.account_auth0_id,
+        studentId: student.id,
+        error: error instanceof Error ? error.message : 'unknown',
+      })
+    }
+  }
+}
 
 export default new Elysia()
   .use(serviceGuard)
@@ -61,6 +113,7 @@ export default new Elysia()
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Failed to save attendance', true)
     }
+    await fanOutAttendanceNotifications([student], [record])
     set.status = 200
     return { record }
   })
@@ -91,12 +144,13 @@ export default new Elysia()
     }
 
     // Verify every student belongs to this org before any write.
+    const students: Student[] = []
     for (const entry of entries) {
-      const exists = await getStudent(
+      const student = await getStudent(
         auth0Id,
         (entry as Record<string, unknown>).student_id as string,
       )
-      if (!exists) {
+      if (!student) {
         set.status = 404
         return buildError(
           'NOT_FOUND',
@@ -104,6 +158,7 @@ export default new Elysia()
           false,
         )
       }
+      students.push(student)
     }
 
     const parsed = entries.map((entry) => {
@@ -116,6 +171,7 @@ export default new Elysia()
       }
     })
     const records = await setAttendanceBatch(auth0Id, parsed)
+    await fanOutAttendanceNotifications(students, records)
     set.status = 200
     return { records, count: records.length }
   })

@@ -18,6 +18,7 @@ import Section from '@/components/org/Section'
 import StatusPill from '@/components/org/StatusPill'
 import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
+import NotificationsSection from '@/components/org/NotificationsSection'
 import MembersSection from '@/components/org/MembersSection'
 import SettingRow from '@/components/org/SettingRow'
 import type { SettingsSection } from '@/components/org/SettingsPanel'
@@ -228,6 +229,12 @@ export default function buildSettingsSections({
       label: 'Preferences',
       icon: 'preferences',
       content: <PreferencesSection />,
+    },
+    {
+      id: 'notifications',
+      label: 'Notifications',
+      icon: 'notifications',
+      content: <NotificationsSection />,
     },
   ]
 

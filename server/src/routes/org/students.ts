@@ -19,6 +19,7 @@ import {
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
 import { resolveCaller } from '../../lib/caller'
+import { hasPermission } from '../../lib/permissions'
 import { auditRoute } from '../../lib/audit'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
 import { buildError } from '../../lib/errors'
@@ -319,11 +320,17 @@ export default new Elysia()
     set.status = 200
     return { analyses }
   })
-  .put('/api/org/:auth0Id/analyses/:jobId/student', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/analyses/:jobId/student', async ({ params, body, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const caller = await resolveCaller(auth0Id, request)
+    const role = caller.role
+    if (!hasPermission(role, 'player.manage')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Linking analyses to students requires player.manage', false)
     }
     const { student_id } = body as { student_id?: unknown }
     if (student_id !== undefined && student_id !== null && typeof student_id !== 'string') {

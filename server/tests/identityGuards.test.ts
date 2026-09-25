@@ -71,6 +71,8 @@ describe('route-level verified-identity guards', () => {
     expect(await res.json()).toEqual(MISSING_IDENTITY_BODY)
   })
 
+  // Touches the live store (profile lookup), so it inherits remote-DB latency
+  // and can exceed Bun's 5s default when the DB-backed suites run alongside it.
   test('GET /api/me/profile with the verified header passes the guard', async () => {
     setToken(TEST_SERVICE_TOKEN)
     const status = await statusAfterGuard(
@@ -82,7 +84,7 @@ describe('route-level verified-identity guards', () => {
       ),
     )
     expect(status).not.toBe(403)
-  })
+  }, 20_000)
 
   test('GET /api/me/notifications without the verified header → pinned 403', async () => {
     setToken(undefined)

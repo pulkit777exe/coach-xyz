@@ -637,9 +637,19 @@ export const ensureInitialized = async () => {
             title text not null,
             body text,
             data jsonb not null default '{}'::jsonb,
+            dedupe_key text,
             read boolean not null default false,
             created_at timestamptz not null default now()
           );
+        `
+            await store`
+          alter table notifications
+          add column if not exists dedupe_key text;
+        `
+            await store`
+          create unique index if not exists notifications_auth0_dedupe_key_unique
+          on notifications (auth0_id, dedupe_key)
+          where dedupe_key is not null;
         `
             await store`
           create index if not exists idx_notifications_auth0_created

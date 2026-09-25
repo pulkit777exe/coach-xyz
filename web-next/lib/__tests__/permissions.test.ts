@@ -7,6 +7,7 @@ import {
   REPORT_SEND_ROLES,
   ROLE_PERMISSIONS,
   TEAM_DELETE_ROLES,
+  analysisDetailCapabilities,
   dashboardQuickActions,
   hasPermission,
   type Permission,
@@ -172,6 +173,25 @@ describe('route floors pinned from server guards', () => {
     for (const role of TEAM_DELETE_ROLES) {
       expect(hasPermission(role, 'team.manage'), `role: ${role}`).toBe(true)
     }
+  })
+})
+
+describe('analysis detail capabilities', () => {
+  test.each([
+    ['owner', true, true],
+    ['analyst', false, false],
+    ['medical', false, false],
+    ['player', false, false],
+    ['assistant_coach', true, false],
+  ] as const)('%s share=%s link=%s', (role, canShareTokens, canLinkToStudent) => {
+    expect(analysisDetailCapabilities(role)).toEqual({ canShareTokens, canLinkToStudent })
+  })
+
+  test('an unresolved role receives neither action', () => {
+    expect(analysisDetailCapabilities(null)).toEqual({
+      canShareTokens: false,
+      canLinkToStudent: false,
+    })
   })
 })
 

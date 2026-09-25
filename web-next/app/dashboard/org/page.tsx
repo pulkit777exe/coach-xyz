@@ -22,6 +22,7 @@ import {
   orgSubscription,
 } from '@/lib/serverData'
 import { ORG_MEMBER_ROLE_LABELS, type OrgMember, type OrgMemberRole } from '@/lib/members'
+import { MEMBERS_NAV_ROLES } from '@/lib/nav'
 import { Button } from '@/components/9ui/ui/button'
 import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
@@ -132,9 +133,18 @@ export default async function OrgPage() {
         title="Organization"
         description="Workspace details, plan, and staff."
         actions={
-          <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/dashboard/members" />}>
-            Manage members
-          </Button>
+          // Same floor as the Members nav item — an analyst/medical/assistant
+          // coach landing here must not be sent to a page that denies them.
+          MEMBERS_NAV_ROLES.includes(role) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/dashboard/members" />}
+            >
+              Manage members
+            </Button>
+          ) : null
         }
       />
 
@@ -155,7 +165,10 @@ export default async function OrgPage() {
           </div>
           <div className="mt-5 border-t border-border pt-1">
             <DefRow label="Organization ID" value={auth0Id} mono />
-            <DefRow label="Your account" value={profileRes?.user.email ?? session.user.email ?? '—'} />
+            <DefRow
+              label="Your account"
+              value={profileRes?.user.email ?? session.user.email ?? '—'}
+            />
             <DefRow label="Members" value={memberCount} />
             <DefRow label="Students" value={studentCount} />
             <DefRow label="Sessions this month" value={sessionsThisMonth} />
