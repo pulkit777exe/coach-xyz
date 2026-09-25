@@ -151,7 +151,7 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 
 ```bash
 cd engine   && python -m pytest tests/ -q   # 225 tests
-cd server   && bun test                      # 355 tests / 34 files
+cd server   && bun test                      # 360 tests / 34 files
 cd web-next && npm test                      # 185 tests / 18 files (vitest)
 ```
 

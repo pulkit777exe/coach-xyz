@@ -721,7 +721,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 185 tests / 18 files; server 355 pass / 34 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-24.
+- Web test suite: 185 tests / 18 files; server 360 pass / 34 files (`bun test`, 3 notification DB-integration tests skip unless `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-24.
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -812,7 +812,7 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
 | Test suite: 225 tests pass (CONFIRMED 2026-09-24) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 355 pass / 34 files (CONFIRMED 2026-09-24) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 360 pass / 34 files (CONFIRMED 2026-09-25) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
 | Test suite: 185 tests / 18 files (CONFIRMED 2026-09-24) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
@@ -835,4 +835,4 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 
 ---
 
-*Last verified: 2026-09-24 (documentation-sync pass after six architecture candidates + a routing sync landed: historyStore wrapper-owned init + `orDisabledDefault`, `requireVerifiedSelf`/`admitAnalysis`, lazy queue wiring + single Redis URL derivation + `lib/retention.ts`, chat `Transcript` seam + `askEngineChat` + buffered `lib/sse.ts` + dead `system_prompt` removed, engine-owned error/status/retryable registry with server posture helpers, JOB_NOT_FOUND `retryable: false` everywhere, dead routes removed (`…/stages`, server `POST /api/chat`, `GET /teams/:teamId`), statusless-vs-stamped decision added §9, Resolved entries 17–22 §10; baselines CONFIRMED: server 333/33, engine 220, web 146/16, tsc/lint/prettier/ruff clean. Later same-day hardening (counts now server 355/34, engine 225, web 185/18): winston logging seam + access logs, logged degradation fallbacks, classifyFailure terminal-event fix, striped engine job locks, code-based historyStore reconnect predicate, dead-export sweeps, live-DB test budgets)*
+*Last verified: 2026-09-24 (documentation-sync pass after six architecture candidates + a routing sync landed: historyStore wrapper-owned init + `orDisabledDefault`, `requireVerifiedSelf`/`admitAnalysis`, lazy queue wiring + single Redis URL derivation + `lib/retention.ts`, chat `Transcript` seam + `askEngineChat` + buffered `lib/sse.ts` + dead `system_prompt` removed, engine-owned error/status/retryable registry with server posture helpers, JOB_NOT_FOUND `retryable: false` everywhere, dead routes removed (`…/stages`, server `POST /api/chat`, `GET /teams/:teamId`), statusless-vs-stamped decision added §9, Resolved entries 17–22 §10; baselines CONFIRMED: server 333/33, engine 220, web 146/16, tsc/lint/prettier/ruff clean. Later same-day hardening (counts now server 360/34, engine 225, web 185/18): winston logging seam + access logs, logged degradation fallbacks, classifyFailure terminal-event fix, striped engine job locks, code-based historyStore reconnect predicate, dead-export sweeps, live-DB test budgets)*
