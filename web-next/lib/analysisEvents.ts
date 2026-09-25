@@ -7,8 +7,8 @@ import type { JobStatus } from '@/types'
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 
 type AnalysisEvent = {
-  type: 'snapshot' | 'progress' | 'status'
-  status: JobStatus
+  type: 'snapshot' | 'progress' | 'status' | 'heartbeat'
+  status?: JobStatus
 }
 
 type EventFailureHandler = (error: unknown) => void
@@ -27,6 +27,17 @@ export function subscribeAnalysisEvents(
   const controller = new AbortController()
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
+  let activityTimer: ReturnType<typeof setTimeout> | null = null
+  let timedOut = false
+  const armActivityTimer = () => {
+    if (activityTimer) clearTimeout(activityTimer)
+    activityTimer = setTimeout(() => {
+      if (controller.signal.aborted) return
+      timedOut = true
+      onFailure(new Error('Analysis event stream heartbeat was missed.'))
+      controller.abort()
+    }, 90_000)
+  }
 
   void (async () => {
     try {
@@ -47,9 +58,13 @@ export function subscribeAnalysisEvents(
       }
       if (!response.body) throw new Error('Analysis event stream returned no body.')
 
+      armActivityTimer()
       for await (const event of parseEventStream<AnalysisEvent>(response)) {
         if (controller.signal.aborted) return
-        if (!event || typeof event !== 'object' || !event.status) continue
+        armActivityTimer()
+        if (!event || typeof event !== 'object') continue
+        if (event.type === 'heartbeat') continue
+        if (!event.status) continue
         onStatus(event.status)
         if (event.status.complete) return
       }
@@ -57,8 +72,9 @@ export function subscribeAnalysisEvents(
         throw new Error('Analysis event stream closed before a terminal status.')
       }
     } catch (error) {
-      if (!controller.signal.aborted) onFailure(error)
+      if (!controller.signal.aborted && !timedOut) onFailure(error)
     } finally {
+      if (activityTimer) clearTimeout(activityTimer)
       signal.removeEventListener('abort', onAbort)
     }
   })()
@@ -154,6 +170,7 @@ export function startAnalysisStatus(config: AnalysisStatusConfig): JobPollingCon
       intervalMs: 5_000,
       timeoutMs: config.timeoutMs ?? 12 * 60 * 1000,
       maxFailures: 4,
+      maxRequests: 4,
       backoffFactor: 2,
       maxBackoffMs: 30_000,
       warnAfterMs: config.warnAfterMs,

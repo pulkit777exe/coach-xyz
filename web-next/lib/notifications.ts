@@ -36,6 +36,7 @@ type NotificationsState = {
 }
 
 type NotificationEvent = AppNotification
+type NotificationStreamEvent = NotificationEvent | { type: 'heartbeat' }
 
 // Delivery-dedup for the CLIENT notification stream (NotificationBell).
 // Module-scoped like the attribution cache: safe because subscription only
@@ -97,6 +98,7 @@ export async function markAllRead(): Promise<void> {
 export function subscribeNotifications(
   onEvent: (n: AppNotification) => void,
   signal: AbortSignal,
+  onReconnect?: () => void,
 ): () => void {
   const controller = new AbortController()
   const outerSignal = signal
@@ -106,15 +108,31 @@ export function subscribeNotifications(
   outerSignal.addEventListener('abort', onAbort)
 
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let connectionTimer: ReturnType<typeof setTimeout> | null = null
+  let idleTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
   let isConnecting = false
   let isStreaming = false
+  let timedOut = false
   const maxReconnectAttempts = 6
   const reconnectDelays = [10_000, 20_000, 40_000, 60_000]
 
   const clearReconnect = () => {
     if (reconnectTimer) clearTimeout(reconnectTimer)
     reconnectTimer = null
+  }
+  const clearConnectionTimers = () => {
+    if (connectionTimer) clearTimeout(connectionTimer)
+    if (idleTimer) clearTimeout(idleTimer)
+    connectionTimer = null
+    idleTimer = null
+  }
+  const armIdleTimer = () => {
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 90_000)
   }
 
   const scheduleReconnect = () => {
@@ -123,6 +141,7 @@ export function subscribeNotifications(
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
+      onReconnect?.()
       void connect()
     }, delay)
   }
@@ -130,6 +149,11 @@ export function subscribeNotifications(
   async function connect() {
     if (controller.signal.aborted || isConnecting || isStreaming) return
     isConnecting = true
+    timedOut = false
+    connectionTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 15_000)
     try {
       const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/sse`, {
         signal: controller.signal,
@@ -137,12 +161,16 @@ export function subscribeNotifications(
       })
 
       if (!res.ok || !res.body) return
+      if (connectionTimer) clearTimeout(connectionTimer)
+      connectionTimer = null
       isStreaming = true
-      reconnectAttempt = 0
+      armIdleTimer()
 
-      for await (const event of parseEventStream<NotificationEvent>(res)) {
-        // Skip connected handshake
-        if ('connected' in event && (event as { connected?: boolean }).connected) continue
+      for await (const event of parseEventStream<NotificationStreamEvent>(res)) {
+        if (timedOut) break
+        armIdleTimer()
+        // Skip connected handshake and transport heartbeat.
+        if ('type' in event && event.type === 'heartbeat') continue
         if (!('id' in event)) continue
 
         const n = event as AppNotification
@@ -153,16 +181,18 @@ export function subscribeNotifications(
     } catch {
       // Fall through — scheduleReconnect handles the bounded reconnection policy.
     } finally {
+      clearConnectionTimers()
       isConnecting = false
       isStreaming = false
     }
-    scheduleReconnect()
+    if (!outerSignal.aborted && (!controller.signal.aborted || timedOut)) scheduleReconnect()
   }
 
   const onOnline = () => {
     if (controller.signal.aborted || isConnecting || isStreaming) return
     reconnectAttempt = 0
     clearReconnect()
+    onReconnect?.()
     void connect()
   }
   const onVisibilityChange = () => {
@@ -174,6 +204,7 @@ export function subscribeNotifications(
 
   return () => {
     clearReconnect()
+    clearConnectionTimers()
     outerSignal.removeEventListener('abort', onAbort)
     window.removeEventListener('online', onOnline)
     document.removeEventListener('visibilitychange', onVisibilityChange)

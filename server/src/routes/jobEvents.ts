@@ -75,10 +75,14 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
       // Subscribe before the snapshot so an update racing the initial read is
       // buffered rather than lost. The durable status key remains authoritative
       // for reconnects.
+      // The engine publishes by engine_job_id, while the browser-facing URL
+      // and server_job_id namespace use the server id. Subscribe to the engine
+      // namespace; keep all reconciliation/response ids server-scoped.
+      const eventJobId = serverJob.engine_job_id
       const buffered: JobEvent[] = []
       let ready = false
       let unsubscribe = () => {}
-      unsubscribe = subscribe(jobId, (event) => {
+      unsubscribe = subscribe(eventJobId, (event) => {
         if (!ready) buffered.push(event)
         else void emitEvent(event)
       })
@@ -136,7 +140,14 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
             }
 
             const terminal = await resolve(request, jobId)
-            if (!terminal.ok) return
+            if (!terminal.ok) {
+              // The engine acknowledged a terminal event but the status
+              // resolver is temporarily unavailable; close so the client can
+              // perform one bounded reconciliation instead of hanging on a
+              // heartbeat forever.
+              close()
+              return
+            }
             send({ type: 'status', status: terminal.response })
             close()
           })
@@ -164,7 +175,9 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
           heartbeat = setInterval(() => {
             if (closed || !controllerRef) return
             try {
-              controllerRef.enqueue(new TextEncoder().encode(': heartbeat\n\n'))
+              controllerRef.enqueue(
+                new TextEncoder().encode(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`),
+              )
             } catch {
               close()
             }

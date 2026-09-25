@@ -41,12 +41,21 @@ export const orgAiReportStatus = (
   auth0Id: string,
   reportJobId: string,
 ): Promise<AiReportJobPoll> => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
   return apiFetch<AiReportJobPoll>(
     `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}/reports/ai/${encodeURIComponent(reportJobId)}`,
-  )
+    { signal: controller.signal },
+  ).finally(() => clearTimeout(timeout))
 }
 
 /** Subscribe to one report job's event stream (client-side only). */
+type AiReportStreamEvent = AiReportJobPoll | { type: 'heartbeat' }
+
+function isHeartbeatEvent(event: AiReportStreamEvent): event is { type: 'heartbeat' } {
+  return 'type' in event && event.type === 'heartbeat'
+}
+
 export function subscribeAiReportEvents(
   auth0Id: string,
   reportJobId: string,
@@ -57,6 +66,17 @@ export function subscribeAiReportEvents(
   const controller = new AbortController()
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
+  let activityTimer: ReturnType<typeof setTimeout> | null = null
+  let timedOut = false
+  const armActivityTimer = () => {
+    if (activityTimer) clearTimeout(activityTimer)
+    activityTimer = setTimeout(() => {
+      if (controller.signal.aborted) return
+      timedOut = true
+      onFailure(new Error('Report event stream heartbeat was missed.'))
+      controller.abort()
+    }, 90_000)
+  }
 
   void (async () => {
     try {
@@ -71,8 +91,11 @@ export function subscribeAiReportEvents(
         })
       }
       if (!response.body) throw new Error('Report event stream returned no body.')
-      for await (const event of parseEventStream<AiReportJobPoll>(response)) {
+      armActivityTimer()
+      for await (const event of parseEventStream<AiReportStreamEvent>(response)) {
         if (controller.signal.aborted) return
+        armActivityTimer()
+        if (isHeartbeatEvent(event)) continue
         onEvent(event)
         if (event.status === 'done' || event.status === 'failed') return
       }
@@ -80,8 +103,9 @@ export function subscribeAiReportEvents(
         throw new Error('Report event stream closed before a terminal status.')
       }
     } catch (error) {
-      if (!controller.signal.aborted) onFailure(error)
+      if (!controller.signal.aborted && !timedOut) onFailure(error)
     } finally {
+      if (activityTimer) clearTimeout(activityTimer)
       signal.removeEventListener('abort', onAbort)
     }
   })()

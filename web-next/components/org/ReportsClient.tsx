@@ -125,10 +125,12 @@ export default function ReportsClient({
     const applyStatus = (res: AiReportJobPoll) => {
       if (finished) return
       setAiJob(res)
-      if (res.status === 'done' && res.report) {
-        setReports((prev) =>
-          prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
-        )
+      if (res.status === 'done') {
+        if (res.report) {
+          setReports((prev) =>
+            prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
+          )
+        }
         toast.success('AI report generated')
         finished = true
         setAiPending(null)
@@ -157,6 +159,7 @@ export default function ReportsClient({
         // job is still running, stop rather than creating a polling loop.
         void orgAiReportStatus(auth0Id, aiPending.report_job_id)
           .then((res) => {
+            if (finished) return
             if (res.status === 'done' || res.status === 'failed') {
               applyStatus(res)
             } else {

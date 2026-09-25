@@ -32,6 +32,8 @@ export interface JobPollingConfig<S> {
   warnAfterMs?: number
   /** Consecutive failures allowed before giving up (default 5). */
   maxFailures?: number
+  /** Hard total request budget, including successful nonterminal responses. */
+  maxRequests?: number
   /** Interval multiplier per consecutive failure (default 2). Pass 1 for fixed-interval retries. */
   backoffFactor?: number
   maxBackoffMs?: number
@@ -59,6 +61,13 @@ const TIMEOUT_ERROR: CoachAIError = {
   retryable: false,
 }
 
+const REQUEST_BUDGET_ERROR: CoachAIError = {
+  code: 'STATUS_RECONCILIATION_EXHAUSTED',
+  message: 'Live status updates are unavailable. Refresh to try again.',
+  layer: 'client',
+  retryable: false,
+}
+
 export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingController {
   const {
     jobId,
@@ -68,6 +77,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
     timeoutMs,
     warnAfterMs,
     maxFailures = 5,
+    maxRequests,
     backoffFactor = 2,
     maxBackoffMs = 30_000,
     giveUpOnFirstFailure = false,
@@ -83,6 +93,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   let timer: ReturnType<typeof setTimeout> | null = null
   let startedAt = now()
   let failures = 0
+  let requests = 0
   let hadSucceeded = false
   let warned = false
 
@@ -117,6 +128,12 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       return
     }
 
+    if (maxRequests !== undefined && requests >= maxRequests) {
+      fail('timeout', REQUEST_BUDGET_ERROR)
+      return
+    }
+    requests += 1
+
     let status: S
     try {
       status = await fetchStatus(jobId)
@@ -147,6 +164,11 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       return
     }
 
+    if (maxRequests !== undefined && requests >= maxRequests) {
+      fail('timeout', REQUEST_BUDGET_ERROR)
+      return
+    }
+
     if (warnAfterMs !== undefined && !warned && elapsed > warnAfterMs) {
       warned = true
       onWarn?.()
@@ -163,6 +185,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   function refresh() {
     startedAt = now()
     failures = 0
+    requests = 0
     warned = false
     void run()
   }

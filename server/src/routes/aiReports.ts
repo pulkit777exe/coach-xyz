@@ -196,10 +196,39 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
       }
 
-      const initial = await getJob(reportJobId)
-      if (!initial || initial.auth0_id !== auth0Id) {
+      const initialForAuth = await getJob(reportJobId)
+      if (!initialForAuth || initialForAuth.auth0_id !== auth0Id) {
         set.status = 404
         return buildError('NOT_FOUND', 'Report job not found', false)
+      }
+
+      // Subscribe before taking the snapshot used by the stream. The durable
+      // record is still the source of truth, but a transition racing this
+      // read is retained in `latest` instead of being lost.
+      let latest: AiReportJob | null = null
+      let activeListener: ((job: AiReportJob) => void) | null = null
+      const unsubscribe = subscribeJob(reportJobId, (job) => {
+        latest = job
+        activeListener?.(job)
+      })
+      let snapshot: AiReportJob | null
+      try {
+        snapshot = await getJob(reportJobId)
+      } catch (error) {
+        unsubscribe()
+        throw error
+      }
+      if (!snapshot || snapshot.auth0_id !== auth0Id) {
+        unsubscribe()
+        set.status = 404
+        return buildError('NOT_FOUND', 'Report job not found', false)
+      }
+      const latestJob = latest as AiReportJob | null
+      const initial =
+        latestJob && latestJob.updated_at >= snapshot.updated_at ? latestJob : snapshot
+      if (request.signal.aborted) {
+        unsubscribe()
+        return new Response(null, { status: 499 })
       }
 
       const stream = new ReadableStream({
@@ -207,13 +236,13 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
           const encoder = new TextEncoder()
           let closed = false
           let heartbeat: ReturnType<typeof setInterval> | null = null
-          let unsubscribe = () => {}
           let sequence = Promise.resolve()
 
           const close = () => {
             if (closed) return
             closed = true
             if (heartbeat) clearInterval(heartbeat)
+            activeListener = null
             unsubscribe()
             try {
               controller.close()
@@ -222,7 +251,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
             }
           }
 
-          const enqueue = (job: typeof initial) => {
+          const enqueue = (job: AiReportJob) => {
             sequence = sequence
               .then(async () => {
                 if (closed) return
@@ -252,17 +281,26 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
               })
           }
 
-          unsubscribe = subscribeJob(reportJobId, enqueue)
+          activeListener = enqueue
           enqueue(initial)
+          // Cover the tiny gap between snapshot selection and listener
+          // assignment without replaying the same record twice.
+          if (latest && latest !== initial) enqueue(latest)
           heartbeat = setInterval(() => {
             if (closed) return
             try {
-              controller.enqueue(encoder.encode(': heartbeat\n\n'))
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`),
+              )
             } catch {
               close()
             }
           }, 30_000)
           request.signal.addEventListener('abort', close, { once: true })
+        },
+        cancel() {
+          activeListener = null
+          unsubscribe()
         },
       })
 

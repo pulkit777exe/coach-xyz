@@ -20,6 +20,7 @@ const request = () => new Request('http://localhost/api/job-events/job-1')
 describe('/api/job-events/:jobId', () => {
   test('sends a snapshot, streams progress, then reconciles a terminal event', async () => {
     let listener: JobEventListener | null = null
+    let subscribedJobId = ''
     let terminalResolveCalls = 0
     const resolve = async (): Promise<StatusResolution> => {
       terminalResolveCalls += 1
@@ -36,7 +37,8 @@ describe('/api/job-events/:jobId', () => {
       getJob: async () => job,
       startBus: async () => true,
       resolveStatus: resolve,
-      onEvent: (_jobId, handler) => {
+      onEvent: (jobId, handler) => {
+        subscribedJobId = jobId
         listener = handler
         return () => {
           listener = null
@@ -47,6 +49,7 @@ describe('/api/job-events/:jobId', () => {
     const response = await route.handle(request())
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('text/event-stream')
+    expect(subscribedJobId).toBe('engine-1')
     const reader = response.body!.getReader()
     const decoder = new TextDecoder()
 
@@ -55,7 +58,7 @@ describe('/api/job-events/:jobId', () => {
     expect(first.value).toBeDefined()
 
     listener!({
-      job_id: 'job-1',
+      job_id: 'engine-1',
       status: {
         state: 'analyzing',
         stage: 3,
@@ -73,7 +76,7 @@ describe('/api/job-events/:jobId', () => {
     expect(decoder.decode(second.value)).toContain('"progress":60')
 
     listener!({
-      job_id: 'job-1',
+      job_id: 'engine-1',
       status: {
         state: 'completed',
         stage: 6,

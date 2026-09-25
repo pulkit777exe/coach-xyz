@@ -33,6 +33,9 @@ export type JobEventListener = (event: JobEvent) => void
 
 let subscriber: IORedis | null = null
 let startPromise: Promise<boolean> | null = null
+let restartTimer: ReturnType<typeof setTimeout> | null = null
+let stopRequested = false
+let lifecycleGeneration = 0
 const listeners = new Map<string, Set<JobEventListener>>()
 
 function parseJobEvent(raw: string): JobEvent | null {
@@ -41,7 +44,33 @@ function parseJobEvent(raw: string): JobEvent | null {
     if (typeof parsed.job_id !== 'string' || !parsed.status || typeof parsed.status !== 'object') {
       return null
     }
-    return parsed as JobEvent
+    const status = parsed.status as Record<string, unknown>
+    // Allowlist the fields that may cross the Redis boundary. Do not spread
+    // arbitrary JSON from the channel into a response or a log record.
+    if (
+      typeof status.state !== 'string' ||
+      typeof status.stage !== 'number' ||
+      typeof status.stage_name !== 'string' ||
+      typeof status.progress !== 'number' ||
+      typeof status.complete !== 'boolean' ||
+      typeof status.retryable !== 'boolean'
+    ) {
+      return null
+    }
+    return {
+      job_id: parsed.job_id,
+      status: {
+        state: status.state,
+        stage: status.stage,
+        stage_name: status.stage_name,
+        progress: status.progress,
+        complete: status.complete,
+        summary: status.summary ?? null,
+        error: typeof status.error === 'string' ? status.error : null,
+        error_code: typeof status.error_code === 'string' ? status.error_code : null,
+        retryable: status.retryable,
+      },
+    }
   } catch {
     return null
   }
@@ -63,6 +92,15 @@ function dispatch(event: JobEvent): void {
   }
 }
 
+function scheduleRestart(): void {
+  if (stopRequested || restartTimer) return
+  restartTimer = setTimeout(() => {
+    restartTimer = null
+    if (!stopRequested) void startJobEventBus()
+  }, 5_000)
+  restartTimer.unref?.()
+}
+
 /**
  * Start the dedicated Redis subscriber. The function is lazy and safe to call
  * from a request: a no-Redis development posture returns false, allowing the
@@ -70,6 +108,7 @@ function dispatch(event: JobEvent): void {
  * connection.
  */
 export function startJobEventBus(): Promise<boolean> {
+  stopRequested = false
   if (subscriber) return Promise.resolve(true)
   if (startPromise) return startPromise
 
@@ -82,10 +121,12 @@ export function startJobEventBus(): Promise<boolean> {
     return Promise.resolve(false)
   }
 
+  const generation = lifecycleGeneration
+  let client: IORedis | null = null
   startPromise = (async () => {
     try {
       const IORedisCtor = require('ioredis') as typeof import('ioredis').default
-      const client: IORedis = new IORedisCtor(url, {
+      client = new IORedisCtor(url, {
         maxRetriesPerRequest: null,
         ...(isLocalRedis() ? {} : { tls: {} }),
         enableReadyCheck: false,
@@ -95,31 +136,46 @@ export function startJobEventBus(): Promise<boolean> {
           return Math.min(times * 500, 5000)
         },
       })
-      client.on('error', (error: Error) => {
+      const createdClient = client
+      createdClient.on('error', (error: Error) => {
         logger.error('job_event_redis_error', {
           type: 'job_event_redis_error',
           error: error.message,
         })
       })
-      client.on('reconnecting', (delay: number) => {
+      createdClient.on('reconnecting', (delay: number) => {
         logger.warn('job_event_redis_reconnecting', {
           type: 'job_event_redis_reconnecting',
           delay_ms: delay,
         })
       })
-      client.on('message', (channel: string, message: string) => {
+      const onConnectionClosed = () => {
+        if (subscriber === createdClient) {
+          subscriber = null
+          scheduleRestart()
+        }
+      }
+      createdClient.on('close', onConnectionClosed)
+      createdClient.on('end', onConnectionClosed)
+      createdClient.on('message', (channel: string, message: string) => {
         if (channel !== JOB_EVENT_CHANNEL) return
         const event = parseJobEvent(message)
         if (event) dispatch(event)
       })
-      await client.subscribe(JOB_EVENT_CHANNEL)
-      subscriber = client
+      await createdClient.subscribe(JOB_EVENT_CHANNEL)
+      if (stopRequested || generation !== lifecycleGeneration) {
+        await createdClient.quit().catch(() => createdClient.disconnect())
+        return false
+      }
+      subscriber = createdClient
       return true
     } catch (error) {
       logger.error('job_event_bus_start_failed', {
         type: 'job_event_bus_start_failed',
         error: error instanceof Error ? error.message : String(error),
       })
+      if (client) await client.quit().catch(() => client?.disconnect())
+      scheduleRestart()
       return false
     } finally {
       startPromise = null
@@ -131,6 +187,14 @@ export function startJobEventBus(): Promise<boolean> {
 
 /** Stop the subscriber and detach all in-process listeners. */
 export async function stopJobEventBus(): Promise<void> {
+  stopRequested = true
+  lifecycleGeneration += 1
+  if (restartTimer) {
+    clearTimeout(restartTimer)
+    restartTimer = null
+  }
+  const pending = startPromise
+  if (pending) await pending.catch(() => false)
   const client = subscriber
   subscriber = null
   listeners.clear()
