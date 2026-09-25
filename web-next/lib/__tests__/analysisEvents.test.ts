@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { startAnalysisStatus } from '../analysisEvents'
+import { startAnalysisStatus, subscribeAnalysisEvents } from '../analysisEvents'
 import type { JobStatus } from '@/types'
 
 const status = (overrides: Partial<JobStatus> = {}): JobStatus => ({
@@ -20,6 +20,7 @@ const status = (overrides: Partial<JobStatus> = {}): JobStatus => ({
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('startAnalysisStatus', () => {
@@ -48,6 +49,33 @@ describe('startAnalysisStatus', () => {
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(fetchStatus).not.toHaveBeenCalled()
     controller.stop()
+  })
+
+  it('fails a stalled stream connection instead of waiting forever for headers', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ token: 'token-1', exp: Date.now() + 60_000 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockImplementationOnce(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+          }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const onFailure = vi.fn()
+    const stop = subscribeAnalysisEvents('job-1', vi.fn(), onFailure, new AbortController().signal)
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Analysis event stream connection timed out.' }),
+    )
+    stop()
   })
 
   it('falls back to a bounded, slower status path when SSE is unavailable', () => {

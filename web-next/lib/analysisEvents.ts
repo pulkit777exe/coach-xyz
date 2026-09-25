@@ -28,7 +28,17 @@ export function subscribeAnalysisEvents(
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
   let activityTimer: ReturnType<typeof setTimeout> | null = null
+  let connectTimer: ReturnType<typeof setTimeout> | null = null
   let timedOut = false
+  const armConnectTimer = () => {
+    if (connectTimer) clearTimeout(connectTimer)
+    connectTimer = setTimeout(() => {
+      if (controller.signal.aborted) return
+      timedOut = true
+      onFailure(new Error('Analysis event stream connection timed out.'))
+      controller.abort()
+    }, 15_000)
+  }
   const armActivityTimer = () => {
     if (activityTimer) clearTimeout(activityTimer)
     activityTimer = setTimeout(() => {
@@ -42,7 +52,8 @@ export function subscribeAnalysisEvents(
   void (async () => {
     try {
       if (!API_BASE) throw new Error('Analysis event stream is not configured.')
-      const attribution = await getAttributionToken().catch(() => null)
+      armConnectTimer()
+      const attribution = await getAttributionToken(controller.signal).catch(() => null)
       const response = await fetch(`${API_BASE}/api/job-events/${encodeURIComponent(jobId)}`, {
         signal: controller.signal,
         headers: {
@@ -58,6 +69,8 @@ export function subscribeAnalysisEvents(
       }
       if (!response.body) throw new Error('Analysis event stream returned no body.')
 
+      if (connectTimer) clearTimeout(connectTimer)
+      connectTimer = null
       armActivityTimer()
       for await (const event of parseEventStream<AnalysisEvent>(response)) {
         if (controller.signal.aborted) return
@@ -75,6 +88,7 @@ export function subscribeAnalysisEvents(
       if (!controller.signal.aborted && !timedOut) onFailure(error)
     } finally {
       if (activityTimer) clearTimeout(activityTimer)
+      if (connectTimer) clearTimeout(connectTimer)
       signal.removeEventListener('abort', onAbort)
     }
   })()

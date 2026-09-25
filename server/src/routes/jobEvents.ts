@@ -4,7 +4,12 @@ import { buildError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import { verifyJobAccess } from '../lib/jobAccess'
 import { logger } from '../lib/logger'
-import { onJobEvent, startJobEventBus, type JobEvent } from '../lib/jobEvents'
+import {
+  onJobEvent,
+  onJobEventBusDisconnect,
+  startJobEventBus,
+  type JobEvent,
+} from '../lib/jobEvents'
 import {
   resolveStatus,
   statusResponse,
@@ -23,6 +28,7 @@ export type JobEventsDeps = {
   resolveStatus?: ResolveStatus
   startBus?: typeof startJobEventBus
   onEvent?: typeof onJobEvent
+  onBusDisconnect?: typeof onJobEventBusDisconnect
 }
 
 const eventHeaders = {
@@ -37,6 +43,7 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
   const resolve = deps.resolveStatus ?? resolveStatus
   const startBus = deps.startBus ?? startJobEventBus
   const subscribe = deps.onEvent ?? onJobEvent
+  const subscribeToDisconnect = deps.onBusDisconnect ?? onJobEventBusDisconnect
 
   return new Elysia({ name: 'job-events' }).get(
     '/api/job-events/:jobId',
@@ -81,7 +88,19 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
       const eventJobId = serverJob.engine_job_id
       const buffered: JobEvent[] = []
       let ready = false
+      let busDisconnected = false
+      let requestAborted = request.signal.aborted
+      let closeStream = () => {}
       let unsubscribe = () => {}
+      const onRequestAbort = () => {
+        requestAborted = true
+        closeStream()
+      }
+      request.signal.addEventListener('abort', onRequestAbort, { once: true })
+      const unsubscribeDisconnect = subscribeToDisconnect(() => {
+        busDisconnected = true
+        closeStream()
+      })
       unsubscribe = subscribe(eventJobId, (event) => {
         if (!ready) buffered.push(event)
         else void emitEvent(event)
@@ -90,8 +109,27 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
       const initial = await resolve(request, jobId)
       if (!initial.ok) {
         unsubscribe()
+        unsubscribeDisconnect()
+        request.signal.removeEventListener('abort', onRequestAbort)
         set.status = initial.status
         return initial.body
+      }
+      if (requestAborted) {
+        unsubscribe()
+        unsubscribeDisconnect()
+        request.signal.removeEventListener('abort', onRequestAbort)
+        return new Response(null, { status: 499 })
+      }
+      if (busDisconnected) {
+        unsubscribe()
+        unsubscribeDisconnect()
+        request.signal.removeEventListener('abort', onRequestAbort)
+        set.status = 503
+        return buildError(
+          'EVENT_STREAM_UNAVAILABLE',
+          'Live status updates are temporarily unavailable.',
+          true,
+        )
       }
 
       let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null
@@ -104,12 +142,16 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
         closed = true
         if (heartbeat) clearInterval(heartbeat)
         unsubscribe()
+        unsubscribeDisconnect()
+        request.signal.removeEventListener('abort', onRequestAbort)
         try {
           controllerRef?.close()
         } catch {
           // The browser may have already closed the response.
         }
       }
+
+      closeStream = close
 
       const send = (payload: unknown) => {
         if (closed || !controllerRef) return
@@ -182,7 +224,6 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
               close()
             }
           }, 30_000)
-          request.signal.addEventListener('abort', close, { once: true })
         },
         cancel() {
           close()

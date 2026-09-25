@@ -2,11 +2,12 @@ import { isTransientError, toCoachAIError } from '@/lib/errors'
 import type { CoachAIError } from '@/types'
 
 // ── Job Polling Engine ──────────────────────────────────────────────────────
-// The single poll loop used by every job-status consumer (the live analysis
-// pipeline and the dashboard detail page). One implementation drives interval,
-// exponential backoff, an optional hard timeout, and an optional "stuck"
-// warning — with the clock, fetcher, and completion predicate injected so the
-// loop is deterministic and testable.
+// The bounded fallback loop used when a live job-event stream is unavailable.
+// The normal analysis path subscribes to /api/job-events/:jobId and never
+// enters this loop. One implementation drives interval, exponential backoff,
+// an optional hard timeout/request budget, and an optional "stuck" warning —
+// with the clock, fetcher, and completion predicate injected so the loop is
+// deterministic and testable.
 //
 // Callers stay declarative: they describe what the poll should do and react to
 // onStatus / onComplete / onTransient / onError / onWarn instead of
@@ -94,6 +95,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   let startedAt = now()
   let failures = 0
   let requests = 0
+  let generation = 0
   let hadSucceeded = false
   let warned = false
 
@@ -121,6 +123,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
 
   async function run() {
     if (stopped) return
+    const runGeneration = generation
 
     const elapsed = now() - startedAt
     if (timeoutMs !== undefined && elapsed > timeoutMs) {
@@ -138,7 +141,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
     try {
       status = await fetchStatus(jobId)
     } catch (err) {
-      if (stopped) return
+      if (stopped || runGeneration !== generation) return
       failures++
       const error = toCoachAIError(err)
 
@@ -152,7 +155,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       return
     }
 
-    if (stopped) return
+    if (stopped || runGeneration !== generation) return
     hadSucceeded = true
     failures = 0
     onStatus?.(status)
@@ -183,6 +186,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   }
 
   function refresh() {
+    generation += 1
     startedAt = now()
     failures = 0
     requests = 0

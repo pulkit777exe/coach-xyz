@@ -154,17 +154,19 @@ export async function apiFetch<T>(
  * expiry to avoid an extra round-trip per scan/analyze pair.
  */
 let attributionTokenCache: { token: string; exp: number } | null = null
-async function mintAttributionToken(): Promise<{ token: string; exp: number } | null> {
+async function mintAttributionToken(
+  signal?: AbortSignal,
+): Promise<{ token: string; exp: number } | null> {
   try {
     return await apiFetch<{ token: string; exp: number }>(
       `${IDENTITY_BASE}/api/me/attribution/mint`,
-      { method: 'GET' },
+      { method: 'GET', signal },
     )
   } catch {
     return null
   }
 }
-export async function getAttributionToken(): Promise<string | null> {
+export async function getAttributionToken(signal?: AbortSignal): Promise<string | null> {
   // The cache is module-scoped: on the server that means shared across
   // requests (and therefore across USERS) — never read or write it there.
   // Server-side callers always mint fresh; only the browser reuses tokens.
@@ -172,12 +174,12 @@ export async function getAttributionToken(): Promise<string | null> {
   // this guard keeps a future server-component call from silently serving
   // another user's signed token.
   if (typeof window === 'undefined') {
-    return (await mintAttributionToken())?.token ?? null
+    return (await mintAttributionToken(signal))?.token ?? null
   }
   if (attributionTokenCache && attributionTokenCache.exp > Date.now()) {
     return attributionTokenCache.token
   }
-  attributionTokenCache = await mintAttributionToken()
+  attributionTokenCache = await mintAttributionToken(signal)
   return attributionTokenCache?.token ?? null
 }
 

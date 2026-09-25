@@ -30,6 +30,7 @@ export type JobEvent = {
 }
 
 export type JobEventListener = (event: JobEvent) => void
+export type JobEventBusDisconnectListener = () => void
 
 let subscriber: IORedis | null = null
 let startPromise: Promise<boolean> | null = null
@@ -37,6 +38,7 @@ let restartTimer: ReturnType<typeof setTimeout> | null = null
 let stopRequested = false
 let lifecycleGeneration = 0
 const listeners = new Map<string, Set<JobEventListener>>()
+const disconnectListeners = new Set<JobEventBusDisconnectListener>()
 
 function parseJobEvent(raw: string): JobEvent | null {
   try {
@@ -86,6 +88,19 @@ function dispatch(event: JobEvent): void {
       logger.error('job_event_listener_error', {
         type: 'job_event_listener_error',
         job_id: event.job_id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+}
+
+function notifyDisconnected(): void {
+  for (const listener of [...disconnectListeners]) {
+    try {
+      listener()
+    } catch (error) {
+      logger.error('job_event_disconnect_listener_error', {
+        type: 'job_event_disconnect_listener_error',
         error: error instanceof Error ? error.message : String(error),
       })
     }
@@ -152,6 +167,7 @@ export function startJobEventBus(): Promise<boolean> {
       const onConnectionClosed = () => {
         if (subscriber === createdClient) {
           subscriber = null
+          notifyDisconnected()
           scheduleRestart()
         }
       }
@@ -198,6 +214,7 @@ export async function stopJobEventBus(): Promise<void> {
   const client = subscriber
   subscriber = null
   listeners.clear()
+  disconnectListeners.clear()
   if (!client) return
   try {
     await client.quit()
@@ -207,6 +224,12 @@ export async function stopJobEventBus(): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     })
   }
+}
+
+/** Observe loss of the shared Redis subscriber so open SSE routes can close. */
+export function onJobEventBusDisconnect(listener: JobEventBusDisconnectListener): () => void {
+  disconnectListeners.add(listener)
+  return () => disconnectListeners.delete(listener)
 }
 
 /** Subscribe to one job's compact status events. */

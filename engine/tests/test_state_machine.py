@@ -106,6 +106,7 @@ def test_state_transition_publishes_public_event_without_video_paths():
     assert event["status"]["state"] == "scanning"
     assert "video_key" not in event["status"]
     assert "video_path" not in event["status"]
+    assert event["status"]["summary"] is None
 
 
 def test_retry_transition_clears_failed_terminal_fields():

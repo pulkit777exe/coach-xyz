@@ -97,6 +97,32 @@ describe('/api/job-events/:jobId', () => {
     expect(listener).toBeNull()
   })
 
+  test('closes an open stream when the shared event bus disconnects', async () => {
+    let disconnect: (() => void) | null = null
+    const route = jobEventsRoute({
+      getJob: async () => job,
+      startBus: async () => true,
+      resolveStatus: async () => ({
+        ok: true,
+        response: statusResponse('job-1', { state: 'analyzing', progress: 20 }),
+      }),
+      onEvent: () => () => {},
+      onBusDisconnect: (handler) => {
+        disconnect = handler
+        return () => {
+          disconnect = null
+        }
+      },
+    })
+    const response = await route.handle(request())
+    expect(response.status).toBe(200)
+    const reader = response.body!.getReader()
+    await reader.read()
+    disconnect!()
+    expect((await reader.read()).done).toBe(true)
+    expect(disconnect).toBeNull()
+  })
+
   test('returns a bounded fallback signal when the event bus is unavailable', async () => {
     const route = jobEventsRoute({
       getJob: async () => job,

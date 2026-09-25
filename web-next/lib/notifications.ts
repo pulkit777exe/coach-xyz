@@ -98,15 +98,9 @@ export async function markAllRead(): Promise<void> {
 export function subscribeNotifications(
   onEvent: (n: AppNotification) => void,
   signal: AbortSignal,
-  onReconnect?: () => void,
 ): () => void {
-  const controller = new AbortController()
   const outerSignal = signal
-
-  // Tie external abort to our controller
-  const onAbort = () => controller.abort()
-  outerSignal.addEventListener('abort', onAbort)
-
+  let attemptController: AbortController | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let connectionTimer: ReturnType<typeof setTimeout> | null = null
   let idleTimer: ReturnType<typeof setTimeout> | null = null
@@ -127,36 +121,40 @@ export function subscribeNotifications(
     connectionTimer = null
     idleTimer = null
   }
-  const armIdleTimer = () => {
+  const armIdleTimer = (attempt: AbortController) => {
     if (idleTimer) clearTimeout(idleTimer)
     idleTimer = setTimeout(() => {
       timedOut = true
-      controller.abort()
+      attempt.abort()
     }, 90_000)
   }
 
   const scheduleReconnect = () => {
-    if (controller.signal.aborted || reconnectAttempt >= maxReconnectAttempts) return
+    if (outerSignal.aborted || reconnectAttempt >= maxReconnectAttempts) return
     const delay = reconnectDelays[Math.min(reconnectAttempt, reconnectDelays.length - 1)]
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      onReconnect?.()
       void connect()
     }, delay)
   }
 
   async function connect() {
-    if (controller.signal.aborted || isConnecting || isStreaming) return
+    if (outerSignal.aborted || isConnecting || isStreaming) return
+    const attempt = new AbortController()
+    attemptController = attempt
+    const forwardAbort = () => attempt.abort()
+    outerSignal.addEventListener('abort', forwardAbort, { once: true })
     isConnecting = true
     timedOut = false
     connectionTimer = setTimeout(() => {
       timedOut = true
-      controller.abort()
+      attempt.abort()
     }, 15_000)
+
     try {
       const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/sse`, {
-        signal: controller.signal,
+        signal: attempt.signal,
         credentials: 'include',
       })
 
@@ -164,11 +162,11 @@ export function subscribeNotifications(
       if (connectionTimer) clearTimeout(connectionTimer)
       connectionTimer = null
       isStreaming = true
-      armIdleTimer()
+      armIdleTimer(attempt)
 
       for await (const event of parseEventStream<NotificationStreamEvent>(res)) {
         if (timedOut) break
-        armIdleTimer()
+        armIdleTimer(attempt)
         // Skip connected handshake and transport heartbeat.
         if ('type' in event && event.type === 'heartbeat') continue
         if (!('id' in event)) continue
@@ -182,17 +180,18 @@ export function subscribeNotifications(
       // Fall through — scheduleReconnect handles the bounded reconnection policy.
     } finally {
       clearConnectionTimers()
+      outerSignal.removeEventListener('abort', forwardAbort)
+      attemptController = null
       isConnecting = false
       isStreaming = false
     }
-    if (!outerSignal.aborted && (!controller.signal.aborted || timedOut)) scheduleReconnect()
+    if (!outerSignal.aborted && (!attempt.signal.aborted || timedOut)) scheduleReconnect()
   }
 
   const onOnline = () => {
-    if (controller.signal.aborted || isConnecting || isStreaming) return
+    if (outerSignal.aborted || isConnecting || isStreaming) return
     reconnectAttempt = 0
     clearReconnect()
-    onReconnect?.()
     void connect()
   }
   const onVisibilityChange = () => {
@@ -205,9 +204,8 @@ export function subscribeNotifications(
   return () => {
     clearReconnect()
     clearConnectionTimers()
-    outerSignal.removeEventListener('abort', onAbort)
+    attemptController?.abort()
     window.removeEventListener('online', onOnline)
     document.removeEventListener('visibilitychange', onVisibilityChange)
-    controller.abort()
   }
 }

@@ -67,7 +67,17 @@ export function subscribeAiReportEvents(
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
   let activityTimer: ReturnType<typeof setTimeout> | null = null
+  let connectTimer: ReturnType<typeof setTimeout> | null = null
   let timedOut = false
+  const armConnectTimer = () => {
+    if (connectTimer) clearTimeout(connectTimer)
+    connectTimer = setTimeout(() => {
+      if (controller.signal.aborted) return
+      timedOut = true
+      onFailure(new Error('Report event stream connection timed out.'))
+      controller.abort()
+    }, 15_000)
+  }
   const armActivityTimer = () => {
     if (activityTimer) clearTimeout(activityTimer)
     activityTimer = setTimeout(() => {
@@ -80,6 +90,7 @@ export function subscribeAiReportEvents(
 
   void (async () => {
     try {
+      armConnectTimer()
       const response = await fetch(
         `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}/reports/ai/${encodeURIComponent(reportJobId)}/events`,
         { signal: controller.signal, credentials: 'include' },
@@ -91,6 +102,8 @@ export function subscribeAiReportEvents(
         })
       }
       if (!response.body) throw new Error('Report event stream returned no body.')
+      if (connectTimer) clearTimeout(connectTimer)
+      connectTimer = null
       armActivityTimer()
       for await (const event of parseEventStream<AiReportStreamEvent>(response)) {
         if (controller.signal.aborted) return
@@ -106,6 +119,7 @@ export function subscribeAiReportEvents(
       if (!controller.signal.aborted && !timedOut) onFailure(error)
     } finally {
       if (activityTimer) clearTimeout(activityTimer)
+      if (connectTimer) clearTimeout(connectTimer)
       signal.removeEventListener('abort', onAbort)
     }
   })()

@@ -41,6 +41,10 @@ def _publish_job_event(job: JobStatus) -> None:
     status = asdict(job)
     status.pop("video_key", None)
     status.pop("video_path", None)
+    # Summaries are fetched through the authenticated status resolver at the
+    # terminal boundary; never put potentially sensitive analysis content on a
+    # shared Redis channel.
+    status["summary"] = None
     try:
         publisher(
             JOB_EVENT_CHANNEL,

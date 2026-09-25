@@ -111,7 +111,7 @@ coach-xyz/
 │   │       └── chat/page.tsx  # Chat route (V2 — see V2_COACH.md)
 │   ├── components/            # UI components
 │   │   ├── AppClient.tsx      # Pipeline state machine (idle→uploading→…→chatting)
-│   │   ├── AnalysisDetailClient.tsx  # Detail page polling + expired state
+│   │   ├── AnalysisDetailClient.tsx  # Detail page event stream + bounded reconciliation
 │   │   ├── AnalysisProgress.tsx      # In-progress view
 │   │   ├── ResultsSummary.tsx        # Completed analysis view
 │   │   ├── ErrorScreen.tsx           # Structured error display
@@ -146,10 +146,11 @@ coach-xyz/
 │   │   ├── date.ts            # ISO date/time conversions + scheduleMonthWindow
 │   │   ├── sports.ts          # Sport emoji helpers
 │   │   ├── usePipeline.ts     # Pipeline state hook (idle→…→chatting→error)
-│   │   ├── jobPolling.ts      # Single job-status poll engine (injected clock/fetch/callbacks)
+│   │   ├── jobPolling.ts      # Bounded fallback status loop (injected clock/fetch/callbacks)
 │   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
 │   │   ├── errors.ts          # Client error normalization + transient classification
 │   │   ├── sse.ts             # Shared SSE line parser (data: JSON)
+│   │   ├── analysisEvents.ts  # Analysis SSE primary + bounded status fallback
 │   │   ├── utils.ts           # cn() class-name helper + capitalize
 │   │   └── __tests__/         # lib unit tests (csv, analysis, date, api, org, etc.)
 │   ├── proxy.ts               # Auth0 middleware proxy (Next.js 16)
@@ -160,7 +161,8 @@ coach-xyz/
 │   ├── src/routes/
 │   │   ├── scan.ts            # POST /api/scan-video — upload + player detection (+ scan-intent/scan-from-key/progress proxy)
 │   │   ├── analyze.ts         # POST /api/analyze-video — enqueue analysis job
-│   │   ├── status.ts          # GET /api/job-status/:jobId — poll progress
+│   │   ├── status.ts          # GET /api/job-status/:jobId — one-shot status/reconciliation
+│   │   ├── jobEvents.ts       # GET /api/job-events/:jobId — authenticated analysis SSE
 │   │   ├── download.ts        # GET /api/download/:jobId — stream result video
 │   │   ├── chat.ts            # POST /api/chat/stream (SSE) + GET /api/conversation/:jobId — V2 chat proxy to engine (server exposes no non-streaming chat route)
 │   │   ├── findings.ts        # /api/auth/.../findings{,/trends,/export} + review routes (split out of auth.ts)
@@ -173,6 +175,7 @@ coach-xyz/
 │   │   └── health.ts          # GET /health (frontend + Docker healthcheck), /health/deep (ops-only probe — no frontend consumer)
 │   ├── src/lib/
 │   │   ├── queue.ts           # Single BullMQ wiring: queues + workers + stuck-job recovery + shutdown — LAZY: importing connects nothing; index.ts calls startQueueInfrastructure() first / stopQueueInfrastructure() on shutdown (notifications.ts attaches via onQueueInfrastructureReady)
+│   │   ├── jobEvents.ts       # Redis analysis-event subscriber + authenticated SSE fan-out
 │   │   ├── redis.ts           # Redis client (Upstash REST or local ioredis)
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (/scan, /analyze, /status, /download)
@@ -233,7 +236,7 @@ coach-xyz/
 │   │   ├── findings.py        # Per-event findings (ids, severity, evidence frames, provenance)
 │   │   ├── quality.py         # Pre-render stage quality gate
 │   │   ├── multicam.py        # Multi-angle session helpers + per-angle progress keys
-│   │   ├── jobs.py            # Engine-side job state machine (Redis)
+│   │   ├── jobs.py            # Engine-side job state machine (Redis) + sanitized job-event publishes
 │   │   ├── cache.py           # Video hash + Redis caching
 │   │   ├── dedup.py           # Request deduplication
 │   │   ├── storage.py         # Local file storage
@@ -247,7 +250,7 @@ coach-xyz/
 │   │   ├── config.py          # Engine configuration constants + ENGINE_VERSION
 │   │   ├── logging_config.py  # Structured logging setup
 │   │   └── errors.py          # Error types hierarchy
-│   ├── tests/                 # pytest suite (227 tests)
+│   ├── tests/                 # pytest suite (228 tests)
 │   └── requirements.txt       # Python dependencies (single runtime manifest — pyproject is tooling-only)
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -266,6 +269,7 @@ coach-xyz/
 - Key: `coachai:job:{job_id}`
 - TTL: 7200 seconds (2 hours)
 - Shape: `JobStatus` dataclass (job_id, state, stage, stage_name, progress, complete, error, error_code, retryable, summary, video_key, video_path, created_at)
+- Pub/sub wake-up channel: `coachai:job-events` — sanitized progress/terminal snapshots only; the job key remains authoritative.
 - States: uploading → scanning → player_selection → analyzing → rendering → completed (or → failed)
 
 **Error Responses** (wire shape in `server/src/lib/errors.ts`; status + retryable owned by the engine)
@@ -277,7 +281,7 @@ coach-xyz/
   - `retry_after?: number` — seconds to wait before retrying (optional, server rate-limit rejections)
 - The `isCoachAIError` type guard validates the four core fields; `errorBody()` strips the server-internal stamp so the wire stays these fields only.
 - **Ownership:** the engine owns code → HTTP status (`STATUS_BY_CODE`) and code → retryable (`RETRYABLE_BY_CODE`, both `engine/core/errors.py`; unregistered codes fall back to 422-if-retryable/500 for status and `status >= 500` for retryable). `throwNonOk` (`lib/engine.ts`) stamps the status the engine answered with onto the thrown `CoachAIError.status` (server-internal, never serialized). Routes derive their HTTP status only via the posture helpers in `lib/errors.ts` — `enginePassthroughStatus` (scan/download pass-through), `chatEngineStatus` (chat: 4xx passes through, ≥500 → 502, statusless → route applies its connectivity posture) — and never re-map codes to statuses themselves.
-- **`JOB_NOT_FOUND` is `retryable: false` on every path** (miss, expired-supabase, and the 200-poll expired answer) — one code, one meaning; tests pin both directions.
+- **`JOB_NOT_FOUND` is `retryable: false` on every path** (miss, expired-Supabase, and the terminal reconciliation answer) — one code, one meaning; tests pin both directions.
 
 **Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
 - Key: `coachai:srv:{server_job_id}`
@@ -442,12 +446,36 @@ coach-xyz/
    i. Render annotated video
    j. Upload result to local storage
 
-9. Server resolves status: the job mapping is read from Redis, then the
-   computed status is fetched from the engine over HTTP and persisted to
-   Supabase (the Supabase row serves as the fallback once the Redis mapping
-   expires)
-   → server/src/routes/status.ts:39-79 (mapping read at :40, engine HTTP at :79, Supabase fallback at :44-66)
+9. The web opens `GET /api/job-events/:jobId` over authenticated SSE. The server
+   subscribes to the engine-id event namespace and sends an initial status
+   snapshot; subsequent progress/terminal events are wake-ups only, with the
+   same access, persistence, and medical-redaction resolver used by the one-shot
+   status route. A missed/broken stream uses only a bounded four-request
+   reconciliation fallback.
+   → web-next/lib/analysisEvents.ts `startAnalysisStatus`
+   → server/src/routes/jobEvents.ts
+   → server/src/lib/jobEvents.ts
+   → server/src/routes/status.ts `resolveStatus` (shared snapshot/terminal path)
    → server/src/lib/jobs.ts:24-42 (getJob)
+```
+
+### Flow 2b: AI report generation (EVENT-DRIVEN)
+
+```
+1. POST /api/org/:auth0Id/reports/ai enqueues a BullMQ report job and returns
+   its report_job_id. State writes publish through the in-process report event
+   bus after the Redis record is durable.
+   → web-next/lib/aiReports.ts `orgGenerateAiReport`
+   → server/src/routes/aiReports.ts
+   → server/src/lib/aiReportData.ts
+
+2. The browser subscribes to
+   GET /api/org/:auth0Id/reports/ai/:reportJobId/events. The route subscribes
+   before its snapshot, sends queued/running/done/failed events, and closes on
+   a terminal state. A dropped connection performs at most one bounded status
+   reconciliation.
+   → web-next/lib/aiReports.ts `subscribeAiReportEvents`
+   → web-next/components/org/ReportsClient.tsx
 ```
 
 ### Flow 3: Download Result (CONFIRMED)
@@ -499,7 +527,7 @@ The system uses Auth0 for user authentication. The beta-code gate described in e
 - **User sync:** On account page load, `POST /api/auth/sync` upserts the user into the `users` Supabase table. New accounts default to `role = 'coach'` (first account is a coach); when the login email matches a student row, the account is auto-linked (`students.account_auth0_id` set) and its role flips to `player`.
 - **Social providers:** Google and GitHub are configured in the Auth0 tenant dashboard (confirmed by CSP `img-src` allowing `*.googleusercontent.com` and `*.githubusercontent.com` in `web-next/next.config.ts`)
 - **Logout:** `/auth/logout` (Auth0 SDK route)
-- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`), analyze (`POST /api/analyze-video`), status (`GET /api/job-status/:jobId`), chat (`POST /api/chat/stream`) and conversation (`GET /api/conversation/:jobId`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. Downloads (`<video src>`/`<a href>` cannot carry headers) send the same token as `?attribution=` (`getAuthorizedDownloadUrl`), verified identically. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
+- **`auth0_id` attribution on capability routes:** capability-token routes can't transit the identity proxy (uploads/SSE), so scan/analyze attribution uses a **signed attestation token** instead of a raw client header. The web app fetches `GET /api/me/attribution/mint` (self-scoped, behind serviceGuard) which returns a short-lived HMAC-SHA256 token binding the **verified session sub** (`sub.exp.exp-hmac`, TTL 10 min, keyed by `SERVICE_TOKEN`, `server/src/lib/attribution.ts`). Browser-direct scan (`POST /api/scan-video`), analyze (`POST /api/analyze-video`), status/events (`GET /api/job-status/:jobId`, `GET /api/job-events/:jobId`), chat (`POST /api/chat/stream`) and conversation (`GET /api/conversation/:jobId`) send it as `x-attribution`; the server verifies and stores the embedded sub in `video_conversations.auth0_id` / `analysis_history.auth0_id`. Downloads (`<video src>`/`<a href>` cannot carry headers) send the same token as `?attribution=` (`getAuthorizedDownloadUrl`), verified identically. A raw `x-auth0-id` header is never trusted — there is nothing to spoof.
 
 ### Identity Boundary (service-to-service, two-faces)
 
@@ -510,7 +538,7 @@ The backend never trusts a client-supplied auth0Id. The Next app is the identity
 - **Client routing** (`web-next/lib/api.ts` `IDENTITY_BASE`, `web-next/lib/org.ts`, `web-next/lib/serverData.ts`): client components call the proxy via `lib/api`/`lib/org`; RSC pages call React.cache'd fetchers in `lib/serverData.ts` (which use `lib/api` internally with service headers when called server-side). Middleware (`proxy.ts`) and route handlers keep using raw `auth0`/`lib/api`.
 - **Web error mapping** (`web-next/lib/errors.ts`): one rule for every transport — `errorFromResponse()` narrows the any-typed wire body (non-string message/code falls back, `retry_after` must be numeric), 429 → `RATE_LIMITED`, structured engine bodies pass through, `engineError()` shapes engine-layer failures. `apiFetch`, both XHR upload paths, and the chat/SSE streams all funnel through it; no hand literals. Query params go through the shared `qs()` (`lib/api.ts`); form payloads through `pickDefined()` (`lib/org.ts`, `''` → null so cleared fields clear).
 - **Web role vocabulary**: one set — `NavRole`/`OrgRole`/`MyOrg['role']` are aliases of `ORG_MEMBER_ROLES` (`lib/members.ts`); `userRoles` (coach/player) is the separate account-level set.
-- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/download/:jobId`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite. These routes never trust a raw `auth0_id` — attribution comes from the signed `x-attribution` token minted at `/api/me/attribution/mint` (see §6 Auth0).
+- **Out of scope of the proxy:** capability-token routes (`/api/scan-video`, `/api/scan-progress/:sessionToken`, `/api/analyze-video`, `/api/job-status/:jobId`, `/api/job-events/:jobId`, `/api/download/:jobId`, `/api/chat/stream`, `/api/conversation/:jobId`) stay browser→backend so video uploads and SSE streams never transit Vercel. Downloads use a next.config rewrite. These routes never trust a raw `auth0_id` — attribution comes from the signed `x-attribution` token minted at `/api/me/attribution/mint` (see §6 Auth0).
 
 ### Roles (two-faces)
 
@@ -813,9 +841,10 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts:75-77` (`checkAnalysisLimit`, `ANALYSIS_RATE_LIMIT`) |
 | Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
-| Test suite: 227 tests pass (CONFIRMED 2026-09-25) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 360 pass / 34 files (CONFIRMED 2026-09-25) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
-| Test suite: 204 tests / 19 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
+| Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
+| Test suite: 228 tests pass (CONFIRMED 2026-09-25) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
+| Test suite: 386 pass / 37 files (CONFIRMED 2026-09-25) | `cd server && bun test` (3 notification DB-integration tests skip unless `DATABASE_URL` reachable) |
+| Test suite: 220 tests / 21 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
 | New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |

@@ -22,6 +22,24 @@ import type { AiReportPayload } from '../lib/queue'
 import { logger } from '../lib/logger'
 
 const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
+const REPORT_EVENT_LOOKUP_TIMEOUT_MS = 10_000
+
+async function withReportLookupTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Report lookup timed out while streaming the job event.')),
+          REPORT_EVENT_LOOKUP_TIMEOUT_MS,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 export type AiReportRequest = {
   student_id?: string | null
@@ -231,6 +249,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         return new Response(null, { status: 499 })
       }
 
+      let cancelStream = () => {}
       const stream = new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder()
@@ -251,13 +270,15 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
             }
           }
 
+          cancelStream = close
+
           const enqueue = (job: AiReportJob) => {
             sequence = sequence
               .then(async () => {
                 if (closed) return
                 const report =
                   job.status === 'done' && job.report_id
-                    ? await fetchReport(auth0Id, job.report_id)
+                    ? await withReportLookupTimeout(fetchReport(auth0Id, job.report_id))
                     : null
                 if (closed) return
                 controller.enqueue(
@@ -299,8 +320,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
           request.signal.addEventListener('abort', close, { once: true })
         },
         cancel() {
-          activeListener = null
-          unsubscribe()
+          cancelStream()
         },
       })
 

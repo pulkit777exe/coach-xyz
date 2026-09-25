@@ -40,8 +40,10 @@ components/                    UI: LandingPage, PlayerSelector, AnalysisProgress
 types/index.ts                 Shared API types
 ```
 
-The pipeline polls `GET /api/job-status/:jobId`, streams scan/chat progress over SSE, and proxies
-video downloads through `next.config.ts` `/api/download/:path*` rewrite.
+The pipeline subscribes to `GET /api/job-events/:jobId` for live analysis state (with a
+strictly bounded status reconciliation only when the stream is unavailable), streams
+scan/chat/report/notification progress over SSE, and proxies video downloads through
+`next.config.ts` `/api/download/:path*` rewrite.
 
 See [../ARCHITECTURE.md](../ARCHITECTURE.md) for the full architecture and [../setup.md](../setup.md) for setup.
 
