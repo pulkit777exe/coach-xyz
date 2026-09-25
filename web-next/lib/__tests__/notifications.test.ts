@@ -35,8 +35,39 @@ describe('subscribeNotifications reconnect policy', () => {
     await vi.advanceTimersByTimeAsync(15_000)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(onReconnect).toHaveBeenCalledTimes(1)
+    // A stalled attempt has no established stream, so it must not trigger a
+    // snapshot callback; the next successful connection will.
+    expect(onReconnect).toHaveBeenCalledTimes(0)
 
+    stop()
+  })
+
+  it('reconciles only after a replacement stream is established', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start() {
+            // Keep the stream open until the test cleanup aborts it.
+          },
+        }),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const onConnected = vi.fn()
+    const stop = subscribeNotifications(vi.fn(), new AbortController().signal, onConnected)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onConnected).toHaveBeenCalledTimes(1)
     stop()
   })
 })

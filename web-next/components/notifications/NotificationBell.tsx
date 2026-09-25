@@ -48,6 +48,8 @@ export default function NotificationBell() {
   const [isLoading, setIsLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const loadedRef = useRef(false)
+  const liveNotificationIdsRef = useRef<Set<string>>(new Set())
+  const localRevisionRef = useRef(0)
 
   useEffect(() => {
     if (loadedRef.current) return
@@ -56,37 +58,47 @@ export default function NotificationBell() {
     let unsubscribe: (() => void) | null = null
     const controller = new AbortController()
 
-    const mergeSnapshot = (state: NotificationsState) => {
+    const mergeSnapshot = (state: NotificationsState, revisionAtStart: number) => {
+      const hasLocalChanges = localRevisionRef.current !== revisionAtStart
       setNotifications((prev) => {
-        const byId = new Map(prev.map((item) => [item.id, item]))
-        for (const item of state.notifications) byId.set(item.id, item)
+        const byId = new Map(state.notifications.map((item) => [item.id, item]))
+        for (const item of prev) {
+          // Keep a row that arrived by SSE after this snapshot began.
+          if (liveNotificationIdsRef.current.has(item.id)) byId.set(item.id, item)
+        }
         return [...byId.values()]
       })
-      // A reconnect snapshot can race a live event; never let it erase that
-      // event's unread increment.
-      setUnreadCount((prev) => Math.max(prev, state.unread_count))
+      // A snapshot that predates a local event/read must not erase it.
+      setUnreadCount((prev) =>
+        hasLocalChanges ? Math.max(prev, state.unread_count) : state.unread_count,
+      )
     }
-    const fetchSnapshot = () => fetchNotifications().then(mergeSnapshot)
-
-    void fetchSnapshot()
-      .catch(() => {
-        // Non-fatal — empty bell still works
-      })
-      .finally(() => setIsLoading(false))
+    const fetchSnapshot = () => {
+      const revisionAtStart = localRevisionRef.current
+      return fetchNotifications().then((state) => mergeSnapshot(state, revisionAtStart))
+    }
 
     unsubscribe = subscribeNotifications(
       (n) => {
+        liveNotificationIdsRef.current.add(n.id)
+        localRevisionRef.current += 1
         setNotifications((prev) => {
           if (prev.some((existing) => existing.id === n.id)) return prev
           return [n, ...prev]
         })
-        setUnreadCount((prev) => prev + 1)
+        setUnreadCount((prev) => (n.read ? prev : prev + 1))
       },
       controller.signal,
       () => {
         void fetchSnapshot().catch(() => {})
       },
     )
+
+    void fetchSnapshot()
+      .catch(() => {
+        // Non-fatal — empty bell still works
+      })
+      .finally(() => setIsLoading(false))
 
     return () => {
       unsubscribe?.()
@@ -106,6 +118,8 @@ export default function NotificationBell() {
       router.push(`/dashboard/analysis/${serverJobId}`)
     }
     if (!n.read) {
+      liveNotificationIdsRef.current.delete(n.id)
+      localRevisionRef.current += 1
       setUnreadCount((prev) => Math.max(0, prev - 1))
       setNotifications((prev) =>
         prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)),
@@ -116,6 +130,8 @@ export default function NotificationBell() {
   }
 
   const handleMarkAllRead = () => {
+    liveNotificationIdsRef.current.clear()
+    localRevisionRef.current += 1
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     setUnreadCount(0)
     markAllRead().catch(() => {})

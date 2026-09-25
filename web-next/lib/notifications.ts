@@ -136,7 +136,6 @@ export function subscribeNotifications(
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      onReconnect?.()
       void connect()
     }, delay)
   }
@@ -164,6 +163,9 @@ export function subscribeNotifications(
       if (connectionTimer) clearTimeout(connectionTimer)
       connectionTimer = null
       isStreaming = true
+      // Reconcile only after the response body is established, so a snapshot
+      // cannot race ahead of the new stream subscription.
+      onReconnect?.()
       armIdleTimer(attempt)
 
       for await (const event of parseEventStream<NotificationStreamEvent>(res)) {
@@ -194,7 +196,6 @@ export function subscribeNotifications(
     if (outerSignal.aborted || isConnecting || isStreaming) return
     reconnectAttempt = 0
     clearReconnect()
-    onReconnect?.()
     void connect()
   }
   const onVisibilityChange = () => {
