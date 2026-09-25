@@ -104,7 +104,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <MobileNavDrawer label={drawerLabel} footer={sidebarFooter}>
           {sidebarTop}
         </MobileNavDrawer>
-        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">
+          {children}
+        </main>
       </div>
     </div>
   )

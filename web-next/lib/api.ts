@@ -17,13 +17,16 @@ if (!BASE) {
 export const IDENTITY_BASE =
   typeof window === 'undefined' ? process.env.NEXT_PUBLIC_API_URL : '/api/service'
 
-function identityFromRequest(url: string, body?: BodyInit | null): string | undefined {
-  let path = url
+function pathnameOf(url: string): string {
   try {
-    path = new URL(url).pathname
+    return new URL(url).pathname
   } catch {
-    // relative url — keep as-is
+    return url // relative url — keep as-is
   }
+}
+
+function identityFromRequest(url: string, body?: BodyInit | null): string | undefined {
+  const path = pathnameOf(url)
 
   const scoped = path.match(/\/api\/(?:org|email|auth\/user)\/([^/]+)/)
   if (scoped) return decodeURIComponent(scoped[1])
@@ -47,12 +50,7 @@ function identityFromRequest(url: string, body?: BodyInit | null): string | unde
  * onboarding, or non-request contexts).
  */
 async function serverIdentity(url: string, body?: BodyInit | null): Promise<string | undefined> {
-  let path = url
-  try {
-    path = new URL(url).pathname
-  } catch {
-    // relative url — keep as-is
-  }
+  const path = pathnameOf(url)
 
   const isIdentityBearing =
     path.match(/\/api\/(?:org|email|auth\/user)\/[^/]+/) !== null ||
@@ -61,6 +59,10 @@ async function serverIdentity(url: string, body?: BodyInit | null): Promise<stri
   if (!isIdentityBearing) return undefined
 
   try {
+    // Dynamic import ON PURPOSE: session.ts pulls in the Auth0 server SDK,
+    // and this module ships to the browser too (client components import
+    // apiFetch). A static import would drag server-only code into the
+    // client bundle. The dynamic branch only ever runs server-side.
     const { getSession } = await import('./session')
     const session = await getSession()
     const sub = session?.user?.sub

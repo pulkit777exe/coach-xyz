@@ -17,9 +17,9 @@ export const metadata: Metadata = {
 
 export default async function MembersPage() {
   noStore()
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
-  const { auth0Id, role } = await getOrgContext()
+  const { auth0Id, role } = orgCtx
   if (!MEMBERS_NAV_ROLES.includes(role)) {
     return <AccessDenied page="Members" allowedRoles={MEMBERS_NAV_ROLES} />
   }
