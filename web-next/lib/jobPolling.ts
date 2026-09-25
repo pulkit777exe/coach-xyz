@@ -112,7 +112,12 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       failureCount === 0
         ? intervalMs
         : Math.min(intervalMs * Math.pow(backoffFactor, failureCount - 1), maxBackoffMs)
-    timer = setTimeout(run, delay)
+    const scheduledGeneration = generation
+    timer = setTimeout(() => {
+      if (scheduledGeneration !== generation) return
+      timer = null
+      void run()
+    }, delay)
   }
 
   function fail(kind: 'permanent' | 'timeout', error: CoachAIError) {
@@ -186,6 +191,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   }
 
   function refresh() {
+    clearTimer()
     generation += 1
     startedAt = now()
     failures = 0

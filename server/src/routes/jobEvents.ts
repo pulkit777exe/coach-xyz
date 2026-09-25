@@ -37,6 +37,37 @@ const eventHeaders = {
   Connection: 'keep-alive',
   'X-Accel-Buffering': 'no',
 }
+const EVENT_RESOLVE_TIMEOUT_MS = 15_000
+
+async function resolveWithDeadline(
+  resolve: ResolveStatus,
+  request: Request,
+  jobId: string,
+): Promise<StatusResolution> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      resolve(request, jobId),
+      new Promise<StatusResolution>((resolveResult) => {
+        timer = setTimeout(
+          () =>
+            resolveResult({
+              ok: false,
+              status: 503,
+              body: buildError(
+                'ENGINE_UNAVAILABLE',
+                'Analysis status is temporarily unavailable.',
+                true,
+              ),
+            }),
+          EVENT_RESOLVE_TIMEOUT_MS,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
   const loadJob = deps.getJob ?? getJob
@@ -54,7 +85,7 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
       // A persisted terminal job has no live engine stream to subscribe to;
       // reconcile it once and close after the snapshot.
       if (!serverJob) {
-        const snapshot = await resolve(request, jobId)
+        const snapshot = await resolveWithDeadline(resolve, request, jobId)
         if (!snapshot.ok) {
           set.status = snapshot.status
           return snapshot.body
@@ -106,7 +137,7 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
         else void emitEvent(event)
       })
 
-      const initial = await resolve(request, jobId)
+      const initial = await resolveWithDeadline(resolve, request, jobId)
       if (!initial.ok) {
         unsubscribe()
         unsubscribeDisconnect()
@@ -181,7 +212,7 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
               return
             }
 
-            const terminal = await resolve(request, jobId)
+            const terminal = await resolveWithDeadline(resolve, request, jobId)
             if (!terminal.ok) {
               // The engine acknowledged a terminal event but the status
               // resolver is temporarily unavailable; close so the client can

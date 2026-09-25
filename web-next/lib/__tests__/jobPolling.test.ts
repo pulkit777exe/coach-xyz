@@ -88,6 +88,25 @@ describe('startJobPolling', () => {
     c.stop()
   })
 
+  it('cancels a scheduled poll when refresh starts a new generation', async () => {
+    fetchStatus.mockResolvedValue(mkStatus(false))
+    const controller = startJobPolling({
+      jobId: 'j1',
+      fetchStatus,
+      isComplete: (s) => s.complete,
+      intervalMs: 1000,
+    })
+    await flush()
+    controller.refresh()
+    await flush()
+    expect(fetchStatus).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1000)
+    // One poll from the refreshed generation is expected; the pre-refresh
+    // timer must not create a second overlapping poll at the same deadline.
+    expect(fetchStatus).toHaveBeenCalledTimes(3)
+    controller.stop()
+  })
+
   it('completes once isComplete becomes true and stops polling', async () => {
     fetchStatus.mockResolvedValueOnce(mkStatus(false)).mockResolvedValueOnce(mkStatus(true))
     const onStatus = vi.fn()
