@@ -5,8 +5,9 @@ import { describe, expect, test } from 'bun:test'
 // a roster, not whose roster. Each case spawns a probe process so the probe's
 // `mock.module` stubs never leak into the suite's shared module cache.
 //
-// A refusal is 404, not 403, on purpose — a different status for "exists but is
-// not yours" turns any student id into a membership oracle.
+// Reads answer 404, so a student outside the caller's teams is
+// indistinguishable from one that does not exist. Writes answer 403, beside the
+// capability gate they follow.
 
 type Role = string | null
 type Result = { role: Role; status: number; writes: Record<string, number> }
@@ -43,19 +44,21 @@ const TEAM_COACHES = ['coach', 'head_coach', 'assistant_coach']
 const ORG_READERS = ['analyst', 'medical']
 
 describe('a team coach cannot reach a student on another team', () => {
-  const cases = [
-    'read.performance',
-    'read.analyses',
-    'write.update',
-    'write.delete',
-    'write.performance',
-    'write.linkAnalysis',
+  // Reads hide the row (404); writes refuse the action (403). Both attempt
+  // nothing.
+  const readCases = [
+    { probeCase: 'read.performance', status: 404 },
+    { probeCase: 'read.analyses', status: 404 },
+    { probeCase: 'write.update', status: 403 },
+    { probeCase: 'write.delete', status: 403 },
+    { probeCase: 'write.performance', status: 403 },
+    { probeCase: 'write.linkAnalysis', status: 403 },
   ] as const
 
-  for (const probeCase of cases) {
-    test(`${probeCase} is 404 for a team-A coach and attempts no write`, async () => {
+  for (const { probeCase, status } of readCases) {
+    test(`${probeCase} is ${status} for a team-A coach and attempts no write`, async () => {
       const [coach] = await run(probeCase, TEAM_COACHES)
-      expect(coach?.status).toBe(404)
+      expect(coach?.status).toBe(status)
       expect(coach?.writes).toEqual(NO_WRITES)
     })
   }

@@ -28,9 +28,10 @@ import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
 /**
- * Visibility test for student-keyed reads that do not otherwise load the row.
- * Scoped callers get 404 rather than 403, matching the roster read above: a
- * different status would turn any student id into a membership oracle.
+ * Visibility test for student-keyed handlers. Scoped callers are refused
+ * before any store call: reads answer 404, matching the roster read below, so
+ * a hidden student is indistinguishable from one that does not exist. Writes
+ * answer 403, beside the capability gate they follow.
  */
 const studentVisible = async (
   auth0Id: string,
@@ -181,10 +182,10 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'Student not found', false)
     }
     // Capability is not scope: a team coach may not reshape a roster they
-    // cannot see. 404 (not 403) so the id stays no membership oracle.
+    // cannot see.
     if (!(await studentVisible(auth0Id, request, id))) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Student not found', false)
+      set.status = 403
+      return buildError('FORBIDDEN', 'Updating students requires access to that student', false)
     }
 
     const input = parseStudentInput(body as Record<string, unknown>)
@@ -261,8 +262,8 @@ export default new Elysia()
       )
     }
     if (!(await studentVisible(auth0Id, request, id))) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Student not found', false)
+      set.status = 403
+      return buildError('FORBIDDEN', 'Deleting students requires access to that student', false)
     }
     const deleted = await deleteStudent(auth0Id, id)
     if (!deleted) {
@@ -354,8 +355,12 @@ export default new Elysia()
       )
     }
     if (!(await studentVisible(auth0Id, request, id))) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Student not found', false)
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Recording performance metrics requires access to that student',
+        false,
+      )
     }
     const { metric_key, metric_value, unit, measured_at } = body as Record<string, unknown>
     if (!metric_key || typeof metric_key !== 'string') {
@@ -429,8 +434,8 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'Student not found', false)
     }
     if (typeof student_id === 'string' && !(await studentVisible(auth0Id, request, student_id))) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Student not found', false)
+      set.status = 403
+      return buildError('FORBIDDEN', 'Linking analyses requires access to that student', false)
     }
     const analysis = await linkAnalysisToStudent(
       auth0Id,

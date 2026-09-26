@@ -38,10 +38,12 @@ Split the scope by staff kind rather than by "is this the owner".
    `visibleStudentIds(orgAuth0Id, caller.studentScope)` (`lib/org/scope.ts`) — `null` for
    org-wide, a list for a scoped caller, `[]` for none — and write paths gate on
    `canSeeStudent` before touching the store. `null` and `[]` are deliberately distinct.
-4. Refusals for an out-of-scope **target** are 404, not 403, matching the roster read that
-   already did this: a distinct status for "exists but is not yours" turns any student id
-   into a membership oracle. A missing **capability** still returns 403, since that leaks
-   only the caller's own role.
+4. Refusals for an out-of-scope **target** split by operation. A **read** answers 404,
+   so a student outside the caller's teams is indistinguishable from one that does not
+   exist — this continues the choice the roster read already made. A **write** answers
+   403, beside the capability gate it follows; a missing capability is always 403. The
+   residual difference is that a write against a hidden id confirms the id exists, which
+   is accepted because student ids are UUIDv4 and cannot be enumerated.
 5. `schedule_events` and `seasons` carry no `team_id` and no `student_id`. They stay
    org-wide deliberately. Narrowing them would mean hiding the fixture list from the coaches
    who need it, which is worse than the exposure.
