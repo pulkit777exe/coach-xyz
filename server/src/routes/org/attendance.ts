@@ -11,6 +11,7 @@ import {
 } from '../../lib/orgData'
 import { isDate } from '../../lib/orgValidate'
 import { resolveCaller } from '../../lib/caller'
+import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -20,6 +21,9 @@ import { Elysia } from 'elysia'
 
 type AttendanceNotificationStudent = Pick<Student, 'id' | 'full_name' | 'account_auth0_id'>
 type NotificationSender = Parameters<typeof notifyAttendanceRecorded>[1]
+
+/** Capability is not scope: `attendance.write` says WHICH writes, not WHOSE. */
+const OUT_OF_SCOPE_MESSAGE = 'Recording attendance is limited to the students in your team scope'
 
 /** Fan out one notification per affected student, never once per batch row. */
 export const fanOutAttendanceNotifications = async (
@@ -73,22 +77,28 @@ export default new Elysia()
   // ── Attendance ─────────────────────────────────────────────────────────────
   .get('/api/org/:auth0Id/attendance', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
     const records = await listAttendance(auth0Id, {
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
       studentId: url.searchParams.get('studentId') ?? undefined,
+      // `null` = org-wide (owner/admin/analyst/medical); a list narrows the
+      // query to the caller's teams, and `[]` yields nothing.
+      studentIds: await visibleStudentIds(auth0Id, caller.studentScope),
     })
     set.status = 200
     return { records }
   })
   .get('/api/org/:auth0Id/attendance/summary', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
     const summary = await attendanceSummary(auth0Id, {
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
       studentId: url.searchParams.get('studentId') ?? undefined,
+      studentIds: await visibleStudentIds(auth0Id, caller.studentScope),
     })
     set.status = 200
     return { summary }
@@ -108,6 +118,13 @@ export default new Elysia()
     if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing or invalid attendance fields', false)
+    }
+    // Scope gate: refuse BEFORE the roster lookup, so an out-of-scope student id
+    // never reaches the store (a write must not be attempted at all).
+    const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
+    if (!canSeeStudent(studentIds, student_id as string)) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE_MESSAGE, false)
     }
     const student = await getStudent(auth0Id, student_id as string)
     if (!student) {
@@ -164,6 +181,18 @@ export default new Elysia()
       )
     }
 
+    // Scope gate before ANY write: one bad entry refuses the whole batch, and
+    // no student is read or written first.
+    const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
+    const outOfScope = entries.find(
+      (entry) =>
+        !canSeeStudent(studentIds, (entry as Record<string, unknown>).student_id as string),
+    )
+    if (outOfScope) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE_MESSAGE, false)
+    }
+
     // Verify every student belongs to this org before any write.
     const students: Student[] = []
     for (const entry of entries) {
@@ -213,6 +242,11 @@ export default new Elysia()
     if (!studentId || !sessionDate) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing studentId or date', false)
+    }
+    const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
+    if (!canSeeStudent(studentIds, studentId)) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE_MESSAGE, false)
     }
     const deleted = await deleteAttendance(auth0Id, studentId, sessionDate)
     if (!deleted) {

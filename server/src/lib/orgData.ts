@@ -92,6 +92,7 @@ export type {
 } from './org/performance'
 export {
   listPerformance,
+  getPerformanceMetric,
   createPerformanceMetric,
   updatePerformanceMetric,
   deletePerformanceMetric,

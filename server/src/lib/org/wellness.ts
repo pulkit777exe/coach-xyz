@@ -2,6 +2,7 @@
 
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { getStudent } from './students'
+import type { StudentScope } from './scope'
 
 // ── Wellness check-ins (health data, §5) ─────────────────────────────────────
 
@@ -37,6 +38,15 @@ export const listWellness = async (
   )
 }
 
+/**
+ * Record a wellness check-in for one student.
+ *
+ * `scope` is the caller's roster visibility (`lib/org/scope.ts`), passed
+ * straight into the student lookup: a check-in for a player outside the
+ * caller's teams finds no student and writes nothing. The route refuses that
+ * case with 403 first — this is the second line for health data, where a
+ * record that lands is the thing we must never do by accident.
+ */
 export const createWellnessCheckin = async (
   auth0Id: string,
   createdBy: string | null,
@@ -48,8 +58,9 @@ export const createWellnessCheckin = async (
     availability?: string | null
     note?: string | null
   },
+  scope?: StudentScope,
 ): Promise<WellnessCheckin | null> => {
-  const student = await getStudent(auth0Id, input.student_id)
+  const student = await getStudent(auth0Id, input.student_id, scope)
   if (!student) return null
   const sleep =
     typeof input.sleep_hours === 'number' && input.sleep_hours >= 0 && input.sleep_hours <= 24

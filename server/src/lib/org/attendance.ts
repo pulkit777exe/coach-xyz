@@ -1,7 +1,26 @@
 // Attendance data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
+import { uuidArrayLiteral } from './scope'
 import type { AttendanceStatus } from '../orgEnums'
+
+/**
+ * Bind pair for the student-scope filter (the list `visibleStudentIds` returns
+ * in `lib/org/scope.ts`): `undefined`/`null` means org-wide and adds no
+ * predicate, a list means exactly those students, and `[]` means the caller
+ * sees nobody.
+ *
+ * The binding is the one proven in `org/students.ts`: an empty list binds NULL
+ * (Bun sends `[]` as '', which is not a valid uuid[] literal) so
+ * `not ${scoped} or student_id = any(NULL::uuid[])` matches no rows — the honest
+ * answer for a coach who manages no team — while a non-empty list goes through
+ * `uuidArrayLiteral`, because a raw JS array reaches Postgres as comma-joined
+ * text and the `::uuid[]` cast then fails.
+ */
+const scopeFilter = (ids: string[] | null | undefined) => ({
+  scoped: ids !== undefined && ids !== null,
+  param: ids !== undefined && ids !== null && ids.length > 0 ? uuidArrayLiteral(ids) : null,
+})
 
 export type AttendanceRecord = {
   id: string
@@ -31,10 +50,11 @@ export type AttendanceSummary = {
 // ── Attendance ───────────────────────────────────────────────────────────────
 export const listAttendance = async (
   auth0Id: string,
-  opts: { from?: string; to?: string; studentId?: string } = {},
+  opts: { from?: string; to?: string; studentId?: string; studentIds?: string[] | null } = {},
 ): Promise<AttendanceWithStudent[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const filter = scopeFilter(opts.studentIds)
       const rows = await db<AttendanceWithStudent[]>`
         select a.*, s.full_name, s.sport
         from attendance a
@@ -43,6 +63,7 @@ export const listAttendance = async (
           and (${opts.from ?? null}::date is null or a.session_date >= ${opts.from ?? null}::date)
           and (${opts.to ?? null}::date is null or a.session_date <= ${opts.to ?? null}::date)
           and (${opts.studentId ?? null}::uuid is null or a.student_id = ${opts.studentId ?? null}::uuid)
+          and (not ${filter.scoped} or a.student_id = any(${filter.param}::uuid[]))
         order by a.session_date desc, s.full_name asc;
       `
       return rows ?? []
@@ -112,10 +133,11 @@ export const deleteAttendance = async (
 
 export const attendanceSummary = async (
   auth0Id: string,
-  opts: { from?: string; to?: string; studentId?: string } = {},
+  opts: { from?: string; to?: string; studentId?: string; studentIds?: string[] | null } = {},
 ): Promise<AttendanceSummary> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const filter = scopeFilter(opts.studentIds)
       const rows = await db<AttendanceSummary[]>`
         select
           count(*)::int as total_records,
@@ -130,7 +152,8 @@ export const attendanceSummary = async (
         where auth0_id = ${auth0Id}
           and (${opts.from ?? null}::date is null or session_date >= ${opts.from ?? null}::date)
           and (${opts.to ?? null}::date is null or session_date <= ${opts.to ?? null}::date)
-          and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid);
+          and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid)
+          and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]));
       `
       return (
         rows?.[0] ?? {

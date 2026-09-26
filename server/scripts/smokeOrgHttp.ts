@@ -13,6 +13,8 @@ import { Elysia } from 'elysia'
 
 import authRoute from '../src/routes/auth'
 import orgRoute from '../src/routes/org'
+import membersRoute from '../src/routes/members'
+import teamsRoute from '../src/routes/teams'
 import meRoute from '../src/routes/me'
 import emailRoute from '../src/routes/email'
 import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
@@ -28,6 +30,11 @@ const app = new Elysia()
   .use(globalErrorHandler)
   .use(authRoute)
   .use(orgRoute)
+  // teams.ts and members.ts are mounted at the top level in src/index.ts, not
+  // inside routes/org. Without them the team-scope block below 404s on route
+  // match rather than exercising the scope filters.
+  .use(membersRoute)
+  .use(teamsRoute)
   .use(meRoute)
   .use(emailRoute)
 
@@ -575,6 +582,87 @@ async function main() {
     r.status === 403 && expectError(r.json),
     r.json,
   )
+
+  // ── Team scope, exercised against a real Postgres ─────────────────────────
+  // Every scoped read in the suite stubs `db` as a plain tag function, so no
+  // fixture ever asks Postgres whether a bound id list is a legal `uuid[]`.
+  // That class of bug (22P02 on a scoped query while the unscoped path looks
+  // fine) is only visible here, so this block builds a real second team and a
+  // real scoped coach and reads through it.
+  console.log('team scope')
+  const scopedId = `${tag}|scoped-coach`
+  const scopedEmail = `${tag}+scoped@example.com`
+
+  r = await call('POST', '/api/auth/sync', {
+    body: { sub: scopedId, name: 'Scoped Coach', email: scopedEmail, email_verified: true },
+  })
+  check('scoped coach user exists', r.status === 200 && r.json?.user?.auth0_id === scopedId, r.json)
+
+  r = await call('POST', `/api/org/${coachId}/teams`, {
+    identity: coachId,
+    body: { name: 'Smoke Squad', sport: 'basketball' },
+  })
+  const teamId = typeof r.json?.team?.id === 'string' ? r.json.team.id : ''
+  check('create team', r.status === 201 && teamId.length > 0, { status: r.status, body: r.json })
+
+  r = await call('POST', `/api/org/${coachId}/members`, {
+    identity: coachId,
+    body: { email: scopedEmail, role: 'coach' },
+  })
+  check('invite scoped coach as a member', r.status === 201, r.json)
+
+  r = await call('POST', `/api/org/${coachId}/teams/${teamId}/members`, {
+    identity: coachId,
+    body: { member_auth0_id: scopedId, role: 'coach' },
+  })
+  check('add scoped coach to the team', r.status === 201, r.json)
+
+  // The team holds no students, so a correctly scoped caller sees nothing while
+  // the owner still sees the org. These four are the live array-bind checks.
+  r = await call('GET', `/api/org/${coachId}/students`, { identity: scopedId })
+  check(
+    'scoped coach reads no students off-team (live uuid[] bind)',
+    r.status === 200 && r.json?.students?.length === 0,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/attendance`, { identity: scopedId })
+  check(
+    'scoped coach reads no attendance off-team (live uuid[] bind)',
+    r.status === 200 && (r.json?.records?.length ?? 0) === 0,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/matches`, { identity: scopedId })
+  check(
+    'scoped coach reads no matches off-team (live uuid[] bind)',
+    r.status === 200 && (r.json?.matches?.length ?? 0) === 0,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/reports`, { identity: scopedId })
+  check(
+    'scoped coach reads no reports off-team (live uuid[] bind)',
+    r.status === 200 && (r.json?.reports?.length ?? 0) === 0,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/teams`, { identity: scopedId })
+  check(
+    'scoped coach sees only their own team',
+    r.status === 200 && r.json?.teams?.length === 1 && r.json?.teams?.[0]?.id === teamId,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/students`, { identity: coachId })
+  check(
+    'owner is not narrowed by the same org',
+    r.status === 200 && (r.json?.students?.length ?? 0) >= 1,
+    r.json,
+  )
+
+  r = await call('DELETE', `/api/org/${coachId}/teams/${teamId}`, { identity: coachId })
+  check('delete team', r.status === 200, r.json)
 
   // ── Identity-boundary negatives ───────────────────────────────────────────
   console.log('identity boundary')

@@ -2,6 +2,7 @@
 
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { STUDENT_STATUSES } from '../orgEnums'
+import { canSeeStudent, uuidArrayLiteral, visibleStudentIds, type StudentScope } from './scope'
 
 export type Student = {
   id: string
@@ -47,8 +48,10 @@ export const listStudents = async (
       const scoped = opts.teamIds !== undefined
       // Bun binds [] as '' which is not a valid uuid[] literal — bind NULL
       // instead. Unscoped queries short-circuit on `not ${scoped}`; scoped
-      // queries with NULL match nothing (correct: no visible teams).
-      const scopeParam = scopeIds.length > 0 ? scopeIds : null
+      // queries with NULL match nothing (correct: no visible teams). Non-empty
+      // lists go through `uuidArrayLiteral`: a raw JS array is sent as
+      // comma-joined text and the cast fails (see scope.ts).
+      const scopeParam = scopeIds.length > 0 ? uuidArrayLiteral(scopeIds) : null
       const rows = await db<Student[]>`
         select *
         from students
@@ -66,7 +69,26 @@ export const listStudents = async (
   )
 }
 
-export const getStudent = async (auth0Id: string, id: string): Promise<Student | null> => {
+/**
+ * One student by id, optionally narrowed to the caller's scope.
+ *
+ * `scope` follows the same convention as `listStudents`: omitted means the org
+ * is visible, `{ all: false, teamIds }` means those teams' students only. The
+ * scope is resolved BEFORE the by-id query, so a student outside the caller's
+ * teams answers `null` and its id is never used as a probe against the store —
+ * `getStudent` is the by-id door into the roster, and every write keyed to a
+ * student (wellness, plans, objectives, reports, performance) routes through
+ * here, so the narrowing has to live below the route as well as above it.
+ */
+export const getStudent = async (
+  auth0Id: string,
+  id: string,
+  scope?: StudentScope,
+): Promise<Student | null> => {
+  if (scope) {
+    const visible = await visibleStudentIds(auth0Id, scope)
+    if (!canSeeStudent(visible, id)) return null
+  }
   return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Student[]>`
       select * from students where auth0_id = ${auth0Id} and id = ${id} limit 1;

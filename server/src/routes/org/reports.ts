@@ -11,11 +11,17 @@ import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { resolveCaller } from '../../lib/caller'
+import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { notifyReportReady } from '../../lib/notificationEvents'
 import { logger } from '../../lib/logger'
 import { Elysia } from 'elysia'
+
+// A report belongs to exactly one student (reports carry no team_id), so scope
+// is a pure student-visibility question. `report.create` says the caller may
+// author reports at all; this says whose.
+const OUT_OF_SCOPE = 'Reports are limited to students in your team scope'
 
 export default new Elysia()
   .use(serviceGuard)
@@ -23,15 +29,26 @@ export default new Elysia()
   .get('/api/org/:auth0Id/reports', async ({ params, request, set }) => {
     const { auth0Id } = params
     const url = new URL(request.url)
+    const caller = await resolveCaller(auth0Id, request)
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
     const reports = await listReports(auth0Id, {
       studentId: url.searchParams.get('studentId') ?? undefined,
+      // Absent for an org-wide caller (owner/admin/analyst/medical) so the query
+      // stays unfiltered; present-and-empty for an unassigned coach.
+      ...(visible === null ? {} : { visibleStudentIds: visible }),
     })
     set.status = 200
     return { reports }
   })
-  .get('/api/org/:auth0Id/reports/:id', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
-    const report = await getReport(auth0Id, id)
+    const caller = await resolveCaller(auth0Id, request)
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    // Scoped in SQL, so a report outside the caller's scope reads as absent —
+    // 404, not 403: a single-item read must not become an existence oracle.
+    const report = await getReport(auth0Id, id, {
+      ...(visible === null ? {} : { visibleStudentIds: visible }),
+    })
     if (!report) {
       set.status = 404
       return buildError('NOT_FOUND', 'Report not found', false)
@@ -54,6 +71,16 @@ export default new Elysia()
       string,
       unknown
     >
+
+    // Scope gate, beside the capability gate and ahead of every write: a scoped
+    // caller may only author for a student it can see, so an org-wide report
+    // request (no student) is refused too — it would summarize the whole org.
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    const target = typeof student_id === 'string' ? student_id : null
+    if (visible !== null && (target === null || !canSeeStudent(visible, target))) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
+    }
 
     if (!report_type || !REPORT_TYPE_SET.has(report_type as string)) {
       set.status = 400
@@ -142,6 +169,15 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Report not found', false)
     }
+    // Fetch-then-check: this is the report's own student, fetched unscoped so a
+    // refusal can be 403 rather than a 404 that hides the row's existence. Refuse
+    // before buildReportContent aggregates that student's data and before any write.
+    // A report with no student is org-level, so a scoped caller cannot edit it.
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    if (visible !== null && !(existing.student_id && canSeeStudent(visible, existing.student_id))) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
+    }
 
     const { report_type, period_start, period_end, title } = body as Record<string, unknown>
 
@@ -219,6 +255,18 @@ export default new Elysia()
         'Deleting reports requires the report.create permission',
         false,
       )
+    }
+    // Fetch-then-check, before the delete: a scoped caller may not remove a
+    // report for a student outside its teams.
+    const existing = await getReport(auth0Id, id)
+    if (!existing) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Report not found', false)
+    }
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    if (visible !== null && !(existing.student_id && canSeeStudent(visible, existing.student_id))) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
     }
     const deleted = await deleteReport(auth0Id, id)
     if (!deleted) {

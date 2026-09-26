@@ -9,6 +9,7 @@ import { attendanceSummary } from './attendance'
 import { getStudentPerformanceSeries } from './performance'
 import { getStudent } from './students'
 import { getOrgOverview } from './overview'
+import { uuidArrayLiteral } from './scope'
 
 export type ReportRecord = {
   id: string
@@ -54,10 +55,30 @@ export type ReportInput = {
   content_json: Record<string, unknown>
 }
 
+/**
+ * Team scope for report reads. `reports` rows carry only `student_id` (no
+ * `team_id`), so visibility is purely "is that student visible to this caller".
+ *
+ * `visibleStudentIds` absent = the caller sees the whole org (owner/admin, and
+ * the org-wide readers analyst/medical). Present = the caller's visible student
+ * set, and it stays meaningful when EMPTY: `[]` means "an unassigned coach",
+ * who must see nothing, and must not be confused with org-wide.
+ *
+ * The ids bind through `uuidArrayLiteral` (the shared owner of `= any(...::uuid[])`
+ * — see its doc comment): a raw JS array reaches Postgres as comma-joined text
+ * and the cast fails with `22P02 malformed array literal`, which would 500 every
+ * scoped read. The empty scope binds NULL, and `= any(NULL)` is never true, so an
+ * unassigned coach matches nothing rather than everything.
+ */
+export type ReportScope = { visibleStudentIds?: string[] }
+
 export const listReports = async (
   auth0Id: string,
-  opts: { studentId?: string } = {},
+  opts: ReportScope & { studentId?: string } = {},
 ): Promise<Array<ReportRecord & { full_name: string | null }>> => {
+  const scoped = opts.visibleStudentIds !== undefined
+  const scopeParam =
+    scoped && opts.visibleStudentIds!.length > 0 ? uuidArrayLiteral(opts.visibleStudentIds!) : null
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
@@ -66,6 +87,7 @@ export const listReports = async (
         left join students s on s.id = r.student_id
         where r.auth0_id = ${auth0Id}
           and (${opts.studentId ?? null}::uuid is null or r.student_id = ${opts.studentId ?? null}::uuid)
+          and (not ${scoped} or r.student_id = any(${scopeParam}::uuid[]))
         order by r.created_at desc;
       `
       return rows ?? []
@@ -76,13 +98,18 @@ export const listReports = async (
 export const getReport = async (
   auth0Id: string,
   id: string,
+  opts: ReportScope = {},
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
+  const scoped = opts.visibleStudentIds !== undefined
+  const scopeParam =
+    scoped && opts.visibleStudentIds!.length > 0 ? uuidArrayLiteral(opts.visibleStudentIds!) : null
   return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       select r.*, s.full_name
       from reports r
       left join students s on s.id = r.student_id
       where r.auth0_id = ${auth0Id} and r.id = ${id}
+        and (not ${scoped} or r.student_id = any(${scopeParam}::uuid[]))
       limit 1;
     `
     return rows?.[0] ?? null

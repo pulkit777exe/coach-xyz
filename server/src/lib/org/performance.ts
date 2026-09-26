@@ -3,7 +3,26 @@
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { computeMetricTrends as computeTrends } from '../orgValidate'
 import type { MetricTrend } from '../orgValidate'
+import { uuidArrayLiteral } from './scope'
 import { getStudent } from './students'
+
+/**
+ * Bind pair for the student-scope filter (the list `visibleStudentIds` returns
+ * in `lib/org/scope.ts`): `undefined`/`null` means org-wide and adds no
+ * predicate, a list means exactly those students, and `[]` means the caller
+ * sees nobody.
+ *
+ * The binding is the one proven in `org/students.ts`: an empty list binds NULL
+ * (Bun sends `[]` as '', which is not a valid uuid[] literal) so
+ * `not ${scoped} or student_id = any(NULL::uuid[])` matches no rows — the honest
+ * answer for a coach who manages no team — while a non-empty list goes through
+ * `uuidArrayLiteral`, because a raw JS array reaches Postgres as comma-joined
+ * text and the `::uuid[]` cast then fails.
+ */
+const scopeFilter = (ids: string[] | null | undefined) => ({
+  scoped: ids !== undefined && ids !== null,
+  param: ids !== undefined && ids !== null && ids.length > 0 ? uuidArrayLiteral(ids) : null,
+})
 
 export type PerformanceMetric = {
   id: string
@@ -29,13 +48,23 @@ export type PerformanceSeriesPoint = {
 
 // ── Performance ──────────────────────────────────────────────────────────────
 
+/** Series/list options; `studentIds` narrows every query to visible students. */
+export type PerformanceSeriesOptions = {
+  metricKey?: string
+  from?: string
+  to?: string
+  /** Visible student ids from `lib/org/scope.ts`; null/undefined = org-wide. */
+  studentIds?: string[] | null
+}
+
 export const listPerformance = async (
   auth0Id: string,
   studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string; limit?: number } = {},
+  opts: PerformanceSeriesOptions & { limit?: number } = {},
 ): Promise<PerformanceMetric[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const filter = scopeFilter(opts.studentIds)
       const rows = await db<PerformanceMetric[]>`
         select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
                source_analysis_id, measured_at, created_at
@@ -44,6 +73,7 @@ export const listPerformance = async (
           and (${opts.metricKey ?? ''} = '' or metric_key = ${opts.metricKey ?? null})
           and (${opts.from ?? null}::timestamptz is null or measured_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or measured_at <= ${opts.to ?? null}::timestamptz)
+          and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]))
         order by measured_at asc
         limit ${opts.limit ?? 500};
       `
@@ -86,6 +116,27 @@ export const createPerformanceMetric = async (
   })
 }
 
+/**
+ * Resolve a metric row by id so a write guard can ask which student the metric
+ * belongs to before mutating anything: `canSeeStudent` needs a student id, and
+ * the write routes are keyed by metric id.
+ */
+export const getPerformanceMetric = async (
+  auth0Id: string,
+  id: string,
+): Promise<PerformanceMetric | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<PerformanceMetric[]>`
+      select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
+        unit, source_analysis_id, measured_at, created_at
+      from performance_metrics
+      where auth0_id = ${auth0Id} and id = ${id}::uuid
+      limit 1;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const updatePerformanceMetric = async (
   auth0Id: string,
   id: string,
@@ -116,15 +167,17 @@ export const deletePerformanceMetric = async (auth0Id: string, id: string): Prom
 
 /**
  * Combined performance timeline for a student: manual metrics + form scores
- * extracted from completed AI analyses.
+ * extracted from completed AI analyses. `opts.studentIds` narrows both halves of
+ * the timeline, so a team-scoped caller never sees another team's series.
  */
 export const getStudentPerformanceSeries = async (
   auth0Id: string,
   studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string } = {},
+  opts: PerformanceSeriesOptions = {},
 ): Promise<PerformanceSeriesPoint[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const filter = scopeFilter(opts.studentIds)
       const analyses = await db<
         {
           requested_at: string
@@ -144,12 +197,14 @@ export const getStudentPerformanceSeries = async (
           and (summary_json->>'form_score') is not null
           and (${opts.from ?? null}::timestamptz is null or requested_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or requested_at <= ${opts.to ?? null}::timestamptz)
+          and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]))
         order by requested_at asc;
       `
       const manual = await listPerformance(auth0Id, studentId, {
         metricKey: opts.metricKey || undefined,
         from: opts.from,
         to: opts.to,
+        studentIds: opts.studentIds,
       })
 
       const points: PerformanceSeriesPoint[] = [
@@ -188,7 +243,7 @@ export const getStudentPerformanceSeries = async (
 export const getStudentTrends = async (
   auth0Id: string,
   studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string } = {},
+  opts: PerformanceSeriesOptions = {},
 ): Promise<MetricTrend[]> => {
   const series = await getStudentPerformanceSeries(auth0Id, studentId, opts)
   return computeTrends(series)

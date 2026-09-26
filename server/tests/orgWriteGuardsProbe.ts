@@ -19,6 +19,7 @@ const ORG_ID = 'auth0|org-owner'
 const STUDENT_ID = '00000000-0000-0000-0000-000000000001'
 const REPORT_ID = '00000000-0000-0000-0000-000000000002'
 const METRIC_ID = '00000000-0000-0000-0000-000000000003'
+const PROBE_TEAM_ID = '00000000-0000-0000-0000-0000000000f1'
 
 const roleTokens = (process.env.ORG_WRITE_GUARD_ROLES ?? '')
   .split(',')
@@ -82,7 +83,24 @@ mock.module('../src/lib/orgMembers', () => ({
 
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
-  listMemberTeamIds: async () => [],
+  // Coaching roles are team staff, so the probe gives them a team. With none
+  // they would legitimately see no students and every guarded write would be
+  // refused on scope — which is correct behaviour, and not what this file
+  // tests. It tests the capability floor.
+  listMemberTeamIds: async () => (currentRole ? [PROBE_TEAM_ID] : []),
+}))
+
+// The scope seam resolves visible students through the store. Stub the store
+// rather than the seam, so the real `visibleStudentIds` and `canSeeStudent` run
+// and these cases test the capability floor against the real policy. (Mocking
+// `lib/org/scope` directly does not work here: pre-importing the module to
+// reach its pure helpers defeats the override, and the routes keep calling the
+// real function.)
+const storeDb = () => Promise.resolve([{ id: STUDENT_ID }])
+mock.module('../src/lib/historyStore', () => ({
+  withHistoryStoreOrThrow: async (fn: (db: unknown) => unknown) => fn(storeDb),
+  withHistoryStore: async (fn: (db: unknown) => unknown) => fn(storeDb),
+  orDisabledDefault: (_value: unknown, fallback: unknown) => fallback,
 }))
 
 mock.module('../src/lib/analyses', () => ({
@@ -171,6 +189,9 @@ mock.module('../src/lib/orgData', () => ({
   getStudentPerformanceSeries: async () => [],
   // performance
   listPerformance: async () => [metric],
+  // The performance write routes resolve the owning student from the metric
+  // before mutating, so the scope gate can ask whether that student is visible.
+  getPerformanceMetric: async () => metric,
   getStudentTrends: async () => [],
   compareStudents: async () => [],
   createPerformanceMetric: async () => {

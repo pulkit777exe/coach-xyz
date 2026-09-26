@@ -1,13 +1,22 @@
 import { getOrgOverview, searchOrg } from '../../lib/orgData'
+import { resolveCaller } from '../../lib/caller'
+import { visibleStudentIds } from '../../lib/org/scope'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
+// Capability is not scope: the rollup and the search box are org-wide queries,
+// so both resolve the caller once and hand the visible-student set down.
+// Otherwise a team-A coach reads team B's headcount here and enumerates team B
+// by name in /search. `null` (org-wide) and `[]` (sees nothing) stay distinct
+// all the way into the data layer — an unassigned coach gets zeros and no hits.
 export default new Elysia()
   .use(serviceGuard)
   // ── Overview ───────────────────────────────────────────────────────────────
-  .get('/api/org/:auth0Id/overview', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/overview', async ({ params, request, set }) => {
     const { auth0Id } = params
-    const overview = await getOrgOverview(auth0Id)
+    const caller = await resolveCaller(auth0Id, request)
+    const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
+    const overview = await getOrgOverview(auth0Id, studentIds)
     set.status = 200
     return { overview }
   })
@@ -16,7 +25,9 @@ export default new Elysia()
     const { auth0Id } = params
     const url = new URL(request.url)
     const query = url.searchParams.get('q') ?? ''
-    const results = await searchOrg(auth0Id, query)
+    const caller = await resolveCaller(auth0Id, request)
+    const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
+    const results = await searchOrg(auth0Id, query, studentIds)
     set.status = 200
     return results
   })

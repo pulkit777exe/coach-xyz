@@ -6,10 +6,16 @@ import {
 } from '../../lib/orgData'
 import { resolveCaller } from '../../lib/caller'
 import { hasPermission } from '../../lib/permissions'
+import { visibleStudentIds } from '../../lib/org/scope'
+// Imported from its own module, not the orgData barrel: the barrel is frozen
+// shared surface in this change, and the fetch-then-check read this needs is new.
+import { getTrainingPlan, planVisibleTo } from '../../lib/org/plans'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
+
+const OUT_OF_SCOPE = 'Training plans are limited to students and teams in your scope'
 
 export default new Elysia()
   .use(serviceGuard)
@@ -22,11 +28,18 @@ export default new Elysia()
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    const caller = await resolveCaller(auth0Id, request)
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
     set.status = 200
     return {
       plans: await listTrainingPlans(auth0Id, {
         teamId: pickId(url.searchParams.get('team_id')),
         studentId: pickId(url.searchParams.get('student_id')),
+        // Absent for an org-wide caller, so the existing team_id/student_id
+        // query-param filters keep working unchanged.
+        ...(caller.studentScope.all
+          ? {}
+          : { scope: { teamIds: caller.studentScope.teamIds, studentIds: visible ?? [] } }),
       }),
     }
   })
@@ -44,14 +57,23 @@ export default new Elysia()
     }
     const raw = (body ?? {}) as Record<string, unknown>
     const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
+    // Scope gate, beside the capability gate and ahead of the insert: the
+    // requested team OR student must be one the caller can reach. Neither set
+    // is an org-level plan, which a scoped caller may not create.
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    const target = { team_id: pickId(raw.team_id), student_id: pickId(raw.student_id) }
+    if (!planVisibleTo(caller.studentScope, visible, target)) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
+    }
     const title = typeof raw.title === 'string' ? raw.title : ''
     if (!title.trim()) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'title is required', false)
     }
     const plan = await createTrainingPlan(auth0Id, caller.verified, {
-      team_id: pickId(raw.team_id),
-      student_id: pickId(raw.student_id),
+      team_id: target.team_id,
+      student_id: target.student_id,
       title,
       description: typeof raw.description === 'string' ? raw.description : null,
     })
@@ -73,6 +95,18 @@ export default new Elysia()
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
+    }
+    // Fetch-then-check: unscoped read so "missing" (404) stays distinct from
+    // "not yours" (403), then refuse before the status update is attempted.
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    const existing = await getTrainingPlan(auth0Id, id)
+    if (!existing) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Plan not found', false)
+    }
+    if (!planVisibleTo(caller.studentScope, visible, existing)) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
     }
     const { status } = (body ?? {}) as { status?: unknown }
     if (status !== 'active' && status !== 'done' && status !== 'archived') {
@@ -98,6 +132,17 @@ export default new Elysia()
     if (!hasPermission(role, 'player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
+    }
+    // Fetch-then-check, before the delete — see the PATCH handler.
+    const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    const existing = await getTrainingPlan(auth0Id, id)
+    if (!existing) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Plan not found', false)
+    }
+    if (!planVisibleTo(caller.studentScope, visible, existing)) {
+      set.status = 403
+      return buildError('FORBIDDEN', OUT_OF_SCOPE, false)
     }
     const removed = await deleteTrainingPlan(auth0Id, id)
     if (!removed) {
