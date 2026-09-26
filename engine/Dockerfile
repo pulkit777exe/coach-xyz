@@ -19,8 +19,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install --upgrade pip --timeout 100 --retries 5 \
-    && pip install -r requirements.txt --timeout 100 --retries 5
+RUN pip install --no-cache-dir --no-compile --timeout 100 --retries 5 \
+    -r requirements.txt
 
 COPY . .
 RUN useradd --create-home --uid 10001 coachai \
