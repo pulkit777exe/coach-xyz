@@ -499,6 +499,83 @@ async function main() {
     )
   }
 
+  // ── Account settings + data rights (self-scoped) ───────────────────────────
+  console.log('account settings')
+  r = await call('GET', '/api/me/preferences', { identity: playerId })
+  check(
+    'GET /api/me/preferences -> 200 with the synced settings',
+    r.status === 200 && r.json !== null && 'theme' in r.json && 'reduceMotion' in r.json,
+    r.json,
+  )
+
+  r = await call('PUT', '/api/me/preferences', {
+    identity: playerId,
+    body: { weekStartsMonday: true },
+  })
+  check('PUT /api/me/preferences -> 200', r.status === 200, r.json)
+
+  r = await call('PUT', '/api/me/preferences', { identity: playerId, body: { theme: 'neon' } })
+  check(
+    'PUT /api/me/preferences with a bad theme -> 400',
+    r.status === 400 && expectError(r.json),
+    r.json,
+  )
+
+  r = await call('GET', '/api/me/notification-preferences', { identity: playerId })
+  check(
+    'GET /api/me/notification-preferences -> 200 with the digest cadence',
+    r.status === 200 && r.json !== null && 'cadence' in r.json && 'lastDigestAt' in r.json,
+    r.json,
+  )
+
+  r = await call('PUT', '/api/me/notification-preferences', {
+    identity: playerId,
+    body: { cadence: 'hourly' },
+  })
+  check(
+    'PUT /api/me/notification-preferences with a bad cadence -> 400',
+    r.status === 400 && expectError(r.json),
+    r.json,
+  )
+
+  r = await call('GET', '/api/me/consent', { identity: playerId })
+  check(
+    'GET /api/me/consent -> 200 with the linked/unlinked shape',
+    r.status === 200 && r.json !== null && 'linked' in r.json,
+    r.json,
+  )
+
+  r = await call('GET', '/api/me/privacy-requests', { identity: playerId })
+  check(
+    'GET /api/me/privacy-requests -> 200 with the caller own list',
+    r.status === 200 && r.json !== null && Array.isArray(r.json.requests),
+    r.json,
+  )
+
+  r = await call('GET', '/api/me/export', { identity: playerId })
+  check(
+    'GET /api/me/export -> 200 carrying a portability bundle',
+    r.status === 200 && r.json !== null && 'formatVersion' in r.json,
+    r.json,
+  )
+
+  r = await call('GET', `/api/org/${coachId}/settings`, { identity: coachId })
+  check(
+    'GET /api/org/:id/settings -> 200 with the org identity',
+    r.status === 200 && r.json !== null && 'settings' in r.json,
+    r.json,
+  )
+
+  r = await call('PATCH', `/api/org/${coachId}/settings`, {
+    identity: playerId,
+    body: { name: 'not allowed' },
+  })
+  check(
+    'PATCH /api/org/:id/settings as a non-member -> 403',
+    r.status === 403 && expectError(r.json),
+    r.json,
+  )
+
   // ── Identity-boundary negatives ───────────────────────────────────────────
   console.log('identity boundary')
   r = await call('GET', `/api/org/${coachId}/students`, { identity: playerId })
