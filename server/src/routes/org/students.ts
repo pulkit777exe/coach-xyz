@@ -22,9 +22,25 @@ import { resolveCaller } from '../../lib/caller'
 import { hasPermission } from '../../lib/permissions'
 import { auditRoute } from '../../lib/audit'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
+import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
+
+/**
+ * Visibility test for student-keyed reads that do not otherwise load the row.
+ * Scoped callers get 404 rather than 403, matching the roster read above: a
+ * different status would turn any student id into a membership oracle.
+ */
+const studentVisible = async (
+  auth0Id: string,
+  request: Request,
+  studentId: string,
+): Promise<boolean> => {
+  const scope = (await resolveCaller(auth0Id, request)).studentScope
+  if (scope.all) return true
+  return canSeeStudent(await visibleStudentIds(auth0Id, scope), studentId)
+}
 
 export default new Elysia()
   .use(serviceGuard)
@@ -164,6 +180,12 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
+    // Capability is not scope: a team coach may not reshape a roster they
+    // cannot see. 404 (not 403) so the id stays no membership oracle.
+    if (!(await studentVisible(auth0Id, request, id))) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
 
     const input = parseStudentInput(body as Record<string, unknown>)
     if (input.full_name !== undefined && typeof input.full_name !== 'string') {
@@ -238,6 +260,10 @@ export default new Elysia()
         false,
       )
     }
+    if (!(await studentVisible(auth0Id, request, id))) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
     const deleted = await deleteStudent(auth0Id, id)
     if (!deleted) {
       set.status = 404
@@ -299,6 +325,14 @@ export default new Elysia()
   // ── Student detail: attendance, performance, analyses ─────────────────────
   .get('/api/org/:auth0Id/students/:id/performance', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    if (!(await studentVisible(auth0Id, request, id))) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
     const url = new URL(request.url)
     const series = await getStudentPerformanceSeries(auth0Id, id, {
       metricKey: url.searchParams.get('metricKey') ?? undefined,
@@ -318,6 +352,10 @@ export default new Elysia()
         'Recording performance metrics requires the player.manage permission',
         false,
       )
+    }
+    if (!(await studentVisible(auth0Id, request, id))) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
     }
     const { metric_key, metric_value, unit, measured_at } = body as Record<string, unknown>
     if (!metric_key || typeof metric_key !== 'string') {
@@ -355,11 +393,15 @@ export default new Elysia()
     set.status = 201
     return { metric }
   })
-  .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    if (!(await studentVisible(auth0Id, request, id))) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
     }
     const analyses = await getStudentAnalyses(auth0Id, id)
     set.status = 200
@@ -383,6 +425,10 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'student_id must be a string or null', false)
     }
     if (student_id && (await getStudent(auth0Id, student_id)) === null) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
+    if (typeof student_id === 'string' && !(await studentVisible(auth0Id, request, student_id))) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
