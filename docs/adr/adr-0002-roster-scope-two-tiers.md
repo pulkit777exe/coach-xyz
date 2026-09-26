@@ -44,9 +44,17 @@ Split the scope by staff kind rather than by "is this the owner".
    403, beside the capability gate it follows; a missing capability is always 403. The
    residual difference is that a write against a hidden id confirms the id exists, which
    is accepted because student ids are UUIDv4 and cannot be enumerated.
-5. `schedule_events` and `seasons` carry no `team_id` and no `student_id`. They stay
-   org-wide deliberately. Narrowing them would mean hiding the fixture list from the coaches
-   who need it, which is worse than the exposure.
+5. `schedule_events` and `seasons` were org-wide only because they had no team
+   column. They have one now, so they are scoped rather than exempted.
+   `schedule_events.team_id` is nullable, where **null is a club-wide fixture that
+   stays visible to everyone** and a set id must be one of the caller's teams. A
+   scoped caller may write only its own team's events, and may not create a
+   club-wide one — otherwise any team coach could publish to the org calendar. A
+   **season** is org-level metadata (a name and a date range), so it is not hidden
+   wholesale: one is hidden only when it holds at least one match and none of them
+   is the caller's, which keeps an empty or club-wide season visible. Getting that
+   backwards would hide upcoming fixtures from coaches, which is the failure the
+   earlier exemption existed to avoid.
 
 ## Consequences
 
