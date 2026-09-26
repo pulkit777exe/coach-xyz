@@ -289,7 +289,9 @@ class TestStripedLocks:
     def test_stripes_are_real_locks(self):
         import threading
 
-        assert isinstance(_get_job_lock("any-job"), threading.Lock)
+        # threading.Lock is a factory function before 3.13 and a class after,
+        # so compare against the type of a freshly built lock.
+        assert isinstance(_get_job_lock("any-job"), type(threading.Lock()))
         assert len(_stripes) == 256
 
     def test_distinct_jobs_spread_across_stripes(self):
