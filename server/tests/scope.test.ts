@@ -17,10 +17,12 @@ describe('visibleStudentScope', () => {
     expect(await visibleStudentIds('org-1', { all: false, teamIds: [] })).toEqual([])
   })
 
-  test('a scoped caller is limited to their teams', async () => {
-    // Behaviour with a live store is covered by the per-domain route tests;
-    // what matters here is that only a non-empty scope goes to the database.
-    expect(visibleStudentIds('org-1', { all: false, teamIds: ['t1'] })).toBeInstanceOf(Promise)
+  test('a team list that filters down to nothing short-circuits to none', async () => {
+    // Bun sends [] as '' which is not a valid uuid[] literal, so a list that
+    // filters to empty must never reach the database. Asserting the returned
+    // value (rather than only that a Promise came back) is also what keeps this
+    // from firing an unhandled rejection when the suite runs against a live DB.
+    expect(await visibleStudentIds('org-1', { all: false, teamIds: ['', ''] })).toEqual([])
   })
 })
 

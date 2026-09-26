@@ -19,14 +19,21 @@ import { Elysia } from 'elysia'
 export default new Elysia()
   .use(serviceGuard)
   // ── Seasons & matches ────────────────────────────────────────────────
-  .get('/api/org/:auth0Id/seasons', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/seasons', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
+    const caller = await resolveCaller(auth0Id, request)
     set.status = 200
-    return { seasons: await listSeasons(auth0Id) }
+    return {
+      // A season is org-level metadata, so it is narrowed by the matches it
+      // holds rather than hidden outright — see `listSeasons`.
+      seasons: await listSeasons(auth0Id, {
+        teamIds: caller.studentScope.all ? undefined : caller.studentScope.teamIds,
+      }),
+    }
   })
   .post('/api/org/:auth0Id/seasons', async ({ params, body, request, set }) => {
     const { auth0Id } = params

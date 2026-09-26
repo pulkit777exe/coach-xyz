@@ -1017,6 +1017,24 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+            // The team dimension ADR-0002 §5 anticipated for the club calendar:
+            // an event with no team is a club-level fixture every coach keeps
+            // seeing, so the column is nullable and there is nothing to backfill
+            // (every existing row is club-level by definition). `on delete
+            // cascade` because the event belonged to that team — `set null`
+            // would silently promote a deleted team's fixtures to org-wide.
+            await store`
+          alter table schedule_events
+            add column if not exists team_id uuid references teams (id) on delete cascade;
+        `
+          })(),
+          (async () => {
+            await store`
+          create index if not exists idx_schedule_team_id
+          on schedule_events (team_id);
+        `
+          })(),
+          (async () => {
             await store`
           create index if not exists idx_reports_auth0_id
           on reports (auth0_id);

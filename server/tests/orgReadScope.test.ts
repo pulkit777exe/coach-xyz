@@ -32,6 +32,7 @@ type StoreLabels = {
   overview: number
   searchStudents: number
   searchSchedule: number
+  calendarTeamFilters: number
   searchReports: number
   searchAnalyses: number
   getStudent: number
@@ -109,8 +110,9 @@ const TEAM_A_OVERVIEW = {
 const ORG_OVERVIEW = {
   student_count: 3,
   active_students: 2,
-  sessions_this_month: 2,
-  upcoming_events: 1,
+  // Three fixtures now: a team A session, a team B match and a club-wide event.
+  sessions_this_month: 3,
+  upcoming_events: 2,
   analyses_linked: 2,
   avg_attendance_rate: 66.7,
 }
@@ -128,6 +130,7 @@ const NO_STORE_QUERIES: StoreLabels = {
   overview: 0,
   searchStudents: 0,
   searchSchedule: 0,
+  calendarTeamFilters: 0,
   searchReports: 0,
   searchAnalyses: 0,
   getStudent: 0,
@@ -173,6 +176,19 @@ describe('a team-A coach is narrowed to team A', () => {
     expect(org.scopeLiteral).toBeNull()
   })
 
+  test('the calendar counts and the schedule search each bind the team filter', () => {
+    // Counted from the statement text. A param-based fixture cannot catch this:
+    // it keeps applying the team scope from the surviving subquery's bind even
+    // after the filter is deleted from the other, so dropping the filter from
+    // `sessions_this_month` alone left every test green.
+    const [overview] = runProbe('overview.get', ['head_coach'], [TEAM_A])
+    // sessions_this_month + upcoming_events.
+    expect(overview.store.calendarTeamFilters, 'overview calendar subqueries').toBe(2)
+
+    const [search] = runProbe('overview.search', ['head_coach'], [TEAM_A])
+    expect(search.store.calendarTeamFilters, 'schedule search').toBe(1)
+  })
+
   test('GET /overview counts are not the org rollup', () => {
     const [scoped] = runProbe('overview.get', ['head_coach'], [TEAM_A])
     const [org] = runProbe('overview.get', ['analyst'])
@@ -194,11 +210,10 @@ describe('a team-A coach is narrowed to team A', () => {
         'Player clip A1',
         'Player clip unlinked',
       ])
-      // The schedule is org-wide by design: it is a club calendar, not a player.
-      expect(labels(result.body, 'schedule'), `role: ${role}`).toEqual([
-        'Player squad session',
-        'Player friendly',
-      ])
+      // The schedule is team-scoped: team B's "Player friendly" drops out. The
+      // club-wide fixture survives the scope but not the query, which is a
+      // different filter — its title carries no search term.
+      expect(labels(result.body, 'schedule'), `role: ${role}`).toEqual(['Player squad session'])
     }
   })
 

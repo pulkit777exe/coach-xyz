@@ -26,11 +26,49 @@ export type Match = {
   created_at: string
 }
 
-export const listSeasons = async (auth0Id: string): Promise<Season[]> => {
+/**
+ * Seasons, narrowed by the matches inside them rather than hidden outright.
+ *
+ * A season is org-level metadata — a name and a date range — so a team coach is
+ * not cut off from the calendar by it. The rule: hide a season only when it
+ * holds at least one match and none of those matches is visible to the caller,
+ * i.e. when every fixture in it belongs to another team. A season with no
+ * matches yet, or with a club-level (team-less) fixture, stays visible — the
+ * first `not exists` arm is what keeps an empty season visible, and inverting it
+ * would hide upcoming fixtures from the coaches planning them.
+ *
+ * The second arm carries the `listMatches` rule unchanged: a team-less match is
+ * a club fixture and counts as visible. Note the asymmetry with a single
+ * "no hidden match" arm: `team_id = any(NULL::uuid[])` is NULL, not false, so
+ * an unassigned coach (`teamIds: []`) would be shown every team's season.
+ */
+export const listSeasons = async (
+  auth0Id: string,
+  opts: { teamIds?: string[] } = {},
+): Promise<Season[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const scoped = opts.teamIds !== undefined
+      const teamIds = (opts.teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
+      // Same bind as listMatches: a literal for a non-empty list, NULL for an
+      // empty one (see uuidArrayLiteral in lib/org/scope.ts).
+      const scopeParam = teamIds.length > 0 ? uuidArrayLiteral(teamIds) : null
       const rows = await db<Season[]>`
-      select * from seasons where org_auth0_id = ${auth0Id} order by created_at desc;
+      select s.* from seasons s
+      where s.org_auth0_id = ${auth0Id}
+        and (
+          not ${scoped}
+          or not exists (
+            select 1 from matches m
+            where m.org_auth0_id = s.org_auth0_id and m.season_id = s.id
+          )
+          or exists (
+            select 1 from matches m
+            where m.org_auth0_id = s.org_auth0_id and m.season_id = s.id
+              and (m.team_id is null or m.team_id = any(${scopeParam}::uuid[]))
+          )
+        )
+      order by s.created_at desc;
     `
       return rows ?? []
     })) ?? []

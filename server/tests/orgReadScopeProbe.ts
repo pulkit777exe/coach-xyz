@@ -106,6 +106,9 @@ const ATTENDANCE: Array<{ student_id: string; status: string }> = [
   { student_id: S_B1, status: 'absent' },
 ]
 
+// `team_id` is what makes these scopeable at all: null is a club-wide fixture
+// that stays visible to everyone, a set id must be one of the caller's teams
+// (the listSchedule rule).
 const SCHEDULE: Array<{
   id: string
   title: string
@@ -116,6 +119,7 @@ const SCHEDULE: Array<{
   status: string
   this_month: boolean
   upcoming: boolean
+  team_id: string | null
 }> = [
   {
     id: '00000000-0000-0000-0000-0000000000e1',
@@ -127,6 +131,7 @@ const SCHEDULE: Array<{
     status: 'scheduled',
     this_month: true,
     upcoming: false,
+    team_id: TEAM_A,
   },
   {
     id: '00000000-0000-0000-0000-0000000000e2',
@@ -138,6 +143,19 @@ const SCHEDULE: Array<{
     status: 'scheduled',
     this_month: true,
     upcoming: true,
+    team_id: TEAM_B,
+  },
+  {
+    id: '00000000-0000-0000-0000-0000000000e3',
+    title: 'Club open day',
+    event_type: 'meeting',
+    starts_at: '2026-09-11T10:00:00Z',
+    location: 'Clubhouse',
+    description: 'Everyone',
+    status: 'scheduled',
+    this_month: true,
+    upcoming: true,
+    team_id: null,
   },
 ]
 
@@ -235,6 +253,7 @@ type StoreLabels = {
   overview: number
   searchStudents: number
   searchSchedule: number
+  calendarTeamFilters: number
   searchReports: number
   searchAnalyses: number
   getStudent: number
@@ -247,6 +266,11 @@ const store: StoreLabels = {
   overview: 0,
   searchStudents: 0,
   searchSchedule: 0,
+  // How many schedule subqueries actually bind the team filter. Counted from the
+  // statement text, not the params: a param-based fixture keeps applying the
+  // scope even when the SQL stops filtering on it, which is how a dropped filter
+  // hides behind a green test.
+  calendarTeamFilters: 0,
   searchReports: 0,
   searchAnalyses: 0,
   getStudent: 0,
@@ -271,6 +295,35 @@ let scopeLiteralSeen: string | null = null
  * raw JS array as comma-joined text and the `::uuid[]` cast then fails — so the
  * fixture reads the literal, exactly as Postgres would.
  */
+/**
+ * Team scope as the fixture sees it. The overview statement binds one
+ * (auth0_id, bool, literal) triple per subquery, so position is not a reliable
+ * signal — six subqueries share the shape. What does distinguish them: the team
+ * filter binds a literal of TEAM ids, every student filter binds a literal of
+ * STUDENT ids. So the team scope is the bound literal made only of known team
+ * ids. Returns null when no such literal is bound, which is the org-wide case
+ * (and matches listSchedule: a team-less event is a club fixture, visible to
+ * everyone).
+ */
+const KNOWN_TEAM_IDS = new Set(STUDENTS.map((s) => s.team_id).filter((t): t is string => !!t))
+
+const boundTeamScope = (params: unknown[]): Set<string> | null => {
+  for (const p of params) {
+    if (typeof p !== 'string' || !p.startsWith('{') || !p.endsWith('}')) continue
+    const ids = p
+      .slice(1, -1)
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+    if (ids.length > 0 && ids.every((id) => KNOWN_TEAM_IDS.has(id))) return new Set(ids)
+  }
+  return null
+}
+
+/** Events a caller may see: their own teams, plus every club-wide fixture. */
+const visibleEvents = (teams: Set<string> | null) =>
+  teams === null ? SCHEDULE : SCHEDULE.filter((e) => e.team_id === null || teams.has(e.team_id))
+
 const boundScope = (params: unknown[]): { scoped: boolean; ids: Set<string> | null } => {
   const scoped = params.find((p): p is boolean => typeof p === 'boolean') === true
   const literal = params.find(
@@ -312,6 +365,9 @@ const answer = async (text: string, params: unknown[]): Promise<unknown[]> => {
   }
   // Idempotent-migration column probes: "no rows" means "add it below".
   if (text.includes('information_schema.columns')) return []
+  // Counted centrally, from the statement text, so it covers every statement
+  // rather than one branch. Statements without the clause contribute nothing.
+  store.calendarTeamFilters += (text.match(/team_id is null or team_id = any/g) ?? []).length
   const scope = boundScope(params)
   const like = String(
     params.find((p) => typeof p === 'string' && p.startsWith('%') && p.endsWith('%')) ?? '%%',
@@ -346,8 +402,11 @@ const answer = async (text: string, params: unknown[]): Promise<unknown[]> => {
       {
         student_count: students.length,
         active_students: students.filter((s) => s.status === 'active').length,
-        sessions_this_month: SCHEDULE.filter((e) => e.this_month).length,
-        upcoming_events: SCHEDULE.filter((e) => e.upcoming && e.status === 'scheduled').length,
+        sessions_this_month: visibleEvents(boundTeamScope(params)).filter((e) => e.this_month)
+          .length,
+        upcoming_events: visibleEvents(boundTeamScope(params)).filter(
+          (e) => e.upcoming && e.status === 'scheduled',
+        ).length,
         analyses_linked: visible(ANALYSES, scope).filter((a) => a.student_id !== null).length,
         avg_attendance_rate:
           attendance.length === 0 ? null : Math.round((attended * 1000) / attendance.length) / 10,
@@ -366,10 +425,11 @@ const answer = async (text: string, params: unknown[]): Promise<unknown[]> => {
         ilike(s.position, like),
     )
   }
-  // The schedule has no student or team key: org-wide by design.
+  // Team-keyed since schedule_events gained team_id; a null team is a club
+  // fixture and stays visible.
   if (text.includes('from schedule_events')) {
     store.searchSchedule += 1
-    return SCHEDULE.filter(
+    return visibleEvents(boundTeamScope(params)).filter(
       (e) =>
         ilike(e.title, like) ||
         ilike(e.location, like) ||

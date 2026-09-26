@@ -1,6 +1,7 @@
 // Schedule (events) data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
+import { uuidArrayLiteral } from './scope'
 import { EVENT_STATUSES, EVENT_TYPES } from '../orgEnums'
 
 export type ScheduleEvent = {
@@ -13,28 +14,67 @@ export type ScheduleEvent = {
   location: string | null
   description: string | null
   status: (typeof EVENT_STATUSES)[number]
+  /** Null = a club-level fixture, visible to every caller (see `listSchedule`). */
+  team_id: string | null
   created_at: string
   updated_at: string
+}
+
+/**
+ * Bind pair for the team-scope filter, the rule `listMatches` already uses for
+ * fixtures: `undefined` means the org is visible (every pre-existing caller —
+ * `/api/me/schedule`, the data export — passes nothing), a list narrows to
+ * those teams, and `[]` is a coach who manages no team.
+ *
+ * The binding is the one proven in `org/students.ts`: a non-empty list goes
+ * through `uuidArrayLiteral`, because Bun sends a raw JS array as comma-joined
+ * text and the `::uuid[]` cast then fails (22P02); an empty list binds NULL,
+ * which is not what `[]` would send. `null` and `[]` stay distinct, so an
+ * unassigned coach keeps the club calendar and loses every team row.
+ */
+const teamScopeFilter = (teamIds: string[] | undefined) => {
+  const ids = (teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
+  return { scoped: teamIds !== undefined, param: ids.length > 0 ? uuidArrayLiteral(ids) : null }
 }
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
 
 export const listSchedule = async (
   auth0Id: string,
-  opts: { from?: string; to?: string } = {},
+  opts: { from?: string; to?: string; teamIds?: string[] } = {},
 ): Promise<ScheduleEvent[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const scope = teamScopeFilter(opts.teamIds)
       const rows = await db<ScheduleEvent[]>`
         select * from schedule_events
         where auth0_id = ${auth0Id}
           and (${opts.from ?? null}::timestamptz is null or starts_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or starts_at <= ${opts.to ?? null}::timestamptz)
+          and (not ${scope.scoped} or team_id is null or team_id = any(${scope.param}::uuid[]))
         order by starts_at asc;
       `
       return rows ?? []
     })) ?? []
   )
+}
+
+/**
+ * One event by id, unscoped — the by-id door the schedule writes load before
+ * asking whether the caller may touch it. Unscoped on purpose, like `getMatch`:
+ * the refusal is the route's decision (403 beside its capability gate), and
+ * "missing" has to stay distinguishable from "not yours" (404).
+ */
+export const getScheduleEvent = async (
+  auth0Id: string,
+  id: string,
+): Promise<ScheduleEvent | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<ScheduleEvent[]>`
+      select * from schedule_events where auth0_id = ${auth0Id} and id = ${id} limit 1;
+    `
+    return rows?.[0] ?? null
+  })
 }
 
 const scheduleInsertCols = {
@@ -45,6 +85,7 @@ const scheduleInsertCols = {
   location: true,
   description: true,
   status: true,
+  team_id: true,
 } as const
 
 export type ScheduleInput = Record<string, unknown>
@@ -75,8 +116,12 @@ export const updateScheduleEvent = async (
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStoreOrThrow(async (db) => {
     const cols = Object.keys(scheduleInsertCols).filter((k) => k in input)
+    // Everything else is text; `team_id` is a uuid, so it takes the explicit
+    // cast (the same treatment `updateStudent` gives the same column).
+    const colCasts = { team_id: '::uuid' } as Record<string, string>
     const setClause =
-      cols.map((k, i) => `${k} = $${i + 1}::text`).join(', ') + (cols.length ? ', ' : '')
+      cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? '::text'}`).join(', ') +
+      (cols.length ? ', ' : '')
     const sql = `
       update schedule_events set
         ${setClause} updated_at = now()
@@ -86,6 +131,8 @@ export const updateScheduleEvent = async (
     const values = cols.map((k) => {
       const v = input[k]
       if (v === undefined || v === null) return null
+      // A cast column rejects '' — treat it as "no team".
+      if (v === '' && colCasts[k]) return null
       return String(v)
     })
     const rows = await db.unsafe<ScheduleEvent[]>(sql, [...values, auth0Id, id])

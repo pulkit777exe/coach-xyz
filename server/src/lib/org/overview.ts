@@ -37,18 +37,20 @@ const EMPTY_OVERVIEW: OrgOverview = {
  * counts, linked analyses and the 30-day attendance rate are all exact per
  * scope, because each of those rows carries a `student_id`.
  *
- * The two schedule numbers are deliberately NOT filtered: `schedule_events` has
- * no `team_id` and no `student_id` (see the DDL in `lib/historyStore.ts`), so
- * "sessions for team A this month" is not an answer this schema can produce
- * without joining events to attendance, which would count a session once per
- * player and over-count team sessions with missing attendance. They stay
- * org-wide calendar counts per the documented policy (AGENTS.md: "the schedule
- * is deliberately org-wide rather than hidden from coaches") — a club calendar,
- * not a player record. Everything player-keyed in the same panel is scoped.
+ * The two schedule numbers are team-scoped, not student-scoped: a session
+ * belongs to a team (or to nobody, when `team_id` is null — a club-wide fixture
+ * that stays visible to everyone). They were deliberately left org-wide while
+ * `schedule_events` had no `team_id` at all, which is no longer true; the column
+ * and its index were added in `lib/historyStore.ts` and the same rule the
+ * schedule list uses applies here. Deriving them from attendance instead would
+ * count a session once per player and under-count sessions with no attendance.
  */
 export const getOrgOverview = async (
   auth0Id: string,
   studentIds: string[] | null = null,
+  // undefined = org-wide; an array narrows to those teams, and an empty one
+  // still admits team-less club fixtures (the schedule list's rule).
+  teamIds?: string[],
 ): Promise<OrgOverview> => {
   // `[]` (sees nothing) short-circuits: no ids, no rows, no store round-trip.
   if (studentIds !== null && studentIds.length === 0) return EMPTY_OVERVIEW
@@ -59,6 +61,8 @@ export const getOrgOverview = async (
   // `lib/org/scope.ts`).
   const scoped = studentIds !== null
   const scope = studentIds === null ? null : uuidArrayLiteral(studentIds)
+  const teamScoped = teamIds !== undefined
+  const teamScope = teamIds === undefined || teamIds.length === 0 ? null : uuidArrayLiteral(teamIds)
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<OrgOverview[]>`
@@ -69,12 +73,15 @@ export const getOrgOverview = async (
           (select count(*)::int from students
              where auth0_id = ${auth0Id} and status = 'active'
                and (not ${scoped} or id = any(${scope}::uuid[]))) as active_students,
-          -- Calendar counts: org-wide by design, see the note above.
+          -- Calendar counts: team-scoped, with a team-less event treated as a
+          -- club fixture that stays visible to everyone (listSchedule's rule).
           (select count(*)::int from schedule_events
              where auth0_id = ${auth0Id}
+               and (not ${teamScoped} or team_id is null or team_id = any(${teamScope}::uuid[]))
                and date_trunc('month', starts_at) = date_trunc('month', now())) as sessions_this_month,
           (select count(*)::int from schedule_events
-             where auth0_id = ${auth0Id} and status = 'scheduled' and starts_at > now()) as upcoming_events,
+             where auth0_id = ${auth0Id} and status = 'scheduled' and starts_at > now()
+               and (not ${teamScoped} or team_id is null or team_id = any(${teamScope}::uuid[]))) as upcoming_events,
           -- Already student-keyed (unlinked analyses are excluded), so the
           -- scope filter makes this count exact.
           (select count(*)::int from analysis_history
@@ -124,6 +131,8 @@ export const searchOrg = async (
   auth0Id: string,
   query: string,
   studentIds: string[] | null = null,
+  // Same convention as getOrgOverview: undefined = org-wide.
+  teamIds?: string[],
 ): Promise<OrgSearchResult> => {
   const q = query.trim().slice(0, 100)
   if (!q) return { students: [], schedule: [], reports: [], analyses: [] }
@@ -138,6 +147,8 @@ export const searchOrg = async (
   // org, so org-wide needs no second query shape, and a list must go through
   // `uuidArrayLiteral` or the `::uuid[]` cast fails.
   const scoped = studentIds !== null
+  const teamScoped = teamIds !== undefined
+  const teamScope = teamIds === undefined || teamIds.length === 0 ? null : uuidArrayLiteral(teamIds)
   const scope = studentIds === null ? null : uuidArrayLiteral(studentIds)
 
   return withHistoryStoreOrThrow(async (db) => {
@@ -171,6 +182,7 @@ export const searchOrg = async (
         select id, title, event_type, starts_at, location
         from schedule_events
         where auth0_id = ${auth0Id}
+          and (not ${teamScoped} or team_id is null or team_id = any(${teamScope}::uuid[]))
           and (title ilike ${like} or location ilike ${like} or event_type ilike ${like} or description ilike ${like})
         order by starts_at desc
         limit 8;

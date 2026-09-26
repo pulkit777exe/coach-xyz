@@ -16,7 +16,10 @@ export default new Elysia()
     const { auth0Id } = params
     const caller = await resolveCaller(auth0Id, request)
     const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
-    const overview = await getOrgOverview(auth0Id, studentIds)
+    // The calendar counts and the schedule arm of the search are team-keyed, not
+    // student-keyed, so they need the team half of the scope as well.
+    const teamIds = caller.studentScope.all ? undefined : caller.studentScope.teamIds
+    const overview = await getOrgOverview(auth0Id, studentIds, teamIds)
     set.status = 200
     return { overview }
   })
@@ -27,7 +30,8 @@ export default new Elysia()
     const query = url.searchParams.get('q') ?? ''
     const caller = await resolveCaller(auth0Id, request)
     const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
-    const results = await searchOrg(auth0Id, query, studentIds)
+    const teamIds = caller.studentScope.all ? undefined : caller.studentScope.teamIds
+    const results = await searchOrg(auth0Id, query, studentIds, teamIds)
     set.status = 200
     return results
   })

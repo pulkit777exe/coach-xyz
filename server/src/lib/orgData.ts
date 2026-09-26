@@ -69,6 +69,7 @@ export {
 export type { ScheduleEvent, ScheduleInput } from './org/schedule'
 export {
   listSchedule,
+  getScheduleEvent,
   createScheduleEvent,
   updateScheduleEvent,
   deleteScheduleEvent,
