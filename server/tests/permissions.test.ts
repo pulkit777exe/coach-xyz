@@ -103,12 +103,18 @@ describe('canAccessTeam', () => {
     expect(canAccessTeam('admin', [], 'team-1')).toBe(true)
   })
 
-  test('coach/analyst/medical need a membership on that team', () => {
+  test('coaches need a membership on that team', () => {
     expect(canAccessTeam('coach', ['team-1'], 'team-1')).toBe(true)
     expect(canAccessTeam('coach', ['team-2'], 'team-1')).toBe(false)
+  })
+
+  test('org staff reach every team without a membership', () => {
+    // Matches resolveStudentScope: analyst/medical are org-level readers, so
+    // a membership must not be the only way they see a team.
     expect(canAccessTeam('analyst', ['team-1'], 'team-1')).toBe(true)
+    expect(canAccessTeam('analyst', [], 'team-1')).toBe(true)
     expect(canAccessTeam('medical', ['team-1'], 'team-1')).toBe(true)
-    expect(canAccessTeam('medical', [], 'team-1')).toBe(false)
+    expect(canAccessTeam('medical', [], 'team-1')).toBe(true)
   })
 
   test('head/assistant coaches need a membership on that team', () => {
@@ -180,19 +186,26 @@ describe('resolveStudentScope', () => {
     expect(resolveStudentScope('admin', [])).toEqual({ all: true })
   })
 
-  test('staff see only their teams', () => {
+  test('team staff see only their teams', () => {
     expect(resolveStudentScope('coach', ['t1', 't2'])).toEqual({
       all: false,
       teamIds: ['t1', 't2'],
     })
-    expect(resolveStudentScope('analyst', [])).toEqual({
-      all: false,
-      teamIds: [],
-    })
-    expect(resolveStudentScope('medical', ['t9'])).toEqual({
-      all: false,
-      teamIds: ['t9'],
-    })
+  })
+
+  test('org staff (analyst, medical) see the whole org, teams or not', () => {
+    // Read-only specialists are not assigned to a team; scoping them by
+    // membership would leave the app empty for them.
+    expect(resolveStudentScope('analyst', [])).toEqual({ all: true })
+    expect(resolveStudentScope('medical', [])).toEqual({ all: true })
+    // A team membership does not narrow them further.
+    expect(resolveStudentScope('analyst', ['t9'])).toEqual({ all: true })
+    expect(resolveStudentScope('medical', ['t9'])).toEqual({ all: true })
+  })
+
+  test('an unassigned coach sees nothing rather than everything', () => {
+    expect(resolveStudentScope('coach', [])).toEqual({ all: false, teamIds: [] })
+    expect(resolveStudentScope('head_coach', [])).toEqual({ all: false, teamIds: [] })
   })
 
   test('coaching tracks see only their teams', () => {

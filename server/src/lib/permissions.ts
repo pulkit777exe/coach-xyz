@@ -94,13 +94,10 @@ export function canAccessTeam(
   teamId: string,
 ): boolean {
   if (role === 'owner' || role === 'admin') return true
-  if (
-    role === 'head_coach' ||
-    role === 'assistant_coach' ||
-    role === 'coach' ||
-    role === 'analyst' ||
-    role === 'medical'
-  ) {
+  // Analyst and medical are org-level readers, so they reach every team —
+  // gating them by membership would hide the very data their scope allows.
+  if (role === 'analyst' || role === 'medical') return true
+  if (role === 'head_coach' || role === 'assistant_coach' || role === 'coach') {
     return memberTeamIds.includes(teamId)
   }
   return false
@@ -113,22 +110,26 @@ export function canAccessTeam(
 // keys stripped (scores, feedback, and findings stay intact).
 
 /**
- * Pure student-visibility scope (§3 hierarchy: owner → coaches → players).
- * Owners/admins see the whole org roster; coaches, analysts, and medical
- * staff see only students on their assigned teams.
+ * Pure student-visibility scope.
+ *
+ * Two tiers, because the org has two kinds of non-owner staff:
+ * - Team staff (head/assistant/legacy `coach`) run sessions for the teams they
+ *   are assigned to, so they see only those teams' students. An unassigned
+ *   coach therefore sees none — that is the honest answer for "manages no team".
+ * - Org staff (`analyst`, `medical`) are read-only specialists who analyse the
+ *   whole club and are rarely given a team membership. Scoping them by
+ *   membership would leave the entire app empty for them, so they see the org.
+ *
+ * Owners/admins see everything. Players never resolve through here — they read
+ * their own records through the self-scoped `/api/me/*` routes.
  */
 export function resolveStudentScope(
   role: OrgMemberRole | null,
   memberTeamIds: readonly string[],
 ): { all: true } | { all: false; teamIds: string[] } {
   if (role === 'owner' || role === 'admin') return { all: true }
-  if (
-    role === 'head_coach' ||
-    role === 'assistant_coach' ||
-    role === 'coach' ||
-    role === 'analyst' ||
-    role === 'medical'
-  ) {
+  if (role === 'analyst' || role === 'medical') return { all: true }
+  if (role === 'head_coach' || role === 'assistant_coach' || role === 'coach') {
     return { all: false, teamIds: [...memberTeamIds] }
   }
   return { all: false, teamIds: [] }
