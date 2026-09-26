@@ -1,4 +1,6 @@
-FROM python:3.11-slim
+# Debian slim keeps the runtime compatible with ffmpeg, OpenCV, and MediaPipe;
+# Alpine is not used because their native wheels/libraries expect glibc.
+FROM python:3.12.14-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
