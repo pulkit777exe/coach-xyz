@@ -15,7 +15,7 @@ import {
   listObjectives,
 } from '../lib/orgData'
 import { serviceGuard } from '../lib/serviceGuard'
-import { missingVerifiedSelf, requireVerifiedSelf } from '../lib/caller'
+import { missingVerifiedSelf, requireVerifiedSelf, type MissingVerifiedSelf } from '../lib/caller'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { redactWellness } from '../lib/permissions'
 import { logger } from '../lib/logger'
@@ -32,6 +32,18 @@ import {
   validateNotificationPrefsPatch,
 } from '../lib/notificationPrefs'
 import { userSettings, upsertUserSettings, validateUserSettingsPatch } from '../lib/userSettings'
+import {
+  consentForStudent,
+  unlinkedConsent,
+  upsertConsent,
+  validateConsentPatch,
+} from '../lib/consents'
+import { buildAccountExport, exportFilename } from '../lib/dataExport'
+import {
+  createPrivacyRequest,
+  listPrivacyRequests,
+  validatePrivacyRequestBody,
+} from '../lib/privacyRequests'
 import { DEFAULT_MODEL } from '../types'
 
 /**
@@ -56,6 +68,20 @@ export type PlayerScopeResult = {
 }
 
 /**
+ * The canonical "this account is not linked to a player" rejection (403,
+ * non-retryable FORBIDDEN). Single owner of the literal, shared by the
+ * analysis-admission decision and the consent write — the two self-scoped
+ * writes that have nothing to write without a player row.
+ */
+export function missingLinkedPlayer(): MissingVerifiedSelf {
+  return {
+    ok: false,
+    status: 403,
+    error: buildError('FORBIDDEN', 'No linked player account', false),
+  }
+}
+
+/**
  * Pure "me-analyze" scoping decision. Turns the verified player identity +
  * their resolved player scope into the coach-scoped persistence target (the
  * job shows up in the coach's history) plus the attribution (requested_by).
@@ -71,13 +97,7 @@ export const decidePlayerAnalysis = (input: {
 }): PlayerAnalysisDecision => {
   const { verifiedAuth0Id, playerScope: scope } = input
   if (!verifiedAuth0Id) return missingVerifiedSelf()
-  if (!scope.student || !scope.coachAuth0Id) {
-    return {
-      ok: false,
-      status: 403,
-      error: buildError('FORBIDDEN', 'No linked player account', false),
-    }
-  }
+  if (!scope.student || !scope.coachAuth0Id) return missingLinkedPlayer()
   return {
     ok: true,
     coachAuth0Id: scope.coachAuth0Id,
@@ -216,6 +236,117 @@ export default new Elysia()
     auditRoute(request, verified, 'settings.changed', 'user_settings', verified)
     set.status = 200
     return settings
+  })
+
+  // ── Consent & data rights ──────────────────────────────────────────────────
+  // Consent is per player (keyed by the linked student row), so the read
+  // answers for an unlinked account instead of erroring: the settings screen
+  // has to render for a coach-only account too.
+  .get('/api/me/consent', async ({ request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const { student } = await playerScope(verified)
+    set.status = 200
+    return student ? consentForStudent(student.id) : unlinkedConsent()
+  })
+  .put('/api/me/consent', async ({ request, body, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const validated = validateConsentPatch(body)
+    if (!validated.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', validated.message, false)
+    }
+
+    const { student } = await playerScope(verified)
+    if (!student) {
+      const rejection = missingLinkedPlayer()
+      set.status = rejection.status
+      return rejection.error
+    }
+
+    const consent = await upsertConsent(student.id, validated.value)
+    if (!consent) {
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to save consent', true)
+    }
+
+    auditRoute(request, verified, 'settings.changed', 'player_consent', student.id, {
+      policy_version: consent.policyVersion,
+      training_data: consent.trainingData,
+      medical_data: consent.medicalData,
+      marketing: consent.marketing,
+    })
+    set.status = 200
+    return consent
+  })
+
+  // Portability: every record the account holds, as one JSON attachment. The
+  // bundle is built from the VERIFIED sub alone (lib/dataExport resolves the
+  // player link itself), so it cannot be aimed at another account.
+  .get('/api/me/export', async ({ request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    // Linked accounts may sign in via a secondary provider; the data is keyed
+    // to the primary auth0_id.
+    const accountAuth0Id = (await resolveAuth0Id(verified)) ?? verified
+    const bundle = await buildAccountExport(accountAuth0Id)
+
+    auditRoute(request, verified, 'settings.changed', 'account_export', accountAuth0Id, {
+      format_version: bundle.formatVersion,
+    })
+
+    return new Response(JSON.stringify(bundle, null, 2), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="${exportFilename()}"`,
+        'Cache-Control': 'no-store',
+      },
+    })
+  })
+
+  // Privacy requests are RECORDED, never executed: a delete cascades through
+  // analyses, reports, videos and audit rows, so it is a reviewed request.
+  .get('/api/me/privacy-requests', async ({ request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const url = new URL(request.url)
+    const raw = url.searchParams.get('limit')
+    const requested = raw === null ? Number.NaN : Number(raw)
+    // listPrivacyRequests owns the cap; an absent/garbage limit means "default".
+    const requests = await listPrivacyRequests(verified, {
+      limit: Number.isFinite(requested) ? requested : undefined,
+    })
+
+    set.status = 200
+    return { requests }
+  })
+  .post('/api/me/privacy-requests', async ({ request, body, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+
+    const validated = validatePrivacyRequestBody(body)
+    if (!validated.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', validated.message, false)
+    }
+
+    const privacyRequest = await createPrivacyRequest(verified, validated.value.type)
+    if (!privacyRequest) {
+      set.status = 500
+      return buildError('INTERNAL_ERROR', 'Failed to record privacy request', true)
+    }
+
+    auditRoute(request, verified, 'settings.changed', 'privacy_request', privacyRequest.id, {
+      request_type: privacyRequest.type,
+    })
+    set.status = 201
+    return { request: privacyRequest }
   })
 
   // Own attendance history + summary (joined with the linked player scope)

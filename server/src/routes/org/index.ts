@@ -11,6 +11,7 @@ import plans from './plans'
 import wellness from './wellness'
 import performance from './performance'
 import overview from './overview'
+import settings from './settings'
 
 // Org domain routes, one module per subdomain (see report candidate 4).
 // serviceGuard runs inside each module; the orgRoleGuard composes at the
@@ -27,3 +28,4 @@ export default new Elysia()
   .use(wellness)
   .use(performance)
   .use(overview)
+  .use(settings)

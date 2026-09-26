@@ -12,6 +12,7 @@ import { orgOverview, orgStudents, orgSubscription } from '@/lib/org'
 import type { OrgOverview, Student } from '@/lib/org'
 import type { UserRecord } from '@/lib/api'
 import { preferredOrgCookie, resolveOrgContext } from '@/lib/orgContext'
+import type { OrgMemberRole } from '@/lib/members'
 
 export type { SettingsIdentity } from '@/components/org/settings/buildSettingsSections'
 
@@ -29,6 +30,7 @@ export default function SettingsClient({
   const [profileFailed, setProfileFailed] = useState(false)
   const [orgFailed, setOrgFailed] = useState(false)
   const [auth0Id, setAuth0Id] = useState<string | null>(null)
+  const [role, setRole] = useState<OrgMemberRole | null>(null)
   const [students, setStudents] = useState<Student[] | null>(null)
   const [overview, setOverview] = useState<OrgOverview | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
@@ -55,6 +57,7 @@ export default function SettingsClient({
           if (cancelled) return
           const ctx = resolveOrgContext(identity.sub, orgs, preferredOrgCookie())
           setAuth0Id(ctx.auth0Id)
+          setRole(ctx.role)
           const [studentsRes, overviewRes, subscriptionRes] = await Promise.all([
             orgStudents(ctx.auth0Id),
             orgOverview(ctx.auth0Id),
@@ -86,6 +89,7 @@ export default function SettingsClient({
     emailVerified,
     passwordUrl,
     auth0Id,
+    role,
     students,
     overview,
     subscription,

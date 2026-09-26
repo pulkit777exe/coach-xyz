@@ -215,3 +215,110 @@ export async function acceptInvite(token: string): Promise<{ org_auth0_id: strin
 export async function getMyReport(id: string): Promise<MyReport> {
   return apiFetch<MyReport>(me(`/reports/${encodeURIComponent(id)}`))
 }
+
+// ── Consent, portability & deletion requests ─────────────────────────────────
+// Self-scoped like the rest of this module: the verified session IS the
+// resource owner, so no call below ever takes an account id. Mirrors
+// server/src/lib/{consents,dataExport,privacyRequests}.ts.
+
+/** One boolean per processing purpose + the policy version answered under. */
+export type PlayerConsent = {
+  /** False when the account has no linked player: nothing can be recorded. */
+  linked: boolean
+  /** Present only when linked — the player row the consent belongs to. */
+  studentId?: string
+  policyVersion: string
+  trainingData: boolean
+  medicalData: boolean
+  marketing: boolean
+  updatedAt: string | null
+}
+
+export type ConsentPatch = {
+  trainingData?: boolean
+  medicalData?: boolean
+  marketing?: boolean
+}
+
+export const CONSENT_PURPOSES = ['trainingData', 'medicalData', 'marketing'] as const
+export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number]
+
+export const PRIVACY_REQUEST_TYPES = ['export', 'delete'] as const
+export type PrivacyRequestType = (typeof PRIVACY_REQUEST_TYPES)[number]
+
+export const PRIVACY_REQUEST_STATUSES = [
+  'received',
+  'in_progress',
+  'completed',
+  'declined',
+] as const
+export type PrivacyRequestStatus = (typeof PRIVACY_REQUEST_STATUSES)[number]
+
+export type PrivacyRequest = {
+  id: string
+  type: PrivacyRequestType
+  /** 'received' = logged and awaiting review, NOT yet actioned. */
+  status: PrivacyRequestStatus
+  createdAt: string
+  resolvedAt: string | null
+}
+
+/**
+ * The whole-account JSON bundle (server `GET /api/me/export`, which also sets
+ * Content-Disposition). `analyses` is the player-facing shape — wellness keys
+ * are stripped server-side, exactly as the player hub sees them.
+ */
+export type AccountExport = {
+  formatVersion: number
+  exportedAt: string
+  account: { auth0Id: string }
+  user: UserRecord | null
+  student: Student | null
+  coachAuth0Id: string | null
+  attendance: AttendanceWithStudent[]
+  attendanceSummary: AttendanceSummary | null
+  schedule: ScheduleEvent[]
+  performance: PerformanceSeriesPoint[]
+  analyses: DashboardPlayerAnalysis[]
+  reports: Array<ReportRecord & { full_name: string | null }>
+  objectives: MyObjectives['objectives']
+  notifications: Array<{ id: string; type: string; title: string; read: boolean }>
+  notificationPreferences: NotificationPrefs
+  displaySettings: UserSettings
+  consent: PlayerConsent
+  privacyRequests: PrivacyRequest[]
+}
+
+export async function getMyConsent(): Promise<PlayerConsent> {
+  return apiFetch<PlayerConsent>(me('/consent'))
+}
+
+export async function updateMyConsent(patch: ConsentPatch): Promise<PlayerConsent> {
+  return apiFetch<PlayerConsent>(me('/consent'), {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  })
+}
+
+/** The immediate, self-service copy of everything the account holds. */
+export async function getMyDataExport(): Promise<AccountExport> {
+  return apiFetch<AccountExport>(me('/export'))
+}
+
+export async function listMyPrivacyRequests(): Promise<{ requests: PrivacyRequest[] }> {
+  return apiFetch<{ requests: PrivacyRequest[] }>(me('/privacy-requests'))
+}
+
+/**
+ * Record a portability/deletion request. Nothing is deleted by this call — a
+ * delete request is reviewed by a human, so the UI must present it as a
+ * request, never as a completed action.
+ */
+export async function createMyPrivacyRequest(
+  type: PrivacyRequestType,
+): Promise<{ request: PrivacyRequest }> {
+  return apiFetch<{ request: PrivacyRequest }>(me('/privacy-requests'), {
+    method: 'POST',
+    body: JSON.stringify({ type }),
+  })
+}

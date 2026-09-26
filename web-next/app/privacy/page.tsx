@@ -33,8 +33,8 @@ const sections = [
   {
     title: 'Retention',
     body: [
-      'We keep your videos and analyses for as long as your account is active. When you delete a video, a report or your account, the associated content is removed from active storage and purged from backups within 30 days.',
-      'Attendance, roster and report history is retained as part of your coaching record and is deletable in full by removing your account.',
+      'We keep your videos and analyses for as long as your account is active. When you delete a video or a report, the associated content is removed from active storage and purged from backups within 30 days.',
+      'Attendance, roster and report history is retained as part of your coaching record. Removing your account deletes it in full — but only after a person has reviewed your deletion request, as described below.',
     ],
   },
   {
@@ -46,7 +46,10 @@ const sections = [
   {
     title: 'Your rights',
     body: [
-      'You can access, correct or delete the personal information we hold by contacting help@coachxyz.app or by using the controls in your dashboard. Where local law applies, you may also request a copy of your data in a portable format and object to or restrict certain processing.',
+      'Access and correction: your profile, player record, attendance, schedule, performance, analyses, reports, objectives, notifications and consent choices are all readable or editable from the Privacy section of your settings — or by writing to help@coachxyz.app.',
+      'Consent: you choose, per purpose, whether your training data, health information and optional product emails may be used, and each choice is recorded against the policy version shown on screen. You can withdraw or change any of them yourself, and a withdrawal applies immediately.',
+      'Portability: “Download my data” in that same section gives you every one of those records as one JSON file, immediately, with no request and no waiting period.',
+      'Deletion: “Request account deletion” records a request that a person on our team reviews. It is not an instant deletion — nothing is removed until we have confirmed it to you by email. Where local law applies, you may also object to or restrict certain processing by writing to us.',
     ],
   },
   {
@@ -77,7 +80,7 @@ export default function PrivacyPage() {
             Privacy Policy
           </h1>
           <p className="mt-3 text-sm text-muted-foreground tabular-nums">
-            Last updated: September 15, 2026
+            Last updated: September 26, 2026
           </p>
         </div>
       </section>

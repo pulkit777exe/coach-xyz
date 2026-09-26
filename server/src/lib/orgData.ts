@@ -101,3 +101,13 @@ export {
 
 export type { OrgOverview, SearchItem, OrgSearchResult } from './org/overview'
 export { getOrgOverview, searchOrg } from './org/overview'
+
+export type { OrgSettings, OrgSettingsPatch } from './org/settings'
+export {
+  emptyOrgSettings,
+  isIanaTimezone,
+  ORG_NAME_MAX_LENGTH,
+  orgSettings,
+  updateOrgSettings,
+  validateOrgSettingsPatch,
+} from './org/settings'

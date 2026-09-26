@@ -859,6 +859,37 @@ export const orgUpdatePerformanceMetric = async (
   )
 }
 
+// ── Organization settings ───────────────────────────────────────────────────
+// `name` and `timezone` are org-wide: readable by any member the /api/org tree
+// admits, writable by owners/admins (see the route's role floor). A patch is
+// partial — omit a field to keep the stored value, send `timezone: null` to
+// clear it. Deliberately not pickDefined, which would turn '' into null and
+// quietly clear the name instead of letting the server reject it.
+export type OrgSettings = {
+  name: string | null
+  timezone: string | null
+  createdAt: string | null
+}
+
+export type OrgSettingsPatch = {
+  name?: string
+  timezone?: string | null
+}
+
+export const orgSettings = async (auth0Id: string): Promise<{ settings: OrgSettings }> => {
+  return apiFetch<{ settings: OrgSettings }>(org(auth0Id, '/settings'))
+}
+
+export const updateOrgSettings = async (
+  auth0Id: string,
+  patch: OrgSettingsPatch,
+): Promise<{ settings: OrgSettings }> => {
+  return apiFetch<{ settings: OrgSettings }>(org(auth0Id, '/settings'), {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
 // ── Overview & analysis linking ──────────────────────────────────────────────
 
 export const orgOverview = async (auth0Id: string): Promise<{ overview: OrgOverview }> => {

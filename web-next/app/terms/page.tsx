@@ -56,7 +56,7 @@ const sections = [
   {
     title: 'Termination',
     body: [
-      'You may delete your account at any time; your content is removed as described in our Privacy Policy. We may terminate accounts that violate these terms, and you may appeal by writing to help@coachxyz.app.',
+      'You may request deletion of your account at any time from the Privacy section of your settings; we review each request and confirm by email before anything is removed, as described in our Privacy Policy. We may terminate accounts that violate these terms, and you may appeal by writing to help@coachxyz.app.',
     ],
   },
   {

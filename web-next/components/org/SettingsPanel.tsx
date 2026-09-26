@@ -2,7 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { BarChart3, Bell, Gauge, Shield, SlidersHorizontal, User, Users, X } from 'lucide-react'
+import {
+  BarChart3,
+  Bell,
+  Building2,
+  Gauge,
+  LockKeyhole,
+  Shield,
+  SlidersHorizontal,
+  User,
+  Users,
+  X,
+} from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
@@ -12,13 +23,23 @@ import { cn } from '@/lib/utils'
  * client shell. The keys resolve to icons imported here.
  */
 export type SettingsSectionIcon =
-  'account' | 'security' | 'preferences' | 'notifications' | 'members' | 'plan' | 'records'
+  | 'account'
+  | 'security'
+  | 'preferences'
+  | 'notifications'
+  | 'organization'
+  | 'privacy'
+  | 'members'
+  | 'plan'
+  | 'records'
 
 const SECTION_ICONS: Record<SettingsSectionIcon, React.ElementType> = {
   account: User,
   security: Shield,
   preferences: SlidersHorizontal,
   notifications: Bell,
+  organization: Building2,
+  privacy: LockKeyhole,
   members: Users,
   plan: Gauge,
   records: BarChart3,

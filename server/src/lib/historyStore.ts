@@ -653,6 +653,53 @@ export const ensureInitialized = async () => {
           );
         `
           })(),
+          // Organization settings. `organizations.name` already exists but was
+          // never editable or read — the switcher derived a display name from
+          // the owner's user row instead. `timezone` anchors scheduling and
+          // reporting so a club's "today" matches its own calendar.
+          (async () => {
+            const columns = await store<{ column_name: string }[]>`
+              select column_name from information_schema.columns
+              where table_name = 'organizations' and column_name = 'timezone';
+            `
+            if (columns.length === 0) {
+              await store`alter table organizations add column timezone text;`
+            }
+          })(),
+          // Player consent, recorded per purpose so a future policy version can be
+          // re-consented. It is the player's own record, not an org field.
+          (async () => {
+            await store`
+          create table if not exists player_consents (
+            student_id uuid primary key references students(id) on delete cascade,
+            training_data boolean not null default false,
+            medical_data boolean not null default false,
+            marketing boolean not null default false,
+            policy_version text not null default '2026-09-26',
+            updated_at timestamptz not null default now()
+          );
+        `
+          })(),
+          // Privacy requests. Recorded, never auto-executed: a deletion cascades
+          // through analyses, reports, chat and audit rows, so it stays a reviewed
+          // request rather than a button.
+          (async () => {
+            await store`
+          create table if not exists privacy_requests (
+            id uuid primary key default gen_random_uuid(),
+            auth0_id text not null,
+            request_type text not null check (request_type in ('export', 'delete')),
+            status text not null default 'received'
+              check (status in ('received', 'in_progress', 'completed', 'declined')),
+            created_at timestamptz not null default now(),
+            resolved_at timestamptz
+          );
+        `
+            await store`
+          create index if not exists idx_privacy_requests_auth0
+            on privacy_requests (auth0_id, created_at desc);
+        `
+          })(),
           // notifications: moved here from lib/notifications.ts so every table's
           // DDL is owned by this single schema mechanism (see teams note below).
           (async () => {

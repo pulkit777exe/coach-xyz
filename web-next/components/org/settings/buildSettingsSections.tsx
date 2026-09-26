@@ -20,11 +20,14 @@ import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
 import NotificationsSection from '@/components/org/NotificationsSection'
 import MembersSection from '@/components/org/MembersSection'
+import OrganizationSettingsSection from '@/components/org/OrganizationSettingsSection'
+import PrivacySection from '@/components/org/PrivacySection'
 import SettingRow from '@/components/org/SettingRow'
 import type { SettingsSection } from '@/components/org/SettingsPanel'
 import { Spinner } from '@/components/org/Spinner'
 
 import type { OrgOverview, Student, orgSubscription } from '@/lib/org'
+import type { OrgMemberRole } from '@/lib/members'
 import type { UserRecord } from '@/lib/api'
 
 /**
@@ -57,6 +60,8 @@ type SettingsSectionsProps = {
   emailVerified: boolean
   passwordUrl: string | null
   auth0Id: string | null
+  /** The caller's role in that org — gates the Organization section. */
+  role: OrgMemberRole | null
   students: Student[] | null
   overview: OrgOverview | null
   subscription: SubscriptionInfo | null
@@ -135,6 +140,7 @@ export default function buildSettingsSections({
   emailVerified,
   passwordUrl,
   auth0Id,
+  role,
   students,
   overview,
   subscription,
@@ -236,7 +242,34 @@ export default function buildSettingsSections({
       icon: 'notifications',
       content: <NotificationsSection />,
     },
+    {
+      // Personal data rights: consent, export and a deletion request. Every
+      // role gets it — a player's copy of their data is the point.
+      id: 'privacy',
+      label: 'Privacy & data',
+      icon: 'privacy',
+      content: <PrivacySection />,
+    },
   ]
+
+  if (isDashboard) {
+    sections.push({
+      // Org identity is a fact about the workspace, not the caller: owners and
+      // admins edit it, everyone else reads it.
+      id: 'organization',
+      label: 'Organization',
+      icon: 'organization',
+      content: auth0Id ? (
+        <OrganizationSettingsSection auth0Id={auth0Id} role={role} />
+      ) : (
+        <Section title="Organization">
+          <p className="text-body text-muted-foreground">
+            {orgFailed ? 'Failed to load organization settings.' : 'No organization selected.'}
+          </p>
+        </Section>
+      ),
+    })
+  }
 
   if (isDashboard) {
     sections.push({
