@@ -8,3 +8,7 @@ coverage
 .env.*
 *.lock
 bun.lockb
+# Next regenerates this on every `next build`/`next dev` and it is gitignored,
+# so formatting it is undone by the next build and makes `format:check` red
+# depending on whether a build happened to run.
+web-next/next-env.d.ts

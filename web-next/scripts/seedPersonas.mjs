@@ -36,7 +36,6 @@ const HERE = path.dirname(new URL(import.meta.url).pathname)
 const WEB_ROOT = path.join(HERE, '..')
 const SESSION_DIR = path.join(WEB_ROOT, '.personas')
 const API = process.env.SERVER_API_URL ?? 'http://localhost:8000'
-const BASE = process.env.APP_BASE_URL ?? 'http://localhost:3000'
 const SESSIONS_ONLY = process.argv.includes('--sessions')
 
 /** Read a KEY=value from a .env file without adding a dotenv dependency. */
