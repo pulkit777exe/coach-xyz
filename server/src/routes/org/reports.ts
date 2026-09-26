@@ -10,6 +10,7 @@ import {
 import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
+import { resolveCaller } from '../../lib/caller'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { notifyReportReady } from '../../lib/notificationEvents'
@@ -38,8 +39,17 @@ export default new Elysia()
     set.status = 200
     return { report }
   })
-  .post('/api/org/:auth0Id/reports', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/reports', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('report.create')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Creating reports requires the report.create permission',
+        false,
+      )
+    }
     const { student_id, report_type, period_start, period_end, title } = body as Record<
       string,
       unknown
@@ -116,8 +126,17 @@ export default new Elysia()
     set.status = 201
     return { report }
   })
-  .put('/api/org/:auth0Id/reports/:id', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/reports/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('report.create')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Updating reports requires the report.create permission',
+        false,
+      )
+    }
     const existing = await getReport(auth0Id, id)
     if (!existing) {
       set.status = 404
@@ -190,8 +209,17 @@ export default new Elysia()
     set.status = 200
     return { report }
   })
-  .delete('/api/org/:auth0Id/reports/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('report.create')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Deleting reports requires the report.create permission',
+        false,
+      )
+    }
     const deleted = await deleteReport(auth0Id, id)
     if (!deleted) {
       set.status = 404

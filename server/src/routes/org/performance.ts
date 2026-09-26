@@ -7,6 +7,7 @@ import {
   updatePerformanceMetric,
 } from '../../lib/orgData'
 import { DEFAULT_COMPARISON_METRIC_KEY } from '../../lib/orgValidate'
+import { resolveCaller } from '../../lib/caller'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
@@ -30,8 +31,17 @@ export default new Elysia()
     set.status = 200
     return { metrics }
   })
-  .delete('/api/org/:auth0Id/performance/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/performance/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Deleting performance metrics requires the player.manage permission',
+        false,
+      )
+    }
     const deleted = await deletePerformanceMetric(auth0Id, id)
     if (!deleted) {
       set.status = 404
@@ -40,8 +50,17 @@ export default new Elysia()
     set.status = 200
     return { deleted: true }
   })
-  .put('/api/org/:auth0Id/performance/:id', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/performance/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Updating performance metrics requires the player.manage permission',
+        false,
+      )
+    }
     const { metric_value, unit } = body as Record<string, unknown>
     if (typeof metric_value !== 'number' || !Number.isFinite(metric_value)) {
       set.status = 400

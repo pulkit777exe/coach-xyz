@@ -76,6 +76,15 @@ export default new Elysia()
   })
   .post('/api/org/:auth0Id/students', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Creating students requires the player.manage permission',
+        false,
+      )
+    }
     const input = parseStudentInput(body as Record<string, unknown>)
 
     if (!input.full_name || typeof input.full_name !== 'string') {
@@ -112,15 +121,15 @@ export default new Elysia()
     } else {
       // Hierarchy convenience: a coach with exactly one team creates
       // players under that team unless another is chosen.
-      const auto = await resolveCaller(auth0Id, request)
+      const role = caller.role
       if (
-        auto.role === 'head_coach' ||
-        auto.role === 'assistant_coach' ||
-        auto.role === 'coach' ||
-        auto.role === 'analyst' ||
-        auto.role === 'medical'
+        role === 'head_coach' ||
+        role === 'assistant_coach' ||
+        role === 'coach' ||
+        role === 'analyst' ||
+        role === 'medical'
       ) {
-        if (auto.teamIds.length === 1) input.team_id = auto.teamIds[0]
+        if (caller.teamIds.length === 1) input.team_id = caller.teamIds[0]
       }
     }
 
@@ -140,6 +149,15 @@ export default new Elysia()
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Updating students requires the player.manage permission',
+        false,
+      )
     }
     const existing = await getStudent(auth0Id, id)
     if (!existing) {
@@ -209,8 +227,17 @@ export default new Elysia()
     set.status = 200
     return { student }
   })
-  .delete('/api/org/:auth0Id/students/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Deleting students requires the player.manage permission',
+        false,
+      )
+    }
     const deleted = await deleteStudent(auth0Id, id)
     if (!deleted) {
       set.status = 404
@@ -219,8 +246,17 @@ export default new Elysia()
     set.status = 200
     return { deleted: true }
   })
-  .post('/api/org/:auth0Id/students/import', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/students/import', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Importing students requires the player.manage permission',
+        false,
+      )
+    }
     const { rows } = body as { rows?: unknown[] }
     if (!Array.isArray(rows) || rows.length === 0) {
       set.status = 400
@@ -272,8 +308,17 @@ export default new Elysia()
     set.status = 200
     return { series }
   })
-  .post('/api/org/:auth0Id/students/:id/performance', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/students/:id/performance', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.manage')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Recording performance metrics requires the player.manage permission',
+        false,
+      )
+    }
     const { metric_key, metric_value, unit, measured_at } = body as Record<string, unknown>
     if (!metric_key || typeof metric_key !== 'string') {
       set.status = 400
