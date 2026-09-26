@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   'analysis.read',
   'player.read',
   'player.manage',
+  'attendance.write',
   'report.read',
   'report.create',
   'finding.review',
@@ -37,6 +38,7 @@ const COACH_PERMISSIONS: readonly Permission[] = [
   'analysis.read',
   'player.read',
   'player.manage',
+  'attendance.write',
   'report.read',
   'report.create',
   'finding.review',
@@ -54,11 +56,13 @@ const ANALYST_PERMISSIONS: readonly Permission[] = [
 
 // Assistant coaches run sessions and review findings but cannot reshape teams
 // or manage the roster — head coaches (and the legacy `coach` alias) can.
+// They do run attendance, so `attendance.write` stays with them.
 const ASSISTANT_COACH_PERMISSIONS: readonly Permission[] = [
   'team.read',
   'analysis.create',
   'analysis.read',
   'player.read',
+  'attendance.write',
   'report.read',
   'report.create',
   'finding.review',

@@ -10,6 +10,7 @@ import {
   type Student,
 } from '../../lib/orgData'
 import { isDate } from '../../lib/orgValidate'
+import { resolveCaller } from '../../lib/caller'
 import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -90,8 +91,17 @@ export default new Elysia()
     set.status = 200
     return { summary }
   })
-  .put('/api/org/:auth0Id/attendance', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/attendance', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Recording attendance requires the attendance.write permission',
+        false,
+      )
+    }
     const { student_id, session_date, status, note } = body as Record<string, unknown>
     if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
       set.status = 400
@@ -117,8 +127,17 @@ export default new Elysia()
     set.status = 200
     return { record }
   })
-  .post('/api/org/:auth0Id/attendance/batch', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/attendance/batch', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Recording attendance requires the attendance.write permission',
+        false,
+      )
+    }
     const { entries } = body as { entries?: unknown[] }
     if (!Array.isArray(entries) || entries.length === 0) {
       set.status = 400
@@ -177,6 +196,15 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/attendance', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Recording attendance requires the attendance.write permission',
+        false,
+      )
+    }
     const url = new URL(request.url)
     const studentId = url.searchParams.get('studentId')
     const sessionDate = url.searchParams.get('date')

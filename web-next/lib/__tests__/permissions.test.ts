@@ -28,6 +28,7 @@ const CANONICAL: Record<OrgMemberRole, readonly Permission[]> = {
     'analysis.read',
     'player.read',
     'player.manage',
+    'attendance.write',
     'report.read',
     'report.create',
     'finding.review',
@@ -37,6 +38,7 @@ const CANONICAL: Record<OrgMemberRole, readonly Permission[]> = {
     'analysis.create',
     'analysis.read',
     'player.read',
+    'attendance.write',
     'report.read',
     'report.create',
     'finding.review',
@@ -49,6 +51,7 @@ const CANONICAL: Record<OrgMemberRole, readonly Permission[]> = {
     'analysis.read',
     'player.read',
     'player.manage',
+    'attendance.write',
     'report.read',
     'report.create',
     'finding.review',
@@ -108,6 +111,15 @@ describe('role → permission matrix (mirrors the server)', () => {
   test('hasPermission is false for a null/unresolved role', () => {
     expect(hasPermission(null, 'team.read')).toBe(false)
     expect(hasPermission(undefined, 'report.read')).toBe(false)
+  })
+
+  test('attendance.write is held by the coaching roles only', () => {
+    for (const role of ['owner', 'admin', 'head_coach', 'coach', 'assistant_coach'] as const) {
+      expect(hasPermission(role, 'attendance.write'), `role: ${role}`).toBe(true)
+    }
+    for (const role of ['analyst', 'medical', 'player'] as const) {
+      expect(hasPermission(role, 'attendance.write'), `role: ${role}`).toBe(false)
+    }
   })
 
   test('owner holds every permission, admin holds all but medical.read', () => {

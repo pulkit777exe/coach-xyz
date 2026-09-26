@@ -68,6 +68,19 @@ describe('hasPermission', () => {
     expect(hasPermission('medical', 'player.manage')).toBe(false)
   })
 
+  // Attendance and schedule writes used to ride the broad org floor, so an
+  // analyst or a medical user could write player records. `attendance.write`
+  // is the capability that runs a session; read-only roles must not hold it,
+  // and assistant coaches must keep it because running the session is their job.
+  test('attendance.write is held by the coaching roles only', () => {
+    for (const role of ['owner', 'admin', 'head_coach', 'coach', 'assistant_coach'] as const) {
+      expect(hasPermission(role, 'attendance.write'), `role: ${role}`).toBe(true)
+    }
+    for (const role of ['analyst', 'medical', 'player'] as const) {
+      expect(hasPermission(role, 'attendance.write'), `role: ${role}`).toBe(false)
+    }
+  })
+
   test('player is read-only on own scope', () => {
     expect(hasPermission('player', 'analysis.read')).toBe(true)
     expect(hasPermission('player', 'report.read')).toBe(true)

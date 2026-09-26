@@ -5,6 +5,7 @@ import {
   updateScheduleEvent,
 } from '../../lib/orgData'
 import { isIsoDate } from '../../lib/orgValidate'
+import { resolveCaller } from '../../lib/caller'
 import { EVENT_STATUS_SET, EVENT_TYPE_SET, parseScheduleInput } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -23,8 +24,19 @@ export default new Elysia()
     set.status = 200
     return { events }
   })
-  .post('/api/org/:auth0Id/schedule', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/schedule', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    // Scheduling is the same "run the session" job as attendance, so it shares
+    // the attendance.write capability.
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Managing the schedule requires the attendance.write permission',
+        false,
+      )
+    }
     const input = parseScheduleInput(body as Record<string, unknown>)
     if (!input.title || typeof input.title !== 'string') {
       set.status = 400
@@ -63,11 +75,20 @@ export default new Elysia()
     set.status = 201
     return { event }
   })
-  .put('/api/org/:auth0Id/schedule/:id', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/schedule/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Managing the schedule requires the attendance.write permission',
+        false,
+      )
     }
     const input = parseScheduleInput(body as Record<string, unknown>)
     if (input.starts_at !== undefined && typeof input.starts_at !== 'string') {
@@ -99,8 +120,17 @@ export default new Elysia()
     set.status = 200
     return { event }
   })
-  .delete('/api/org/:auth0Id/schedule/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/schedule/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('attendance.write')) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Managing the schedule requires the attendance.write permission',
+        false,
+      )
+    }
     const deleted = await deleteScheduleEvent(auth0Id, id)
     if (!deleted) {
       set.status = 404
