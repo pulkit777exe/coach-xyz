@@ -1,18 +1,18 @@
 fastapi==0.141.1
-uvicorn[standard]==0.52.0
+uvicorn[standard]==0.54.0
 boto3>=1.34.0
 google-genai==2.25.0
 httpx==0.28.1
 httpx2==2.13.1
-mediapipe==1.0.0
+mediapipe==1.0.1
 numpy>=1.24.0
 # mediapipe depends on opencv-contrib-python; pinning a second, headless-only
 # cv2 wheel here would overwrite cv2 at install time and ship both copies.
 opencv-contrib-python==5.0.0.93
 Pillow>=10.0.0
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 python-multipart==0.0.32
 requests>=2.31.0
 rich>=13.0.0
-sentry-sdk==2.66.1
-upstash-redis==1.7.0
+sentry-sdk==2.70.0
+upstash-redis==1.8.0
