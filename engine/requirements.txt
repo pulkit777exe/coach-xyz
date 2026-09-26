@@ -10,6 +10,11 @@ numpy>=1.24.0
 # cv2 wheel here would overwrite cv2 at install time and ship both copies.
 opencv-contrib-python==5.0.0.93
 Pillow>=10.0.0
+# Required at runtime, not directly imported: main.py sets
+# ORJSONResponse as the default response class, and FastAPI imports orjson
+# lazily inside ORJSONResponse.render — so dropping this pin 500s every route
+# (including /health) while the image still builds.
+orjson==3.12.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
 requests>=2.31.0
