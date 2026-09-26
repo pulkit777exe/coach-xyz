@@ -1,4 +1,9 @@
-FROM python:3.11-slim
+# Debian slim keeps the runtime compatible with ffmpeg, OpenCV, and MediaPipe;
+# Alpine is not used because their native wheels/libraries expect glibc.
+# libegl1/libgles2 are MediaPipe 1.0.1's native bindings: without them
+# PoseLandmarker.create_from_options dies with "libEGL.so.1: cannot open
+# shared object file" at the first analysis, not at build time.
+FROM python:3.12.14-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,12 +19,16 @@ RUN apt-get update \
         ffmpeg \
         libgl1 \
         libglib2.0-0 \
+        libegl1 \
+        libgles2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN pip install --upgrade pip --timeout 100 --retries 5 \
-    && pip install -r requirements.txt --timeout 100 --retries 5 \
-    && pip cache purge
+# One install, no cache: the ENV above sets PIP_NO_CACHE_DIR=1, which makes
+# `pip cache purge` exit 1 and fails the whole build. The self-upgrade is
+# dropped too — the base image's pip resolves these pins fine.
+RUN pip install --no-cache-dir --no-compile --timeout 100 --retries 5 \
+    -r requirements.txt
 
 COPY . .
 RUN useradd --create-home --uid 10001 coachai \
