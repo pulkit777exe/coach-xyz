@@ -643,7 +643,7 @@ Removed 2026-09-24 (dead routes): `GET …/analyses/:jobId/stages` (orphaned `ge
 ### Docker (CONFIRMED)
 
 **Engine** (`engine/Dockerfile`):
-- Base: `python:3.11-slim`
+- Base: `python:3.12.14-slim-trixie`
 - Exposes: 8001
 - Worker: Single uvicorn worker (`--workers 1`)
 - Health check: HTTP `/health` every 30s, 60s start period

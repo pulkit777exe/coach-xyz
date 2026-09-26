@@ -4,7 +4,7 @@
 
 This document explains how to run the Coach-XYZ system locally. The project has three tiers:
 
-- **`engine/`** — Python 3.11 + FastAPI video-analysis pipeline (MediaPipe + Gemini)
+- **`engine/`** — Python 3.12 + FastAPI video-analysis pipeline (MediaPipe + Gemini)
 - **`server/`** — Bun + Elysia middleware (BullMQ worker, Redis, Supabase persistence)
 - **`web-next/`** — Next.js 16 + React 19 frontend
 
@@ -14,7 +14,7 @@ The CLI tool lives at `engine/cli/`.
 ## Prerequisites
 
 - Docker (recommended) — dev setup is driven by `docker-compose.yml`
-- Python 3.11 (for non-Docker engine)
+- Python 3.12 (for non-Docker engine)
 - Bun 1.x (for non-Docker server; web-next uses npm)
 
 ## Quick start (Docker)

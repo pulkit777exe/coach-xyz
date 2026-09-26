@@ -44,9 +44,9 @@ npm install                  # root tooling
 (cd server && bun install)
 (cd web-next && npm install)
 
-# Engine (Python 3.11) — no root orchestration
+# Engine (Python 3.12) — no root orchestration
 cd engine
-python3.11 -m venv .venv && source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.sample .env   # add GEMINI_API_KEY + Upstash Redis vars
 
