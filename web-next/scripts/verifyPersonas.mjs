@@ -44,6 +44,21 @@ if (!fs.existsSync(SESSION_DIR)) {
   process.exit(1)
 }
 
+// Fail with something actionable rather than a raw ERR_CONNECTION_RESET from the
+// first page.goto. The dev server picks the next free port when 3000 is taken,
+// so the default base URL is not always where the app is.
+try {
+  const probe = await fetch(`${BASE}/login`, {
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!probe.ok && probe.status >= 500) throw new Error(`status ${probe.status}`)
+} catch (err) {
+  console.error(`Cannot reach the app at ${BASE} (${String(err).split('\n')[0]}).`)
+  console.error('Start it with: cd web-next && npx next dev')
+  console.error('If it bound another port, pass it: APP_BASE_URL=http://localhost:3003 …')
+  process.exit(1)
+}
+
 const browser = await chromium.launch({ executablePath: EXECUTABLE, args: ['--no-sandbox'] })
 const rows = []
 let failures = 0
@@ -55,7 +70,14 @@ for (const [persona, want] of Object.entries(EXPECTED)) {
     failures += 1
     continue
   }
-  const ctx = await browser.newContext({ storageState: JSON.parse(fs.readFileSync(file, 'utf8')) })
+  const state = JSON.parse(fs.readFileSync(file, 'utf8'))
+  // Drop the org preference cookie on purpose. With it, a persona reaches the
+  // club even if org routing is wrong, so the check would pass against the very
+  // bug it exists to catch: an invited member being sent to the owner-of-self org
+  // every account is auto-seeded with, and seeing an empty app. Asserting the
+  // default path is the point.
+  const stripped = { ...state, cookies: state.cookies.filter((c) => c.name !== 'coach_org') }
+  const ctx = await browser.newContext({ storageState: stripped })
   const page = await ctx.newPage()
   const res = await page.goto(`${BASE}/dashboard/students`, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(3000)

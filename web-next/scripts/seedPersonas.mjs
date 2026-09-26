@@ -255,14 +255,12 @@ for (const p of PERSONAS) {
   const file = path.join(SESSION_DIR, `${p.key}.json`)
   // Playwright storageState shape, so this drops straight into a project config.
   //
-  // The org cookie is what makes the persona deterministic. Every user gets an
-  // org of their own on first login (`/api/auth/sync` calls ensureOrg — "first
-  // login forms the org"), and resolveOrgContext in web-next/lib/orgContext.ts
-  // prefers an org the caller OWNS over one they were invited to. Without the
-  // cookie, an invited coach is routed into their own empty org instead of the
-  // club, and every UI assertion silently describes the wrong org. The cookie is
-  // the app's own supported "which org am I working in" mechanism, so setting it
-  // is a fixture concern, not a workaround.
+  // The org cookie pins each persona to the seeded club. It is belt-and-braces,
+  // not what makes this work: resolveOrgContext now prefers a real membership
+  // over the owner-of-self org that every account is auto-seeded with, so an
+  // invited persona reaches the club with no cookie at all — which
+  // scripts/verifyPersonas.mjs asserts by stripping it. Pinning it keeps the
+  // fixture deterministic and exercises the preference path.
   fs.writeFileSync(
     file,
     JSON.stringify(
