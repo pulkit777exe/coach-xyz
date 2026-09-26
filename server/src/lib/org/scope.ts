@@ -17,6 +17,23 @@ import { withHistoryStoreOrThrow } from '../historyStore'
 export type StudentScope = { all: true } | { all: false; teamIds: string[] }
 
 /**
+ * A Postgres array literal for a list of uuids — the one way to write
+ * `= any(...::uuid[])` from this client.
+ *
+ * Bun binds a JS array as comma-joined TEXT, so `= any(${ids}::uuid[])` sends
+ * `a,b` and the cast fails with `22P02 malformed array literal` (verified
+ * against a live server). Only org-wide reads escaped it, because only they skip
+ * the array — which is why every scoped read crashed while unscoped reads looked
+ * fine. (`db.array(ids, 'uuid')` also works, but it needs the connection inside
+ * the callback and breaks every fixture that stubs `db` as a plain tag function.)
+ *
+ * The literal still travels as a query *parameter* — the only literal text is the
+ * `::uuid[]` cast — and a uuid's text form cannot contain `,` `{}` or `"`, so this
+ * is data, not SQL: no injection surface.
+ */
+export const uuidArrayLiteral = (ids: readonly string[]): string => `{${ids.join(',')}}`
+
+/**
  * Ids of the students this caller may see, or `null` when the caller sees the
  * whole org. `null` is deliberately distinct from `[]`: org-wide is not the
  * same as "no students", and collapsing them would silently hide everything
@@ -33,7 +50,7 @@ export const visibleStudentIds = async (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ id: string }[]>`
         select id from students
-        where auth0_id = ${orgAuth0Id} and team_id = any(${teamIds}::uuid[]);
+        where auth0_id = ${orgAuth0Id} and team_id = any(${uuidArrayLiteral(teamIds)}::uuid[]);
       `
       return rows ?? []
     })) ?? []

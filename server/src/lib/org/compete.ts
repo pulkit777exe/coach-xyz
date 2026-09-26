@@ -1,6 +1,7 @@
 // Seasons & matches (compete) data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
+import { uuidArrayLiteral } from './scope'
 
 // ── Seasons & matches ────────────────────────────────────────────────────────
 
@@ -75,8 +76,10 @@ export const listMatches = async (
     (await withHistoryStoreOrThrow(async (db) => {
       const scoped = opts.teamIds !== undefined
       const teamIds = (opts.teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
-      // Bun binds [] as '' which is not a valid uuid[] literal — bind NULL.
-      const scopeParam = teamIds.length > 0 ? teamIds : null
+      // A raw JS array reaches Postgres as comma-joined text and the ::uuid[]
+      // cast then fails; a non-empty list goes through uuidArrayLiteral. An
+      // empty one binds NULL, so `any(NULL::uuid[])` matches no row.
+      const scopeParam = teamIds.length > 0 ? uuidArrayLiteral(teamIds) : null
       const rows = await db<Match[]>`
       select * from matches
       where org_auth0_id = ${auth0Id}
