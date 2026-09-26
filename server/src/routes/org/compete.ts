@@ -3,6 +3,7 @@ import {
   createSeason,
   deleteMatch,
   deleteSeason,
+  getMatch,
   listMatches,
   listSeasons,
 } from '../../lib/orgData'
@@ -86,6 +87,7 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
+    const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
     set.status = 200
@@ -93,6 +95,8 @@ export default new Elysia()
       matches: await listMatches(auth0Id, {
         teamId: pickId(url.searchParams.get('team_id')),
         seasonId: pickId(url.searchParams.get('season_id')),
+        // A team coach sees their own fixtures; org staff see every match.
+        teamIds: caller.studentScope.all ? undefined : caller.studentScope.teamIds,
       }),
     }
   })
@@ -118,6 +122,12 @@ export default new Elysia()
     if (teamId && !(await getTeam(auth0Id, teamId))) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'team not found in this organization', false)
+    }
+    // team.manage is a capability, not a scope: it says a role may manage
+    // fixtures, not another team's.
+    if (teamId && !caller.canAccessTeam(teamId)) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing matches requires access to that team', false)
     }
     const match = await createMatch(auth0Id, {
       team_id: teamId,
@@ -145,6 +155,17 @@ export default new Elysia()
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
+    }
+    // Load the target before deleting so its team can be scope-checked; a
+    // team coach must not remove another team's fixture by id.
+    const target = await getMatch(auth0Id, id)
+    if (!target) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Match not found', false)
+    }
+    if (target.team_id && !caller.canAccessTeam(target.team_id)) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing matches requires access to that team', false)
     }
     const removed = await deleteMatch(auth0Id, id)
     if (!removed) {

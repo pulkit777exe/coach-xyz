@@ -73,13 +73,11 @@ export default new Elysia()
         const caller = await resolveCaller(auth0Id, request)
         if (!caller.can('team.read')) return forbid(set)
         const all = await listTeams(auth0Id)
-        if (caller.role === 'owner' || caller.role === 'admin') {
-          set.status = 200
-          return { teams: all }
-        }
-        const mine = new Set(caller.teamIds)
+        // Filter through canAccessTeam rather than caller.teamIds directly:
+        // org staff reach every team by policy, so comparing raw membership
+        // ids would show them an empty list while their member reads work.
         set.status = 200
-        return { teams: all.filter((t) => mine.has(t.id)) }
+        return { teams: all.filter((t) => caller.canAccessTeam(t.id)) }
       })
       .post('/api/org/:auth0Id/teams', async ({ params, request, body, set }) => {
         const { auth0Id } = params

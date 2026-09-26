@@ -65,20 +65,38 @@ export const deleteSeason = async (auth0Id: string, id: string): Promise<boolean
 
 export const listMatches = async (
   auth0Id: string,
-  opts: { teamId?: string | null; seasonId?: string | null } = {},
+  // `teamIds` undefined means the org is visible; an array narrows to those
+  // teams. A match with no team is a club-level fixture and stays visible to
+  // everyone, the same rule the objectives/plans team_id-or-student_id filter
+  // uses for a row that belongs to nobody in particular.
+  opts: { teamId?: string | null; seasonId?: string | null; teamIds?: string[] } = {},
 ): Promise<Match[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      const scoped = opts.teamIds !== undefined
+      const teamIds = (opts.teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
+      // Bun binds [] as '' which is not a valid uuid[] literal — bind NULL.
+      const scopeParam = teamIds.length > 0 ? teamIds : null
       const rows = await db<Match[]>`
       select * from matches
       where org_auth0_id = ${auth0Id}
         and (${opts.teamId ?? null}::uuid is null or team_id = ${opts.teamId ?? null}::uuid)
         and (${opts.seasonId ?? null}::uuid is null or season_id = ${opts.seasonId ?? null}::uuid)
+        and (not ${scoped} or team_id is null or team_id = any(${scopeParam}::uuid[]))
       order by match_on desc nulls last, created_at desc;
     `
       return rows ?? []
     })) ?? []
   )
+}
+
+export const getMatch = async (auth0Id: string, id: string): Promise<Match | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<Match[]>`
+      select * from matches where org_auth0_id = ${auth0Id} and id = ${id} limit 1;
+    `
+    return rows?.[0] ?? null
+  })
 }
 
 export const createMatch = async (
