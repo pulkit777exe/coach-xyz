@@ -32,17 +32,16 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 ### Engine (`engine/`)
 | Technology | Version | Source |
 |------------|---------|--------|
-| Python | 3.11 | `engine/Dockerfile:1` |
+| Python | 3.12.14 | `engine/Dockerfile:1` |
 | FastAPI | 0.141.1 | `engine/requirements.txt:1` |
 | uvicorn | 0.52.0 | `engine/requirements.txt:2` |
 | boto3 | >=1.34.0 | `engine/requirements.txt:3` (S3 backend, imported lazily) |
-| google-genai | 2.15.0 | `engine/requirements.txt:4` |
+| google-genai | 2.25.0 | `engine/requirements.txt:4` |
 | httpx | 0.28.1 | `engine/requirements.txt:5` |
-| mediapipe | 1.0.0 | `engine/requirements.txt:6` |
-| opencv-python-headless | 4.13.0.92 | `engine/requirements.txt:8` |
-| orjson | 3.11.9 | `engine/requirements.txt:10` |
-| sentry-sdk | 2.66.1 | `engine/requirements.txt:15` |
-| upstash-redis | 1.7.0 | `engine/requirements.txt:16` |
+| mediapipe | 1.0.0 | `engine/requirements.txt:7` |
+| opencv-contrib-python | 5.0.0.93 | `engine/requirements.txt:11` (provides `cv2` for mediapipe) |
+| sentry-sdk | 2.66.1 | `engine/requirements.txt:17` |
+| upstash-redis | 1.7.0 | `engine/requirements.txt:18` |
 
 ### Infrastructure
 | Component | Technology | Source |
