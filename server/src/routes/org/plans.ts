@@ -1,4 +1,5 @@
 import {
+  getTrainingPlan,
   createTrainingPlan,
   deleteTrainingPlan,
   listTrainingPlans,
@@ -7,9 +8,9 @@ import {
 import { resolveCaller } from '../../lib/caller'
 import { hasPermission } from '../../lib/permissions'
 import { visibleStudentIds } from '../../lib/org/scope'
-// Imported from its own module, not the orgData barrel: the barrel is frozen
-// shared surface in this change, and the fetch-then-check read this needs is new.
-import { getTrainingPlan, planVisibleTo } from '../../lib/org/plans'
+// The pure visibility predicate is route logic rather than a data accessor, so
+// it stays with its query; the read itself comes from the barrel.
+import { planVisibleTo } from '../../lib/org/plans'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'

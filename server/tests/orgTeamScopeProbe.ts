@@ -285,6 +285,13 @@ mock.module('../src/lib/orgData', () => ({
     bump('deleteObjective')
     return true
   },
+  // Fetch-then-check read for the PATCH/DELETE scope gate. Unscoped by design:
+  // the route loads the row, then decides visibility, so a refusal can be 403
+  // rather than a 404 that hides the row's existence.
+  getObjective: async (_orgAuth0Id: string, id: string) => {
+    reads.getObjective += 1
+    return OBJECTIVES.find((o) => o.id === id) ?? null
+  },
   // plans
   listTrainingPlans: async (_orgAuth0Id: string, opts: Record<string, unknown>) => {
     listOpts = opts
@@ -303,22 +310,21 @@ mock.module('../src/lib/orgData', () => ({
     bump('deleteTrainingPlan')
     return true
   },
-}))
-
-// The single-row reads the routes import from their own module (the orgData
-// barrel is frozen shared surface). Re-export the REAL predicates with them.
-mock.module('../src/lib/org/objectives', () => ({
-  getObjective: async (_orgAuth0Id: string, id: string) => {
-    reads.getObjective += 1
-    return OBJECTIVES.find((o) => o.id === id) ?? null
-  },
-  objectiveVisibleTo,
-}))
-mock.module('../src/lib/org/plans', () => ({
   getTrainingPlan: async (_orgAuth0Id: string, id: string) => {
     reads.getTrainingPlan += 1
     return PLANS.find((p) => p.id === id) ?? null
   },
+}))
+
+// The single-row reads the routes import from their own module (the orgData
+// barrel is frozen shared surface). Re-export the REAL predicates with them.
+// The visibility predicates are route logic that lives beside its query, so they
+// stay mocked here. The fetch-then-check reads moved to the orgData mock above,
+// which is where the routes now import them from.
+mock.module('../src/lib/org/objectives', () => ({
+  objectiveVisibleTo,
+}))
+mock.module('../src/lib/org/plans', () => ({
   planVisibleTo,
 }))
 

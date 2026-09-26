@@ -1,4 +1,5 @@
 import {
+  getObjective,
   createObjective,
   deleteObjective,
   listObjectives,
@@ -8,10 +9,9 @@ import { isDate } from '../../lib/orgValidate'
 import { resolveCaller } from '../../lib/caller'
 import { hasPermission } from '../../lib/permissions'
 import { visibleStudentIds } from '../../lib/org/scope'
-// getObjective is imported from its own module, not the orgData barrel: the
-// barrel is frozen shared surface in this change, and the fetch-then-check read
-// it exists for is new.
-import { getObjective, objectiveVisibleTo } from '../../lib/org/objectives'
+// The pure visibility predicate is route logic rather than a data accessor, so
+// it stays with its query; the read itself comes from the barrel.
+import { objectiveVisibleTo } from '../../lib/org/objectives'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'

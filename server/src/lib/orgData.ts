@@ -28,6 +28,7 @@ export {
 export type { TrainingObjective, ObjectiveInput } from './org/objectives'
 export {
   listObjectives,
+  getObjective,
   createObjective,
   setObjectiveStatus,
   deleteObjective,
@@ -47,6 +48,7 @@ export {
 export type { TrainingPlan } from './org/plans'
 export {
   listTrainingPlans,
+  getTrainingPlan,
   createTrainingPlan,
   setTrainingPlanStatus,
   deleteTrainingPlan,
