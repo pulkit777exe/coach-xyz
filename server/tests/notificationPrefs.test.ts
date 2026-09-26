@@ -159,6 +159,7 @@ describe('notification preferences', () => {
         membership: true,
       },
       updatedAt: null,
+      lastDigestAt: null,
     })
   })
 
@@ -183,6 +184,7 @@ describe('notification preferences', () => {
         membership: true,
       },
       updatedAt: expect.any(String),
+      lastDigestAt: null,
     })
 
     const second = await upsertNotificationPrefs(auth0Id, {

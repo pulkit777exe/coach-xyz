@@ -20,6 +20,7 @@ const PREFS: NotificationPrefs = {
     membership: true,
   },
   updatedAt: null,
+    lastDigestAt: null,
 }
 
 const jsonResponse = (body: unknown, status = 200): Response =>

@@ -637,6 +637,14 @@ export const ensureInitialized = async () => {
             updated_at timestamptz not null default now()
           );
         `
+            // The digest window anchor. NULL means "never digested", which the
+            // runner reads as the cadence lookback (24h/7d) rather than the
+            // account's whole history. Additive column, same probe-or-alter
+            // posture as notifications.dedupe_key above.
+            await store`
+          alter table notification_preferences
+            add column if not exists last_digest_at timestamptz;
+        `
           })(),
           // Account display settings (theme, reduce motion, week start). Self-scoped
           // for every role — no org, no FK — so they sync across devices without

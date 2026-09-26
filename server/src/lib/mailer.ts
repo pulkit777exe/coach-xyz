@@ -159,3 +159,36 @@ export const escapeHtml = (value: unknown): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+
+/**
+ * Shared deliverability check for an outbound address. Posters must point at a
+ * real mailbox; Resend rejects the rest, and one bad address must not fail a
+ * whole digest batch.
+ */
+export const isDeliverableAddress = (value: unknown): boolean =>
+  typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+
+/**
+ * Notification digest shell. The content (subject, intro, per-day groups,
+ * overflow note, plain-text body) is assembled by the digest domain module —
+ * this owns the chrome only, exactly like the templates above.
+ */
+export const digestEmail = (
+  subject: string,
+  introHtml: string,
+  groupsHtml: string,
+  textBody: string,
+) => {
+  const inner = `
+    ${introHtml}
+    ${groupsHtml}
+    <p style="font-size:12px;color:#7a6e62;margin-top:20px;">
+      Change how often CoachXYZ emails you from your notification settings.
+    </p>
+  `
+  return {
+    subject,
+    html: wrap(subject, inner),
+    text: textBody,
+  }
+}

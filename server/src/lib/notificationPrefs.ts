@@ -19,6 +19,13 @@ export type NotificationPreferences = {
   cadence: NotificationCadence
   events: NotificationEvents
   updatedAt: string | null
+  /**
+   * When the account's last digest email went out. `null` means "never
+   * digested" — the digest runner then reads the window as the cadence
+   * lookback (24h/7d) rather than the account's whole history. Written only by
+   * a successful send (lib/notificationDigest), never by a settings save.
+   */
+  lastDigestAt: string | null
 }
 
 export type NotificationPreferencesPatch = {
@@ -32,6 +39,7 @@ type NotificationPreferencesRow = {
   cadence: string
   events: unknown
   updated_at: string | Date
+  last_digest_at: string | Date | null
 }
 
 const CADENCES: ReadonlySet<string> = new Set<NotificationCadence>(['instant', 'daily', 'weekly'])
@@ -50,10 +58,19 @@ export const defaultNotificationPreferences = (): NotificationPreferences => ({
   cadence: 'instant',
   events: defaultEvents(),
   updatedAt: null,
+  lastDigestAt: null,
 })
 
 const toIsoString = (value: string | Date): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+
+/** Optional column: NULL (or an absent projection) reads back as null, never
+ *  as an Invalid Date string. */
+const toOptionalIsoString = (value: string | Date | null | undefined): string | null => {
+  if (value === null || value === undefined) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
 
 const toNotificationPreferences = (row: NotificationPreferencesRow): NotificationPreferences => {
   const storedEvents =
@@ -71,6 +88,7 @@ const toNotificationPreferences = (row: NotificationPreferencesRow): Notificatio
       ]),
     ) as NotificationEvents,
     updatedAt: toIsoString(row.updated_at),
+    lastDigestAt: toOptionalIsoString(row.last_digest_at),
   }
 }
 
@@ -81,7 +99,7 @@ const toNotificationPreferences = (row: NotificationPreferencesRow): Notificatio
 export const notificationPrefs = async (auth0Id: string): Promise<NotificationPreferences> => {
   const stored = await withHistoryStore(async (db) => {
     const rows = await db<NotificationPreferencesRow[]>`
-      select in_app, cadence, events, updated_at
+      select in_app, cadence, events, updated_at, last_digest_at
       from notification_preferences
       where auth0_id = ${auth0Id}
       limit 1;
@@ -108,7 +126,7 @@ export const upsertNotificationPrefs = async (
     // all-enabled — silently discarding the user's choices. A settings write
     // is rare and the UI serializes saves, so read-merge-write is enough.
     const existing = await db<NotificationPreferencesRow[]>`
-      select in_app, cadence, events, updated_at
+      select in_app, cadence, events, updated_at, last_digest_at
       from notification_preferences
       where auth0_id = ${auth0Id}
       limit 1;
@@ -143,7 +161,7 @@ export const upsertNotificationPrefs = async (
         cadence = excluded.cadence,
         events = excluded.events,
         updated_at = excluded.updated_at
-      returning in_app, cadence, events, updated_at;
+      returning in_app, cadence, events, updated_at, last_digest_at;
     `
     const row = rows?.[0]
     return row ? toNotificationPreferences(row) : null

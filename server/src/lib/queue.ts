@@ -23,6 +23,11 @@ import { logger } from './logger'
 import { startJobEventBus, stopJobEventBus } from './jobEvents'
 import { startServerEventBus, stopServerEventBus } from './serverEvents'
 import {
+  notificationDigestProcessor,
+  registerNotificationDigestJobs,
+  type DigestCadence,
+} from './notificationDigest'
+import {
   initAiReportJob,
   updateAiReportJob,
   persistAiReportRecord,
@@ -54,6 +59,10 @@ export interface AiReportPayload {
   sport?: string | null
   student_name?: string | null
   report_context: Record<string, unknown>
+}
+
+export interface NotificationDigestPayload {
+  cadence: DigestCadence
 }
 
 // ── BullMQ Redis client ─────────────────────────────────────────────────────
@@ -263,6 +272,8 @@ export let worker: Worker<AnalysisPayload> | null = null
 export let aiReportWorker: Worker<AiReportPayload> | null = null
 export let queueEvents: QueueEvents | null = null
 let reportQueueEvents: QueueEvents | null = null
+export let notificationDigestQueue: Queue<NotificationDigestPayload> | null = null
+export let notificationDigestWorker: Worker<NotificationDigestPayload> | null = null
 let stuckRecoveryInterval: ReturnType<typeof setInterval> | null = null
 let stuckRecoveryTimeout: ReturnType<typeof setTimeout> | null = null
 let started = false
@@ -743,6 +754,64 @@ function startReportInfrastructure(): void {
 }
 
 /**
+ * Digest queue + worker. The two cron repeatables (07:00 UTC daily, 07:00 UTC
+ * Mondays) are registered onto it by the digest module, which owns the
+ * cadence → schedule mapping; this owns the handles and the lifecycle, exactly
+ * as it does for the two analysis queues.
+ */
+function startDigestInfrastructure(): void {
+  const redisAvailable = !!connection
+
+  notificationDigestQueue = redisAvailable
+    ? new Queue<NotificationDigestPayload>('coachai-notification-digest', {
+        connection: connection!,
+        defaultJobOptions: {
+          // A digest is idempotent per window (last_digest_at advances on a
+          // successful send), so a transient failure gets exactly one retry —
+          // not the 3-attempt exponential ladder the video queues use.
+          attempts: 2,
+          backoff: { type: 'fixed', delay: 30_000 },
+          removeOnComplete: 20,
+          removeOnFail: 20,
+        },
+      })
+    : null
+
+  notificationDigestWorker = redisAvailable
+    ? new Worker<NotificationDigestPayload>(
+        'coachai-notification-digest',
+        notificationDigestProcessor,
+        {
+          connection: connection!,
+          // One batch at a time: the runner already bounds per-account
+          // concurrency internally, so a second concurrent batch would only
+          // widen the outbound email burst.
+          concurrency: 1,
+        },
+      )
+    : null
+
+  if (notificationDigestWorker) {
+    notificationDigestWorker.on('error', (err) => {
+      logger.error('notification_digest_worker_error', {
+        type: 'notification_digest_worker_error',
+        error: err.message,
+      })
+    })
+    notificationDigestWorker.on('stalled', (jobId) => {
+      logger.warn('notification_digest_worker_stalled', {
+        type: 'notification_digest_worker_stalled',
+        jobId,
+      })
+    })
+  }
+
+  if (redisAvailable && notificationDigestQueue) {
+    void registerNotificationDigestJobs(notificationDigestQueue)
+  }
+}
+
+/**
  * Build the queues, workers, QueueEvents, intervals, and signal handlers —
  * exactly once per start. Called first thing from src/index.ts; never as an
  * import side effect. No-op when Redis is not configured (every handle stays
@@ -757,6 +826,7 @@ export function startQueueInfrastructure(): void {
 
   startAnalysisInfrastructure()
   startReportInfrastructure()
+  startDigestInfrastructure()
   // Dedicated subscriber for engine-published analysis events. It is
   // independent of BullMQ's queue connection and safely no-ops without Redis.
   void startJobEventBus()
@@ -802,16 +872,24 @@ export async function stopQueueInfrastructure(): Promise<void> {
   await stopJobEventBus()
   if (worker) await worker.close()
   if (aiReportWorker) await aiReportWorker.close()
+  if (notificationDigestWorker) await notificationDigestWorker.close()
   if (analysisQueue) await analysisQueue.close()
   if (aiReportQueue) await aiReportQueue.close()
+  // Closed with the rest: the repeatable-job SCHEDULES stay registered in Redis
+  // on purpose (that is what a repeatable is — it survives a restart, and the
+  // next start upserts the same ids idempotently). What must not survive is a
+  // live worker, so no digest batch is mid-flight during shutdown.
+  if (notificationDigestQueue) await notificationDigestQueue.close()
   if (connection) await connection.quit()
 
   queueEvents = null
   reportQueueEvents = null
   worker = null
   aiReportWorker = null
+  notificationDigestWorker = null
   analysisQueue = null
   aiReportQueue = null
+  notificationDigestQueue = null
   connection = null
   started = false
 

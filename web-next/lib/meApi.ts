@@ -60,6 +60,8 @@ export type NotificationPrefs = {
   cadence: NotificationCadence
   events: NotificationEvents
   updatedAt: string | null
+  /** ISO time of the last digest email actually sent; null = never sent. */
+  lastDigestAt: string | null
 }
 
 export type NotificationPrefsPatch = {

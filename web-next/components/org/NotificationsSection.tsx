@@ -7,11 +7,19 @@ import SettingRow from '@/components/org/SettingRow'
 import { Spinner } from '@/components/org/Spinner'
 import { Switch } from '@/components/9ui/ui/switch'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/9ui/ui/select'
+import {
   getNotificationPrefs,
   NOTIFICATION_EVENTS,
   NOTIFICATION_EVENT_LABELS,
   type NotificationEvent,
   type NotificationEvents,
+  type NotificationCadence,
   type NotificationPrefs,
   updateNotificationPrefs,
 } from '@/lib/meApi'
@@ -30,6 +38,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
   cadence: 'instant',
   events: DEFAULT_EVENTS,
   updatedAt: null,
+  lastDigestAt: null,
 }
 
 const EVENT_DESCRIPTIONS: Record<NotificationEvent, string> = {
@@ -46,6 +55,13 @@ const EVENT_ROWS = NOTIFICATION_EVENTS.map((event) => ({
   label: NOTIFICATION_EVENT_LABELS[event],
   description: EVENT_DESCRIPTIONS[event],
 }))
+
+/** `instant` is the "off" value: in-app only, no digest. */
+const CADENCE_ITEMS: Record<NotificationCadence, string> = {
+  instant: 'Off',
+  daily: 'Daily',
+  weekly: 'Weekly',
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -121,6 +137,22 @@ export default function NotificationsSection() {
       .finally(() => setIsSaving(false))
   }
 
+  const updateCadence = (cadence: NotificationCadence) => {
+    if (!prefs || isSaving) return
+    const previous = prefs
+    setPrefs({ ...prefs, cadence })
+    setError(null)
+    setIsSaving(true)
+
+    void updateNotificationPrefs({ cadence })
+      .then((saved) => setPrefs(saved))
+      .catch((cause) => {
+        setPrefs(previous)
+        setError(errorMessage(cause, 'Failed to save notification preferences.'))
+      })
+      .finally(() => setIsSaving(false))
+  }
+
   return (
     <Section title="Notifications">
       {isLoading ? (
@@ -141,6 +173,48 @@ export default function NotificationsSection() {
                 aria-label="In-app notifications"
               />
             </SettingRow>
+          </div>
+
+          {/* Email is a summary, never one message per event: a daily or
+              weekly digest of what you missed. Independent of the in-app
+              switch — turning alerts off in the app does not unsubscribe
+              your inbox, and vice versa. */}
+          <div className="mt-6">
+            <SettingRow
+              title="Email digest"
+              description="One summary of what you missed, instead of a message for every event."
+            >
+              <Select
+                items={CADENCE_ITEMS}
+                value={prefs.cadence}
+                onValueChange={(v) => {
+                  if (v === 'instant' || v === 'daily' || v === 'weekly') updateCadence(v)
+                }}
+              >
+                <SelectTrigger className="w-44" aria-label="Email digest">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CADENCE_ITEMS).map(([k, label]) => (
+                    <SelectItem key={k} value={k}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingRow>
+            <p className="mt-1.5 text-caption text-muted-foreground">
+              {prefs.cadence === 'instant'
+                ? 'Off — notifications stay in the app only.'
+                : `Sent ${prefs.cadence === 'daily' ? 'each morning' : 'at the start of each week'} with anything you have not seen yet.`}
+            </p>
+            {prefs.cadence !== 'instant' ? (
+              <p className="mt-1 text-caption text-muted-foreground">
+                {prefs.lastDigestAt
+                  ? `Last digest: ${new Date(prefs.lastDigestAt).toLocaleString()}`
+                  : 'No digest sent yet.'}
+              </p>
+            ) : null}
           </div>
 
           <p className="mb-1 mt-6 text-meta font-medium leading-[1.4] text-foreground">Events</p>

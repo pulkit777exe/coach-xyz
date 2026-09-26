@@ -208,6 +208,37 @@ source; pinned in `lib/__tests__/permissions.test.ts`.
 | medical            | CoachHome              | Schedule                            | read-only students/teams/reports; no stat tiles or Recents (account-data floor) | history/members/audit → AccessDenied; History + New Analysis absent from nav/palette; Recents hidden                    |
 | player             | `/player` PlayerHub    | Analyze My Video                    | own reports → detail pages                                                      | no staff nav; `/dashboard` bounces to `/player`; topbar has no org pill or Dashboard CTA; foreign report id → not-found |
 
+### Settings center
+
+One role-aware panel; sections appear by capability, never by hiding a
+disabled control. Order is stable: My account · Security · Preferences ·
+Notifications · Privacy & data, then the org-only blocks (Organization,
+Members, Plan & usage, Records) on the dashboard variant.
+
+| Section        | Who sees it | What it owns                                                             |
+| -------------- | ----------- | ------------------------------------------------------------------------ |
+| My account     | everyone    | name, nickname, picture                                                  |
+| Security       | everyone    | verified email, password deep link, log out                              |
+| Preferences    | everyone    | theme, reduce motion, week start — device-local, mirrored to the account |
+| Notifications  | everyone    | in-app master, per-event switches, email digest cadence                  |
+| Privacy & data | everyone    | consent per purpose, data download, deletion request                     |
+| Organization   | dashboard   | club name + timezone (owner/admin edit, everyone else reads)             |
+| Members        | dashboard   | staff list, invites, roles, player roster                                |
+| Plan & usage   | owner/admin | tier and today's usage                                                   |
+| Records        | dashboard   | metric tiles                                                             |
+
+Two rules the settings surface follows:
+
+- **Device-local first, account-mirrored.** Theme/motion/week-start render
+  from local state and write through in the background, so a toggle never
+  waits on the network. A first-time account (no stored row) keeps the
+  device's choice rather than being reset to the server default.
+- **Email is a digest, never a message per event.** `cadence` is
+  `instant` (the default: in-app only) or `daily` / `weekly`, which send one
+  summary of what was missed. The in-app switch and the digest are
+  independent; per-event opt-outs are re-checked when the digest is built,
+  so muting an event also removes it from a digest you had not received yet.
+
 ### States contract (every data surface)
 
 1. **Loading** — skeleton or progress (9ui `skeleton` for content
