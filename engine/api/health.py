@@ -50,16 +50,30 @@ def health_deep():
     # Check MediaPipe
     mp_ok = pose_backend_available()
 
+    # Check the pose model asset itself. pose_backend_available() only proves
+    # the mediapipe package imports, so an image built without the model still
+    # reports a healthy backend and then fails on the first analysis with
+    # "model file is missing". The Dockerfile now fetches it, so a missing file
+    # means the image is wrong — report it instead of serving a broken service.
+    try:
+        from core.pose_backend import _default_model_path
+
+        model_path = _default_model_path()
+        model_ok = model_path.is_file()
+    except Exception:
+        model_path, model_ok = None, False
+
     # Check executor queue depth
     executor_depth = analysis_executor._work_queue.qsize() if hasattr(analysis_executor, '_work_queue') else -1
 
-    status = "healthy" if (redis_ok and mp_ok) else "degraded"
+    status = "healthy" if (redis_ok and mp_ok and model_ok) else "degraded"
 
     return {
         "status": status,
         "checks": {
             "redis": {"ok": redis_ok, "latency_ms": redis_latency},
             "mediapipe": {"ok": mp_ok},
+            "pose_model": {"ok": model_ok, "path": str(model_path) if model_path else None},
             "executor": {"queue_depth": executor_depth, "max_workers": getattr(analysis_executor, '_max_workers', -1)},
         },
         "uptime": round(time.time() - START_TIME, 1),

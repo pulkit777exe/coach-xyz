@@ -30,6 +30,17 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --no-compile --timeout 100 --retries 5 \
     -r requirements.txt
 
+# The pose model is gitignored (*.task) and nothing fetches it at runtime, so
+# without this step every build ships an image where the first analysis dies
+# with "model file is missing" — and /health cannot catch it, because it only
+# checks that mediapipe imports. Pinned to a versioned asset with a checksum so
+# a swapped or truncated download fails the build instead of the deploy.
+# urllib is already here; this avoids adding curl to the image.
+ARG POSE_MODEL_URL=https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task
+ARG POSE_MODEL_SHA256=5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1
+RUN python -c "import urllib.request; urllib.request.urlretrieve('$POSE_MODEL_URL', '/app/pose_landmarker_full.task')" \
+    && echo "$POSE_MODEL_SHA256  /app/pose_landmarker_full.task" | sha256sum -c -
+
 COPY . .
 RUN useradd --create-home --uid 10001 coachai \
     && mkdir -p /app/tmp \

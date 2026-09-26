@@ -16,3 +16,6 @@ tmp/
 .gitignore
 *.md
 pose_landmarker_lite.task
+# Fetched (and checksum-pinned) by the Dockerfile, so a developer's local copy
+# must never ride along in the build context and shadow it.
+pose_landmarker_full.task
