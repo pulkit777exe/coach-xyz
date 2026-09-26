@@ -4,6 +4,7 @@ import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { getAnalysisByServerJobId } from './analyses'
 import { analysisQueue, queueEvents, classifyFailure, onQueueInfrastructureReady } from './queue'
 import { isEventEnabled } from './notificationPrefs'
+import { analysisResultHref, NOTIFICATION_EVENT } from './notificationEventNames'
 import { logger } from './logger'
 import { publishNotification, subscribeNotification } from './serverEvents'
 
@@ -238,19 +239,17 @@ function attachQueueEventListeners() {
         )) {
           await createNotification({
             auth0Id,
-            type: 'analysis_complete',
+            type: NOTIFICATION_EVENT.analysisComplete,
             title: 'Analysis complete',
             body: analysis.displayName || job.data.engine_job_id,
             data: {
               server_job_id: job.data.server_job_id,
               engine_job_id: job.data.engine_job_id,
-              // Recipient-correct destination: the owning coach gets the
-              // dashboard detail; a player who requested it has no detail
-              // route, so their hub is the landing spot.
-              href:
-                auth0Id === analysis.auth0Id
-                  ? `/dashboard/analysis/${job.data.server_job_id}`
-                  : '/player',
+              href: analysisResultHref(
+                analysis.auth0Id,
+                auth0Id,
+                job.data.server_job_id as string,
+              ),
             },
             dedupeKey: `analysis_complete:${job.data.server_job_id}:${auth0Id}`,
           })
@@ -289,17 +288,17 @@ function attachQueueEventListeners() {
           )) {
             await createNotification({
               auth0Id,
-              type: 'analysis_failed',
+              type: NOTIFICATION_EVENT.analysisFailed,
               title: 'Analysis failed',
               body: analysis.displayName || job.data.engine_job_id,
               data: {
                 server_job_id: job.data.server_job_id,
                 engine_job_id: job.data.engine_job_id,
-                // Same recipient-correct routing as the completed branch.
-                href:
-                  auth0Id === analysis.auth0Id
-                    ? `/dashboard/analysis/${job.data.server_job_id}`
-                    : '/player',
+                href: analysisResultHref(
+                  analysis.auth0Id,
+                  auth0Id,
+                  job.data.server_job_id as string,
+                ),
               },
               dedupeKey: `analysis_failed:${job.data.server_job_id}:${auth0Id}`,
             })

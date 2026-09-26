@@ -14,18 +14,18 @@ import { resolveCaller } from '../../lib/caller'
 import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
-import { createNotification, type CreateNotificationInput } from '../../lib/notifications'
+import { notifyAttendanceRecorded } from '../../lib/notificationEvents'
 import { logger } from '../../lib/logger'
 import { Elysia } from 'elysia'
 
 type AttendanceNotificationStudent = Pick<Student, 'id' | 'full_name' | 'account_auth0_id'>
-type NotificationSender = (input: CreateNotificationInput) => Promise<unknown>
+type NotificationSender = Parameters<typeof notifyAttendanceRecorded>[1]
 
 /** Fan out one notification per affected student, never once per batch row. */
 export const fanOutAttendanceNotifications = async (
   students: AttendanceNotificationStudent[],
   records: AttendanceRecord[],
-  notify: NotificationSender = createNotification,
+  notify?: NotificationSender,
 ): Promise<void> => {
   const recordByStudentId = new Map<string, AttendanceRecord>()
   for (const record of records) {
@@ -42,19 +42,21 @@ export const fanOutAttendanceNotifications = async (
     notifiedStudentIds.add(student.id)
 
     try {
-      await notify({
-        auth0Id: student.account_auth0_id,
-        type: 'attendance',
-        title: 'Attendance recorded',
-        body: student.full_name,
-        data: {
-          attendance_id: record.id,
-          student_id: record.student_id,
-          session_date: record.session_date,
-          status: record.status,
-          href: '/player',
+      await notifyAttendanceRecorded(
+        {
+          auth0Id: student.account_auth0_id,
+          title: 'Attendance recorded',
+          body: student.full_name,
+          data: {
+            attendance_id: record.id,
+            student_id: record.student_id,
+            session_date: record.session_date,
+            status: record.status,
+            href: '/player',
+          },
         },
-      })
+        notify,
+      )
     } catch (error) {
       logger.error('attendance_notification_error', {
         type: 'attendance_notification_error',

@@ -391,10 +391,9 @@ async function createAiReportNotification(input: {
   try {
     // Dynamic import avoids a static queue <-> notifications cycle: the
     // notification module owns the shared analysis QueueEvents listeners.
-    const { createNotification } = await import('./notifications')
-    await createNotification({
+    const { notifyAiReportFinished } = await import('./notificationEvents')
+    await notifyAiReportFinished({
       auth0Id: input.auth0Id,
-      type: 'ai_report',
       title: input.title,
       body: input.body,
       data: input.data,
