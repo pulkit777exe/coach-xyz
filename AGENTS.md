@@ -8,7 +8,7 @@ CoachXYZ — multi-sport AI video analyzer. Three deployable tiers plus shared c
 
 - `web-next/` — Next.js 16 (App Router) + React 19 + TS + Tailwind v4. Coach dashboard, marketing site, player hub.
 - `server/` — Bun 1.x + Elysia. Auth sync, org data layer, BullMQ orchestration, Supabase persistence, email (Resend).
-- `engine/` — Python 3.11 + FastAPI. Video analysis pipeline (Gemini + MediaPipe).
+- `engine/` — Python 3.12 + FastAPI. Video analysis pipeline (Gemini + MediaPipe).
 - `sports/` — per-sport scoring config JSON. `docs/` — feature docs.
 
 `web-next/proxy.ts` is the Next middleware that forwards `/api/*` to the server.
@@ -71,6 +71,7 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 - Engine owns code → HTTP status + `retryable` (`engine/core/errors.py` `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`); routes derive status only via `enginePassthroughStatus`/`chatEngineStatus` and send bodies through `errorBody(...)` — never re-map codes to statuses; `JOB_NOT_FOUND` is `retryable: false` on every path.
 - Rate limiting + ids:429s come from `rateLimited()` (`src/lib/ratelimit.ts`); validate ids against `UUID_RE` (`src/lib/uuid.ts`). Don't hand-roll either.
 - Engine HTTP surface: routes live under `engine/api/` (mounted by the thin `engine/main.py`); session-token mint/validation and upload cleanup live in `engine/sessions.py`.
+- Engine tests must never inherit a developer's `engine/.env`: `engine/tests/conftest.py` pins `SERVICE_TOKEN` and `SENTRY_DSN` to empty before `main.py` imports (the service-token middleware 403s every non-`/health` route once `SERVICE_TOKEN` is set, and a real DSN ships test events to Sentry). `tests/test_service_auth.py` owns the identity boundary with its own `monkeypatch`. CI runs without a `.env`, so a leak here is invisible until someone's machine runs it.
 - Sport vocab SSOT is `engine/core/sport_config.py` (positions/aliases/pack versions) — served through the guard-exempt `GET /sports/{sport}/positions`.
 - Email: `src/lib/mailer.ts`. `RESEND_API_KEY` unset → routes return 501 `EMAIL_NOT_CONFIGURED` by design; smoke asserts it.
 - Env: documented in `server/.env.example` and `web-next/.env.example`; keep them in sync with `process.env` reads.
