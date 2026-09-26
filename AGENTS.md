@@ -27,6 +27,10 @@ npm run build        # web next build
 npm run smoke        # server live HTTP smoke (needs .env + running server + Neon DB)
 ```
 
+Local test personas (real logins for every role, no Auth0 Management API app needed): `cd web-next && node scripts/seedPersonas.mjs`, then load a role with `web-next/.personas/<role>.json` as a Playwright `storageState`. It mints `__session` with the SDK's first-party `generateSessionCookie` (`@auth0/nextjs-auth0/testing`) from `AUTH0_SECRET` — `getSession()` only decrypts that cookie, so no Auth0 call, signup, CAPTCHA or throttle is involved — and seeds the `users`/`org_members` rows through the app's API with `SERVICE_TOKEN`. Credentials go to `.env.personas.local`, sessions to `.personas/`, both gitignored. Re-run with `--sessions` to refresh: minted cookies expire in 1h. Every persona is pinned to the seeded org with the `coach_org` cookie, because each user gets an org of their own on first login and `resolveOrgContext` prefers an owned org over one they were invited to.
+
+```
+
 Per-app: server uses `bun`, engine uses `pip`/`python`, web-next uses `npm` (CI also uses npm).
 
 Test baselines (keep green; re-confirmed 2026-09-26, current worktree): server `bun test` = 666 pass / 54 files (live DB checks run when `DATABASE_URL` reaches Neon; Bun autoloads `server/.env` locally); web `vitest run` = 232 tests / 23 files; engine `pytest tests -q` = 228 tests; `tsc --noEmit` + eslint clean both TS apps (zero lint warnings), `prettier --check` clean for files added/edited this round (a long tail of pre-existing files was never formatted — don't opportunistically reformat them); `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 72/72 green (account settings, data rights, and a real second team with a scoped coach).
@@ -83,3 +87,4 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 - `SERVICE_TOKEN` shared secret set on both server and web for the identity boundary.
 - `RESEND_API_KEY` needed for live invite/report/attendance email.
 - Live Neon DB through `DATABASE_URL` (server) / proxy (web). Users auto-link to org members by email.
+```
