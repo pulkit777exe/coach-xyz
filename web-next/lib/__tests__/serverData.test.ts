@@ -7,11 +7,30 @@ describe('resolveOrgContext', () => {
   const OWNER = 'auth0|owner-1'
   const MEMBER = 'auth0|member-1'
 
-  test('owner-of-self wins even when also a member elsewhere', () => {
+  test('a membership elsewhere outranks owner-of-self', () => {
+    // An org is keyed by its owner's sub, so a caller's own org and the
+    // personal org they are auto-seeded with are the same row — ownership of
+    // it says nothing about intent. The API also orders owner rows first, so
+    // preferring it dropped every invited coach into their own empty org.
     const orgs: Org[] = [
       { org_auth0_id: 'auth0|other-org', role: 'coach' },
       { org_auth0_id: OWNER, role: 'owner' },
     ]
+    expect(resolveOrgContext(OWNER, orgs)).toEqual({ auth0Id: 'auth0|other-org', role: 'coach' })
+  })
+
+  test('an invited coach lands in the club that invited them, not their own org', () => {
+    // The reported case: the API returns the auto-seeded owner row first, so a
+    // naive first-membership default sends them to an org with no roster.
+    const orgs: Org[] = [
+      { org_auth0_id: MEMBER, role: 'owner' },
+      { org_auth0_id: 'auth0|club', role: 'coach' },
+    ]
+    expect(resolveOrgContext(MEMBER, orgs)).toEqual({ auth0Id: 'auth0|club', role: 'coach' })
+  })
+
+  test('a solo user with only their own org still resolves to it', () => {
+    const orgs: Org[] = [{ org_auth0_id: OWNER, role: 'owner' }]
     expect(resolveOrgContext(OWNER, orgs)).toEqual({ auth0Id: OWNER, role: 'owner' })
   })
 

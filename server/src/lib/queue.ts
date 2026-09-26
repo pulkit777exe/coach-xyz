@@ -517,6 +517,56 @@ async function recoverStuckJobs(): Promise<void> {
   }
 }
 
+// ── Fatal Redis conditions ──────────────────────────────────────────────────
+// Serverless Redis plans (Upstash) cap total requests per billing window. Once
+// the cap is hit every command fails, but a BullMQ worker does not give up: it
+// reconnects and retries, which produced a ~100ms error loop that could neither
+// recover nor tell anyone — it just kept the window exhausted and buried the
+// real cause under thousands of identical log lines. `redisAvailable` only asks
+// whether a connection object exists, so a quota-exhausted Redis still gets a
+// full set of workers.
+//
+// So treat it as fatal for this process: report once, then stop the workers.
+// Degrading to the no-Redis path is the honest state — the HTTP surface (auth,
+// org data, reads) does not need the queue, and analysis/report/digest are
+// already unavailable because the quota is spent.
+const FATAL_REDIS_RE =
+  /max requests limit exceeded|plan limit|request limit exceeded|quota exceeded|too many requests/i
+
+let fatalRedisReported = false
+
+export const isFatalRedisError = (err: unknown): boolean =>
+  FATAL_REDIS_RE.test(err instanceof Error ? err.message : String(err))
+
+/** Stop every worker so a fatal Redis error cannot burn quota in a loop. */
+function haltWorkersOnFatalRedis(source: string, err: unknown): void {
+  if (fatalRedisReported) return
+  fatalRedisReported = true
+  logger.error('redis_fatal_error', {
+    type: 'redis_fatal_error',
+    source,
+    error: err instanceof Error ? err.message : String(err),
+    detail:
+      'The Redis request allowance for this billing window is spent. Workers are ' +
+      'stopped so they do not retry in a loop and extend it; analysis, AI reports ' +
+      'and the notification digest stay unavailable until the window resets.',
+  })
+  for (const w of [worker, aiReportWorker, notificationDigestWorker]) {
+    // close() rejects against a dead Redis; swallow it — we are already in the
+    // failure path and a second log line per worker would defeat the point.
+    void w?.close().catch(() => undefined)
+  }
+}
+
+/** Worker error handler that does not spin or spam on a fatal Redis error. */
+const onWorkerError = (source: string) => (err: Error) => {
+  if (isFatalRedisError(err)) {
+    haltWorkersOnFatalRedis(source, err)
+    return
+  }
+  logger.error(`${source}_error`, { type: `${source}_error`, error: err.message })
+}
+
 // ── Infrastructure construction ─────────────────────────────────────────────
 
 function startAnalysisInfrastructure(): void {
@@ -546,12 +596,7 @@ function startAnalysisInfrastructure(): void {
 
   // Worker health event handlers
   if (worker) {
-    worker.on('error', (err) => {
-      logger.error('worker_error', {
-        type: 'worker_error',
-        error: err.message,
-      })
-    })
+    worker.on('error', onWorkerError('worker'))
     worker.on('stalled', (jobId) => {
       logger.warn('worker_stalled', {
         type: 'worker_stalled',
@@ -684,12 +729,7 @@ function startReportInfrastructure(): void {
     : null
 
   if (aiReportWorker) {
-    aiReportWorker.on('error', (err) => {
-      logger.error('ai_report_worker_error', {
-        type: 'ai_report_worker_error',
-        error: err.message,
-      })
-    })
+    aiReportWorker.on('error', onWorkerError('ai_report_worker'))
   }
 
   if (redisAvailable && aiReportQueue) {
@@ -792,12 +832,7 @@ function startDigestInfrastructure(): void {
     : null
 
   if (notificationDigestWorker) {
-    notificationDigestWorker.on('error', (err) => {
-      logger.error('notification_digest_worker_error', {
-        type: 'notification_digest_worker_error',
-        error: err.message,
-      })
-    })
+    notificationDigestWorker.on('error', onWorkerError('notification_digest_worker'))
     notificationDigestWorker.on('stalled', (jobId) => {
       logger.warn('notification_digest_worker_stalled', {
         type: 'notification_digest_worker_stalled',

@@ -17,10 +17,22 @@ export type OrgContext = {
 /**
  * Pure org-context decision: given the caller's own sub and their memberships,
  * pick the primary org. An explicit cookie preference wins when it names an
- * org the caller actually belongs to; otherwise owner-of-self wins; otherwise
- * the first membership. Empty memberships → owner-of-self fallback (fresh
- * coach, or memberships unavailable). Never trusts the cookie blindly — the
- * caller's role always comes from the membership row.
+ * org the caller actually belongs to; otherwise a membership in someone else's
+ * org wins; otherwise owner-of-self; otherwise the first membership. Empty
+ * memberships → owner-of-self fallback (fresh coach, or memberships
+ * unavailable). Never trusts the cookie blindly — the caller's role always
+ * comes from the membership row.
+ *
+ * Why owner-of-self does not simply win: an org is keyed by its owner's sub, so
+ * a caller's own org and the personal org they are auto-seeded with (see
+ * `listMembershipsForUser`, which seeds owner-of-self for every real account)
+ * are the *same* row — and the API orders owner rows first. "Owner of an org
+ * whose id is my own sub" is therefore a side effect of having an account, not
+ * a choice, and letting it outrank a real membership routed every invited coach
+ * into their own empty org instead of the club that invited them. Two orgs only
+ * ever means "my own space plus somewhere I was actually invited", so the
+ * deliberate membership wins. The cookie still overrides both, which is how a
+ * multi-org user pins the one they want.
  *
  * Lives in this pure module (not lib/serverData) so client components — the
  * settings shell in particular — can resolve org context from getMyOrgs()
@@ -35,8 +47,9 @@ export function resolveOrgContext(
     const preferred = orgs.find((o) => o.org_auth0_id === preferredOrgId)
     if (preferred) return { auth0Id: preferred.org_auth0_id, role: preferred.role }
   }
+  const elsewhere = orgs.find((o) => o.org_auth0_id !== ownSub)
   const owned = orgs.find((o) => o.org_auth0_id === ownSub && o.role === 'owner')
-  const primary = owned ?? orgs[0]
+  const primary = elsewhere ?? owned ?? orgs[0]
   if (primary) return { auth0Id: primary.org_auth0_id, role: primary.role }
   return { auth0Id: ownSub ?? '', role: 'owner' }
 }
