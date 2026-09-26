@@ -11,6 +11,14 @@ from pathlib import Path
 # events in production monitoring, and no 2s flush delay at interpreter exit.
 os.environ["SENTRY_DSN"] = ""
 
+# Same trap, one more key: engine/.env carries a real SERVICE_TOKEN, and
+# main.py's service_token_middleware 403s every non-/health request when that
+# var is set. Route tests exercise handler behavior, not the identity boundary,
+# so pin it empty here; test_service_auth.py opts back in with its own
+# monkeypatch to cover the boundary itself. Without this, the suite passes in
+# CI (no .env) and fails locally.
+os.environ["SERVICE_TOKEN"] = ""
+
 # Ensure engine/ is on sys.path so `core.*` imports resolve
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 if str(ENGINE_ROOT) not in sys.path:
