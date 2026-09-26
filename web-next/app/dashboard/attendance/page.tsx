@@ -5,6 +5,7 @@ import { getOrgContext, orgStudents, orgAttendance } from '@/lib/serverData'
 import { toISODate } from '@/lib/date'
 import AttendanceGrid from '@/components/org/AttendanceGrid'
 import PageHeader from '@/components/org/PageHeader'
+import { hasPermission } from '@/lib/permissions'
 import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
@@ -17,6 +18,9 @@ export default async function AttendancePage() {
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id } = orgCtx
+  // attendance.write mirrors the server floor on the attendance routes: the
+  // grid hides what the server would reject for this role.
+  const canWrite = hasPermission(orgCtx.role, 'attendance.write')
 
   const today = new Date()
   const first = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -46,6 +50,7 @@ export default async function AttendancePage() {
         <AttendanceGrid
           auth0Id={auth0Id}
           students={active}
+          canWrite={canWrite}
           initialRecords={attendanceRes.records.map((r) => ({
             student_id: r.student_id,
             session_date: r.session_date,

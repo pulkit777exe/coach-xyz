@@ -65,10 +65,13 @@ export default function AttendanceGrid({
   auth0Id,
   students,
   initialRecords,
+  canWrite = true,
 }: {
   auth0Id: string
   students: Student[]
   initialRecords: GridRecord[]
+  /** attendance.write — false renders the grid read-only (analyst/medical). */
+  canWrite?: boolean
 }) {
   const today = startOfLocalDay(new Date())
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
@@ -360,6 +363,11 @@ export default function AttendanceGrid({
 
   return (
     <div>
+      {!canWrite && (
+        <p className="text-muted-foreground mb-3 text-meta">
+          You have read-only access to this page.
+        </p>
+      )}
       {/* Month header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -401,9 +409,11 @@ export default function AttendanceGrid({
               </span>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEmailAttOpen(true)}>
-            <MailIcon /> Email sheet
-          </Button>
+          {canWrite && (
+            <Button variant="outline" size="sm" onClick={() => setEmailAttOpen(true)}>
+              <MailIcon /> Email sheet
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <DownloadIcon /> Export
           </Button>
@@ -423,37 +433,53 @@ export default function AttendanceGrid({
                   const k = keyOf(s.id, toISODate(d))
                   return acc + (records.has(k) && notes.has(k) ? 1 : 0)
                 }, 0)
+                const dayHeaderClass = `relative flex h-9 w-8 flex-col items-center justify-center rounded-[4px] border border-transparent transition-colors duration-150 ${
+                  canWrite
+                    ? 'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 '
+                    : ''
+                }${
+                  isToday(d)
+                    ? 'border-transparent bg-accent font-medium text-foreground'
+                    : 'text-muted-foreground'
+                }`
+                const dayHeaderBody = (
+                  <>
+                    <span className="text-xs leading-none">{d.getDate()}</span>
+                    {counts.marked > 0 && (
+                      <span className="mt-0.5 flex gap-0.5 leading-none">
+                        {counts.present > 0 && (
+                          <span
+                            className="size-1 rounded-full"
+                            style={{ background: STATUS_META.present.color }}
+                          />
+                        )}
+                        {counts.late > 0 && (
+                          <span
+                            className="size-1 rounded-full"
+                            style={{ background: STATUS_META.late.color }}
+                          />
+                        )}
+                      </span>
+                    )}
+                    {noteCount > 0 && (
+                      <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-muted-foreground" />
+                    )}
+                  </>
+                )
                 return (
                   <th key={d.getTime()} className="px-0.5 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => openDayDialog(d)}
-                      title="Open day — mark present or add notes"
-                      className={`relative flex h-9 w-8 flex-col items-center justify-center rounded-[4px] border border-transparent transition-colors duration-150 hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                        isToday(d) ? 'border-transparent bg-accent font-medium text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      <span className="text-xs leading-none">{d.getDate()}</span>
-                      {counts.marked > 0 && (
-                        <span className="mt-0.5 flex gap-0.5 leading-none">
-                          {counts.present > 0 && (
-                            <span
-                              className="size-1 rounded-full"
-                              style={{ background: STATUS_META.present.color }}
-                            />
-                          )}
-                          {counts.late > 0 && (
-                            <span
-                              className="size-1 rounded-full"
-                              style={{ background: STATUS_META.late.color }}
-                            />
-                          )}
-                        </span>
-                      )}
-                      {noteCount > 0 && (
-                        <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-muted-foreground" />
-                      )}
-                    </button>
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        onClick={() => openDayDialog(d)}
+                        title="Open day — mark present or add notes"
+                        className={dayHeaderClass}
+                      >
+                        {dayHeaderBody}
+                      </button>
+                    ) : (
+                      <span className={dayHeaderClass}>{dayHeaderBody}</span>
+                    )}
                   </th>
                 )
               })}
@@ -486,41 +512,59 @@ export default function AttendanceGrid({
                     const st = records.get(k)
                     const meta = st ? STATUS_META[st] : null
                     const hasNote = records.has(k) && notes.has(k)
+                    const cellStyle = meta
+                      ? {
+                          background: meta.color,
+                          color: 'var(--color-background)',
+                          borderColor: meta.color,
+                        }
+                      : isToday(d)
+                        ? {
+                            background: 'var(--color-muted)',
+                            color: 'var(--color-muted-foreground)',
+                          }
+                        : {
+                            background: 'transparent',
+                            color: 'var(--color-muted-foreground)',
+                          }
+                    const cellBody = (
+                      <>
+                        {meta ? meta.letter : isToday(d) ? '•' : ''}
+                        {hasNote && (
+                          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
+                        )}
+                      </>
+                    )
                     return (
                       <td key={d.getTime()} className="px-0.5 py-1 text-center">
-                        <button
-                          type="button"
-                          onClick={() => cycle(s.id, d)}
-                          title={
-                            st
-                              ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ''}${hasNote ? ` · ${notes.get(k)}` : ''} — click to change`
-                              : 'Click to mark present'
-                          }
-                          disabled={savingKey === k}
-                          className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40"
-                          style={
-                            meta
-                              ? {
-                                  background: meta.color,
-                                  color: 'var(--color-background)',
-                                  borderColor: meta.color,
-                                }
-                              : isToday(d)
-                                ? {
-                                    background: 'var(--color-muted)',
-                                    color: 'var(--color-muted-foreground)',
-                                  }
-                                : {
-                                    background: 'transparent',
-                                    color: 'var(--color-muted-foreground)',
-                                  }
-                          }
-                        >
-                          {meta ? meta.letter : isToday(d) ? '•' : ''}
-                          {hasNote && (
-                            <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
-                          )}
-                        </button>
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            onClick={() => cycle(s.id, d)}
+                            title={
+                              st
+                                ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ''}${hasNote ? ` · ${notes.get(k)}` : ''} — click to change`
+                                : 'Click to mark present'
+                            }
+                            disabled={savingKey === k}
+                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40"
+                            style={cellStyle}
+                          >
+                            {cellBody}
+                          </button>
+                        ) : (
+                          <span
+                            title={
+                              st
+                                ? `${ATTENDANCE_STATUS_LABELS[st]}${hasNote ? ` · ${notes.get(k)}` : ''}`
+                                : undefined
+                            }
+                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold"
+                            style={cellStyle}
+                          >
+                            {cellBody}
+                          </span>
+                        )}
                       </td>
                     )
                   })}
@@ -538,117 +582,125 @@ export default function AttendanceGrid({
           </tbody>
         </table>
       </div>
-      <p className="text-muted-foreground mt-3 text-meta">
-        Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
-        mark the day or add per-student notes.
-      </p>
+      {canWrite && (
+        <p className="text-muted-foreground mt-3 text-meta">
+          Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
+          mark the day or add per-student notes.
+        </p>
+      )}
 
-      {/* Day dialog: notes + batch mark */}
-      <Dialog open={Boolean(dayDialog)} onOpenChange={(open) => !open && setDayDialog(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {dayDialog?.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </DialogTitle>
-            <DialogDescription>
-              {dialogMarked.length} of {roster.length} marked
-              {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ''}.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Day dialog: notes + batch mark — a write surface, so it never mounts read-only */}
+      {canWrite && (
+        <Dialog open={Boolean(dayDialog)} onOpenChange={(open) => !open && setDayDialog(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {dayDialog?.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </DialogTitle>
+              <DialogDescription>
+                {dialogMarked.length} of {roster.length} marked
+                {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ''}.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4">
-            {dialogUnmarked > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading}
-                onClick={() => dayDialog && markRemainingPresent(dayDialog)}
-              >
-                {loading ? <Spinner /> : 'Mark remaining present'}
-              </Button>
-            )}
+            <div className="grid gap-4">
+              {dialogUnmarked > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => dayDialog && markRemainingPresent(dayDialog)}
+                >
+                  {loading ? <Spinner /> : 'Mark remaining present'}
+                </Button>
+              )}
 
-            <div className="grid gap-3">
-              {roster.map((s) => {
-                const k = keyOf(s.id, dialogDateStr)
-                const st = records.get(k)
-                return (
-                  <div key={s.id} className="grid gap-1.5">
-                    <div className="flex items-center gap-2 text-body">
-                      <select
-                        value={statusDraft[s.id] ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value as AttendanceStatus
-                          setStatusDraft((prev) => {
-                            const next = { ...prev }
-                            if (v) next[s.id] = v
-                            else delete next[s.id]
-                            return next
-                          })
-                        }}
-                        className={`h-7 rounded-[6px] border px-1.5 text-label font-semibold ${
-                          st
-                            ? 'text-background'
-                            : 'text-muted-foreground border-border/60 bg-transparent'
-                        }`}
-                        style={
-                          st
-                            ? {
-                                background: STATUS_META[st].color,
-                                borderColor: STATUS_META[st].color,
-                              }
-                            : undefined
+              <div className="grid gap-3">
+                {roster.map((s) => {
+                  const k = keyOf(s.id, dialogDateStr)
+                  const st = records.get(k)
+                  return (
+                    <div key={s.id} className="grid gap-1.5">
+                      <div className="flex items-center gap-2 text-body">
+                        <select
+                          value={statusDraft[s.id] ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value as AttendanceStatus
+                            setStatusDraft((prev) => {
+                              const next = { ...prev }
+                              if (v) next[s.id] = v
+                              else delete next[s.id]
+                              return next
+                            })
+                          }}
+                          className={`h-7 rounded-[6px] border px-1.5 text-label font-semibold ${
+                            st
+                              ? 'text-background'
+                              : 'text-muted-foreground border-border/60 bg-transparent'
+                          }`}
+                          style={
+                            st
+                              ? {
+                                  background: STATUS_META[st].color,
+                                  borderColor: STATUS_META[st].color,
+                                }
+                              : undefined
+                          }
+                          title="Status for this day"
+                        >
+                          <option value="">—</option>
+                          {STATUSES.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {ATTENDANCE_STATUS_LABELS[opt]}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-foreground">{s.full_name}</span>
+                        {!st && (
+                          <span className="text-muted-foreground text-meta">not yet marked</span>
+                        )}
+                      </div>
+                      <Input
+                        value={noteDraft[s.id] ?? ''}
+                        onChange={(e) =>
+                          setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
                         }
-                        title="Status for this day"
-                      >
-                        <option value="">—</option>
-                        {STATUSES.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {ATTENDANCE_STATUS_LABELS[opt]}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="text-foreground">{s.full_name}</span>
-                      {!st && <span className="text-muted-foreground text-meta">not yet marked</span>}
+                        placeholder="Add a note (e.g. injured, arrived late)…"
+                        className="h-8 text-body"
+                      />
                     </div>
-                    <Input
-                      value={noteDraft[s.id] ?? ''}
-                      onChange={(e) =>
-                        setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
-                      }
-                      placeholder="Add a note (e.g. injured, arrived late)…"
-                      className="h-8 text-body"
-                    />
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDayDialog(null)}>
-              Cancel
-            </Button>
-            <Button onClick={saveNotes} disabled={notesSaving}>
-              {notesSaving ? <Spinner /> : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDayDialog(null)}>
+                Cancel
+              </Button>
+              <Button onClick={saveNotes} disabled={notesSaving}>
+                {notesSaving ? <Spinner /> : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Email attendance */}
-      <EmailAttendanceDialog
-        auth0Id={auth0Id}
-        open={emailAttOpen}
-        onOpenChange={setEmailAttOpen}
-        from={toISODate(new Date(year, monthNum, 1))}
-        to={toISODate(new Date(year, monthNum + 1, 0))}
-      />
+      {canWrite && (
+        <EmailAttendanceDialog
+          auth0Id={auth0Id}
+          open={emailAttOpen}
+          onOpenChange={setEmailAttOpen}
+          from={toISODate(new Date(year, monthNum, 1))}
+          to={toISODate(new Date(year, monthNum + 1, 0))}
+        />
+      )}
     </div>
   )
 }

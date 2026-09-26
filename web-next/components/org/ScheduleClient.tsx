@@ -45,16 +45,18 @@ import { toISODate, scheduleMonthWindow } from '@/lib/date'
 import { usePreferences } from '@/lib/preferences'
 import type { CoachAIError } from '@/lib/api'
 
-const TYPE_META: Record<
-  ScheduleEvent['event_type'],
-  { text: string; bg: string; border: string }
-> = {
-  practice: { text: 'text-info', bg: 'bg-info/10', border: 'border-info-border' },
-  match: { text: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive-border' },
-  tournament: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning-border' },
-  meeting: { text: 'text-success', bg: 'bg-success/10', border: 'border-success-border' },
-  other: { text: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
-}
+const TYPE_META: Record<ScheduleEvent['event_type'], { text: string; bg: string; border: string }> =
+  {
+    practice: { text: 'text-info', bg: 'bg-info/10', border: 'border-info-border' },
+    match: {
+      text: 'text-destructive',
+      bg: 'bg-destructive/10',
+      border: 'border-destructive-border',
+    },
+    tournament: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning-border' },
+    meeting: { text: 'text-success', bg: 'bg-success/10', border: 'border-success-border' },
+    other: { text: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
+  }
 
 const STATUS_TONE: Record<EventStatus, 'blue' | 'green' | 'red'> = {
   scheduled: 'blue',
@@ -83,9 +85,12 @@ export function weekStartOffset(date: Date, mondayFirst: boolean): number {
 export default function ScheduleClient({
   auth0Id,
   initialEvents,
+  canWrite = true,
 }: {
   auth0Id: string
   initialEvents: ScheduleEvent[]
+  /** attendance.write — false renders the calendar read-only (analyst/medical). */
+  canWrite?: boolean
 }) {
   const today = new Date()
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
@@ -224,6 +229,11 @@ export default function ScheduleClient({
 
   return (
     <div>
+      {!canWrite && (
+        <p className="text-muted-foreground mb-3 text-meta">
+          You have read-only access to this page.
+        </p>
+      )}
       {/* Toolbar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -274,9 +284,11 @@ export default function ScheduleClient({
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <DownloadIcon /> Export
           </Button>
-          <Button size="sm" onClick={() => openCreate(new Date())}>
-            <PlusIcon /> Add event
-          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={() => openCreate(new Date())}>
+              <PlusIcon /> Add event
+            </Button>
+          )}
         </div>
       </div>
 
@@ -316,9 +328,7 @@ export default function ScheduleClient({
                 <span
                   className={cn(
                     'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-caption tabular-nums',
-                    isToday
-                      ? 'bg-accent font-medium text-foreground'
-                      : 'text-muted-foreground'
+                    isToday ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                   )}
                 >
                   {date.getDate()}
@@ -329,14 +339,14 @@ export default function ScheduleClient({
                     return (
                       <div
                         key={ev.id}
-                        onClick={(e) => openEdit(ev, e)}
+                        onClick={canWrite ? (e) => openEdit(ev, e) : undefined}
                         title={ev.title}
                         className={cn(
                           'truncate rounded-[4px] border px-1.5 py-0.5 text-label font-medium leading-tight transition-colors',
                           meta.text,
                           meta.bg,
                           meta.border,
-                          ev.status === 'cancelled' ? 'line-through opacity-60' : ''
+                          ev.status === 'cancelled' ? 'line-through opacity-60' : '',
                         )}
                       >
                         <span className="tabular-nums">{ev.starts_at.slice(11, 16)}</span>{' '}
@@ -359,7 +369,9 @@ export default function ScheduleClient({
       {visibleEvents.length === 0 && (
         <p className="text-muted-foreground mt-4 text-meta">
           {events.length === 0
-            ? `No events in ${monthLabel}. Click any day to add one.`
+            ? canWrite
+              ? `No events in ${monthLabel}. Click any day to add one.`
+              : `No events in ${monthLabel}.`
             : 'No events match the selected status.'}
         </p>
       )}
@@ -385,13 +397,8 @@ export default function ScheduleClient({
 
           <div className="grid gap-2">
             {dayViewEvents.map((ev) => {
-              return (
-                <button
-                  key={ev.id}
-                  type="button"
-                  onClick={() => openEdit(ev)}
-                  className="border-border hover:bg-accent/50 rounded-[6px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
+              const eventCard = (
+                <>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-body font-medium text-foreground">{ev.title}</span>
                     <StatusPill tone={STATUS_TONE[ev.status]}>
@@ -413,6 +420,26 @@ export default function ScheduleClient({
                       {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
                     </span>
                   </div>
+                </>
+              )
+              if (!canWrite) {
+                return (
+                  <div
+                    key={ev.id}
+                    className="border-border rounded-[6px] border p-3 text-left transition-colors"
+                  >
+                    {eventCard}
+                  </div>
+                )
+              }
+              return (
+                <button
+                  key={ev.id}
+                  type="button"
+                  onClick={() => openEdit(ev)}
+                  className="border-border hover:bg-accent/50 rounded-[6px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  {eventCard}
                 </button>
               )
             })}
@@ -422,16 +449,18 @@ export default function ScheduleClient({
             <Button variant="outline" onClick={() => setDayView(null)}>
               Close
             </Button>
-            <Button
-              onClick={() => {
-                if (dayView) {
-                  setDayView(null)
-                  openCreate(dayView)
-                }
-              }}
-            >
-              <PlusIcon /> Add event
-            </Button>
+            {canWrite && (
+              <Button
+                onClick={() => {
+                  if (dayView) {
+                    setDayView(null)
+                    openCreate(dayView)
+                  }
+                }}
+              >
+                <PlusIcon /> Add event
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -456,16 +485,19 @@ export default function ScheduleClient({
         </DialogContent>
       </Dialog>
 
-      <EventFormDialog
-        key={editingEvent?.id ?? `new-${initialDate ?? 'none'}`}
-        auth0Id={auth0Id}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        event={editingEvent}
-        initialDate={initialDate}
-        onSaved={onSaved}
-        onDelete={(ev) => setConfirmEvent(ev)}
-      />
+      {/* Create/edit form — also carries the delete affordance, so it never mounts read-only */}
+      {canWrite && (
+        <EventFormDialog
+          key={editingEvent?.id ?? `new-${initialDate ?? 'none'}`}
+          auth0Id={auth0Id}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          event={editingEvent}
+          initialDate={initialDate}
+          onSaved={onSaved}
+          onDelete={(ev) => setConfirmEvent(ev)}
+        />
+      )}
     </div>
   )
 }
