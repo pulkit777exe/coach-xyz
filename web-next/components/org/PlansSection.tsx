@@ -134,46 +134,46 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
                 <StatusPill tone={PLAN_TONE[plan.status] ?? 'gray'}>
                   <span className="capitalize">{plan.status}</span>
                 </StatusPill>
-              {plan.status !== 'done' && canWrite && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setStatus(plan.id, 'done')}
-                >
-                  Done
-                </Button>
-              )}
-              {plan.status === 'done' && canWrite && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setStatus(plan.id, 'active')}
-                >
-                  Reopen
-                </Button>
-              )}
-              {canWrite && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true)
-                  try {
-                    await orgDeletePlan(auth0Id, plan.id)
-                    setPlans((prev) => prev.filter((p) => p.id !== plan.id))
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-              >
-                Delete
-              </Button>
-              )}
-            </div>
+                {plan.status !== 'done' && canWrite && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setStatus(plan.id, 'done')}
+                  >
+                    Done
+                  </Button>
+                )}
+                {plan.status === 'done' && canWrite && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setStatus(plan.id, 'active')}
+                  >
+                    Reopen
+                  </Button>
+                )}
+                {canWrite && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true)
+                      try {
+                        await orgDeletePlan(auth0Id, plan.id)
+                        setPlans((prev) => prev.filter((p) => p.id !== plan.id))
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>

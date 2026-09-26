@@ -8,7 +8,11 @@ const perks = ['6 sports', '60s analysis', 'Reports']
 
 export default function SignupPage() {
   return (
-    <main id="main" tabIndex={-1} className="grid min-h-[calc(100vh-56px)] place-items-center bg-background px-6 py-10">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="grid min-h-[calc(100vh-56px)] place-items-center bg-background px-6 py-10"
+    >
       <div className="w-full max-w-[400px] rounded-[8px] border border-border bg-background p-6 text-sm text-foreground-strong">
         <span className="inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-label font-semibold text-link">
           New

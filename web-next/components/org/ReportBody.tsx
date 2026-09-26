@@ -67,7 +67,9 @@ export default function ReportBody({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-label font-medium uppercase tracking-[0.08em]">{title}</p>
+      <p className="text-muted-foreground mb-2 text-label font-medium uppercase tracking-[0.08em]">
+        {title}
+      </p>
       {children}
     </div>
   )

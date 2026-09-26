@@ -56,7 +56,11 @@ export default function AcceptInviteClient() {
             <p className="text-body text-muted-foreground">Accepting invitation…</p>
           )}
           {state === 'error' && <p className="text-meta text-destructive">{message}</p>}
-          {state === 'done' && <Button nativeButton={false} render={<Link href="/dashboard" />}>Open dashboard</Button>}
+          {state === 'done' && (
+            <Button nativeButton={false} render={<Link href="/dashboard" />}>
+              Open dashboard
+            </Button>
+          )}
           {state === 'error' && token && (
             <Button onClick={() => setState('working')}>Try again</Button>
           )}

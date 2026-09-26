@@ -508,7 +508,9 @@ export default function StudentProfile({
           <DetailRow label="Guardian" value={student_.guardian_name || '—'} />
           <DetailRow label="Guardian phone" value={student_.guardian_phone || '—'} />
           <div className="border-border border-t p-4 sm:col-span-2">
-            <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Notes</p>
+            <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Notes
+            </p>
             <p className="text-muted-foreground mt-1 whitespace-pre-wrap text-body">
               {student_.notes || 'No notes recorded.'}
             </p>
@@ -597,136 +599,136 @@ export default function StudentProfile({
 
         {/* Log metric — form only for player.manage; the logged list stays readable */}
         {(canWrite || manualPoints.length > 0) && (
-        <div className="border-border bg-card mt-4 rounded-[6px] border p-4">
-          {canWrite && (
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="metric_key" className="text-body font-medium">
-                Metric
-              </Label>
-              <Input
-                id="metric_key"
-                className="h-8 w-40 text-sm"
-                placeholder="form_score"
-                disabled={Boolean(editingMetric)}
-                value={metricForm.metric_key}
-                onChange={(e) => setMetricForm((f) => ({ ...f, metric_key: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="metric_value" className="text-body font-medium">
-                Value *
-              </Label>
-              <Input
-                id="metric_value"
-                type="number"
-                step="any"
-                className="h-8 w-24 text-sm"
-                value={metricForm.metric_value}
-                onChange={(e) => setMetricForm((f) => ({ ...f, metric_value: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="metric_unit" className="text-body font-medium">
-                Unit
-              </Label>
-              <Input
-                id="metric_unit"
-                className="h-8 w-24 text-sm"
-                placeholder="pts"
-                value={metricForm.unit}
-                onChange={(e) => setMetricForm((f) => ({ ...f, unit: e.target.value }))}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="metric_at" className="text-body font-medium">
-                Date
-              </Label>
-              <Input
-                id="metric_at"
-                type="date"
-                className="h-8 w-36 text-sm"
-                disabled={Boolean(editingMetric)}
-                value={metricForm.measured_at}
-                onChange={(e) => setMetricForm((f) => ({ ...f, measured_at: e.target.value }))}
-              />
-            </div>
-            <Button size="sm" onClick={addMouseMetric} disabled={isMetricSubmitting}>
-              {isMetricSubmitting ? <Spinner /> : editingMetric ? <PencilIcon /> : <PlusIcon />}{' '}
-              {editingMetric ? 'Update metric' : 'Log metric'}
-            </Button>
-            {editingMetric && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setEditingMetric(null)
-                  setMetricForm({ metric_key: '', metric_value: '', unit: '', measured_at: '' })
-                }}
-              >
-                Cancel
-              </Button>
+          <div className="border-border bg-card mt-4 rounded-[6px] border p-4">
+            {canWrite && (
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="metric_key" className="text-body font-medium">
+                    Metric
+                  </Label>
+                  <Input
+                    id="metric_key"
+                    className="h-8 w-40 text-sm"
+                    placeholder="form_score"
+                    disabled={Boolean(editingMetric)}
+                    value={metricForm.metric_key}
+                    onChange={(e) => setMetricForm((f) => ({ ...f, metric_key: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="metric_value" className="text-body font-medium">
+                    Value *
+                  </Label>
+                  <Input
+                    id="metric_value"
+                    type="number"
+                    step="any"
+                    className="h-8 w-24 text-sm"
+                    value={metricForm.metric_value}
+                    onChange={(e) => setMetricForm((f) => ({ ...f, metric_value: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="metric_unit" className="text-body font-medium">
+                    Unit
+                  </Label>
+                  <Input
+                    id="metric_unit"
+                    className="h-8 w-24 text-sm"
+                    placeholder="pts"
+                    value={metricForm.unit}
+                    onChange={(e) => setMetricForm((f) => ({ ...f, unit: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="metric_at" className="text-body font-medium">
+                    Date
+                  </Label>
+                  <Input
+                    id="metric_at"
+                    type="date"
+                    className="h-8 w-36 text-sm"
+                    disabled={Boolean(editingMetric)}
+                    value={metricForm.measured_at}
+                    onChange={(e) => setMetricForm((f) => ({ ...f, measured_at: e.target.value }))}
+                  />
+                </div>
+                <Button size="sm" onClick={addMouseMetric} disabled={isMetricSubmitting}>
+                  {isMetricSubmitting ? <Spinner /> : editingMetric ? <PencilIcon /> : <PlusIcon />}{' '}
+                  {editingMetric ? 'Update metric' : 'Log metric'}
+                </Button>
+                {editingMetric && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingMetric(null)
+                      setMetricForm({ metric_key: '', metric_value: '', unit: '', measured_at: '' })
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {manualPoints.length > 0 && (
+              <ul className="mt-4 space-y-1 border-t border-border pt-3">
+                {manualPoints.map((p) => (
+                  <li
+                    key={p.id ?? `${p.metric_key}-${p.measured_at}`}
+                    className="flex items-center justify-between gap-2 py-1 text-sm"
+                  >
+                    <span className="text-foreground">
+                      {formatKey(p.metric_key)}{' '}
+                      <span className="text-muted-foreground">
+                        {p.metric_value}
+                        {p.unit ? ` ${p.unit}` : ''}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-muted-foreground text-xs">
+                        {formatDateShort(p.measured_at)}
+                      </span>
+                      {p.id && canWrite && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground"
+                          onClick={() => openMetricEdit(p)}
+                          aria-label="Edit metric"
+                        >
+                          <PencilIcon className="size-3.5" />
+                        </Button>
+                      )}
+                      {canWrite && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() =>
+                            p.id &&
+                            setConfirm({
+                              title: 'Delete this metric?',
+                              description: `${formatKey(p.metric_key)} · ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}.`,
+                              action: async () => {
+                                await orgDeletePerformanceMetric(auth0Id, p.id as string)
+                                toast.success('Metric deleted')
+                                await refresh()
+                              },
+                            })
+                          }
+                          aria-label="Delete metric"
+                        >
+                          <TrashIcon className="size-3.5" />
+                        </Button>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-          )}
-
-          {manualPoints.length > 0 && (
-            <ul className="mt-4 space-y-1 border-t border-border pt-3">
-              {manualPoints.map((p) => (
-                <li
-                  key={p.id ?? `${p.metric_key}-${p.measured_at}`}
-                  className="flex items-center justify-between gap-2 py-1 text-sm"
-                >
-                  <span className="text-foreground">
-                    {formatKey(p.metric_key)}{' '}
-                    <span className="text-muted-foreground">
-                      {p.metric_value}
-                      {p.unit ? ` ${p.unit}` : ''}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="text-muted-foreground text-xs">
-                      {formatDateShort(p.measured_at)}
-                    </span>
-                    {p.id && canWrite && (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground"
-                        onClick={() => openMetricEdit(p)}
-                        aria-label="Edit metric"
-                      >
-                        <PencilIcon className="size-3.5" />
-                      </Button>
-                    )}
-                    {canWrite && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        p.id &&
-                        setConfirm({
-                          title: 'Delete this metric?',
-                          description: `${formatKey(p.metric_key)} · ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}.`,
-                          action: async () => {
-                            await orgDeletePerformanceMetric(auth0Id, p.id as string)
-                            toast.success('Metric deleted')
-                            await refresh()
-                          },
-                        })
-                      }
-                      aria-label="Delete metric"
-                    >
-                      <TrashIcon className="size-3.5" />
-                    </Button>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
         )}
       </div>
 
@@ -751,7 +753,10 @@ export default function StudentProfile({
                 <p className="text-foreground mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums">
                   {t.latest ?? '—'}
                   {t.points[0]?.unit ? (
-                    <span className="text-muted-foreground text-meta font-normal"> {t.points[0].unit}</span>
+                    <span className="text-muted-foreground text-meta font-normal">
+                      {' '}
+                      {t.points[0].unit}
+                    </span>
                   ) : null}
                 </p>
                 <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-meta">
@@ -879,55 +884,55 @@ export default function StudentProfile({
           <div className="border-border overflow-hidden rounded-[6px] border">
             <table className="w-full text-body">
               <thead>
-                  <tr className="border-b border-border">
-                    <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      Analysis
-                    </th>
-                    <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      Date
-                    </th>
-                    <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                      Form
-                    </th>
-                    <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {linked.map((a) => (
-                    <tr
-                      key={a.server_job_id}
-                      className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50"
-                    >
-                      <td className="px-4 py-2.5 text-body">
-                        <Link
-                          href={`/dashboard/analysis/${a.server_job_id}`}
-                          className="hover:underline"
-                        >
-                          {a.display_name || a.file_name || 'Untitled video'}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2.5 text-body text-muted-foreground">
-                        {new Date(a.requested_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </td>
-                      <td className="hidden px-4 py-2.5 text-body tabular-nums md:table-cell">
-                        {analysisScore(a) ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                      {canWrite && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground"
-                        onClick={() => setAnalysisLink(a, null)}
+                <tr className="border-b border-border">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Analysis
+                  </th>
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Date
+                  </th>
+                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                    Form
+                  </th>
+                  <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {linked.map((a) => (
+                  <tr
+                    key={a.server_job_id}
+                    className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50"
+                  >
+                    <td className="px-4 py-2.5 text-body">
+                      <Link
+                        href={`/dashboard/analysis/${a.server_job_id}`}
+                        className="hover:underline"
                       >
-                        <UnlinkIcon className="size-3.5" /> Unlink
-                      </Button>
+                        {a.display_name || a.file_name || 'Untitled video'}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5 text-body text-muted-foreground">
+                      {new Date(a.requested_at).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="hidden px-4 py-2.5 text-body tabular-nums md:table-cell">
+                      {analysisScore(a) ?? '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      {canWrite && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          onClick={() => setAnalysisLink(a, null)}
+                        >
+                          <UnlinkIcon className="size-3.5" /> Unlink
+                        </Button>
                       )}
                     </td>
                   </tr>
@@ -976,26 +981,26 @@ export default function StudentProfile({
                       })}
                     </span>
                     {canWrite && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        setConfirm({
-                          title: 'Delete this report?',
-                          description:
-                            'This permanently removes the generated report. This cannot be undone.',
-                          action: async () => {
-                            await orgDeleteReport(auth0Id, r.id)
-                            setReports((prev) => prev.filter((x) => x.id !== r.id))
-                            toast.success('Report deleted')
-                          },
-                        })
-                      }
-                      aria-label="Delete report"
-                    >
-                      <TrashIcon className="size-3.5" />
-                    </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() =>
+                          setConfirm({
+                            title: 'Delete this report?',
+                            description:
+                              'This permanently removes the generated report. This cannot be undone.',
+                            action: async () => {
+                              await orgDeleteReport(auth0Id, r.id)
+                              setReports((prev) => prev.filter((x) => x.id !== r.id))
+                              toast.success('Report deleted')
+                            },
+                          })
+                        }
+                        aria-label="Delete report"
+                      >
+                        <TrashIcon className="size-3.5" />
+                      </Button>
                     )}
                   </span>
                 </li>
@@ -1044,7 +1049,9 @@ export default function StudentProfile({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-border border-t p-4 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
-      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </p>
       <p className="text-foreground mt-1 text-body">{value}</p>
     </div>
   )

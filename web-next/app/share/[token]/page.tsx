@@ -107,10 +107,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                   : `${Math.round(num(summary.duration_sec)!)}s`,
             },
           ].map((card) => (
-            <div
-              key={card.label}
-              className="border-border bg-card rounded-[6px] border p-5"
-            >
+            <div key={card.label} className="border-border bg-card rounded-[6px] border p-5">
               <p className="text-muted-foreground text-label font-medium uppercase tracking-[0.08em]">
                 {card.label}
               </p>

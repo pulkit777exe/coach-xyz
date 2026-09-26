@@ -1,7 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, ChevronUp, CircleHelp, LifeBuoy, LogOut, Settings, Sparkles } from 'lucide-react'
+import {
+  Building2,
+  ChevronUp,
+  CircleHelp,
+  LifeBuoy,
+  LogOut,
+  Settings,
+  Sparkles,
+} from 'lucide-react'
 
 import UserAvatar from '@/components/UserAvatar'
 import {

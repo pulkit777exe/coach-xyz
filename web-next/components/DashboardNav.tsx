@@ -123,9 +123,7 @@ export default function DashboardNav({ role = null }: { role?: NavRole | null })
     <nav className="flex min-h-0 flex-1 flex-col pb-3 pt-1">
       {groups.map((group) => (
         <div key={group.label ?? 'home'}>
-          {group.label && (
-            <p className={NAV_SECTION_LABEL_CLASS}>{group.label}</p>
-          )}
+          {group.label && <p className={NAV_SECTION_LABEL_CLASS}>{group.label}</p>}
           <div className="flex flex-col">
             {group.items.map(({ href, label, icon: Icon, exact, badge }) => {
               const isActive = exact

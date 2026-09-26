@@ -96,9 +96,7 @@ export default async function AccountPage() {
                   key={row.label}
                   className="flex items-center justify-between gap-4 bg-card px-4 py-3"
                 >
-                  <span className="text-meta font-medium text-muted-foreground">
-                    {row.label}
-                  </span>
+                  <span className="text-meta font-medium text-muted-foreground">{row.label}</span>
                   <span
                     className={`text-body text-foreground truncate max-w-[260px] text-right tabular-nums ${row.mono ? 'font-mono text-meta' : ''}`}
                   >
@@ -129,9 +127,7 @@ export default async function AccountPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between px-6 py-3.5">
-                <span className="text-meta font-medium text-muted-foreground">
-                  Last Updated
-                </span>
+                <span className="text-meta font-medium text-muted-foreground">Last Updated</span>
                 <span className="text-meta text-foreground tabular-nums">
                   {new Date(user.updated_at).toLocaleString()}
                 </span>

@@ -49,12 +49,18 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
         <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           History
         </span>
-        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          /
+        </span>
         <span className="max-w-48 truncate text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {chatLabel}
         </span>
-        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">/</span>
-        <span className="text-label font-medium uppercase tracking-[0.08em] text-foreground">Chat</span>
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          /
+        </span>
+        <span className="text-label font-medium uppercase tracking-[0.08em] text-foreground">
+          Chat
+        </span>
       </div>
       <div className="rounded-[6px] border border-border" style={{ height: 'calc(100% - 3rem)' }}>
         <HistoryChat auth0Id={auth0Id} jobId={id} summary={summary} />

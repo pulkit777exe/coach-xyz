@@ -31,5 +31,7 @@ export default async function SettingsPage() {
     emailVerified: Boolean(session.user.email_verified),
   }
 
-  return <SettingsClient variant="dashboard" identity={identity} passwordUrl={changePasswordUrl()} />
+  return (
+    <SettingsClient variant="dashboard" identity={identity} passwordUrl={changePasswordUrl()} />
+  )
 }

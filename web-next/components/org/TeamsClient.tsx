@@ -258,7 +258,11 @@ export default function TeamsClient({
             ))}
           </div>
           {teams.length === 0 && (
-            <EmptyState compact title="No teams yet" description="Create your first team to scope coaching and trends." />
+            <EmptyState
+              compact
+              title="No teams yet"
+              description="Create your first team to scope coaching and trends."
+            />
           )}
           {canManage && (
             <Button className="w-full mt-3" onClick={() => setCreateOpen(true)}>
@@ -370,9 +374,13 @@ export default function TeamsClient({
                   ))}
                 </div>
                 {members.length === 0 && (
-                  <EmptyState compact title="No members yet" description="Add coaches by account or players from the roster." />
+                  <EmptyState
+                    compact
+                    title="No members yet"
+                    description="Add coaches by account or players from the roster."
+                  />
                 )}
-                  {canManage && (
+                {canManage && (
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
                       items={{ coach: 'Coach (account)', player: 'Player (roster)' }}
@@ -440,7 +448,7 @@ export default function TeamsClient({
                       Add
                     </Button>
                   </div>
-                  )}
+                )}
               </Section>
 
               <Section title="Matches">
@@ -449,7 +457,11 @@ export default function TeamsClient({
                 </p>
                 <div className="space-y-1">
                   {matches.length === 0 && (
-                  <EmptyState compact title="No matches scheduled" description="Add the next fixture for this team." />
+                    <EmptyState
+                      compact
+                      title="No matches scheduled"
+                      description="Add the next fixture for this team."
+                    />
                   )}
                   {matches.map((match) => (
                     <div
@@ -485,68 +497,68 @@ export default function TeamsClient({
                     </div>
                   ))}
                   {canManage && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    <Input
-                      value={matchOpponent}
-                      onChange={(e) => setMatchOpponent(e.target.value)}
-                      placeholder="Opponent"
-                      aria-label="Opponent"
-                      className="h-9 flex-1 min-w-32"
-                    />
-                    <Input
-                      type="date"
-                      value={matchOn}
-                      onChange={(e) => setMatchOn(e.target.value)}
-                      aria-label="Match date"
-                      className="h-9 w-36"
-                    />
-                    <Select
-                      items={{
-                        __none: 'No season',
-                        ...Object.fromEntries(seasons.map((s) => [s.id, s.name])),
-                      }}
-                      value={matchSeason || '__none'}
-                      onValueChange={(v) =>
-                        setMatchSeason(v === '__none' ? '' : typeof v === 'string' ? v : '')
-                      }
-                    >
-                      <SelectTrigger aria-label="Season" className="w-36">
-                        <SelectValue placeholder="No season" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">No season</SelectItem>
-                        {seasons.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      disabled={busy || !matchOpponent.trim()}
-                      onClick={() =>
-                        run(async () => {
-                          await orgCreateMatch(auth0Id, {
-                            team_id: selected.id,
-                            season_id: matchSeason || null,
-                            opponent: matchOpponent.trim(),
-                            match_on: matchOn || null,
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Input
+                        value={matchOpponent}
+                        onChange={(e) => setMatchOpponent(e.target.value)}
+                        placeholder="Opponent"
+                        aria-label="Opponent"
+                        className="h-9 flex-1 min-w-32"
+                      />
+                      <Input
+                        type="date"
+                        value={matchOn}
+                        onChange={(e) => setMatchOn(e.target.value)}
+                        aria-label="Match date"
+                        className="h-9 w-36"
+                      />
+                      <Select
+                        items={{
+                          __none: 'No season',
+                          ...Object.fromEntries(seasons.map((s) => [s.id, s.name])),
+                        }}
+                        value={matchSeason || '__none'}
+                        onValueChange={(v) =>
+                          setMatchSeason(v === '__none' ? '' : typeof v === 'string' ? v : '')
+                        }
+                      >
+                        <SelectTrigger aria-label="Season" className="w-36">
+                          <SelectValue placeholder="No season" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">No season</SelectItem>
+                          {seasons.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        disabled={busy || !matchOpponent.trim()}
+                        onClick={() =>
+                          run(async () => {
+                            await orgCreateMatch(auth0Id, {
+                              team_id: selected.id,
+                              season_id: matchSeason || null,
+                              opponent: matchOpponent.trim(),
+                              match_on: matchOn || null,
+                            })
+                            setMatchOpponent('')
+                            setMatchOn('')
+                            setMatchSeason('')
+                            const res = await orgMatches(auth0Id, { teamId: selected.id })
+                            setMatches(res.matches)
                           })
-                          setMatchOpponent('')
-                          setMatchOn('')
-                          setMatchSeason('')
-                          const res = await orgMatches(auth0Id, { teamId: selected.id })
-                          setMatches(res.matches)
-                        })
-                      }
-                >
-                  Add match
-                </Button>
-              </div>
-              )}
-            </div>
-          </Section>
-        </>
+                        }
+                      >
+                        Add match
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            </>
           ) : (
             <div className="rounded-[6px] border border-border bg-card py-10 text-center text-body text-muted-foreground">
               Select a team to manage members and see trends.

@@ -60,7 +60,9 @@ export default function AnalysisTitle({
       title="Click to rename"
     >
       {name}
-      <span className="ml-2 opacity-0 group-hover:opacity-60 text-sm align-middle transition-opacity">✎</span>
+      <span className="ml-2 opacity-0 group-hover:opacity-60 text-sm align-middle transition-opacity">
+        ✎
+      </span>
     </h1>
   )
 }

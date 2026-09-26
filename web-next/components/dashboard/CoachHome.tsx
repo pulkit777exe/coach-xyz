@@ -155,9 +155,7 @@ export default function CoachHome({
 
       <TeamsCard teams={teams} />
 
-      {showsOrgSection(role) && overview !== null ? (
-        <OrgSection overview={overview} />
-      ) : null}
+      {showsOrgSection(role) && overview !== null ? <OrgSection overview={overview} /> : null}
 
       {!overview && !error ? (
         <p className="mt-6 rounded-[6px] border border-border bg-card p-6 text-center text-body text-muted-foreground">

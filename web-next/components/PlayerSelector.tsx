@@ -112,8 +112,7 @@ export default function PlayerSelector({
                 <>
                   {' '}
                   in the{' '}
-                  <span className="text-foreground font-medium capitalize">{activeAngle}</span>{' '}
-                  view
+                  <span className="text-foreground font-medium capitalize">{activeAngle}</span> view
                 </>
               ) : null}
               . Select the primary athlete to continue the pipeline.
@@ -206,7 +205,7 @@ export default function PlayerSelector({
                               : 'bg-destructive/10 text-destructive'
                         }`}
                       >
-                        Confidence: {' '}
+                        Confidence:{' '}
                         <span className="tabular-nums">
                           {(player.confidence * 100).toFixed(0)}%
                         </span>

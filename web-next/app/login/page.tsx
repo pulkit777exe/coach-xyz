@@ -5,7 +5,11 @@ export const metadata = { title: 'Log in | CoachXYZ' }
 
 export default function LoginPage() {
   return (
-    <main id="main" tabIndex={-1} className="grid min-h-[calc(100vh-56px)] place-items-center bg-background px-6 py-10">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="grid min-h-[calc(100vh-56px)] place-items-center bg-background px-6 py-10"
+    >
       <div className="w-full max-w-[400px] rounded-[8px] border border-border bg-background p-6 text-sm text-foreground-strong">
         <div className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-[6px] bg-primary text-xs font-bold text-primary-foreground">

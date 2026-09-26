@@ -219,7 +219,9 @@ export default function SidebarSearch({
                     onClick={() => go(r.href)}
                     className={cn(
                       ROW_CLASS,
-                      i === active ? 'bg-accent text-foreground' : 'text-foreground/90 hover:bg-accent',
+                      i === active
+                        ? 'bg-accent text-foreground'
+                        : 'text-foreground/90 hover:bg-accent',
                     )}
                   >
                     {r.icon === 'player' ? (

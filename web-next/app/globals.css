@@ -480,8 +480,8 @@
   *::before,
   *::after {
     transition-property:
-      opacity, color, background-color, border-color, outline-color,
-      text-decoration-color, fill, stroke, box-shadow !important;
+      opacity, color, background-color, border-color, outline-color, text-decoration-color, fill,
+      stroke, box-shadow !important;
     transition-duration: var(--dur-fast) !important;
   }
 }
@@ -509,7 +509,7 @@
   animation-iteration-count: 1 !important;
   animation-duration: var(--dur-fast) !important;
   transition-property:
-    opacity, color, background-color, border-color, outline-color,
-    text-decoration-color, fill, stroke, box-shadow !important;
+    opacity, color, background-color, border-color, outline-color, text-decoration-color, fill,
+    stroke, box-shadow !important;
   transition-duration: var(--dur-fast) !important;
 }

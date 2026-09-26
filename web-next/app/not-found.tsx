@@ -10,7 +10,11 @@ const ACTION_PRIMARY =
 
 export default function NotFound() {
   return (
-    <main id="main" tabIndex={-1} className="flex min-h-[70vh] items-center justify-center bg-background px-6">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="flex min-h-[70vh] items-center justify-center bg-background px-6"
+    >
       <div className="w-full max-w-sm rounded-[8px] border border-border bg-card p-8 text-center">
         <p className="text-[40px] leading-none font-bold text-muted-foreground">404</p>
         <h1 className="mt-4 text-base font-medium text-foreground">Page not found</h1>
@@ -18,7 +22,12 @@ export default function NotFound() {
           The page you are looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="mt-5">
-          <Button variant="ghost" nativeButton={false} render={<Link href="/" />} className={ACTION_PRIMARY}>
+          <Button
+            variant="ghost"
+            nativeButton={false}
+            render={<Link href="/" />}
+            className={ACTION_PRIMARY}
+          >
             Go home
           </Button>
         </div>

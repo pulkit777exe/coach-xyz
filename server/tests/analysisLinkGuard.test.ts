@@ -30,7 +30,9 @@ const runProbe = (
   studentId: string | null = STUDENT_ID,
 ): ProbeResult => {
   const env = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
   )
   env.SERVICE_TOKEN = ''
   env.DATABASE_URL = ''

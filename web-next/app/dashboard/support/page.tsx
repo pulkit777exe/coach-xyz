@@ -155,15 +155,17 @@ export default async function SupportPage() {
         </Section>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Support hours: Mon–Fri, 9:00–18:00 UTC
-          </p>
+          <p className="text-xs text-muted-foreground">Support hours: Mon–Fri, 9:00–18:00 UTC</p>
           <p className="text-meta leading-relaxed text-muted-foreground">
             Reports, invites and attendance sheets are emailed from CoachXYZ — add us to your
             address book so they land in your inbox, not spam.
           </p>
           <p className="text-meta leading-relaxed text-muted-foreground">
-            Questions about plans or trials? See <Link href="/pricing" className="font-medium text-primary hover:underline">pricing</Link>.
+            Questions about plans or trials? See{' '}
+            <Link href="/pricing" className="font-medium text-primary hover:underline">
+              pricing
+            </Link>
+            .
           </p>
         </div>
       </div>

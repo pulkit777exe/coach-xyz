@@ -25,10 +25,7 @@ export default function PreferencesSection() {
     <Section title="Preferences">
       <p className="mb-1 text-meta font-medium leading-[1.4] text-foreground">Appearance</p>
       <div>
-        <SettingRow
-          title="Theme"
-          description="Choose a theme for CoachXYZ on this device."
-        >
+        <SettingRow title="Theme" description="Choose a theme for CoachXYZ on this device.">
           <Select
             items={THEME_ITEMS}
             value={prefs.theme}

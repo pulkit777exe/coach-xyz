@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react'
 
 /**
  * A titled content section: 16px/600 heading over a hairline rule,
@@ -8,12 +8,12 @@ export default function Section({
   title,
   children,
   actions,
-  className = "",
+  className = '',
 }: {
-  title: ReactNode;
-  children: ReactNode;
-  actions?: ReactNode;
-  className?: string;
+  title: ReactNode
+  children: ReactNode
+  actions?: ReactNode
+  className?: string
 }) {
   return (
     <section className={className}>
@@ -25,5 +25,5 @@ export default function Section({
       </div>
       <div className="pt-4">{children}</div>
     </section>
-  );
+  )
 }

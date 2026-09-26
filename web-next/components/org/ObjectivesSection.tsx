@@ -289,15 +289,15 @@ export default function ObjectivesSection({
                   </Button>
                 )}
                 {canWrite && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive"
-                  disabled={busy}
-                  onClick={() => void removeObjective(objective.id)}
-                >
-                  Delete
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    disabled={busy}
+                    onClick={() => void removeObjective(objective.id)}
+                  >
+                    Delete
+                  </Button>
                 )}
               </div>
             </div>
@@ -336,8 +336,7 @@ export default function ObjectivesSection({
                 <span className="inline-block size-2 rounded-[2px] bg-primary/70" /> findings
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-[2px] bg-success/80" /> objectives
-                done
+                <span className="inline-block size-2 rounded-[2px] bg-success/80" /> objectives done
               </span>
             </div>
           </div>
@@ -381,19 +380,19 @@ export default function ObjectivesSection({
                     {finding.observation ? ` — ${finding.observation}` : ''}
                   </p>
                   {canWrite && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-meta"
-                    onClick={() => {
-                      setFindingId(finding.id)
-                      setTitle(finding.observation ?? '')
-                      setError(null)
-                      setOpen(true)
-                    }}
-                  >
-                    Make objective
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-meta"
+                      onClick={() => {
+                        setFindingId(finding.id)
+                        setTitle(finding.observation ?? '')
+                        setError(null)
+                        setOpen(true)
+                      }}
+                    >
+                      Make objective
+                    </Button>
                   )}
                 </div>
               ))}
@@ -510,16 +509,11 @@ function ObjectiveBoard({
           <div key={col.status}>
             <div className="mb-2 flex items-center gap-2 px-0.5">
               <StatusPill tone={col.tone}>{col.label}</StatusPill>
-              <span className="text-meta tabular-nums text-muted-foreground">
-                {cards.length}
-              </span>
+              <span className="text-meta tabular-nums text-muted-foreground">{cards.length}</span>
             </div>
             <div className="flex flex-col gap-2">
               {cards.map((o) => (
-                <div
-                  key={o.id}
-                  className="rounded-[6px] border border-border bg-card p-3"
-                >
+                <div key={o.id} className="rounded-[6px] border border-border bg-card p-3">
                   <p className="text-body font-medium leading-snug text-foreground">{o.title}</p>
                   {o.description && (
                     <p className="mt-1 text-meta leading-relaxed text-muted-foreground line-clamp-2">
@@ -531,71 +525,71 @@ function ObjectiveBoard({
                     {o.due_on ? `due ${o.due_on}` : 'no due date'}
                   </p>
                   {canWrite && (
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    {o.status === 'active' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-meta"
-                        disabled={busy}
-                        onClick={() => onStatus(o.id, 'done')}
-                      >
-                        Done
-                      </Button>
-                    )}
-                    {o.status === 'done' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-meta"
-                        disabled={busy}
-                        onClick={() => onStatus(o.id, 'active')}
-                      >
-                        Reopen
-                      </Button>
-                    )}
-                    {o.status === 'archived' ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-meta"
-                        disabled={busy}
-                        onClick={() => onStatus(o.id, 'active')}
-                      >
-                        Restore
-                      </Button>
-                    ) : (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      {o.status === 'active' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-meta"
+                          disabled={busy}
+                          onClick={() => onStatus(o.id, 'done')}
+                        >
+                          Done
+                        </Button>
+                      )}
+                      {o.status === 'done' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-meta"
+                          disabled={busy}
+                          onClick={() => onStatus(o.id, 'active')}
+                        >
+                          Reopen
+                        </Button>
+                      )}
+                      {o.status === 'archived' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-meta"
+                          disabled={busy}
+                          onClick={() => onStatus(o.id, 'active')}
+                        >
+                          Restore
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-meta text-muted-foreground"
+                          disabled={busy}
+                          onClick={() => onStatus(o.id, 'archived')}
+                        >
+                          Archive
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-meta text-muted-foreground"
+                        className="h-7 text-meta text-destructive"
                         disabled={busy}
-                        onClick={() => onStatus(o.id, 'archived')}
+                        onClick={() => void onDelete(o.id)}
                       >
-                        Archive
+                        Delete
                       </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 text-meta text-destructive"
-                      disabled={busy}
-                      onClick={() => void onDelete(o.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
+                    </div>
                   )}
                 </div>
               ))}
               {canWrite && (
-              <button
-                type="button"
-                onClick={onNew}
-                className="flex h-9 items-center gap-1 rounded-[4px] px-2 text-left text-meta text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <span aria-hidden="true">+</span> New page
-              </button>
+                <button
+                  type="button"
+                  onClick={onNew}
+                  className="flex h-9 items-center gap-1 rounded-[4px] px-2 text-left text-meta text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  <span aria-hidden="true">+</span> New page
+                </button>
               )}
             </div>
           </div>

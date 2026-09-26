@@ -1,10 +1,6 @@
 import { describe, expect, test } from 'vitest'
 
-import {
-  adoptUserSettings,
-  hasStoredUserSettings,
-  toSyncedPatch,
-} from '../preferencesSync'
+import { adoptUserSettings, hasStoredUserSettings, toSyncedPatch } from '../preferencesSync'
 
 const stored = {
   theme: 'dark' as const,
@@ -30,9 +26,11 @@ describe('preference sync', () => {
   })
 
   test('the pushed patch carries exactly the three synced preferences', () => {
-    expect(
-      toSyncedPatch({ theme: 'light', reduceMotion: false, weekStartsMonday: true }),
-    ).toEqual({ theme: 'light', reduceMotion: false, weekStartsMonday: true })
+    expect(toSyncedPatch({ theme: 'light', reduceMotion: false, weekStartsMonday: true })).toEqual({
+      theme: 'light',
+      reduceMotion: false,
+      weekStartsMonday: true,
+    })
   })
 
   test('the patch never carries server-owned fields', () => {

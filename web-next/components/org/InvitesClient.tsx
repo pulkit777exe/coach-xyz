@@ -152,15 +152,11 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <StatusPill tone="gray">{ORG_MEMBER_ROLE_LABELS[invite.role] ?? invite.role}</StatusPill>
+                <StatusPill tone="gray">
+                  {ORG_MEMBER_ROLE_LABELS[invite.role] ?? invite.role}
+                </StatusPill>
                 <StatusPill
-                  tone={
-                    state === 'pending'
-                      ? 'amber'
-                      : state === 'accepted'
-                        ? 'primary'
-                        : 'gray'
-                  }
+                  tone={state === 'pending' ? 'amber' : state === 'accepted' ? 'primary' : 'gray'}
                 >
                   {state}
                 </StatusPill>

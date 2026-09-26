@@ -51,10 +51,7 @@ export function ProgressBar({
           {label}
         </span>
 
-        <span
-          aria-hidden
-          className="grid shrink-0 justify-items-end text-muted-foreground"
-        >
+        <span aria-hidden className="grid shrink-0 justify-items-end text-muted-foreground">
           <motion.span
             className="col-start-1 row-start-1 whitespace-nowrap text-[12px] font-medium leading-5"
             initial={false}

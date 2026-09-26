@@ -80,63 +80,63 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
           <>
             {canWrite && (
               <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="well-sleep">Sleep (h)</Label>
-                <Input
-                  id="well-sleep"
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.5}
-                  value={sleep}
-                  onChange={(e) => setSleep(e.target.value)}
-                  className="h-9 tabular-nums"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="well-fatigue">Fatigue (1–5)</Label>
-                <Input
-                  id="well-fatigue"
-                  type="number"
-                  min={1}
-                  max={5}
-                  step={1}
-                  value={fatigue}
-                  onChange={(e) => setFatigue(e.target.value)}
-                  className="h-9 tabular-nums"
-                />
-                {fatigue !== '' && (
-                  <p className="text-meta text-muted-foreground">
-                    {FATIGUE_LABELS[Number(fatigue)] ?? ''}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label htmlFor="well-avail">Availability</Label>
-                <Input
-                  id="well-avail"
-                  value={availability}
-                  onChange={(e) => setAvailability(e.target.value)}
-                  placeholder="available · limited · out"
-                  className="h-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="well-note">Note</Label>
-              <Textarea
-                id="well-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                placeholder="Player-reported observation…"
-              />
-            </div>
-            {error && <p className="text-meta text-destructive">{error}</p>}
-            <Button size="sm" disabled={busy} onClick={submit}>
-              {busy ? 'Recording…' : 'Record check-in'}
-            </Button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="well-sleep">Sleep (h)</Label>
+                    <Input
+                      id="well-sleep"
+                      type="number"
+                      min={0}
+                      max={24}
+                      step={0.5}
+                      value={sleep}
+                      onChange={(e) => setSleep(e.target.value)}
+                      className="h-9 tabular-nums"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="well-fatigue">Fatigue (1–5)</Label>
+                    <Input
+                      id="well-fatigue"
+                      type="number"
+                      min={1}
+                      max={5}
+                      step={1}
+                      value={fatigue}
+                      onChange={(e) => setFatigue(e.target.value)}
+                      className="h-9 tabular-nums"
+                    />
+                    {fatigue !== '' && (
+                      <p className="text-meta text-muted-foreground">
+                        {FATIGUE_LABELS[Number(fatigue)] ?? ''}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <Label htmlFor="well-avail">Availability</Label>
+                    <Input
+                      id="well-avail"
+                      value={availability}
+                      onChange={(e) => setAvailability(e.target.value)}
+                      placeholder="available · limited · out"
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="well-note">Note</Label>
+                  <Textarea
+                    id="well-note"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    rows={2}
+                    placeholder="Player-reported observation…"
+                  />
+                </div>
+                {error && <p className="text-meta text-destructive">{error}</p>}
+                <Button size="sm" disabled={busy} onClick={submit}>
+                  {busy ? 'Recording…' : 'Record check-in'}
+                </Button>
               </>
             )}
             <div className="pt-1">

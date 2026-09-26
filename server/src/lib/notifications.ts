@@ -245,11 +245,7 @@ function attachQueueEventListeners() {
             data: {
               server_job_id: job.data.server_job_id,
               engine_job_id: job.data.engine_job_id,
-              href: analysisResultHref(
-                analysis.auth0Id,
-                auth0Id,
-                job.data.server_job_id as string,
-              ),
+              href: analysisResultHref(analysis.auth0Id, auth0Id, job.data.server_job_id as string),
             },
             dedupeKey: `analysis_complete:${job.data.server_job_id}:${auth0Id}`,
           })

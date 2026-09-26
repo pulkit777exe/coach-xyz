@@ -17,8 +17,7 @@ const band = 'bg-muted'
 const hairline = 'border-border'
 const textMain = 'text-foreground-strong'
 const textMuted = 'text-muted-foreground'
-const eyebrow =
-  'text-caption font-medium uppercase tracking-[0.08em] text-muted-foreground'
+const eyebrow = 'text-caption font-medium uppercase tracking-[0.08em] text-muted-foreground'
 const sectionTitle =
   'text-[26px] font-bold tracking-[-0.01em] text-balance sm:text-[34px] text-foreground-strong'
 const card =
@@ -26,8 +25,7 @@ const card =
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 const statValue =
   'text-[30px] font-semibold leading-none tracking-[-0.01em] tabular-nums text-foreground-strong'
-const statLabel =
-  'text-label font-medium uppercase tracking-[0.08em] text-muted-foreground'
+const statLabel = 'text-label font-medium uppercase tracking-[0.08em] text-muted-foreground'
 const footerLink = `block text-sm text-foreground transition-colors duration-[120ms] hover:text-primary hover:underline ${focusRing}`
 
 const PREVIEW_CARDS = [
@@ -74,7 +72,11 @@ const FEATURE_BLOCKS = [
 
 const TIMELINE_STEPS = [
   { n: '1', t: 'Upload your clip', d: 'Drag MP4/MOV/AVI up to 500 MB. Auto-validated.' },
-  { n: '2', t: 'We detect every athlete', d: 'MediaPipe finds each player with boxes + confidence.' },
+  {
+    n: '2',
+    t: 'We detect every athlete',
+    d: 'MediaPipe finds each player with boxes + confidence.',
+  },
   { n: '3', t: 'Gemini scores & corrects', d: 'Form, mechanics and timing across keyframes.' },
   { n: '4', t: 'You get annotated video', d: 'Pose overlays, HUD stats, coaching cues.' },
   { n: '5', t: 'Share & track progress', d: 'Link to roster, reports and trends.' },
@@ -159,7 +161,11 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
   const open = () => fileInputRef.current?.click()
 
   return (
-    <main id="main" tabIndex={-1} className={`antialiased selection:bg-primary/15 ${surface} ${textMain}`}>
+    <main
+      id="main"
+      tabIndex={-1}
+      className={`antialiased selection:bg-primary/15 ${surface} ${textMain}`}
+    >
       {/* ── Hero — Notion: huge centered headline, plain surface ─────────── */}
       <section className={`${surface} px-6 pt-16 pb-14 lg:px-8`}>
         <div className="mx-auto max-w-[1120px] text-center">
@@ -199,22 +205,16 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   key={x.k}
                   className={`h-[200px] w-[144px] shrink-0 rounded-[8px] border p-3 ${hairline} ${band}`}
                 >
-                  <div
-                    className={`h-full rounded-[6px] border p-2.5 ${hairline} ${surface}`}
-                  >
+                  <div className={`h-full rounded-[6px] border p-2.5 ${hairline} ${surface}`}>
                     <div
                       className={`mx-auto mb-3 h-1.5 w-8 rounded-full ${hairline} border bg-transparent`}
                     />
-                    <p className="text-label font-semibold text-foreground-strong">
-                      {x.k}
-                    </p>
+                    <p className="text-label font-semibold text-foreground-strong">{x.k}</p>
                     <p className="text-[10px] text-muted-foreground">{x.d}</p>
                     <div className="mt-3 space-y-1.5">
                       <div className="h-1.5 rounded bg-primary/40" />
                       <div className="h-1.5 w-3/4 rounded bg-foreground/8 dark:bg-white/10" />
-                      <div
-                        className={`mt-3 h-14 rounded-[6px] border ${hairline} bg-muted`}
-                      />
+                      <div className={`mt-3 h-14 rounded-[6px] border ${hairline} bg-muted`} />
                     </div>
                   </div>
                 </div>
@@ -259,10 +259,10 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       <section className={`px-6 py-14 lg:px-8 ${surface}`}>
         <div className="mx-auto max-w-[1120px] text-center">
           <p className={eyebrow}>The pipeline</p>
-          <h2 className={`mt-3 ${sectionTitle}`}>
-            Intelligence for the entire athlete lifecycle
-          </h2>
-          <div className={`mx-auto mt-8 max-w-[720px] rounded-[8px] border p-8 ${hairline} ${surface}`}>
+          <h2 className={`mt-3 ${sectionTitle}`}>Intelligence for the entire athlete lifecycle</h2>
+          <div
+            className={`mx-auto mt-8 max-w-[720px] rounded-[8px] border p-8 ${hairline} ${surface}`}
+          >
             <div className="relative mx-auto h-[180px] w-full max-w-[560px]">
               <div className="absolute inset-x-12 top-6 bottom-0 rounded-t-[280px] border border-b-0 border-foreground/12 bg-gradient-to-b from-primary/[0.08] to-transparent dark:border-white/10 dark:from-primary/[0.10]" />
               <div className="absolute top-6 left-1/2 h-[140px] w-px -translate-x-1/2 bg-foreground/9 dark:bg-white/10" />
@@ -274,9 +274,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                     >
                       {s.l[0]}
                     </div>
-                    <span className="text-xs font-semibold text-foreground-strong">
-                      {s.l}
-                    </span>
+                    <span className="text-xs font-semibold text-foreground-strong">{s.l}</span>
                     <span className={`text-[10px] ${textMuted}`}>{s.sub}</span>
                   </div>
                 ))}
@@ -330,9 +328,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 <div className="grid size-7 place-items-center rounded-[6px] bg-primary/10 text-meta font-semibold text-link">
                   {c.n}
                 </div>
-                <p className="mt-4 text-title font-semibold text-foreground-strong">
-                  {c.t}
-                </p>
+                <p className="mt-4 text-title font-semibold text-foreground-strong">{c.t}</p>
                 <p className={`mt-2 text-sm leading-6 ${textMuted}`}>{c.d}</p>
               </div>
             ))}
@@ -377,9 +373,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                     <div className="mx-auto h-2 w-16 rounded bg-foreground/10 dark:bg-white/10" />
                     <div className="mt-3 h-2 rounded bg-primary/40" />
                     <div className="mt-2 h-2 w-3/4 rounded bg-foreground/8 dark:bg-white/10" />
-                    <div
-                      className={`mt-3 h-10 rounded-[6px] border ${hairline} bg-background`}
-                    />
+                    <div className={`mt-3 h-10 rounded-[6px] border ${hairline} bg-background`} />
                   </div>
                 </div>
                 <p className="mt-2 text-center text-[10px] font-medium tracking-[0.08em] text-muted-foreground/70 uppercase">
@@ -407,7 +401,9 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               </span>
             ))}
           </div>
-          <div className={`mt-8 grid gap-4 rounded-[8px] border p-6 lg:grid-cols-[280px_1fr] ${hairline} ${surface}`}>
+          <div
+            className={`mt-8 grid gap-4 rounded-[8px] border p-6 lg:grid-cols-[280px_1fr] ${hairline} ${surface}`}
+          >
             <div className={`rounded-[6px] border p-4 ${hairline} ${band}`}>
               <p className="text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
                 Featured
@@ -461,9 +457,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <span className="size-2.5 rounded-full bg-destructive/60" />
               <span className="size-2.5 rounded-full bg-warning/60" />
               <span className="size-2.5 rounded-full bg-success/60" />
-              <span className={`ml-3 font-mono text-xs ${textMuted}`}>
-                POST /api/analyze-video
-              </span>
+              <span className={`ml-3 font-mono text-xs ${textMuted}`}>POST /api/analyze-video</span>
             </div>
             <pre className="overflow-x-auto p-4 font-mono text-xs leading-5 text-foreground-strong/80">
               <code>{`curl -X POST https://api.coachxyz.app/analyze-video \\
@@ -648,18 +642,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   aria-controls={`faq-${i}`}
                   className={`flex w-full items-center justify-between gap-4 rounded-[6px] text-left ${focusRing}`}
                 >
-                  <span className="text-title font-medium text-foreground-strong">
-                    {f.q}
-                  </span>
+                  <span className="text-title font-medium text-foreground-strong">{f.q}</span>
                   <ChevronDown
                     className={`size-4 shrink-0 text-muted-foreground transition-transform duration-150 ${openFaq === i ? 'rotate-180' : ''}`}
                   />
                 </button>
                 {openFaq === i && (
-                  <p
-                    id={`faq-${i}`}
-                    className={`mt-3 text-sm leading-[1.6] ${textMuted}`}
-                  >
+                  <p id={`faq-${i}`} className={`mt-3 text-sm leading-[1.6] ${textMuted}`}>
                     {f.a}
                   </p>
                 )}
@@ -683,13 +672,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               Start for free
             </Button>
           </div>
-          <div className={`flex flex-col items-start justify-center rounded-[8px] border p-8 ${hairline} ${surface}`}>
+          <div
+            className={`flex flex-col items-start justify-center rounded-[8px] border p-8 ${hairline} ${surface}`}
+          >
             <p className="text-[18px] font-semibold text-foreground-strong">
               Not ready to buy yet?
             </p>
-            <p className={`mt-1 text-sm ${textMuted}`}>
-              Book a call with our coaching specialist
-            </p>
+            <p className={`mt-1 text-sm ${textMuted}`}>Book a call with our coaching specialist</p>
             <Button
               variant="outline"
               nativeButton={false}
@@ -703,22 +692,22 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       </section>
 
       {/* ── Footer — Notion: 4 link columns + quote + bottom row ─────────── */}
-      <footer
-        className={`border-t px-6 py-12 lg:px-8 ${hairline} bg-muted dark:bg-background`}
-      >
+      <footer className={`border-t px-6 py-12 lg:px-8 ${hairline} bg-muted dark:bg-background`}>
         <div className="mx-auto max-w-[1120px]">
           <div className="grid gap-10 md:grid-cols-[1.5fr_repeat(4,minmax(0,1fr))]">
             <div>
-              <Link href="/" className={`inline-flex items-center gap-2 rounded-[6px] ${focusRing}`}>
+              <Link
+                href="/"
+                className={`inline-flex items-center gap-2 rounded-[6px] ${focusRing}`}
+              >
                 <span className="grid size-6 place-items-center rounded-[6px] bg-primary text-label font-bold text-primary-foreground">
                   C
                 </span>
-                <span className="text-sm font-semibold text-foreground-strong">
-                  CoachXYZ
-                </span>
+                <span className="text-sm font-semibold text-foreground-strong">CoachXYZ</span>
               </Link>
               <blockquote className="mt-5 max-w-[280px] border-l-2 border-input pl-4 text-sm italic leading-[1.6] text-muted-foreground">
-                &ldquo;CoachXYZ cut our review time in half. Players get precise fixes same day.&rdquo;
+                &ldquo;CoachXYZ cut our review time in half. Players get precise fixes same
+                day.&rdquo;
               </blockquote>
               <cite className="mt-2 block pl-4 text-meta not-italic text-muted-foreground/70">
                 — David R., Performance Coach
@@ -727,9 +716,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
 
             {FOOTER_COLUMNS.map((col) => (
               <div key={col.title}>
-                <p className="text-meta font-medium text-muted-foreground">
-                  {col.title}
-                </p>
+                <p className="text-meta font-medium text-muted-foreground">{col.title}</p>
                 <div className="mt-3 flex flex-col gap-2.5">
                   {col.links.map((l) => (
                     <Link key={l.label} href={l.href} className={footerLink}>

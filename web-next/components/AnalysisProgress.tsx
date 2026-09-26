@@ -95,7 +95,9 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
 
         {isWaitingForQuota && (
           <div className="mb-5 border border-destructive/20 bg-destructive/10 rounded-[6px] p-4">
-            <p className="text-body text-destructive">AI capacity is busy. Retrying automatically.</p>
+            <p className="text-body text-destructive">
+              AI capacity is busy. Retrying automatically.
+            </p>
           </div>
         )}
 

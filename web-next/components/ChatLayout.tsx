@@ -125,7 +125,8 @@ export default function ChatLayout({
             {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
               <details className="border-t border-border px-4 py-2">
                 <summary className="cursor-pointer text-meta font-medium text-muted-foreground py-1">
-                  Key findings (<span className="tabular-nums">{jobStatus.summary.findings.length}</span>)
+                  Key findings (
+                  <span className="tabular-nums">{jobStatus.summary.findings.length}</span>)
                 </summary>
                 <div className="py-2 max-h-64 overflow-y-auto">
                   <FindingsTimeline

@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
-import { FileText } from "lucide-react";
+import type { ReactNode } from 'react'
+import { FileText } from 'lucide-react'
 
 interface EmptyStateProps {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  icon?: ReactNode;
-  compact?: boolean;
+  title: string
+  description?: string
+  action?: ReactNode
+  icon?: ReactNode
+  compact?: boolean
 }
 
 export default function EmptyState({
@@ -19,7 +19,7 @@ export default function EmptyState({
   return (
     <div
       className={`flex flex-col items-center justify-center text-center ${
-        compact ? "py-8" : "py-14"
+        compact ? 'py-8' : 'py-14'
       }`}
     >
       <div className="mb-3.5 flex h-10 w-10 items-center justify-center rounded-[8px] bg-muted text-muted-foreground/70">
@@ -33,5 +33,5 @@ export default function EmptyState({
       ) : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
-  );
+  )
 }

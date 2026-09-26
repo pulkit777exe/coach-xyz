@@ -158,7 +158,10 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
           {auth0Id && (
             <div className="mt-3 grid grid-cols-[1fr_64px_64px_auto] items-end gap-2">
               <div className="grid gap-1">
-                <Label htmlFor="clip-label" className="text-label font-medium text-muted-foreground">
+                <Label
+                  htmlFor="clip-label"
+                  className="text-label font-medium text-muted-foreground"
+                >
                   Label
                 </Label>
                 <Input
@@ -170,7 +173,10 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
                 />
               </div>
               <div className="grid gap-1">
-                <Label htmlFor="clip-start" className="text-label font-medium text-muted-foreground">
+                <Label
+                  htmlFor="clip-start"
+                  className="text-label font-medium text-muted-foreground"
+                >
                   Start (s)
                 </Label>
                 <Input

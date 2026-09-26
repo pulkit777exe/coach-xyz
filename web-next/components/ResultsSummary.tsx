@@ -132,7 +132,9 @@ export default function ResultsSummary({
                     Total Form Score
                   </p>
                   <div className="flex items-baseline justify-center md:justify-start gap-1.5">
-                    <div className={`text-[32px] font-semibold leading-none tabular-nums ${formScoreColor}`}>
+                    <div
+                      className={`text-[32px] font-semibold leading-none tabular-nums ${formScoreColor}`}
+                    >
                       {summary.form_score}
                     </div>
                     <span className="text-title text-muted-foreground font-medium tabular-nums">
@@ -290,19 +292,25 @@ export default function ResultsSummary({
 
             <Button
               nativeButton={false}
-              render={<a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group" />}
+              render={
+                <a
+                  href={downloadUrl}
+                  download="coachai_analysis.mp4"
+                  className="flex-1 block group"
+                />
+              }
               className="w-full h-12 rounded-[6px] text-body font-medium transition-colors active:scale-[0.98]"
             >
-                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Download Video
-              </Button>
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              Download Video
+            </Button>
 
             <Button
               variant="outline"
@@ -406,10 +414,7 @@ export default function ResultsSummary({
                             <span
                               className={`rounded-full px-2 py-0.5 text-label font-medium ${toneClass}`}
                             >
-                              Score:{' '}
-                              <span className="tabular-nums">
-                                {event.form_score}/10
-                              </span>
+                              Score: <span className="tabular-nums">{event.form_score}/10</span>
                             </span>
                           </div>
                           {event.key_observation && (

@@ -77,9 +77,7 @@ export default function AuditClient({ initialLogs }: AuditClientProps) {
         <span className="tabular-nums">{logs.length}</span> shown.
       </p>
       <div>
-        {logs.length === 0 && (
-          <EmptyState compact title="No audit entries yet" />
-        )}
+        {logs.length === 0 && <EmptyState compact title="No audit entries yet" />}
         {logs.map((log) => (
           <div
             key={log.id}

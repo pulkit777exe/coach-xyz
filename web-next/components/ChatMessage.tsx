@@ -49,12 +49,7 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
         {message.timestamp_refs && message.timestamp_refs.length > 0 && onSeekTo && (
           <div className="mt-3 flex flex-wrap gap-2">
             {message.timestamp_refs.slice(0, 5).map((ts) => (
-              <TimestampPill
-                key={ts}
-                seconds={ts}
-                format="clock"
-                onSeek={onSeekTo}
-              />
+              <TimestampPill key={ts} seconds={ts} format="clock" onSeek={onSeekTo} />
             ))}
           </div>
         )}

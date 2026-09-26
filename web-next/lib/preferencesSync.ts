@@ -5,10 +5,7 @@ import type { UserSettings } from './meApi'
 import type { Preferences } from './preferences'
 
 /** Only the three preferences that follow the user across devices. */
-export type SyncedPreferences = Pick<
-  Preferences,
-  'theme' | 'reduceMotion' | 'weekStartsMonday'
->
+export type SyncedPreferences = Pick<Preferences, 'theme' | 'reduceMotion' | 'weekStartsMonday'>
 
 /**
  * A missing row (`updatedAt: null`) means the account has never saved a

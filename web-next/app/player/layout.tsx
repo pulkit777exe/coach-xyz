@@ -61,7 +61,9 @@ export default async function PlayerLayout({ children }: { children: React.React
         <MobileNavDrawer label={session.user.name ?? 'My hub'} footer={sidebarFooter}>
           {sidebarTop}
         </MobileNavDrawer>
-        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">{children}</main>
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">
+          {children}
+        </main>
       </div>
     </div>
   )
