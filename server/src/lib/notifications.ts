@@ -3,6 +3,7 @@ import type { QueueEvents } from 'bullmq'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { getAnalysisByServerJobId } from './analyses'
 import { analysisQueue, queueEvents, classifyFailure, onQueueInfrastructureReady } from './queue'
+import { isEventEnabled } from './notificationPrefs'
 import { logger } from './logger'
 import { publishNotification, subscribeNotification } from './serverEvents'
 
@@ -63,6 +64,8 @@ export type CreateNotificationInput = {
 export async function createNotification(
   input: CreateNotificationInput,
 ): Promise<NotificationRow | null> {
+  if (!(await isEventEnabled(input.auth0Id, input.type))) return null
+
   const result = await withHistoryStore(async (db) => {
     const rows = await db<NotificationRow[]>`
       insert into notifications (auth0_id, type, title, body, data, dedupe_key)
@@ -169,22 +172,44 @@ export async function unreadCount(auth0Id: string): Promise<number> {
  * primary source; falls back to a direct `analysis_history` query when its
  * auth0_id is absent (the dashboard SELECT does not always project it).
  */
-type AnalysisOwner = { auth0Id: string; displayName: string | null }
+type AnalysisOwner = {
+  auth0Id: string
+  requestedBy: string | null
+  displayName: string | null
+}
+
+export const analysisNotificationRecipients = (
+  ownerAuth0Id: string,
+  requestedBy: string | null,
+): string[] =>
+  requestedBy && requestedBy !== ownerAuth0Id ? [ownerAuth0Id, requestedBy] : [ownerAuth0Id]
 
 async function resolveAnalysisOwner(serverJobId: string): Promise<AnalysisOwner | null> {
   const analysis = await getAnalysisByServerJobId(serverJobId)
   if (analysis?.auth0_id) {
-    return { auth0Id: analysis.auth0_id, displayName: analysis.display_name }
+    return {
+      auth0Id: analysis.auth0_id,
+      requestedBy: analysis.requested_by,
+      displayName: analysis.display_name,
+    }
   }
 
   const owner = await withHistoryStore(async (db) => {
-    const rows = await db<{ auth0_id: string | null; display_name: string | null }[]>`
-      select auth0_id, display_name from analysis_history
+    const rows = await db<
+      { auth0_id: string | null; requested_by: string | null; display_name: string | null }[]
+    >`
+      select auth0_id, requested_by, display_name from analysis_history
       where server_job_id = ${serverJobId}
       limit 1;
     `
     const row = rows?.[0]
-    return row?.auth0_id ? { auth0Id: row.auth0_id, displayName: row.display_name } : null
+    return row?.auth0_id
+      ? {
+          auth0Id: row.auth0_id,
+          requestedBy: row.requested_by,
+          displayName: row.display_name,
+        }
+      : null
   })
   return owner ?? null
 }
@@ -207,17 +232,29 @@ function attachQueueEventListeners() {
         const analysis = await resolveAnalysisOwner(job.data.server_job_id)
         if (!analysis) return
 
-        await createNotification({
-          auth0Id: analysis.auth0Id,
-          type: 'analysis_complete',
-          title: 'Analysis complete',
-          body: analysis.displayName || job.data.engine_job_id,
-          data: {
-            server_job_id: job.data.server_job_id,
-            engine_job_id: job.data.engine_job_id,
-          },
-          dedupeKey: `analysis_complete:${job.data.server_job_id}:${analysis.auth0Id}`,
-        })
+        for (const auth0Id of analysisNotificationRecipients(
+          analysis.auth0Id,
+          analysis.requestedBy,
+        )) {
+          await createNotification({
+            auth0Id,
+            type: 'analysis_complete',
+            title: 'Analysis complete',
+            body: analysis.displayName || job.data.engine_job_id,
+            data: {
+              server_job_id: job.data.server_job_id,
+              engine_job_id: job.data.engine_job_id,
+              // Recipient-correct destination: the owning coach gets the
+              // dashboard detail; a player who requested it has no detail
+              // route, so their hub is the landing spot.
+              href:
+                auth0Id === analysis.auth0Id
+                  ? `/dashboard/analysis/${job.data.server_job_id}`
+                  : '/player',
+            },
+            dedupeKey: `analysis_complete:${job.data.server_job_id}:${auth0Id}`,
+          })
+        }
       } catch (err) {
         logger.error('notification_completed_handler_error', {
           type: 'notification_completed_handler_error',
@@ -246,17 +283,27 @@ function attachQueueEventListeners() {
           const analysis = await resolveAnalysisOwner(job.data.server_job_id)
           if (!analysis) return
 
-          await createNotification({
-            auth0Id: analysis.auth0Id,
-            type: 'analysis_failed',
-            title: 'Analysis failed',
-            body: analysis.displayName || job.data.engine_job_id,
-            data: {
-              server_job_id: job.data.server_job_id,
-              engine_job_id: job.data.engine_job_id,
-            },
-            dedupeKey: `analysis_failed:${job.data.server_job_id}:${analysis.auth0Id}`,
-          })
+          for (const auth0Id of analysisNotificationRecipients(
+            analysis.auth0Id,
+            analysis.requestedBy,
+          )) {
+            await createNotification({
+              auth0Id,
+              type: 'analysis_failed',
+              title: 'Analysis failed',
+              body: analysis.displayName || job.data.engine_job_id,
+              data: {
+                server_job_id: job.data.server_job_id,
+                engine_job_id: job.data.engine_job_id,
+                // Same recipient-correct routing as the completed branch.
+                href:
+                  auth0Id === analysis.auth0Id
+                    ? `/dashboard/analysis/${job.data.server_job_id}`
+                    : '/player',
+              },
+              dedupeKey: `analysis_failed:${job.data.server_job_id}:${auth0Id}`,
+            })
+          }
         } catch (err) {
           logger.error('notification_failed_handler_error', {
             type: 'notification_failed_handler_error',

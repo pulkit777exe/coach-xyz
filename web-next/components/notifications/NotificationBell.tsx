@@ -16,9 +16,11 @@ import {
   fetchNotificationsWithRetry,
   markRead,
   markAllRead,
+  notificationHref,
   subscribeNotifications,
 } from '@/lib/notifications'
 import type { AppNotification, NotificationsState } from '@/lib/notifications'
+import { getNotificationPrefs } from '@/lib/meApi'
 import { cn } from '@/lib/utils'
 
 function formatTime(iso: string): string {
@@ -47,14 +49,37 @@ export default function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [open, setOpen] = useState(false)
-  const loadedRef = useRef(false)
+  const [inAppEnabled, setInAppEnabled] = useState<boolean | null>(null)
+  const prefsRequestRef = useRef<Promise<boolean> | null>(null)
+  const notificationsLoadedRef = useRef(false)
   const liveNotificationIdsRef = useRef<Set<string>>(new Set())
-  const localRevisionRef = useRef(0)
   const locallyReadIdsRef = useRef<Set<string>>(new Set())
+  const localRevisionRef = useRef(0)
 
   useEffect(() => {
-    if (loadedRef.current) return
-    loadedRef.current = true
+    let active = true
+
+    // Reuse the in-flight request across a Strict Mode effect replay, while
+    // ensuring preferences are fetched only once for this bell instance.
+    const request =
+      prefsRequestRef.current ??
+      getNotificationPrefs()
+        .then((prefs) => prefs.inApp)
+        .catch(() => true) // Fail open: a prefs outage must not hide the bell.
+    prefsRequestRef.current = request
+
+    void request.then((enabled) => {
+      if (active) setInAppEnabled(enabled)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (inAppEnabled !== true || notificationsLoadedRef.current) return
+    notificationsLoadedRef.current = true
 
     let unsubscribe: (() => void) | null = null
     const controller = new AbortController()
@@ -110,7 +135,7 @@ export default function NotificationBell() {
       unsubscribe?.()
       controller.abort()
     }
-  }, [])
+  }, [inAppEnabled])
 
   const sorted = useMemo(() => {
     return [...notifications].sort(
@@ -119,9 +144,9 @@ export default function NotificationBell() {
   }, [notifications])
 
   const handleOpen = (n: AppNotification) => {
-    const serverJobId = typeof n.data?.server_job_id === 'string' ? n.data.server_job_id : null
-    if (serverJobId) {
-      router.push(`/dashboard/analysis/${serverJobId}`)
+    const href = notificationHref(n)
+    if (href) {
+      router.push(href)
     }
     if (!n.read) {
       // Keep the locally-read row authoritative over a late snapshot.
@@ -148,6 +173,8 @@ export default function NotificationBell() {
     markAllRead().catch(() => {})
     setOpen(false)
   }
+
+  if (inAppEnabled !== true) return null
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
