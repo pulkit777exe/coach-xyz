@@ -17,6 +17,8 @@ import { buildReportContent, getAiReportJob, subscribeAiReportJob } from '../lib
 import type { AiReportJob } from '../lib/aiReportData'
 import { getReport } from '../lib/orgData'
 import type { ReportRecord } from '../lib/orgData'
+import { resolveCaller } from '../lib/caller'
+import { canSeeStudent, visibleStudentIds } from '../lib/org/scope'
 import { enqueueAiReport } from '../lib/queue'
 import type { AiReportPayload } from '../lib/queue'
 import { logger } from '../lib/logger'
@@ -152,12 +154,28 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
 
   return new Elysia({ name: 'aiReports' })
     .use(serviceGuard)
-    .post('/api/org/:auth0Id/reports/ai', async ({ params, body, set }) => {
+    .post('/api/org/:auth0Id/reports/ai', async ({ params, body, request, set }) => {
       const { auth0Id } = params as { auth0Id: string }
       if (!auth0Id) {
         set.status = 400
         return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
       }
+      // This route is role-guarded where it is mounted (index.ts), which is a
+      // floor and not a scope. Authoring a report is `report.create`, and the
+      // generated report embeds buildReportContent for the target student — so
+      // without the scope check a team coach could have an AI report written
+      // about another team's player, carrying that player's attendance, series
+      // and analyses inside `report_context`.
+      const caller = await resolveCaller(auth0Id, request)
+      if (!caller.can('report.create')) {
+        set.status = 403
+        return buildError(
+          'FORBIDDEN',
+          'Generating an AI report requires the report.create permission',
+          false,
+        )
+      }
+      const visible = await visibleStudentIds(auth0Id, caller.studentScope)
       const { allowed } = await checkAiReportLimit(auth0Id)
       if (!allowed) {
         return rateLimited(set, 'Hourly AI report limit reached for this organization.')
@@ -169,6 +187,24 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         return validated.error
       }
       const value = validated.value
+
+      // Scope before the context is built, so an off-team student is never
+      // aggregated in the first place. A student-less report summarizes the
+      // whole org, so a scoped caller cannot ask for one — same rule as
+      // POST /api/org/:id/reports.
+      if (typeof value.student_id === 'string' && value.student_id) {
+        if (!canSeeStudent(visible, value.student_id)) {
+          set.status = 403
+          return buildError('FORBIDDEN', 'That student is outside your team scope', false)
+        }
+      } else if (visible !== null) {
+        set.status = 403
+        return buildError(
+          'FORBIDDEN',
+          'Org-wide AI reports cannot be generated from a team account',
+          false,
+        )
+      }
 
       const context = await buildContext(auth0Id, {
         student_id: value.student_id ?? undefined,
