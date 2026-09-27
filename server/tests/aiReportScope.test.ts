@@ -110,7 +110,7 @@ const attempt = async (
       body: JSON.stringify(body),
     }),
   )
-  const parsed = await res.json().catch(() => null)
+  await res.text()
   return { role, status: res.status, contextStudentIds: observed, enqueued }
 }
 

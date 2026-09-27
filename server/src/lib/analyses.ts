@@ -5,6 +5,7 @@ import type { RequestMeta } from './requestMeta'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { persistFindings, type FindingRecord } from './findings'
 import { persistPlayerEvents } from './registry'
+import { uuidArrayLiteral } from './org/scope'
 type VideoConversationRecord = RequestMeta & {
   sessionToken: string
   fileName: string
@@ -573,10 +574,24 @@ export const getUserAnalyses = async (
   auth0Id: string,
   limit = 20,
   offset = 0,
-  opts: { unlinked?: boolean } = {},
+  opts: { unlinked?: boolean; studentIds?: string[] | null } = {},
 ): Promise<DashboardAnalysis[]> => {
   return orDisabledDefault(
     await withHistoryStore(async (db) => {
+      // Rows here are owned by the *org* (the account id in this path is the
+      // org's own sub), so an unfiltered read is org-wide. A scoped caller gets
+      // their own students plus their own unlinked rows: an analysis with no
+      // student is nobody else's player, and dropping those would hide a coach's
+      // own unfiled uploads from their History page.
+      //
+      // The clause is parameterised rather than spliced as text for two reasons,
+      // both learned the hard way: a raw JS array binds as comma-joined text and
+      // `::uuid[]` then fails with 22P02, and a literal interpolated into
+      // `db.unsafe` loses its braces (`syntax error at or near "{"`). So the id
+      // list is a real bind and `scoped` gates the whole clause in one shape.
+      // `null` means org-wide and adds no filter; `[]` degrades to unlinked only.
+      const scoped = opts.studentIds !== null && opts.studentIds !== undefined
+      const ids = uuidArrayLiteral(opts.studentIds ?? [])
       const unlinkedFilter = opts.unlinked ? 'and a.student_id is null' : ''
       const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
@@ -584,12 +599,45 @@ export const getUserAnalyses = async (
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id}
         ${db.unsafe(unlinkedFilter)}
+        and (${scoped} = false
+             or a.student_id is null
+             or a.student_id = any(${ids}::uuid[]))
       order by a.requested_at desc
       limit ${limit} offset ${offset};
     `
       return rows ?? []
     }),
     [],
+  )
+}
+
+/**
+ * The student a stored analysis is about, for the account tree's job-keyed
+ * scope check.
+ *
+ * Returned as an explicit `found` flag rather than a nullable id because a
+ * `null` student is a real answer (an upload nobody filed under a player) and
+ * `orDisabledDefault` would absorb it into the disabled-store fallback, turning
+ * "this analysis has no student" into "no such analysis" and 404ing a coach's
+ * own unfiled upload.
+ */
+export const getAnalysisStudentId = async (
+  auth0Id: string,
+  serverJobId: string,
+): Promise<{ found: boolean; studentId: string | null }> => {
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
+      const rows = await db<{ student_id: string | null }[]>`
+        select a.student_id
+        from analysis_history a
+        where a.auth0_id = ${auth0Id} and a.server_job_id = ${serverJobId}
+        limit 1;
+      `
+      const row = rows?.[0]
+      if (!row) return { found: false, studentId: null }
+      return { found: true, studentId: row.student_id ?? null }
+    }),
+    { found: false, studentId: null },
   )
 }
 

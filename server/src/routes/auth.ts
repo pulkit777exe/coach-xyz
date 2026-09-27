@@ -15,6 +15,7 @@ import { logger } from '../lib/logger'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
+import { accountJobScope, resolveAccountScope } from '../lib/accountScope'
 
 import { findingsReadRoutes, findingsReviewRoutes } from './findings'
 import clipsRoute from './clips'
@@ -113,6 +114,9 @@ export default new Elysia()
 
     const analyses = await getUserAnalyses(auth0Id, limit, offset, {
       unlinked,
+      // Rows in this path are owned by the org, so without the caller's team
+      // scope this read is org-wide — a team coach saw every player in the club.
+      studentIds: (await resolveAccountScope(auth0Id, request)).visible,
     })
     set.status = 200
     return { analyses }
@@ -122,6 +126,12 @@ export default new Elysia()
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+
+    const gate = await accountJobScope(auth0Id, jobId, request, 'read')
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
 
     const analysis = await getUserAnalysisById(auth0Id, jobId)
@@ -156,11 +166,19 @@ export default new Elysia()
   })
   .use(findingsReadRoutes)
   .use(clipsRoute)
-  .patch('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, body, set }) => {
+  .patch('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, body, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+
+    // Renaming a row the caller may not see is a write against another team's
+    // data, so it is a 403 rather than the 404 a read would answer.
+    const gate = await accountJobScope(auth0Id, jobId, request, 'write')
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
 
     const { display_name } = body as { display_name?: string }
@@ -196,6 +214,11 @@ export default new Elysia()
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const cancelGate = await accountJobScope(auth0Id, jobId, request, 'write')
+    if (!cancelGate.ok) {
+      set.status = cancelGate.status
+      return cancelGate.error
     }
     const analysis = await getUserAnalysisById(auth0Id, jobId)
     if (!analysis) {
@@ -243,6 +266,13 @@ export default new Elysia()
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    // Deleting reaches the engine and the derived rows, so the scope gate has
+    // to come before the getJob/markEngineJobFailed pair, not after it.
+    const deleteGate = await accountJobScope(auth0Id, jobId, request, 'write')
+    if (!deleteGate.ok) {
+      set.status = deleteGate.status
+      return deleteGate.error
     }
     const serverJob = await getJob(jobId)
     if (serverJob) {

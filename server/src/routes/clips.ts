@@ -13,6 +13,7 @@ import { checkClipLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { buildError } from '../lib/errors'
 import { serviceGuard } from '../lib/serviceGuard'
 import { resolveCaller } from '../lib/caller'
+import { accountJobScope } from '../lib/accountScope'
 import { auditRoute } from '../lib/audit'
 
 // Clips routes (split from routes/auth.ts): subclip bookmarks on the rendered
@@ -20,11 +21,19 @@ import { auditRoute } from '../lib/audit'
 // finding.review.
 export default new Elysia()
   .use(serviceGuard)
-  .get('/api/auth/user/:auth0Id/analyses/:jobId/clips', async ({ params, set }) => {
+  .get('/api/auth/user/:auth0Id/analyses/:jobId/clips', async ({ params, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    // Clips are subclip bookmarks on the analysis itself, so they carry the
+    // analysis's student: without this a team coach could page through another
+    // team's rendered video frame by frame.
+    const gate = await accountJobScope(auth0Id, jobId, request, 'read')
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     set.status = 200
     return { clips: await listClips(auth0Id, jobId) }
@@ -43,6 +52,14 @@ export default new Elysia()
     if (caller.verified !== auth0Id && !caller.can('finding.review')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Clip creation requires the finding.review permission', false)
+    }
+    // The capability above says who may clip; this says whose analysis. A
+    // coach holds finding.review for the whole club, so without it the write
+    // lands on another team's video.
+    const gate = await accountJobScope(auth0Id, jobId, request, 'write', caller)
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
     if (!allowed) {
@@ -95,6 +112,11 @@ export default new Elysia()
           'Clip deletion requires the finding.review permission',
           false,
         )
+      }
+      const gate = await accountJobScope(auth0Id, jobId, request, 'write', caller)
+      if (!gate.ok) {
+        set.status = gate.status
+        return gate.error
       }
       const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
       if (!allowed) {

@@ -661,6 +661,33 @@ async function main() {
     r.json,
   )
 
+  // The account tree, `/api/auth/user/:auth0Id/analyses`, is org-scoped by path
+  // but keyed to the *org* (analysis rows are owned by the org), so an unfiltered
+  // read here is org-wide — the case a stubbed `db` cannot catch, because the
+  // narrowing lives in the SQL. `analysisId` is org-owned and linked to a student
+  // on the owner's team, so the scoped coach must not see it by list or by id.
+  r = await call('GET', `/api/auth/user/${coachId}/analyses`, { identity: scopedId })
+  check(
+    'scoped coach list omits an off-team analysis (live uuid[] bind)',
+    r.status === 200 &&
+      !(r.json?.analyses ?? []).some(
+        (a: { server_job_id: string }) => a.server_job_id === analysisId,
+      ),
+    r.json,
+  )
+
+  r = await call('GET', `/api/auth/user/${coachId}/analyses/${analysisId}`, {
+    identity: scopedId,
+  })
+  check(
+    'scoped coach reads no off-team analysis by id → 404',
+    r.status === 404 && expectError(r.json),
+    r.json,
+  )
+
+  r = await call('GET', `/api/auth/user/${coachId}/analyses/${analysisId}`, { identity: coachId })
+  check('owner is not narrowed on the account tree', r.status === 200, r.json)
+
   r = await call('DELETE', `/api/org/${coachId}/teams/${teamId}`, { identity: coachId })
   check('delete team', r.status === 200, r.json)
 

@@ -8,6 +8,7 @@ import { serviceGuard } from '../lib/serviceGuard'
 import { generateSimpleResponse } from '../lib/aiResponse'
 import { dashboardTranscript } from '../lib/transcript'
 import type { Transcript } from '../lib/transcript'
+import { accountJobScope } from '../lib/accountScope'
 
 // Analysis chat transcript + ask-analysis endpoint (split from
 // routes/auth.ts). The engine reply falls back to the deterministic local
@@ -34,11 +35,19 @@ export const chatHistoryRoutes = (
 ) =>
   new Elysia()
     .use(serviceGuard)
-    .get('/api/auth/user/:auth0Id/analyses/:jobId/chat', async ({ params, set }) => {
+    .get('/api/auth/user/:auth0Id/analyses/:jobId/chat', async ({ params, request, set }) => {
       const { auth0Id, jobId } = params
       if (!auth0Id || !jobId) {
         set.status = 400
         return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      }
+      // The transcript is a free-text channel over the analysis: it can carry
+      // anything a coach typed about the video, so it inherits the analysis's
+      // student scope rather than being readable on its own terms.
+      const gate = await accountJobScope(auth0Id, jobId, request, 'read')
+      if (!gate.ok) {
+        set.status = gate.status
+        return gate.error
       }
 
       const messages = await deps.transcript.load({ serverJobId: jobId, auth0Id })
@@ -61,6 +70,15 @@ export const chatHistoryRoutes = (
         if (!auth0Id || !jobId) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+        }
+
+        // Ahead of the transcript.append below: appending is a write against
+        // another team's analysis, and it is the engine call that makes it
+        // observable.
+        const gate = await accountJobScope(auth0Id, jobId, request, 'write')
+        if (!gate.ok) {
+          set.status = gate.status
+          return gate.error
         }
 
         const { message } = body as { message?: string }
