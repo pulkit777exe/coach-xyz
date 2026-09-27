@@ -206,6 +206,37 @@ export const reviewFinding = async (
   )
 }
 
+/**
+ * The analysis a finding belongs to, so the review mutation can be scoped to the
+ * player that analysis is about. A finding has no `student_id` of its own — it
+ * hangs off `server_job_id` — so the student comes from the analysis row.
+ *
+ * `found` is explicit rather than a nullable id for the same reason as
+ * `getAnalysisStudentId`: `orDisabledDefault` would absorb a legitimate null.
+ */
+export const getFindingJobId = async (
+  auth0Id: string,
+  findingId: string,
+): Promise<{ found: boolean; serverJobId: string | null }> => {
+  return orDisabledDefault(
+    await withHistoryStore(async (db) => {
+      const rows = await db<{ server_job_id: string }[]>`
+        select f.server_job_id
+        from findings f
+        where f.id = ${findingId}
+          and f.server_job_id in (
+            select server_job_id from analysis_history where auth0_id = ${auth0Id}
+          )
+        limit 1;
+      `
+      const row = rows?.[0]
+      if (!row) return { found: false, serverJobId: null }
+      return { found: true, serverJobId: row.server_job_id }
+    }),
+    { found: false, serverJobId: null },
+  )
+}
+
 /** Per-day finding counts for an account's analyses (longitudinal §26). */
 
 export const getFindingsTrend = async (

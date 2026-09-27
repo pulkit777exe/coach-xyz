@@ -688,6 +688,32 @@ async function main() {
   r = await call('GET', `/api/auth/user/${coachId}/analyses/${analysisId}`, { identity: coachId })
   check('owner is not narrowed on the account tree', r.status === 200, r.json)
 
+  // The findings half of the same tree is keyed by `student_id` instead of by
+  // job, and it is the half that ships a CSV. `studentId` is on the owner's team,
+  // so the scoped coach must not read it — by list, by export, or by trends.
+  r = await call('GET', `/api/auth/user/${coachId}/findings?student_id=${studentId}`, {
+    identity: scopedId,
+  })
+  check('scoped coach reads no off-team findings → 404', r.status === 404, r.json)
+
+  r = await call('GET', `/api/auth/user/${coachId}/findings/export?student_id=${studentId}`, {
+    identity: scopedId,
+  })
+  check('scoped coach exports no off-team findings → 404', r.status === 404, r.json)
+
+  r = await call('GET', `/api/auth/user/${coachId}/findings/trends?student_id=${studentId}`, {
+    identity: scopedId,
+  })
+  check('scoped coach reads no off-team findings trend → 404', r.status === 404, r.json)
+
+  r = await call('GET', `/api/auth/user/${coachId}/findings/trends`, { identity: scopedId })
+  check('scoped coach reads no org-wide findings trend → 403', r.status === 403, r.json)
+
+  r = await call('GET', `/api/auth/user/${coachId}/findings?student_id=${studentId}`, {
+    identity: coachId,
+  })
+  check('owner is not narrowed on the findings tree', r.status === 200, r.json)
+
   r = await call('DELETE', `/api/org/${coachId}/teams/${teamId}`, { identity: coachId })
   check('delete team', r.status === 200, r.json)
 

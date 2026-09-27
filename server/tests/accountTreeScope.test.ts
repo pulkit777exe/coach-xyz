@@ -42,6 +42,7 @@ const run = async (roles: string[]): Promise<Row[]> => {
 }
 
 const STUDENT_A = '00000000-0000-0000-0000-0000000000a1'
+const STUDENT_B = '00000000-0000-0000-0000-0000000000b1'
 /** Team staff, narrowed to team A by the scope seam. */
 const TEAM_STAFF = ['coach', 'head_coach', 'assistant_coach']
 /** Org staff hold no team, so they are org-wide by design (ADR-0002). */
@@ -150,6 +151,73 @@ describe("another team's analysis is out of reach through the account tree", () 
       const returned = list.touched.find((t) => t.startsWith('returned:')) ?? ''
       expect(returned, `${role} list`).toContain(JOB_A)
       expect(returned, `${role} list must hide the other team`).not.toContain(JOB_B)
+    }
+  })
+})
+
+describe('findings, the student-keyed half of the same tree', () => {
+  test('a team coach is refused another team’s findings, and the CSV with them', async () => {
+    for (const role of TEAM_STAFF) {
+      const rows = await run([role])
+      for (const route of [
+        'GET findings',
+        'GET findings export',
+        'GET findings trends (student)',
+      ]) {
+        const row = find(rows, route, STUDENT_B)
+        // 404 for a read: a UUID is a shape, not a permission.
+        expect(row.status, `${role} ${route}`).toBe(404)
+        expect(row.touched, `${role} ${route} must not read`).toEqual([])
+      }
+    }
+  })
+
+  test('a team coach cannot read another team’s trends, nor the whole org', async () => {
+    for (const role of TEAM_STAFF) {
+      const rows = await run([role])
+      // A named team is a read of that team → 404.
+      expect(find(rows, 'GET findings trends (team)', 'team-b').status, role).toBe(404)
+      // With no filter at all the query is org-wide, which a team account has no
+      // business asking for: 403, because the target is not a row that could 404.
+      expect(find(rows, 'GET findings trends (org)', 'org').status, role).toBe(403)
+      expect(find(rows, 'GET findings trends (org)', 'org').touched, role).toEqual([])
+    }
+  })
+
+  test('a team coach cannot review a finding about another team’s player', async () => {
+    for (const role of TEAM_STAFF) {
+      const rows = await run([role])
+      const row = find(rows, 'PATCH finding review', JOB_B)
+      // 403 for a write, beside the capability gate it follows — and the
+      // capability is not the reason: every one of these roles holds
+      // finding.review, so this is scope doing the refusing.
+      expect(row.status, role).toBe(403)
+      expect(row.touched, `${role} must not review`).not.toContain('reviewFinding')
+    }
+  })
+
+  test('a team coach still reaches their own player and their own findings', async () => {
+    for (const role of TEAM_STAFF) {
+      const rows = await run([role])
+      expect(find(rows, 'GET findings', STUDENT_A).status, role).toBe(200)
+      expect(find(rows, 'PATCH finding review', JOB_A).status, role).toBe(200)
+    }
+  })
+
+  test('org-wide callers keep every findings route', async () => {
+    for (const role of ORG_WIDE) {
+      const rows = await run([role])
+      for (const [route, job] of [
+        ['GET findings', STUDENT_B],
+        ['GET findings export', STUDENT_B],
+        ['GET findings trends (student)', STUDENT_B],
+        ['GET findings trends (team)', 'team-b'],
+        ['GET findings trends (org)', 'org'],
+      ] as const) {
+        const { status } = find(rows, route, job)
+        expect(status, `${role} ${route} must not be refused`).not.toBe(403)
+        expect(status, `${role} ${route} must not be refused`).not.toBe(404)
+      }
     }
   })
 })

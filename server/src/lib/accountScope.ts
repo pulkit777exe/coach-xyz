@@ -78,3 +78,21 @@ export const accountJobScope = async (
   }
   return { ok: true, scope }
 }
+
+/**
+ * The same gate for a route keyed by `student_id` rather than by job — the
+ * findings list, its CSV export and the trends query. Refused as a 404, since
+ * these are reads and the target must stay indistinguishable from a student who
+ * does not exist.
+ */
+export const accountStudentReadable = async (
+  orgAuth0Id: string,
+  studentId: string,
+  request: Request,
+): Promise<{ ok: true; scope: AccountScope } | AccountScopeRefusal> => {
+  const scope = await resolveAccountScope(orgAuth0Id, request)
+  if (scope.visible === null || canSeeStudent(scope.visible, studentId)) {
+    return { ok: true, scope }
+  }
+  return refusal(404, 'Student not found')
+}

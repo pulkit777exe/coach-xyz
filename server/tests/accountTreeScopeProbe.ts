@@ -30,6 +30,7 @@ const ORG = 'auth0|org-owner'
 const STUDENT_A = '00000000-0000-0000-0000-0000000000a1' // team A
 const STUDENT_B = '00000000-0000-0000-0000-0000000000b1' // team B
 const TEAM_A = '00000000-0000-0000-0000-0000000000f1'
+const TEAM_B = '00000000-0000-0000-0000-0000000000f2'
 
 const JOB_A = 'job-team-a'
 const JOB_B = 'job-team-b'
@@ -147,6 +148,35 @@ mock.module('../src/lib/clips', () => ({
   parseClipInput: () => ({ ok: true, cleaned: { start_ms: 0, end_ms: 1000 } }),
 }))
 
+// Findings hang off an analysis, so a finding's player comes from its job.
+const FINDING_A = 'finding-on-team-a'
+const FINDING_B = 'finding-on-team-b'
+const findingJob: Record<string, string> = {
+  [FINDING_A]: JOB_A,
+  [FINDING_B]: JOB_B,
+}
+mock.module('../src/lib/findings', () => ({
+  getStudentFindings: async (_org: string, studentId: string) => {
+    note('getStudentFindings')
+    return studentId === STUDENT_A ? [] : [{ id: 'off-team-finding' }]
+  },
+  getFindingsTrend: async () => {
+    note('getFindingsTrend')
+    return []
+  },
+  findingsToCsv: () => 'csv',
+  getFindingJobId: async (_org: string, findingId: string) => {
+    note('getFindingJobId')
+    return findingId in findingJob
+      ? { found: true, serverJobId: findingJob[findingId] }
+      : { found: false, serverJobId: null }
+  },
+  reviewFinding: async (_org: string, findingId: string) => {
+    note('reviewFinding')
+    return findingId in findingJob
+  },
+}))
+
 mock.module('../src/lib/jobs', () => ({
   getJob: async () => {
     note('getJob')
@@ -207,6 +237,7 @@ process.env.SERVICE_TOKEN = ''
 
 const authRoutes = (await import('../src/routes/auth')).default
 const clipsRoute = (await import('../src/routes/clips')).default
+const { findingsReadRoutes, findingsReviewRoutes } = await import('../src/routes/findings')
 const { chatHistoryRoutes } = await import('../src/routes/chatHistory')
 
 const transcript = {
@@ -364,6 +395,80 @@ for (const role of roleTokens) {
       authRoutes,
     )
   }
+
+  // ── The findings half of the tree: keyed by student, not by job ───────────
+  const fq = (query: string) => `${p(`/findings${query}`)}`
+  const findingAttempts: { route: string; job: string; path: string; app: ElysiaApp }[] = [
+    {
+      route: 'GET findings',
+      job: STUDENT_B,
+      path: fq(`?student_id=${STUDENT_B}`),
+      app: findingsReadRoutes,
+    },
+    {
+      route: 'GET findings export',
+      job: STUDENT_B,
+      path: fq(`/export?student_id=${STUDENT_B}`),
+      app: findingsReadRoutes,
+    },
+    {
+      route: 'GET findings trends (student)',
+      job: STUDENT_B,
+      path: fq(`/trends?student_id=${STUDENT_B}`),
+      app: findingsReadRoutes,
+    },
+    {
+      route: 'GET findings trends (team)',
+      job: 'team-b',
+      path: fq(`/trends?team_id=${TEAM_B}`),
+      app: findingsReadRoutes,
+    },
+    {
+      route: 'GET findings trends (org)',
+      job: 'org',
+      path: fq('/trends'),
+      app: findingsReadRoutes,
+    },
+    {
+      route: 'PATCH finding review',
+      job: 'job-team-b',
+      path: `${p(`/findings/${FINDING_B}`)}`,
+      app: findingsReviewRoutes,
+    },
+  ]
+  for (const f of findingAttempts) {
+    const method = f.route.startsWith('PATCH') ? 'PATCH' : 'GET'
+    const body = method === 'PATCH' ? JSON.stringify({ review_state: 'approved' }) : undefined
+    await attempt(
+      role,
+      f.route,
+      f.job,
+      (h) => new Request(`http://localhost${f.path}`, { method, headers: h, body }),
+      f.app,
+    )
+  }
+
+  // The allowed counterparts, so a refusal cannot be confused with a route that
+  // is simply broken.
+  await attempt(
+    role,
+    'GET findings',
+    STUDENT_A,
+    (h) => new Request(`http://localhost${fq(`?student_id=${STUDENT_A}`)}`, { headers: h }),
+    findingsReadRoutes,
+  )
+  await attempt(
+    role,
+    'PATCH finding review',
+    'job-team-a',
+    (h) =>
+      new Request(`http://localhost${p(`/findings/${FINDING_A}`)}`, {
+        method: 'PATCH',
+        headers: h,
+        body: JSON.stringify({ review_state: 'approved' }),
+      }),
+    findingsReviewRoutes,
+  )
 }
 
 console.log(JSON.stringify({ roles: roleTokens, rows }))

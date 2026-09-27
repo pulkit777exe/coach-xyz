@@ -1,9 +1,17 @@
 import { Elysia } from 'elysia'
 
-import { findingsToCsv, getFindingsTrend, getStudentFindings, reviewFinding } from '../lib/findings'
+import {
+  findingsToCsv,
+  getFindingJobId,
+  getFindingsTrend,
+  getStudentFindings,
+  reviewFinding,
+} from '../lib/findings'
 import { buildError } from '../lib/errors'
 import { serviceGuard } from '../lib/serviceGuard'
 import { resolveCaller } from '../lib/caller'
+import { accountJobScope, accountStudentReadable, resolveAccountScope } from '../lib/accountScope'
+import { canSeeStudent } from '../lib/org/scope'
 import { UUID_RE } from '../lib/uuid'
 
 // Findings routes (split from routes/auth.ts). The read routes and the review
@@ -60,7 +68,30 @@ export const findingsReadRoutes = new Elysia()
     }
 
     const url = new URL(request.url)
-    const trends = await getFindingsTrend(auth0Id, parseFindingsTrendQuery(url.searchParams))
+    const query = parseFindingsTrendQuery(url.searchParams)
+    // A trend query is scoped three ways, and each filter is a chance to read
+    // past the caller's team: a named student, a named team, or — with neither —
+    // the whole org, which is what this route used to be for everyone.
+    const { caller, visible } = await resolveAccountScope(auth0Id, request)
+    if (query.studentId) {
+      if (visible !== null && !canSeeStudent(visible, query.studentId)) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Student not found', false)
+      }
+    } else if (query.teamId) {
+      if (!caller.canAccessTeam(query.teamId)) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Team not found', false)
+      }
+    } else if (visible !== null) {
+      set.status = 403
+      return buildError(
+        'FORBIDDEN',
+        'Org-wide findings trends cannot be read from a team account',
+        false,
+      )
+    }
+    const trends = await getFindingsTrend(auth0Id, query)
     set.status = 200
     return { trends }
   })
@@ -75,6 +106,13 @@ export const findingsReadRoutes = new Elysia()
     if (!UUID_RE.test(studentId)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
+    }
+    // A UUID is a shape, not a permission: without this a team coach could read
+    // any player's findings by passing their id.
+    const gate = await accountStudentReadable(auth0Id, studentId, request)
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     const limitRaw = Number(url.searchParams.get('limit') || 50)
     const limit = Number.isFinite(limitRaw) ? limitRaw : 50
@@ -92,6 +130,13 @@ export const findingsReadRoutes = new Elysia()
     if (!UUID_RE.test(studentId)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
+    }
+    // Same gate as the list: this one is a CSV, so it is the more valuable of the
+    // two to leave unrefused.
+    const gate = await accountStudentReadable(auth0Id, studentId, request)
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     const limitRaw = Number(url.searchParams.get('limit') || 200)
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 500) : 200
@@ -125,6 +170,19 @@ export const findingsReviewRoutes = new Elysia()
     if (caller.verified !== auth0Id && !caller.can('finding.review')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Finding review requires the finding.review permission', false)
+    }
+    // The permission says who may review; this says whose. A finding hangs off an
+    // analysis, so the player comes from that analysis, and approving a finding
+    // about another team's player is a write on their record — 403, not 404.
+    const { found, serverJobId } = await getFindingJobId(auth0Id, findingId)
+    if (!found || !serverJobId) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Finding not found', false)
+    }
+    const gate = await accountJobScope(auth0Id, serverJobId, request, 'write', caller)
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     const updated = await reviewFinding(auth0Id, findingId, review_state)
     if (!updated) {
