@@ -251,13 +251,15 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         set.status = 201
         return { report_job_id: reportJobId, status: 'queued' }
       })
-      // Progress stream for one AI report job. Deliberately not team-scoped: it
-      // emits the job's lifecycle (queued/running/done/failed) and never the report
-      // itself, so a member of the same org learns that a job exists and how far
-      // along it is, nothing about the player. The content is only reachable through
-      // the GET below, which is scoped. Scoping this one too would mean a scoped
-      // caller could not watch a job they legitimately started, since an in-flight
-      // job has no report row to read a student from.
+      // Progress stream for one AI report job. Not team-scoped for the
+      // lifecycle: it emits queued/running/done/failed, so a member of the same
+      // org learns that a job exists and how far along it is, nothing about the
+      // player — and a scoped caller who started the job must be able to watch
+      // it, which matters because an in-flight job has no report row to read a
+      // student from. The *finished report* is content, not lifecycle, so it is
+      // scope-checked against the same rule as the GET below and omitted when
+      // the caller may not read that player; the client then falls back to that
+      // GET, which answers 403/404.
       .get('/api/org/:auth0Id/reports/ai/:reportJobId/events', async ({ params, request, set }) => {
         const { auth0Id, reportJobId } = params as {
           auth0Id: string
@@ -341,6 +343,11 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
           return new Response(null, { status: 499 })
         }
 
+        // Resolved once, before the stream opens: the caller's roster does not
+        // change mid-report, and per-frame lookups would be a query per event.
+        const caller = await resolveCaller(auth0Id, request)
+        const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+
         let cancelStream = () => {}
         const stream = new ReadableStream({
           start(controller) {
@@ -368,21 +375,34 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
             closeStream = close
             cancelStream = close
 
-            const enqueue = (job: AiReportJob) => {
+            const enqueue = async (job: AiReportJob) => {
               sequence = sequence
                 .then(async () => {
                   if (closed) return
+                  // The lifecycle (queued/running/done/failed) stays visible to
+                  // any member of the org: a scoped caller who legitimately
+                  // started this job must be able to watch it, and an in-flight
+                  // job has no report row to read a student from. The finished
+                  // report is a different matter — it carries the player's
+                  // attendance, series and analyses, so it goes through the
+                  // same read rule as the scoped GET below. Omit it rather than
+                  // refusing the stream: the client falls back to that GET,
+                  // which answers 403/404 properly.
                   const report =
                     job.status === 'done' && job.report_id
                       ? await withReportLookupTimeout(fetchReport(auth0Id, job.report_id))
                       : null
+                  const readable =
+                    report !== null &&
+                    caller.can('report.read') &&
+                    canSeeStudent(visible, report.student_id ?? '')
                   if (closed) return
                   controller.enqueue(
                     encoder.encode(
                       `data: ${JSON.stringify({
                         report_job_id: job.report_job_id,
                         status: job.status,
-                        report,
+                        report: readable ? report : null,
                       })}\n\n`,
                     ),
                   )

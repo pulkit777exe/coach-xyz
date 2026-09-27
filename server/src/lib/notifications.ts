@@ -75,7 +75,7 @@ export async function createNotification(
         ${input.type},
         ${input.title},
         ${input.body ?? null},
-        ${JSON.stringify(input.data ?? {})}::jsonb,
+        ${input.data ?? {}}::jsonb,
         ${input.dedupeKey ?? null}
       )
       on conflict do nothing

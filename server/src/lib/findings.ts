@@ -53,9 +53,9 @@ const findingNumber = (value: unknown): number | null => {
           ${findingText(f.observation)},
           ${findingText(f.feedback)},
           ${findingNumber(f.form_score)},
-          ${JSON.stringify(Array.isArray(f.evidence_frames) ? f.evidence_frames.slice(0, 50) : [])}::jsonb,
+          ${Array.isArray(f.evidence_frames) ? f.evidence_frames.slice(0, 50) : []}::jsonb,
           ${findingNumber(f.measured_at_timestamp)},
-          ${JSON.stringify(f.model_versions && typeof f.model_versions === 'object' ? f.model_versions : {})}::jsonb,
+          ${f.model_versions && typeof f.model_versions === 'object' ? f.model_versions : {}}::jsonb,
           ${findingText(f.review_state, 20) ?? 'auto'}
         )
         on conflict (server_job_id, id) do nothing;

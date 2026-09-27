@@ -83,7 +83,7 @@ export const audit = async (entry: {
           ${entry.resourceType},
           ${entry.resourceId ?? null},
           ${entry.result ?? 'ok'},
-          ${JSON.stringify(entry.meta ?? {})}::jsonb,
+          ${entry.meta ?? {}}::jsonb,
           ${entry.clientIp ?? null}
         );
       `

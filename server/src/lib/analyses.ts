@@ -106,8 +106,8 @@ export const persistVideoConversation = async (record: VideoConversationRecord):
         ${record.fileMimeType},
         ${record.fileSizeBytes},
         ${record.playerCount},
-        ${JSON.stringify(record.players)}::jsonb,
-        ${JSON.stringify(record.scanResponse)}::jsonb,
+        ${record.players ?? null}::jsonb,
+        ${record.scanResponse ?? null}::jsonb,
         ${record.clientIp},
         ${record.userAgent},
         ${supabaseProjectUrl},
@@ -180,7 +180,11 @@ export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise
 }
 
 export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promise<void> => {
-  const summaryJson = record.status.summary ? JSON.stringify(record.status.summary) : null
+  // Bound as the object, not JSON.stringify(...): Bun's prepared-statement path
+  // stores the string form as a jsonb *string* (jsonb_typeof = 'string'), which
+  // redactWellness then passes through untouched — so the medical redaction
+  // silently stopped working on the persisted row.
+  const summaryJson = record.status.summary ?? null
   const errorCode = record.status.error_code ?? (record.status.error ? 'ANALYSIS_FAILED' : null)
   const completedAt = record.status.complete ? new Date().toISOString() : null
 
@@ -231,7 +235,7 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
         ${record.status.complete},
         ${record.status.video_ready},
         ${summaryJson}::jsonb,
-        ${JSON.stringify(record.status)}::jsonb,
+        ${record.status}::jsonb,
         ${errorCode},
         ${record.status.error},
         ${record.requestedBy || null},

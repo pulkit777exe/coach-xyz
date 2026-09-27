@@ -278,3 +278,99 @@ describe('the capability check is a second layer, not the role floor', () => {
     expect(r.status).toBe(201)
   })
 })
+
+// The progress stream is NOT content-free, which the comment above it claimed.
+// The `done` frame attached the whole ReportRecord — attendance, series,
+// analyses, raw_report — so a team-A coach holding a team-B report_job_id read
+// team B's finished report in the first frame, from the very route whose comment
+// said it never could. The lifecycle stays visible on purpose (a scoped caller
+// who started the job must be able to watch it); only the report is gated.
+const streamDoneFrame = async (
+  role: OrgMemberRole | null,
+  reportStudentId: string | null,
+): Promise<{ status: number; frame: Record<string, unknown> | null }> => {
+  currentRole = role
+  const doneJob = {
+    report_job_id: JOB_ID,
+    auth0_id: ORG,
+    status: 'done',
+    report_id: 'report-1',
+    error: null,
+    progress: 100,
+    created_at: 0,
+    updated_at: 0,
+  }
+  const route = aiReportsRoute({
+    getJob: (async () => doneJob) as never,
+    getReportById: (async () => ({
+      id: 'report-1',
+      student_id: reportStudentId,
+      full_name: 'Player',
+      content_json: { summary: 'SECRET attendance+series+analyses' },
+    })) as never,
+    // The stream pushes its own snapshot frame on open, so the test never has to
+    // drive the listener; `getJob` above is the frame under test.
+    subscribeJob: (() => () => undefined) as never,
+    startBus: (async () => true) as never,
+    onBusDisconnect: (() => () => undefined) as never,
+  })
+  const res = await route.handle(
+    new Request(`http://localhost/api/org/${encodeURIComponent(ORG)}/reports/ai/${JOB_ID}/events`, {
+      headers: { 'x-verified-auth0-id': `auth0|${role ?? 'outsider'}-member` },
+    }),
+  )
+  if (res.status !== 200) return { status: res.status, frame: null }
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  // The snapshot frame is pushed by the stream itself on open; read until we
+  // have one `data:` payload.
+  while (!text.includes('data:')) {
+    const { done, value } = await reader.read()
+    if (done) break
+    text += decoder.decode(value, { stream: true })
+  }
+  const line = text.split('\n').find((l) => l.startsWith('data: '))
+  await reader.cancel().catch(() => undefined)
+  return { status: res.status, frame: line ? JSON.parse(line.slice(6)) : null }
+}
+
+describe('the AI-report progress stream withholds a report the caller may not read', () => {
+  test('a team coach watching an off-team job gets the lifecycle but no report', async () => {
+    for (const role of TEAM_STAFF) {
+      const { status, frame } = await streamDoneFrame(role, STUDENT_B)
+      expect(status, `role ${role}`).toBe(200)
+      // Lifecycle is intentionally visible: the job belongs to this club.
+      expect(frame?.status, `role ${role}: lifecycle`).toBe('done')
+      // The content is not.
+      expect(frame?.report, `role ${role}: off-team report must be withheld`).toBeNull()
+    }
+  })
+
+  test('an org-wide report is withheld from a team coach for the same reason', async () => {
+    // A report with no student summarizes the whole club, which is exactly what
+    // the scoped GET refuses and what POST /reports/ai refuses to generate.
+    const { frame } = await streamDoneFrame('coach', null)
+    expect(frame?.report).toBeNull()
+  })
+
+  test('a team coach still receives their own player report on the stream', async () => {
+    for (const role of TEAM_STAFF) {
+      const { frame } = await streamDoneFrame(role, STUDENT_A)
+      expect((frame?.report as { student_id: string } | null)?.student_id, `role ${role}`).toBe(
+        STUDENT_A,
+      )
+    }
+  })
+
+  test('an owner is org-wide and receives the report on the stream', async () => {
+    const { frame } = await streamDoneFrame('owner', STUDENT_B)
+    expect((frame?.report as { student_id: string } | null)?.student_id).toBe(STUDENT_B)
+  })
+
+  test('a player holds report.read but belongs to no team, so the report is withheld', async () => {
+    const { frame } = await streamDoneFrame('player', STUDENT_A)
+    expect(frame?.status).toBe('done')
+    expect(frame?.report).toBeNull()
+  })
+})

@@ -406,6 +406,36 @@ async function main() {
   })
   check('update report', r.status === 200 && r.json?.report?.report_type === 'monthly', r.json)
 
+  // ── jsonb bind invariant ───────────────────────────────────────────────────
+  console.log('jsonb')
+  // On Bun's prepared-statement path `${JSON.stringify(x)}::jsonb` stores a jsonb
+  // *string*. Ten columns were written that way, which quietly defeated
+  // redactWellness (its `typeof summary !== 'object'` guard passes a string
+  // straight through, so the medical redaction stopped working on persisted
+  // analyses) and left notification.data.href undefined after a reload. The
+  // repair migration in ensureInitialized unwraps them; this asserts the
+  // invariant holds, which is what fails if a writer regresses to the string
+  // form and new rows start landing as strings. A fixture cannot catch it —
+  // they stub `db` as a plain tag function, so the binding never happens.
+  const stringJsonb = await withHistoryStore(async (database) => {
+    const rows = await database<{ table_name: string; column_name: string; n: number }[]>`
+      select c.table_name, c.column_name, count(*)::int as n
+      from information_schema.columns c
+      join pg_class t on t.relname = c.table_name
+      where c.table_schema = 'public' and c.data_type = 'jsonb'
+      group by 1, 2;
+    `
+    let total = 0
+    for (const col of rows) {
+      const hits = await database.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from ${col.table_name} where ${col.column_name} is not null and jsonb_typeof(${col.column_name}) = 'string';`,
+      )
+      total += hits[0]?.n ?? 0
+    }
+    return total
+  })
+  check('no jsonb column holds a double-encoded string', stringJsonb === 0, { stringJsonb })
+
   // ── Analysis linking ──────────────────────────────────────────────────────
   console.log('analyses')
   analysisId = `srv-smoke-${tag}`

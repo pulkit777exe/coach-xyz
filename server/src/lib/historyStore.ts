@@ -965,6 +965,75 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+            // Repairs jsonb columns that older writers filled with
+            // JSON.stringify(value)::jsonb. On Bun's prepared-statement path
+            // that stores a jsonb *string* whose text is the intended JSON, so
+            // every read saw a string where an object was declared: notification
+            // links vanished on reload (data.href was undefined) and
+            // redactWellness passed summary_json through untouched, quietly
+            // disabling the medical redaction on persisted analyses.
+            //
+            // Only rows that are currently a string are touched, and the first/
+            // last-character prefilter keeps a malformed payload from aborting
+            // the statement; the exception guard is the backstop for anything
+            // that still fails to cast. Idempotent: a repaired row is an object,
+            // so the second run matches nothing.
+            const countStringJsonb = async (table: string, column: string): Promise<number> => {
+              const rows = await store.unsafe<{ n: number }[]>(
+                `select count(*)::int as n from ${table} where ${column} is not null and jsonb_typeof(${column}) = 'string';`,
+              )
+              return rows?.[0]?.n ?? 0
+            }
+            const repairDoubleEncodedJsonb = async (table: string, column: string) => {
+              await store.unsafe(
+                `do $$
+                begin
+                  update ${table}
+                     set ${column} = (${column} #>> '{}')::jsonb
+                   where ${column} is not null
+                     and jsonb_typeof(${column}) = 'string'
+                     and left(${column} #>> '{}', 1) in ('{', '[')
+                     and right(${column} #>> '{}', 1) in ('}', ']');
+                exception when others then
+                  null;
+                end $$;`,
+              )
+            }
+            // Every jsonb column in the schema, not just the ones found to be
+            // damaged: the list was originally short by `reports.content_json`,
+            // and the live smoke's all-columns invariant caught the omission. A
+            // column with nothing to repair is skipped by the guard below.
+            for (const [table, column] of [
+              ['analysis_history', 'status_json'],
+              ['analysis_history', 'summary_json'],
+              ['audit_logs', 'meta'],
+              ['chat_messages', 'event_refs'],
+              ['chat_messages', 'timestamp_refs'],
+              ['findings', 'evidence_frames'],
+              ['findings', 'model_versions'],
+              ['notification_preferences', 'events'],
+              ['notifications', 'data'],
+              ['reports', 'content_json'],
+              ['video_conversations', 'players_json'],
+              ['video_conversations', 'scan_response_json'],
+            ] as const) {
+              const damaged = await countStringJsonb(table, column)
+              if (damaged === 0) continue
+              await repairDoubleEncodedJsonb(table, column)
+              const remaining = await countStringJsonb(table, column)
+              const repaired = damaged - remaining
+              if (repaired > 0) {
+                logger.warn('jsonb_double_encoded_rows_repaired', {
+                  type: 'jsonb_double_encoded_rows_repaired',
+                  table,
+                  column,
+                  repaired,
+                  remaining,
+                })
+              }
+            }
+          })(),
+          (async () => {
             await store`alter table users add column if not exists role text not null default 'coach';`
           })(),
           (async () => {

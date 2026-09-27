@@ -26,8 +26,8 @@ export const saveChatMessage = async (msg: {
         ${msg.auth0Id},
         ${msg.role},
         ${msg.content},
-        ${msg.timestampRefs ? JSON.stringify(msg.timestampRefs) : null}::jsonb,
-        ${msg.eventRefs ? JSON.stringify(msg.eventRefs) : null}::jsonb
+        ${msg.timestampRefs ?? null}::jsonb,
+        ${msg.eventRefs ?? null}::jsonb
       )
       returning *;
     `
