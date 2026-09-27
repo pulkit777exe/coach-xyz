@@ -76,12 +76,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web-next/package-lock.json
+
+      # Bun is the package manager, matching the server job and the committed
+      # `bun.lock`. There is no package-lock.json: two lockfiles in one package
+      # meant an `npm ci` and a `bun install` could resolve different trees, and
+      # the disagreement only surfaced in CI. Node stays the runtime Next builds
+      # and runs on.
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
         working-directory: web-next
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check
         working-directory: web-next

@@ -5,17 +5,18 @@ Next.js 16 (App Router) + React 19 + TypeScript frontend for Coach-XYZ, a multi-
 ## Scripts
 
 ```bash
-npm install       # install dependencies (CI uses `npm ci`; see the lockfile note below)
-npm run dev       # start dev server on :3000
-npm run build     # production build
-npm run start     # serve production build
+bun install       # install dependencies (CI runs `bun install --frozen-lockfile`)
+bun run dev       # start dev server on :3000
+bun run build     # production build
+bun run start     # serve production build
 ```
 
-> **Lockfile.** This package currently has both `package-lock.json` and
-> `bun.lock`, and CI installs with `npm ci` — so `package-lock.json` is the one
-> CI trusts. Use npm here unless you are deliberately changing the lockfile; a
-> `bun install` can resolve a different tree and the divergence is invisible
-> until CI disagrees.
+> **Package manager.** Bun, like the server — `bun.lock` is the only lockfile
+> here. The npm scripts below still work (`npm run dev` just executes a
+> `package.json` script), but `bun install` is what CI uses, so install with bun
+> to keep your tree matching it. There is no `package-lock.json`: the two lockfiles
+> it sat beside could resolve different trees, and the divergence only appeared
+> when CI disagreed.
 
 ## Environment
 
