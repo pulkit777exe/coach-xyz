@@ -257,6 +257,38 @@ async function main() {
   })
   check('update event', r.status === 200 && r.json?.event?.status === 'completed', r.json)
 
+  // A full edit, the body EventFormDialog always sends. The update built
+  // `${k} = $n::text` for every column that was not team_id, and Postgres has
+  // no assignment cast from text to timestamptz, so any edit touching a time
+  // 500'd with "column starts_at is of type timestamp with time zone but
+  // expression is of type text" — editing an event was impossible from the UI.
+  // No fixture can catch it: they stub `db` as a plain tag function.
+  r = await call('PUT', `/api/org/${coachId}/schedule/${eventId}`, {
+    identity: coachId,
+    body: {
+      title: 'Smoke Practice (moved)',
+      event_type: 'practice',
+      starts_at: '2026-09-11T18:30:00Z',
+      ends_at: '2026-09-11T19:30:00Z',
+      location: 'Pitch 2',
+      status: 'completed',
+    },
+  })
+  check('edit event times → 200', r.status === 200, r.json)
+  check(
+    'edited starts_at persisted',
+    r.status === 200 && String(r.json?.event?.starts_at ?? '').startsWith('2026-09-11'),
+    r.json,
+  )
+  check(
+    'edited ends_at and text persisted',
+    r.status === 200 &&
+      String(r.json?.event?.ends_at ?? '').startsWith('2026-09-11') &&
+      r.json?.event?.title === 'Smoke Practice (moved)' &&
+      r.json?.event?.location === 'Pitch 2',
+    r.json,
+  )
+
   r = await call('GET', `/api/org/${coachId}/schedule`)
   check('list events', r.status === 200 && r.json?.events?.length === 1, r.json)
 
@@ -273,6 +305,52 @@ async function main() {
   })
   check('create metric → 201', r.status === 201 && r.json?.metric?.id, r.json)
   metricId = r.json?.metric?.id ?? ''
+
+  // No measured_at: the web's date field is optional and only adds the key when
+  // non-empty. An explicit NULL does not fall back to the column default
+  // (measured_at is NOT NULL DEFAULT now()), it raised 23502 and 500'd.
+  r = await call('POST', `/api/org/${coachId}/students/${studentId}/performance`, {
+    identity: coachId,
+    body: { metric_key: 'undated_metric', metric_value: 7 },
+  })
+  check('log a metric with no date → 201', r.status === 201 && r.json?.metric?.id, r.json)
+  const undated = await withHistoryStore(async (database) => {
+    const rows = await database<{ measured_at: string }[]>`
+      select measured_at from performance_metrics
+      where auth0_id = ${coachId} and metric_key = 'undated_metric' limit 1;
+    `
+    return rows[0]?.measured_at ?? null
+  })
+  check('undated metric defaulted measured_at to now()', undated !== null, { measured_at: undated })
+
+  // Two metrics now exist, which is the first time Array#sort in
+  // getStudentPerformanceSeries has had two points to compare. Bun decodes a
+  // timestamptz column to a Date, so the sort's `a.measured_at.localeCompare(b)`
+  // threw "a.measured_at.localeCompare is not a function" — taking the series
+  // and every report built from it down with it. The one-metric shape could
+  // never catch it, because sort does not call its comparator for a single
+  // element. Assert the order, and that measured_at is a usable string.
+  r = await call('GET', `/api/org/${coachId}/students/${studentId}/performance`)
+  const series = (r.json?.series ?? []) as Array<{ measured_at: string; metric_key: string }>
+  check('series returns both metrics', r.status === 200 && series.length === 2, r.json)
+  check(
+    'series is ordered by measured_at ascending',
+    series.length === 2 && String(series[0]?.measured_at) <= String(series[1]?.measured_at),
+    { series: series.map((p) => p.measured_at) },
+  )
+  check(
+    'series measured_at is an ISO string, not a Date',
+    series.every(
+      (p) => typeof p.measured_at === 'string' && !Number.isNaN(Date.parse(p.measured_at)),
+    ),
+    { series: series.map((p) => typeof p.measured_at) },
+  )
+
+  // Drop the probe: the checks below assert exact metric counts for this
+  // student, and this one is about the write path and the sort, not the count.
+  await withHistoryStore(async (database) => {
+    await database`delete from performance_metrics where auth0_id = ${coachId} and metric_key = 'undated_metric';`
+  })
 
   r = await call('GET', `/api/org/${coachId}/students/${studentId}/performance`)
   check('student performance series', r.status === 200 && r.json?.series?.length === 1, r.json)
@@ -304,6 +382,20 @@ async function main() {
     identity: coachId,
   })
   check('get report', r.status === 200 && r.json?.report?.id === reportId, r.json)
+
+  // content_json is jsonb. createReportRecord/updateReportRecord bound
+  // `${JSON.stringify(obj)}::jsonb`, which Postgres stores as a jsonb *string*:
+  // every key read back undefined and the report rendered empty. Assert the
+  // value is a real object on disk, not just that the row exists.
+  const contentTypes = await withHistoryStore(async (database) => {
+    const rows = await database<{ t: string }[]>`
+      select jsonb_typeof(content_json) as t from reports where id = ${reportId};
+    `
+    return rows[0]?.t ?? null
+  })
+  check('report content_json stored as an object', contentTypes === 'object', {
+    jsonb_typeof: contentTypes,
+  })
 
   r = await call('GET', `/api/org/${coachId}/reports?studentId=${studentId}`)
   check('list reports', r.status === 200 && r.json?.reports?.length >= 1, r.json)

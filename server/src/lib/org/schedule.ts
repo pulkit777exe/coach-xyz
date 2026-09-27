@@ -116,11 +116,20 @@ export const updateScheduleEvent = async (
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStoreOrThrow(async (db) => {
     const cols = Object.keys(scheduleInsertCols).filter((k) => k in input)
-    // Everything else is text; `team_id` is a uuid, so it takes the explicit
-    // cast (the same treatment `updateStudent` gives the same column).
-    const colCasts = { team_id: '::uuid' } as Record<string, string>
+    // Every non-text column takes an explicit cast, exactly as `updateStudent`
+    // does for its own. This must stay in sync with the DDL: the timestamps
+    // used to fall through to a `::text` default, and Postgres has no
+    // assignment cast from text to timestamptz, so any edit that touched a time
+    // 500'd with "column starts_at is of type timestamp with time zone but
+    // expression is of type text" — the web always sends starts_at/ends_at, so
+    // editing any event failed outright.
+    const colCasts = {
+      team_id: '::uuid',
+      starts_at: '::timestamptz',
+      ends_at: '::timestamptz',
+    } as Record<string, string>
     const setClause =
-      cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? '::text'}`).join(', ') +
+      cols.map((k, i) => `${k} = $${i + 1}${colCasts[k] ?? ''}`).join(', ') +
       (cols.length ? ', ' : '')
     const sql = `
       update schedule_events set

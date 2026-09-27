@@ -26,6 +26,38 @@ export type ReportRecord = {
 
 // ── Reports ──────────────────────────────────────────────────────────────────
 
+/**
+ * `content_json` is jsonb and must be bound as an object. These two writers
+ * used to bind `${JSON.stringify(obj)}::jsonb`, which Postgres stores as a
+ * jsonb *string* — every consumer then read `content.period` off a string and
+ * got undefined, so the report rendered empty. One such row is still on disk.
+ * Reads normalize defensively so a pre-fix row is not lost; the value is
+ * already an object for every row written after the fix.
+ */
+type ContentJson = Record<string, unknown>
+
+const withNormalizedContent = <T extends { content_json: unknown }>(row: T): T => ({
+  ...row,
+  content_json: normalizeContentJson(row.content_json),
+})
+
+const normalizeContentJson = (value: unknown): ContentJson => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as ContentJson
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as ContentJson
+      }
+    } catch {
+      // fall through to the empty object
+    }
+  }
+  return {}
+}
+
 export const getStudentAnalyses = async (
   auth0Id: string,
   studentId: string,
@@ -90,7 +122,7 @@ export const listReports = async (
           and (not ${scoped} or r.student_id = any(${scopeParam}::uuid[]))
         order by r.created_at desc;
       `
-      return rows ?? []
+      return (rows ?? []).map(withNormalizedContent)
     })) ?? []
   )
 }
@@ -112,7 +144,7 @@ export const getReport = async (
         and (not ${scoped} or r.student_id = any(${scopeParam}::uuid[]))
       limit 1;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withNormalizedContent(rows[0]) : null
   })
 }
 
@@ -131,11 +163,11 @@ export const createReportRecord = async (
         ${input.title},
         ${input.period_start ?? null}::date,
         ${input.period_end ?? null}::date,
-        ${JSON.stringify(input.content_json)}::jsonb
+        ${input.content_json}::jsonb
       )
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withNormalizedContent(rows[0]) : null
   })
 }
 
@@ -349,11 +381,11 @@ export const updateReportRecord = async (
         title = ${input.title},
         period_start = ${input.period_start}::date,
         period_end = ${input.period_end}::date,
-        content_json = ${JSON.stringify(input.content_json)}::jsonb,
+        content_json = ${input.content_json}::jsonb,
         updated_at = now()
       where auth0_id = ${auth0Id} and id = ${id}
       returning *, (select full_name from students s where s.id = reports.student_id) as full_name;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withNormalizedContent(rows[0]) : null
   })
 }

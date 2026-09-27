@@ -106,7 +106,11 @@ export const createPerformanceMetric = async (
         ${input.metric_value}::float8,
         ${input.unit ?? null},
         ${input.source_analysis_id ?? null},
-        ${input.measured_at ?? null}::timestamptz
+        -- An explicit NULL does not fall back to the column default
+        -- (measured_at is NOT NULL DEFAULT now()), it raises 23502.
+        -- measured_at is optional in PerformanceInput and the web's date
+        -- field is optional, so logging without a date has to mean "now".
+        coalesce(${input.measured_at ?? null}::timestamptz, now())
       )
       on conflict (auth0_id, student_id, metric_key, measured_at) do nothing
       returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
@@ -180,7 +184,7 @@ export const getStudentPerformanceSeries = async (
       const filter = scopeFilter(opts.studentIds)
       const analyses = await db<
         {
-          requested_at: string
+          requested_at: string | Date
           form_score: number | null
           server_job_id: string
         }[]
@@ -207,10 +211,22 @@ export const getStudentPerformanceSeries = async (
         studentIds: opts.studentIds,
       })
 
+      // Bun decodes a timestamptz column to a Date, not to the string these
+      // types declare. Everything downstream treats measured_at as a string —
+      // including the sort below, and orgValidate.computeMetricTrends, which
+      // runs its own localeCompare sort over the same points — so normalize
+      // where the value enters the domain object. With a single point
+      // Array#sort never calls its comparator, which is why a student with one
+      // metric looked fine while a student with two threw
+      // "a.measured_at.localeCompare is not a function", taking the performance
+      // series and every report built from it with it.
+      const iso = (value: string | Date): string =>
+        value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+
       const points: PerformanceSeriesPoint[] = [
         ...(analyses ?? []).map((a) => ({
           id: null as string | null,
-          measured_at: a.requested_at,
+          measured_at: iso(a.requested_at),
           metric_key: 'form_score',
           metric_value: a.form_score as number,
           unit: '/10',
@@ -219,7 +235,7 @@ export const getStudentPerformanceSeries = async (
         })),
         ...(manual ?? []).map((m) => ({
           id: m.id,
-          measured_at: m.measured_at,
+          measured_at: iso(m.measured_at),
           metric_key: m.metric_key,
           metric_value: m.metric_value,
           unit: m.unit,
