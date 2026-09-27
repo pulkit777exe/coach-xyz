@@ -7,6 +7,7 @@ Depends on video_io for frame reading, and on detection_utils/detector/pose_back
 
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 import cv2
@@ -24,6 +25,49 @@ from core.detector import detect_players
 from core.errors import NoPlayersDetectedError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.video_io import read_frame_by_index
+
+
+def _compute_elbow_extension(landmarks: list[dict]) -> float:
+    """Interior angle at the left elbow, in degrees: 180° straight, 0° folded.
+
+    Uses the same dot/cross geometry as `compute_joint_angles`, so the two
+    joint-angle producers in this module agree on what an angle means.
+
+    This is the *extension* every sport pack scores against (basketball
+    `elbow_alignment` ideal [160, 175], weight 0.20 — the highest in that pack;
+    baseball `hand_path` [140, 165]; cricket and hockey [150, 170]).
+
+    It used to difference the two bone *directions*,
+    `abs(arctan2(elbow->wrist) - arctan2(shoulder->elbow))`, which is the
+    complement: for a straight arm those vectors point the same way, so it
+    returned 0.0° and the highest-weighted basketball criterion reported the
+    exact opposite of the truth — a player with a perfect release was told
+    "Outside acceptable range (ideal: 160-175°, measured: 0.0°)". Differencing
+    arctan2 results is also wrong across the ±pi branch cut, reporting ~335°
+    where the true value is ~17°. Dot/cross has no branch cut.
+
+    Returns NaN when the landmarks are absent or a bone has zero length, so the
+    caller omits the key rather than publishing a number it cannot measure.
+    """
+    try:
+        shoulder = landmarks[11]
+        elbow = landmarks[13]
+        wrist = landmarks[15]
+    except (IndexError, KeyError, TypeError):
+        return float("nan")
+
+    def vector(p1: dict, p2: dict) -> np.ndarray:
+        return np.array([p2["x"] - p1["x"], p2["y"] - p1["y"]])
+
+    # Both vectors point *into* the elbow vertex, so a straight shoulder-elbow-
+    # wrist line makes them anti-parallel: arccos(-1) = 180°.
+    v1 = vector(shoulder, elbow)
+    v2 = vector(wrist, elbow)
+    n1, n2 = float(np.linalg.norm(v1)), float(np.linalg.norm(v2))
+    if n1 < 1e-9 or n2 < 1e-9:
+        return float("nan")
+    cos_angle = np.dot(v1, v2) / (n1 * n2)
+    return float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0))))
 
 
 def compute_joint_angles(landmarks: list[dict[str, float]]) -> dict[str, float]:
@@ -366,24 +410,8 @@ def build_active_player_tracks(
         # Add elbow extension angle (key metric for shooting sports)
         landmarks = track.get("landmarks", [])
         if landmarks and len(landmarks) > 16:
-            # Elbow extension angle using left shoulder (11), left elbow (13), left wrist (15)
-            def vector_angle(p1: dict, p2: dict) -> float:
-                return np.arctan2(p2["y"] - p1["y"], p2["x"] - p1["x"])
-
-            try:
-                shoulder = landmarks[11]
-                elbow = landmarks[13]
-                wrist = landmarks[15]
-
-                # Vector from shoulder to elbow
-                v_shoulder_elbow = vector_angle(shoulder, elbow)
-                # Vector from elbow to wrist
-                v_elbow_wrist = vector_angle(elbow, wrist)
-
-                # Angle difference (larger = more extended)
-                elbow_extension = abs(v_elbow_wrist - v_shoulder_elbow)
-                track["elbow_extension_angle"] = float(np.degrees(elbow_extension))
-            except (IndexError, KeyError):
-                pass
+            value = _compute_elbow_extension(landmarks)
+            if not math.isnan(value):
+                track["elbow_extension_angle"] = value
 
     return active_tracks

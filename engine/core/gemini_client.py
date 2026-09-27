@@ -13,7 +13,7 @@ from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
-from core.config import GEMINI_MODEL, parse_timestamp
+from core.config import GEMINI_ANALYSIS_TIMEOUT_S, GEMINI_MODEL, parse_timestamp
 from core.detection_utils import landmark_angle
 from core.errors import GeminiParseError, GeminiQuotaError
 from core.gemini_common import parse_json_response
@@ -70,6 +70,27 @@ def is_quota_error(exc: BaseException) -> bool:
 # (previously the app booted a second, separate client for chat/report).
 
 
+def _client(api_key: str) -> "genai.Client":
+    """A Gemini client with a real HTTP timeout.
+
+    Without this the SDK passes `timeout=None` straight through to httpx, which
+    httpx reads as *wait forever*. A request that never returns then holds its
+    executor thread for good, and with `analysis_executor` at `max_workers=2`
+    two of them wedged every future analysis in the process. This applies the
+    same bound the analysis stage wraps around the call, but on the inside, so
+    the thread is released too.
+    """
+    http_options = None
+    if genai_types is not None:
+        try:
+            http_options = genai_types.HttpOptions(timeout=GEMINI_ANALYSIS_TIMEOUT_S * 1000)
+        except Exception:  # pragma: no cover - SDK without HttpOptions
+            http_options = None
+    if http_options is None:
+        return genai.Client(api_key=api_key)
+    return genai.Client(api_key=api_key, http_options=http_options)
+
+
 def _configured_client() -> "genai.Client | None":
     """Create the shared client when configured; None when unavailable.
 
@@ -82,7 +103,7 @@ def _configured_client() -> "genai.Client | None":
     if not api_key:
         return None
     try:
-        return genai.Client(api_key=api_key)
+        return _client(api_key)
     except Exception:
         return None
 
@@ -101,7 +122,7 @@ def _get_client() -> "genai.Client":
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise GeminiQuotaError("GEMINI_API_KEY is not configured")
-        _gemini_client = genai.Client(api_key=api_key)
+        _gemini_client = _client(api_key)
     return _gemini_client
 
 

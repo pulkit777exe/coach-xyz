@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import BinaryIO
 
@@ -41,6 +43,46 @@ if _local_storage_env:
     LOCAL_STORAGE_ROOT = _local_storage_path.resolve()
 else:
     LOCAL_STORAGE_ROOT = (TMP_ROOT / "storage").resolve()
+
+
+def sweep_stale_storage(max_age_s: float) -> int:
+    """Delete local storage files older than `max_age_s`. Returns the count.
+
+    Recursive by design. The shutdown sweep used to glob one level deep and keep
+    only `os.path.isfile` hits, but nothing writes at the root any more:
+    `upload_video_streaming` and `upload_result_video` namespace their keys
+    under `raw/<session>/<angle>/` and `results/`, so the glob returned those
+    two *directories* and isfile rejected both. Reproduced against the layout
+    the code produces: 0 files deleted. One rendered mp4 per completed analysis
+    then accumulated forever on any deployment with a persistent disk, while
+    `docs/BACKUP_RESTORE.md` called the directory ephemeral.
+
+    It also resolved a relative `LOCAL_STORAGE_DIR` against the process CWD,
+    while this module resolves it against `ENGINE_ROOT` — so launching uvicorn
+    from anywhere but the Dockerfile's WORKDIR skipped the sweep entirely.
+    """
+    if not LOCAL_STORAGE_ROOT.exists():
+        return 0
+
+    cutoff = time.time() - max_age_s
+    removed = 0
+    for path in LOCAL_STORAGE_ROOT.rglob("*"):
+        try:
+            # is_file() follows symlinks and is False for directories, so
+            # neither a subdirectory nor a dangling link is ever unlinked.
+            if not path.is_file():
+                continue
+            if path.stat().st_mtime >= cutoff:
+                continue
+            path.unlink()
+            removed += 1
+            logging.info(f"[STORAGE] Cleaned up stale file: {path}")
+        except OSError as exc:
+            # A file another process is still writing, or one we cannot remove:
+            # log it rather than abandoning the rest of the sweep.
+            logging.warning(f"[STORAGE] Could not remove {path}: {exc}")
+    return removed
+
 
 
 def is_local_backend() -> bool:

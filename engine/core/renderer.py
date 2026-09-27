@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Dict
 
@@ -247,6 +248,28 @@ def _draw_player_bbox(
 
 # ── HUD panel ─────────────────────────────────────────────────────────────────
 
+def _coerce_score(value: object) -> int:
+    """Coerce a model-supplied form score to an int for display, or 0.
+
+    The value is a Gemini output, so it arrives as a float, an int, or a numeric
+    string depending on the model's mood. `quality_check` coerces with float() and
+    accepts "8.5" as in-range, and `validator` checks the summary fields for
+    presence but never for type, so a stringly-typed score reaches the renderer
+    intact — where `int("8.5")` raised ValueError and killed the render at the
+    most expensive stage of the job, after the model call had been paid for.
+    NaN and +/-inf convert without raising but cannot be rendered as a score.
+    """
+    if value is None or isinstance(value, bool):
+        return 0
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
+    if not math.isfinite(number):
+        return 0
+    return int(number)
+
+
 def _draw_hud(
     frame: np.ndarray,
     analysis_result: dict,
@@ -256,7 +279,7 @@ def _draw_hud(
     current_frame: int,
 ) -> None:
     sport = str(analysis_result.get("sport", "unknown"))
-    form_score = int(analysis_result.get("form_score", 0) or 0)
+    form_score = _coerce_score(analysis_result.get("form_score"))
     tips = analysis_result.get("top_tips", []) or []
 
     if not isinstance(tips, list):
@@ -486,29 +509,43 @@ def render_video(
     frame_index = 0
     last_frame = None
 
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
+    # `cap` and `writer` are released in a finally: an exception from the frame
+    # loop (a decode error, a malformed analysis_result) used to escape with
+    # both handles open and the mp4 never finalized, leaking a descriptor and a
+    # partial video per failure. release() is idempotent, so the success path
+    # releases here and the finally acts as the backstop.
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
 
-        track = track_by_frame.get(frame_index)
-        if track:
-            _draw_pose_landmarks(frame, track["landmarks"], connections, tuple(colors["primary"]))
-            _draw_player_bbox(frame, track["bbox"], tuple(colors["primary"]))
+            track = track_by_frame.get(frame_index)
+            if track:
+                _draw_pose_landmarks(frame, track["landmarks"], connections, tuple(colors["primary"]))
+                _draw_player_bbox(frame, track["bbox"], tuple(colors["primary"]))
 
-        timestamp = frame_index / max(1.0, use_fps)
-        _draw_hud(frame, analysis_result, timestamp, colors, total_frames, frame_index)
+            timestamp = frame_index / max(1.0, use_fps)
+            _draw_hud(frame, analysis_result, timestamp, colors, total_frames, frame_index)
 
-        writer.write(frame)
-        last_frame = frame
-        frame_index += 1
+            writer.write(frame)
+            last_frame = frame
+            frame_index += 1
 
-    if last_frame is not None:
-        hold_frames = int(round(use_fps * 3))
-        summary_frame = _draw_summary_screen(last_frame.copy(), analysis_result, colors)
-        for _ in range(max(1, hold_frames)):
-            writer.write(summary_frame)
-
-    writer.release()
-    cap.release()
+        if last_frame is not None:
+            hold_frames = int(round(use_fps * 3))
+            summary_frame = _draw_summary_screen(last_frame.copy(), analysis_result, colors)
+            for _ in range(max(1, hold_frames)):
+                writer.write(summary_frame)
+    except BaseException:
+        # A partially written video is not deliverable; drop it rather than
+        # leave it for someone to find.
+        try:
+            Path(output_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+    finally:
+        writer.release()
+        cap.release()
     return output_path

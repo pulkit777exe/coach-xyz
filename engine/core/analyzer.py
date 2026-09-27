@@ -665,26 +665,44 @@ def _stage_reasoning(ctx: AnalysisContext, resumed: bool) -> None:
     # fast with a retryable error instead of wedging the worker. Runs in
     # a one-shot executor; on timeout the stray thread is abandoned (it
     # only writes the analysis cache, which is keyed and idempotent).
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini") as gemini_pool:
-        gemini_future = gemini_pool.submit(
-            call_gemini,
-            best_for_gemini,
-            ctx.video_duration,
-            ctx.fps,
-            ctx.video_width,
-            ctx.video_height,
-            ctx.player_index,
-            ctx.preprocessed_path,
-            ctx.frame_cache,
-        )
-        try:
-            gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
-        except FuturesTimeoutError as exc:
-            raise EngineError(
-                code="GEMINI_TIMEOUT",
-                message="AI analysis timed out. Please try again.",
-                retryable=True,
-            ) from exc
+    # The pool is deliberately NOT used as a context manager. `with` calls
+    # shutdown(wait=True) on the way out, so raising the timeout from inside the
+    # block would join the stuck worker *before* the EngineError propagated —
+    # the timeout bounded nothing. Reproduced: a 5s call with timeout=0.5 raised
+    # at 0.50s but surfaced to the caller at 5.00s. The HTTP call is bounded
+    # independently by the client's own timeout (see `_configured_client`), so
+    # the abandoned thread finishes on its own; this is what makes the *request*
+    # fail fast and hand the job back to BullMQ instead of holding it for the
+    # full allowance.
+    gemini_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemini")
+    gemini_future = gemini_pool.submit(
+        call_gemini,
+        best_for_gemini,
+        ctx.video_duration,
+        ctx.fps,
+        ctx.video_width,
+        ctx.video_height,
+        ctx.player_index,
+        ctx.preprocessed_path,
+        ctx.frame_cache,
+    )
+    try:
+        gemini_result = gemini_future.result(timeout=GEMINI_ANALYSIS_TIMEOUT_S)
+    except FuturesTimeoutError as exc:
+        gemini_pool.shutdown(wait=False, cancel_futures=True)
+        raise EngineError(
+            code="GEMINI_TIMEOUT",
+            message="AI analysis timed out. Please try again.",
+            retryable=True,
+        ) from exc
+    except BaseException:
+        # Same reasoning for any other failure: never block the caller on a
+        # thread whose work nobody is waiting for.
+        gemini_pool.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        # Already finished, so this returns immediately.
+        gemini_pool.shutdown(wait=True)
     ctx.gemini_result = normalize_gemini_result(gemini_result)
 
 

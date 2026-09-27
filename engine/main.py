@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import glob
 import hmac
 import json
 import logging
@@ -23,6 +22,7 @@ import sentry_sdk
 # Logging comes first so a Sentry-init failure is visible instead of silent:
 # error monitoring that fails closed with zero signal is worse than none.
 from core.logging_config import setup_logging
+from core.storage import sweep_stale_storage
 setup_logging()
 _engine_log = logging.getLogger("coachai-engine")
 
@@ -94,16 +94,7 @@ async def lifespan(app: FastAPI):
 
     analysis_executor.shutdown(wait=True, cancel_futures=False)
     logging.info("CoachAI Engine shutting down")
-    storage_dir = os.environ.get("LOCAL_STORAGE_DIR", "./tmp/storage")
-    if os.path.exists(storage_dir):
-        now = time.time()
-        for f in glob.glob(os.path.join(storage_dir, "*")):
-            try:
-                if os.path.isfile(f) and now - os.path.getmtime(f) > 7200:
-                    os.unlink(f)
-                    logging.info(f"[SHUTDOWN] Cleaned up orphaned file: {f}")
-            except Exception:
-                pass
+    sweep_stale_storage(max_age_s=7200)
 
 
 app = FastAPI(title="CoachAI Engine", version="0.2.0", lifespan=lifespan)
