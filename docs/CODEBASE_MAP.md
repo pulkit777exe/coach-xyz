@@ -3,30 +3,33 @@
 Large god-modules and the org route monolith were split (candidates 1–6 of an
 earlier architecture review, all shipped — the report itself no longer exists
 at its original location). This file records where the remaining domain
-modules live so new code lands in the right place. Last verified 2026-09-24,
-after the server routes/libs split, the engine `main.py` slim-down, and the
+modules live so new code lands in the right place. Last verified 2026-09-27,
+after the server routes/libs split, the engine `main.py` slim-down, the
 2026-09-24 architecture-candidate + routing-sync pass (new seam modules below,
-three dead routes removed).
+three dead routes removed), and the 2026-09-27 authorization pass (ADR-0003;
+every org write route capability-checked, team scope applied across the org tree
+and the org-keyed account tree).
 
 ## Server (`server/src/`)
 
-| Domain                    | Routes                                                                                                                                   | Data layer                                                                                                                                                                                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Identity boundary         | `lib/serviceGuard.ts`, `lib/attribution.ts`, `lib/jobAccess.ts`, `lib/httpErrors.ts` (shared error handler: app + smoke)                 | —                                                                                                                                                                                                                                  |
-| Caller + permissions      | `lib/caller.ts` (`resolveCaller`, self-scope `requireVerifiedSelf`/`missingVerifiedSelf`), `lib/permissions.ts`                          | `lib/orgMembers.ts` (roles), `lib/teams.ts`                                                                                                                                                                                        |
-| History/analyses          | `routes/status.ts`, `routes/analyze.ts`, `routes/download.ts`                                                                            | `lib/analyses.ts`, `lib/jobs.ts`, `lib/queue.ts` (lazy), `lib/engine.ts`, `lib/analysisAdmission.ts` (atomic quota admission via `tryReserveUsage` + `usage_counters`), `lib/retention.ts` (sweep)                                 |
-| Findings                  | `routes/findings.ts` (trends/list/export/review)                                                                                         | `lib/findings.ts` (persist gate, CSV)                                                                                                                                                                                              |
-| Clips                     | `routes/clips.ts` (list/create/delete; mounted by `routes/auth.ts`)                                                                      | `lib/clips.ts` (validator + scoped CRUD)                                                                                                                                                                                           |
-| Registry                  | `routes/scan.ts`, `routes/auth.ts` (sync)                                                                                                | `lib/registry.ts` (organizations, videos, player_events)                                                                                                                                                                           |
-| Users                     | `routes/auth.ts` (sync), `routes/me.ts`                                                                                                  | `lib/users.ts`                                                                                                                                                                                                                     |
-| Chat                      | `routes/chat.ts` (`/api/chat/stream` only), `routes/chatHistory.ts` (transcript GET/POST + ask-an-analysis; mounted by `routes/auth.ts`) | `lib/transcript.ts` (`Transcript` seam: `playerTranscript` Redis / `dashboardTranscript` Postgres), `lib/sse.ts` (buffered SSE parsing), `lib/chatMessages.ts`, `lib/conversation.ts`, `lib/aiResponse.ts` (connectivity fallback) |
-| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared)    | `lib/org/*` per domain, via the `lib/orgData.ts` barrel                                                                                                                                                                            |
-| Members/invites/audit     | `routes/members.ts`, `routes/teams.ts`                                                                                                   | `lib/orgMembers.ts`, `lib/invites.ts`, `lib/audit.ts` (`AUDIT_ACTIONS`), `lib/teams.ts`                                                                                                                                            |
-| Player hub                | `routes/me.ts`                                                                                                                           | `lib/orgData.ts` (scoped reads)                                                                                                                                                                                                    |
-| Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                                | engine sport packs via `GET /sports/{sport}/positions`                                                                                                                                                                             |
-| Email/share/notifications | `routes/email.ts`, `routes/share.ts`, `routes/notifications.ts`, `routes/aiReports.ts`                                                   | `lib/mailer.ts`, `lib/shareTokens.ts`, `lib/notifications.ts`, `lib/aiReportData.ts`                                                                                                                                               |
-| Schema + connection       | —                                                                                                                                        | `lib/historyStore.ts` (all DDL, 3 parallel levels — sole owner; no-DB fallbacks via `orDisabledDefault`)                                                                                                                           |
-| Observability             | —                                                                                                                                        | `lib/logger.ts` (winston singleton, key-based redaction, Sentry bridge — the only logging seam), `lib/requestLog.ts` (access-log helpers)                                                                                          |
+| Domain                    | Routes                                                                                                                                                                            | Data layer                                                                                                                                                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity boundary         | `lib/serviceGuard.ts`, `lib/attribution.ts`, `lib/jobAccess.ts`, `lib/httpErrors.ts` (shared error handler: app + smoke)                                                          | —                                                                                                                                                                                                                                  |
+| Caller + permissions      | `lib/caller.ts` (`resolveCaller`, self-scope `requireVerifiedSelf`/`missingVerifiedSelf`), `lib/permissions.ts`                                                                   | `lib/orgMembers.ts` (roles), `lib/teams.ts`                                                                                                                                                                                        |
+| Authorization scope       | `lib/org/scope.ts` (primitives: `visibleStudentIds`, `canSeeStudent`, `uuidArrayLiteral`), `lib/accountScope.ts` (account-tree seam: `accountJobScope`, `accountStudentReadable`) | —                                                                                                                                                                                                                                  |
+| History/analyses          | `routes/status.ts`, `routes/analyze.ts`, `routes/download.ts`                                                                                                                     | `lib/analyses.ts`, `lib/jobs.ts`, `lib/queue.ts` (lazy), `lib/engine.ts`, `lib/analysisAdmission.ts` (atomic quota admission via `tryReserveUsage` + `usage_counters`), `lib/retention.ts` (sweep)                                 |
+| Findings                  | `routes/findings.ts` (trends/list/export/review)                                                                                                                                  | `lib/findings.ts` (persist gate, CSV)                                                                                                                                                                                              |
+| Clips                     | `routes/clips.ts` (list/create/delete; mounted by `routes/auth.ts`)                                                                                                               | `lib/clips.ts` (validator + scoped CRUD)                                                                                                                                                                                           |
+| Registry                  | `routes/scan.ts`, `routes/auth.ts` (sync)                                                                                                                                         | `lib/registry.ts` (organizations, videos, player_events)                                                                                                                                                                           |
+| Users                     | `routes/auth.ts` (sync), `routes/me.ts`                                                                                                                                           | `lib/users.ts`                                                                                                                                                                                                                     |
+| Chat                      | `routes/chat.ts` (`/api/chat/stream` only), `routes/chatHistory.ts` (transcript GET/POST + ask-an-analysis; mounted by `routes/auth.ts`)                                          | `lib/transcript.ts` (`Transcript` seam: `playerTranscript` Redis / `dashboardTranscript` Postgres), `lib/sse.ts` (buffered SSE parsing), `lib/chatMessages.ts`, `lib/conversation.ts`, `lib/aiResponse.ts` (connectivity fallback) |
+| Org subdomains            | `routes/org/` (students, attendance, schedule, reports, objectives, billing, compete, plans, wellness, performance, overview, shared)                                             | `lib/org/*` per domain, via the `lib/orgData.ts` barrel                                                                                                                                                                            |
+| Members/invites/audit     | `routes/members.ts`, `routes/teams.ts`                                                                                                                                            | `lib/orgMembers.ts`, `lib/invites.ts`, `lib/audit.ts` (`AUDIT_ACTIONS`), `lib/teams.ts`                                                                                                                                            |
+| Player hub                | `routes/me.ts`                                                                                                                                                                    | `lib/orgData.ts` (scoped reads)                                                                                                                                                                                                    |
+| Sport vocab               | `routes/sports.ts` (guard-exempt, cached, degrades to [])                                                                                                                         | engine sport packs via `GET /sports/{sport}/positions`                                                                                                                                                                             |
+| Email/share/notifications | `routes/email.ts`, `routes/share.ts`, `routes/notifications.ts`, `routes/aiReports.ts`                                                                                            | `lib/mailer.ts`, `lib/shareTokens.ts`, `lib/notifications.ts`, `lib/aiReportData.ts`                                                                                                                                               |
+| Schema + connection       | —                                                                                                                                                                                 | `lib/historyStore.ts` (all DDL, 3 parallel levels — sole owner; no-DB fallbacks via `orDisabledDefault`)                                                                                                                           |
+| Observability             | —                                                                                                                                                                                 | `lib/logger.ts` (winston singleton, key-based redaction, Sentry bridge — the only logging seam), `lib/requestLog.ts` (access-log helpers)                                                                                          |
 
 Routes removed 2026-09-24 (dead): `GET …/analyses/:jobId/stages` (+ orphaned
 `getAnalysisStages`/`AnalysisStageEntry`), server `POST /api/chat`
@@ -119,7 +122,17 @@ UX-only — the server remains the enforcement point:
 | `finding.review`      |   ✓   |   ✓   |     ✓      |        ✓        |   ✓   |    ✓    |         |        |
 | `medical.read`        |   ✓   |       |            |                 |       |         |    ✓    |        |
 
-**Server gaps (frontend-only for now — server fixes out of scope here):**
+**Authorization is four layers, and only the inner two say whose data.**
+Membership (`serviceGuard`) → role floor (`orgRoleGuard` at mount) → capability
+(in-handler `resolveCaller(...).can(...)`) → scope (in-handler
+`visibleStudentIds`/`canSeeStudent`, or `accountJobScope`/`accountStudentReadable`
+on the account tree). A mount-time guard is a floor, not a capability, and a
+capability is not a scope — so auditing a file for "is it guarded" produces false
+negatives. Full reasoning, including the rejected alternatives, is
+`docs/adr/adr-0003-authorization-four-layers.md`; the scope tiers are
+`docs/adr/adr-0002-roster-scope-two-tiers.md`.
+
+**Server gaps closed since the 2026-09-24 pass (kept for the regression notes):**
 
 - **Regression (broken since `b9fca0f`, 2026-09-22 — FIXED, `9314a14`):**
   `serviceGuard` passed the ABSOLUTE `request.url` into
@@ -132,23 +145,30 @@ UX-only — the server remains the enforcement point:
   (`new URL(x).pathname`, raw string on parse failure) so absolute URLs and
   bare pathnames both match the org prefixes — +6 hermetic regression tests in
   `server/tests/serviceGuard.test.ts` pin the normalization and the
-  absolute-URL member fast path (`bun test` 360 pass / 0 fail / 34 files;
-  member `/reports`, `/students`, `/teams` verified 200). Landed in `9314a14`
-  — kept atomic with the winston-logging migration that shared these files.
-- `/api/org/:id/reports` CRUD runs on identity + the app-level non-player floor
-  only (guard now fixed): `medical` can
-  create/update/delete reports server-side despite `report.read`-only (UI hides
-  the affordances).
-- `attendance`/`schedule`/`performance`/`overview`/`students` writes have no
-  per-role floor beyond membership: any non-player member (incl. `medical`,
-  `analyst`) can invoke them over raw HTTP where the matrix grants read-only.
+  absolute-URL member fast path. Landed in `9314a14`.
+- **FIXED:** `/api/org/:id/reports` CRUD ran on identity + the app-level
+  non-player floor only, so `medical` could create/update/delete reports
+  despite holding `report.read` only. All three writes now check
+  `report.create`.
+- **FIXED:** `attendance`/`schedule`/`performance`/`students` writes had no
+  per-role floor beyond membership, so `medical` and `analyst` could invoke
+  them over raw HTTP where the matrix grants read-only. Every org write route
+  now checks its capability. (`overview` has no writes.)
+- **FIXED:** `/api/auth/user/:id/*` had neither capability nor scope checks, and
+  the account id in that path is the org's own sub — so reads were org-wide, not
+  "the caller's own data". See ADR-0003. The findings half (`routes/findings.ts`,
+  the only caller of `getStudentFindings`/`getFindingsTrend`/`reviewFinding`) was
+  keyed by `student_id` and validated only that it was a UUID.
+- **FIXED:** `routes/share.ts` compared the analysis row's owning org against
+  the caller's own sub, which for org-owned rows could only pass for the org
+  owner — so no coach could mint or revoke a share link.
 - The email floor (`owner, admin, head_coach, assistant_coach, coach`) is
   _stricter_ than `report.create`: `analyst` can draft reports but not email
   them — mirrored on both sides, recorded here so the asymmetry is conscious.
 - Enforced server-side today: `objectives`/`plans` (`player.manage`),
   `compete` (`team.manage`), `teams` (+ owner/admin delete floor),
   `members` (`orgRoleGuard` per scope), `wellness` (read `medical.read`,
-  write `player.manage`), `aiReports` (email-family floor).
+  write `player.manage`), `aiReports` (email-family floor + `report.create`/`.read`).
 
 **Intentional server behavior the UI mirrors (verified 2026-09-24):**
 
@@ -164,9 +184,17 @@ UX-only — the server remains the enforcement point:
 - Org student lists scope to the caller's team hierarchy (`studentScope`):
   members with no assigned team see `[]` even when the org has students — a
   scoped empty list, not a failed fetch.
+- `/api/auth/user/:id/*` is **org-keyed** (see ADR-0003), so it is team-scoped
+  too. A team coach's History list shows their own players plus their own unfiled
+  uploads, and the dashboard stat tiles are scoped the same way so the two agree.
+  `getUserStats` therefore takes the same `studentIds` option as
+  `getUserAnalyses`.
 
 ## Conventions (must keep)
 
+- Decisions with reasoning and rejected alternatives live in
+  `docs/adr/` (index: `docs/adr/README.md`) — start with 0002 (which players a
+  caller may see) and 0003 (how the four authorization layers compose).
 - Design foundations — type scale, 9ui/interior.dev library policy, motion
   tokens, role-IA + states contract: `docs/DESIGN_FOUNDATIONS.md`.
 - No barrel imports; direct paths only. No components defined in components.

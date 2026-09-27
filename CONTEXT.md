@@ -24,11 +24,24 @@ One line per term, sourced from actual code/docs (no invention). Deep detail liv
   claim. Table `findings`; human review = approve/flag (`server/src/lib/findings.ts`).
 - **Clip** — coach-curated `[start_ms, end_ms)` bookmark on an analysis's rendered video,
   optional finding link, 120s / 100-per-analysis caps; table `clips` (`server/src/lib/clips.ts`).
-- **Org / Member / Role** — an org = one owning coach's scope, keyed by the owner's `auth0_id`.
-  Member roles: `owner | admin | head_coach | assistant_coach | coach | analyst | medical`
-  (`server/src/lib/orgMembers.ts`, mirrored contractually in `web-next/lib`). Account-level
-  `users.role` is separate: `coach | player`, flipping to `player` when the login email
-  auto-links a `students` row.
+- **Org / Member / Role** — an org = one owning coach's scope, keyed by the owner's
+  `auth0_id` (`server/src/lib/orgMembers.ts`, mirrored contractually in `web-next/lib`).
+  Member roles: `owner | admin | head_coach | assistant_coach | coach | analyst | medical | player`.
+  Account-level `users.role` is separate: `coach | player`, flipping to `player` when the
+  login email auto-links a `students` row.
+- **Capability / Scope / Role floor** — the three answers to "may this caller do this, to
+  whose data". A **role floor** is which org roles may reach a handler at all
+  (`orgRoleGuard`, applied where a route is mounted); a **capability** is which of those
+  roles may perform this action (`resolveCaller(...).can(...)`, in-handler, a missing
+  capability is 403); **scope** is which player's data it may touch
+  (`visibleStudentIds` / `canSeeStudent`, in-handler). A floor is not a capability and a
+  capability is not a scope. `docs/adr/adr-0003-authorization-four-layers.md`.
+- **Team scope / student scope** — roster visibility for one caller, resolved by
+  `resolveStudentScope` into `{ all: true }` or `{ all: false, teamIds }`. Two tiers by
+  design: team staff (head/assistant/legacy coach) narrow to their assigned teams, while
+  org staff (`analyst`, `medical`) stay org-wide because they are never assigned a team
+  and would otherwise see an empty app. `null` (org-wide) and `[]` (no students) are
+  deliberately distinct. `docs/adr/adr-0002-roster-scope-two-tiers.md`.
 - **Attribution token** — signed `<sub>.<exp>.<hmac>` (HMAC-SHA256 over `sub.exp`, keyed by
   `SERVICE_TOKEN`, TTL 10 min) minted at `GET /api/me/attribution/mint`; browser-direct
   capability routes send it as `x-attribution` (downloads as `?attribution=`). A raw
@@ -44,7 +57,9 @@ One line per term, sourced from actual code/docs (no invention). Deep detail liv
   `pruneRetention` (`server/src/lib/analyses.ts`).
 - **Share token** — 48-hex random token (`coachai:share:*`, 72h TTL) minted by a coach for an
   analysis, redeemed at public `GET /api/share/:token`; revocable, distinguishes 404 (never
-  existed) from 410 (expired) (`server/src/lib/shareTokens.ts`, `routes/share.ts`).
+  existed) from 410 (expired) (`server/src/lib/shareTokens.ts`, `routes/share.ts`). It is
+  stamped with the **org**, not the minter, and because the link needs no login, minting or
+  revoking one is a write about the player on that video.
 - **Job-not-found semantics** — `JOB_NOT_FOUND` means the job is expired or unknown; it answers
   `retryable: false` on every path (404 miss and the 200-poll expired answer alike) — retrying
   cannot fix it, the user re-uploads. Engine registry maps it to 404
