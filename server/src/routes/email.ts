@@ -11,6 +11,9 @@ import {
   isDeliverableAddress,
 } from '../lib/mailer'
 import { getUserByAuth0Id } from '../lib/users'
+import { resolveCaller, type Caller } from '../lib/caller'
+import { canSeeStudent, visibleStudentIds } from '../lib/org/scope'
+import type { Permission } from '../lib/permissions'
 import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
 import { serviceGuard } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
@@ -34,14 +37,50 @@ const statusColor = (status: string): string => {
   }
 }
 
+/**
+ * Capability gate for the org email routes.
+ *
+ * `serviceGuard` only proves the caller is *a* member of the org named in the
+ * path — membership, not authorization. With nothing else here, any member
+ * could use these routes as an exfiltration channel: `attendance` returns the
+ * whole club's attendance when `student_id` is omitted, `report` returns any
+ * report by id, and both mail the contents to an address the caller chooses.
+ * That bypassed the permission matrix *and* team scope, and hiding the button in
+ * the UI did nothing about it.
+ *
+ * So: one capability per route, checked once, before any data is read.
+ */
+const emailGuard = async (
+  auth0Id: string,
+  request: Request,
+  permission: Permission,
+  action: string,
+): Promise<{ ok: true; caller: Caller } | { ok: false; body: ReturnType<typeof buildError> }> => {
+  const caller = await resolveCaller(auth0Id, request)
+  if (!caller.can(permission)) {
+    return {
+      ok: false,
+      body: buildError('FORBIDDEN', `${action} requires the ${permission} permission`, false),
+    }
+  }
+  return { ok: true, caller }
+}
+
 export default new Elysia()
   .use(serviceGuard)
   // ── Invite players by email ────────────────────────────────────────────
   // body: { emails: string[], student_ids?: string[] }
   // Creates missing student rows (arm-band email only, no account link),
   // then emails each address an invitation with a signup link.
-  .post('/api/email/:auth0Id/invite', async ({ params, body, set }) => {
+  .post('/api/email/:auth0Id/invite', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    // Org-branded signup invites are an owner/admin capability, not a member's:
+    // any member could otherwise send them, using the club's name, to anyone.
+    const guard = await emailGuard(auth0Id, request, 'org.invite', 'Sending invites')
+    if (!guard.ok) {
+      set.status = 403
+      return guard.body
+    }
     const { allowed: emailOk, remaining } = await checkEmailLimit(auth0Id)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!emailOk) {
@@ -129,6 +168,14 @@ export default new Elysia()
   // body: { report_id: string, to?: string }  — `to` defaults to the student's email
   .post('/api/email/:auth0Id/report', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    // Sending a report mails it out, so it is an authoring capability
+    // (`report.create`) rather than the read a player legitimately has.
+    const guard = await emailGuard(auth0Id, request, 'report.create', 'Emailing a report')
+    if (!guard.ok) {
+      set.status = 403
+      return guard.body
+    }
+    const visible = await visibleStudentIds(auth0Id, guard.caller.studentScope)
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
       return rateLimited(
@@ -155,6 +202,18 @@ export default new Elysia()
     if (!report) {
       set.status = 404
       return buildError('NOT_FOUND', 'Report not found.', false)
+    }
+    // A report about a student the caller cannot see must not be mailed out,
+    // and a student-less report summarizes the whole org — so a scoped caller
+    // cannot send one either. Mirrors the guard on POST/PUT /reports.
+    if (report.student_id) {
+      if (!canSeeStudent(visible, report.student_id)) {
+        set.status = 403
+        return buildError('FORBIDDEN', 'That report is outside your team scope', false)
+      }
+    } else if (visible !== null) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Org-wide reports cannot be sent from a team account', false)
     }
 
     let recipient = typeof to === 'string' ? to.trim() : ''
@@ -205,8 +264,21 @@ export default new Elysia()
 
   // ── Email an attendance sheet ───────────────────────────────────────────
   // body: { student_id?: string, from?: string, to?: string, to?: string }
-  .post('/api/email/:auth0Id/attendance', async ({ params, body, set }) => {
+  .post('/api/email/:auth0Id/attendance', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    const guard = await emailGuard(
+      auth0Id,
+      request,
+      'attendance.write',
+      'Emailing an attendance sheet',
+    )
+    if (!guard.ok) {
+      set.status = 403
+      return guard.body
+    }
+    // Omitting student_id means "the whole period", so the read must be capped
+    // at the caller's scope or it returns every team's attendance.
+    const visible = await visibleStudentIds(auth0Id, guard.caller.studentScope)
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
       return rateLimited(
@@ -233,11 +305,16 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'student_id must be a string.', false)
     }
+    if (typeof student_id === 'string' && !canSeeStudent(visible, student_id)) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'That student is outside your team scope', false)
+    }
 
     const records = await listAttendance(auth0Id, {
       from: typeof from === 'string' ? from : undefined,
       to: typeof to === 'string' ? to : undefined,
       studentId: typeof student_id === 'string' ? student_id : undefined,
+      studentIds: visible,
     })
     if (records.length === 0) {
       set.status = 200
