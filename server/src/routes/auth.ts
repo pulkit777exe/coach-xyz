@@ -153,14 +153,17 @@ export default new Elysia()
           },
     }
   })
-  .get('/api/auth/user/:auth0Id/stats', async ({ params, set }) => {
+  .get('/api/auth/user/:auth0Id/stats', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
 
-    const stats = await getUserStats(auth0Id)
+    // Same scope as the list these tiles sit above, so the two agree.
+    const stats = await getUserStats(auth0Id, {
+      studentIds: (await resolveAccountScope(auth0Id, request)).visible,
+    })
     set.status = 200
     return { stats }
   })

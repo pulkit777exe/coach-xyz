@@ -692,6 +692,24 @@ async function main() {
   r = await call('GET', `/api/auth/user/${coachId}/analyses/${analysisId}`, { identity: coachId })
   check('owner is not narrowed on the account tree', r.status === 200, r.json)
 
+  // The stat tiles sit directly above that list, so a coach whose tile counted
+  // the whole club beside a one-row list looked like a bug. `analysisId` is
+  // org-owned and linked to a player on the owner's team, and the scoped coach's
+  // team holds none, so their count must be zero while the owner's is not.
+  r = await call('GET', `/api/auth/user/${coachId}/stats`, { identity: scopedId })
+  check(
+    'scoped coach counts no off-team analysis (live count filter)',
+    r.status === 200 && r.json?.stats?.total_analyses === 0,
+    r.json,
+  )
+
+  r = await call('GET', `/api/auth/user/${coachId}/stats`, { identity: coachId })
+  check(
+    'owner counts their own analysis (live count filter)',
+    r.status === 200 && (r.json?.stats?.total_analyses ?? 0) >= 1,
+    r.json,
+  )
+
   // The findings half of the same tree is keyed by `student_id` instead of by
   // job, and it is the half that ships a CSV. `studentId` is on the owner's team,
   // so the scoped coach must not read it — by list, by export, or by trends.

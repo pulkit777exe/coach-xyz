@@ -697,9 +697,24 @@ export const getAnalysisOwner = async (
   })
 }
 
-export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
+/**
+ * Counts for the dashboard's stat tiles.
+ *
+ * `studentIds` mirrors `getUserAnalyses`: rows here are owned by the org, so an
+ * unfiltered count is org-wide, and the tiles sit directly above the History list
+ * — a coach whose tile read "20" beside a three-row list looked like a bug. The
+ * clause and its bound-parameter handling are the same as the list's, unlinked
+ * rows included, so a coach's own unfiled uploads still count toward their own
+ * total.
+ */
+export const getUserStats = async (
+  auth0Id: string,
+  opts: { studentIds?: string[] | null } = {},
+): Promise<DashboardStats> => {
   return orDisabledDefault(
     await withHistoryStore(async (db) => {
+      const scoped = opts.studentIds !== null && opts.studentIds !== undefined
+      const ids = uuidArrayLiteral(opts.studentIds ?? [])
       const rows = await db<DashboardStats[]>`
       select
         count(*)::int as total_analyses,
@@ -708,7 +723,10 @@ export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => 
         count(*) filter (where error_code is not null)::int as failed_analyses,
         coalesce(sum(download_count), 0)::int as total_downloads
       from analysis_history
-      where auth0_id = ${auth0Id};
+      where auth0_id = ${auth0Id}
+        and (${scoped} = false
+             or student_id is null
+             or student_id = any(${ids}::uuid[]));
     `
       return (
         rows?.[0] ?? {
