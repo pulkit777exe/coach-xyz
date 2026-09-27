@@ -17,6 +17,7 @@ import membersRoute from '../src/routes/members'
 import teamsRoute from '../src/routes/teams'
 import meRoute from '../src/routes/me'
 import emailRoute from '../src/routes/email'
+import shareRoute from '../src/routes/share'
 import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
 import { globalErrorHandler } from '../src/lib/httpErrors'
 import type { CoachAIError } from '../src/lib/errors'
@@ -37,6 +38,9 @@ const app = new Elysia()
   .use(teamsRoute)
   .use(meRoute)
   .use(emailRoute)
+  // Share tokens are on the org tree, and the scope assertions below need the
+  // route mounted to reach them.
+  .use(shareRoute)
 
 const base = 'http://smoke.test'
 const token = process.env.SERVICE_TOKEN
@@ -713,6 +717,24 @@ async function main() {
     identity: coachId,
   })
   check('owner is not narrowed on the findings tree', r.status === 200, r.json)
+
+  // A share token is unauthenticated — anyone holding the link reads the analysis
+  // — so minting one is a write about the player on that video, not a read. The
+  // scoped coach's team holds no students and `analysisId` is linked to one on
+  // the owner's, so the mint is refused; the owner still gets one.
+  r = await call('POST', `/api/org/${coachId}/analyses/${analysisId}/share-token`, {
+    identity: scopedId,
+  })
+  check('scoped coach publishes no off-team analysis → 403', r.status === 403, r.json)
+
+  r = await call('POST', `/api/org/${coachId}/analyses/${analysisId}/share-token`, {
+    identity: coachId,
+  })
+  // Not "=== 201": the share-token store is Redis-backed, so a spendt quota
+  // turns this into a 5xx. What this asserts is that scope did not refuse the
+  // owner — the old code compared the row's owning org against the caller's own
+  // sub, which refused every coach and would have failed here with 403.
+  check('owner is not refused a share by scope', r.status !== 403, r.json)
 
   r = await call('DELETE', `/api/org/${coachId}/teams/${teamId}`, { identity: coachId })
   check('delete team', r.status === 200, r.json)

@@ -152,310 +152,339 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
   const startBus = deps.startBus ?? startServerEventBus
   const subscribeToDisconnect = deps.onBusDisconnect ?? onServerEventBusDisconnect
 
-  return new Elysia({ name: 'aiReports' })
-    .use(serviceGuard)
-    .post('/api/org/:auth0Id/reports/ai', async ({ params, body, request, set }) => {
-      const { auth0Id } = params as { auth0Id: string }
-      if (!auth0Id) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
-      }
-      // This route is role-guarded where it is mounted (index.ts), which is a
-      // floor and not a scope. Authoring a report is `report.create`, and the
-      // generated report embeds buildReportContent for the target student — so
-      // without the scope check a team coach could have an AI report written
-      // about another team's player, carrying that player's attendance, series
-      // and analyses inside `report_context`.
-      const caller = await resolveCaller(auth0Id, request)
-      if (!caller.can('report.create')) {
-        set.status = 403
-        return buildError(
-          'FORBIDDEN',
-          'Generating an AI report requires the report.create permission',
-          false,
-        )
-      }
-      const visible = await visibleStudentIds(auth0Id, caller.studentScope)
-      const { allowed } = await checkAiReportLimit(auth0Id)
-      if (!allowed) {
-        return rateLimited(set, 'Hourly AI report limit reached for this organization.')
-      }
-
-      const validated = validateAiReportBody(body)
-      if (!validated.ok) {
-        set.status = 400
-        return validated.error
-      }
-      const value = validated.value
-
-      // Scope before the context is built, so an off-team student is never
-      // aggregated in the first place. A student-less report summarizes the
-      // whole org, so a scoped caller cannot ask for one — same rule as
-      // POST /api/org/:id/reports.
-      if (typeof value.student_id === 'string' && value.student_id) {
-        if (!canSeeStudent(visible, value.student_id)) {
-          set.status = 403
-          return buildError('FORBIDDEN', 'That student is outside your team scope', false)
+  return (
+    new Elysia({ name: 'aiReports' })
+      .use(serviceGuard)
+      .post('/api/org/:auth0Id/reports/ai', async ({ params, body, request, set }) => {
+        const { auth0Id } = params as { auth0Id: string }
+        if (!auth0Id) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
         }
-      } else if (visible !== null) {
-        set.status = 403
-        return buildError(
-          'FORBIDDEN',
-          'Org-wide AI reports cannot be generated from a team account',
-          false,
-        )
-      }
+        // This route is role-guarded where it is mounted (index.ts), which is a
+        // floor and not a scope. Authoring a report is `report.create`, and the
+        // generated report embeds buildReportContent for the target student — so
+        // without the scope check a team coach could have an AI report written
+        // about another team's player, carrying that player's attendance, series
+        // and analyses inside `report_context`.
+        const caller = await resolveCaller(auth0Id, request)
+        if (!caller.can('report.create')) {
+          set.status = 403
+          return buildError(
+            'FORBIDDEN',
+            'Generating an AI report requires the report.create permission',
+            false,
+          )
+        }
+        const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+        const { allowed } = await checkAiReportLimit(auth0Id)
+        if (!allowed) {
+          return rateLimited(set, 'Hourly AI report limit reached for this organization.')
+        }
 
-      const context = await buildContext(auth0Id, {
-        student_id: value.student_id ?? undefined,
-        from: value.period_start ?? undefined,
-        to: value.period_end ?? undefined,
-        report_type: value.report_type,
-      })
+        const validated = validateAiReportBody(body)
+        if (!validated.ok) {
+          set.status = 400
+          return validated.error
+        }
+        const value = validated.value
 
-      const studentBlock =
-        context.student && typeof context.student === 'object'
-          ? (context.student as Record<string, unknown>)
-          : null
-      const sport = typeof studentBlock?.sport === 'string' ? (studentBlock.sport as string) : null
-      const studentName =
-        typeof studentBlock?.full_name === 'string' ? (studentBlock.full_name as string) : null
-
-      const title =
-        value.title ??
-        defaultReportTitle(value.report_type, studentName ? { full_name: studentName } : null)
-
-      const reportJobId = await enqueue({
-        auth0_id: auth0Id,
-        report_type: value.report_type,
-        period_start: value.period_start,
-        period_end: value.period_end,
-        title,
-        student_id: value.student_id ?? null,
-        sport,
-        student_name: studentName,
-        report_context: context,
-      })
-
-      if (!reportJobId) {
-        set.status = 503
-        return buildError(
-          'QUEUE_UNAVAILABLE',
-          'Job queue is not configured. Please try again later.',
-          true,
-        )
-      }
-
-      set.status = 201
-      return { report_job_id: reportJobId, status: 'queued' }
-    })
-    .get('/api/org/:auth0Id/reports/ai/:reportJobId/events', async ({ params, request, set }) => {
-      const { auth0Id, reportJobId } = params as {
-        auth0Id: string
-        reportJobId: string
-      }
-      if (!auth0Id || !reportJobId) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
-      }
-
-      const initialForAuth = await getJob(reportJobId)
-      if (!initialForAuth || initialForAuth.auth0_id !== auth0Id) {
-        set.status = 404
-        return buildError('NOT_FOUND', 'Report job not found', false)
-      }
-
-      // Register before starting so a subscriber that drops during startup
-      // cannot leave a newly-created stream attached to a dead bus.
-      let busDisconnected = false
-      let closeStream = () => {}
-      const unsubscribeDisconnect = subscribeToDisconnect(() => {
-        busDisconnected = true
-        closeStream()
-      })
-      let busAvailable: boolean
-      try {
-        busAvailable = await startBus()
-      } catch (error) {
-        unsubscribeDisconnect()
-        throw error
-      }
-      if (!busAvailable) {
-        unsubscribeDisconnect()
-        set.status = 503
-        return buildError(
-          'REPORT_EVENT_STREAM_UNAVAILABLE',
-          'Live report updates are temporarily unavailable.',
-          true,
-        )
-      }
-
-      // Subscribe before taking the snapshot used by the stream. The durable
-      // record is still the source of truth, but a transition racing this
-      // read is retained in `latest` instead of being lost.
-      let latest: AiReportJob | null = null
-      let activeListener: ((job: AiReportJob) => void) | null = null
-      const unsubscribe = subscribeJob(reportJobId, (job) => {
-        latest = job
-        activeListener?.(job)
-      })
-      let snapshot: AiReportJob | null
-      try {
-        snapshot = await getJob(reportJobId)
-      } catch (error) {
-        unsubscribe()
-        unsubscribeDisconnect()
-        throw error
-      }
-      if (!snapshot || snapshot.auth0_id !== auth0Id) {
-        unsubscribe()
-        unsubscribeDisconnect()
-        set.status = 404
-        return buildError('NOT_FOUND', 'Report job not found', false)
-      }
-      if (busDisconnected) {
-        unsubscribe()
-        unsubscribeDisconnect()
-        set.status = 503
-        return buildError(
-          'REPORT_EVENT_STREAM_UNAVAILABLE',
-          'Live report updates are temporarily unavailable.',
-          true,
-        )
-      }
-      const latestJob = latest as AiReportJob | null
-      const initial =
-        latestJob && latestJob.updated_at >= snapshot.updated_at ? latestJob : snapshot
-      if (request.signal.aborted) {
-        unsubscribe()
-        unsubscribeDisconnect()
-        return new Response(null, { status: 499 })
-      }
-
-      let cancelStream = () => {}
-      const stream = new ReadableStream({
-        start(controller) {
-          const encoder = new TextEncoder()
-          let closed = false
-          let heartbeat: ReturnType<typeof setInterval> | null = null
-          let maxDurationTimer: ReturnType<typeof setTimeout> | null = null
-          let sequence = Promise.resolve()
-
-          const close = () => {
-            if (closed) return
-            closed = true
-            if (heartbeat) clearInterval(heartbeat)
-            if (maxDurationTimer) clearTimeout(maxDurationTimer)
-            activeListener = null
-            unsubscribe()
-            unsubscribeDisconnect()
-            try {
-              controller.close()
-            } catch {
-              // The client may already have closed the stream.
-            }
+        // Scope before the context is built, so an off-team student is never
+        // aggregated in the first place. A student-less report summarizes the
+        // whole org, so a scoped caller cannot ask for one — same rule as
+        // POST /api/org/:id/reports.
+        if (typeof value.student_id === 'string' && value.student_id) {
+          if (!canSeeStudent(visible, value.student_id)) {
+            set.status = 403
+            return buildError('FORBIDDEN', 'That student is outside your team scope', false)
           }
+        } else if (visible !== null) {
+          set.status = 403
+          return buildError(
+            'FORBIDDEN',
+            'Org-wide AI reports cannot be generated from a team account',
+            false,
+          )
+        }
 
-          closeStream = close
-          cancelStream = close
+        const context = await buildContext(auth0Id, {
+          student_id: value.student_id ?? undefined,
+          from: value.period_start ?? undefined,
+          to: value.period_end ?? undefined,
+          report_type: value.report_type,
+        })
 
-          const enqueue = (job: AiReportJob) => {
-            sequence = sequence
-              .then(async () => {
-                if (closed) return
-                const report =
-                  job.status === 'done' && job.report_id
-                    ? await withReportLookupTimeout(fetchReport(auth0Id, job.report_id))
-                    : null
-                if (closed) return
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({
-                      report_job_id: job.report_job_id,
-                      status: job.status,
-                      report,
-                    })}\n\n`,
-                  ),
-                )
-                if (job.status === 'done' || job.status === 'failed') close()
-              })
-              .catch((error: unknown) => {
-                logger.error('ai_report_event_stream_error', {
-                  type: 'ai_report_event_stream_error',
-                  report_job_id: reportJobId,
-                  error: error instanceof Error ? error.message : String(error),
+        const studentBlock =
+          context.student && typeof context.student === 'object'
+            ? (context.student as Record<string, unknown>)
+            : null
+        const sport =
+          typeof studentBlock?.sport === 'string' ? (studentBlock.sport as string) : null
+        const studentName =
+          typeof studentBlock?.full_name === 'string' ? (studentBlock.full_name as string) : null
+
+        const title =
+          value.title ??
+          defaultReportTitle(value.report_type, studentName ? { full_name: studentName } : null)
+
+        const reportJobId = await enqueue({
+          auth0_id: auth0Id,
+          report_type: value.report_type,
+          period_start: value.period_start,
+          period_end: value.period_end,
+          title,
+          student_id: value.student_id ?? null,
+          sport,
+          student_name: studentName,
+          report_context: context,
+        })
+
+        if (!reportJobId) {
+          set.status = 503
+          return buildError(
+            'QUEUE_UNAVAILABLE',
+            'Job queue is not configured. Please try again later.',
+            true,
+          )
+        }
+
+        set.status = 201
+        return { report_job_id: reportJobId, status: 'queued' }
+      })
+      // Progress stream for one AI report job. Deliberately not team-scoped: it
+      // emits the job's lifecycle (queued/running/done/failed) and never the report
+      // itself, so a member of the same org learns that a job exists and how far
+      // along it is, nothing about the player. The content is only reachable through
+      // the GET below, which is scoped. Scoping this one too would mean a scoped
+      // caller could not watch a job they legitimately started, since an in-flight
+      // job has no report row to read a student from.
+      .get('/api/org/:auth0Id/reports/ai/:reportJobId/events', async ({ params, request, set }) => {
+        const { auth0Id, reportJobId } = params as {
+          auth0Id: string
+          reportJobId: string
+        }
+        if (!auth0Id || !reportJobId) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
+        }
+
+        const initialForAuth = await getJob(reportJobId)
+        if (!initialForAuth || initialForAuth.auth0_id !== auth0Id) {
+          set.status = 404
+          return buildError('NOT_FOUND', 'Report job not found', false)
+        }
+
+        // Register before starting so a subscriber that drops during startup
+        // cannot leave a newly-created stream attached to a dead bus.
+        let busDisconnected = false
+        let closeStream = () => {}
+        const unsubscribeDisconnect = subscribeToDisconnect(() => {
+          busDisconnected = true
+          closeStream()
+        })
+        let busAvailable: boolean
+        try {
+          busAvailable = await startBus()
+        } catch (error) {
+          unsubscribeDisconnect()
+          throw error
+        }
+        if (!busAvailable) {
+          unsubscribeDisconnect()
+          set.status = 503
+          return buildError(
+            'REPORT_EVENT_STREAM_UNAVAILABLE',
+            'Live report updates are temporarily unavailable.',
+            true,
+          )
+        }
+
+        // Subscribe before taking the snapshot used by the stream. The durable
+        // record is still the source of truth, but a transition racing this
+        // read is retained in `latest` instead of being lost.
+        let latest: AiReportJob | null = null
+        let activeListener: ((job: AiReportJob) => void) | null = null
+        const unsubscribe = subscribeJob(reportJobId, (job) => {
+          latest = job
+          activeListener?.(job)
+        })
+        let snapshot: AiReportJob | null
+        try {
+          snapshot = await getJob(reportJobId)
+        } catch (error) {
+          unsubscribe()
+          unsubscribeDisconnect()
+          throw error
+        }
+        if (!snapshot || snapshot.auth0_id !== auth0Id) {
+          unsubscribe()
+          unsubscribeDisconnect()
+          set.status = 404
+          return buildError('NOT_FOUND', 'Report job not found', false)
+        }
+        if (busDisconnected) {
+          unsubscribe()
+          unsubscribeDisconnect()
+          set.status = 503
+          return buildError(
+            'REPORT_EVENT_STREAM_UNAVAILABLE',
+            'Live report updates are temporarily unavailable.',
+            true,
+          )
+        }
+        const latestJob = latest as AiReportJob | null
+        const initial =
+          latestJob && latestJob.updated_at >= snapshot.updated_at ? latestJob : snapshot
+        if (request.signal.aborted) {
+          unsubscribe()
+          unsubscribeDisconnect()
+          return new Response(null, { status: 499 })
+        }
+
+        let cancelStream = () => {}
+        const stream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder()
+            let closed = false
+            let heartbeat: ReturnType<typeof setInterval> | null = null
+            let maxDurationTimer: ReturnType<typeof setTimeout> | null = null
+            let sequence = Promise.resolve()
+
+            const close = () => {
+              if (closed) return
+              closed = true
+              if (heartbeat) clearInterval(heartbeat)
+              if (maxDurationTimer) clearTimeout(maxDurationTimer)
+              activeListener = null
+              unsubscribe()
+              unsubscribeDisconnect()
+              try {
+                controller.close()
+              } catch {
+                // The client may already have closed the stream.
+              }
+            }
+
+            closeStream = close
+            cancelStream = close
+
+            const enqueue = (job: AiReportJob) => {
+              sequence = sequence
+                .then(async () => {
+                  if (closed) return
+                  const report =
+                    job.status === 'done' && job.report_id
+                      ? await withReportLookupTimeout(fetchReport(auth0Id, job.report_id))
+                      : null
+                  if (closed) return
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({
+                        report_job_id: job.report_job_id,
+                        status: job.status,
+                        report,
+                      })}\n\n`,
+                    ),
+                  )
+                  if (job.status === 'done' || job.status === 'failed') close()
                 })
-                close()
-              })
-          }
-
-          activeListener = enqueue
-          enqueue(initial)
-          // Cover the tiny gap between snapshot selection and listener
-          // assignment without replaying the same record twice.
-          if (latest && latest.updated_at > initial.updated_at) enqueue(latest)
-          heartbeat = setInterval(() => {
-            if (closed) return
-            try {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`),
-              )
-            } catch {
-              close()
+                .catch((error: unknown) => {
+                  logger.error('ai_report_event_stream_error', {
+                    type: 'ai_report_event_stream_error',
+                    report_job_id: reportJobId,
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                  close()
+                })
             }
-          }, 30_000)
-          maxDurationTimer = setTimeout(close, REPORT_EVENT_MAX_DURATION_MS)
-          maxDurationTimer.unref?.()
-          request.signal.addEventListener('abort', close, { once: true })
-        },
-        cancel() {
-          cancelStream()
-        },
+
+            activeListener = enqueue
+            enqueue(initial)
+            // Cover the tiny gap between snapshot selection and listener
+            // assignment without replaying the same record twice.
+            if (latest && latest.updated_at > initial.updated_at) enqueue(latest)
+            heartbeat = setInterval(() => {
+              if (closed) return
+              try {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`),
+                )
+              } catch {
+                close()
+              }
+            }, 30_000)
+            maxDurationTimer = setTimeout(close, REPORT_EVENT_MAX_DURATION_MS)
+            maxDurationTimer.unref?.()
+            request.signal.addEventListener('abort', close, { once: true })
+          },
+          cancel() {
+            cancelStream()
+          },
+        })
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          },
+        })
       })
+      .get('/api/org/:auth0Id/reports/ai/:reportJobId', async ({ params, request, set }) => {
+        const { auth0Id, reportJobId } = params as {
+          auth0Id: string
+          reportJobId: string
+        }
+        if (!auth0Id || !reportJobId) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
+        }
 
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'X-Accel-Buffering': 'no',
-        },
-      })
-    })
-    .get('/api/org/:auth0Id/reports/ai/:reportJobId', async ({ params, set }) => {
-      const { auth0Id, reportJobId } = params as {
-        auth0Id: string
-        reportJobId: string
-      }
-      if (!auth0Id || !reportJobId) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
-      }
+        const job = await getJob(reportJobId)
+        // Same 404 for missing and cross-org ids so account boundaries don't leak.
+        if (!job || job.auth0_id !== auth0Id) {
+          set.status = 404
+          return buildError('NOT_FOUND', 'Report job not found', false)
+        }
 
-      const job = await getJob(reportJobId)
-      // Same 404 for missing and cross-org ids so account boundaries don't leak.
-      if (!job || job.auth0_id !== auth0Id) {
-        set.status = 404
-        return buildError('NOT_FOUND', 'Report job not found', false)
-      }
+        if (job.status === 'done' && job.report_id) {
+          const report = await fetchReport(auth0Id, job.report_id)
+          // The org check above says the job belongs to this club, not that this
+          // caller may read it: a generated report carries the player's attendance,
+          // series and analyses, so a team coach could read another team's finished
+          // report. Same read rule as the rest of the tree — 404, so an off-team
+          // report is indistinguishable from one that was never generated.
+          const caller = await resolveCaller(auth0Id, request)
+          if (!caller.can('report.read')) {
+            set.status = 403
+            return buildError(
+              'FORBIDDEN',
+              'Reading an AI report requires the report.read permission',
+              false,
+            )
+          }
+          const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+          if (report && !canSeeStudent(visible, report.student_id ?? '')) {
+            set.status = 404
+            return buildError('NOT_FOUND', 'Report job not found', false)
+          }
+          set.status = 200
+          return {
+            report_job_id: job.report_job_id,
+            status: job.status,
+            report,
+          }
+        }
 
-      if (job.status === 'done' && job.report_id) {
-        const report = await fetchReport(auth0Id, job.report_id)
         set.status = 200
         return {
           report_job_id: job.report_job_id,
           status: job.status,
-          report,
+          report: null,
         }
-      }
-
-      set.status = 200
-      return {
-        report_job_id: job.report_job_id,
-        status: job.status,
-        report: null,
-      }
-    })
+      })
+  )
 }
 
 export default aiReportsRoute()

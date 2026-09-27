@@ -77,6 +77,8 @@ const note = (what: string) => {
 
 const analysisRow = (job: string) => ({
   server_job_id: job,
+  // Rows are owned by the org, which is the fact the share route keys on.
+  auth0_id: ORG,
   engine_job_id: `eng-${job}`,
   session_token: null,
   student_id: jobStudent[job] ?? null,
@@ -105,6 +107,10 @@ mock.module('../src/lib/analyses', () => ({
   },
   getUserAnalysisById: async (_org: string, job: string) => {
     note('getUserAnalysisById')
+    return job in jobStudent ? analysisRow(job) : null
+  },
+  getAnalysisByServerJobId: async (job: string) => {
+    note('getAnalysisByServerJobId')
     return job in jobStudent ? analysisRow(job) : null
   },
   getAnalysisStudentId: async (_org: string, job: string) => {
@@ -238,6 +244,33 @@ process.env.SERVICE_TOKEN = ''
 const authRoutes = (await import('../src/routes/auth')).default
 const clipsRoute = (await import('../src/routes/clips')).default
 const { findingsReadRoutes, findingsReviewRoutes } = await import('../src/routes/findings')
+const { orgShareRoute } = await import('../src/routes/share')
+
+// A share token is unauthenticated — anyone holding the link reads the analysis —
+// so minting one is a write about the player on that video, not a read. The store
+// is injected so the probe never touches Redis.
+type TokenRecord = { auth0_id: string; server_job_id: string }
+const tokens = new Map<string, TokenRecord>()
+let minted = 0
+const shareStore = {
+  getShareToken: async (token: string) => tokens.get(token) ?? null,
+  createShareToken: async (input: TokenRecord) => {
+    minted += 1
+    const token = `tok-${minted}`
+    tokens.set(token, input)
+    return { token, expires_at: new Date(Date.now() + 3_600_000).toISOString() }
+  },
+  deleteShareToken: async (token: string) => tokens.delete(token),
+} as never
+const shareRoute = orgShareRoute({
+  store: shareStore,
+  // The row shape is trimmed to what the route reads; the real type has more
+  // columns than any of these routes look at.
+  getAnalysis: (async (job: string) => (job in jobStudent ? analysisRow(job) : null)) as never,
+})
+tokens.set('tok-own', { auth0_id: ORG, server_job_id: JOB_A })
+tokens.set('tok-off-team', { auth0_id: ORG, server_job_id: JOB_B })
+tokens.set('tok-foreign', { auth0_id: 'auth0|someone-else', server_job_id: JOB_A })
 const { chatHistoryRoutes } = await import('../src/routes/chatHistory')
 
 const transcript = {
@@ -260,6 +293,8 @@ const headers = (role: OrgMemberRole | null) => ({
 })
 
 const p = (suffix: string) => `/api/auth/user/${encodeURIComponent(ORG)}${suffix}`
+// Share tokens live on the org tree, not the account tree.
+const op = (suffix: string) => `/api/org/${encodeURIComponent(ORG)}${suffix}`
 
 type Row = {
   role: OrgMemberRole | null
@@ -445,6 +480,37 @@ for (const role of roleTokens) {
       f.job,
       (h) => new Request(`http://localhost${f.path}`, { method, headers: h, body }),
       f.app,
+    )
+  }
+
+  // ── Share tokens: publishing, not reading ─────────────────────────────────
+  // Only the cross-org half is exercised here. Share gates its identity and
+  // scope checks on the service guard being *on*, and the guard captures
+  // SERVICE_TOKEN at import, so a probe process cannot have it both ways: this
+  // one runs inert to isolate the scope seam, exactly as the account tree above.
+  // The team-scope half needs a real team-scoped member, so smokeOrgHttp.ts
+  // asserts it live against a real org.
+  const shareAttempts: { route: string; job: string; path: string; method: string }[] = [
+    {
+      route: 'POST share token',
+      job: JOB_B,
+      path: `/analyses/${JOB_B}/share-token`,
+      method: 'POST',
+    },
+    {
+      route: 'DELETE share token',
+      job: 'foreign',
+      path: '/share-tokens/tok-foreign',
+      method: 'DELETE',
+    },
+  ]
+  for (const s of shareAttempts) {
+    await attempt(
+      role,
+      s.route,
+      s.job,
+      (h) => new Request(`http://localhost${op(s.path)}`, { method: s.method, headers: h }),
+      shareRoute,
     )
   }
 

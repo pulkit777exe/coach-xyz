@@ -116,6 +116,103 @@ const attempt = async (
 
 const TEAM_STAFF: OrgMemberRole[] = ['coach', 'head_coach', 'assistant_coach']
 
+// The read side. `job.auth0_id === auth0Id` only says the job belongs to this
+// club, so before the fix a team coach could read another team's *finished* AI
+// report — which carries that player's attendance, series and analyses. The
+// generated report is the whole point of the request, so the scope check has to
+// sit on the way out, not only on the way in.
+const JOB_ID = 'report-job-1'
+const read = async (
+  role: OrgMemberRole | null,
+  reportStudentId: string | null,
+  jobStatus: 'done' | 'running' = 'done',
+): Promise<{ status: number; reportsFetched: number }> => {
+  currentRole = role
+  let reportsFetched = 0
+  const route = aiReportsRoute({
+    getJob: (async () => ({
+      report_job_id: JOB_ID,
+      auth0_id: ORG,
+      status: jobStatus,
+      report_id: jobStatus === 'done' ? 'report-1' : null,
+      error: null,
+      progress: 100,
+      created_at: 0,
+      updated_at: 0,
+    })) as never,
+    getReportById: (async () => {
+      reportsFetched += 1
+      return {
+        id: 'report-1',
+        student_id: reportStudentId,
+        full_name: 'Player',
+        content_json: {},
+      } as never
+    }) as never,
+  })
+  const res = await route.handle(
+    new Request(`http://localhost/api/org/${encodeURIComponent(ORG)}/reports/ai/${JOB_ID}`, {
+      headers: { 'x-verified-auth0-id': `auth0|${role ?? 'outsider'}-member` },
+    }),
+  )
+  await res.text()
+  return { status: res.status, reportsFetched }
+}
+
+describe("reading another team's finished AI report is refused", () => {
+  test('a team coach gets 404 for an off-team report, and an unfiled one too', async () => {
+    for (const role of TEAM_STAFF) {
+      const offTeam = await read(role, STUDENT_B)
+      expect(offTeam.status, `role ${role}: off-team report`).toBe(404)
+      // A report with no student summarizes the whole org, which is the same
+      // thing POST /reports/ai refuses to generate for a team account.
+      const orgWide = await read(role, null)
+      expect(orgWide.status, `role ${role}: org-wide report`).toBe(404)
+    }
+  })
+
+  test('a team coach still reads their own report', async () => {
+    for (const role of TEAM_STAFF) {
+      const own = await read(role, STUDENT_A)
+      expect(own.status, `role ${role}`).toBe(200)
+      expect(own.reportsFetched, `role ${role}`).toBe(1)
+    }
+  })
+
+  test('an owner is org-wide and reads both', async () => {
+    expect((await read('owner', STUDENT_B)).status).toBe(200)
+    expect((await read('owner', null)).status).toBe(200)
+  })
+
+  test('a non-member is refused outright', async () => {
+    // No role in the matrix that can reach this route lacks report.read, so the
+    // capability check is defense in depth rather than a narrower gate — the
+    // non-member is the one caller it is what actually refuses.
+    expect((await read(null, STUDENT_A)).status).toBe(403)
+  })
+
+  test('org staff are org-wide, so they read any report in the club', async () => {
+    // `medical` holds report.read and, like every org-staff role, is never
+    // assigned a team, so ADR-0002's second tier leaves it org-wide. This is the
+    // policy showing through, not a gap in the check.
+    expect((await read('medical', STUDENT_B)).status).toBe(200)
+    expect((await read('analyst', STUDENT_B)).status).toBe(200)
+  })
+
+  test('a player holds report.read but belongs to no team', async () => {
+    // Reads of a linked report are 404 rather than 403: the target is a player
+    // the caller may not see, and a read must not confirm that they exist.
+    expect((await read('player', STUDENT_A)).status).toBe(404)
+  })
+
+  test('a report still in flight carries no player, so it is not refused', async () => {
+    // Progress is the job's lifecycle only; the content is what the check above
+    // guards, and there is no report row to read a student from yet.
+    const inFlight = await read('coach', null, 'running')
+    expect(inFlight.status).toBe(200)
+  })
+})
+
 describe('generating an AI report for another team is refused', () => {
   test('a team coach cannot name a student off-team, and nothing is aggregated', async () => {
     for (const role of TEAM_STAFF) {
