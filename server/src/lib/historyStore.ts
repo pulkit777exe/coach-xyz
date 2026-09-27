@@ -802,7 +802,13 @@ export const ensureInitialized = async () => {
             role text not null default 'player'
               check (role in ('coach', 'player')),
             created_at timestamptz not null default now(),
-            constraint team_memberships_unique unique (team_id, member_auth0_id, student_id),
+            -- NULLS NOT DISTINCT, not a plain unique: a btree unique index treats
+            -- NULLs as distinct, so (team, member, NULL) — which is every coach
+            -- membership, and the common case — was insertable without limit, and
+            -- the ON CONFLICT clause in addTeamMember could never match it. The
+            -- migration below repairs databases created before this.
+            constraint team_memberships_unique
+              unique nulls not distinct (team_id, member_auth0_id, student_id),
             constraint team_memberships_target_check
               check (member_auth0_id is not null or student_id is not null)
           );
@@ -913,6 +919,49 @@ export const ensureInitialized = async () => {
             await store`
           create index if not exists idx_users_email
           on users (email);
+        `
+          })(),
+          (async () => {
+            // Repairs `team_memberships` on databases created before the
+            // constraint became NULLS NOT DISTINCT. A btree unique index treats
+            // NULLs as distinct, so coach memberships — (team, member, NULL) —
+            // were never actually constrained: the seeder produced five copies of
+            // each one, and addTeamMember's `on conflict ... do update set role`
+            // was dead code for every coach. Collapse the duplicates (newest
+            // wins, so the most recent role survives) and swap the constraint.
+            //
+            // Guarded on the constraint's own definition text rather than a
+            // pg_index column, so this stays correct on a PG version that
+            // predates indnullsnotdistinct, and returns immediately once the
+            // database is already correct.
+            await store`
+          do $$
+          declare
+            _def text;
+          begin
+            select pg_get_constraintdef(c.oid) into _def
+            from pg_constraint c
+            join pg_class t on t.oid = c.conrelid
+            where t.relname = 'team_memberships'
+              and c.conname = 'team_memberships_unique'
+            limit 1;
+
+            if _def like '%NULLS NOT DISTINCT%' then
+              return;
+            end if;
+
+            delete from team_memberships a
+            using team_memberships b
+            where a.team_id = b.team_id
+              and a.member_auth0_id is not distinct from b.member_auth0_id
+              and a.student_id is not distinct from b.student_id
+              and (a.created_at, a.id) < (b.created_at, b.id);
+
+            alter table team_memberships drop constraint if exists team_memberships_unique;
+            alter table team_memberships
+              add constraint team_memberships_unique
+              unique nulls not distinct (team_id, member_auth0_id, student_id);
+          end $$;
         `
           })(),
           (async () => {

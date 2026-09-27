@@ -621,6 +621,30 @@ async function main() {
   })
   check('add scoped coach to the team', r.status === 201, r.json)
 
+  // Adding the same coach again must be idempotent. A btree unique index treats
+  // NULLs as distinct, so `unique (team_id, member_auth0_id, student_id)` never
+  // constrained a coach membership (student_id is NULL) — every call inserted
+  // another row and addTeamMember's ON CONFLICT DO UPDATE was dead code for
+  // coaches. No fixture can catch that: they stub `db` as a plain tag function.
+  r = await call('POST', `/api/org/${coachId}/teams/${teamId}/members`, {
+    identity: coachId,
+    body: { member_auth0_id: scopedId, role: 'coach' },
+  })
+  check('re-adding the same coach is accepted (idempotent)', r.status === 201, r.json)
+  const memberships = await withHistoryStore(async (database) => {
+    const rows = await database<{ n: number }[]>`
+      select count(*)::int as n
+      from team_memberships
+      where team_id = ${teamId} and member_auth0_id = ${scopedId};
+    `
+    return rows[0]?.n ?? 0
+  })
+  check(
+    'one membership row after two adds (live NULLS NOT DISTINCT constraint)',
+    memberships === 1,
+    { teamId, member: scopedId, rows: memberships },
+  )
+
   // The team holds no students, so a correctly scoped caller sees nothing while
   // the owner still sees the org. These four are the live array-bind checks.
   r = await call('GET', `/api/org/${coachId}/students`, { identity: scopedId })
