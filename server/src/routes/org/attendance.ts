@@ -10,6 +10,7 @@ import {
   type Student,
 } from '../../lib/orgData'
 import { isDate } from '../../lib/orgValidate'
+import { pickUuid } from '../../lib/uuid'
 import { resolveCaller } from '../../lib/caller'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { ATTENDANCE_STATUS_SET } from './shared'
@@ -21,6 +22,34 @@ import { Elysia } from 'elysia'
 
 type AttendanceNotificationStudent = Pick<Student, 'id' | 'full_name' | 'account_auth0_id'>
 type NotificationSender = Parameters<typeof notifyAttendanceRecorded>[1]
+
+/**
+ * `from`/`to`/`studentId` for the two read routes, or `null` after answering 400.
+ *
+ * All three reach a cast in the query, so a malformed value is a client error and
+ * belongs at the boundary. `studentId` is optional, so a bad value narrows to
+ * "no filter" rather than erroring — except that would silently widen a scoped
+ * caller, so it is validated too.
+ */
+const attendanceWindow = (
+  url: URL,
+): { ok: true; from?: string; to?: string; studentId?: string } | { ok: false } => {
+  const rawFrom = url.searchParams.get('from')
+  const rawTo = url.searchParams.get('to')
+  const rawStudent = url.searchParams.get('studentId')
+  if ((rawFrom !== null && !isDate(rawFrom)) || (rawTo !== null && !isDate(rawTo))) {
+    return { ok: false }
+  }
+  if (rawStudent !== null && !pickUuid(rawStudent)) {
+    return { ok: false }
+  }
+  return {
+    ok: true,
+    from: rawFrom ?? undefined,
+    to: rawTo ?? undefined,
+    studentId: rawStudent ?? undefined,
+  }
+}
 
 /** Capability is not scope: `attendance.write` says WHICH writes, not WHOSE. */
 const OUT_OF_SCOPE_MESSAGE = 'Recording attendance is limited to the students in your team scope'
@@ -79,10 +108,15 @@ export default new Elysia()
     const { auth0Id } = params
     const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
+    const window = attendanceWindow(url)
+    if (!window.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid attendance filter', false)
+    }
     const records = await listAttendance(auth0Id, {
-      from: url.searchParams.get('from') ?? undefined,
-      to: url.searchParams.get('to') ?? undefined,
-      studentId: url.searchParams.get('studentId') ?? undefined,
+      from: window.from,
+      to: window.to,
+      studentId: window.studentId,
       // `null` = org-wide (owner/admin/analyst/medical); a list narrows the
       // query to the caller's teams, and `[]` yields nothing.
       studentIds: await visibleStudentIds(auth0Id, caller.studentScope),
@@ -94,10 +128,15 @@ export default new Elysia()
     const { auth0Id } = params
     const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
+    const window = attendanceWindow(url)
+    if (!window.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid attendance filter', false)
+    }
     const summary = await attendanceSummary(auth0Id, {
-      from: url.searchParams.get('from') ?? undefined,
-      to: url.searchParams.get('to') ?? undefined,
-      studentId: url.searchParams.get('studentId') ?? undefined,
+      from: window.from,
+      to: window.to,
+      studentId: window.studentId,
       studentIds: await visibleStudentIds(auth0Id, caller.studentScope),
     })
     set.status = 200
@@ -115,25 +154,30 @@ export default new Elysia()
       )
     }
     const { student_id, session_date, status, note } = body as Record<string, unknown>
-    if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
+    // This route and its batch sibling sit in the same file, 50 lines apart, and
+    // only the batch validated its date. Both fed the values straight into a
+    // `::date` / `::uuid` cast, so a malformed one raised 22P02/22007 and the
+    // global handler answered 500 INTERNAL_ERROR where a 400 is the truth.
+    const studentUuid = pickUuid(student_id)
+    if (!studentUuid || !isDate(session_date) || !ATTENDANCE_STATUS_SET.has(status as string)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing or invalid attendance fields', false)
     }
     // Scope gate: refuse BEFORE the roster lookup, so an out-of-scope student id
     // never reaches the store (a write must not be attempted at all).
     const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
-    if (!canSeeStudent(studentIds, student_id as string)) {
+    if (!canSeeStudent(studentIds, studentUuid)) {
       set.status = 403
       return buildError('FORBIDDEN', OUT_OF_SCOPE_MESSAGE, false)
     }
-    const student = await getStudent(auth0Id, student_id as string)
+    const student = await getStudent(auth0Id, studentUuid)
     if (!student) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found in this organization', false)
     }
     const record = await upsertAttendance(
       auth0Id,
-      student_id as string,
+      studentUuid,
       session_date as string,
       status as AttendanceStatus,
       typeof note === 'string' ? note : null,
@@ -167,7 +211,7 @@ export default new Elysia()
       const sessionDate = typeof e.session_date === 'string' ? e.session_date : ''
       return (
         typeof e.student_id !== 'string' ||
-        !e.student_id ||
+        !pickUuid(e.student_id) ||
         !isDate(sessionDate) ||
         !ATTENDANCE_STATUS_SET.has(e.status as string)
       )
@@ -237,11 +281,13 @@ export default new Elysia()
       )
     }
     const url = new URL(request.url)
-    const studentId = url.searchParams.get('studentId')
+    const rawStudentId = url.searchParams.get('studentId')
     const sessionDate = url.searchParams.get('date')
-    if (!studentId || !sessionDate) {
+    // Present but malformed is a 400, not a 500 from the ::uuid/::date casts.
+    const studentId = pickUuid(rawStudentId)
+    if (!studentId || !isDate(sessionDate)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing studentId or date', false)
+      return buildError('INVALID_REQUEST', 'Missing or invalid studentId or date', false)
     }
     const studentIds = await visibleStudentIds(auth0Id, caller.studentScope)
     if (!canSeeStudent(studentIds, studentId)) {

@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 
+import { pickInt } from '../lib/uuid'
 import { buildError } from '../lib/errors'
 import { serviceGuard } from '../lib/serviceGuard'
 import { requireVerifiedSelf } from '../lib/caller'
@@ -33,7 +34,7 @@ export const notificationsRoute = (deps: NotificationsRouteDeps = {}) => {
         if (typeof verified !== 'string') return verified
 
         const url = new URL(request.url)
-        const limit = Math.min(Number(url.searchParams.get('limit') || 20), 100)
+        const limit = pickInt(url.searchParams.get('limit'), { min: 1, max: 100, fallback: 20 })
         const unreadOnly = url.searchParams.get('unreadOnly') === '1'
 
         const [notifications, unread] = await Promise.all([

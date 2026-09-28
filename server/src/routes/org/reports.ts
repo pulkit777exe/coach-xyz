@@ -11,6 +11,7 @@ import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { resolveCaller } from '../../lib/caller'
+import { UUID_RE, pickUuid } from '../../lib/uuid'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -31,8 +32,13 @@ export default new Elysia()
     const url = new URL(request.url)
     const caller = await resolveCaller(auth0Id, request)
     const visible = await visibleStudentIds(auth0Id, caller.studentScope)
+    const rawStudentId = url.searchParams.get('studentId')
+    if (rawStudentId !== null && !pickUuid(rawStudentId)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'studentId must be a uuid', false)
+    }
     const reports = await listReports(auth0Id, {
-      studentId: url.searchParams.get('studentId') ?? undefined,
+      studentId: rawStudentId ?? undefined,
       // Absent for an org-wide caller (owner/admin/analyst/medical) so the query
       // stays unfiltered; present-and-empty for an unassigned coach.
       ...(visible === null ? {} : { visibleStudentIds: visible }),
@@ -42,6 +48,10 @@ export default new Elysia()
   })
   .get('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid report id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     const visible = await visibleStudentIds(auth0Id, caller.studentScope)
     // Scoped in SQL, so a report outside the caller's scope reads as absent —
@@ -89,6 +99,10 @@ export default new Elysia()
         `report_type must be one of ${[...REPORT_TYPE_SET].join(', ')}`,
         false,
       )
+    }
+    if (student_id !== undefined && student_id !== null && !pickUuid(student_id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'student_id must be a uuid or null', false)
     }
     if (student_id && (await getStudent(auth0Id, student_id as string)) === null) {
       set.status = 404
@@ -155,6 +169,10 @@ export default new Elysia()
   })
   .put('/api/org/:auth0Id/reports/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid report id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('report.create')) {
       set.status = 403
@@ -247,6 +265,10 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid report id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('report.create')) {
       set.status = 403

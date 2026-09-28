@@ -412,6 +412,106 @@ async function main() {
   })
   check('update report', r.status === 200 && r.json?.report?.report_type === 'monthly', r.json)
 
+  // ── Malformed ids are 400, not 500 ─────────────────────────────────────────
+  console.log('id validation')
+  // A malformed id used to reach a ::uuid / ::date cast, raise 22P02 or 22007,
+  // and be reported as 500 INTERNAL_ERROR — for any member, including a read-only
+  // one, and on routes whose own sibling answered a clean 400 for a *missing* id.
+  // The sharpest instance was inside one file: attendance's batch route validated
+  // its date and the single-record route 50 lines above it did not.
+  const badIds: Array<[string, string, string, Record<string, unknown>?]> = [
+    ['GET', `/api/org/${coachId}/students/not-a-uuid`, 'malformed student id', undefined],
+    [
+      'GET',
+      `/api/org/${coachId}/attendance?studentId=not-a-uuid`,
+      'attendance studentId',
+      undefined,
+    ],
+    ['GET', `/api/org/${coachId}/attendance?from=yesterday`, 'attendance from date', undefined],
+    [
+      'GET',
+      `/api/org/${coachId}/attendance/summary?studentId=not-a-uuid`,
+      'attendance summary studentId',
+      undefined,
+    ],
+    [
+      'GET',
+      `/api/org/${coachId}/performance?studentId=not-a-uuid`,
+      'performance studentId',
+      undefined,
+    ],
+    ['GET', `/api/org/${coachId}/students/comparison?ids=not-a-uuid`, 'comparison ids', undefined],
+    ['GET', `/api/org/${coachId}/reports/not-a-uuid`, 'report id', undefined],
+    [
+      'PUT',
+      `/api/org/${coachId}/reports/not-a-uuid`,
+      'report id on write',
+      { report_type: 'monthly' },
+    ],
+    ['DELETE', `/api/org/${coachId}/reports/not-a-uuid`, 'report id on delete', undefined],
+    ['PUT', `/api/org/${coachId}/schedule/not-a-uuid`, 'event id', { status: 'completed' }],
+    ['DELETE', `/api/org/${coachId}/schedule/not-a-uuid`, 'event id on delete', undefined],
+    ['PUT', `/api/org/${coachId}/performance/not-a-uuid`, 'metric id', { metric_value: 1 }],
+    ['DELETE', `/api/org/${coachId}/performance/not-a-uuid`, 'metric id on delete', undefined],
+    [
+      'PUT',
+      `/api/org/${coachId}/attendance`,
+      'attendance write student_id',
+      { student_id: 'not-a-uuid', session_date: '2026-09-01', status: 'present' },
+    ],
+    [
+      'PUT',
+      `/api/org/${coachId}/attendance`,
+      'attendance write date',
+      { student_id: studentId, session_date: 'yesterday', status: 'present' },
+    ],
+    [
+      'DELETE',
+      `/api/org/${coachId}/attendance?studentId=not-a-uuid&date=2026-09-01`,
+      'attendance delete id',
+      undefined,
+    ],
+    [
+      'DELETE',
+      `/api/org/${coachId}/attendance?studentId=${studentId}&date=yesterday`,
+      'attendance delete date',
+      undefined,
+    ],
+    [
+      'POST',
+      `/api/org/${coachId}/attendance/batch`,
+      'attendance batch id',
+      { entries: [{ student_id: 'not-a-uuid', session_date: '2026-09-01', status: 'present' }] },
+    ],
+    [
+      'POST',
+      `/api/org/${coachId}/reports`,
+      'report write student_id',
+      { report_type: 'monthly', student_id: 'not-a-uuid' },
+    ],
+    [
+      'PUT',
+      // A literal job id: the student_id check runs before the job is resolved, so
+      // this asserts the 400 rather than the 404 a real job would produce.
+      `/api/org/${coachId}/analyses/srv-smoke-never-existed/student`,
+      'analysis link student_id',
+      { student_id: 'not-a-uuid' },
+    ],
+  ]
+  for (const [method, path, label, body] of badIds) {
+    const res = await call(method, path, { identity: coachId, body })
+    check(`${method} ${label} → 400, not 500`, res.status === 400, {
+      status: res.status,
+      code: (res.json as { code?: string } | null)?.code,
+    })
+  }
+
+  // A non-numeric or negative pagination value is a client typo. This one is
+  // NOT pinned here: the old `Math.min(Number(x) || fallback, max)` form was
+  // already safe for both (`NaN || 20` is 20, Math.max floors a negative
+  // offset), so a smoke assertion would pass with or without the change. The
+  // helper is unit-tested instead — see tests/uuid.test.ts.
+
   // ── Retention prune ────────────────────────────────────────────────────────
   console.log('retention')
   // The batch delete passed a JS array to db.unsafe, which Bun serialises as
@@ -535,6 +635,15 @@ async function main() {
     r.status === 200 &&
       Array.isArray(r.json?.analyses) &&
       r.json.analyses.every((a) => !a.student_id),
+    r.json,
+  )
+
+  // A valid limit still narrows — the pickInt change must not have made the
+  // parameter inert.
+  r = await call('GET', `/api/auth/user/${coachId}/analyses?limit=1`, { identity: coachId })
+  check(
+    'a valid limit still narrows the analyses list',
+    r.status === 200 && r.json?.analyses?.length === 1,
     r.json,
   )
 

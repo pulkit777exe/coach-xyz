@@ -10,6 +10,7 @@ import {
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { DEFAULT_COMPARISON_METRIC_KEY } from '../../lib/orgValidate'
 import { resolveCaller } from '../../lib/caller'
+import { UUID_RE, pickUuid } from '../../lib/uuid'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
@@ -23,10 +24,10 @@ export default new Elysia()
   .get('/api/org/:auth0Id/performance', async ({ params, request, set }) => {
     const { auth0Id } = params
     const url = new URL(request.url)
-    const studentId = url.searchParams.get('studentId')
+    const studentId = pickUuid(url.searchParams.get('studentId'))
     if (!studentId) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing studentId parameter', false)
+      return buildError('INVALID_REQUEST', 'Missing or invalid studentId parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
     const metrics = await listPerformance(auth0Id, studentId, {
@@ -42,6 +43,10 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/performance/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid metric id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
       set.status = 403
@@ -73,6 +78,10 @@ export default new Elysia()
   })
   .put('/api/org/:auth0Id/performance/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid metric id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
       set.status = 403
@@ -111,9 +120,9 @@ export default new Elysia()
   // ── Student trends ────────────────────────────────────────────────────────
   .get('/api/org/:auth0Id/students/:id/trends', async ({ params, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     const student = await getStudent(auth0Id, id)
     if (!student) {
@@ -149,6 +158,12 @@ export default new Elysia()
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
+    // Each id reaches a ::uuid cast in compareStudents, so one bad entry in a
+    // comma list took the whole route to 500 rather than rejecting the request.
+    if (ids.some((id) => !pickUuid(id))) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'ids must all be uuids', false)
+    }
     if (ids.length === 0 || ids.length > 10) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Provide 1-10 student ids', false)

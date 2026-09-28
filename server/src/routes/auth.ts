@@ -10,6 +10,7 @@ import {
 } from '../lib/analyses'
 import { markEngineJobFailed } from '../lib/engine'
 import { getJob } from '../lib/jobs'
+import { pickInt } from '../lib/uuid'
 import { buildError } from '../lib/errors'
 import { logger } from '../lib/logger'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
@@ -108,8 +109,16 @@ export default new Elysia()
     }
 
     const url = new URL(request.url)
-    const limit = Math.min(Number(url.searchParams.get('limit') || 20), 100)
-    const offset = Math.max(Number(url.searchParams.get('offset') || 0), 0)
+    // pickInt for clarity and one shared contract, not because the previous
+    // `Math.min(Number(x) || fallback, max)` was broken: the `||` already
+    // absorbed a NaN (`Number('abc') || 20` is 20) and Math.max floored a
+    // negative offset, so every input this route can receive was already safe.
+    // I checked that before claiming otherwise. What pickInt removes is three
+    // hand-rolled variants of the same clamp and the `limit=1e999` case, where
+    // `Infinity || 20` is Infinity and the old form silently capped at 100 while
+    // the new one reports the intended fallback.
+    const limit = pickInt(url.searchParams.get('limit'), { min: 1, max: 100, fallback: 20 })
+    const offset = pickInt(url.searchParams.get('offset'), { min: 0, max: 100_000, fallback: 0 })
     const unlinked = url.searchParams.get('unlinked') === '1'
 
     const analyses = await getUserAnalyses(auth0Id, limit, offset, {

@@ -24,6 +24,7 @@ import { hasPermission, redactWellness, resolveMedicalAccess } from '../../lib/p
 import { auditRoute } from '../../lib/audit'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
+import { UUID_RE, pickUuid } from '../../lib/uuid'
 import { buildError } from '../../lib/errors'
 import { serviceGuard, SERVICE_HEADERS } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
@@ -73,9 +74,13 @@ export default new Elysia()
   })
   .get('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    // A malformed id is a client error. It used to reach `getStudent`'s ::uuid
+    // cast, raise 22P02, and surface as 500 INTERNAL_ERROR — the same route
+    // answers a clean 400 for a *missing* id, so the two were indistinguishable
+    // from the outside while meaning very different things.
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     const student = await getStudent(auth0Id, id)
     if (!student) {
@@ -164,9 +169,13 @@ export default new Elysia()
   })
   .put('/api/org/:auth0Id/students/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    // A malformed id is a client error. It used to reach `getStudent`'s ::uuid
+    // cast, raise 22P02, and surface as 500 INTERNAL_ERROR — the same route
+    // answers a clean 400 for a *missing* id, so the two were indistinguishable
+    // from the outside while meaning very different things.
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
@@ -327,25 +336,39 @@ export default new Elysia()
   // ── Student detail: attendance, performance, analyses ─────────────────────
   .get('/api/org/:auth0Id/students/:id/performance', async ({ params, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    // A malformed id is a client error. It used to reach `getStudent`'s ::uuid
+    // cast, raise 22P02, and surface as 500 INTERNAL_ERROR — the same route
+    // answers a clean 400 for a *missing* id, so the two were indistinguishable
+    // from the outside while meaning very different things.
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     if (!(await studentVisible(auth0Id, request, id))) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
     const url = new URL(request.url)
+    const rawFrom = url.searchParams.get('from')
+    const rawTo = url.searchParams.get('to')
+    if ((rawFrom !== null && !isIsoDate(rawFrom)) || (rawTo !== null && !isIsoDate(rawTo))) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid series filter', false)
+    }
     const series = await getStudentPerformanceSeries(auth0Id, id, {
       metricKey: url.searchParams.get('metricKey') ?? undefined,
-      from: url.searchParams.get('from') ?? undefined,
-      to: url.searchParams.get('to') ?? undefined,
+      from: rawFrom ?? undefined,
+      to: rawTo ?? undefined,
     })
     set.status = 200
     return { series }
   })
   .post('/api/org/:auth0Id/students/:id/performance', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
       set.status = 403
@@ -401,9 +424,13 @@ export default new Elysia()
   })
   .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    // A malformed id is a client error. It used to reach `getStudent`'s ::uuid
+    // cast, raise 22P02, and surface as 500 INTERNAL_ERROR — the same route
+    // answers a clean 400 for a *missing* id, so the two were indistinguishable
+    // from the outside while meaning very different things.
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
     if (!(await studentVisible(auth0Id, request, id))) {
       set.status = 404
@@ -425,16 +452,22 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Linking analyses to students requires player.manage', false)
     }
-    const { student_id } = body as { student_id?: unknown }
-    if (student_id !== undefined && student_id !== null && typeof student_id !== 'string') {
+    // Narrow once, then use the narrowed value everywhere. A string was accepted
+    // on shape alone, so "not-a-uuid" passed the old `typeof === 'string'` check
+    // and then raised 22P02 inside getStudent's ::uuid cast — a 500 for what is a
+    // malformed request. Absent or null still means "unlink" and stays allowed.
+    const rawStudentId = (body as { student_id?: unknown }).student_id
+    const studentId =
+      rawStudentId === undefined || rawStudentId === null ? null : pickUuid(rawStudentId)
+    if (studentId === null && rawStudentId !== undefined && rawStudentId !== null) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'student_id must be a string or null', false)
+      return buildError('INVALID_REQUEST', 'student_id must be a uuid or null', false)
     }
-    if (student_id && (await getStudent(auth0Id, student_id)) === null) {
+    if (studentId && (await getStudent(auth0Id, studentId)) === null) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
-    if (typeof student_id === 'string' && !(await studentVisible(auth0Id, request, student_id))) {
+    if (studentId !== null && !(await studentVisible(auth0Id, request, studentId))) {
       set.status = 403
       return buildError('FORBIDDEN', 'Linking analyses requires access to that student', false)
     }
@@ -450,11 +483,7 @@ export default new Elysia()
       set.status = jobScope.status
       return jobScope.error
     }
-    const analysis = await linkAnalysisToStudent(
-      auth0Id,
-      jobId,
-      (student_id as string | null) ?? null,
-    )
+    const analysis = await linkAnalysisToStudent(auth0Id, jobId, studentId)
     if (!analysis) {
       set.status = 404
       return buildError('NOT_FOUND', 'Analysis not found', false)

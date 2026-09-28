@@ -18,6 +18,7 @@ import { serviceGuard } from '../lib/serviceGuard'
 import { missingVerifiedSelf, requireVerifiedSelf, type MissingVerifiedSelf } from '../lib/caller'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { redactWellness } from '../lib/permissions'
+import { pickInt } from '../lib/uuid'
 import { logger } from '../lib/logger'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
@@ -438,7 +439,7 @@ export default new Elysia()
     }
 
     const url = new URL(request.url)
-    const limit = Math.min(Number(url.searchParams.get('limit') || 50), 100)
+    const limit = pickInt(url.searchParams.get('limit'), { min: 1, max: 100, fallback: 50 })
 
     const analyses = await getStudentAnalyses(coachAuth0Id, student.id, limit)
     // Player scope never carries wellness signals (§5) — strip injury_risk.

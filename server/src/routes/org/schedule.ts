@@ -6,6 +6,7 @@ import {
   updateScheduleEvent,
 } from '../../lib/orgData'
 import { isIsoDate } from '../../lib/orgValidate'
+import { UUID_RE } from '../../lib/uuid'
 import { resolveCaller, type Caller } from '../../lib/caller'
 import { EVENT_STATUS_SET, EVENT_TYPE_SET, parseScheduleInput, resolveTeamId } from './shared'
 import { buildError } from '../../lib/errors'
@@ -114,9 +115,9 @@ export default new Elysia()
   })
   .put('/api/org/:auth0Id/schedule/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
-    if (!auth0Id || !id) {
+    if (!auth0Id || !UUID_RE.test(id)) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return buildError('INVALID_REQUEST', 'Invalid event id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('attendance.write')) {
@@ -186,6 +187,10 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/schedule/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    if (!auth0Id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid event id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('attendance.write')) {
       set.status = 403
