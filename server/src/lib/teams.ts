@@ -149,13 +149,23 @@ export const listTeamMembers = async (teamId: string): Promise<TeamMember[]> => 
   )
 }
 
-/** Team ids a member belongs to (coach-side link). */
-export const listMemberTeamIds = async (memberAuth0Id: string): Promise<string[]> => {
+/**
+ * Team ids a member holds in ONE org (coach-side link). Scoped by joining
+ * `teams`: the unscoped variant returned team ids across every org the user
+ * belonged to, so a coach with teams in two orgs carried the other org's
+ * teams into this org's scope (`resolveCaller` → `studentScope`).
+ */
+export const listMemberTeamIdsInOrg = async (
+  orgAuth0Id: string,
+  memberAuth0Id: string,
+): Promise<string[]> => {
   const rows =
     (await withHistoryStoreOrThrow(async (db) => {
       const ids = await db<{ team_id: string }[]>`
-      select team_id from team_memberships
-      where member_auth0_id = ${memberAuth0Id};
+      select tm.team_id from team_memberships tm
+      join teams t on t.id = tm.team_id
+      where tm.member_auth0_id = ${memberAuth0Id}
+        and t.org_auth0_id = ${orgAuth0Id};
     `
       return ids ?? []
     })) ?? []

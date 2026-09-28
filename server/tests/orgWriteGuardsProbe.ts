@@ -87,7 +87,7 @@ mock.module('../src/lib/teams', () => ({
   // they would legitimately see no students and every guarded write would be
   // refused on scope — which is correct behaviour, and not what this file
   // tests. It tests the capability floor.
-  listMemberTeamIds: async () => (currentRole ? [PROBE_TEAM_ID] : []),
+  listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => (currentRole ? [PROBE_TEAM_ID] : []),
 }))
 
 // The scope seam resolves visible students through the store. Stub the store

@@ -141,7 +141,7 @@ mock.module('../src/lib/orgMembers', () => ({
 
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
-  listMemberTeamIds: async () => teamsForCurrentCaller(),
+  listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsForCurrentCaller(),
 }))
 
 mock.module('../src/lib/audit', () => ({

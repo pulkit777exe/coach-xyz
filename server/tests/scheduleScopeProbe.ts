@@ -317,7 +317,7 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) =>
     teamId === TEAM_FOREIGN ? null : { id: teamId },
-  listMemberTeamIds: async () => teamIds,
+  listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamIds,
 }))
 
 mock.module('../src/lib/audit', () => ({

@@ -2,7 +2,7 @@ import { SERVICE_HEADERS } from './serviceGuard'
 import { buildError, type CoachAIError } from './errors'
 import { getMemberRole, type OrgMemberRole } from './orgMembers'
 import { logger } from './logger'
-import { listMemberTeamIds } from './teams'
+import { listMemberTeamIdsInOrg } from './teams'
 import { canAccessTeam, hasPermission, resolveStudentScope, type Permission } from './permissions'
 
 // ── Caller resolution ────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export async function resolveCaller(orgAuth0Id: string, request: Request): Promi
   let teamIds: string[] = []
   if (verified && role !== null && role !== 'owner' && role !== 'admin') {
     try {
-      teamIds = await listMemberTeamIds(verified)
+      teamIds = await listMemberTeamIdsInOrg(orgAuth0Id, verified)
     } catch (error) {
       logger.warn('member_team_lookup_failed', {
         type: 'member_team_lookup_failed',

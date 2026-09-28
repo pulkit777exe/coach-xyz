@@ -196,7 +196,7 @@ mock.module('../src/lib/orgMembers', () => ({
 
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
-  listMemberTeamIds: async (memberAuth0Id: string) =>
+  listMemberTeamIdsInOrg: async (_orgAuth0Id: string, memberAuth0Id: string) =>
     memberAuth0Id === memberId ? callerTeams : [],
 }))
 

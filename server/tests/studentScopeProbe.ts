@@ -53,17 +53,39 @@ const STUDENTS_ON_TEAM: Record<string, string[]> = {
 }
 
 let currentRole: OrgMemberRole | null = null
-const teamsFor = (role: OrgMemberRole | null): string[] => (role ? (TEAM_FOR_ROLE[role] ?? []) : [])
+/**
+ * Opt-in second team, so one run can present a caller as multi-team.
+ *
+ * TEAM_FOR_ROLE deliberately gives every team-staff role exactly ONE team,
+ * because that is what makes `read.performance` on STUDENT_B a 404 — give
+ * `coach` team B as well and it would legitimately see team B, breaking that
+ * assertion. Rather than perturb the shared fixture, a case that needs a
+ * multi-team caller sets STUDENT_SCOPE_SECOND_TEAM and only that run is
+ * affected. It exists to reach one branch: a scoped caller who names no team
+ * and has no single team to be defaulted onto.
+ */
+const secondTeam = process.env.STUDENT_SCOPE_SECOND_TEAM ?? ''
+const teamsFor = (role: OrgMemberRole | null): string[] => {
+  const base = role ? (TEAM_FOR_ROLE[role] ?? []) : []
+  return secondTeam ? [...base, secondTeam] : base
+}
 
 // ── Store spy ────────────────────────────────────────────────────────────────
 type WriteKey =
-  'updateStudent' | 'deleteStudent' | 'createPerformanceMetric' | 'linkAnalysisToStudent'
+  | 'updateStudent'
+  | 'deleteStudent'
+  | 'createPerformanceMetric'
+  | 'linkAnalysisToStudent'
+  | 'createStudent'
+  | 'importStudents'
 
 const writes: Record<WriteKey, number> = {
   updateStudent: 0,
   deleteStudent: 0,
   createPerformanceMetric: 0,
   linkAnalysisToStudent: 0,
+  createStudent: 0,
+  importStudents: 0,
 }
 const bump = (key: WriteKey) => {
   writes[key] += 1
@@ -94,7 +116,7 @@ mock.module('../src/lib/orgMembers', () => ({
 
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
-  listMemberTeamIds: async () => teamsFor(currentRole),
+  listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
 }))
 
 mock.module('../src/lib/analyses', () => ({
@@ -133,7 +155,10 @@ mock.module('../src/lib/orgData', () => ({
   listStudents: async () => [student(STUDENT_A), student(STUDENT_B)],
   listStudentSports: async () => [],
   getStudent: async (_orgAuth0Id: string, id: string) => student(id),
-  createStudent: async () => student(STUDENT_A),
+  createStudent: async () => {
+    bump('createStudent')
+    return student(STUDENT_A)
+  },
   updateStudent: async () => {
     bump('updateStudent')
     return student(STUDENT_A)
@@ -142,7 +167,10 @@ mock.module('../src/lib/orgData', () => ({
     bump('deleteStudent')
     return true
   },
-  importStudents: async () => ({ imported: 0, failed: [], duplicates_skipped: 0 }),
+  importStudents: async () => {
+    bump('importStudents')
+    return { imported: 0, failed: [], duplicates_skipped: 0 }
+  },
   getStudentAnalyses: async () => [{ id: JOB_ID }],
   getStudentPerformanceSeries: async () => [{ metric_key: 'sprint_time' }],
   createPerformanceMetric: async () => {
@@ -190,6 +218,62 @@ const CASES: Record<string, Case> = {
     method: 'PUT',
     path: `/api/org/${orgPath}/analyses/${JOB_ID}/student`,
     body: { student_id: STUDENT_B },
+  },
+
+  // ── Team assignment on create / import ───────────────────────────────────
+  // The team a player is *filed under* is a different axis from the team a
+  // student-keyed route resolves. `resolveTeamId` proves the team is in this
+  // ORG; nothing proved it was in the caller's SCOPE, so `player.manage` plus
+  // any in-org team uuid was enough to create a player on a team the caller is
+  // not assigned to. The sibling PUT route asked the scope question and create
+  // did not. These are the create/import halves of that gap.
+
+  // POST a player onto the caller's OWN team: the positive control, so the
+  // 403 below cannot be explained by the route refusing everyone.
+  'create.ownTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students`,
+    body: { full_name: 'New Teammate', team_id: TEAM_A },
+  },
+  // The defect: a valid, in-org team the caller has no membership in.
+  'create.offTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students`,
+    body: { full_name: 'Injected Player', team_id: TEAM_B },
+  },
+  // No team named, and a single-team caller: the hierarchy convenience should
+  // file it under that team, exactly as POST always did.
+  'create.noTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students`,
+    body: { full_name: 'Unassigned By Default' },
+  },
+
+  // Import into a team the caller does not belong to.
+  'import.offTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students/import`,
+    body: { team_id: TEAM_B, rows: [{ full_name: 'Bulk Injected' }] },
+  },
+  // Import into the caller's own team: accepted.
+  'import.ownTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students/import`,
+    body: { team_id: TEAM_A, rows: [{ full_name: 'Bulk Teammate' }] },
+  },
+  // Per-row team, batch-level default deliberately absent.
+  'import.rowTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students/import`,
+    body: { rows: [{ full_name: 'Row Teamed', team_id: TEAM_A }] },
+  },
+  // No team anywhere. A single-team scoped caller is defaulted onto it; a
+  // caller with zero or several teams is refused. Which branch this exercises
+  // depends on the role, so the assertion is split per role below.
+  'import.noTeam': {
+    method: 'POST',
+    path: `/api/org/${orgPath}/students/import`,
+    body: { rows: [{ full_name: 'Bulk Unassigned' }] },
   },
 }
 
