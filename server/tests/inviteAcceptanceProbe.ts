@@ -43,7 +43,7 @@ mock.module('../src/lib/orgMembers', () => ({
 // on the token the caller passes rather than on its hash.
 mock.module('../src/lib/historyStore', () => ({
   withHistoryStoreOrThrow: async (fn: (db: unknown) => unknown) => {
-    const db = (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const db = (strings: TemplateStringsArray) => {
       const sql = strings.join('?')
       // Bun's SQL resolves to the row array itself, not to an envelope, so the
       // stub must too — returning { rows } makes `rows?.[0]` undefined and the
