@@ -140,6 +140,21 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', team.error, false)
     }
     if (team.teamId) {
+      // Scoped staff can only file a player under a team they belong to.
+      //
+      // `resolveTeamId` answers an ORG question — it stops a coach from linking a
+      // player to a team in another organization — and its own doc comment says
+      // so. It never asked the SCOPE question, and the sibling PUT route in this
+      // file did ask it; create did not. So `player.manage` plus a valid
+      // cross-org-safe team uuid was enough to file a new player onto a team the
+      // caller is not assigned to — a write outside the roster scope that
+      // `resolveStudentScope` is supposed to make impossible, and one that is
+      // invisible to the coach's own view.
+      const scope = await studentScope(auth0Id, request)
+      if (!scope.all && !scope.teamIds.includes(team.teamId)) {
+        set.status = 403
+        return buildError('FORBIDDEN', 'Cannot assign a team outside your scope', false)
+      }
       input.team_id = team.teamId
     } else {
       // Hierarchy convenience: a coach with exactly one team creates
@@ -262,6 +277,12 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    // A malformed id reaches a `::uuid` cast and raises 22P02, reported as a
+    // 500 — the boundary is the only place that knows it is a 400.
+    if (!auth0Id || !id || !UUID_RE.test(id)) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid student id', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
       set.status = 403
@@ -275,11 +296,16 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Deleting students requires access to that student', false)
     }
+    // Capture the name before deleting: the audit row outlives the student.
+    const existing = await getStudent(auth0Id, id)
     const deleted = await deleteStudent(auth0Id, id)
     if (!deleted) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
+    auditRoute(request, auth0Id, 'player.deleted', 'student', id, {
+      full_name: existing?.full_name ?? null,
+    })
     set.status = 200
     return { deleted: true }
   })
@@ -294,7 +320,7 @@ export default new Elysia()
         false,
       )
     }
-    const { rows } = body as { rows?: unknown[] }
+    const { rows, team_id: batchTeamRaw } = body as { rows?: unknown[]; team_id?: unknown }
     if (!Array.isArray(rows) || rows.length === 0) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'rows must be a non-empty array', false)
@@ -304,17 +330,86 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', `Maximum ${MAX_IMPORT_ROWS} rows per import`, false)
     }
 
+    // ── Team assignment ──────────────────────────────────────────────────────
+    // This route used to have no team concept at all: `ImportRow` had no
+    // `team_id` and `importStudents` inserts only the cleaned columns, so EVERY
+    // imported player landed with `team_id = NULL`. Two consequences, and only
+    // one of them is a security problem:
+    //   1. `player.manage` plus this route was a way to create players with no
+    //      scope check whatsoever — a bypass of the roster scope, which the
+    //      single-student POST now refuses (see its `studentScope` gate).
+    //   2. Even for the owner it was a broken feature: a head coach who bulk
+    //      imported a roster got 200 players they can never see, because a
+    //      NULL-team student is outside a team-scoped caller's view.
+    //
+    // A row may name its own `team_id`; the request may carry one batch-level
+    // `team_id` as the default. Malformed/unknown ids are DATA errors and join
+    // the per-row `failed` list like every other bad field. A team that resolves
+    // but sits outside the caller's scope is an AUTHORIZATION failure and
+    // refuses the whole request — "you may not write here" is not a per-row
+    // opinion, and a 200 with some rows silently dropped would be worse.
+    const batchTeam = await resolveTeamId(auth0Id, batchTeamRaw)
+    if (!batchTeam.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', batchTeam.error, false)
+    }
+    const scope = await studentScope(auth0Id, request)
+    // Same hierarchy convenience as POST /students: a scoped caller with exactly
+    // one team files under it, so the common case needs no team in the CSV.
+    const onlyTeam = !scope.all && scope.teamIds.length === 1 ? scope.teamIds[0] : null
+
     const validated: Array<{ cleaned: Record<string, unknown> }> = []
     const failed: Array<{ row_index: number; reason: string }> = []
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] as ImportRow
       const result = validateStudentRow(row)
-      if (result.ok) {
-        validated.push({ cleaned: result.cleaned })
-      } else {
+      if (!result.ok) {
         failed.push({ row_index: i, reason: result.reason })
+        continue
       }
+      const cleaned = { ...result.cleaned }
+      const rawTeam = cleaned.team_id ?? batchTeam.teamId
+      const resolved =
+        rawTeam === undefined || rawTeam === null || rawTeam === ''
+          ? { ok: true as const, teamId: null }
+          : await resolveTeamId(auth0Id, rawTeam)
+      if (!resolved.ok) {
+        failed.push({ row_index: i, reason: resolved.error })
+        continue
+      }
+      let teamId = resolved.teamId
+      if (!scope.all) {
+        if (teamId && !scope.teamIds.includes(teamId)) {
+          set.status = 403
+          return buildError(
+            'FORBIDDEN',
+            'Cannot import players into a team outside your scope',
+            false,
+          )
+        }
+        if (!teamId) {
+          // No team named and none inferable: refuse rather than write players
+          // the caller is not allowed to see. Only a multi-team (or teamless)
+          // scoped caller lands here; a single-team one was defaulted above.
+          if (onlyTeam) {
+            teamId = onlyTeam
+          } else {
+            set.status = 403
+            return buildError(
+              'FORBIDDEN',
+              'A team_id is required: you are not assigned to exactly one team',
+              false,
+            )
+          }
+        }
+      }
+      if (teamId) {
+        cleaned.team_id = teamId
+      } else {
+        delete cleaned.team_id
+      }
+      validated.push({ cleaned })
     }
 
     if (validated.length === 0) {

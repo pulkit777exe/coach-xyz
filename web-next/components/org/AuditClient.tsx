@@ -36,6 +36,7 @@ const ACTION_GROUPS = [
   'settings.changed',
   'player.created',
   'player.transferred',
+  'player.deleted',
   'health.record_viewed',
   'clip.created',
   'clip.deleted',

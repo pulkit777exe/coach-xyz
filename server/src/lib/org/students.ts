@@ -190,15 +190,37 @@ export const updateStudent = async (
   })
 }
 
-export const deleteStudent = async (auth0Id: string, id: string): Promise<boolean> => {
-  const res = await withHistoryStoreOrThrow(async (db) => {
-    const rows = await db<{ id: string }[]>`
-      delete from students where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
+/**
+ * Delete a student and their private rows, atomically. Dependent tables have
+ * no foreign keys, so each is handled explicitly:
+ *
+ * - Private rows go: `wellness_checkins`, `training_objectives`,
+ *   `training_plans`, `team_memberships` (student side).
+ * - Club history stays: `analysis_history` and `player_events` are unlinked
+ *   (`student_id = null`) so owner/coach dashboards keep the analyses.
+ * - `attendance`, `performance_metrics`, `player_consents` cascade via FK;
+ *   `reports.student_id` is `on delete set null`.
+ *
+ * The student row is claimed (`for update`, org-scoped) before anything it
+ * points at is touched — the same claim-then-write order as `deleteTeam` —
+ * so a foreign id deletes nothing instead of orphaning another org's data.
+ */
+export const deleteStudent = async (auth0Id: string, id: string): Promise<boolean> =>
+  (await withHistoryStoreOrThrow((db) =>
+    db.begin(async (tx) => {
+      const owned = await tx<{ id: string }[]>`
+        select id from students where auth0_id = ${auth0Id} and id = ${id} for update;`
+      if (!owned[0]) return false
+      await tx`delete from wellness_checkins where student_id = ${id};`
+      await tx`delete from training_objectives where student_id = ${id};`
+      await tx`delete from training_plans where student_id = ${id};`
+      await tx`delete from team_memberships where student_id = ${id};`
+      await tx`update analysis_history set student_id = null where student_id = ${id};`
+      await tx`update player_events set student_id = null where student_id = ${id};`
+      await tx`delete from students where auth0_id = ${auth0Id} and id = ${id};`
+      return true
+    }),
+  )) ?? false
 
 export const listStudentSports = async (auth0Id: string): Promise<string[]> => {
   return (

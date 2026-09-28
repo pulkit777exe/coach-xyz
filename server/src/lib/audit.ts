@@ -26,6 +26,7 @@ export type AuditAction =
   | 'settings.changed'
   | 'player.created'
   | 'player.transferred'
+  | 'player.deleted'
   | 'health.record_viewed'
   | 'clip.created'
   | 'clip.deleted'
@@ -54,6 +55,7 @@ export const AUDIT_ACTIONS: readonly AuditAction[] = [
   'settings.changed',
   'player.created',
   'player.transferred',
+  'player.deleted',
   'health.record_viewed',
   'clip.created',
   'clip.deleted',

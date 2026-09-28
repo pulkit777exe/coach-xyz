@@ -8,6 +8,7 @@ describe('AUDIT_ACTIONS', () => {
     expect(AUDIT_ACTIONS).toContain('clip.created')
     expect(AUDIT_ACTIONS).toContain('clip.deleted')
     expect(AUDIT_ACTIONS).toContain('player.created')
+    expect(AUDIT_ACTIONS).toContain('player.deleted')
     expect(AUDIT_ACTIONS).toContain('health.record_viewed')
     expect(AUDIT_ACTIONS).toContain('video.exported')
   })
@@ -15,6 +16,6 @@ describe('AUDIT_ACTIONS', () => {
   test('mirrors the web audit filter (update both when adding an action)', () => {
     // web-next/components/org/AuditClient.tsx ACTION_GROUPS must list the
     // same actions in the same order — drift hides actions from the filter.
-    expect(AUDIT_ACTIONS.length).toBe(21)
+    expect(AUDIT_ACTIONS.length).toBe(22)
   })
 })
