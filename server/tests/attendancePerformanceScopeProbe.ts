@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 
 import { setHistoryStoreConnectionForTests } from '../src/lib/historyStore'
 import type { OrgMemberRole } from '../src/lib/orgMembers'
+import { MAX_ATTENDANCE_BATCH } from '../src/lib/orgValidate'
 
 // ── Team-scope probe: attendance + performance ───────────────────────────────
 // Drives ONE attendance/performance route for one (role, teams, target student)
@@ -345,6 +346,37 @@ const CASES: Record<string, Case> = {
     method: 'POST',
     body: {
       entries: [{ student_id: targetStudentId, session_date: SESSION_DATE, status: 'late' }],
+    },
+  },
+  // One entry over the cap. Every entry is individually well-formed and the
+  // target student IS in scope, so the only thing that can reject this is the
+  // size check — and `calls.setAttendanceBatch` must stay 0, which is the
+  // assertion that matters: the cap has to fire *before* the sequential upsert
+  // loop, not after it has already done 501 round trips.
+  'attendance.batchOverCap': {
+    route: 'attendance',
+    path: `/api/org/${orgPath}/attendance/batch`,
+    method: 'POST',
+    body: {
+      entries: Array.from({ length: MAX_ATTENDANCE_BATCH + 1 }, () => ({
+        student_id: targetStudentId,
+        session_date: SESSION_DATE,
+        status: 'late',
+      })),
+    },
+  },
+  // The boundary itself: exactly at the cap is still accepted, so the check is
+  // `>` and not `>=`. Paired with batchOverCap so a one-off cannot pass both.
+  'attendance.batchAtCap': {
+    route: 'attendance',
+    path: `/api/org/${orgPath}/attendance/batch`,
+    method: 'POST',
+    body: {
+      entries: Array.from({ length: MAX_ATTENDANCE_BATCH }, () => ({
+        student_id: targetStudentId,
+        session_date: SESSION_DATE,
+        status: 'late',
+      })),
     },
   },
   'attendance.delete': {

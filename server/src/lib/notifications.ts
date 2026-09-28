@@ -3,26 +3,24 @@ import type { QueueEvents } from 'bullmq'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { getAnalysisByServerJobId } from './analyses'
 import { analysisQueue, queueEvents, classifyFailure, onQueueInfrastructureReady } from './queue'
-import { isEventEnabled } from './notificationPrefs'
-import { analysisResultHref, NOTIFICATION_EVENT } from './notificationEventNames'
+import { analysisResultHref } from './notificationEventNames'
 import { logger } from './logger'
-import { publishNotification, subscribeNotification } from './serverEvents'
+import { subscribeNotification } from './serverEvents'
+import { notifyAnalysisResult } from './notificationEvents'
+// Re-exported so every existing importer (dataExport, the routes, the tests)
+// keeps one import path. The implementation moved out so the emission seam can
+// use it as its default transport without a cycle — see notificationCreate.ts.
+import {
+  createNotification,
+  type CreateNotificationInput,
+  type NotificationRow,
+} from './notificationCreate'
+
+export { createNotification, type CreateNotificationInput, type NotificationRow }
 
 // Notification rows are durable in Postgres. The shared Redis bus is only a
 // wake-up signal for authenticated SSE routes; each replica dispatches locally
 // and the browser reconciles a snapshot after every event/reconnect.
-
-export type NotificationRow = {
-  id: string
-  auth0_id: string
-  type: string
-  title: string
-  body: string | null
-  data: Record<string, unknown>
-  read: boolean
-  dedupe_key?: string | null
-  created_at: string
-}
 
 export function onNotification(auth0Id: string, handler: (n: NotificationRow) => void): () => void {
   return subscribeNotification(auth0Id, handler)
@@ -32,79 +30,6 @@ export function onNotification(auth0Id: string, handler: (n: NotificationRow) =>
 // Table bootstrap lives in historyStore.ensureInitialized — the module owns a
 // single schema mechanism, so every wrapped query below can assume the
 // notifications table exists (the wrapper initializes before the callback).
-
-function normalizeNotificationData(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  if (typeof value !== 'string') return {}
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-  } catch (error) {
-    logger.error('notification_data_parse_failed', {
-      type: 'notification_data_parse_failed',
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-  return {}
-}
-
-export type CreateNotificationInput = {
-  auth0Id: string
-  type: string
-  title: string
-  body?: string | null
-  data?: Record<string, unknown>
-  /** Internal idempotency key for queue-derived notifications. */
-  dedupeKey?: string | null
-}
-
-export async function createNotification(
-  input: CreateNotificationInput,
-): Promise<NotificationRow | null> {
-  if (!(await isEventEnabled(input.auth0Id, input.type))) return null
-
-  const result = await withHistoryStore(async (db) => {
-    const rows = await db<NotificationRow[]>`
-      insert into notifications (auth0_id, type, title, body, data, dedupe_key)
-      values (
-        ${input.auth0Id},
-        ${input.type},
-        ${input.title},
-        ${input.body ?? null},
-        ${input.data ?? {}}::jsonb,
-        ${input.dedupeKey ?? null}
-      )
-      on conflict do nothing
-      returning *;
-    `
-    return rows?.[0] ?? null
-  })
-
-  if (result) {
-    const createdAt = new Date(result.created_at as unknown as string | number | Date).toISOString()
-    const data = normalizeNotificationData(result.data)
-    void publishNotification({
-      id: result.id,
-      auth0_id: result.auth0_id,
-      type: result.type,
-      title: result.title,
-      body: result.body,
-      data,
-      read: result.read,
-      created_at: createdAt,
-    }).catch((error: unknown) => {
-      logger.error('notification_event_publish_error', {
-        type: 'notification_event_publish_error',
-        error: error instanceof Error ? error.message : String(error),
-      })
-    })
-  }
-  return result
-}
 
 export async function listNotifications(
   auth0Id: string,
@@ -237,9 +162,13 @@ function attachQueueEventListeners() {
           analysis.auth0Id,
           analysis.requestedBy,
         )) {
-          await createNotification({
+          // Through the seam, so the event name and payload shape live in one
+          // place. This handler used to hand-roll createNotification with the
+          // event name inline, which is why notifyAnalysisResult had no call
+          // sites at all and a parity test could not see it.
+          await notifyAnalysisResult({
             auth0Id,
-            type: NOTIFICATION_EVENT.analysisComplete,
+            event: 'analysisComplete',
             title: 'Analysis complete',
             body: analysis.displayName || job.data.engine_job_id,
             data: {
@@ -282,9 +211,9 @@ function attachQueueEventListeners() {
             analysis.auth0Id,
             analysis.requestedBy,
           )) {
-            await createNotification({
+            await notifyAnalysisResult({
               auth0Id,
-              type: NOTIFICATION_EVENT.analysisFailed,
+              event: 'analysisFailed',
               title: 'Analysis failed',
               body: analysis.displayName || job.data.engine_job_id,
               data: {

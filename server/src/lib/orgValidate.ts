@@ -36,6 +36,19 @@ const STUDENT_STATUS_SET: ReadonlySet<string> = new Set(STUDENT_STATUSES)
 /** Bulk import contract: max rows accepted per request. */
 export const MAX_IMPORT_ROWS = 500
 
+/**
+ * Bulk attendance contract: max entries accepted per request.
+ *
+ * Same reasoning as MAX_IMPORT_ROWS, and it matters more here: setAttendanceBatch
+ * loops its entries **sequentially**, one upsert per entry inside the single
+ * request, so the route's cost is linear in `entries.length`. It previously
+ * checked only `Array.isArray(entries) && length > 0`, so any member holding
+ * `attendance.write` could post 50,000 entries and hold a request open that long.
+ * A class of 30 students over a fortnight is ~40 entries; 500 leaves ample room
+ * for a whole season in one call.
+ */
+export const MAX_ATTENDANCE_BATCH = 500
+
 /** Comparison contract: default metric key used when none is specified. */
 export const DEFAULT_COMPARISON_METRIC_KEY = 'form_score'
 

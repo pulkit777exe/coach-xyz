@@ -75,13 +75,25 @@ afterEach(() => {
 
 /**
  * The scope predicate binds two consecutive values — the `scoped` flag then the
- * id list (`not ${scoped} or … = any(${param}::uuid[])`) — and the flag is the
- * only boolean in these queries, so it can be located unambiguously.
+ * id list (`not ${scoped} or … = any(${param}::uuid[])`).
+ *
+ * Locate them by *position*, not by type. The previous version searched for the
+ * only boolean in the values array, which assumed no other predicate bound one.
+ * That assumption died the moment `toBound` added a day flag to the same
+ * queries: `findIndex(typeof === 'boolean'` then returned the period bound's
+ * flag and read the id list out of the next slot, so all five performance cases
+ * failed while attendance's kept passing. These queries may bind any number of
+ * booleans; the `?` the regex matches is a fixed offset, so counting the
+ * placeholders before it indexes the values array exactly.
  */
+const SCOPE_PREDICATE = /not \? or [\w.]*student_id = any\(\?::uuid\[\]\)/
+
 const scopeBinding = (query: Query): { scoped: unknown; ids: unknown } => {
-  const flag = query.values.findIndex((value) => typeof value === 'boolean')
-  expect(flag, `no scope predicate bound in: ${query.sql}`).toBeGreaterThan(-1)
-  expect(query.sql).toMatch(/not \? or [\w.]*student_id = any\(\?::uuid\[\]\)/)
+  const match = SCOPE_PREDICATE.exec(query.sql)
+  expect(match, `no scope predicate bound in: ${query.sql}`).not.toBeNull()
+  // `values` is parallel to the `?` placeholders, so the count of placeholders
+  // preceding the predicate is the index of its first bound value.
+  const flag = query.sql.slice(0, match?.index ?? 0).split('?').length - 1
   return { scoped: query.values[flag], ids: query.values[flag + 1] }
 }
 
@@ -240,6 +252,10 @@ describe('performance queries carry the student scope', () => {
   }
 
   const cleanup = async (db: SQL) => {
+    // analysis_history is keyed by server_job_id, not by an id column, and the
+    // series test seeds one for ORG. It has to go or the "trends" case above
+    // would see a second point and fail on a row it never created.
+    await db`delete from analysis_history where auth0_id = ${ORG}`
     await db`delete from performance_metrics where auth0_id = ${ORG}`
     await db`delete from attendance where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
@@ -291,6 +307,91 @@ describe('performance queries carry the student scope', () => {
       const series = await getStudentPerformanceSeries(ORG, STUDENT_A, { studentIds: [STUDENT_A] })
       expect(series.map((p) => p.metric_value)).toEqual([7])
       expect(await getStudentTrends(ORG, STUDENT_A, { studentIds: [] })).toEqual([])
+    })
+  }, 60000)
+
+  // The upper period bound is where a fixture is blind: the whole defect is how
+  // Postgres casts the bound, and only the server can show that. `to` arrives in
+  // two shapes — `period_end` is always a bare `YYYY-MM-DD` (the report path,
+  // isDate-validated), and the series route may pass a full instant — and the
+  // two used to share one `<= to::timestamptz` comparison, which is midnight for a
+  // bare date. So a report for 1st..30th dropped everything recorded on the 30th
+  // while the attendance half of the same report (`session_date <= to::date`)
+  // kept the day. The bound is now exclusive and shifts by a day only when a day
+  // was named; these assertions pin both halves of that, including the negative
+  // case, so a blanket "widen to end of day" regression cannot pass.
+  test('a bare `to` date keeps that whole day; an instant stays exact', async () => {
+    await withSeededStore(async () => {
+      await withHistoryStore(async (db) => {
+        await db`
+          insert into performance_metrics (auth0_id, student_id, metric_key, metric_value, measured_at)
+          values (${ORG}, ${STUDENT_A}::uuid, 'bound_probe', 42, '2026-03-02 18:00:00+00'::timestamptz);
+        `
+      })
+
+      const bound = async (from?: string, to?: string) =>
+        (
+          await listPerformance(ORG, STUDENT_A, {
+            metricKey: 'bound_probe',
+            from,
+            to,
+          })
+        ).length
+
+      // A bare date names a whole day, so the 18:00 measurement is inside it.
+      expect(await bound(undefined, '2026-03-02')).toBe(1)
+      // The previous day ends before it.
+      expect(await bound(undefined, '2026-03-01')).toBe(0)
+      // `from` is a bare date too and stays inclusive at midnight.
+      expect(await bound('2026-03-02', '2026-03-02')).toBe(1)
+      expect(await bound('2026-03-03', '2026-03-04')).toBe(0)
+
+      // A full instant is an instant: earlier excludes, later includes. Without
+      // these the "day" widening could be unconditional and still pass above.
+      expect(await bound(undefined, '2026-03-02T12:00:00Z')).toBe(0)
+      expect(await bound(undefined, '2026-03-02T19:00:00Z')).toBe(1)
+
+      // No bound at all is still no bound.
+      expect(await bound()).toBe(1)
+    })
+  }, 60000)
+
+  // The same bound on the other half of the series: `requested_at` on
+  // analysis_history, which is the query reports read for form scores. It is a
+  // separate predicate in a separate statement, so it needs its own evidence —
+  // the previous version of this test asserted an empty series both before and
+  // after the fix and therefore proved nothing.
+  test('the series upper bound keeps the final day of a period', async () => {
+    await withSeededStore(async () => {
+      await withHistoryStore(async (db) => {
+        // summary_json is bound as an object, never JSON.stringify'd: on Bun's
+        // prepared-statement path the string form is stored as a jsonb string,
+        // and `(summary_json->>'form_score')` then yields NULL and the row drops
+        // out of the query for a reason that has nothing to do with the bound.
+        await db`
+          insert into analysis_history (
+            server_job_id, engine_job_id, model, complete, summary_json,
+            auth0_id, student_id, requested_at
+          ) values (
+            ${'bound-probe-job'}, ${'bound-probe-engine'}, ${'gemini'}, true,
+            ${{ form_score: 8.5 }}::jsonb,
+            ${ORG}, ${STUDENT_A}::uuid, '2026-03-02 18:00:00+00'::timestamptz
+          );
+        `
+      })
+
+      const formScores = async (from?: string, to?: string) =>
+        (await getStudentPerformanceSeries(ORG, STUDENT_A, { from, to })).filter(
+          (p) => p.metric_key === 'form_score',
+        )
+
+      // A bare `to` names a whole day, so an 18:00 analysis on the final day is
+      // inside a 1st..2nd period. This is the row the old `<=` dropped.
+      expect(await formScores('2026-03-01', '2026-03-02')).toHaveLength(1)
+      expect(await formScores('2026-03-01', '2026-03-01')).toHaveLength(0)
+      // A full instant is still exact, so the same day can be excluded.
+      expect(await formScores('2026-03-01', '2026-03-02T12:00:00Z')).toHaveLength(0)
+      expect(await formScores('2026-03-01', '2026-03-02T19:00:00Z')).toHaveLength(1)
     })
   }, 60000)
 })

@@ -153,8 +153,17 @@ export async function resolveMemberRoleForPath(
   if (!isOrgScopedPath(pathname) || !orgAuth0Id || orgAuth0Id === verifiedAuth0Id) return null
   try {
     return await getMemberRole(orgAuth0Id, verifiedAuth0Id)
-  } catch {
-    // DB unavailable — deny by treating the caller as a non-member.
+  } catch (error) {
+    // DB unavailable — deny by treating the caller as a non-member. Failing
+    // closed is right; failing *silently* is not. `caller.ts` logs the identical
+    // failure class as member_role_lookup_failed, so a Neon blip here denied
+    // every non-owner org request with zero signal.
+    logger.warn('member_role_lookup_failed', {
+      type: 'member_role_lookup_failed',
+      path: pathname,
+      orgAuth0Id,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -247,8 +256,16 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
     let members: OrgRoleMember[] | null = null
     try {
       members = await listOrgMembers(auth0Id)
-    } catch {
-      // DB unavailable — fail the check below on empty membership.
+    } catch (error) {
+      // DB unavailable — fail the check below on empty membership. As above, the
+      // fail-closed default is correct and the silence was not: a transient
+      // database error looked exactly like "this caller holds no role here".
+      logger.warn('org_role_lookup_failed', {
+        type: 'org_role_lookup_failed',
+        orgAuth0Id: auth0Id,
+        requiredRoles,
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
     const outcome = verifyOrgRole({
       verifiedAuth0Id,

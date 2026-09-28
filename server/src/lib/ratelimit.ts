@@ -1,6 +1,7 @@
 import { redis } from './redis'
 import { readRequestMeta } from './requestMeta'
 import { buildError, type CoachAIError } from './errors'
+import { logger } from './logger'
 
 // Rate limiting with atomic Redis increments
 // When Redis is unavailable, fail open — don't block users
@@ -62,7 +63,17 @@ export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResu
       remaining: Math.max(0, limit - result.current),
       reset: result.reset,
     }
-  } catch {
+  } catch (error) {
+    // Fail open, but never silently: the fallback is per-process and per-replica,
+    // so a Redis outage quietly weakens the limit for every user while looking
+    // perfectly healthy. It is also invisible precisely when it matters most —
+    // the shared serverless quota being spent makes *every* request take this
+    // path, and nothing distinguished that from normal operation.
+    logger.warn('rate_limit_degraded_to_memory', {
+      type: 'rate_limit_degraded_to_memory',
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return memoryLimit(key, limit, windowSec * 1000)
   }
 }

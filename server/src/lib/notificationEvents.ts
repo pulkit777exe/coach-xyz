@@ -4,7 +4,7 @@
 // and the destination a recipient needs all live in one place. The names
 // themselves come from the dependency-free vocabulary module.
 
-import { createNotification, type CreateNotificationInput } from './notifications'
+import { createNotification, type CreateNotificationInput } from './notificationCreate'
 import { NOTIFICATION_EVENT, type NotificationEventName } from './notificationEventNames'
 
 export { analysisResultHref, NOTIFICATION_EVENT } from './notificationEventNames'

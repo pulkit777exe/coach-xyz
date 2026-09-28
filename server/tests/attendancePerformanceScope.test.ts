@@ -275,6 +275,26 @@ describe('the same routes still work inside the caller scope', () => {
     expect(result.calls.setAttendanceBatch).toBe(1)
   })
 
+  // The batch size cap. `setAttendanceBatch` upserts one entry at a time in a
+  // sequential loop, so an uncapped array turns a single request into an
+  // unbounded number of round trips — the route checked only `length > 0`
+  // before. Both cases below target a student the caller CAN see, with
+  // individually valid entries, so size is the only thing separating them.
+  test('a batch one entry over the cap is refused before any write', () => {
+    const result = runAsTeamACoach('attendance.batchOverCap', 'teamA')
+    expect(result.status).toBe(400)
+    expect(result.body).toMatchObject({ code: 'INVALID_REQUEST' })
+    // The load-bearing assertion: the cap has to fire before the loop, not
+    // after it has already issued 501 upserts.
+    expect(result.calls.setAttendanceBatch).toBe(0)
+  })
+
+  test('a batch of exactly MAX_ATTENDANCE_BATCH is still accepted', () => {
+    const result = runAsTeamACoach('attendance.batchAtCap', 'teamA')
+    expect(result.status).toBe(200)
+    expect(result.calls.setAttendanceBatch).toBe(1)
+  })
+
   test('a team A coach deletes attendance for a team A student', () => {
     const result = runAsTeamACoach('attendance.delete', 'teamA')
     expect(result.status).toBe(200)

@@ -1,7 +1,7 @@
 // Performance metrics data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
-import { computeMetricTrends as computeTrends } from '../orgValidate'
+import { computeMetricTrends as computeTrends, isDate } from '../orgValidate'
 import type { MetricTrend } from '../orgValidate'
 import { uuidArrayLiteral } from './scope'
 import { getStudent } from './students'
@@ -57,6 +57,30 @@ export type PerformanceSeriesOptions = {
   studentIds?: string[] | null
 }
 
+/**
+ * A period's upper bound, and whether it names a whole day.
+ *
+ * `to` arrives in two shapes. The report path passes `period_end`, always a bare
+ * `YYYY-MM-DD` (`isDate`-validated in routes/org/reports.ts and
+ * routes/aiReports.ts), meaning "through the end of that day". The series route
+ * passes a query param, which may be a bare date or a full instant.
+ *
+ * Both were compared as `col <= to::timestamptz`, and for a bare date that cast is
+ * *midnight* — so a report for 2026-09-01..2026-09-30 silently dropped every
+ * metric and analysis recorded on the 30th, while the attendance half of the very
+ * same report (`session_date <= to::date`) kept the day. Nothing errored; the
+ * numbers were just quietly short.
+ *
+ * So the bound is now **exclusive**, and `toIsDay` shifts it by one day only when
+ * the caller named a day. The arithmetic stays in Postgres so no timezone is
+ * involved, and the boolean gate is the same "one query shape for both cases"
+ * pattern the scope filters use.
+ */
+const toBound = (to: string | null | undefined): { to: string | null; toIsDay: boolean } => ({
+  to: to ?? null,
+  toIsDay: typeof to === 'string' && isDate(to),
+})
+
 export const listPerformance = async (
   auth0Id: string,
   studentId: string,
@@ -65,6 +89,7 @@ export const listPerformance = async (
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const filter = scopeFilter(opts.studentIds)
+      const upper = toBound(opts.to)
       const rows = await db<PerformanceMetric[]>`
         select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
                source_analysis_id, measured_at, created_at
@@ -72,7 +97,7 @@ export const listPerformance = async (
         where auth0_id = ${auth0Id} and student_id = ${studentId}
           and (${opts.metricKey ?? ''} = '' or metric_key = ${opts.metricKey ?? null})
           and (${opts.from ?? null}::timestamptz is null or measured_at >= ${opts.from ?? null}::timestamptz)
-          and (${opts.to ?? null}::timestamptz is null or measured_at <= ${opts.to ?? null}::timestamptz)
+          and (${upper.to}::timestamptz is null or measured_at < ${upper.to}::timestamptz + (case when ${upper.toIsDay} then interval '1 day' else interval '0' end))
           and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]))
         order by measured_at asc
         limit ${opts.limit ?? 500};
@@ -182,6 +207,7 @@ export const getStudentPerformanceSeries = async (
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const filter = scopeFilter(opts.studentIds)
+      const upper = toBound(opts.to)
       const analyses = await db<
         {
           requested_at: string | Date
@@ -200,7 +226,7 @@ export const getStudentPerformanceSeries = async (
           and summary_json is not null
           and (summary_json->>'form_score') is not null
           and (${opts.from ?? null}::timestamptz is null or requested_at >= ${opts.from ?? null}::timestamptz)
-          and (${opts.to ?? null}::timestamptz is null or requested_at <= ${opts.to ?? null}::timestamptz)
+          and (${upper.to}::timestamptz is null or requested_at < ${upper.to}::timestamptz + (case when ${upper.toIsDay} then interval '1 day' else interval '0' end))
           and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]))
         order by requested_at asc;
       `

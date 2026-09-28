@@ -9,7 +9,7 @@ import {
   type AttendanceStatus,
   type Student,
 } from '../../lib/orgData'
-import { isDate } from '../../lib/orgValidate'
+import { isDate, MAX_ATTENDANCE_BATCH } from '../../lib/orgValidate'
 import { pickUuid } from '../../lib/uuid'
 import { resolveCaller } from '../../lib/caller'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
@@ -205,6 +205,17 @@ export default new Elysia()
     if (!Array.isArray(entries) || entries.length === 0) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'entries must be a non-empty array', false)
+    }
+    // Capped like the student import, and for a stronger reason: the batch is
+    // written one upsert at a time in a sequential loop, so an uncapped array
+    // turns a single request into an unbounded number of round trips.
+    if (entries.length > MAX_ATTENDANCE_BATCH) {
+      set.status = 400
+      return buildError(
+        'INVALID_REQUEST',
+        `Maximum ${MAX_ATTENDANCE_BATCH} attendance entries per request`,
+        false,
+      )
     }
     const invalid = entries.find((entry) => {
       const e = entry as Record<string, unknown>

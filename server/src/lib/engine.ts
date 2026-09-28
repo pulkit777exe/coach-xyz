@@ -379,6 +379,20 @@ export const markEngineJobFailed = async (
     }
   } catch (error) {
     if (isConnectivityError(error)) {
+      // Every other engine adapter turns connectivity loss into a thrown
+      // ENGINE_UNAVAILABLE; this one returned, so when the engine was unreachable
+      // at the moment the queue's `failed` handler ran, the analysis row was
+      // written as failed and the user notified while the engine's own job state
+      // stayed `running` forever — an unobservable divergence between the two
+      // stores. Returning rather than throwing is deliberate: the caller persists
+      // the failed status on the very next line, so raising here would mean the
+      // failure was never recorded at all. Make the divergence visible instead.
+      logger.warn('engine_job_failed_not_delivered', {
+        type: 'engine_job_failed_not_delivered',
+        message,
+        code,
+        error: error instanceof Error ? error.message : String(error),
+      })
       return
     }
     throw error
