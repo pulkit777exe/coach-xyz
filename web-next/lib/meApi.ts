@@ -119,6 +119,15 @@ export async function getMyOrgs(): Promise<MyOrgs> {
   return apiFetch<MyOrgs>(me('/orgs'))
 }
 
+export async function leaveOrganization(
+  orgAuth0Id: string,
+): Promise<{ left: boolean; teams: string[] }> {
+  return apiFetch<{ left: boolean; teams: string[] }>(
+    me(`/orgs/${encodeURIComponent(orgAuth0Id)}/leave`),
+    { method: 'POST' },
+  )
+}
+
 export async function getMyProfile(): Promise<MyProfile> {
   return apiFetch<MyProfile>(me('/profile'))
 }

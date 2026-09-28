@@ -24,6 +24,8 @@ import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
 import { mintAttributionToken } from '../lib/attribution'
 import { acceptInvite } from '../lib/invites'
+import { findActiveMemberRowId, offboardMember } from '../lib/orgOffboard'
+import { notifyMembershipChanged } from '../lib/notificationEvents'
 import { auditRoute } from '../lib/audit'
 import { enqueueAnalysis } from '../lib/queue'
 import { UUID_RE } from '../lib/uuid'
@@ -643,6 +645,68 @@ export default new Elysia()
     )
     set.status = 200
     return { org_auth0_id: result.orgAuth0Id, role: result.role }
+  })
+
+  // Self-service leave: the caller gives up their own membership. Always the
+  // custodian path (no successor): their teams go back to the org owner and
+  // the analyses they ran stay with the club. Refuses leaving your own org
+  // and player self-removal (players are managed by their coach).
+  .post('/api/me/orgs/:orgAuth0Id/leave', async ({ params, request, set }) => {
+    const verified = requireVerifiedSelf({ request, set })
+    if (typeof verified !== 'string') return verified
+    const { orgAuth0Id } = params
+    const primary = (await resolveAuth0Id(verified)) ?? verified
+    if (!orgAuth0Id || orgAuth0Id === primary) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'You cannot leave your own organization', false)
+    }
+    const rowId = await findActiveMemberRowId(orgAuth0Id, primary)
+    if (!rowId) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Membership not found', false)
+    }
+    const result = await offboardMember(orgAuth0Id, rowId, null, { self: true })
+    if (!result) {
+      set.status = 503
+      return buildError('SERVICE_UNAVAILABLE', 'Membership service unavailable', true)
+    }
+    if (!result.ok) {
+      if (result.status === 404) {
+        set.status = 404
+        return buildError('NOT_FOUND', result.error, false)
+      }
+      set.status = 400
+      return buildError('INVALID_REQUEST', result.error, false)
+    }
+    auditRoute(request, orgAuth0Id, 'member.removed', 'org_member', rowId, {
+      email: result.email,
+      role: result.role,
+      self: true,
+      teams: result.teamIds,
+    })
+    for (const teamId of result.teamIds) {
+      auditRoute(request, orgAuth0Id, 'team.member_removed', 'team', teamId, {
+        membership: rowId,
+        self: true,
+      })
+    }
+    // Best-effort: the org owner learns a coach left.
+    try {
+      await notifyMembershipChanged({
+        auth0Id: orgAuth0Id,
+        title: 'A coach left the club',
+        body: result.email ?? result.role,
+        data: { href: '/dashboard/members' },
+        dedupeKey: `member-left:${rowId}`,
+      })
+    } catch (error) {
+      logger.warn('leave_notify_failed', {
+        type: 'leave_notify_failed',
+        error: error instanceof Error ? error.message : 'unknown',
+      })
+    }
+    set.status = 200
+    return { left: true, teams: result.teamIds }
   })
 
   // Mint a short-lived attribution token binding the verified session sub.

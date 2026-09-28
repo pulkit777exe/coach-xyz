@@ -89,10 +89,15 @@ export const orgSetMemberRole = async (
 export const orgRemoveMember = async (
   auth0Id: string,
   id: string,
-): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/members/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  successorId?: string,
+): Promise<{ deleted: boolean; successor: string | null; teams: string[] }> => {
+  const query = successorId ? `?successor=${encodeURIComponent(successorId)}` : ''
+  return apiFetch<{ deleted: boolean; successor: string | null; teams: string[] }>(
+    org(auth0Id, `/members/${encodeURIComponent(id)}${query}`),
+    {
+      method: 'DELETE',
+    },
+  )
 }
 
 export type OrgInvite = {

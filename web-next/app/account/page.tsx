@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSession } from '@/lib/session'
-import { syncUser } from '@/lib/serverData'
+import { getMyOrgsCached, syncUser } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import UserAvatar from '@/components/UserAvatar'
 import PageHeader from '@/components/org/PageHeader'
 import StatusPill from '@/components/org/StatusPill'
+import OrganizationsCard from '@/components/org/OrganizationsCard'
 import { USER_ROLE_LABELS } from '@/lib/userRoles'
 
 export const metadata: Metadata = {
@@ -51,6 +52,15 @@ export default async function AccountPage() {
   } catch (error) {
     console.error('Failed to sync user with backend:', error)
     syncError = error instanceof Error ? error.message : 'Failed to sync profile data'
+  }
+
+  // Memberships for the Organizations card. A failure hides the card instead
+  // of breaking the page.
+  let orgs = null
+  try {
+    orgs = (await getMyOrgsCached()).orgs
+  } catch (error) {
+    console.error('Failed to load organizations:', error)
   }
 
   return (
@@ -135,6 +145,8 @@ export default async function AccountPage() {
             </div>
           </div>
         )}
+
+        <OrganizationsCard initialOrgs={orgs} />
 
         <div className="mt-6 flex gap-3">
           <Link

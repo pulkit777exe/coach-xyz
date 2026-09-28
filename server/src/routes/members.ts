@@ -8,11 +8,13 @@ import {
   getOrgMember,
   inviteOrgMember,
   listOrgMembers,
-  removeOrgMember,
   setOrgMemberRole,
   type OrgMemberInviteRole,
   type OrgMemberRole,
 } from '../lib/orgMembers'
+import { offboardMember } from '../lib/orgOffboard'
+import { notifyMembershipChanged } from '../lib/notificationEvents'
+import { logger } from '../lib/logger'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { listInvites, mintInvite, revokeInvite } from '../lib/invites'
 import { auditRoute, listAuditLogs } from '../lib/audit'
@@ -236,6 +238,12 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid member id', false)
         }
+        const url = new URL(request.url)
+        const successorRaw = url.searchParams.get('successor')
+        if (successorRaw !== null && !UUID_RE.test(successorRaw)) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Invalid successor id', false)
+        }
         const members = await listOrgMembers(auth0Id)
         const target = members.find((m) => m.id === id)
         if (!target) {
@@ -247,16 +255,56 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Cannot remove the last owner', false)
         }
-        const removed = await removeOrgMember(auth0Id, id)
-        if (!removed) {
-          set.status = 404
-          return buildError('NOT_FOUND', 'Member not found', false)
+        // The membership row goes last, in the same transaction as the team
+        // cleanup — no caller can bypass it via removeOrgMember anymore.
+        const result = await offboardMember(auth0Id, id, successorRaw, {})
+        if (!result) {
+          set.status = 503
+          return buildError('SERVICE_UNAVAILABLE', 'Membership service unavailable', true)
+        }
+        if (!result.ok) {
+          if (result.status === 404) {
+            set.status = 404
+            return buildError('NOT_FOUND', result.error, false)
+          }
+          set.status = result.status === 422 ? 422 : 400
+          return buildError('INVALID_REQUEST', result.error, false)
         }
         auditRoute(request, auth0Id, 'member.removed', 'org_member', id, {
-          email: target.member_email,
-          role: target.role,
+          email: result.email,
+          role: result.role,
+          successor: result.successorSub,
+          teams: result.teamIds,
         })
+        for (const teamId of result.teamIds) {
+          auditRoute(request, auth0Id, 'team.member_removed', 'team', teamId, {
+            membership: id,
+            successor: result.successorSub,
+          })
+          if (result.successorSub) {
+            auditRoute(request, auth0Id, 'team.member_added', 'team', teamId, {
+              member: result.successorSub,
+            })
+          }
+        }
+        // Best-effort: the successor learns about the transferred teams.
+        if (result.successorSub && result.teamIds.length > 0) {
+          try {
+            await notifyMembershipChanged({
+              auth0Id: result.successorSub,
+              title: 'Teams transferred to you',
+              body: `${result.email ?? 'A coach'} left the club`,
+              data: { href: '/dashboard/teams', teams: result.teamIds },
+              dedupeKey: `teams-transferred:${id}`,
+            })
+          } catch (error) {
+            logger.warn('successor_notify_failed', {
+              type: 'successor_notify_failed',
+              error: error instanceof Error ? error.message : 'unknown',
+            })
+          }
+        }
         set.status = 200
-        return { deleted: true }
+        return { deleted: true, successor: result.successorSub, teams: result.teamIds }
       }),
   )

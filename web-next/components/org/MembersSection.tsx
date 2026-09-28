@@ -95,6 +95,7 @@ export default function MembersSection({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<OrgMember | null>(null)
+  const [pendingSuccessor, setPendingSuccessor] = useState<string>('custodian')
   const requestSeq = useRef(0)
   const mountedRef = useRef(initialData !== null)
 
@@ -151,13 +152,19 @@ export default function MembersSection({
     if (!pendingRemove) return
     setBusyId(pendingRemove.id)
     try {
-      await orgRemoveMember(auth0Id, pendingRemove.id)
+      const res = await orgRemoveMember(
+        auth0Id,
+        pendingRemove.id,
+        pendingSuccessor === 'custodian' ? undefined : pendingSuccessor,
+      )
       setData((prev) => {
         if (!prev) return prev
         return { ...prev, members: prev.members.filter((m) => m.id !== pendingRemove.id) }
       })
       toast.success(
-        `${pendingRemove.display_name ?? pendingRemove.member_email ?? 'Member'} removed`,
+        `${pendingRemove.display_name ?? pendingRemove.member_email ?? 'Member'} removed${
+          res.successor ? ' — teams transferred' : ''
+        }`,
       )
       setPendingRemove(null)
     } catch (err) {
@@ -166,6 +173,21 @@ export default function MembersSection({
       setBusyId(null)
     }
   }
+
+  const openRemove = (member: OrgMember) => {
+    setPendingSuccessor('custodian')
+    setPendingRemove(member)
+  }
+
+  // Successor candidates: roles holding team.manage_members, minus the leaver.
+  // Anything else is refused server-side (422); the custodian default keeps
+  // the common case one click.
+  const successorCandidates = members.filter(
+    (m) =>
+      pendingRemove !== null &&
+      m.id !== pendingRemove.id &&
+      (m.role === 'owner' || m.role === 'admin' || m.role === 'head_coach' || m.role === 'coach'),
+  )
 
   const ownerRowCannotBeRemoved = (member: OrgMember): boolean =>
     member.role === 'owner' && ownerCount <= 1
@@ -250,7 +272,7 @@ export default function MembersSection({
                         size="icon-sm"
                         aria-label={`Remove ${name}`}
                         disabled={ownerRowCannotBeRemoved(member)}
-                        onClick={() => setPendingRemove(member)}
+                        onClick={() => openRemove(member)}
                       >
                         <Trash2Icon />
                       </Button>
@@ -291,9 +313,42 @@ export default function MembersSection({
               Remove {pendingRemove?.display_name ?? pendingRemove?.member_email ?? 'member'}?
             </DialogTitle>
             <DialogDescription>
-              This revokes their access to this organization&apos;s data. This cannot be undone.
+              This revokes their access to this organization&apos;s data. Their teams go to the
+              successor below, or back to the owner when no successor is named. This cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="remove_successor">Successor for their teams</Label>
+            <Select
+              id="remove_successor"
+              items={{
+                custodian: 'Owner (custodian)',
+                ...Object.fromEntries(
+                  successorCandidates.map((m) => [
+                    m.id,
+                    m.display_name ?? m.member_email ?? m.id,
+                  ]),
+                ),
+              }}
+              value={pendingSuccessor}
+              onValueChange={(value) => {
+                if (typeof value === 'string' && value) setPendingSuccessor(value)
+              }}
+            >
+              <SelectTrigger aria-label="Successor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custodian">Owner (custodian)</SelectItem>
+                {successorCandidates.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.display_name ?? m.member_email ?? m.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingRemove(null)}>
               Cancel
