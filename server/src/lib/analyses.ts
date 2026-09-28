@@ -314,13 +314,24 @@ const ANALYSIS_CHILD_TABLES = [
 
 const deleteAnalysisChildren = async (db: SQL, serverJobIds: string | string[]): Promise<void> => {
   const many = Array.isArray(serverJobIds)
+  // The batch form needs the ids as a Postgres array *literal*, built here and
+  // bound as one parameter with an explicit ::text[] cast. Passing the JS array
+  // straight through does not work: Bun serialises an array as comma-joined
+  // text, and `any($1)` against a text column then infers text[] and dies with
+  // `malformed array literal: "a,b"`. That made every retention run throw on its
+  // first child table, so nothing was ever pruned — analyses, findings, clips,
+  // player_events and chat_messages accumulated forever, and the feature
+  // reported as healthy because the throw was logged once a day and `pruned`
+  // never rose. Verified live against Neon on both a prepared and an unprepared
+  // connection. `retention.test.ts` only covers the pure retentionDays() clamp,
+  // and no fixture can catch this: they stub `db` as a plain tag function.
+  const batchLiteral = many ? `{${(serverJobIds as string[]).join(',')}}` : null
   for (const table of ANALYSIS_CHILD_TABLES) {
-    await db.unsafe(
-      many
-        ? `delete from ${table} where server_job_id = any($1);`
-        : `delete from ${table} where server_job_id = $1;`,
-      [serverJobIds],
-    )
+    if (batchLiteral !== null) {
+      await db.unsafe(`delete from ${table} where server_job_id = any($1::text[]);`, [batchLiteral])
+    } else {
+      await db.unsafe(`delete from ${table} where server_job_id = $1;`, [serverJobIds])
+    }
   }
 }
 

@@ -14,12 +14,17 @@ import { Elysia } from 'elysia'
 import authRoute from '../src/routes/auth'
 import orgRoute from '../src/routes/org'
 import membersRoute from '../src/routes/members'
+import { pruneRetention } from '../src/lib/analyses'
 import { deleteTeam } from '../src/lib/teams'
 import teamsRoute from '../src/routes/teams'
 import meRoute from '../src/routes/me'
 import emailRoute from '../src/routes/email'
 import shareRoute from '../src/routes/share'
-import { ensureInitialized, withHistoryStore } from '../src/lib/historyStore'
+import {
+  ensureInitialized,
+  withHistoryStore,
+  withHistoryStoreOrThrow,
+} from '../src/lib/historyStore'
 import { globalErrorHandler } from '../src/lib/httpErrors'
 import type { CoachAIError } from '../src/lib/errors'
 
@@ -406,6 +411,62 @@ async function main() {
     body: { report_type: 'monthly' },
   })
   check('update report', r.status === 200 && r.json?.report?.report_type === 'monthly', r.json)
+
+  // ── Retention prune ────────────────────────────────────────────────────────
+  console.log('retention')
+  // The batch delete passed a JS array to db.unsafe, which Bun serialises as
+  // comma-joined text, so `any($1)` against a text column died with
+  // `malformed array literal` on the first child table. Every retention run threw
+  // and nothing was ever pruned — analyses, findings, clips, player_events and
+  // chat_messages grew forever — while the feature reported as healthy, because
+  // retention.ts logged the error once a day and `pruned` never rose. Nothing
+  // covered it: retention.test.ts only tests the retentionDays() clamp, and a
+  // fixture stubs `db` as a plain tag function, so the binding never happens.
+  const RETENTION_JOBS = [`smokehttp-${tag}-ret1`, `smokehttp-${tag}-ret2`]
+  const AGED = '2000-01-01T00:00:00.000Z'
+  await withHistoryStore(async (database) => {
+    for (const job of RETENTION_JOBS) {
+      await database`
+        insert into analysis_history (server_job_id, engine_job_id, auth0_id, model, complete, requested_at)
+        values (${job}, ${`${job}-eng`}, ${coachId}, ${'smoke-model'}, true, ${AGED})
+        on conflict (server_job_id) do update set requested_at = ${AGED};
+      `
+      await database`
+        insert into findings (id, server_job_id, category)
+        values (${`${job}-f`}, ${job}, ${'technique'})
+        on conflict (server_job_id, id) do nothing;
+      `
+      await database`
+        insert into player_events (server_job_id, org_auth0_id, category)
+        values (${job}, ${coachId}, ${'shot'});
+      `
+    }
+  })
+  const pruned = await pruneRetention()
+  const retentionLiteral = `{${RETENTION_JOBS.join(',')}}`
+  // A table name cannot be a Bun tagged-template parameter — `${table}` binds as
+  // $1 and the query dies with "syntax error at or near $1". Splice the table and
+  // bind the ids, the way deleteAnalysisChildren does. withHistoryStoreOrThrow
+  // rather than the fail-open wrapper, so a failure surfaces instead of arriving
+  // here as a null count.
+  const remainingFor = (table: string): Promise<number> =>
+    withHistoryStoreOrThrow(async (database) => {
+      const rows = await database.unsafe<{ n: number }[]>(
+        `select count(*)::int as n from ${table} where server_job_id = any($1::text[]);`,
+        [retentionLiteral],
+      )
+      return rows[0]?.n ?? -1
+    })
+  check('retention pruned the aged analyses', pruned > 0, { pruned })
+  const analysesLeft = await remainingFor('analysis_history')
+  check('retention removed every aged analysis row', analysesLeft === 0, { analysesLeft })
+  const findingsLeft = await remainingFor('findings')
+  check('retention removed the child rows too', findingsLeft === 0, { findingsLeft })
+  await withHistoryStore(async (database) => {
+    await database`delete from findings where server_job_id like ${`smokehttp-${tag}-ret%`}`
+    await database`delete from player_events where server_job_id like ${`smokehttp-${tag}-ret%`}`
+    await database`delete from analysis_history where server_job_id like ${`smokehttp-${tag}-ret%`}`
+  })
 
   // ── jsonb bind invariant ───────────────────────────────────────────────────
   console.log('jsonb')
