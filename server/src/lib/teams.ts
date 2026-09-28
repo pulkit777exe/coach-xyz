@@ -215,3 +215,111 @@ export const removeTeamMember = async (teamId: string, membershipId: string): Pr
     })) ?? false
   )
 }
+
+/** One membership row, for deciding whether a removal is a coach or a student. */
+export const getTeamMembership = async (
+  teamId: string,
+  membershipId: string,
+): Promise<TeamMember | null> => {
+  return (
+    (await withHistoryStoreOrThrow(async (db) => {
+      const rows = await db<TeamMember[]>`
+      select id, team_id, member_auth0_id, student_id, role, created_at
+      from team_memberships
+      where team_id = ${teamId} and id = ${membershipId}
+      limit 1;
+    `
+      return rows?.[0] ?? null
+    })) ?? null
+  )
+}
+
+export type StudentTeamChange = {
+  /** The mirrored membership row (the route's `{ member }` shape is unchanged). */
+  member: TeamMember | null
+  /** Team the student leaves, null when unassigned. */
+  fromTeamId: string | null
+  /** Team the student joins, null when unassigned. */
+  toTeamId: string | null
+  /** Fresh student row after the move. */
+  student: {
+    id: string
+    auth0_id: string
+    full_name: string
+    team_id: string | null
+  } | null
+}
+
+/**
+ * Move a student between teams (or off teams) with the membership mirror kept
+ * in one transaction. `students.team_id` is the scope source of truth, so a
+ * `team_memberships` row without it leaves the player invisible to the team's
+ * coaches, and a `team_id` without the row hides them from the team roster —
+ * both halves are written here, never separately.
+ *
+ * Returns null when the student or (when set) the team is not in this org.
+ */
+export const setStudentTeam = async (
+  orgAuth0Id: string,
+  studentId: string,
+  teamId: string | null,
+): Promise<StudentTeamChange | null> =>
+  withHistoryStoreOrThrow((db) =>
+    db.begin(async (tx) => {
+      const owned = await tx<{ id: string; team_id: string | null }[]>`
+        select id, team_id from students
+        where auth0_id = ${orgAuth0Id} and id = ${studentId}
+        for update;
+      `
+      const current = owned?.[0]
+      if (!current) return null
+      if (teamId) {
+        const team = await tx<{ id: string }[]>`
+          select id from teams
+          where org_auth0_id = ${orgAuth0Id} and id = ${teamId}
+          limit 1;
+        `
+        if (!team?.[0]) return null
+      }
+      const updated = await tx<StudentTeamChange['student'][]>`
+        update students set team_id = ${teamId}, updated_at = now()
+        where auth0_id = ${orgAuth0Id} and id = ${studentId}
+        returning id, auth0_id, full_name, team_id;
+      `
+      // Drop this student's membership rows in the org's teams, then mirror
+      // the new assignment. Scoped by joining teams: a bare
+      // `where student_id = ?` would touch another org's rows on a uuid that
+      // collides across tenants only by attacker construction — the claim
+      // above already established ownership, the join keeps it local anyway.
+      await tx`
+        delete from team_memberships
+        where student_id = ${studentId}
+          and team_id in (select id from teams where org_auth0_id = ${orgAuth0Id});
+      `
+      let member: TeamMember | null = null
+      if (teamId) {
+        const inserted = await tx<TeamMember[]>`
+          insert into team_memberships (team_id, member_auth0_id, student_id, role)
+          values (${teamId}, null, ${studentId}, 'player')
+          on conflict (team_id, member_auth0_id, student_id) do nothing
+          returning id, team_id, member_auth0_id, student_id, role, created_at;
+        `
+        member =
+          inserted?.[0] ??
+          (
+            await tx<TeamMember[]>`
+            select id, team_id, member_auth0_id, student_id, role, created_at
+            from team_memberships
+            where team_id = ${teamId} and student_id = ${studentId}
+            limit 1;
+          `
+          )?.[0] ?? null
+      }
+      return {
+        member,
+        fromTeamId: current.team_id,
+        toTeamId: teamId,
+        student: updated?.[0] ?? null,
+      }
+    }),
+  )

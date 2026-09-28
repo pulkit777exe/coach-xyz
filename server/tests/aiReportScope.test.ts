@@ -38,6 +38,8 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_org: string, id: string) => ({ id }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 // The scope seam's one query, answered by stubbing the store module. Swapping

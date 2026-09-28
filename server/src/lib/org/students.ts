@@ -2,6 +2,7 @@
 
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { STUDENT_STATUSES } from '../orgEnums'
+import { logger } from '../logger'
 import { canSeeStudent, uuidArrayLiteral, visibleStudentIds, type StudentScope } from './scope'
 
 export type Student = {
@@ -303,6 +304,27 @@ export const importStudents = async (
         if (rowsInserted?.[0]) {
           result.imported++
           if (email) emailSet.add(email)
+          // Mirror the team assignment: `students.team_id` alone leaves the
+          // player off the team roster (`team_memberships` side). Conflict-safe
+          // — a retry of the same row must not fail the batch. A mirror failure
+          // (e.g. the team vanished mid-import) is logged, not row-failing: the
+          // player is still visible through `team_id`, the scope source.
+          const assignedTeam = cleaned.team_id
+          if (typeof assignedTeam === 'string' && assignedTeam) {
+            try {
+              await db`
+                insert into team_memberships (team_id, member_auth0_id, student_id, role)
+                values (${assignedTeam}::uuid, null, ${rowsInserted[0].id}::uuid, 'player')
+                on conflict (team_id, member_auth0_id, student_id) do nothing;
+              `
+            } catch (err) {
+              logger.warn('import_team_mirror_failed', {
+                type: 'import_team_mirror_failed',
+                studentId: rowsInserted[0].id,
+                error: err instanceof Error ? err.message : 'unknown',
+              })
+            }
+          }
         } else {
           result.failed.push({
             row_index: i,

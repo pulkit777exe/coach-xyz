@@ -88,6 +88,8 @@ mock.module('../src/lib/teams', () => ({
   // refused on scope — which is correct behaviour, and not what this file
   // tests. It tests the capability floor.
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => (currentRole ? [PROBE_TEAM_ID] : []),
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 // The scope seam resolves visible students through the store. Stub the store

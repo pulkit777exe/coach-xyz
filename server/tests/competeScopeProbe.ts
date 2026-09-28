@@ -70,6 +70,8 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
   listTeams: async () => [
     { id: TEAM_A, name: 'A', sport: 'soccer' },
     { id: TEAM_B, name: 'B', sport: 'soccer' },

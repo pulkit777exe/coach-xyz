@@ -18,6 +18,7 @@ import {
   type ImportRow,
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
+import { setStudentTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
 import { accountJobScope } from '../../lib/accountScope'
 import { hasPermission, redactWellness, resolveMedicalAccess } from '../../lib/permissions'
@@ -260,20 +261,45 @@ export default new Elysia()
       }
       input.team_id = team.teamId
     }
+    const assignTeam = 'team_id' in input
+    const { team_id: nextTeam, ...scalarInput } = input
 
-    const student = await updateStudent(auth0Id, id, input)
+    const student = await updateStudent(auth0Id, id, scalarInput)
     if (!student) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
-    if (existing.status !== 'transferred' && student.status === 'transferred') {
+    // The team move goes through the mirrored write: `students.team_id` plus
+    // the `team_memberships` row, in one transaction. `resolveTeamId` above
+    // already answered org and scope; this answers the mirror.
+    let finalStudent = student
+    let movedFrom: string | null | undefined
+    if (assignTeam) {
+      const change = await setStudentTeam(
+        auth0Id,
+        id,
+        typeof nextTeam === 'string' ? nextTeam : null,
+      )
+      if (!change?.student) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Student not found', false)
+      }
+      finalStudent = { ...student, ...change.student }
+      movedFrom = change.fromTeamId
+    }
+    if (existing.status !== 'transferred' && finalStudent.status === 'transferred') {
       auditRoute(request, auth0Id, 'player.transferred', 'student', id, {
         from_team: existing.team_id,
-        to_team: student.team_id,
+        to_team: finalStudent.team_id,
+      })
+    } else if (assignTeam && movedFrom !== finalStudent.team_id) {
+      auditRoute(request, auth0Id, 'player.transferred', 'student', id, {
+        from_team: movedFrom ?? null,
+        to_team: finalStudent.team_id,
       })
     }
     set.status = 200
-    return { student }
+    return { student: finalStudent }
   })
   .delete('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params

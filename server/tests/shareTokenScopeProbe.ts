@@ -76,6 +76,8 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_org: string, id: string) => ({ id }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 const storeDb = () => Promise.resolve([{ id: STUDENT_A }])

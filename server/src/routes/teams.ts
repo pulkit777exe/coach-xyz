@@ -6,10 +6,12 @@ import {
   createTeam,
   deleteTeam,
   getTeam,
+  getTeamMembership,
   listTeamMembers,
   listTeams,
   removeTeamMember,
   renameTeam,
+  setStudentTeam,
 } from '../lib/teams'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { type Permission } from '../lib/permissions'
@@ -217,9 +219,31 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'role must be coach or player', false)
         }
+        // A student assignment writes BOTH halves: `students.team_id` (the
+        // scope source of truth — a membership row alone leaves the player
+        // invisible to the team's coaches) and the mirrored membership row
+        // (without it the player is missing from the team roster).
+        if (typeof student_id === 'string' && UUID_RE.test(student_id)) {
+          const change = await setStudentTeam(auth0Id, student_id, teamId)
+          if (!change || !change.member) {
+            set.status = 404
+            return buildError('NOT_FOUND', 'Student not found in this organization', false)
+          }
+          logTeamAudit(request, auth0Id, 'team.member_added', teamId, {
+            membership: change.member.id,
+          })
+          if (change.fromTeamId && change.fromTeamId !== teamId) {
+            auditRoute(request, auth0Id, 'player.transferred', 'student', student_id, {
+              from_team: change.fromTeamId,
+              to_team: teamId,
+            })
+          }
+          set.status = 201
+          return { member: change.member }
+        }
         const member = await addTeamMember(teamId, {
           memberAuth0Id: typeof member_auth0_id === 'string' ? member_auth0_id : null,
-          studentId: typeof student_id === 'string' ? student_id : null,
+          studentId: null,
           role: role === 'coach' ? 'coach' : 'player',
         })
         if (!member) {
@@ -248,6 +272,22 @@ export default new Elysia()
           }
           const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
           if (!('caller' in g)) return g
+          // A student removal clears `students.team_id` as well as the row:
+          // deleting the membership alone would strand the player on a team
+          // whose roster no longer lists them but whose scope still does.
+          const membership = await getTeamMembership(teamId, membershipId)
+          if (membership?.student_id) {
+            const change = await setStudentTeam(auth0Id, membership.student_id, null)
+            if (change) {
+              logTeamAudit(request, auth0Id, 'team.member_removed', teamId, {
+                membership: membershipId,
+              })
+              set.status = 200
+              return { deleted: true }
+            }
+            // The student row is gone but its membership row survived: drop
+            // the orphan so the roster cannot wedge.
+          }
           const removed = await removeTeamMember(teamId, membershipId)
           if (!removed) {
             set.status = 404

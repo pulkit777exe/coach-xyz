@@ -318,6 +318,8 @@ mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) =>
     teamId === TEAM_FOREIGN ? null : { id: teamId },
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamIds,
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 mock.module('../src/lib/audit', () => ({

@@ -235,6 +235,8 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_org: string, id: string) => ({ id }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 // The app-level guard is made inert: Bun autoloads server/.env, so without this
