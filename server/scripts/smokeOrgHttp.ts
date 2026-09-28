@@ -14,6 +14,7 @@ import { Elysia } from 'elysia'
 import authRoute from '../src/routes/auth'
 import orgRoute from '../src/routes/org'
 import membersRoute from '../src/routes/members'
+import { deleteTeam } from '../src/lib/teams'
 import teamsRoute from '../src/routes/teams'
 import meRoute from '../src/routes/me'
 import emailRoute from '../src/routes/email'
@@ -730,6 +731,56 @@ async function main() {
   })
   const teamId = typeof r.json?.team?.id === 'string' ? r.json.team.id : ''
   check('create team', r.status === 201 && teamId.length > 0, { status: r.status, body: r.json })
+
+  // deleteTeam must establish ownership before it unassigns anyone.
+  // `students.team_id` is a loose link, not a foreign key, so `where team_id =
+  // ?` matches any org's team; unassigning before the org check meant a caller
+  // from another org who knew the uuid cleared every victim's player and then
+  // received 404 — a refusal that had already mutated another tenant. The route
+  // only pins the role floor, so the data layer is the only place this can be
+  // caught. Driven at the data layer because the HTTP route needs a second org's
+  // owner session, and a fixture cannot reach the SQL at all.
+  const victimTeamId = await withHistoryStore(async (database) => {
+    const made = await database<{ id: string }[]>`
+      insert into teams (org_auth0_id, name, sport)
+      values (${coachId}, ${'Smoke Victim Squad'}, ${'basketball'})
+      returning id;
+    `
+    const victimTeam = made[0].id
+    await database`
+      update students set team_id = ${victimTeam} where auth0_id = ${coachId};
+    `
+    return victimTeam
+  })
+  const removedByOtherOrg = await deleteTeam(`smokehttp-other-org-${tag}`, victimTeamId)
+  check('deleteTeam refuses a team owned by another org', removedByOtherOrg === false, {
+    removedByOtherOrg,
+  })
+  const victimPlayers = await withHistoryStore(async (database) => {
+    const rows = await database<{ n: number }[]>`
+      select count(*)::int as n from students
+      where auth0_id = ${coachId} and team_id = ${victimTeamId};
+    `
+    return rows[0]?.n ?? 0
+  })
+  check("the other org's players kept their team after the refused delete", victimPlayers > 0, {
+    victimTeamId,
+    playersStillAssigned: victimPlayers,
+  })
+  await withHistoryStore(async (database) => {
+    await database`update students set team_id = null where auth0_id = ${coachId};`
+    await database`delete from teams where id = ${victimTeamId};`
+  })
+  check(
+    'victim-squad cleanup',
+    true,
+    await withHistoryStore(async (database) => {
+      const rows = await database<{ n: number }[]>`
+        select count(*)::int as n from teams where id = ${victimTeamId};
+      `
+      return { teamsRemaining: rows[0]?.n ?? -1 }
+    }),
+  )
 
   r = await call('POST', `/api/org/${coachId}/members`, {
     identity: coachId,

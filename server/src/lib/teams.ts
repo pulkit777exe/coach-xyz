@@ -94,13 +94,42 @@ export const renameTeam = async (
 export const deleteTeam = async (orgAuth0Id: string, teamId: string): Promise<boolean> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
-      // Unassign students first (team_id is a loose link, not a FK).
-      await db`update students set team_id = null where team_id = ${teamId};`
+      // Claim the team for THIS org before touching anything it points at.
+      // `students.team_id` is a loose link rather than a foreign key, so the
+      // schema cannot scope the unassign to an org: `where team_id = ?` matches
+      // any org's team, because a team uuid is globally unique. The old order
+      // unassigned first and asked the org question second, so a caller from
+      // another org who knew the uuid cleared every player's team_id --
+      // committed -- and then answered 404, because their own org did not own
+      // the team. The victim org's coach was left looking at an empty roster,
+      // since visibleStudentIds resolves their scope by team_id.
+      //
+      // The row lock also serializes two concurrent deletes: without it both
+      // callers could read the row, then both unassign, then both delete.
+      const claimed = await db<{ id: string }[]>`
+        select id from teams
+        where org_auth0_id = ${orgAuth0Id} and id = ${teamId}
+        for update;
+      `
+      if (!claimed?.[0]) return false
+
+      // Only now, with ownership established. The org predicate stays in the
+      // statement so the invariant is local to this write rather than resting
+      // on a check the caller is trusted to have made.
+      await db`
+        update students set team_id = null
+        where team_id = ${teamId}
+          and exists (
+            select 1 from teams t
+            where t.id = ${teamId} and t.org_auth0_id = ${orgAuth0Id}
+          );
+      `
+      // team_memberships cascades on team_id, so the memberships go with it.
       const rows = await db<{ id: string }[]>`
-      delete from teams
-      where org_auth0_id = ${orgAuth0Id} and id = ${teamId}
-      returning id;
-    `
+        delete from teams
+        where org_auth0_id = ${orgAuth0Id} and id = ${teamId}
+        returning id;
+      `
       return Boolean(rows?.[0])
     })) ?? false
   )
