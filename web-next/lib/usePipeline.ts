@@ -42,6 +42,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL
 export function usePipeline(
   auth0Id: string | null = null,
   initialJobId: string | null = null,
+  orgAuth0Id: string | null = null,
 ): Pipeline {
   const router = useRouter()
   const pathname = usePathname()
@@ -185,6 +186,7 @@ export function usePipeline(
         video_key: scan.video_key,
         angle: scan.angle ?? null,
         auth0Id,
+        orgAuth0Id,
         signal,
       })
       // The scan flow may have been reset/superseded while the enqueue was in
@@ -196,7 +198,7 @@ export function usePipeline(
         router.push(`/dashboard/analysis/${job_id}`)
       }
     },
-    [auth0Id, startPolling, router, pathname],
+    [auth0Id, orgAuth0Id, startPolling, router, pathname],
   )
 
   // ── Shared scan flow ───────────────────────────────────────────────────
@@ -286,6 +288,7 @@ export function usePipeline(
           video_key: scan.video_key,
           angle: scan.angle ?? null,
           auth0Id,
+          orgAuth0Id,
           signal: controller.signal,
         })
           .then(({ job_id }) => {
@@ -321,7 +324,7 @@ export function usePipeline(
       setJobError(null)
       setJobPhase(null)
     }
-  }, [flow, errorStatus, stopPolling, cancelPendingRetry, startPolling, auth0Id, router, pathname])
+  }, [flow, errorStatus, stopPolling, cancelPendingRetry, startPolling, auth0Id, orgAuth0Id, router, pathname])
 
   const handleReset = useCallback(() => {
     stopPolling()

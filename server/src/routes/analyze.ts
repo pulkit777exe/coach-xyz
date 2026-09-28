@@ -10,6 +10,8 @@ import { UUID_RE } from '../lib/uuid'
 import { persistAnalysisStart } from '../lib/analyses'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { listMembershipsForUser } from '../lib/orgMembers'
+import { resolveAuth0Id } from '../lib/users'
+import { hasPermission } from '../lib/permissions'
 import { DEFAULT_MODEL } from '../types'
 import { logger } from '../lib/logger'
 
@@ -18,6 +20,7 @@ type AnalyzeBody = {
   player_index: number | null
   video_key?: string | null
   angle?: string | null
+  org_auth0_id?: string | null
 }
 
 export default new Elysia().post('/api/analyze-video', async ({ request, set }) => {
@@ -47,6 +50,10 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
   const playerIndex = body.player_index
   const videoKey = body.video_key ?? null
   const angle = typeof body.angle === 'string' ? body.angle : null
+  // The club to charge and own the analysis. Attributed members name it
+  // explicitly (the web sends its active org); absent keeps today's behavior.
+  const requestedOrg =
+    typeof body.org_auth0_id === 'string' && body.org_auth0_id ? body.org_auth0_id : null
 
   // Validate session_token format (must be UUID if provided)
   if (sessionToken !== null && (typeof sessionToken !== 'string' || !UUID_RE.test(sessionToken))) {
@@ -68,6 +75,9 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
     // Per-org daily quota (§17): resolve the caller's primary org when
     // attributed; anonymous callers keep only the IP rate limit.
     let priority = 0
+    // The org key the analysis row is stored under, and who requested it.
+    let orgAuth0Id: string | null = null
+    let requestedBy: string | null = null
     if (owner) {
       let memberships: Awaited<ReturnType<typeof listMembershipsForUser>>
       try {
@@ -81,7 +91,37 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
         })
         memberships = []
       }
-      const orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
+      if (requestedOrg) {
+        // An invited coach analyzes for the club: the row is keyed by the
+        // club, the coach is recorded as the requester, and quota/priority
+        // are charged to the club. Linked accounts resolve to the primary id
+        // first so the membership check cannot be dodged with a secondary sub.
+        const primary = await resolveAuth0Id(owner)
+        const membership = memberships.find((m) => m.org_auth0_id === requestedOrg)
+        if (!membership || !hasPermission(membership.role, 'analysis.create')) {
+          set.status = 403
+          return buildError(
+            'FORBIDDEN',
+            'You are not a member of this organization',
+            false,
+          )
+        }
+        orgAuth0Id = requestedOrg
+        requestedBy = primary
+      } else {
+        orgAuth0Id = memberships?.[0]?.org_auth0_id ?? owner
+        // A member of someone else's club analyzing without naming it lands
+        // quota and ownership on the wrong org (usually their own empty one).
+        // The web always sends org_auth0_id, so this is a caller that needs
+        // updating, not a case to silently accept.
+        if (memberships.some((m) => m.org_auth0_id !== owner)) {
+          logger.warn('analyze_org_unspecified', {
+            type: 'analyze_org_unspecified',
+            owner,
+            orgs: memberships.map((m) => m.org_auth0_id),
+          })
+        }
+      }
       // Quota + fair-queue admission (§17): base 5 for attributed jobs, paid
       // tiers outrank free (tier-weighted inside admitAnalysis).
       const admission = await admitAnalysis({ orgAuth0Id, basePriority: 5, set })
@@ -98,7 +138,8 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
       video_key: videoKey,
       angle,
       priority,
-      owner_ids: owner ? [owner] : [],
+      // The org owner reads status, chat and download through these ids.
+      owner_ids: [...new Set([orgAuth0Id, owner].filter(Boolean))] as string[],
     })
 
     await persistAnalysisStart({
@@ -108,7 +149,8 @@ export default new Elysia().post('/api/analyze-video', async ({ request, set }) 
       sessionToken,
       playerIndex,
       model: DEFAULT_MODEL,
-      auth0Id: owner,
+      auth0Id: orgAuth0Id ?? owner,
+      requestedBy,
     })
 
     set.status = 200

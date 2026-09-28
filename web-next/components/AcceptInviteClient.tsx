@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/9ui/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import { acceptInvite } from '@/lib/meApi'
+import { setOrgCookie } from '@/lib/orgCookie'
 
 export default function AcceptInviteClient() {
   const searchParams = useSearchParams()
@@ -22,6 +23,8 @@ export default function AcceptInviteClient() {
     acceptInvite(token)
       .then((res) => {
         if (cancelled) return
+        // The club just joined becomes the active org everywhere.
+        setOrgCookie(res.org_auth0_id)
         setRole(res.role)
         setState('done')
       })

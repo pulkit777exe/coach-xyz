@@ -11,6 +11,7 @@ import type { JobStatus } from '@/types'
 
 interface ChatLayoutProps {
   auth0Id: string | null
+  orgAuth0Id?: string | null
   jobId: string
   jobStatus: JobStatus | null
   onBackToResults: () => void
@@ -18,11 +19,15 @@ interface ChatLayoutProps {
 
 export default function ChatLayout({
   auth0Id,
+  orgAuth0Id = null,
   jobId,
   jobStatus,
   onBackToResults,
 }: ChatLayoutProps) {
   const videoRef = useRef<VideoPlayerHandle>(null)
+  // Org-scoped reads (findings review, clips) go through the org that owns
+  // the analysis; job-keyed calls (chat, video, download) stay as they are.
+  const scopeId = orgAuth0Id ?? auth0Id
 
   const handleSeekTo = (timestamp: number) => {
     videoRef.current?.seekTo(timestamp)
@@ -101,8 +106,8 @@ export default function ChatLayout({
                 findings={jobStatus.summary.findings}
                 onSeek={handleSeekTo}
                 onReview={
-                  auth0Id
-                    ? (findingId, state) => reviewFinding(auth0Id, findingId, state).then(() => {})
+                  scopeId
+                    ? (findingId, state) => reviewFinding(scopeId, findingId, state).then(() => {})
                     : undefined
                 }
               />
@@ -111,7 +116,7 @@ export default function ChatLayout({
 
           {/* Clips (coach-curated subclip bookmarks, click to seek) */}
           <div className="shrink-0 border-t border-border max-h-72 overflow-y-auto">
-            <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+            <ClipsSection auth0Id={scopeId} jobId={jobId} onSeek={handleSeekTo} />
           </div>
         </div>
 
@@ -133,9 +138,9 @@ export default function ChatLayout({
                     findings={jobStatus.summary.findings}
                     onSeek={handleSeekTo}
                     onReview={
-                      auth0Id
+                      scopeId
                         ? (findingId, state) =>
-                            reviewFinding(auth0Id, findingId, state).then(() => {})
+                            reviewFinding(scopeId, findingId, state).then(() => {})
                         : undefined
                     }
                   />
@@ -147,7 +152,7 @@ export default function ChatLayout({
                 Clips
               </summary>
               <div className="py-2 max-h-64 overflow-y-auto">
-                <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+                <ClipsSection auth0Id={scopeId} jobId={jobId} onSeek={handleSeekTo} />
               </div>
             </details>
           </div>

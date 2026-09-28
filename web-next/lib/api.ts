@@ -434,10 +434,12 @@ export async function startAnalysis(params: {
   video_key?: string | null
   angle?: string | null
   auth0Id?: string | null
+  /** Club to own and be charged for the analysis (undefined = legacy behavior). */
+  orgAuth0Id?: string | null
   /** Cancel the enqueue when the scan flow is reset or superseded. */
   signal?: AbortSignal
 }): Promise<{ job_id: string }> {
-  const { auth0Id, signal: callerSignal, ...rest } = params
+  const { auth0Id, orgAuth0Id, signal: callerSignal, ...rest } = params
   const controller = new AbortController()
   const abortFromCaller = () => controller.abort()
   if (callerSignal) {
@@ -451,6 +453,8 @@ export async function startAnalysis(params: {
       method: 'POST',
       body: JSON.stringify({
         ...rest,
+        // undefined is dropped by JSON.stringify, so legacy callers send nothing.
+        org_auth0_id: orgAuth0Id ?? undefined,
         model: 'gemini-2.5-flash',
       }),
       signal: controller.signal,

@@ -63,7 +63,13 @@ function RotatingMessage({ messages, percent }: { messages: string[]; percent: n
   )
 }
 
-export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
+export default function AppClient({
+  auth0Id,
+  orgAuth0Id = null,
+}: {
+  auth0Id: string | null
+  orgAuth0Id?: string | null
+}) {
   const {
     pipelineState,
     scanResult,
@@ -81,7 +87,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
     handleReset,
     handleStartChat,
     handleBackToResults,
-  } = usePipeline(auth0Id)
+  } = usePipeline(auth0Id, null, orgAuth0Id)
 
   const progressPercent = uploadProgress?.percent ?? 0
   const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
@@ -136,6 +142,7 @@ export default function AppClient({ auth0Id }: { auth0Id: string | null }) {
       return (
         <ChatLayout
           auth0Id={auth0Id}
+          orgAuth0Id={orgAuth0Id}
           jobId={jobId}
           jobStatus={jobStatus}
           onBackToResults={handleBackToResults}
