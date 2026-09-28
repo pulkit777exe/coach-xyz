@@ -102,6 +102,10 @@ mock.module('../src/lib/analyses', () => ({
     bump('linkAnalysisToStudent')
     return { id: JOB_ID }
   },
+  // Read by the job-scoped seam (lib/accountScope), which the students route now
+  // reaches. `found: false` makes the seam refuse, and these cases are about the
+  // target-student check, which runs first.
+  getAnalysisStudentId: async () => ({ found: false, studentId: null }),
 }))
 
 mock.module('../src/lib/audit', () => ({

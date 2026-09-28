@@ -19,12 +19,13 @@ import {
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
 import { resolveCaller } from '../../lib/caller'
-import { hasPermission } from '../../lib/permissions'
+import { accountJobScope } from '../../lib/accountScope'
+import { hasPermission, redactWellness, resolveMedicalAccess } from '../../lib/permissions'
 import { auditRoute } from '../../lib/audit'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { buildError } from '../../lib/errors'
-import { serviceGuard } from '../../lib/serviceGuard'
+import { serviceGuard, SERVICE_HEADERS } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
 /**
@@ -437,6 +438,18 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Linking analyses requires access to that student', false)
     }
+    // The scope check above is on the *target* student, so it is skipped
+    // entirely when the body omits student_id — which is the unlink case, and
+    // the one that reached the store unguarded. `linkAnalysisToStudent` filters
+    // on server_job_id + auth0_id, i.e. org-scoped but not roster-scoped, so a
+    // team-A coach could unlink team B's player from their own analysis by
+    // sending {}. The job itself is now checked through the account-tree seam:
+    // a write, so an out-of-scope target is a 403 beside the capability gate.
+    const jobScope = await accountJobScope(auth0Id, jobId, request, 'write', caller)
+    if (!jobScope.ok) {
+      set.status = jobScope.status
+      return jobScope.error
+    }
     const analysis = await linkAnalysisToStudent(
       auth0Id,
       jobId,
@@ -446,6 +459,19 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Analysis not found', false)
     }
+    // `linkAnalysisToStudent` is `update ... returning *`, so the row handed
+    // back carries summary_json verbatim. This route's account-tree twin
+    // (routes/auth.ts) strips the wellness signals for a caller without medical
+    // access; this one did not, so the §5 boundary was enforced on the sibling
+    // read and not here.
+    const maySee = await resolveMedicalAccess(
+      auth0Id,
+      request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+    )
     set.status = 200
-    return { analysis }
+    return {
+      analysis: maySee
+        ? analysis
+        : { ...analysis, summary_json: redactWellness(analysis.summary_json) },
+    }
   })

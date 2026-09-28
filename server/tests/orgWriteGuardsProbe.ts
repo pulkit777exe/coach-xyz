@@ -105,6 +105,10 @@ mock.module('../src/lib/historyStore', () => ({
 
 mock.module('../src/lib/analyses', () => ({
   linkAnalysisToStudent: async () => null,
+  // The job-scoped seam (lib/accountScope) reads the analysis's current student
+  // through this, and the students route now reaches it, so a partial mock here
+  // fails the whole probe process with "Export named ... not found".
+  getAnalysisStudentId: async () => ({ found: false, studentId: null }),
 }))
 
 mock.module('../src/lib/audit', () => ({
