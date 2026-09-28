@@ -20,11 +20,20 @@ type ProbeResult = {
   memberCalls: number
   /** Did the second accept find the token still open? */
   secondSawToken: boolean
+  boundMemberAuth0Id?: string | null
+  consumeCount: number
 }
 
 type MemberMode = '0' | '1' | 'recover'
 
-const runProbe = (membershipSucceeds: MemberMode): ProbeResult => {
+type ProbeOpts = {
+  user?: 'match' | 'mismatch' | 'unverified' | 'missing'
+  caller?: string
+  state?: 'valid' | 'consumed' | 'revoked' | 'expired'
+  concurrent?: boolean
+}
+
+const runProbe = (membershipSucceeds: MemberMode, opts: ProbeOpts = {}): ProbeResult => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -33,6 +42,10 @@ const runProbe = (membershipSucceeds: MemberMode): ProbeResult => {
   env.SERVICE_TOKEN = ''
   env.DATABASE_URL = ''
   env.INVITE_PROBE_MEMBER_OK = membershipSucceeds
+  if (opts.user) env.INVITE_PROBE_USER = opts.user
+  if (opts.caller) env.INVITE_PROBE_CALLER = opts.caller
+  if (opts.state) env.INVITE_PROBE_STATE = opts.state
+  if (opts.concurrent) env.INVITE_PROBE_CONCURRENT = '1'
 
   const proc = Bun.spawnSync({
     cmd: [process.execPath, PROBE],
@@ -95,5 +108,57 @@ describe('acceptInvite', () => {
     // On the failure path it is attempted twice — once per accept — because the
     // first attempt left the token open.
     expect(runProbe('0').memberCalls).toBe(2)
+  })
+})
+
+describe('acceptInvite binds to the invited identity', () => {
+  test('a caller whose email differs is rejected and the token survives', () => {
+    // The token alone must not grant membership: holding the link is not proof
+    // of being the invitee.
+    const r = runProbe('1', { user: 'mismatch' })
+    expect(r.first.ok).toBe(false)
+    expect(r.first.error).toBe('Invalid or expired invitation')
+    expect(r.memberCalls).toBe(0)
+    expect(r.secondSawToken).toBe(true)
+    // The token is unconsumed, so the right person can still use it afterwards.
+    expect(r.consumeCount).toBe(0)
+  })
+
+  test('an unverified email is rejected without consuming the token', () => {
+    const r = runProbe('1', { user: 'unverified' })
+    expect(r.first.ok).toBe(false)
+    expect(r.first.error).toBe('Invalid or expired invitation')
+    expect(r.memberCalls).toBe(0)
+    expect(r.secondSawToken).toBe(true)
+  })
+
+  test('a caller with no users row is rejected without consuming the token', () => {
+    const r = runProbe('1', { user: 'missing' })
+    expect(r.first.ok).toBe(false)
+    expect(r.first.error).toBe('Invalid or expired invitation')
+    expect(r.memberCalls).toBe(0)
+    expect(r.secondSawToken).toBe(true)
+  })
+
+  test('the membership lands on the verified caller, not an email lookup', () => {
+    const r = runProbe('1')
+    expect(r.first.ok).toBe(true)
+    expect(r.boundMemberAuth0Id).toBe('auth0|invitee')
+  })
+
+  test('consumed, revoked and expired tokens all fail uniformly', () => {
+    for (const state of ['consumed', 'revoked', 'expired'] as const) {
+      const r = runProbe('1', { state })
+      expect(r.first.ok, state).toBe(false)
+      expect(r.first.error, state).toBe('Invalid or expired invitation')
+      expect(r.memberCalls, state).toBe(0)
+    }
+  })
+
+  test('two concurrent accepts consume the token exactly once', () => {
+    // Both racers may write the membership (the write is idempotent, so one
+    // row), but the conditional consume matches exactly once.
+    const r = runProbe('1', { concurrent: true })
+    expect(r.consumeCount).toBe(1)
   })
 })

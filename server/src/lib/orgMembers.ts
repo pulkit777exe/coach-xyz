@@ -228,11 +228,36 @@ export const inviteOrgMember = async (
 ): Promise<OrgMember | null> => {
   const email = input.email.trim().toLowerCase()
   if (!email) return null
-  return withHistoryStoreOrThrow(async (db) => {
+  const memberAuth0Id = await withHistoryStoreOrThrow(async (db) => {
     const account = await db<{ auth0_id: string }[]>`
       select auth0_id from users where lower(email) = ${email} limit 1;
     `
-    const memberAuth0Id = account?.[0]?.auth0_id ?? null
+    return account?.[0]?.auth0_id ?? null
+  })
+  return inviteOrgMemberWithId(orgAuth0Id, inviterAuth0Id, {
+    email,
+    role: input.role,
+    memberAuth0Id,
+  })
+}
+
+/**
+ * Membership write with an explicit account binding. `acceptInvite` uses this
+ * so the membership lands on the verified caller, never on whichever `users`
+ * row happens to share the invite's email. A null `memberAuth0Id` means the
+ * account is not linked yet; the row is still created by email and linked on
+ * first login — but `acceptInvite` never passes null (it requires a verified,
+ * email-matching caller first).
+ */
+export const inviteOrgMemberWithId = async (
+  orgAuth0Id: string,
+  inviterAuth0Id: string,
+  input: { email: string; role: OrgMemberInviteRole; memberAuth0Id: string | null },
+): Promise<OrgMember | null> => {
+  const email = input.email.trim().toLowerCase()
+  if (!email) return null
+  return withHistoryStoreOrThrow(async (db) => {
+    const memberAuth0Id = input.memberAuth0Id
     if (memberAuth0Id === orgAuth0Id) return null
 
     const existing = await db<{ id: string }[]>`

@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 import { withHistoryStoreOrThrow } from './historyStore'
-import { inviteOrgMember, type OrgMemberInviteRole } from './orgMembers'
+import { inviteOrgMemberWithId, type OrgMemberInviteRole } from './orgMembers'
+import { getUserByAuth0Id, resolveAuth0Id } from './users'
 import { logger } from './logger'
 
 // ── Organization invitations (§7) ───────────────────────────────────────────
@@ -116,22 +117,38 @@ export const acceptInvite = async (
       const invite = rows?.[0]
       if (!invite) return { ok: false, error: 'Invalid or expired invitation' }
 
-      // Link the caller's account (matches by users.email like direct invites).
+      // Bind acceptance to the invited identity. The token alone must not grant
+      // membership: anyone holding the link could otherwise consume it, and a
+      // caller whose email differs would get `{ ok: true }` with no membership
+      // (the write keys on the invite's email, not the caller). Resolve linked
+      // accounts to the primary id first, then require a verified account whose
+      // email matches the invite. A rejection here answers the uniform error
+      // and leaves the token unconsumed, so the right person can still use it.
+      const primary = await resolveAuth0Id(callerAuth0Id)
+      const caller = await getUserByAuth0Id(primary)
+      const callerEmail = caller?.email?.trim().toLowerCase() ?? null
+      if (!caller || caller.email_verified !== true || callerEmail !== invite.email.trim().toLowerCase()) {
+        return { ok: false, error: 'Invalid or expired invitation' }
+      }
+
+      // Link the caller's account explicitly (member_auth0_id = verified
+      // caller), never via an email lookup that could land on another row.
       // This runs BEFORE the token is consumed and its result is checked, which
       // is the whole fix: the order used to be consume-then-write, the return
-      // value was discarded, and `inviteOrgMember` has four `return null` paths.
-      // So a single failed membership write produced `{ ok: true }` — the UI
-      // said "you're in the club" — while every org route then 403'd the user
-      // (`getMemberRole` returned null) and the single-use token was already
-      // burnt, so there was no retry. Writing first means a failure leaves the
-      // token usable, and re-accepting is idempotent because inviteOrgMember
-      // updates the existing row when there is one.
-      const member = await inviteOrgMember(
+      // value was discarded, and the membership write has several `return null`
+      // paths. So a single failed membership write produced `{ ok: true }` —
+      // the UI said "you're in the club" — while every org route then 403'd
+      // the user (`getMemberRole` returned null) and the single-use token was
+      // already burnt, so there was no retry. Writing first means a failure
+      // leaves the token usable, and re-accepting is idempotent because the
+      // write updates the existing row when there is one.
+      const member = await inviteOrgMemberWithId(
         invite.org_auth0_id,
-        invite.created_by ?? callerAuth0Id,
+        invite.created_by ?? primary,
         {
           email: invite.email,
           role: invite.role as OrgMemberInviteRole,
+          memberAuth0Id: primary,
         },
       )
       if (!member) {
