@@ -1,6 +1,6 @@
 import type { ScanResult, JobStatus, CoachAIError, UploadProgress, ChatMessage } from '@/types'
 import { parseEventStream } from '@/lib/sse'
-import { errorFromResponse } from '@/lib/errors'
+import { errorFromResponse, isAbortError } from '@/lib/errors'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
 
@@ -118,7 +118,23 @@ export async function apiFetch<T>(
   let res: Response
   try {
     res = await fetch(url, { ...options, headers })
-  } catch {
+  } catch (cause) {
+    // An abort is not a dead connection. Every timeout in this module is an
+    // abort on the signal handed to apiFetch (getJobStatus 15s, getConversation
+    // 10s, startAnalysis 30s, plus playerUpload and aiReports), and a bare
+    // `catch` collapsed all of them into "Cannot connect to server" — so a slow
+    // backend told the user to check a connection that was fine. It also made
+    // the REQUEST_TIMEOUT branch of toCoachAIError unreachable for every
+    // apiFetch caller, since the abort never escaped. Re-throw our own timeout
+    // shape and let anything else read as the transport failure it is.
+    if (isAbortError(cause)) {
+      throw {
+        code: 'REQUEST_TIMEOUT',
+        message: 'The server took too long to respond.',
+        layer: 'client',
+        retryable: true,
+      } as CoachAIError
+    }
     throw {
       code: 'NETWORK_ERROR',
       message: 'Cannot connect to server. Check your connection.',

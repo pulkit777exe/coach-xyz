@@ -34,10 +34,19 @@ export function formatDateLong(iso: string): string {
   })
 }
 
-/** "Sep 13" — accepts `YYYY-MM-DD` or a full ISO datetime. */
+/**
+ * "Sep 13" — accepts `YYYY-MM-DD` or a full ISO datetime.
+ *
+ * Reads the calendar day out of the string like formatDateMed/formatDateLong do,
+ * rather than localizing the instant. It used to `new Date(iso)` a full
+ * datetime, so a 23:30Z analysis and a 23:45Z one displayed as "Sep 13" and
+ * "Sep 14" in UTC+1 while the formatDateMed rows beside them in the same column
+ * both said "Sep 13" — the two helpers disagreed about which day an instant
+ * belongs to. Truncating to the date part is what the other two already do, and
+ * it makes the whole module consistent.
+ */
 export function formatDateShort(iso: string): string {
-  const d = iso.length === 10 ? localDay(iso) : new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return localDay(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 /**

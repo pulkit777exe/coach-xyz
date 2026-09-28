@@ -1,4 +1,5 @@
 import { IDENTITY_BASE } from './api'
+import { errorFromResponse } from './errors'
 import { parseEventStream } from './sse'
 
 /** Notification row as stored server-side. */
@@ -106,20 +107,38 @@ export async function fetchNotificationsWithRetry(
  * Mark a single notification as read.
  */
 export async function markRead(id: string): Promise<void> {
-  await fetch(`${IDENTITY_BASE}/api/me/notifications/${id}/read`, {
+  // The response is checked because the caller has already decremented
+  // unreadCount and flipped the row locally by the time this settles: an
+  // unchecked fetch resolves on a 401 or a 502, the dot clears, the user is told
+  // nothing, and the row comes back unread on the next snapshot — which only
+  // floors the count, so the count silently drifts too. Also encode the id,
+  // which every other module in this file does and this one did not.
+  const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/${encodeURIComponent(id)}/read`, {
     method: 'POST',
     credentials: 'include',
   })
+  if (!res.ok) {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'REQUEST_FAILED',
+      message: 'Could not mark that notification as read.',
+    })
+  }
 }
 
 /**
  * Mark all notifications as read.
  */
 export async function markAllRead(): Promise<void> {
-  await fetch(`${IDENTITY_BASE}/api/me/notifications/read-all`, {
+  const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/read-all`, {
     method: 'POST',
     credentials: 'include',
   })
+  if (!res.ok) {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'REQUEST_FAILED',
+      message: 'Could not mark notifications as read.',
+    })
+  }
 }
 
 /**

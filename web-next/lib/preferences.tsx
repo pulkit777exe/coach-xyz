@@ -122,6 +122,14 @@ export function usePreferenceSync(enabled: boolean): void {
   const { prefs, setTheme, setWeekStartsMonday, setReduceMotion } = usePreferences()
   const syncedRef = useRef(false)
   const echoRef = useRef(false)
+  // The hydration callback is created once, so it cannot see the live `prefs`;
+  // these two let it compare what the user has touched against what was on
+  // screen when the read went out.
+  const livePrefsRef = useRef(prefs)
+  const baselineRef = useRef(prefs)
+  useEffect(() => {
+    livePrefsRef.current = prefs
+  }, [prefs])
   // Nothing may be pushed before the read has settled: a push from defaults
   // would land after the GET and overwrite the account's stored choice.
   const [syncReady, setSyncReady] = useState(false)
@@ -135,17 +143,40 @@ export function usePreferenceSync(enabled: boolean): void {
     if (!enabled) return
     if (syncedRef.current) return
     syncedRef.current = true
+    baselineRef.current = prefs
 
     void getUserSettings()
       .then((settings) => {
         if (hasStoredUserSettings(settings)) {
           const next = adoptUserSettings(settings)
-          // Mark the echo so the push effect does not write these values
-          // straight back to the server.
-          echoRef.current = true
-          setTheme(next.theme)
-          setWeekStartsMonday(next.weekStartsMonday)
-          setReduceMotion(next.reduceMotion)
+          // Adopt a field only if the user has not touched it since the read
+          // went out. Without this the response is a stale write: land on the
+          // app, flip Reduce motion inside the ~200ms the GET takes, and the
+          // response resolves and reverts the toggle under their finger with no
+          // explanation. Comparing against the snapshot taken at request time is
+          // enough — no per-field dirty tracking, and a field touched *after* the
+          // response still wins because the push effect is what persists it.
+          const baseline = baselineRef.current
+          const current = livePrefsRef.current
+          const untouched = <K extends keyof typeof current>(key: K) =>
+            current[key] === baseline[key]
+          let adopted = false
+          if (untouched('theme')) {
+            setTheme(next.theme)
+            adopted = true
+          }
+          if (untouched('weekStartsMonday')) {
+            setWeekStartsMonday(next.weekStartsMonday)
+            adopted = true
+          }
+          if (untouched('reduceMotion')) {
+            setReduceMotion(next.reduceMotion)
+            adopted = true
+          }
+          // Only suppress the push when values were actually adopted. Marking the
+          // echo unconditionally swallowed the user's next real change too, if it
+          // landed inside the same 500ms debounce window.
+          echoRef.current = adopted
         }
         setSyncReady(true)
       })

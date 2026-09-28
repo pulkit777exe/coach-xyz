@@ -5,6 +5,24 @@ import type { CoachAIError } from '@/types'
 // and classifies them for retry decisions. Both the job poller and form
 // handlers rely on these, instead of each caller re-literalizing the rules.
 
+/**
+ * Is this an abort rather than a transport failure?
+ *
+ * Duck-types on `name` instead of `instanceof DOMException`, because that check
+ * misses Node's own `AbortError` (undici throws a plain `Error` with that name)
+ * and any realm where `DOMException` is not the global constructor. Every client
+ * timeout in this app is an abort, so getting this wrong reports a slow backend
+ * as a dead connection.
+ */
+export function isAbortError(err: unknown): boolean {
+  return (
+    !!err &&
+    typeof err === 'object' &&
+    'name' in err &&
+    (err as { name?: unknown }).name === 'AbortError'
+  )
+}
+
 export function isCoachAIError(err: unknown): err is CoachAIError {
   if (!err || typeof err !== 'object') return false
   const obj = err as Record<string, unknown>
@@ -17,7 +35,7 @@ export function isCoachAIError(err: unknown): err is CoachAIError {
 
 export function toCoachAIError(err: unknown): CoachAIError {
   // AbortError from AbortSignal.timeout()
-  if (err instanceof DOMException && err.name === 'AbortError') {
+  if (isAbortError(err)) {
     return {
       code: 'REQUEST_TIMEOUT',
       message: 'Request timed out.',
@@ -36,7 +54,7 @@ export function toCoachAIError(err: unknown): CoachAIError {
 // Errors the poller should retry: request aborts and canonical errors the
 // source marked retryable. Non-retryable errors will never succeed on retry.
 export function isTransientError(err: unknown): boolean {
-  if (err instanceof DOMException && err.name === 'AbortError') return true
+  if (isAbortError(err)) return true
   return isCoachAIError(err) ? err.retryable !== false : false
 }
 

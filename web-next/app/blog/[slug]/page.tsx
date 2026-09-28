@@ -3,12 +3,12 @@ import Link from 'next/link'
 import { postsBySlug } from '@/lib/blog'
 
 export function generateStaticParams() {
-  return Object.keys(postsBySlug).map((slug) => ({ slug }))
+  return Array.from(postsBySlug.keys()).map((slug) => ({ slug }))
 }
 
 export default async function Post({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const p = postsBySlug[slug]
+  const p = postsBySlug.get(slug)
   if (!p) notFound()
   return (
     <main id="main" tabIndex={-1} className="bg-background text-foreground-strong antialiased">

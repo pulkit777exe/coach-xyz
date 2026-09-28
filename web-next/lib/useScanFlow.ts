@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { scanVideoWithProgress, streamScanProgress, type CoachAIError } from '@/lib/api'
-import { engineError, toCoachAIError } from '@/lib/errors'
+import { engineError, isAbortError, toCoachAIError } from '@/lib/errors'
 import type { ScanResult, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
@@ -147,7 +147,7 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
           }
         } catch (err: unknown) {
           // If aborted (e.g., unmount), don't throw
-          if (err instanceof DOMException && err.name === 'AbortError') {
+          if (isAbortError(err)) {
             throw {
               code: 'REQUEST_TIMEOUT',
               message: 'Scan cancelled.',

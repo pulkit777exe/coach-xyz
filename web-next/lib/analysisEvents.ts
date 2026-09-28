@@ -171,12 +171,20 @@ export function startAnalysisStatus(config: AnalysisStatusConfig): JobPollingCon
     }
   }
 
-  const startFallback = (reason: unknown) => {
+  // `notify: false` is for switching to the poller on purpose, not because the
+  // stream dropped. The two share this path because both must abandon the SSE
+  // connection, but only a genuine drop should reach onTransient — reporting a
+  // manual refresh as a transport failure shows the user "Connection issue.
+  // Retrying... (1/4)" in response to the button the UI offered as the fix, and
+  // spends the bounded reconciliation budget on a refresh they asked for.
+  const startFallback = (reason: unknown, { notify = true }: { notify?: boolean } = {}) => {
     if (stopped || fallback) return
     stopStream()
     clearWarnTimer()
-    const error = toCoachAIError(reason)
-    config.onTransient?.({ kind: 'transient', error, attempts: 1, hadSucceeded })
+    if (notify) {
+      const error = toCoachAIError(reason)
+      config.onTransient?.({ kind: 'transient', error, attempts: 1, hadSucceeded })
+    }
     fallback = startJobPolling({
       jobId: config.jobId,
       fetchStatus: config.fetchStatus,
@@ -245,7 +253,9 @@ export function startAnalysisStatus(config: AnalysisStatusConfig): JobPollingCon
           handleStatus(status)
           return
         }
-        startFallback(new Error('Live status stream was refreshed manually.'))
+        startFallback(new Error('Live status stream was refreshed manually.'), {
+          notify: false,
+        })
       })
       .catch((error: unknown) => startFallback(error))
   }
