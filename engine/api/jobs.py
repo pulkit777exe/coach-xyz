@@ -77,6 +77,27 @@ async def fail(job_id: str, request: Request) -> JSONResponse:
         return error_response(404, "JOB_NOT_FOUND", "Job not found")
 
 
+@download_router.delete("/download/{job_id}")
+def delete_result(job_id: str):
+    """Delete a job's rendered result video. Called by the server when the
+    analysis is deleted or pruned, so storage does not accumulate orphaned
+    mp4s. A missing job reads as already-gone (the server treats 404 as
+    success); only a storage failure is a 500."""
+    try:
+        job = get_job(job_id)
+    except JobNotFoundError:
+        return error_response(404, "JOB_NOT_FOUND", "Job not found")
+
+    if not job.video_key:
+        return JSONResponse(status_code=200, content={"ok": True, "deleted": False})
+
+    try:
+        storage.delete_file(job.video_key)
+    except Exception:
+        return error_response(500, "STORAGE_ERROR", "Could not delete result video")
+    return JSONResponse(status_code=200, content={"ok": True, "deleted": True})
+
+
 @download_router.get("/download/{job_id}")
 def download(job_id: str):
     try:

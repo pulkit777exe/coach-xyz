@@ -15,7 +15,7 @@ const email = (auth0Id: string, path: string) =>
 // Org vocabulary — single source of truth for the web app. The server mirrors
 // these (same values AND order: order is contractual — see server/src/lib/orgEnums.ts
 // and the org *Contract tests on both sides). Add a value there and here.
-export const STUDENT_STATUSES = ['active', 'inactive', 'transferred'] as const
+export const STUDENT_STATUSES = ['active', 'inactive', 'transferred', 'archived'] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
 export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const
@@ -265,7 +265,15 @@ export const orgStudents = async (
   opts: { search?: string; sport?: string; status?: string } = {},
 ): Promise<{ students: Student[] }> => {
   return apiFetch<{ students: Student[] }>(
-    org(auth0Id, `/students${qs({ search: opts.search, sport: opts.sport, status: opts.status })}`),
+    org(
+      auth0Id,
+      `/students${qs({
+        search: opts.search,
+        sport: opts.sport,
+        status: opts.status,
+        include_archived: opts.includeArchived ? '1' : undefined,
+      })}`,
+    ),
   )
 }
 

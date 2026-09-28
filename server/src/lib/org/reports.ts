@@ -106,7 +106,7 @@ export type ReportScope = { visibleStudentIds?: string[] }
 
 export const listReports = async (
   auth0Id: string,
-  opts: ReportScope & { studentId?: string } = {},
+  opts: ReportScope & { studentId?: string; limit?: number } = {},
 ): Promise<Array<ReportRecord & { full_name: string | null }>> => {
   const scoped = opts.visibleStudentIds !== undefined
   const scopeParam =
@@ -120,7 +120,8 @@ export const listReports = async (
         where r.auth0_id = ${auth0Id}
           and (${opts.studentId ?? null}::uuid is null or r.student_id = ${opts.studentId ?? null}::uuid)
           and (not ${scoped} or r.student_id = any(${scopeParam}::uuid[]))
-        order by r.created_at desc;
+        order by r.created_at desc
+        limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)) as number | null};
       `
       return (rows ?? []).map(withNormalizedContent)
     })) ?? []

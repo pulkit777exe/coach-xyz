@@ -16,6 +16,8 @@ import settings from './settings'
 // Org domain routes, one module per subdomain (see report candidate 4).
 // serviceGuard runs inside each module; the orgRoleGuard composes at the
 // app level in index.ts, unchanged.
+import dataRights from './dataRights'
+
 export default new Elysia()
   .use(students)
   .use(attendance)
@@ -29,3 +31,4 @@ export default new Elysia()
   .use(performance)
   .use(overview)
   .use(settings)
+  .use(dataRights)

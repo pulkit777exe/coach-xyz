@@ -399,6 +399,33 @@ export const markEngineJobFailed = async (
   }
 }
 
+export const deleteResultVideo = async (
+  engineJobId: string,
+  requestId?: string | null,
+): Promise<{ deleted: boolean }> => {
+  // Best-effort storage cleanup for deleted/pruned analyses: a 404 means the
+  // engine already forgot the job (Redis TTL) and the file with it. Never
+  // throws — failing the user's delete over an orphaned mp4 would be worse,
+  // and every failure is logged.
+  try {
+    const res = await withTimeout(
+      `${ENGINE_URL}/download/${engineJobId}`,
+      { method: 'DELETE', headers: engineServiceHeaders(requestId) },
+      10_000,
+    )
+    if (res.status === 404) return { deleted: false }
+    if (!res.ok) await throwNonOk(res)
+    return { deleted: true }
+  } catch (error) {
+    logger.warn('result_video_delete_failed', {
+      type: 'result_video_delete_failed',
+      engineJobId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { deleted: false }
+  }
+}
+
 export const getScanProgressStream = async (
   sessionToken: string,
   angle?: string | null,

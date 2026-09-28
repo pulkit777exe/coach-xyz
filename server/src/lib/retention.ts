@@ -5,7 +5,7 @@
 // when the sweep lived inline there: daily interval (unref'd) plus a first
 // run 60 seconds after start. Cadence and first-run delay are unchanged.
 
-import { pruneRetention } from './analyses'
+import { pruneRetentionReport } from './analyses'
 import { logger } from './logger'
 
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -13,9 +13,19 @@ const FIRST_RUN_DELAY_MS = 60_000
 
 async function pruneOldAnalyses(): Promise<void> {
   try {
-    const pruned = await pruneRetention()
-    if (pruned > 0) {
-      logger.info('retention_pruned', { type: 'retention_pruned', analyses: pruned })
+    // Per-table counts keep the sweep observable: a run that prunes nothing
+    // still logs at debug, and a throwing run alerts (a silent throw is how
+    // the binding bug hid for months — see deleteAnalysisChildren).
+    const report = await pruneRetentionReport()
+    if (!report) return
+    const total =
+      report.analyses +
+      report.resultVideos +
+      report.invites +
+      report.notifications +
+      report.stages
+    if (total > 0) {
+      logger.info('retention_pruned', { type: 'retention_pruned', ...report })
     }
   } catch (err) {
     logger.error('retention_prune_error', {

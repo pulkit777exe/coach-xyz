@@ -1,4 +1,5 @@
 import { createWellnessCheckin, listWellness } from '../../lib/orgData'
+import { consentForStudent, gateConsentWrite } from '../../lib/consents'
 import { resolveCaller } from '../../lib/caller'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
 import { auditRoute } from '../../lib/audit'
@@ -69,6 +70,21 @@ export default new Elysia()
         'Wellness data is limited to the students in your team scope',
         false,
       )
+    }
+    // Consent gates the write, never the medical-role read above: without the
+    // player's medical-data consent this logs + audits (warn) or refuses
+    // (enforce) per CONSENT_ENFORCEMENT.
+    const gate = await gateConsentWrite({
+      request,
+      orgAuth0Id: auth0Id,
+      studentId,
+      granted: (await consentForStudent(studentId)).medicalData,
+      purpose: 'medicalData',
+      action: 'wellness.write',
+    })
+    if (!gate.ok) {
+      set.status = gate.status
+      return gate.error
     }
     const raw = (body ?? {}) as Record<string, unknown>
     const checkin = await createWellnessCheckin(

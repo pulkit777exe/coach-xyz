@@ -75,7 +75,24 @@ export const createPrivacyRequest = async (
   })
 }
 
-/** One account's own requests, newest first. Never another account's. */
+/** One request by id (owner/admin review needs the requester's account). */
+export const getPrivacyRequest = async (
+  id: string,
+): Promise<(PrivacyRequest & { auth0Id: string }) | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<(PrivacyRequestRow & { auth0_id: string })[]>`
+      select id, auth0_id, request_type, status, created_at, resolved_at
+      from privacy_requests
+      where id = ${id}::uuid
+      limit 1;
+    `
+    const row = rows?.[0]
+    return row ? { ...toPrivacyRequest(row), auth0Id: row.auth0_id } : null
+  })
+}
+
+/**
+ * One account's own requests, newest first. Never another account's. */
 export const listPrivacyRequests = async (
   auth0Id: string,
   opts: { limit?: number } = {},
@@ -95,6 +112,69 @@ export const listPrivacyRequests = async (
 
 export type PrivacyRequestValidation =
   { ok: true; value: { type: PrivacyRequestType } } | { ok: false; message: string }
+
+/**
+ * Requests reviewable by one org's owners/admins: requests filed by accounts
+ * linked to the org's students, plus the org's own staff. A request from a
+ * stranger names no org, so it never appears here.
+ */
+export const listOrgPrivacyRequests = async (
+  orgAuth0Id: string,
+  opts: { limit?: number } = {},
+): Promise<Array<PrivacyRequest & { auth0Id: string }>> => {
+  const limit = Math.min(Math.max(opts.limit ?? MAX_LIST, 1), MAX_LIST)
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<(PrivacyRequestRow & { auth0_id: string })[]>`
+      select r.id, r.auth0_id, r.request_type, r.status, r.created_at, r.resolved_at
+      from privacy_requests r
+      where r.auth0_id in (
+        select account_auth0_id from students
+        where auth0_id = ${orgAuth0Id} and account_auth0_id is not null
+      ) or r.auth0_id in (
+        select member_auth0_id from org_members
+        where org_auth0_id = ${orgAuth0Id} and member_auth0_id is not null
+      )
+      order by r.created_at desc
+      limit ${limit};
+    `
+    return (rows ?? []).map((row) => ({ ...toPrivacyRequest(row), auth0Id: row.auth0_id }))
+  }) ?? []
+}
+
+/** Reviewer transitions: received → in_progress → completed | declined. */
+const PRIVACY_STATUS_TRANSITIONS: Record<PrivacyRequestStatus, PrivacyRequestStatus[]> = {
+  received: ['in_progress', 'declined'],
+  in_progress: ['completed', 'declined'],
+  completed: [],
+  declined: [],
+}
+
+/** Move a request along the review flow. Illegal transitions return null. */
+export const setPrivacyRequestStatus = async (
+  id: string,
+  next: PrivacyRequestStatus,
+): Promise<PrivacyRequest | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const current = await db<PrivacyRequestRow[]>`
+      select id, request_type, status, created_at, resolved_at
+      from privacy_requests
+      where id = ${id}::uuid
+      limit 1;
+    `
+    const row = current?.[0]
+    if (!row) return null
+    const allowed = PRIVACY_STATUS_TRANSITIONS[row.status as PrivacyRequestStatus] ?? []
+    if (!allowed.includes(next)) return null
+    const updated = await db<PrivacyRequestRow[]>`
+      update privacy_requests
+      set status = ${next},
+        resolved_at = case when ${next} in ('completed', 'declined') then now() else resolved_at end
+      where id = ${id}::uuid
+      returning id, request_type, status, created_at, resolved_at;
+    `
+    return updated?.[0] ? toPrivacyRequest(updated[0]) : null
+  })
+}
 
 /** Strict manual validation matching the existing server route conventions. */
 export const validatePrivacyRequestBody = (body: unknown): PrivacyRequestValidation => {

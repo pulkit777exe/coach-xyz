@@ -50,7 +50,13 @@ export type AttendanceSummary = {
 // ── Attendance ───────────────────────────────────────────────────────────────
 export const listAttendance = async (
   auth0Id: string,
-  opts: { from?: string; to?: string; studentId?: string; studentIds?: string[] | null } = {},
+  opts: {
+    from?: string
+    to?: string
+    studentId?: string
+    studentIds?: string[] | null
+    limit?: number
+  } = {},
 ): Promise<AttendanceWithStudent[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
@@ -64,7 +70,8 @@ export const listAttendance = async (
           and (${opts.to ?? null}::date is null or a.session_date <= ${opts.to ?? null}::date)
           and (${opts.studentId ?? null}::uuid is null or a.student_id = ${opts.studentId ?? null}::uuid)
           and (not ${filter.scoped} or a.student_id = any(${filter.param}::uuid[]))
-        order by a.session_date desc, s.full_name asc;
+        order by a.session_date desc, s.full_name asc
+        limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 20000)) as number | null};
       `
       return rows ?? []
     })) ?? []

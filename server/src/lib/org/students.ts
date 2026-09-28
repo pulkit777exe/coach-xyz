@@ -37,6 +37,10 @@ export const listStudents = async (
     status?: string
     teamId?: string
     teamIds?: string[]
+    /** Include archived students. Default excludes them; an explicit `status` filter wins. */
+    includeArchived?: boolean
+    /** Max rows (exports bound themselves; the roster leaves it unbounded). */
+    limit?: number
   } = {},
 ): Promise<Student[]> => {
   return (
@@ -53,6 +57,11 @@ export const listStudents = async (
       // lists go through `uuidArrayLiteral`: a raw JS array is sent as
       // comma-joined text and the cast fails (see scope.ts).
       const scopeParam = scopeIds.length > 0 ? uuidArrayLiteral(scopeIds) : null
+      // Archive is a status, not a scope: the default roster hides archived
+      // students, an explicit status filter wins over the default, and scope
+      // + by-id reads still resolve archived rows (history keeps working).
+      const hideArchived = !opts.status && !opts.includeArchived
+      const cap = opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)
       const rows = await db<Student[]>`
         select *
         from students
@@ -61,9 +70,11 @@ export const listStudents = async (
                or email ilike ${`%${search}%`} or sport ilike ${`%${search}%`})
           and (${opts.sport ?? ''} = '' or sport = ${opts.sport ?? null})
           and (${opts.status ?? ''} = '' or status = ${opts.status ?? null})
+          and (not ${hideArchived} or status <> 'archived')
           and (${teamId} = '' or team_id = ${teamId === '' ? null : teamId}::uuid)
           and (not ${scoped} or team_id = any(${scopeParam}::uuid[]))
-        order by full_name asc;
+        order by full_name asc
+        limit ${cap};
       `
       return rows ?? []
     })) ?? []

@@ -1050,6 +1050,39 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+            // The students status CHECK is inline and unnamed, so pre-existing
+            // tables still enforce only the three original values: drop
+            // whatever status check exists (name discovered dynamically) and
+            // re-add the named full-vocabulary version. The match is on the
+            // column name, not the `IN` spelling: Postgres normalizes
+            // `x IN (...)` to `x = ANY (ARRAY[...])` in pg_get_constraintdef,
+            // so `like '%status in%'` matches nothing on PG16+.
+            await store`
+          do $$
+          declare _conname text;
+          begin
+            select conname into _conname
+            from pg_constraint
+            where conrelid = 'students'::regclass
+              and contype = 'c'
+              and pg_get_constraintdef(oid) like '%status%';
+            if _conname is not null and _conname <> 'students_status_check' then
+              execute format('alter table students drop constraint %I', _conname);
+            end if;
+          end
+          $$;
+        `
+            await store`
+          alter table students
+            drop constraint if exists students_status_check;
+        `
+            await store`
+          alter table students
+            add constraint students_status_check
+            check (status in ${inList(STUDENT_STATUSES)});
+        `
+          })(),
+          (async () => {
             await store`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`
           })(),
           (async () => {

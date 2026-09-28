@@ -18,6 +18,7 @@ import {
   type ImportRow,
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
+import { consentForStudent, gateConsentWrite } from '../../lib/consents'
 import { setStudentTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
 import { accountJobScope } from '../../lib/accountScope'
@@ -62,6 +63,7 @@ export default new Elysia()
       sport: url.searchParams.get('sport') ?? '',
       status: url.searchParams.get('status') ?? '',
       teamId: url.searchParams.get('team_id') ?? '',
+      includeArchived: url.searchParams.get('include_archived') === '1',
       ...(scope.all ? {} : { teamIds: scope.teamIds }),
     })
     set.status = 200
@@ -603,6 +605,23 @@ export default new Elysia()
     if (!jobScope.ok) {
       set.status = jobScope.status
       return jobScope.error
+    }
+    // Linking builds training data about the player: without their
+    // training-data consent this logs + audits (warn) or refuses (enforce).
+    // Unlinking (null) needs no consent.
+    if (studentId) {
+      const gate = await gateConsentWrite({
+        request,
+        orgAuth0Id: auth0Id,
+        studentId,
+        granted: (await consentForStudent(studentId)).trainingData,
+        purpose: 'trainingData',
+        action: 'analysis.link',
+      })
+      if (!gate.ok) {
+        set.status = gate.status
+        return gate.error
+      }
     }
     const analysis = await linkAnalysisToStudent(auth0Id, jobId, studentId)
     if (!analysis) {

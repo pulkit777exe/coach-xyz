@@ -74,6 +74,17 @@ export async function markAllRead(auth0Id: string): Promise<void> {
   })
 }
 
+/** Erase one account's notifications (privacy-request execution). */
+export async function deleteNotificationsForAccount(auth0Id: string): Promise<number> {
+  const result = await withHistoryStore(async (db) => {
+    const rows = await db<{ id: string }[]>`
+      delete from notifications where auth0_id = ${auth0Id} returning id;
+    `
+    return rows?.length ?? 0
+  })
+  return orDisabledDefault(result, 0)
+}
+
 export async function unreadCount(auth0Id: string): Promise<number> {
   const result = await withHistoryStore(async (db) => {
     const rows = await db<{ count: number }[]>`

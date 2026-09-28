@@ -5,7 +5,7 @@
 // NOTE: values AND order must match web-next/lib/org.ts — pinned by the
 // org *Contract tests on both sides.
 
-export const STUDENT_STATUSES = ['active', 'inactive', 'transferred'] as const
+export const STUDENT_STATUSES = ['active', 'inactive', 'transferred', 'archived'] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
 export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const

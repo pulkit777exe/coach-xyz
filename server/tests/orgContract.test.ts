@@ -16,7 +16,7 @@ import {
 // (pinned there by web-next/lib/__tests__/orgContract.test.ts). Single-sided
 // edits break this test on the unchanged side, surfacing drift in CI.
 const CANONICAL = {
-  studentStatuses: ['active', 'inactive', 'transferred'],
+  studentStatuses: ['active', 'inactive', 'transferred', 'archived'],
   attendanceStatuses: ['present', 'late', 'absent', 'excused'],
   eventTypes: ['practice', 'match', 'tournament', 'meeting', 'other'],
   eventStatuses: ['scheduled', 'completed', 'cancelled'],

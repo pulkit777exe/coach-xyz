@@ -71,6 +71,7 @@ export const listObjectives = async (
     teamId?: string | null
     status?: string | null
     scope?: ObjectiveScope
+    limit?: number
   } = {},
 ): Promise<TrainingObjective[]> => {
   const scoped = opts.scope !== undefined
@@ -94,7 +95,8 @@ export const listObjectives = async (
         and (not ${scoped}
              or coalesce(team_id = any(${teamParam}::uuid[]), false)
              or coalesce(student_id = any(${studentParam}::uuid[]), false))
-      order by created_at desc;
+      order by created_at desc
+      limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)) as number | null};
     `
       return rows ?? []
     })) ?? []

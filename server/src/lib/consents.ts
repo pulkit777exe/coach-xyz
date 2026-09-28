@@ -1,4 +1,7 @@
 import { orDisabledDefault, withHistoryStore, withHistoryStoreOrThrow } from './historyStore'
+import { auditRoute } from './audit'
+import { buildError, type CoachAIError } from './errors'
+import { logger } from './logger'
 
 // ── Player consent ──────────────────────────────────────────────────────────
 // One row per linked player (`player_consents`, keyed by student_id), holding
@@ -160,6 +163,77 @@ export const upsertConsent = async (
 }
 
 export type ConsentValidation = { ok: true; value: ConsentPatch } | { ok: false; message: string }
+
+/**
+ * How strictly recorded consent gates writes. `off` skips every check,
+ * `warn` logs + audits and proceeds, `enforce` rejects with 409
+ * CONSENT_REQUIRED. Default `warn`: the gap is surfaced without breaking
+ * coaching flows that predate consent records. Changing the default is a
+ * product decision, not a code cleanup — STOP and get approval first.
+ */
+export type ConsentEnforcement = 'off' | 'warn' | 'enforce'
+
+export const consentEnforcement = (): ConsentEnforcement => {
+  const raw = (process.env.CONSENT_ENFORCEMENT ?? 'warn').trim().toLowerCase()
+  if (raw === 'enforce') return 'enforce'
+  if (raw === 'off') return 'off'
+  return 'warn'
+}
+
+/**
+ * Enforce one consent purpose on a write. Reads — notably the medical role —
+ * never pass through here. `off` proceeds silently; `warn` logs, audits
+ * (existing `settings.changed` action, so no vocabulary change), and
+ * proceeds; `enforce` answers 409 CONSENT_REQUIRED.
+ */
+export const gateConsentWrite = async (input: {
+  request: Request
+  orgAuth0Id: string
+  studentId: string
+  granted: boolean
+  purpose: Extract<ConsentPurpose, 'medicalData' | 'trainingData'>
+  action: string
+}): Promise<{ ok: true } | { ok: false; status: 409; error: CoachAIError }> => {
+  if (input.granted) return { ok: true }
+  const mode = consentEnforcement()
+  if (mode === 'off') return { ok: true }
+  logger.warn('consent_gate_hit', {
+    type: 'consent_gate_hit',
+    org: input.orgAuth0Id,
+    studentId: input.studentId,
+    purpose: input.purpose,
+    mode,
+    action: input.action,
+  })
+  auditRoute(input.request, input.orgAuth0Id, 'settings.changed', 'player_consent', input.studentId, {
+    purpose: input.purpose,
+    mode,
+    action: input.action,
+  })
+  if (mode === 'enforce') {
+    return {
+      ok: false,
+      status: 409,
+      error: buildError(
+        'CONSENT_REQUIRED',
+        `Consent for ${input.purpose === 'medicalData' ? 'medical data' : 'training data'} is required`,
+        false,
+      ),
+    }
+  }
+  return { ok: true }
+}
+
+/** Erase one player's recorded consent (privacy-request execution). */
+export const deleteConsent = async (studentId: string): Promise<boolean> => {
+  const res = await withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<{ student_id: string }[]>`
+      delete from player_consents where student_id = ${studentId}::uuid returning student_id;
+    `
+    return Boolean(rows?.[0])
+  })
+  return res ?? false
+}
 
 /** Strict manual validation matching the existing server route conventions. */
 export const validateConsentPatch = (body: unknown): ConsentValidation => {

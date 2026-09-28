@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
+import { join } from 'node:path'
 
 import { setHistoryStoreConnectionForTests } from '../src/lib/historyStore'
 import meRoutes from '../src/routes/me'
 import {
   CONSENT_POLICY_VERSION,
+  consentEnforcement,
   consentForStudent,
   unlinkedConsent,
   upsertConsent,
@@ -948,5 +950,113 @@ describe('privacy requests', () => {
     expect(await listPrivacyRequests(CALLER)).toHaveLength(3)
     expect(await listPrivacyRequests(CALLER, { limit: 1 })).toHaveLength(1)
     expect(await listPrivacyRequests(CALLER, { limit: 9999 })).toHaveLength(3)
+  })
+})
+
+describe('consentEnforcement flag', () => {
+  const prev = process.env.CONSENT_ENFORCEMENT
+  afterEach(() => {
+    if (prev === undefined) delete process.env.CONSENT_ENFORCEMENT
+    else process.env.CONSENT_ENFORCEMENT = prev
+  })
+
+  test('defaults to warn and normalizes input', () => {
+    delete process.env.CONSENT_ENFORCEMENT
+    expect(consentEnforcement()).toBe('warn')
+    process.env.CONSENT_ENFORCEMENT = 'ENFORCE'
+    expect(consentEnforcement()).toBe('enforce')
+    process.env.CONSENT_ENFORCEMENT = 'off'
+    expect(consentEnforcement()).toBe('off')
+    process.env.CONSENT_ENFORCEMENT = 'garbage'
+    expect(consentEnforcement()).toBe('warn')
+  })
+})
+
+// ── Consent write gates (probe) ─────────────────────────────────────────────
+// CONSENT_ENFORCEMENT gates wellness writes and analysis linking; medical
+// reads are never gated. Route behavior runs in consentProbe.ts (fresh
+// process, fixture stub): the flag parsing above is pure.
+
+const CONSENT_PROBE = join(import.meta.dir, 'consentProbe.ts')
+const SERVER_DIR = join(import.meta.dir, '..')
+
+const runConsentProbe = (
+  probeCase: string,
+  granted: boolean,
+  mode: string,
+): { results: Array<{ name: string; status: number }>; consentAudits: number } => {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  env.SERVICE_TOKEN = ''
+  env.DATABASE_URL = ''
+  env.CONSENT_CASE = probeCase
+  env.CONSENT_GRANTED = granted ? '1' : '0'
+  env.CONSENT_ENFORCEMENT = mode
+  const proc = Bun.spawnSync({
+    cmd: [process.execPath, CONSENT_PROBE],
+    cwd: SERVER_DIR,
+    env,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const stdout = new TextDecoder().decode(proc.stdout)
+  const stderr = new TextDecoder().decode(proc.stderr)
+  expect(proc.exitCode, `probe failed:\n${stdout}\n${stderr}`).toBe(0)
+  const lines = stdout.trim().split('\n')
+  return JSON.parse(lines[lines.length - 1] ?? '') as {
+    results: Array<{ name: string; status: number }>
+    consentAudits: number
+  }
+}
+
+const consentStatusOf = (
+  result: { results: Array<{ name: string; status: number }> },
+  name: string,
+): number => {
+  const entry = result.results.find((r) => r.name === name)
+  expect(entry, `no result named ${name}`).toBeDefined()
+  return entry?.status ?? -1
+}
+
+describe('wellness consent gate (probe)', () => {
+  test('off proceeds silently without consent', () => {
+    const r = runConsentProbe('wellness', false, 'off')
+    expect(consentStatusOf(r, 'wellness')).toBe(201)
+    expect(r.consentAudits).toBe(0)
+  })
+
+  test('warn proceeds but logs and audits', () => {
+    const r = runConsentProbe('wellness', false, 'warn')
+    expect(consentStatusOf(r, 'wellness')).toBe(201)
+    expect(r.consentAudits).toBe(1)
+  })
+
+  test('enforce refuses without consent', () => {
+    const r = runConsentProbe('wellness', false, 'enforce')
+    expect(consentStatusOf(r, 'wellness')).toBe(409)
+    expect(r.consentAudits).toBe(1)
+  })
+
+  test('granted consent proceeds without audit even under enforce', () => {
+    const r = runConsentProbe('wellness', true, 'enforce')
+    expect(consentStatusOf(r, 'wellness')).toBe(201)
+    expect(r.consentAudits).toBe(0)
+  })
+})
+
+describe('analysis-link consent gate (probe)', () => {
+  test('warn proceeds but audits', () => {
+    const r = runConsentProbe('link', false, 'warn')
+    expect(consentStatusOf(r, 'link')).toBe(200)
+    expect(r.consentAudits).toBe(1)
+  })
+
+  test('enforce refuses without training-data consent', () => {
+    const r = runConsentProbe('link', false, 'enforce')
+    expect(consentStatusOf(r, 'link')).toBe(409)
+    expect(r.consentAudits).toBe(1)
   })
 })

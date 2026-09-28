@@ -33,3 +33,4 @@ Status: accepted. Date: 2026-09-28.
 ## 4. Consent enforcement
 
 - `CONSENT_ENFORCEMENT=off|warn|enforce`, default `warn`. `warn` logs + audits; `enforce` rejects 409 `CONSENT_REQUIRED`. Medical-role reads unaffected. STOP before changing the default.
+- Gated writes: wellness check-ins (`medicalData`) and analysis→student links (`trainingData`). Unlinking needs no consent. Audits reuse the existing `settings.changed` action (no vocabulary change).

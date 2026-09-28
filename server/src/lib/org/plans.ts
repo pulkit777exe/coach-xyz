@@ -44,7 +44,7 @@ export const planVisibleTo = (
 
 export const listTrainingPlans = async (
   auth0Id: string,
-  opts: { teamId?: string | null; studentId?: string | null; scope?: TrainingPlanScope } = {},
+  opts: { teamId?: string | null; studentId?: string | null; scope?: TrainingPlanScope; limit?: number } = {},
 ): Promise<TrainingPlan[]> => {
   // A training_plans row is team-level (team_id set, student_id null),
   // student-level (student_id set) or org-level (both null), so a scoped caller
@@ -70,7 +70,8 @@ export const listTrainingPlans = async (
         and (not ${scoped}
              or coalesce(team_id = any(${teamParam}::uuid[]), false)
              or coalesce(student_id = any(${studentParam}::uuid[]), false))
-      order by created_at desc;
+      order by created_at desc
+      limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)) as number | null};
     `
       return rows ?? []
     })) ?? []

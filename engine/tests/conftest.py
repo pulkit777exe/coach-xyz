@@ -19,6 +19,16 @@ os.environ["SENTRY_DSN"] = ""
 # CI (no .env) and fails locally.
 os.environ["SERVICE_TOKEN"] = ""
 
+# Same trap, two more keys: engine/.env carries real Upstash Redis credentials,
+# and core/jobs.py builds a real client at import when they are set. Every job
+# call then spends the shared serverless quota (currently exhausted, so calls
+# fail) — and whether the TestClient surfaces that as a 500 or a raised error
+# races, which flaked test_service_auth depending on company. Pin both empty
+# so local runs behave like CI (no .env): jobs.redis is None, and the tests
+# that need Redis patch it themselves (see test_state_machine.FakeRedis).
+os.environ["UPSTASH_REDIS_REST_URL"] = ""
+os.environ["UPSTASH_REDIS_REST_TOKEN"] = ""
+
 # Ensure engine/ is on sys.path so `core.*` imports resolve
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 if str(ENGINE_ROOT) not in sys.path:

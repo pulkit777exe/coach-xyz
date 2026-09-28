@@ -66,6 +66,7 @@ const STATUS_STYLE: Record<string, string> = {
   active: 'bg-success/15 text-success',
   inactive: 'bg-warning/15 text-warning',
   transferred: 'bg-muted text-muted-foreground',
+  archived: 'bg-muted text-muted-foreground',
 }
 
 function initials(name: string) {
@@ -363,6 +364,7 @@ export default function StudentsClient({
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [showArchived, setShowArchived] = useState(false)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForBulk, setInviteForBulk] = useState(false)
@@ -496,9 +498,38 @@ export default function StudentsClient({
     setStudents((prev) => prev.map((p) => (p.id === s.id ? s : p)))
   }
 
-  const refreshStudents = async () => {
-    const res = await orgStudents(auth0Id)
+  const refreshStudents = async (includeArchived = showArchived) => {
+    const res = await orgStudents(auth0Id, { includeArchived })
     setStudents(res.students)
+  }
+
+  const toggleArchived = async () => {
+    const next = !showArchived
+    setShowArchived(next)
+    try {
+      const res = await orgStudents(auth0Id, { includeArchived: next })
+      setStudents(res.students)
+    } catch (err) {
+      setShowArchived(!next)
+      toast.error((err as CoachAIError).message ?? 'Failed to load roster')
+    }
+  }
+
+  // Archive is an explicit status change, never a side effect: archived
+  // players leave the default roster but keep history, scope and by-id reads.
+  const setArchivedStatus = async (s: Student, archived: boolean) => {
+    const nextStatus = (archived ? 'archived' : 'active') as Student['status']
+    try {
+      const res = await orgUpdateStudent(auth0Id, s.id, { status: nextStatus })
+      setStudents((prev) =>
+        showArchived || !archived
+          ? prev.map((p) => (p.id === s.id ? res.student : p))
+          : prev.filter((p) => p.id !== s.id),
+      )
+      toast.success(archived ? `${s.full_name} archived` : `${s.full_name} restored`)
+    } catch (err) {
+      toast.error((err as CoachAIError).message ?? 'Failed to update student')
+    }
   }
 
   const confirmDelete = async () => {
@@ -596,6 +627,14 @@ export default function StudentsClient({
               <DownloadIcon /> Export
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void toggleArchived()}
+            aria-pressed={showArchived}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </Button>
           {canInvite && (
             <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
               <UserPlusIcon />
@@ -641,6 +680,14 @@ export default function StudentsClient({
                   onClick={() => applyBulkStatus('inactive')}
                 >
                   Mark inactive
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('archived')}
+                >
+                  Archive
                 </Button>
                 <Button
                   variant="outline"
@@ -840,6 +887,11 @@ export default function StudentsClient({
                           <DropdownMenuItem onClick={() => openEdit(s)}>
                             <PencilIcon className="size-3.5" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void setArchivedStatus(s, s.status !== 'archived')}
+                          >
+                            {s.status === 'archived' ? 'Restore' : 'Archive'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>

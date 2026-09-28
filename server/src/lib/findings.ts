@@ -1,4 +1,5 @@
 import { orDisabledDefault, withHistoryStore } from './historyStore'
+import { csvCell } from './csv'
 export type FindingRecord = {
   id: string
   category?: string | null
@@ -151,16 +152,6 @@ export const applyEvidenceGate = (finding: FindingRecord): FindingRecord => {
     'review_state',
     'created_at',
   ] as const
-
-const CSV_FORMULA_RE = /^[=+\-@\t\r]/
-
-/** Escape one CSV cell: defuse formula injection, quote delimiters. */
-const csvCell = (value: unknown): string => {
-  if (value === null || value === undefined) return ''
-  const raw = String(value)
-  const safe = CSV_FORMULA_RE.test(raw) ? `'${raw}` : raw
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
-}
 
 /** Serialize findings rows to CSV text (pure; BOM-free — the route adds it). */
 export const findingsToCsv = (findings: StoredFinding[]): string => {

@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import type { Player } from '../types'
 import type { RequestMeta } from './requestMeta'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
+import { deleteResultVideo } from './engine'
 import { persistFindings, type FindingRecord } from './findings'
 import { persistPlayerEvents } from './registry'
 import { uuidArrayLiteral } from './org/scope'
@@ -336,19 +337,32 @@ const deleteAnalysisChildren = async (db: SQL, serverJobIds: string | string[]):
 }
 
 export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Promise<boolean> => {
-  return orDisabledDefault(
-    await withHistoryStore(async (db) => {
-      const owned = await db<{ server_job_id: string }[]>`
+  const engineJobId = await withHistoryStore(async (db) => {
+    const owned = await db<{ server_job_id: string; engine_job_id: string | null }[]>`
+      select server_job_id, engine_job_id from analysis_history
+      where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
+      limit 1;
+    `
+    return owned?.[0] ?? null
+  })
+  if (!engineJobId) return false
+  const res = await withHistoryStore(async (db) => {
+    const owned = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
       limit 1;
     `
-      if (!owned?.[0]) return false
-      await deleteAnalysisChildren(db, serverJobId)
-      return true
-    }),
-    false,
-  )
+    if (!owned?.[0]) return false
+    await deleteAnalysisChildren(db, serverJobId)
+    return true
+  })
+  const deleted = orDisabledDefault(res, false)
+  // Storage follows the rows: without this the rendered mp4 orphans forever
+  // (raw uploads die with session eviction, results do not).
+  if (deleted && engineJobId.engine_job_id) {
+    await deleteResultVideo(engineJobId.engine_job_id)
+  }
+  return deleted
 }
 
 /** Daily per-org analysis cap (§17). */
@@ -485,23 +499,77 @@ export const retentionDays = (): number => {
  * Delete analyses (plus findings + chat) older than the retention window.
  * Derived rows go first so no orphans survive the history delete. Returns
  * the number of analyses pruned.
+ *
+ * The same run also sweeps bounded auxiliary tables: consumed/expired
+ * invites, aged notifications, and stages orphaned by deleted jobs. Audit
+ * rows are deliberately NOT pruned here — they outlive analyses by design
+ * (who-did-what must survive what-they-did-to), and any audit retention
+ * belongs to an explicit, separately-reviewed policy, not a daily sweep.
  */
+export type RetentionPruneCounts = {
+  analyses: number
+  resultVideos: number
+  invites: number
+  notifications: number
+  stages: number
+}
 
 export const pruneRetention = async (): Promise<number> => {
+  const report = await pruneRetentionReport()
+  return report?.analyses ?? 0
+}
+
+export const pruneRetentionReport = async (): Promise<RetentionPruneCounts | null> => {
   const days = retentionDays()
-  return orDisabledDefault(
-    await withHistoryStore(async (db) => {
-      const stale = await db<{ server_job_id: string }[]>`
-      select server_job_id from analysis_history
+  return withHistoryStore(async (db) => {
+    const stale =
+      (await db<{ server_job_id: string; engine_job_id: string | null }[]>`
+      select server_job_id, engine_job_id from analysis_history
       where requested_at < now() - (${days} || ' days')::interval;
-    `
-      if (!stale?.length) return 0
+    `) ?? []
+    const counts: RetentionPruneCounts = {
+      analyses: 0,
+      resultVideos: 0,
+      invites: 0,
+      notifications: 0,
+      stages: 0,
+    }
+    if (stale.length > 0) {
       const ids = stale.map((r) => r.server_job_id)
       await deleteAnalysisChildren(db, ids)
-      return ids.length
-    }),
-    0,
-  )
+      counts.analyses = ids.length
+      // Storage follows the rows: rendered mp4s orphan otherwise.
+      for (const row of stale) {
+        if (row.engine_job_id) {
+          const { deleted } = await deleteResultVideo(row.engine_job_id)
+          if (deleted) counts.resultVideos += 1
+        }
+      }
+    }
+    // Single-use tokens have no value after use, expiry, or revocation: a
+    // consumed row that lingers only widens the lookup the accept path scans.
+    const invites = await db<{ id: string }[]>`
+      delete from org_invites
+      where accepted_at is not null
+        or revoked_at is not null
+        or expires_at < now() - interval '7 days'
+      returning id;
+    `
+    counts.invites = invites?.length ?? 0
+    const notifications = await db<{ id: string }[]>`
+      delete from notifications
+      where created_at < now() - (${days} || ' days')::interval
+      returning id;
+    `
+    counts.notifications = notifications?.length ?? 0
+    const stages = await db<{ id: string }[]>`
+      delete from analysis_stages
+      where server_job_id not in (select server_job_id from analysis_history)
+      returning id;
+    `
+    counts.stages = stages?.length ?? 0
+    return counts
+  })
 }
 
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {
