@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { withHistoryStoreOrThrow } from './historyStore'
 import { inviteOrgMember, type OrgMemberInviteRole } from './orgMembers'
+import { logger } from './logger'
 
 // ── Organization invitations (§7) ───────────────────────────────────────────
 // Staff invites are token-based: cryptographically random, stored hashed,
@@ -102,21 +103,63 @@ export const acceptInvite = async (
     return { ok: false, error: 'Invalid or expired invitation' }
   return (
     (await withHistoryStoreOrThrow(async (db) => {
+      // Read the invite, do NOT consume it yet.
       const rows = await db<OrgInvite[]>`
-      update org_invites set accepted_at = now()
+      select org_auth0_id, email, role, created_by, accepted_at
+      from org_invites
       where token_hash = ${hashToken(token)}
         and accepted_at is null
         and revoked_at is null
         and expires_at > now()
-      returning org_auth0_id, email, role, created_by;
+      limit 1;
     `
       const invite = rows?.[0]
       if (!invite) return { ok: false, error: 'Invalid or expired invitation' }
+
       // Link the caller's account (matches by users.email like direct invites).
-      await inviteOrgMember(invite.org_auth0_id, invite.created_by ?? callerAuth0Id, {
-        email: invite.email,
-        role: invite.role as OrgMemberInviteRole,
-      })
+      // This runs BEFORE the token is consumed and its result is checked, which
+      // is the whole fix: the order used to be consume-then-write, the return
+      // value was discarded, and `inviteOrgMember` has four `return null` paths.
+      // So a single failed membership write produced `{ ok: true }` — the UI
+      // said "you're in the club" — while every org route then 403'd the user
+      // (`getMemberRole` returned null) and the single-use token was already
+      // burnt, so there was no retry. Writing first means a failure leaves the
+      // token usable, and re-accepting is idempotent because inviteOrgMember
+      // updates the existing row when there is one.
+      const member = await inviteOrgMember(
+        invite.org_auth0_id,
+        invite.created_by ?? callerAuth0Id,
+        {
+          email: invite.email,
+          role: invite.role as OrgMemberInviteRole,
+        },
+      )
+      if (!member) {
+        logger.error('invite_membership_write_failed', {
+          type: 'invite_membership_write_failed',
+          org: invite.org_auth0_id,
+          email: invite.email,
+          role: invite.role,
+        })
+        return { ok: false, error: 'Could not complete the invitation' }
+      }
+
+      // Consume the token last. `accepted_at is null` keeps this single-use even
+      // if two requests race: both may read the row, but the membership write is
+      // idempotent and the second consume simply matches nothing.
+      const consumed = await db<{ token_hash: string }[]>`
+        update org_invites set accepted_at = now()
+        where token_hash = ${hashToken(token)} and accepted_at is null
+        returning token_hash;
+      `
+      if (!consumed?.[0]) {
+        // Another request consumed it first. The membership is written either
+        // way, so this is still a success from the caller's point of view.
+        logger.info('invite_already_consumed', {
+          type: 'invite_already_consumed',
+          org: invite.org_auth0_id,
+        })
+      }
       return {
         ok: true,
         orgAuth0Id: invite.org_auth0_id,
