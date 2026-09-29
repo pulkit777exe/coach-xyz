@@ -7,6 +7,7 @@ import { logger } from './lib/logger'
 
 import { buildApp, maxRequestBodySize } from './app'
 import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
+import { missingEnvVars } from './lib/env'
 
 // ── Queue infrastructure ────────────────────────────────────────────────────
 // Explicitly started (previously an import side effect of lib/queue) so
@@ -38,19 +39,23 @@ process.on('uncaughtException', (error) => {
 })
 
 // ── Validate Required Environment Variables ────────────────────────────────
-const requiredEnvVars = [
-  'ENGINE_URL',
-  ...(process.env.NODE_ENV === 'production'
-    ? ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'SERVICE_TOKEN']
-    : []),
-]
-const missingEnvVars = requiredEnvVars.filter((k) => !process.env[k])
-if (missingEnvVars.length > 0) {
+const missing = missingEnvVars(process.env, process.env.NODE_ENV)
+if (missing.length > 0) {
   logger.error('missing_required_env', {
     type: 'missing_required_env',
-    missing: missingEnvVars,
+    missing,
   })
   process.exit(1)
+}
+
+try {
+  await initializeHistoryStore()
+} catch (err) {
+  logger.error('history_store_init_failed', {
+    type: 'history_store_init_failed',
+    error: err instanceof Error ? err.message : 'unknown',
+  })
+  // Continue — history is non-critical
 }
 
 

@@ -3,6 +3,7 @@ import { ENGINE_URL } from '../lib/engine'
 import { analysisQueue } from '../lib/queue'
 import { redis } from '../lib/redis'
 import { logger } from '../lib/logger'
+import { historyStoreEnabled, withHistoryStore } from '../lib/historyStore'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
   // Shallow — used by Render health check probe
@@ -54,6 +55,27 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       })
     }
 
+    // Check database (history/org store). A null store (DATABASE_URL unset)
+    // or a failed ping degrades rather than fails boot, so it degrades
+    // here too: the API serves but org features are off.
+    let dbOk = false
+    let dbLatency = 0
+    try {
+      const t = Date.now()
+      const rows = await Promise.race([
+        withHistoryStore(async (db) => db<{ ok: number }[]>`select 1 as ok`),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 2000)),
+      ])
+      dbOk = Array.isArray(rows) && rows.length > 0
+      dbLatency = Date.now() - t
+    } catch (err) {
+      logger.warn('health_check_degraded', {
+        type: 'health_check_degraded',
+        component: 'database',
+        error: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+
     // Check queue depth
     let waiting = 0
     let failed = 0
@@ -72,7 +94,7 @@ export const healthRoute = new Elysia({ prefix: '/health' })
 
     const status = !redisOk
       ? 'unhealthy'
-      : !engineOk
+      : !engineOk || !dbOk
         ? 'degraded'
         : failed > 10
           ? 'degraded'
@@ -84,6 +106,7 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       status,
       checks: {
         redis: { ok: redisOk, latency_ms: redisLatency },
+        database: { ok: dbOk, latency_ms: dbLatency, enabled: historyStoreEnabled() },
         engine: { ok: engineOk, latency_ms: engineLatency },
         queue: { ok: true, waiting, failed },
       },
