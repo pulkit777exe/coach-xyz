@@ -35,6 +35,14 @@ jobs:
         working-directory: engine
         run: ruff check .
 
+      - name: Dependency audit
+        working-directory: engine
+        # Against requirements.txt (same set verified locally); fails the job
+        # on any known CVE so upgrades stay deliberate.
+        run: |
+          pip install pip-audit
+          python -m pip_audit -r requirements.txt
+
       - name: Pytest
         working-directory: engine
         run: pytest tests -q
@@ -42,7 +50,29 @@ jobs:
   server:
     name: server (Bun)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    # Ephemeral Postgres: TEST_DATABASE_URL-gated suites (student delete,
+    # offboarding, archive, data-rights, scope SQL) skip without it — the
+    # service keeps them green in CI instead of silently skipped. PERF_*
+    # points at the same instance for script compatibility; nothing
+    # destructive ever runs against Neon from CI (DATABASE_URL stays unset).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: coachxyz
+          POSTGRES_PASSWORD: coachxyz
+          POSTGRES_DB: coachxyz
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U coachxyz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://coachxyz:coachxyz@localhost:55433/coachxyz
+      PERF_DATABASE_URL: postgres://coachxyz:coachxyz@localhost:55433/coachxyz
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +82,11 @@ jobs:
       - name: Install dependencies
         working-directory: server
         run: bun install --frozen-lockfile
+
+      - name: Dependency audit
+        working-directory: server
+        # Fails the job on any known CVE (verified clean locally: 191 packages).
+        run: bun audit
 
       - name: Type check
         working-directory: server
@@ -89,6 +124,10 @@ jobs:
         working-directory: web-next
         run: bun install --frozen-lockfile
 
+      - name: Dependency audit
+        working-directory: web-next
+        run: bun audit
+
       - name: Type check
         working-directory: web-next
         run: npx tsc --noEmit
@@ -104,3 +143,34 @@ jobs:
       - name: Build
         working-directory: web-next
         run: npx next build
+
+  # Image scan: both deployable images, HIGH/CRITICAL only, fail-closed.
+  # Trivy action pinned to a verified tag (v0.36.0, checked 2026-09-29).
+  scan:
+    name: image scan (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server image
+        run: docker build -t coachxyz-server:ci ./server
+
+      - name: Build engine image
+        run: docker build -t coachxyz-engine:ci ./engine
+
+      - name: Scan server image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: coachxyz-server:ci
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Scan engine image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: coachxyz-engine:ci
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
