@@ -162,6 +162,8 @@ describe('attendance queries carry the student scope', () => {
       STUDENT_B,
       true,
       LITERAL_A,
+      // No limit passed → bound null (LIMIT NULL is unlimited by design).
+      null,
     ])
   })
 })
