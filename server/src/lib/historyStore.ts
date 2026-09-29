@@ -1083,15 +1083,13 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+            // Column and index in one block: they ran as siblings in this
+            // Promise.all and raced on fresh databases (index saw no column).
             await store`ALTER TABLE video_conversations ADD COLUMN IF NOT EXISTS auth0_id text;`
-          })(),
-          (async () => {
-            await store`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
-          })(),
-          (async () => {
             await store`CREATE INDEX IF NOT EXISTS idx_video_conversations_auth0_id ON video_conversations (auth0_id);`
           })(),
           (async () => {
+            await store`ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS auth0_id text;`
             await store`CREATE INDEX IF NOT EXISTS idx_analysis_history_auth0_id ON analysis_history (auth0_id);`
           })(),
           (async () => {
@@ -1122,9 +1120,8 @@ export const ensureInitialized = async () => {
         `
           })(),
           (async () => {
+            // Same column/index race as above: one sequential block.
             await store`alter table students add column if not exists account_auth0_id text;`
-          })(),
-          (async () => {
             await store`
           create index if not exists idx_students_account_auth0_id
           on students (account_auth0_id);
@@ -1134,10 +1131,9 @@ export const ensureInitialized = async () => {
             // Team assignment must exist before any student query runs. The
             // teams module's DDL moved here (single schema mechanism), so this
             // alter is owned solely by ensureInitialized — no lazy-DDL race
-            // when student routes are hit first (smoke caught it).
+            // when student routes are hit first (smoke caught it). Column and
+            // index stay in one block: as siblings they raced on fresh DBs.
             await store`alter table students add column if not exists team_id uuid;`
-          })(),
-          (async () => {
             await store`
           create index if not exists idx_students_team_id
           on students (team_id);
@@ -1174,12 +1170,11 @@ export const ensureInitialized = async () => {
             // (every existing row is club-level by definition). `on delete
             // cascade` because the event belonged to that team — `set null`
             // would silently promote a deleted team's fixtures to org-wide.
+            // Column and index in one block (same fresh-DB race as above).
             await store`
           alter table schedule_events
             add column if not exists team_id uuid references teams (id) on delete cascade;
         `
-          })(),
-          (async () => {
             await store`
           create index if not exists idx_schedule_team_id
           on schedule_events (team_id);

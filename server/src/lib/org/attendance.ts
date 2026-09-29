@@ -108,18 +108,44 @@ export const setAttendanceBatch = async (
     note?: string | null
   }[],
 ): Promise<AttendanceRecord[]> => {
-  const results: AttendanceRecord[] = []
+  if (entries.length === 0) return []
+  // Collapse duplicate (student, date) pairs, last wins: a single multi-row
+  // statement cannot touch the same conflict row twice ("ON CONFLICT DO
+  // UPDATE command cannot affect row a second time"), and sequential upserts
+  // left the last write standing, so the final state is identical.
+  const byKey = new Map<string, (typeof entries)[number]>()
   for (const entry of entries) {
-    const record = await upsertAttendance(
-      auth0Id,
-      entry.studentId,
-      entry.sessionDate,
-      entry.status,
-      entry.note,
-    )
-    if (record) results.push(record)
+    byKey.set(`${entry.studentId}|${entry.sessionDate}`, entry)
   }
-  return results
+  const unique = [...byKey.values()]
+  // One multi-row upsert instead of N sequential round trips: the route caps
+  // batches at MAX_ATTENDANCE_BATCH, so one statement carries at most
+  // 500 × 5 parameters — well within limits — and RETURNING * yields the
+  // same rows in an order the notification fan-out re-keys by student.
+  return (
+    (await withHistoryStoreOrThrow(async (db) => {
+      const placeholders: string[] = []
+      const values: unknown[] = []
+      unique.forEach((entry, i) => {
+        const base = i * 5
+        placeholders.push(
+          `($${base + 1}, $${base + 2}, $${base + 3}::date, $${base + 4}, $${base + 5})`,
+        )
+        values.push(auth0Id, entry.studentId, entry.sessionDate, entry.status, entry.note ?? null)
+      })
+      const rows = await db.unsafe<AttendanceRecord[]>(
+        `insert into attendance (auth0_id, student_id, session_date, status, note)
+         values ${placeholders.join(', ')}
+         on conflict (auth0_id, student_id, session_date) do update set
+           status = excluded.status,
+           note = excluded.note,
+           updated_at = now()
+         returning *;`,
+        values,
+      )
+      return rows ?? []
+    })) ?? []
+  )
 }
 
 export const deleteAttendance = async (

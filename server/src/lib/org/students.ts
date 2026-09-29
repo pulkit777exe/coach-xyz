@@ -82,6 +82,26 @@ export const listStudents = async (
 }
 
 /**
+ * Many students by id, one round trip (batch verification). Duplicates in
+ * `ids` collapse: callers match entries back by id.
+ */
+export const getStudentsByIds = async (
+  auth0Id: string,
+  ids: readonly string[],
+): Promise<Student[]> => {
+  const unique = [...new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))]
+  if (unique.length === 0) return []
+  return (
+    (await withHistoryStoreOrThrow(async (db) => {
+      const rows = await db<Student[]>`
+      select * from students
+      where auth0_id = ${auth0Id} and id = any(${uuidArrayLiteral(unique)}::uuid[]);
+    `
+      return rows ?? []
+    })) ?? []
+  )
+}
+/**
  * One student by id, optionally narrowed to the caller's scope.
  *
  * `scope` follows the same convention as `listStudents`: omitted means the org

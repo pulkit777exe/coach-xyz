@@ -17,6 +17,7 @@ export type { Student, LinkedPlayer, StudentInput, ImportResult } from './org/st
 export {
   listStudents,
   getStudent,
+  getStudentsByIds,
   getLinkedPlayer,
   createStudent,
   updateStudent,

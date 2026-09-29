@@ -2,6 +2,7 @@ import {
   attendanceSummary,
   deleteAttendance,
   getStudent,
+  getStudentsByIds,
   listAttendance,
   setAttendanceBatch,
   upsertAttendance,
@@ -68,16 +69,31 @@ export const fanOutAttendanceNotifications = async (
   }
 
   const notifiedStudentIds = new Set<string>()
+  // Targets resolve synchronously first, so exact-once per student is
+  // deterministic; only completion order varies across the pool below.
+  const targets: Array<{ student: AttendanceNotificationStudent; record: AttendanceRecord }> = []
   for (const student of students) {
     if (notifiedStudentIds.has(student.id) || !student.account_auth0_id) continue
     const record = recordByStudentId.get(student.id)
     if (!record) continue
     notifiedStudentIds.add(student.id)
+    targets.push({ student, record })
+  }
 
+  // Bounded pool: sequential awaits turned a 140-student batch into 140
+  // serialized pref-read + insert round trips (~3s at hosted-DB latency).
+  // `next` advances synchronously between awaits, so no student sends twice.
+  const sendOne = async ({
+    student,
+    record,
+  }: {
+    student: AttendanceNotificationStudent
+    record: AttendanceRecord
+  }): Promise<void> => {
     try {
       await notifyAttendanceRecorded(
         {
-          auth0Id: student.account_auth0_id,
+          auth0Id: student.account_auth0_id as string,
           title: 'Attendance recorded',
           body: student.full_name,
           data: {
@@ -99,6 +115,15 @@ export const fanOutAttendanceNotifications = async (
       })
     }
   }
+  let next = 0
+  const workers = Array.from({ length: Math.min(5, targets.length) }, async () => {
+    while (next < targets.length) {
+      const current = targets[next]
+      next += 1
+      await sendOne(current)
+    }
+  })
+  await Promise.all(workers)
 }
 
 export default new Elysia()
@@ -248,23 +273,25 @@ export default new Elysia()
       return buildError('FORBIDDEN', OUT_OF_SCOPE_MESSAGE, false)
     }
 
-    // Verify every student belongs to this org before any write.
-    const students: Student[] = []
-    for (const entry of entries) {
-      const student = await getStudent(
-        auth0Id,
-        (entry as Record<string, unknown>).student_id as string,
+    // Verify every student belongs to this org before any write: one query
+    // for the whole batch, matched back by id. The first unknown id names
+    // the same 404 as the old per-row loop.
+    const entryIds = entries.map((entry) => (entry as Record<string, unknown>).student_id as string)
+    const byId = new Map(
+      (await getStudentsByIds(auth0Id, entryIds)).map((student) => [student.id, student]),
+    )
+    const missing = entries.find(
+      (entry) => !byId.has((entry as Record<string, unknown>).student_id as string),
+    )
+    if (missing) {
+      set.status = 404
+      return buildError(
+        'NOT_FOUND',
+        `Student ${(missing as Record<string, unknown>).student_id} not found in this organization`,
+        false,
       )
-      if (!student) {
-        set.status = 404
-        return buildError(
-          'NOT_FOUND',
-          `Student ${(entry as Record<string, unknown>).student_id} not found in this organization`,
-          false,
-        )
-      }
-      students.push(student)
     }
+    const students: Student[] = [...byId.values()]
 
     const parsed = entries.map((entry) => {
       const e = entry as Record<string, unknown>

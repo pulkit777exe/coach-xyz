@@ -27,6 +27,28 @@ export type Caller = {
 }
 
 export async function resolveCaller(orgAuth0Id: string, request: Request): Promise<Caller> {
+  // Per-request memo: handlers routinely resolve the same caller two or three
+  // times per request (capability, then scope, then scope again), and each
+  // resolution is two sequential DB round trips (role, then team ids). The
+  // promise itself is cached, so concurrent resolutions share one flight.
+  // Scoped to the request object (plus org) — never shared across requests,
+  // so a role or membership change is visible on the very next request.
+  // Revocation stays immediate by construction.
+  const cached = callerCache.get(request)?.get(orgAuth0Id)
+  if (cached) return cached
+  const pending = resolveCallerUncached(orgAuth0Id, request)
+  let byOrg = callerCache.get(request)
+  if (!byOrg) {
+    byOrg = new Map()
+    callerCache.set(request, byOrg)
+  }
+  byOrg.set(orgAuth0Id, pending)
+  return pending
+}
+
+const callerCache = new WeakMap<Request, Map<string, Promise<Caller>>>()
+
+async function resolveCallerUncached(orgAuth0Id: string, request: Request): Promise<Caller> {
   const verified = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
   // A lookup throw means the DB errored (getMemberRole returns null for
   // non-members without throwing) — fail closed to null, but log it: an

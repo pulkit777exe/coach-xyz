@@ -310,8 +310,8 @@ describe('notification fan-out recipients', () => {
       return null
     })
 
-    expect(sent.map((input) => input.auth0Id)).toEqual(['auth0|player-1', 'auth0|player-2'])
-    expect(sent.map((input) => input.type)).toEqual(['attendance', 'attendance'])
+    expect(sent.map((input) => input.auth0Id).sort()).toEqual(['auth0|player-1', 'auth0|player-2'])
+    expect(sent.map((input) => input.type).sort()).toEqual(['attendance', 'attendance'])
   })
 })
 

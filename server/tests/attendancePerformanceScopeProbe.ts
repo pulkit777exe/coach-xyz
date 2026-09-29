@@ -263,6 +263,10 @@ const attendance = {
     bump('getStudent')
     return studentRow(id)
   },
+  getStudentsByIds: async (_auth0Id: string, ids: readonly string[]) => {
+    bump('getStudentsByIds')
+    return ids.map((id) => studentRow(id)).filter((s) => s !== null)
+  },
   listPerformance: async (_auth0Id: string, studentId: string, opts: ScopedOpts = {}) => {
     bump('listPerformance')
     record('listPerformance', opts.studentIds)
