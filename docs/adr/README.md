@@ -9,6 +9,7 @@ rather than editing the old one.
 | [0001](adr-0001-deliberate-status-quo.md)     | Accepted | 2026-09-24 | Deliberate status quo                                           |
 | [0002](adr-0002-roster-scope-two-tiers.md)    | Accepted | 2026-09-26 | Roster scope has two tiers, not one                             |
 | [0003](adr-0003-authorization-four-layers.md) | Accepted | 2026-09-27 | Authorization is four layers; only the inner two say whose data |
+| [0004](adr-0004-production-stop-lines.md)     | Accepted | 2026-09-29 | Production stop lines: no session-store merge, no ownership transfer, consent stays warn |
 
 ## Reading order
 
