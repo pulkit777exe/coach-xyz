@@ -33,6 +33,7 @@ import { healthRoute } from './routes/health'
 import { sportPositionsRoute } from './routes/sports'
 import { globalErrorHandler } from './lib/httpErrors'
 import { orgRoleGuard } from './lib/serviceGuard'
+import { orgWriteRateLimit } from './lib/ratelimit'
 import { MAX_FILE_SIZE_BYTES } from './types'
 
 export const maxRequestBodySize = Math.max(MAX_FILE_SIZE_BYTES + 10 * 1024 * 1024, 64 * 1024 * 1024)
@@ -76,6 +77,11 @@ export const buildApp = () => {
         credentials: true,
       }),
     )
+    // Global write-method rate limit for the org trees. Registered FIRST:
+    // a global hook only fires for routes mounted after its .use() (same
+    // barrel class as the inert scoped wraps — verified), and top-level
+    // registration propagates into every nested mount below.
+    .use(orgWriteRateLimit)
     // Root no-op onError: Elysia's unmatched-route 404 branch skips
     // afterResponse hooks unless app.event.error is non-empty (compose.js
     // checks `!app.event.error`, and an empty [] from .use()-transferring a
@@ -126,6 +132,7 @@ export const buildApp = () => {
       const isDev = process.env.NODE_ENV !== 'production'
       set.headers['Content-Security-Policy'] = [
         "default-src 'self'",
+        "frame-ancestors 'none'",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",

@@ -3,6 +3,7 @@
 // Mocks: redis (import-time connector), mailer/ratelimit (no real sends).
 
 import { mock } from 'bun:test'
+import { Elysia } from 'elysia'
 
 import { MATRIX, MATRIX_EXCLUDED, type MatrixRole } from './authMatrixPolicy'
 
@@ -143,6 +144,11 @@ mock.module('../src/lib/ratelimit', () => {
     checkEmailLimit: allow,
     checkAiReportLimit: allow,
     checkClipLimit: allow,
+    checkOrgWriteLimit: allow,
+    // Inert: the matrix asserts per-route gates, not the limiter (which has
+    // its own probe). A new ratelimit export without this line fails the
+    // whole probe with "Export named ... not found".
+    orgWriteRateLimit: new Elysia({ name: 'orgWriteRateLimit-stub' }),
     getIP: () => '127.0.0.1',
     rateLimited: (set: { status?: number | string }, message: string) => {
       set.status = 429
