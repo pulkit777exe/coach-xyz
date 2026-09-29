@@ -13,7 +13,7 @@ import { getJob } from '../lib/jobs'
 import { pickInt } from '../lib/uuid'
 import { buildError } from '../lib/errors'
 import { logger } from '../lib/logger'
-import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
+import { serviceGuard, SERVICE_HEADERS, serviceGuardEnabled, verifyServiceIdentity } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 import { accountJobScope, resolveAccountScope } from '../lib/accountScope'
@@ -32,7 +32,7 @@ export { parseFindingsTrendQuery, type FindingsTrendQuery } from './findings'
 
 export default new Elysia()
   .use(serviceGuard)
-  .post('/api/auth/sync', async ({ body, set }) => {
+  .post('/api/auth/sync', async ({ body, request, set }) => {
     const { sub, email, name, nickname, picture, email_verified } = body as {
       sub: string
       email?: string
@@ -45,6 +45,22 @@ export default new Elysia()
     if (!sub) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required field: sub', false)
+    }
+
+    // Identity boundary for the one route naming its owner in the body: the
+    // global serviceGuard cannot read body.sub without consuming the request
+    // stream (see serviceGuard.ts), so the check lives here where the parsed
+    // body exists. Same verdicts as the guard (verifyServiceIdentity).
+    if (serviceGuardEnabled()) {
+      const outcome = verifyServiceIdentity(
+        request.headers.get(SERVICE_HEADERS.token),
+        request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+        sub,
+      )
+      if (!outcome.ok) {
+        set.status = outcome.status
+        return outcome.body
+      }
     }
 
     const user = await upsertUser({
