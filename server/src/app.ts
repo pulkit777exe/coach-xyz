@@ -11,6 +11,7 @@ import { swagger } from '@elysiajs/swagger'
 
 import { logger } from './lib/logger'
 import { formatAccessLog, shouldLogRequest } from './lib/requestLog'
+import { recordRequest } from './lib/metrics'
 import { requestIdFrom } from './lib/engine'
 
 import scanRoute from './routes/scan'
@@ -89,17 +90,22 @@ export const buildApp = () => {
       requestStartTimes.set(request, Date.now())
       set.headers['x-request-id'] = requestId
     })
-    .onAfterResponse(({ request, set }) => {
+    .onAfterResponse(({ request, set, route }) => {
       const pathname = new URL(request.url).pathname
       if (!shouldLogRequest(pathname)) return
       const startedAt = requestStartTimes.get(request)
+      const durationMs = startedAt === undefined ? 0 : Date.now() - startedAt
+      const status = typeof set.status === 'number' ? set.status : 200
+      // Same skip rule as the access log: the Render probe must not drown
+      // the per-route counters it is meant to observe.
+      recordRequest(request.method, typeof route === 'string' ? route : null, status, durationMs)
       logger.info(
         'request',
         formatAccessLog({
           method: request.method,
           path: pathname,
-          status: set.status ?? 200,
-          durationMs: startedAt === undefined ? 0 : Date.now() - startedAt,
+          status,
+          durationMs,
           requestId: requestIds.get(request) ?? requestIdFrom(request),
         }),
       )

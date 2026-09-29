@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 
 import { buildError, isCoachAIError } from './errors'
+import { requestIdFrom } from './engine'
 import { logger } from './logger'
 
 // ── Global error handler (shared) ───────────────────────────────────────────
@@ -33,6 +34,9 @@ export const globalErrorHandler = new Elysia({ name: 'globalErrorHandler' }).onE
       error: e?.message,
       stack: e?.stack,
       path: new URL(request.url).pathname,
+      // Correlation without AsyncLocalStorage: the id the access log and
+      // the engine calls already carry, so a Sentry event joins its trace.
+      request_id: requestIdFrom(request),
     })
     set.status = 500
     return buildError('INTERNAL_ERROR', undefined, true)

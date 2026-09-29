@@ -547,6 +547,7 @@ mock.module('../src/lib/historyStore', () => ({
     return fn(db)
   },
   orDisabledDefault: <T>(v: T | null, f: T) => (v ?? f),
+  historyStoreEnabled: () => true,
   shutdownHistoryStore: async () => undefined,
   setHistoryStoreConnectionForTests: () => () => undefined,
   ensureInitialized: async () => undefined,

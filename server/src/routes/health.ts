@@ -4,6 +4,7 @@ import { analysisQueue } from '../lib/queue'
 import { redis } from '../lib/redis'
 import { logger } from '../lib/logger'
 import { historyStoreEnabled, withHistoryStore } from '../lib/historyStore'
+import { snapshot } from '../lib/metrics'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
   // Shallow — used by Render health check probe
@@ -13,6 +14,10 @@ export const healthRoute = new Elysia({ prefix: '/health' })
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   }))
+  // Per-route counters for ops monitoring and the SLO burn check (see
+  // docs/runbooks/slo.md). Same guard-exempt footing as /health and /deep:
+  // external monitors poll it without service credentials.
+  .get('/metrics', () => snapshot())
   // Deep — ops/queue-health probe (Redis + engine + queue depth) for manual
   // and external monitoring. No frontend consumer: the app pings shallow
   // /health only (web-next usePipeline keep-alive), as does the Docker
