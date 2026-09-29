@@ -31,7 +31,7 @@ import aiReportsRoute from './routes/aiReports'
 import shareRoute from './routes/share'
 import { healthRoute } from './routes/health'
 import { sportPositionsRoute } from './routes/sports'
-import { globalErrorHandler } from './lib/httpErrors'
+import { shapeEscapingError } from './lib/httpErrors'
 import { orgRoleGuard } from './lib/serviceGuard'
 import { orgWriteRateLimit } from './lib/ratelimit'
 import { MAX_FILE_SIZE_BYTES } from './types'
@@ -82,14 +82,14 @@ export const buildApp = () => {
     // barrel class as the inert scoped wraps — verified), and top-level
     // registration propagates into every nested mount below.
     .use(orgWriteRateLimit)
-    // Root no-op onError: Elysia's unmatched-route 404 branch skips
-    // afterResponse hooks unless app.event.error is non-empty (compose.js
-    // checks `!app.event.error`, and an empty [] from .use()-transferring a
-    // plugin onError counts as present-but-falsy). Registered inline, not .use()'d.
-    // makes length === 1 so 404s run the access hook below too. Must return
-    // undefined — a defined return would replace the 404 body (verified: the
-    // body stays "NOT_FOUND" either way). Registered inline, not .use()'d.
-    .onError(() => {})
+    // Root error shaper, registered INLINE (not .use()'d): a plugin-mounted
+    // onError is instance-scoped and never fires for other instances'
+    // routes, so escaping throws used to surface as plain-text 500s. Root
+    // hooks are global. Must return undefined on the 404 pass-through —
+    // a defined return would replace the NOT_FOUND body (verified: the
+    // body stays "NOT_FOUND" either way) — and the registration itself
+    // keeps app.event.error non-empty so 404s run the access hook below.
+    .onError(({ error, set, request }) => shapeEscapingError(error, request, set)?.body)
     .onRequest(({ request, set }) => {
       const requestId = requestIdFrom(request)
       requestIds.set(request, requestId)
@@ -174,6 +174,7 @@ export const buildApp = () => {
     )
     .use(shareRoute)
 
-    // ── Global Error Handler ─────────────────────────────────────────────────
-    .use(globalErrorHandler)
+    // ── Request wiring ends here: error shaping is the root inline
+    // onError above (a .use()'d error plugin would be instance-scoped
+    // and decorative).
 }
