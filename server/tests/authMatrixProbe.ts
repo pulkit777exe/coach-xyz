@@ -143,6 +143,7 @@ mock.module('../src/lib/ratelimit', () => {
     checkAiReportLimit: allow,
     checkClipLimit: allow,
     checkOrgWriteLimit: allow,
+    checkStatusLimit: allow,
     // Inert: the matrix asserts per-route gates, not the limiter (which has
     // its own probe). A new ratelimit export without this line fails the
     // whole probe with "Export named ... not found".
