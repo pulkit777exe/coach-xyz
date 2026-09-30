@@ -187,7 +187,6 @@ def _compute_weighted_scoring(
     criteria = config.get("form_criteria", [])
 
     for event in shot_events:
-        breakdown = event.get("form_breakdown", {})
         biomechanics = event.get("biomechanics", {})
         joint_angles = biomechanics.get("joint_angles", {})
         elbow_ext = biomechanics.get("elbow_extension_angle")
@@ -198,7 +197,6 @@ def _compute_weighted_scoring(
             if not isinstance(criterion, dict):
                 continue
 
-            key = criterion["key"]
             metric = criterion.get("metric")
             measured_value = None
 
@@ -208,14 +206,9 @@ def _compute_weighted_scoring(
             elif metric and metric in joint_angles:
                 measured_value = joint_angles[metric]
 
-            # If no biomechanical measurement, try to infer from form_breakdown
-            if measured_value is None and key in breakdown:
-                rating = breakdown[key]
-                # Use the midpoint of the ideal range as a proxy
-                ideal = criterion.get("ideal_range")
-                if ideal:
-                    measured_value = (ideal[0] + ideal[1]) / 2.0 * (0.8 if rating == "needs_work" else 1.0 if rating == "good" else 0.6)
-
+            # No inference from qualitative ratings: an unmeasured
+            # criterion scores 0 ("No measurement available") instead of
+            # rendering a synthesized value as if observed.
             score_result = _compute_criterion_score(criterion, measured_value)
             criterion_scores.append(score_result)
 
@@ -583,7 +576,14 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
     ctx.preprocessed_path = preprocess_video_ffmpeg(ctx.local_path)
     ctx.cleanup_preprocessed = ctx.preprocessed_path != ctx.local_path
 
-    # Run keyframe extraction (CPU-bound) - returns frame cache
+    # Run keyframe extraction (CPU-bound) - returns frame cache.
+    # New loop per call because this runs inside an executor worker with no
+    # bound loop; restore the previous binding afterwards so threads shared
+    # with concurrent analyses never inherit a closed loop.
+    try:
+        previous_loop = asyncio.get_event_loop()
+    except RuntimeError:
+        previous_loop = None
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -616,6 +616,7 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
         # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
         default_executor = getattr(loop, '_default_executor', None)
         loop.close()
+        asyncio.set_event_loop(previous_loop)
         if default_executor is not None:
             default_executor.shutdown(wait=False)
 

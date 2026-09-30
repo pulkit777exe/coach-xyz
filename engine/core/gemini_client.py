@@ -177,8 +177,10 @@ def build_frame_metadata(track: dict[str, Any], sequence_index: int = 0, motion_
         except (KeyError, IndexError, ZeroDivisionError):
             pass
 
-    # Add computed joint angles from tracking pipeline
-    joint_angles = track.get("joint_angles", {})
+    # Add computed joint angles from tracking pipeline. Copy: the dict
+    # belongs to the track, and writing the derived value into it would
+    # leak across retries and into scoring.
+    joint_angles = dict(track.get("joint_angles", {}))
     elbow_extension = track.get("elbow_extension_angle")
     if elbow_extension is not None:
         joint_angles["elbow_extension_angle"] = elbow_extension

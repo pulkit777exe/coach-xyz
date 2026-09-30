@@ -195,12 +195,14 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
 def read_frame_by_index(video_path: str, frame_index: int) -> np.ndarray | None:
     """Read a single frame from video by frame index. Memory-efficient: loads only one frame."""
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return None
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-    ok, frame = cap.read()
-    cap.release()
-    return frame if ok else None
+    try:
+        if not cap.isOpened():
+            return None
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ok, frame = cap.read()
+        return frame if ok else None
+    finally:
+        cap.release()
 
 
 _MAX_FRAME_DIM = 768  # px — Gemini doesn't benefit from higher resolution for pose analysis

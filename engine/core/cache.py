@@ -28,8 +28,10 @@ CACHE_PREFIX = "coachai:analysis:"
 
 def compute_video_hash(video_path: str) -> str:
     """
-    Fast hash for cache key using file size + first/last 1MB.
-    Full content hash is slow for large videos.
+    Fast hash for cache key using file size + first/middle/last 1MB.
+    Head+tail alone collide on same-camera same-length clips (identical
+    container headers); the middle chunk breaks that symmetry without
+    paying for a full-content read on large videos.
     """
     size = os.path.getsize(video_path)
     chunk_size = 1024 * 1024
@@ -37,16 +39,20 @@ def compute_video_hash(video_path: str) -> str:
     with open(video_path, "rb") as f:
         first_chunk = f.read(chunk_size)
         if size > chunk_size * 2:
+            f.seek(size // 2)
+            middle_chunk = f.read(chunk_size)
             f.seek(-chunk_size, 2)
             last_chunk = f.read(chunk_size)
         else:
+            middle_chunk = b""
             last_chunk = b""
 
     hasher = hashlib.sha256()
     hasher.update(str(size).encode())
     hasher.update(first_chunk)
+    hasher.update(middle_chunk)
     hasher.update(last_chunk)
-    return hasher.hexdigest()[:16]
+    return hasher.hexdigest()
 
 
 def get_cached_analysis(video_hash: str, player_index: int | None = None) -> Optional[dict]:

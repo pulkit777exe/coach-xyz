@@ -94,6 +94,11 @@ async def stream_chat_sse(messages: list[dict[str, str]]) -> AsyncIterator[str]:
       data: {"type":"error","message":"..."}  — error
     """
     client = shared_client()
+    if client is None:
+        # The route pre-checks is_configured(); this covers the TOCTOU gap
+        # and direct callers. Same message as the route's 500.
+        yield 'data: {"type": "error", "message": "AI service is not configured."}\n\n'
+        return
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
 

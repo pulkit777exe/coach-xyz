@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import shutil
@@ -177,7 +178,7 @@ def download_video_to_tmp(key: str) -> str:
         if not source.exists():
             raise FileNotFoundError(f"Storage object not found: {key}")
         return str(source)
-    dest = TMP_ROOT / "s3" / Path(key).name
+    dest = TMP_ROOT / "s3" / f"{hashlib.sha1(key.encode()).hexdigest()[:16]}_{Path(key).name}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     _s3_client().download_file(_s3_bucket(), key, str(dest))
     return str(dest)
