@@ -12,8 +12,11 @@ const normalize = (value: string | null): string | null => {
 const getClientIp = (request: Request): string | null => {
   const forwarded = request.headers.get('x-forwarded-for')
   if (forwarded) {
-    // Take the right-most (last proxy) entry — that is the immediate
-    // sender of this request and cannot be spoofed by earlier XFF entries.
+    // Right-most entry: correct behind an appending proxy (Render adds the
+    // real client IP last, so prepended spoofs don't move it). Direct to
+    // origin the whole header is caller-controlled, so IP-keyed limits are
+    // abuse friction, not a billing boundary — anonymous Gemini spend is
+    // capped by quotas that assume the proxy is in front.
     const parts = forwarded.split(',').map((s) => s.trim())
     return normalize(parts[parts.length - 1] ?? parts[0])
   }

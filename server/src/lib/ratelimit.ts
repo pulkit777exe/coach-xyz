@@ -120,6 +120,14 @@ export async function checkAiReportLimit(orgId: string): Promise<RateLimitResult
   return checkLimit({ key: `rl:aireport:${orgId}`, limit, windowSec: 3600 })
 }
 
+/** Per-IP+identity per-minute cap on status polls. Each poll fans out to
+ *  the engine plus two store writes/reads — unbounded client loops must
+ *  not multiply into engine + DB load. */
+export async function checkStatusLimit(key: string): Promise<RateLimitResult> {
+  const limit = parseInt(process.env.STATUS_RATE_LIMIT || '60')
+  return checkLimit({ key: `rl:status:${key}`, limit, windowSec: 60 })
+}
+
 /** Per-caller hourly cap on clip writes (cheap rows, but unbounded spam). */
 export async function checkClipLimit(key: string): Promise<RateLimitResult> {
   const limit = parseInt(process.env.CLIP_RATE_LIMIT || '60')
@@ -190,6 +198,7 @@ export function rateLimited(
 ): RateLimitedBody {
   set.status = 429
   const body: RateLimitedBody = { ...buildError('RATE_LIMITED', message, true) }
-  if (retryAfterSeconds !== undefined) body.retry_after = retryAfterSeconds
+  // Central floor: a past reset must never emit retry_after 0/negative.
+  if (retryAfterSeconds !== undefined) body.retry_after = Math.max(1, Math.ceil(retryAfterSeconds))
   return body
 }

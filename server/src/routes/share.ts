@@ -14,6 +14,7 @@ import { createShareTokenStore } from '../lib/shareTokens'
 import type { ShareTokenStore } from '../lib/shareTokens'
 import { getAnalysisByServerJobId } from '../lib/analyses'
 import type { DashboardAnalysis } from '../lib/analyses'
+import { redactWellness } from '../lib/permissions'
 
 const defaultStore = createShareTokenStore()
 
@@ -157,7 +158,10 @@ export const publicShareRoute = (deps: ShareRouteDeps = {}) => {
       server_job_id: record.server_job_id,
       expires_at: record.expires_at,
       analysis: {
-        summary_json: analysis.summary_json,
+        // Unauthenticated readers are never medical: strip wellness
+        // signals like every other non-medical read (§5). A forwarded
+        // link must not carry injury data past the medical boundary.
+        summary_json: redactWellness(analysis.summary_json),
         display_name: analysis.display_name,
         requested_at: analysis.requested_at,
         model: analysis.model,

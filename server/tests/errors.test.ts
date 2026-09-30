@@ -431,7 +431,10 @@ describe('/api/download status pass-through (route)', () => {
   })
 
   test('unknown local job still answers 404 JOB_NOT_FOUND (route-owned, pre-engine)', async () => {
-    const res = await downloadRoute({ getJob: async () => null }).handle(getReq())
+    const res = await downloadRoute({
+      getJob: async () => null,
+      getAnalysisByServerJobId: async () => null,
+    }).handle(getReq())
     expect(res.status).toBe(404)
     expect(await res.json()).toEqual({
       code: 'JOB_NOT_FOUND',
@@ -440,13 +443,40 @@ describe('/api/download status pass-through (route)', () => {
       retryable: false,
     })
   })
+
+  test('expired Redis mapping falls back to the persisted row (engine reached)', async () => {
+    mockFetchJson(404, engineBody('VIDEO_EXPIRED', false, FALLBACK_MESSAGES.VIDEO_EXPIRED))
+    const res = await downloadRoute({
+      getJob: async () => null,
+      getAnalysisByServerJobId: async () => ({
+        // Ownerless demo row (empty owner set is bearer-accessible,
+        // mirroring the Redis path): no caller headers needed.
+        server_job_id: 'srv-1',
+        auth0_id: '',
+        requested_by: null,
+        engine_job_id: 'eng-1',
+        summary_json: {},
+        display_name: null,
+        requested_at: new Date().toISOString(),
+        model: 'gemini-2.5-flash',
+        video_ready: true,
+      }),
+    }).handle(getReq())
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({
+      code: 'VIDEO_EXPIRED',
+      message: FALLBACK_MESSAGES.VIDEO_EXPIRED,
+      layer: 'engine',
+      retryable: false,
+    })
+  })
 })
 
 describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () => {
-  // One code, one meaning: a not-found/expired job is terminal on BOTH
-  // paths — the 404 (unknown job) and the 200-poll expired answer — because
-  // polling again cannot fix it. The web keys its expired-state UX on
-  // error_code and its retry branch on retryable.
+  // An engine 404 is terminal only for jobs older than the engine TTL —
+  // anything younger may outlive a mere engine restart, so it answers
+  // retryable 503 with no terminal persist. The web keys its expired-state
+  // UX on error_code and its retry branch on retryable.
   const job: ServerJob = {
     server_job_id: 'srv-nf',
     engine_job_id: 'eng-nf',
@@ -458,10 +488,12 @@ describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () 
   }
   const req = (): Request => new Request('http://localhost/api/job-status/srv-nf')
   type PersistArgs = Parameters<NonNullable<StatusRouteDeps['persistAnalysisStatus']>>
+  // Hermetic limiter: these tests stub every other seam already.
+  const allowList = async () => ({ allowed: true, reset: Date.now() + 60_000, remaining: 59 })
 
   test('engine connectivity loss answers retryable 503 instead of a synthetic 200', async () => {
     mockFetchReject()
-    const route = statusRoute({ getJob: async () => job })
+    const route = statusRoute({ getJob: async () => job, checkStatus: allowList })
     const res = await route.handle(req())
     expect(res.status).toBe(503)
     expect(await res.json()).toEqual({
@@ -476,6 +508,7 @@ describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () 
     const route = statusRoute({
       getJob: async () => null,
       getAnalysisByServerJobId: async () => null,
+      checkStatus: allowList,
     })
     const res = await route.handle(req())
     expect(res.status).toBe(404)
@@ -492,6 +525,7 @@ describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () 
     const persisted: PersistArgs[0][] = []
     const route = statusRoute({
       getJob: async () => job,
+      checkStatus: allowList,
       persistAnalysisStatus: async (record) => {
         persisted.push(record)
       },
@@ -511,5 +545,37 @@ describe('/api/job-status JOB_NOT_FOUND retryable parity (both wire paths)', () 
     expect(persisted).toHaveLength(1)
     expect(persisted[0]?.status.error_code).toBe('JOB_NOT_FOUND')
     expect(persisted[0]?.status.retryable).toBe(false)
+  })
+
+  test('a refused poll budget answers 429 before touching engine or store', async () => {
+    const route = statusRoute({
+      getJob: async () => {
+        throw new Error('must not be called')
+      },
+      checkStatus: async () => ({ allowed: false, reset: Date.now() + 60_000, remaining: 0 }),
+    })
+    const res = await route.handle(req())
+    expect(res.status).toBe(429)
+    const body = (await res.json()) as { code: string; retry_after: number }
+    expect(body.code).toBe('RATE_LIMITED')
+    expect(body.retry_after).toBeGreaterThan(0)
+  })
+
+  test('engine 404 on a young job answers retryable 503 with no terminal persist', async () => {
+    mockFetchJson(404, engineBody('JOB_NOT_FOUND', false))
+    const persisted: PersistArgs[0][] = []
+    const route = statusRoute({
+      getJob: async () => ({ ...job, created_at: Date.now() }),
+      checkStatus: allowList,
+      persistAnalysisStatus: async (record) => {
+        persisted.push(record)
+      },
+    })
+    const res = await route.handle(req())
+    expect(res.status).toBe(503)
+    const body = (await res.json()) as { code: string; retryable: boolean }
+    expect(body.code).toBe('ENGINE_UNAVAILABLE')
+    expect(body.retryable).toBe(true)
+    expect(persisted).toHaveLength(0)
   })
 })

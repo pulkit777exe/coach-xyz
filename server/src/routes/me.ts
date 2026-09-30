@@ -152,7 +152,7 @@ export default new Elysia()
     const verified = requireVerifiedSelf({ request, set })
     if (typeof verified !== 'string') return verified
 
-    const { name, nickname, picture } = body as Record<string, unknown>
+    const { name, nickname, picture } = (body ?? {}) as Record<string, unknown>
     if (
       (name !== undefined && name !== null && typeof name !== 'string') ||
       (nickname !== undefined && nickname !== null && typeof nickname !== 'string') ||

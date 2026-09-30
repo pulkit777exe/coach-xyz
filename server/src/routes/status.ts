@@ -3,8 +3,9 @@ import { Elysia } from 'elysia'
 import { buildError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import type { ServerJob } from '../lib/jobs'
-import { verifyJobAccess } from '../lib/jobAccess'
+import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { getEngineJobStatus, requestIdFrom } from '../lib/engine'
+import { getIP, checkStatusLimit, rateLimited } from '../lib/ratelimit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 import { persistAnalysisStatus, getAnalysisByServerJobId, getAnalysisOwner } from '../lib/analyses'
 import { buildFailedAnalysisStatus } from '../lib/queue'
@@ -28,10 +29,16 @@ export type StatusRouteDeps = {
   getJob?: (jobId: string) => Promise<ServerJob | null>
   getAnalysisByServerJobId?: typeof getAnalysisByServerJobId
   persistAnalysisStatus?: typeof persistAnalysisStatus
+  checkStatus?: typeof checkStatusLimit
 }
 
 export type StatusResolution =
   { ok: true; response: StatusResponse } | { ok: false; status: number; body: unknown }
+
+// Engine job records live 2h (engine/core/jobs.py JOB_TTL); past TTL plus
+// skew, an engine 404 means genuinely expired rather than restarted.
+const ENGINE_JOB_TTL_MS = 7200 * 1000
+const ENGINE_EXPIRY_SKEW_MS = 5 * 60 * 1000
 
 export const statusResponse = (
   jobId: string,
@@ -115,8 +122,23 @@ export async function resolveStatus(
     }
   }
 
-  // Handle truly not found — the job expired or was never created.
+  // Engine 404 is ambiguous: a restarted engine (empty Redis) 404s jobs
+  // that are still live server-side. Only jobs older than the engine job
+  // TTL (plus skew margin) are genuinely expired — anything younger gets a
+  // retryable 503 with NO terminal persist, so a transient engine restart
+  // cannot mark in-flight analyses failed.
   if (result.status === 'not_found') {
+    if (Date.now() - serverJob.created_at <= ENGINE_JOB_TTL_MS + ENGINE_EXPIRY_SKEW_MS) {
+      return {
+        ok: false,
+        status: 503,
+        body: buildError(
+          'ENGINE_UNAVAILABLE',
+          'Analysis engine restarted or is temporarily unavailable.',
+          true,
+        ),
+      }
+    }
     await (deps.persistAnalysisStatus ?? persistAnalysisStatus)({
       serverJobId: serverJob.server_job_id,
       engineJobId: serverJob.engine_job_id,
@@ -196,6 +218,18 @@ export async function resolveStatus(
 
 export const statusRoute = (deps: StatusRouteDeps = {}) =>
   new Elysia().get('/api/job-status/:jobId', async ({ params, request, set }) => {
+    // Ahead of resolveStatus: one poll fans out to engine + store, so an
+    // uncapped client loop multiplies directly into both.
+    const { allowed, reset } = await (deps.checkStatus ?? checkStatusLimit)(
+      resolveJobCaller(request) ?? getIP(request),
+    )
+    if (!allowed) {
+      return rateLimited(
+        set,
+        'Too many status requests. Try again later.',
+        Math.ceil((reset - Date.now()) / 1000),
+      )
+    }
     const result = await resolveStatus(request, params.jobId, deps)
     if (!result.ok) {
       set.status = result.status

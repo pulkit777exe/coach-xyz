@@ -104,7 +104,12 @@ export default new Elysia()
     }
 
     // ── Validate Request ───────────────────────────────────────────────────
-    const form = await request.formData()
+    // A non-multipart body makes formData() throw — 400, not an escaping 500.
+    const form = await request.formData().catch(() => null)
+    if (!form) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Request must be multipart form data.', false)
+    }
     const value = form.get('video')
     // Multi-angle flow: the web appends these fields when adding another
     // camera perspective to an existing session.

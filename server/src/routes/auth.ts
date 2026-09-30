@@ -33,7 +33,7 @@ export { parseFindingsTrendQuery, type FindingsTrendQuery } from './findings'
 export default new Elysia()
   .use(serviceGuard)
   .post('/api/auth/sync', async ({ body, request, set }) => {
-    const { sub, email, name, nickname, picture, email_verified } = body as {
+    const { sub, email, name, nickname, picture, email_verified } = (body ?? {}) as {
       sub: string
       email?: string
       name?: string

@@ -320,6 +320,33 @@ describe('GET /api/share/:token', () => {
     expect(body.analysis.video_ready).toBe(true)
   })
 
+  test('strips wellness signals for unauthenticated readers (§5)', async () => {
+    const store = createShareTokenStore(memoryClient())
+    const { token } = await store.createShareToken({
+      auth0_id: 'auth-coach-1',
+      server_job_id: 'job-1',
+    })
+    const app = new Elysia().use(
+      publicShareRoute({
+        store,
+        getAnalysis: async () => ({
+          ...FAKE_ANALYSIS,
+          summary_json: {
+            form_score: 7.5,
+            shot_events: [{ injury_risk: 'high', label: 'serve' }],
+          },
+        }),
+      }),
+    )
+
+    const res = await app.handle(new Request(`http://localhost/api/share/${token}`))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      analysis: { summary_json: { shot_events: Array<Record<string, unknown>> } }
+    }
+    expect(body.analysis.summary_json.shot_events[0]).toEqual({ label: 'serve' })
+  })
+
   test('404s for an unknown token', async () => {
     const app = new Elysia().use(
       publicShareRoute({

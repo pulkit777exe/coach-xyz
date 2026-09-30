@@ -5,6 +5,7 @@ import { getJob } from '../lib/jobs'
 import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { playerTranscript } from '../lib/transcript'
+import { getAnalysisByServerJobId } from '../lib/analyses'
 import { parseSseDataEvents } from '../lib/sse'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
 import { logger } from '../lib/logger'
@@ -24,12 +25,16 @@ type ChatStreamEvent = {
  */
 async function resolveChatContext(jobId: string, request: Request) {
   const serverJob = await getJob(jobId)
-  if (!serverJob)
+  // Redis mapping expired — fall back to the persisted row like status:
+  // chat must survive the same 2h TTL the status poll does.
+  const persisted = serverJob ? null : await getAnalysisByServerJobId(jobId)
+  const source = serverJob ?? persisted
+  if (!source)
     return {
       error: buildError('JOB_NOT_FOUND', 'Analysis session not found.', false) as unknown,
     }
 
-  const access = verifyJobAccess(request, serverJob)
+  const access = verifyJobAccess(request, serverJob, persisted)
   if (!access.ok) return { error: access.body as unknown, status: access.status }
 
   const history = await playerTranscript.load({ serverJobId: jobId })
@@ -37,7 +42,7 @@ async function resolveChatContext(jobId: string, request: Request) {
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }))
 
-  return { engineJobId: serverJob.engine_job_id, historyForEngine }
+  return { engineJobId: source.engine_job_id, historyForEngine }
 }
 
 /** Rate-limit key: verified sub when present (per-account Gemini spend),
@@ -62,13 +67,13 @@ async function checkChatRateLimit(
 export default new Elysia()
   // Streaming chat — proxies SSE from engine to frontend
   .post('/api/chat/stream', async ({ body, request, set }) => {
-    const { job_id, message } = body as { job_id?: string; message?: string }
+    const { job_id, message } = ((body ?? {}) as { job_id?: unknown; message?: unknown })
 
-    if (!job_id) {
+    if (typeof job_id !== 'string' || !job_id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'job_id is required.', false)
     }
-    if (!message?.trim()) {
+    if (typeof message !== 'string' || !message.trim()) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'message is required.', false)
     }
@@ -204,12 +209,15 @@ export default new Elysia()
   // Load conversation history for a job
   .get('/api/conversation/:jobId', async ({ params, request, set }) => {
     const serverJob = await getJob(params.jobId)
-    if (!serverJob) {
+    // Same persisted fallback as the stream route above.
+    const persisted = serverJob ? null : await getAnalysisByServerJobId(params.jobId)
+    const source = serverJob ?? persisted
+    if (!source) {
       set.status = 404
       return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
     }
 
-    const access = verifyJobAccess(request, serverJob)
+    const access = verifyJobAccess(request, serverJob, persisted)
     if (!access.ok) {
       set.status = access.status
       return access.body

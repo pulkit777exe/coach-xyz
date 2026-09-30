@@ -13,18 +13,27 @@ import { logger } from '../lib/logger'
 /** Everything this route needs, so tests can stub the job store. */
 export type DownloadRouteDeps = {
   getJob?: (jobId: string) => Promise<ServerJob | null>
+  getAnalysisByServerJobId?: typeof getAnalysisByServerJobId
 }
 
 export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
   new Elysia().get('/api/download/:jobId', async ({ params, request, set }) => {
     const serverJob = await (deps.getJob ?? getJob)(params.jobId)
+    // Redis mapping expired — fall back to the persisted row, mirroring
+    // status: a 2h TTL must not brick downloads of finished analyses.
+    const persisted = serverJob
+      ? null
+      : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
 
-    if (!serverJob) {
+    // Either mapping serves: narrows non-null for the engine id,
+    // download count, and audit below.
+    const source = serverJob ?? persisted
+    if (!source) {
       set.status = 404
       return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
     }
 
-    const access = verifyJobAccess(request, serverJob)
+    const access = verifyJobAccess(request, serverJob, persisted)
     if (!access.ok) {
       set.status = access.status
       return access.body
@@ -41,7 +50,7 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
 
     try {
       const engineResponse = await getDownloadStream(
-        serverJob.engine_job_id,
+        source.engine_job_id,
         requestIdFrom(request),
       )
       const contentType = engineResponse.headers?.get('content-type') ?? 'video/mp4'
@@ -50,23 +59,25 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
         'Content-Type': contentType,
         'Content-Disposition': 'inline; filename="coachai_analysis.mp4"',
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600',
+        // Owner-gated bytes: never `public` — a shared cache keyed on
+        // URL alone could serve one job's video for another's request.
+        'Cache-Control': 'private, max-age=3600',
       }
       if (contentLength) {
         headers['Content-Length'] = contentLength
       }
       const response = new Response(engineResponse.body, { headers })
       // Increment download count after successful stream creation
-      await markAnalysisDownloaded(serverJob.server_job_id)
+      await markAnalysisDownloaded(source.server_job_id)
       // Video export is a sensitive action (§29) — audit the verified caller
-      // against the owning org.
-      const persisted = await getAnalysisByServerJobId(serverJob.server_job_id).catch(() => null)
+      // against the owning org (persisted row already fetched above: no
+      // second lookup).
       auditRoute(
         request,
         persisted?.auth0_id ?? 'unknown',
         'video.exported',
         'analysis',
-        serverJob.server_job_id,
+        source.server_job_id,
         null,
         resolveJobCaller(request),
       )

@@ -104,13 +104,19 @@ function createRedisClient() {
         if (current === 1) {
           await client.expire(key, windowSec)
           return { allowed: true, current: 1, reset: resetAt * 1000 }
-        } else if (current > limit) {
-          const ttl = await client.ttl(key)
-          return { allowed: false, current, reset: (now + ttl) * 1000 }
-        } else {
-          const ttl = await client.ttl(key)
-          return { allowed: true, current, reset: (now + ttl) * 1000 }
         }
+        // A missing/negative TTL (failed expire, or the key lapsed between
+        // incr and ttl) must not yield a past reset or a deathless key. A
+        // failing re-expire propagates to checkLimit's logged fallback.
+        const ttl = await client.ttl(key)
+        if (ttl < 0) {
+          await client.expire(key, windowSec)
+          return { allowed: current <= limit, current, reset: resetAt * 1000 }
+        }
+        if (current > limit) {
+          return { allowed: false, current, reset: (now + ttl) * 1000 }
+        }
+        return { allowed: true, current, reset: (now + ttl) * 1000 }
       },
       async eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<number> {
         try {
