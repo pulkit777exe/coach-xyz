@@ -25,6 +25,9 @@ export function subscribeAnalysisEvents(
   signal: AbortSignal,
 ): () => void {
   const controller = new AbortController()
+  // A pre-cancelled caller must not mint a token or open the fetch: without
+  // this, an aborted signal still fires onFailure with a spurious AbortError.
+  if (signal.aborted) return () => {}
   const onAbort = () => controller.abort()
   signal.addEventListener('abort', onAbort, { once: true })
   let activityTimer: ReturnType<typeof setTimeout> | null = null

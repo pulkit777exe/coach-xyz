@@ -12,7 +12,10 @@ const DATA_PREFIX = 'data: '
  * skipped. The reader lock is always released.
  */
 export async function* parseEventStream<T>(res: Response): AsyncGenerator<T, void, unknown> {
-  const reader = res.body!.getReader()
+  // A null body (204, HEAD, mocked Response) throws a bare TypeError at
+  // getReader() — fail here with a message that names the actual problem.
+  if (!res.body) throw new Error('Event stream has no response body.')
+  const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
