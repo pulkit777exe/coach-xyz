@@ -311,12 +311,10 @@ const isSelfPath = (url: string): boolean => {
 }
 
 /**
- * The public share-link resolve: unauthenticated by design (the token is the
- * credential — link readers need no login). It must bypass the global guard
- * entirely: `serviceGuard` is `as: 'global'`, so mounting the guarded
- * orgShareRoute also guards its sibling publicShareRoute, and every public
- * link 403'd in production while working locally with the guard inert.
- * Single-segment only — nothing else under /api/share exists.
+ * Public share-link resolve: unauthenticated by design (the token is the
+ * credential). Must bypass the global guard — mounting the guarded
+ * orgShareRoute also guards its sibling, which 403'd every public link
+ * in production while local runs passed. Single segment only.
  */
 export function isPublicSharePath(pathnameOrUrl: string): boolean {
   let pathname = pathnameOrUrl
@@ -343,14 +341,12 @@ export function isAuthSyncPath(pathnameOrUrl: string): boolean {
  * Elysia plugin for identity-bearing route trees. For path-scoped routes the
  * resource owner is `params.auth0Id` (e.g. /api/org/:auth0Id/...).
  *
- * The hook deliberately does NOT destructure Elysia's `body`: doing so forces
- * a global body parse that consumes the request stream, so every handler
- * reading it itself (`request.json()` / `request.formData()`) throws "Body
- * already used" in the composed app — while standalone route mounts (most
- * unit tests) pass. That took out scan-video upload, both analyze kickoffs,
- * and invite-accept in production. The one route naming its owner in the
- * body (POST /api/auth/sync, `body.sub`) enforces identity in its own
- * handler via verifyServiceIdentity; the guard skips it here.
+ * Never destructure Elysia's `body` here: that forces an app-wide parse
+ * which consumes the request stream, so handlers reading it themselves
+ * throw "Body already used" in the composed app while standalone mounts
+ * pass. That broke scan-video upload, both analyze kickoffs, and
+ * invite-accept. POST /api/auth/sync (owner in `body.sub`) enforces
+ * identity in its own handler instead; the guard skips it below.
  */
 export const serviceGuard = new Elysia({ name: 'serviceGuard' }).onBeforeHandle(
   { as: 'global' },
@@ -360,12 +356,11 @@ export const serviceGuard = new Elysia({ name: 'serviceGuard' }).onBeforeHandle(
       return
     }
 
-    // Public share links carry no identity at all (see isPublicSharePath).
+    // Public share links carry no identity (see isPublicSharePath).
     if (isPublicSharePath(request.url)) return
 
-    // Onboarding sync names its owner in body.sub — enforced in the handler
-    // (verifyServiceIdentity), which owns the parsed body. The global hook
-    // cannot read it without consuming the stream (see above).
+    // Sync names its owner in body.sub — checked in its handler, which
+    // owns the parsed body. The global hook cannot read it (see above).
     if (isAuthSyncPath(request.url)) return
 
     const pathAuth0Id =

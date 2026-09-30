@@ -1,7 +1,7 @@
 // Org-write limiter probe: the REAL plugin + limiter against stub routes.
-// Redis fails always, so every verdict comes from the in-memory fallback —
-// no quota, no server. Prints the observed statuses as the last line.
-// ORG_WRITE_RATE_LIMIT is read per call, so the budget is set here.
+// Redis always fails, so every verdict comes from the in-memory fallback.
+// ORG_WRITE_RATE_LIMIT reads per call — the budget is set here. Prints
+// statuses as the last line.
 
 import { mock } from 'bun:test'
 import { Elysia } from 'elysia'

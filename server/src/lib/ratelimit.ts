@@ -127,8 +127,8 @@ export async function checkClipLimit(key: string): Promise<RateLimitResult> {
 }
 
 /** Per-caller per-minute cap on org writes. Cheap rows individually, but a
- *  runaway client or leaked token looping POST/PUT/PATCH/DELETE must not
- *  serialize the database. Reads never consume budget. */
+ *  runaway client looping writes must not serialize the database. Reads
+ *  never consume budget. */
 export async function checkOrgWriteLimit(key: string): Promise<RateLimitResult> {
   const limit = parseInt(process.env.ORG_WRITE_RATE_LIMIT || '120')
   return checkLimit({ key: `rl:orgwrite:${key}`, limit, windowSec: 60 })
@@ -137,14 +137,10 @@ export async function checkOrgWriteLimit(key: string): Promise<RateLimitResult> 
 const ORG_WRITE_METHODS: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /**
- * Global write-method rate limit for the identity-bearing trees
- * (`/api/org/*`, `/api/email/*`, `/api/auth/user/*`). Composed FIRST in
- * app.ts: a global hook fires only for routes mounted after its .use()
- * (verified — same barrel class as the inert scoped wraps), and top-level
- * registration propagates into every nested mount. Keyed by verified
- * identity (fallback IP) so one abusive caller cannot spend the whole
- * org's budget. Reads pass through untouched; when the identity boundary
- * is off (local dev) the key degrades to IP.
+ * Global write-method limit for the identity-bearing trees
+ * (/api/org/*, /api/email/*, /api/auth/user/*). Composed FIRST in app.ts:
+ * a global hook fires only for routes mounted after its .use(). Keyed by
+ * verified identity (fallback IP); reads pass through untouched.
  */
 export const orgWriteRateLimit = new Elysia({ name: 'orgWriteRateLimit' }).onBeforeHandle(
   { as: 'global' },

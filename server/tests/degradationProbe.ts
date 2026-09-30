@@ -1,11 +1,8 @@
-// Degradation probe: EVERYTHING down at once — no DATABASE_URL (store
-// disabled, real module), Redis failing (memory fallback), engine refusing.
-// Drives the real composed app and prints per-route { status, code } as the
-// last line. The contract pinned here: fail-open where defaults exist
-// (settings/consent read 200 with defaults), fail-closed AND observable
-// (shaped 500 envelope, never a leak or empty body) where the store is the
-// only source of truth, engine-dependent statics degrade to [], and
-// /health/deep reports degraded with database.ok false.
+// Degradation probe: EVERYTHING down at once — no DATABASE_URL, Redis
+// failing, engine refusing. Drives the real composed app; prints per-route
+// { status, code } as the last line. Pins the contract: fail-open where
+// defaults exist, shaped 500s where the store is the only truth, [] for
+// engine statics, degraded deep with database.ok false.
 // Mocks: redis (import-time connector), queue (workers), logger (noise).
 
 import { mock } from 'bun:test'

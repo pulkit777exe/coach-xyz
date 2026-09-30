@@ -47,10 +47,8 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing required field: sub', false)
     }
 
-    // Identity boundary for the one route naming its owner in the body: the
-    // global serviceGuard cannot read body.sub without consuming the request
-    // stream (see serviceGuard.ts), so the check lives here where the parsed
-    // body exists. Same verdicts as the guard (verifyServiceIdentity).
+    // The global guard cannot read body.sub without consuming the request
+    // stream (see serviceGuard.ts) — enforced here, same verdicts.
     if (serviceGuardEnabled()) {
       const outcome = verifyServiceIdentity(
         request.headers.get(SERVICE_HEADERS.token),

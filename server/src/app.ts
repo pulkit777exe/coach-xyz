@@ -1,9 +1,9 @@
 // ── App composition (no side effects) ───────────────────────────────────────
-// The full Elysia route tree without listen(), env validation, queue start,
-// or signal handlers — those stay in index.ts. Exported so tests (notably
-// the authorization matrix) can drive the real composed app in-process via
-// app.handle(). Call buildApp() once per process: the org/email/aiReports
-// `.use(orgRoleGuard(...))` calls below decorate the shared route modules.
+// The route tree without listen(), env validation, queue start, or signal
+// handlers — those stay in index.ts. Exported so tests drive the real
+// composed app in-process via app.handle(). Call buildApp() once per
+// process: the `.use(orgRoleGuard(...))` calls below decorate shared
+// route modules.
 
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
@@ -77,19 +77,14 @@ export const buildApp = () => {
         credentials: true,
       }),
     )
-    // Global write-method rate limit for the org trees. Registered FIRST:
-    // a global hook only fires for routes mounted after its .use() (same
-    // barrel class as the inert scoped wraps — verified), and top-level
-    // registration propagates into every nested mount below.
+    // Global write-method limit for the org trees. Registered FIRST: a
+    // global hook fires only for routes mounted after its .use().
     .use(orgWriteRateLimit)
-    // Root error shaper, registered INLINE (not .use()'d): a plugin-mounted
-    // onError is instance-scoped and never fires for other instances'
-    // routes, so escaping throws used to surface as plain-text 500s. Root
-    // hooks are global. Must return undefined on the 404 pass-through —
-    // a defined return would replace the NOT_FOUND body (verified: the
-    // body stays "NOT_FOUND" either way) — and the registration itself
-    // keeps app.event.error non-empty so 404s run the access hook below.
-    .onError(({ error, set, request }) => shapeEscapingError(error, request, set)?.body)
+    // Root error shaper, registered INLINE: a .use()'d error plugin is
+    // instance-scoped and never fires for other routes. Must return
+    // undefined on the 404 pass-through or the NOT_FOUND body is replaced
+    // (verified); the registration itself keeps 404s running the hook below.
+    .onError(({ error, set, request }) => shapeEscapingError(error, request, set))
     .onRequest(({ request, set }) => {
       const requestId = requestIdFrom(request)
       requestIds.set(request, requestId)
@@ -173,8 +168,4 @@ export const buildApp = () => {
       aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])),
     )
     .use(shareRoute)
-
-    // ── Request wiring ends here: error shaping is the root inline
-    // onError above (a .use()'d error plugin would be instance-scoped
-    // and decorative).
 }

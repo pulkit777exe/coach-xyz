@@ -1,9 +1,8 @@
 // App-ordering probe: the limiter must be composed FIRST in buildApp — a
-// global hook fires only for routes mounted after its .use(), so appending
-// it at the end silently covers nothing (caught live: 6 writes at budget
-// 5 all passed). Real plugin + limiter (memory fallback), minimal store
-// stubs: allowed requests reach the handler (non-429), the third write
-// 429s, reads pass through. Prints statuses as the last line.
+// global hook fires only for routes mounted after its .use() (caught live:
+// end-of-chain placement passed 6 writes at budget 5). Real plugin +
+// limiter, minimal stubs: allowed requests reach the handler, the third
+// write 429s, reads pass through. Prints statuses as the last line.
 
 import { mock } from 'bun:test'
 

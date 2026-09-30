@@ -56,12 +56,10 @@ import { DEFAULT_MODEL } from '../types'
  * when the account is not linked to any student yet.
  */
 const playerScope = async (verifiedAuth0Id: string) => {
-  // A disabled store is an empty world, not an outage: answer unlinked so
-  // settings/consent screens render (their defaults exist for exactly this
-  // case). An unreachable-but-configured store still throws below — loud
-  // and observable — because failing open there would silently show linked
-  // players as unlinked. Writes stay fail-closed either way via
-  // missingLinkedPlayer.
+  // Disabled store is an empty world, not an outage: answer unlinked so
+  // settings screens render. Unreachable-but-configured still throws loud
+  // below — failing open there would silently unlist linked players.
+  // Writes stay fail-closed via missingLinkedPlayer either way.
   if (!historyStoreEnabled()) {
     return { accountAuth0Id: verifiedAuth0Id, student: null, coachAuth0Id: null }
   }

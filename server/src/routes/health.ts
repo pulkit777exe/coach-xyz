@@ -14,9 +14,8 @@ export const healthRoute = new Elysia({ prefix: '/health' })
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   }))
-  // Per-route counters for ops monitoring and the SLO burn check (see
-  // docs/runbooks/slo.md). Same guard-exempt footing as /health and /deep:
-  // external monitors poll it without service credentials.
+  // Per-route counters for the SLO burn check (docs/runbooks/slo.md).
+  // Guard-exempt like /health itself: monitors poll without credentials.
   .get('/metrics', () => snapshot())
   // Deep — ops/queue-health probe (Redis + engine + queue depth) for manual
   // and external monitoring. No frontend consumer: the app pings shallow
@@ -60,9 +59,8 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       })
     }
 
-    // Check database (history/org store). A null store (DATABASE_URL unset)
-    // or a failed ping degrades rather than fails boot, so it degrades
-    // here too: the API serves but org features are off.
+    // Check database. Null store or failed ping degrades (never 503):
+    // the API serves, org features are off.
     let dbOk = false
     let dbLatency = 0
     try {

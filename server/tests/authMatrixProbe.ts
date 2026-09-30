@@ -1,6 +1,6 @@
 // Authorization matrix runner: real composed app, fixture store, policy
 // expectations. Prints { failures, uncovered, total } as the last line.
-// Mocks: redis (import-time connector), mailer/ratelimit (no real sends).
+// Mock first, dynamic-import after (static imports bind before mocks run).
 
 import { mock } from 'bun:test'
 import { Elysia } from 'elysia'
@@ -8,7 +8,6 @@ import { Elysia } from 'elysia'
 import { MATRIX, MATRIX_EXCLUDED, type MatrixRole } from './authMatrixPolicy'
 
 export const ORG = 'auth0|matrix-org'
-export const OTHER_ORG = 'auth0|matrix-other'
 const TEAM_A = '00000000-0000-4000-8000-0000000000a1'
 const TEAM_B = '00000000-0000-4000-8000-0000000000b1'
 const STU_A = '00000000-0000-4000-8000-0000000000c1'
@@ -102,8 +101,7 @@ mock.module('../src/lib/redis', () => ({
   isLocalRedis: () => true,
   getRedisConnectionUrl: () => null,
   // Map-backed fake, not null: job delete resolves getJob (absent → null,
-  // skipping the engine call) without a real connection. Same inertness
-  // rationale as the null stub, but these routes dereference `redis`.
+  // skipping the engine call) without a real connection.
   redis: {
     get: async () => null,
     set: async () => 'OK',
@@ -197,7 +195,7 @@ mock.module('../src/lib/mailer', () => ({  emailConfigured: () => true,
   sendEmail: async () => ({ id: 'stub' }),
 }))
 
-// Silence access/error logs: 1300 requests would bury the result line.
+// Silence access/error logs: thousands of requests would bury the result line.
 mock.module('../src/lib/logger', () => ({
   logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
 }))
@@ -311,7 +309,8 @@ mock.module('../src/lib/historyStore', () => ({
           ? [{ id: STU_LINKED, auth0_id: ORG, account_auth0_id: SUB.player }]
           : []
       }
-      // Jobs (account tree): one unfiled club analysis, fully shaped —      // downstream mappers call new Date() on its timestamps.
+      // Jobs (account tree): one filed club analysis, fully shaped —
+      // downstream mappers call new Date() on its timestamps.
       if (/from analysis_history/.test(sql)) {
         const id = values.find((v) => v === JOB)
         const rows = [
@@ -654,6 +653,7 @@ const runCase = async (
 
 for (const route of routes) {
   const key = `${route.method} ${route.path}`
+  // Debug filter: MATRIX_ONLY="POST /api/org/:auth0Id/matches" runs one route.
   if (process.env.MATRIX_ONLY && !key.includes(process.env.MATRIX_ONLY)) continue
   const entry = MATRIX.find((e) => e.method === route.method && e.path === route.path)
   if (!entry) {

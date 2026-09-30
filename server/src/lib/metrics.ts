@@ -1,10 +1,7 @@
 // ── In-memory request metrics ───────────────────────────────────────────────
-// Per-route counters backing GET /health/metrics. Dependency-free on purpose:
-// no collector, no exporter, no cardinality risk — the key is METHOD plus
-// Elysia's route pattern (never a raw id), with unmatched paths folded to
-// one bucket. Process-local: Render runs one instance; external monitors
-// poll the endpoint. A slow-request counter (over SLOW_MS) feeds the SLO
-// burn check without storing a histogram.
+// Per-route counters backing GET /health/metrics. Dependency-free: the key
+// is METHOD plus Elysia's route pattern (never a raw id), unmatched paths
+// fold to one bucket, averages derive at snapshot time. Process-local.
 
 export const SLOW_REQUEST_MS = 1000
 
@@ -15,22 +12,17 @@ export type RouteStats = {
   totalMs: number
 }
 
-type MetricsTable = Record<string, RouteStats>
-
-let table: MetricsTable = {}
+let table: Record<string, RouteStats> = {}
 let startedAt = Date.now()
 
-const key = (method: string, route: string): string => `${method} ${route}`
-
-/** Record one completed request. Route patterns keep cardinality bounded;
- *  anything without a pattern (404s, parse failures) lands in one bucket. */
+/** Record one completed request. Only 5xx counts as an error. */
 export const recordRequest = (
   method: string,
   route: string | null | undefined,
   status: number,
   durationMs: number,
 ): void => {
-  const k = key(method, route ?? 'unmatched')
+  const k = `${method} ${route ?? 'unmatched'}`
   const stats = table[k] ?? { count: 0, errors: 0, slow: 0, totalMs: 0 }
   stats.count += 1
   if (status >= 500) stats.errors += 1
@@ -39,8 +31,7 @@ export const recordRequest = (
   table[k] = stats
 }
 
-/** JSON shape served by GET /health/metrics. Averages are derived, never
- *  stored, so the table stays four counters per route. */
+/** JSON shape served by GET /health/metrics. */
 export const snapshot = (): {
   uptime_s: number
   routes: Record<string, RouteStats & { avg_ms: number }>

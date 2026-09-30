@@ -76,7 +76,10 @@ const done: string[] = []
 {
   const report = await pruneRetentionReport()
   check(report !== null, 'prune: null report')
-  check(report?.analyses === 1, `prune: analyses=${report?.analyses}`)
+  // At-least-one, not exactly-one: the shared ephemeral DB ages, so other
+  // legitimately stale rows may prune in the same sweep. JOB_PRUNE's own
+  // absence (checked below) is the precise assertion.
+  check((report?.analyses ?? 0) >= 1, `prune: analyses=${report?.analyses}`)
   check(engineDeletes.includes('eng-prune'), 'prune: stale video not swept')
   check((report?.invites ?? 0) >= 1, `prune: invites=${report?.invites}`)
   check((report?.notifications ?? 0) >= 1, `prune: notifications=${report?.notifications}`)

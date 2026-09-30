@@ -1,8 +1,7 @@
-// Metrics endpoint probe: real composed app, stubbed backends. Drives one
-// guard-exempt route plus a 404, then asserts /health/metrics recorded the
-// pattern key (not raw ids), skipped the health traffic, echoed
-// x-request-id, and needed no credentials. Prints the result as the last
-// line. Mocks: redis (import-time connector), historyStore (pg), logger.
+// Metrics endpoint probe: real composed app, stubbed backends. Hits one
+// guard-exempt route plus a 404, then checks /health/metrics recorded the
+// pattern key, folded the 404, skipped the shallow probe, and needed no
+// credentials. Prints the result as the last line.
 
 import { mock } from 'bun:test'
 

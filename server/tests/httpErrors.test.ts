@@ -19,7 +19,7 @@ describe('shapeEscapingError', () => {
     const err = buildError('ENGINE_UNAVAILABLE', 'down', true)
     const out = shapeEscapingError(err, req, set)
     expect(set.status).toBe(503)
-    expect(out?.body).toBe(err)
+    expect(out).toBe(err)
   })
 
   test('404s pass through (body and access hook survive)', () => {
@@ -31,7 +31,7 @@ describe('shapeEscapingError', () => {
   test('escaping throws become a message-free envelope', () => {
     const out = shapeEscapingError(new Error('db password=hunter2'), req, set)
     expect(set.status).toBe(500)
-    expect(out?.body.code).toBe('INTERNAL_ERROR')
-    expect(JSON.stringify(out?.body)).not.toContain('hunter2')
+    expect(out?.code).toBe('INTERNAL_ERROR')
+    expect(JSON.stringify(out)).not.toContain('hunter2')
   })
 })

@@ -1,8 +1,6 @@
 // Deep-health probe: real healthRoute against stubbed backends. One scenario
-// per process (HEALTH_DEEP_CASE); prints the { status, body } as the last
-// line. The engine is real HTTP: either a local Bun.serve (up) or a refused
-// port (down). Mocks: redis (import-time connector), queue (workers),
-// historyStore (pg), logger (noise).
+// per process (HEALTH_DEEP_CASE); prints { status, body } as the last line.
+// The engine is real HTTP: local Bun.serve (up) or a refused port (down).
 
 import { mock } from 'bun:test'
 
