@@ -123,3 +123,17 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 - `SERVICE_TOKEN` shared secret set on both server and web for the identity boundary.
 - `RESEND_API_KEY` needed for live invite/report/attendance email.
 - Live Neon DB through `DATABASE_URL` (server) / proxy (web). Users auto-link to org members by email.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles used as-is. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
