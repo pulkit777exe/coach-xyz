@@ -14,6 +14,7 @@ import { analyzeVideo, scanVideo } from '../src/lib/engine'
 import scanRoute from '../src/routes/scan'
 import { downloadRoute } from '../src/routes/download'
 import { statusRoute, type StatusRouteDeps } from '../src/routes/status'
+import { chatRoutes } from '../src/routes/chat'
 import type { ServerJob } from '../src/lib/jobs'
 
 describe('isQueueRetryable', () => {
@@ -469,6 +470,38 @@ describe('/api/download status pass-through (route)', () => {
       layer: 'engine',
       retryable: false,
     })
+  })
+})
+
+describe('/api/conversation persisted fallback', () => {
+  const persistedRow = {
+    server_job_id: 'srv-1',
+    auth0_id: '',
+    requested_by: null,
+    engine_job_id: 'eng-1',
+    summary_json: {},
+    display_name: null,
+    requested_at: new Date().toISOString(),
+    model: 'gemini-2.5-flash',
+    video_ready: true,
+  }
+  const req = (): Request => new Request('http://localhost/api/conversation/srv-1')
+
+  test('expired Redis mapping serves the transcript from the persisted row', async () => {
+    const res = await chatRoutes({
+      getJob: async () => null,
+      getAnalysisByServerJobId: async () => persistedRow,
+    }).handle(req())
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ messages: [] })
+  })
+
+  test('unknown job still 404s', async () => {
+    const res = await chatRoutes({
+      getJob: async () => null,
+      getAnalysisByServerJobId: async () => null,
+    }).handle(req())
+    expect(res.status).toBe(404)
   })
 })
 

@@ -2,6 +2,7 @@ import { Elysia } from 'elysia'
 
 import { buildError, chatEngineStatus, errorBody, wrapEngineError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
+import type { ServerJob } from '../lib/jobs'
 import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { playerTranscript } from '../lib/transcript'
@@ -23,11 +24,22 @@ type ChatStreamEvent = {
  * Resolve the engine job ID and conversation history for a given server job.
  * Used by the streaming chat route (/api/chat/stream — the only chat wire route).
  */
-async function resolveChatContext(jobId: string, request: Request) {
-  const serverJob = await getJob(jobId)
+type ChatContextDeps = {
+  getJob?: (jobId: string) => Promise<ServerJob | null>
+  getAnalysisByServerJobId?: typeof getAnalysisByServerJobId
+}
+
+async function resolveChatContext(
+  jobId: string,
+  request: Request,
+  deps: ChatContextDeps = {},
+) {
+  const serverJob = await (deps.getJob ?? getJob)(jobId)
   // Redis mapping expired — fall back to the persisted row like status:
   // chat must survive the same 2h TTL the status poll does.
-  const persisted = serverJob ? null : await getAnalysisByServerJobId(jobId)
+  const persisted = serverJob
+    ? null
+    : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(jobId)
   const source = serverJob ?? persisted
   if (!source)
     return {
@@ -64,7 +76,10 @@ async function checkChatRateLimit(
   )
 }
 
-export default new Elysia()
+export type ChatRouteDeps = ChatContextDeps
+
+export const chatRoutes = (deps: ChatRouteDeps = {}) =>
+  new Elysia()
   // Streaming chat — proxies SSE from engine to frontend
   .post('/api/chat/stream', async ({ body, request, set }) => {
     const { job_id, message } = ((body ?? {}) as { job_id?: unknown; message?: unknown })
@@ -81,7 +96,7 @@ export default new Elysia()
     const limited = await checkChatRateLimit(request, set)
     if (limited) return limited
 
-    const ctx = await resolveChatContext(job_id, request)
+    const ctx = await resolveChatContext(job_id, request, deps)
     if ('error' in ctx) {
       set.status = ctx.status ?? 404
       return ctx.error
@@ -208,9 +223,11 @@ export default new Elysia()
 
   // Load conversation history for a job
   .get('/api/conversation/:jobId', async ({ params, request, set }) => {
-    const serverJob = await getJob(params.jobId)
+    const serverJob = await (deps.getJob ?? getJob)(params.jobId)
     // Same persisted fallback as the stream route above.
-    const persisted = serverJob ? null : await getAnalysisByServerJobId(params.jobId)
+    const persisted = serverJob
+      ? null
+      : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
     const source = serverJob ?? persisted
     if (!source) {
       set.status = 404
@@ -227,3 +244,5 @@ export default new Elysia()
     set.status = 200
     return { messages }
   })
+
+export default chatRoutes()
