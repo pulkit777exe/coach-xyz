@@ -70,11 +70,15 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
       // Increment download count after successful stream creation
       await markAnalysisDownloaded(source.server_job_id)
       // Video export is a sensitive action (§29) — audit the verified caller
-      // against the owning org (persisted row already fetched above: no
-      // second lookup).
+      // against the owning org. The fallback branch already holds the row;
+      // the live-Redis branch resolves it (one query, post-stream).
+      const auditOrg =
+        persisted?.auth0_id ??
+        (await getAnalysisByServerJobId(source.server_job_id).catch(() => null))?.auth0_id ??
+        'unknown'
       auditRoute(
         request,
-        persisted?.auth0_id ?? 'unknown',
+        auditOrg,
         'video.exported',
         'analysis',
         source.server_job_id,
