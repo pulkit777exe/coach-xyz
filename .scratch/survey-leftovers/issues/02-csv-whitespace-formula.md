@@ -1,6 +1,8 @@
 # CSV formula-defuse bypass via leading whitespace (unconfirmed)
 
-Status: needs-triage
+Status: ready-for-agent
+
+Triaged 2026-10-01: one-line guard change + test once a vulnerable consumer is confirmed.
 
 ## What
 

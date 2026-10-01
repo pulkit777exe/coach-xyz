@@ -1,6 +1,8 @@
 # mintInvite email-shape validation lives only at call sites (unconfirmed)
 
-Status: needs-triage
+Status: wontfix
+
+Triaged 2026-10-01: not reachable — both call sites validate first; centralizing would turn client 400s into 500s.
 
 ## What
 

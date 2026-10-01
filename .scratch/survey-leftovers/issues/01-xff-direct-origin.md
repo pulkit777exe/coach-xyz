@@ -1,6 +1,8 @@
 # XFF spoofing direct-to-origin evades per-IP rate limits
 
-Status: needs-triage
+Status: ready-for-human
+
+Triaged 2026-10-01: deployment-side task (origin lockdown); parser fix intentionally out of scope.
 
 ## What
 

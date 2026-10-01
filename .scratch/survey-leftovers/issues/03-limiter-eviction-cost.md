@@ -1,6 +1,8 @@
 # In-memory limiter eviction is O(n log n) per request when oversized
 
-Status: needs-triage
+Status: wontfix
+
+Triaged 2026-10-01: bounded, outage-only, single-instance; revisit if the fallback ever goes multi-instance.
 
 ## What
 
