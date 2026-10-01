@@ -80,7 +80,7 @@ globalThis.fetch = (async () =>
   new Response(stream, {
     status: 200,
     headers: { 'content-type': 'video/mp4', 'content-length': '17' },
-  })) as typeof fetch
+  })) as unknown as typeof fetch
 
 const { downloadRoute } = await import('../src/routes/download')
 const res = await downloadRoute().handle(

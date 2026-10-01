@@ -1458,11 +1458,6 @@ export const MATRIX: MatrixEntry[] = [
     ...orgRead('GET', '/api/org/:auth0Id/reports/ai/:reportJobId'),
     expect: {
       anonymous: 403, owner: 404, admin: 404, head_coach: 404, coach: 404,
-      assistant_coach: 404, analyst: 403, medical: 403, player: 403,
-      outsider: 403, other: 403,
-    },
-    expect: {
-      anonymous: 403, owner: 404, admin: 404, head_coach: 404, coach: 404,
       assistant_coach: 404, analyst: 404, medical: 404, player: 404,
       outsider: 403, other: 403,
     },
