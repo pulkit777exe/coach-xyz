@@ -35,7 +35,6 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
   active: 'Active',
   inactive: 'Inactive',
   transferred: 'Transferred',
-  archived: 'Archived',
 }
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
@@ -168,12 +167,6 @@ export type StudentImportRow = {
   notes?: string
   status?: string
   joined_on?: string
-  /**
-   * Team to file this row under. Optional per row; `orgImportStudents` also
-   * takes one batch-level default. The server scope-gates it, so a coach can
-   * only import into a team they belong to.
-   */
-  team_id?: string
 }
 
 export type StudentImportResult = {
@@ -269,7 +262,7 @@ export type OrgOverview = {
 
 export const orgStudents = async (
   auth0Id: string,
-  opts: { search?: string; sport?: string; status?: string; includeArchived?: boolean } = {},
+  opts: { search?: string; sport?: string; status?: string } = {},
 ): Promise<{ students: Student[] }> => {
   return apiFetch<{ students: Student[] }>(
     org(
@@ -278,7 +271,6 @@ export const orgStudents = async (
         search: opts.search,
         sport: opts.sport,
         status: opts.status,
-        include_archived: opts.includeArchived ? '1' : undefined,
       })}`,
     ),
   )
@@ -322,22 +314,13 @@ export const orgDeleteStudent = async (
   })
 }
 
-/**
- * Bulk-import players.
- *
- * `teamId` is a batch-level default for rows that omit `team_id`. The server
- * refuses a team outside the caller's scope, and refuses a teamless import from
- * a team-scoped caller who is not assigned to exactly one team — so a coach
- * needs at least one of the two, and a multi-team coach needs the explicit one.
- */
 export const orgImportStudents = async (
   auth0Id: string,
   rows: StudentImportRow[],
-  teamId?: string,
 ): Promise<StudentImportResult> => {
   return apiFetch<StudentImportResult>(org(auth0Id, '/students/import'), {
     method: 'POST',
-    body: JSON.stringify({ rows, ...(teamId ? { team_id: teamId } : {}) }),
+    body: JSON.stringify({ rows }),
   })
 }
 
