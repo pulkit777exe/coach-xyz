@@ -1,5 +1,9 @@
 FROM oven/bun:1
 
+# Pick up trixie-security patches: the base image otherwise ships known
+# HIGH/CRITICAL OS CVEs that fail the CI image scan.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --chown=bun:bun package.json bun.lock* ./

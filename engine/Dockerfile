@@ -21,6 +21,9 @@ RUN apt-get update \
         libglib2.0-0 \
         libegl1 \
         libgles2 \
+    # Pick up trixie-security patches: stale base layers ship known
+    # HIGH/CRITICAL OS CVEs that fail the CI image scan.
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
