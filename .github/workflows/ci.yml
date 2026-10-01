@@ -165,6 +165,10 @@ jobs:
           image-ref: coachxyz-server:ci
           format: table
           severity: HIGH,CRITICAL
+          # Ignore CVEs with no upstream fix (Debian base-image backlog):
+          # nothing on our side can resolve them, and they would hold the
+          # gate red indefinitely. Anything fixable still fails the build.
+          ignore-unfixed: true
           exit-code: '1'
 
       - name: Scan engine image
@@ -173,4 +177,6 @@ jobs:
           image-ref: coachxyz-engine:ci
           format: table
           severity: HIGH,CRITICAL
+          # Same policy as above: only fixable findings fail the build.
+          ignore-unfixed: true
           exit-code: '1'
