@@ -9,6 +9,7 @@ the extracted modules.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import json
 import logging
@@ -568,18 +569,11 @@ def _stage_resume_check(ctx: AnalysisContext) -> str:
     return "render"
 
 
-def _stage_tracking(ctx: AnalysisContext) -> None:
-    """Preprocess, extract keyframes, and build scored player tracks."""
-    assert ctx.local_path is not None
-    # State: scanning (extracting frames and detecting players)
-    transition_job(ctx.job_id, "scanning")
-    ctx.preprocessed_path = preprocess_video_ffmpeg(ctx.local_path)
-    ctx.cleanup_preprocessed = ctx.preprocessed_path != ctx.local_path
-
-    # Run keyframe extraction (CPU-bound) - returns frame cache.
-    # New loop per call because this runs inside an executor worker with no
-    # bound loop; restore the previous binding afterwards so threads shared
-    # with concurrent analyses never inherit a closed loop.
+@contextlib.contextmanager
+def _worker_event_loop():
+    """Fresh event loop for executor-worker calls, restoring the previous
+    binding afterwards so threads shared with concurrent analyses never
+    inherit a closed loop."""
     try:
         previous_loop = asyncio.get_event_loop()
     except RuntimeError:
@@ -587,6 +581,26 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+        yield loop
+    finally:
+        # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
+        default_executor = getattr(loop, "_default_executor", None)
+        loop.close()
+        asyncio.set_event_loop(previous_loop)
+        if default_executor is not None:
+            default_executor.shutdown(wait=False)
+
+
+def _stage_tracking(ctx: AnalysisContext) -> None:
+    """Preprocess, extract keyframes, and build scored player tracks."""
+    assert ctx.local_path is not None
+    transition_job(ctx.job_id, "scanning")
+    ctx.preprocessed_path = preprocess_video_ffmpeg(ctx.local_path)
+    ctx.cleanup_preprocessed = ctx.preprocessed_path != ctx.local_path
+
+    # New loop per call: this runs inside an executor worker with no bound loop.
+    with _worker_event_loop() as loop:
+        # Run keyframe extraction (CPU-bound) - returns frame cache.
         keyframes, fps, _frame_count, frame_cache = loop.run_until_complete(
             asyncio.to_thread(extract_keyframes, ctx.preprocessed_path)
         )
@@ -612,14 +626,6 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
                 asyncio.to_thread(compute_motion_scores, ctx.local_path, keyframes, frame_cache),
             )
         )
-    finally:
-        # Shut down the default executor to prevent thread leak (Python 3.9-3.11)
-        default_executor = getattr(loop, '_default_executor', None)
-        loop.close()
-        asyncio.set_event_loop(previous_loop)
-        if default_executor is not None:
-            default_executor.shutdown(wait=False)
-
     ctx.keyframes = keyframes
     ctx.fps = fps
     ctx.frame_count = _frame_count

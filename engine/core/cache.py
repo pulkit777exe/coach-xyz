@@ -23,7 +23,10 @@ def _get_redis() -> Optional[UpstashRedis]:
 
 
 CACHE_TTL = 3600 * 24  # 24 hours
-CACHE_PREFIX = "coachai:analysis:"
+# v2: the key strengthened to size + head/middle/tail at full digest on
+# 2026-09-30. Old 16-char head+tail keys are simply never read again —
+# a 24h TTL cache cold-misses once per video after deploy, no migration.
+CACHE_PREFIX = "coachai:analysis:v2:"
 
 
 def compute_video_hash(video_path: str) -> str:

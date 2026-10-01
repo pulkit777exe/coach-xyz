@@ -166,6 +166,13 @@ def upload_video(file_bytes: bytes, key: str) -> str:
 # ── Streaming Download (Memory-Efficient) ───────────────────────────────────
 
 
+def s3_tmp_path(key: str) -> Path:
+    """Scratch copy location for an S3 key. Namespaced by the key hash, not
+    just the basename: two jobs with the same filename must not share a
+    tmp copy."""
+    return TMP_ROOT / "s3" / f"{hashlib.sha1(key.encode()).hexdigest()[:16]}_{Path(key).name}"
+
+
 def download_video_to_tmp(key: str) -> str:
     """Return the local path for a stored video.
 
@@ -178,7 +185,7 @@ def download_video_to_tmp(key: str) -> str:
         if not source.exists():
             raise FileNotFoundError(f"Storage object not found: {key}")
         return str(source)
-    dest = TMP_ROOT / "s3" / f"{hashlib.sha1(key.encode()).hexdigest()[:16]}_{Path(key).name}"
+    dest = s3_tmp_path(key)
     dest.parent.mkdir(parents=True, exist_ok=True)
     _s3_client().download_file(_s3_bucket(), key, str(dest))
     return str(dest)
