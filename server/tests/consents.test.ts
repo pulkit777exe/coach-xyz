@@ -27,6 +27,8 @@ import {
 } from '../src/lib/privacyRequests'
 import type { Student } from '../src/lib/orgData'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Player consent + data portability ────────────────────────────────────────
 // Hermetic: one stub connection answers every table from an in-memory fixture
 // holding TWO accounts — the caller and a bystander. That is what makes the
@@ -980,11 +982,11 @@ describe('consentEnforcement flag', () => {
 const CONSENT_PROBE = join(import.meta.dir, 'consentProbe.ts')
 const SERVER_DIR = join(import.meta.dir, '..')
 
-const runConsentProbe = (
+const runConsentProbe = async (
   probeCase: string,
   granted: boolean,
   mode: string,
-): { results: Array<{ name: string; status: number }>; consentAudits: number } => {
+): Promise<{ results: Array<{ name: string; status: number }>; consentAudits: number }> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -995,21 +997,12 @@ const runConsentProbe = (
   env.CONSENT_CASE = probeCase
   env.CONSENT_GRANTED = granted ? '1' : '0'
   env.CONSENT_ENFORCEMENT = mode
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, CONSENT_PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as {
+  const proc = await runProbeProcess({ probe: CONSENT_PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<{
     results: Array<{ name: string; status: number }>
     consentAudits: number
-  }
+  }>(proc.stdout)
 }
 
 const consentStatusOf = (
@@ -1022,40 +1015,40 @@ const consentStatusOf = (
 }
 
 describe('wellness consent gate (probe)', () => {
-  test('off proceeds silently without consent', () => {
-    const r = runConsentProbe('wellness', false, 'off')
+  test('off proceeds silently without consent', async () => {
+    const r = await runConsentProbe('wellness', false, 'off')
     expect(consentStatusOf(r, 'wellness')).toBe(201)
     expect(r.consentAudits).toBe(0)
   })
 
-  test('warn proceeds but logs and audits', () => {
-    const r = runConsentProbe('wellness', false, 'warn')
+  test('warn proceeds but logs and audits', async () => {
+    const r = await runConsentProbe('wellness', false, 'warn')
     expect(consentStatusOf(r, 'wellness')).toBe(201)
     expect(r.consentAudits).toBe(1)
   })
 
-  test('enforce refuses without consent', () => {
-    const r = runConsentProbe('wellness', false, 'enforce')
+  test('enforce refuses without consent', async () => {
+    const r = await runConsentProbe('wellness', false, 'enforce')
     expect(consentStatusOf(r, 'wellness')).toBe(409)
     expect(r.consentAudits).toBe(1)
   })
 
-  test('granted consent proceeds without audit even under enforce', () => {
-    const r = runConsentProbe('wellness', true, 'enforce')
+  test('granted consent proceeds without audit even under enforce', async () => {
+    const r = await runConsentProbe('wellness', true, 'enforce')
     expect(consentStatusOf(r, 'wellness')).toBe(201)
     expect(r.consentAudits).toBe(0)
   })
 })
 
 describe('analysis-link consent gate (probe)', () => {
-  test('warn proceeds but audits', () => {
-    const r = runConsentProbe('link', false, 'warn')
+  test('warn proceeds but audits', async () => {
+    const r = await runConsentProbe('link', false, 'warn')
     expect(consentStatusOf(r, 'link')).toBe(200)
     expect(r.consentAudits).toBe(1)
   })
 
-  test('enforce refuses without training-data consent', () => {
-    const r = runConsentProbe('link', false, 'enforce')
+  test('enforce refuses without training-data consent', async () => {
+    const r = await runConsentProbe('link', false, 'enforce')
     expect(consentStatusOf(r, 'link')).toBe(409)
     expect(r.consentAudits).toBe(1)
   })

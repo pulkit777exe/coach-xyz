@@ -3,9 +3,13 @@ import { join } from 'node:path'
 
 import type { OrgMemberRole } from '../src/lib/orgMembers'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // The route imports a wide org data barrel and the shared caller resolver. Run
 // the route probe in a fresh Bun process so module mocks cannot leak into the
-// rest of the suite's shared module cache.
+// rest of the suite's shared module cache. The wait is bounded by
+// runProbeProcess, so a wedged child is a probe failure carrying its output
+// rather than an opaque suite timeout (see tests/spawnProbe.ts).
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'analysisLinkGuardProbe.ts')
 const JOB_ID = 'job-1'
@@ -26,11 +30,11 @@ type ProbeResult = {
   jobScopeLookups: number
 }
 
-const runProbe = (
+const runProbe = async (
   role: OrgMemberRole | null,
   studentId: string | null = STUDENT_ID,
   opts: { scope?: 'org' | readonly string[]; jobStudentId?: string | null } = {},
-): ProbeResult => {
+): Promise<ProbeResult> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -45,18 +49,9 @@ const runProbe = (
   env.ANALYSIS_LINK_TEST_JOB_STUDENT_ID =
     opts.jobStudentId === undefined || opts.jobStudentId === null ? '__null__' : opts.jobStudentId
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<ProbeResult>(proc.stdout)
 }
 
 const allowedRoles: readonly OrgMemberRole[] = ['owner', 'admin', 'head_coach', 'coach']
@@ -84,8 +79,8 @@ const expectedUnlinkedAnalysis = {
 
 describe('PUT /api/org/:auth0Id/analyses/:jobId/student permission guard', () => {
   for (const role of allowedRoles) {
-    test(`${role} may link an analysis to a student`, () => {
-      const result = runProbe(role)
+    test(`${role} may link an analysis to a student`, async () => {
+      const result = await runProbe(role)
       expect(result.status).toBe(200)
       expect(result.body).toEqual({ analysis: expectedAnalysis })
       expect(result.studentLookups).toBe(1)
@@ -94,8 +89,8 @@ describe('PUT /api/org/:auth0Id/analyses/:jobId/student permission guard', () =>
   }
 
   for (const role of deniedRoles) {
-    test(`${role} is denied with the player.manage FORBIDDEN body`, () => {
-      const result = runProbe(role)
+    test(`${role} is denied with the player.manage FORBIDDEN body`, async () => {
+      const result = await runProbe(role)
       expect(result.status).toBe(403)
       expect(result.body).toEqual(FORBIDDEN_BODY)
       expect(result.studentLookups).toBe(0)
@@ -103,16 +98,16 @@ describe('PUT /api/org/:auth0Id/analyses/:jobId/student permission guard', () =>
     })
   }
 
-  test('a non-member caller is denied with the player.manage FORBIDDEN body', () => {
-    const result = runProbe(null)
+  test('a non-member caller is denied with the player.manage FORBIDDEN body', async () => {
+    const result = await runProbe(null)
     expect(result.status).toBe(403)
     expect(result.body).toEqual(FORBIDDEN_BODY)
     expect(result.studentLookups).toBe(0)
     expect(result.linkCalls).toBe(0)
   })
 
-  test('coach may unlink an analysis with student_id null', () => {
-    const result = runProbe('coach', null)
+  test('coach may unlink an analysis with student_id null', async () => {
+    const result = await runProbe('coach', null)
     expect(result.status).toBe(200)
     expect(result.body).toEqual({ analysis: expectedUnlinkedAnalysis })
     expect(result.studentLookups).toBe(0)
@@ -131,8 +126,8 @@ describe('PUT /api/org/:auth0Id/analyses/:jobId/student job scope', () => {
   // A scoped coach whose only visible student is STUDENT_ID (their own team).
   const scope = [STUDENT_ID]
 
-  test("a scoped coach cannot unlink another team's player (body omits student_id)", () => {
-    const result = runProbe('head_coach', null, { scope, jobStudentId: OFF_TEAM })
+  test("a scoped coach cannot unlink another team's player (body omits student_id)", async () => {
+    const result = await runProbe('head_coach', null, { scope, jobStudentId: OFF_TEAM })
     // A write, so 403 beside the capability gate — not 404.
     expect(result.status).toBe(403)
     expect(result.body).toMatchObject({ code: 'FORBIDDEN' })
@@ -141,37 +136,37 @@ describe('PUT /api/org/:auth0Id/analyses/:jobId/student job scope', () => {
     expect(result.jobScopeLookups, 'must consult the job seam').toBe(1)
   })
 
-  test('a scoped coach can still unlink their own player', () => {
-    const result = runProbe('head_coach', null, { scope, jobStudentId: STUDENT_ID })
+  test('a scoped coach can still unlink their own player', async () => {
+    const result = await runProbe('head_coach', null, { scope, jobStudentId: STUDENT_ID })
     expect(result.status).toBe(200)
     expect(result.linkCalls).toBe(1)
   })
 
-  test('a scoped coach can still link their own analysis to their own player', () => {
-    const result = runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: STUDENT_ID })
+  test('a scoped coach can still link their own analysis to their own player', async () => {
+    const result = await runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: STUDENT_ID })
     expect(result.status).toBe(200)
     expect(result.body).toEqual({ analysis: expectedAnalysis })
     expect(result.linkCalls).toBe(1)
   })
 
-  test('an org-wide caller is unaffected and pays no job lookup', () => {
+  test('an org-wide caller is unaffected and pays no job lookup', async () => {
     // owners/admins/analyst/medical are org-wide per ADR-0002's second tier, so
     // accountJobScope short-circuits without resolving the analysis.
-    const result = runProbe('owner', STUDENT_ID, { scope: 'org', jobStudentId: OFF_TEAM })
+    const result = await runProbe('owner', STUDENT_ID, { scope: 'org', jobStudentId: OFF_TEAM })
     expect(result.status).toBe(200)
     expect(result.jobScopeLookups).toBe(0)
   })
 
-  test('an unfiled analysis stays linkable for a scoped coach', () => {
+  test('an unfiled analysis stays linkable for a scoped coach', async () => {
     // An analysis with no player belongs to whoever uploaded it, so there is no
     // student to scope by — the documented residual in ADR-0003.
-    const result = runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: null })
+    const result = await runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: null })
     expect(result.status).toBe(200)
     expect(result.linkCalls).toBe(1)
   })
 
-  test('the response never carries injury_risk to a non-medical caller', () => {
-    const result = runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: STUDENT_ID })
+  test('the response never carries injury_risk to a non-medical caller', async () => {
+    const result = await runProbe('head_coach', STUDENT_ID, { scope, jobStudentId: STUDENT_ID })
     const summary = (
       result.body as {
         analysis: {

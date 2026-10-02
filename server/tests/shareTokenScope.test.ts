@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
+
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
 
 // A share token is unauthenticated: whoever holds the link reads that analysis
 // with no login. So minting or revoking one is a write about the player on the
@@ -15,6 +18,12 @@ import { describe, expect, test } from 'bun:test'
 // captures SERVICE_TOKEN at import, so one process cannot have it both ways.
 // That also means the mount-time role floor is live here, which is why the
 // refusal cases distinguish "the matrix said no" from "scope said no".
+//
+// The spawn is bounded by runProbeProcess, so a wedged child is a probe failure
+// carrying its output rather than an opaque suite timeout (tests/spawnProbe.ts).
+
+const SERVER_DIR = join(import.meta.dir, '..')
+const PROBE = join(import.meta.dir, 'shareTokenScopeProbe.ts')
 
 type Row = {
   role: string | null
@@ -25,18 +34,15 @@ type Row = {
 }
 
 const run = async (roles: string[]): Promise<Row[]> => {
-  const proc = Bun.spawn(['bun', 'run', 'tests/shareTokenScopeProbe.ts'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, SHARE_SCOPE_ROLES: roles.join(',') },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const out = await new Response(proc.stdout).text()
-  const err = await new Response(proc.stderr).text()
-  await proc.exited
-  const last = out.trim().split('\n').at(-1) ?? ''
-  if (!last.startsWith('{')) throw new Error(`probe produced no result: ${err}`)
-  return (JSON.parse(last) as { rows: Row[] }).rows
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  env.SHARE_SCOPE_ROLES = roles.join(',')
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<{ rows: Row[] }>(proc.stdout).rows
 }
 
 /** Team staff, narrowed to team A by the scope seam. */

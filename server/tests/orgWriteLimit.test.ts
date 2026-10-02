@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
+import { runProbeProcess } from './spawnProbe'
+
 // ── Org-write rate limit ─────────────────────────────────────────────────────
 // The global orgWriteRateLimit plugin holds mutating org/email/account-tree
 // traffic to a per-caller per-minute budget; reads never consume it. Both
 // probes run the real plugin + limiter with Redis down (in-memory
-// fallback), in fresh processes per the mock-leak rule.
+// fallback), in fresh processes per the mock-leak rule, bounded by
+// runProbeProcess so a wedged child is a probe failure (see tests/spawnProbe.ts).
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'orgWriteLimitProbe.ts')
@@ -22,24 +25,16 @@ const spawnEnv = (): Record<string, string> => {
   return env
 }
 
-const runProbe = (probe: string): string => {
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, probe],
-    cwd: SERVER_DIR,
-    env: spawnEnv(),
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `limit probe failed:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
+const runProbe = async (probe: string): Promise<string> => {
+  const proc = await runProbeProcess({ probe, cwd: SERVER_DIR, env: spawnEnv() })
+  expect(proc.exitCode, `limit probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  const lines = proc.stdout.trim().split('\n')
   return lines[lines.length - 1] ?? ''
 }
 
 describe('org-write rate limit', () => {
-  test('budget of 3: three writes pass, reads are free, callers are isolated', () => {
-    const result = JSON.parse(runProbe(PROBE)) as {
+  test('budget of 3: three writes pass, reads are free, callers are isolated', async () => {
+    const result = JSON.parse(await runProbe(PROBE)) as {
       statuses: number[]
       code: unknown
       retryAfter: unknown
@@ -52,11 +47,11 @@ describe('org-write rate limit', () => {
     expect(result.statuses[9]).toBe(200)
   })
 
-  test('composed app: limiter covers mounted routes (registration order)', () => {
+  test('composed app: limiter covers mounted routes (registration order)', async () => {
     // Budget of 2 against the real buildApp: the first two writes reach
     // the handler (400 on the empty body, never a 429), the third is
     // refused, and the read passes through to the (storeless) handler.
-    const result = JSON.parse(runProbe(APP_PROBE)) as { statuses: number[] }
+    const result = JSON.parse(await runProbe(APP_PROBE)) as { statuses: number[] }
     expect(result.statuses[0]).not.toBe(429)
     expect(result.statuses[1]).not.toBe(429)
     expect(result.statuses[2]).toBe(429)

@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import type { OrgMemberRole } from '../src/lib/orgMembers'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Team scope for attendance + performance ──────────────────────────────────
 // Capability is not scope. `attendance.write` / `player.manage` said WHICH
 // writes a role may make, never WHOSE students they may name, so a coach
@@ -13,10 +15,13 @@ import type { OrgMemberRole } from '../src/lib/orgMembers'
 //
 // The probe (attendancePerformanceScopeProbe.ts) runs in a fresh Bun process per
 // case so its `mock.module` store/identity stubs cannot leak into the rest of
-// the suite's shared module cache. It keeps the REAL `resolveCaller`, the REAL
-// `permissions.ts` matrix and the REAL `lib/org/scope.ts` seam (whose ids come
-// from the stub roster), so an "allowed" case proves the route's own check
-// agreed with the policy instead of with a hard-coded id list.
+// the suite's shared module cache, and the wait is bounded by runProbeProcess
+// (tests/spawnProbe.ts) so a wedged child is a probe failure carrying its
+// output rather than an opaque suite timeout. It keeps the REAL
+// `resolveCaller`, the REAL `permissions.ts` matrix and the REAL
+// `lib/org/scope.ts` seam (whose ids come from the stub roster), so an
+// "allowed" case proves the route's own check agreed with the policy instead of
+// with a hard-coded id list.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'attendancePerformanceScopeProbe.ts')
@@ -81,7 +86,7 @@ type RunOptions = {
   target?: 'teamA' | 'teamB'
 }
 
-const runProbe = (probeCase: string, opts: RunOptions): ProbeResult => {
+const runProbe = async (probeCase: string, opts: RunOptions): Promise<ProbeResult> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -94,23 +99,16 @@ const runProbe = (probeCase: string, opts: RunOptions): ProbeResult => {
   env.ATT_PERF_SCOPE_TEAMS = (opts.teams ?? []).join(',')
   env.ATT_PERF_SCOPE_TARGET = opts.target ?? 'teamA'
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed for ${probeCase}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed for ${probeCase}:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<ProbeResult>(proc.stdout)
 }
 
 /** The coach is on team A; the request targets a team B student by default. */
-const runAsTeamACoach = (probeCase: string, target: 'teamA' | 'teamB' = 'teamB'): ProbeResult =>
-  runProbe(probeCase, { role: 'coach', teams: [TEAM_A], target })
+const runAsTeamACoach = async (
+  probeCase: string,
+  target: 'teamA' | 'teamB' = 'teamB',
+): Promise<ProbeResult> => runProbe(probeCase, { role: 'coach', teams: [TEAM_A], target })
 
 const forbidden = (message: string) => ({
   code: 'FORBIDDEN',
@@ -132,16 +130,16 @@ const studentIdsIn = (body: unknown): string[] => {
 // ── Reads: a team coach sees only their own team ─────────────────────────────
 
 describe('attendance reads are narrowed to the caller teams', () => {
-  test('a team A coach lists only team A attendance, and team B rows are absent', () => {
-    const result = runAsTeamACoach('attendance.list')
+  test('a team A coach lists only team A attendance, and team B rows are absent', async () => {
+    const result = await runAsTeamACoach('attendance.list')
     expect(result.status).toBe(200)
     expect(result.filters.listAttendance).toEqual([STUDENT_A])
     expect(studentIdsIn(result.body)).toEqual([STUDENT_A])
     expect(studentIdsIn(result.body)).not.toContain(STUDENT_B)
   })
 
-  test('the attendance summary counts only team A records', () => {
-    const result = runAsTeamACoach('attendance.summary')
+  test('the attendance summary counts only team A records', async () => {
+    const result = await runAsTeamACoach('attendance.summary')
     expect(result.status).toBe(200)
     expect(result.filters.attendanceSummary).toEqual([STUDENT_A])
     // Two records exist in the org (one per team): scoping to the one visible
@@ -158,10 +156,10 @@ describe('attendance reads are narrowed to the caller teams', () => {
     })
   })
 
-  test('naming another team in the query cannot widen the list', () => {
+  test('naming another team in the query cannot widen the list', async () => {
     // The org-wide `studentId` filter and the scope filter are ANDed in SQL, so
     // a team B student yields nothing rather than that student's rows.
-    const result = runProbe('attendance.list', {
+    const result = await runProbe('attendance.list', {
       role: 'coach',
       teams: [TEAM_A],
       target: 'teamB',
@@ -173,29 +171,29 @@ describe('attendance reads are narrowed to the caller teams', () => {
 })
 
 describe('performance reads are narrowed to the caller teams', () => {
-  test('a team A coach gets no metrics for a team B student', () => {
-    const result = runAsTeamACoach('performance.list')
+  test('a team A coach gets no metrics for a team B student', async () => {
+    const result = await runAsTeamACoach('performance.list')
     expect(result.status).toBe(200)
     expect(result.filters.listPerformance).toEqual([STUDENT_A])
     expect(result.body).toEqual({ metrics: [] })
   })
 
-  test('a team A coach gets the metrics of their own student', () => {
-    const result = runAsTeamACoach('performance.list', 'teamA')
+  test('a team A coach gets the metrics of their own student', async () => {
+    const result = await runAsTeamACoach('performance.list', 'teamA')
     expect(result.status).toBe(200)
     expect(result.filters.listPerformance).toEqual([STUDENT_A])
     expect((result.body as { metrics: Array<{ student_id: string }> }).metrics).toHaveLength(1)
   })
 
-  test('a team A coach gets no trends for a team B student', () => {
-    const result = runAsTeamACoach('performance.trends')
+  test('a team A coach gets no trends for a team B student', async () => {
+    const result = await runAsTeamACoach('performance.trends')
     expect(result.status).toBe(200)
     expect(result.filters.getStudentTrends).toEqual([STUDENT_A])
     expect(result.body).toEqual({ trends: [] })
   })
 
-  test('a team A coach gets the trends of their own student', () => {
-    const result = runAsTeamACoach('performance.trends', 'teamA')
+  test('a team A coach gets the trends of their own student', async () => {
+    const result = await runAsTeamACoach('performance.trends', 'teamA')
     expect(result.status).toBe(200)
     expect(result.body).toEqual({
       trends: [
@@ -212,8 +210,8 @@ describe('performance reads are narrowed to the caller teams', () => {
     })
   })
 
-  test('comparison silently drops the students a scoped caller cannot see', () => {
-    const result = runAsTeamACoach('performance.comparison')
+  test('comparison silently drops the students a scoped caller cannot see', async () => {
+    const result = await runAsTeamACoach('performance.comparison')
     expect(result.status).toBe(200)
     const comparison = (result.body as { comparison: Array<{ student_id: string }> }).comparison
     expect(comparison.map((c) => c.student_id)).toEqual([STUDENT_A])
@@ -223,23 +221,23 @@ describe('performance reads are narrowed to the caller teams', () => {
 // ── Writes: 403 before the store is touched ──────────────────────────────────
 
 describe('attendance writes refuse a student outside the caller scope', () => {
-  test('PUT /attendance: 403 and no store call at all', () => {
-    const result = runAsTeamACoach('attendance.put')
+  test('PUT /attendance: 403 and no store call at all', async () => {
+    const result = await runAsTeamACoach('attendance.put')
     expect(result.status).toBe(403)
     expect(result.body).toEqual(forbidden(ATTENDANCE_SCOPE_MESSAGE))
     // Not even the roster lookup happens: the write is refused before the store.
     expect(result.calls).toEqual(NO_CALLS)
   })
 
-  test('POST /attendance/batch: one out-of-scope entry refuses the whole batch', () => {
-    const result = runAsTeamACoach('attendance.batch')
+  test('POST /attendance/batch: one out-of-scope entry refuses the whole batch', async () => {
+    const result = await runAsTeamACoach('attendance.batch')
     expect(result.status).toBe(403)
     expect(result.body).toEqual(forbidden(ATTENDANCE_SCOPE_MESSAGE))
     expect(result.calls).toEqual(NO_CALLS)
   })
 
-  test('DELETE /attendance: 403 and no delete attempted', () => {
-    const result = runAsTeamACoach('attendance.delete')
+  test('DELETE /attendance: 403 and no delete attempted', async () => {
+    const result = await runAsTeamACoach('attendance.delete')
     expect(result.status).toBe(403)
     expect(result.body).toEqual(forbidden(ATTENDANCE_SCOPE_MESSAGE))
     expect(result.calls).toEqual(NO_CALLS)
@@ -247,8 +245,8 @@ describe('attendance writes refuse a student outside the caller scope', () => {
 })
 
 describe('performance writes refuse a student outside the caller scope', () => {
-  test('PUT /performance/:id: 403 and no update attempted', () => {
-    const result = runAsTeamACoach('performance.update')
+  test('PUT /performance/:id: 403 and no update attempted', async () => {
+    const result = await runAsTeamACoach('performance.update')
     expect(result.status).toBe(403)
     expect(result.body).toEqual(forbidden(PERFORMANCE_SCOPE_MESSAGE))
     expect(result.calls.updatePerformanceMetric).toBe(0)
@@ -256,8 +254,8 @@ describe('performance writes refuse a student outside the caller scope', () => {
     expect(result.calls.getPerformanceMetric).toBe(1)
   })
 
-  test('DELETE /performance/:id: 403 and no delete attempted', () => {
-    const result = runAsTeamACoach('performance.delete')
+  test('DELETE /performance/:id: 403 and no delete attempted', async () => {
+    const result = await runAsTeamACoach('performance.delete')
     expect(result.status).toBe(403)
     expect(result.body).toEqual(forbidden(PERFORMANCE_SCOPE_MESSAGE))
     expect(result.calls.deletePerformanceMetric).toBe(0)
@@ -266,15 +264,15 @@ describe('performance writes refuse a student outside the caller scope', () => {
 })
 
 describe('the same routes still work inside the caller scope', () => {
-  test('a team A coach records attendance for a team A student', () => {
-    const result = runAsTeamACoach('attendance.put', 'teamA')
+  test('a team A coach records attendance for a team A student', async () => {
+    const result = await runAsTeamACoach('attendance.put', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.upsertAttendance).toBe(1)
     expect(result.calls.getStudent).toBe(1)
   })
 
-  test('a team A coach batches attendance for a team A student', () => {
-    const result = runAsTeamACoach('attendance.batch', 'teamA')
+  test('a team A coach batches attendance for a team A student', async () => {
+    const result = await runAsTeamACoach('attendance.batch', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.setAttendanceBatch).toBe(1)
   })
@@ -284,8 +282,8 @@ describe('the same routes still work inside the caller scope', () => {
   // unbounded number of round trips — the route checked only `length > 0`
   // before. Both cases below target a student the caller CAN see, with
   // individually valid entries, so size is the only thing separating them.
-  test('a batch one entry over the cap is refused before any write', () => {
-    const result = runAsTeamACoach('attendance.batchOverCap', 'teamA')
+  test('a batch one entry over the cap is refused before any write', async () => {
+    const result = await runAsTeamACoach('attendance.batchOverCap', 'teamA')
     expect(result.status).toBe(400)
     expect(result.body).toMatchObject({ code: 'INVALID_REQUEST' })
     // The load-bearing assertion: the cap has to fire before the loop, not
@@ -293,26 +291,26 @@ describe('the same routes still work inside the caller scope', () => {
     expect(result.calls.setAttendanceBatch).toBe(0)
   })
 
-  test('a batch of exactly MAX_ATTENDANCE_BATCH is still accepted', () => {
-    const result = runAsTeamACoach('attendance.batchAtCap', 'teamA')
+  test('a batch of exactly MAX_ATTENDANCE_BATCH is still accepted', async () => {
+    const result = await runAsTeamACoach('attendance.batchAtCap', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.setAttendanceBatch).toBe(1)
   })
 
-  test('a team A coach deletes attendance for a team A student', () => {
-    const result = runAsTeamACoach('attendance.delete', 'teamA')
+  test('a team A coach deletes attendance for a team A student', async () => {
+    const result = await runAsTeamACoach('attendance.delete', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.deleteAttendance).toBe(1)
   })
 
-  test('a team A coach updates a team A metric', () => {
-    const result = runAsTeamACoach('performance.update', 'teamA')
+  test('a team A coach updates a team A metric', async () => {
+    const result = await runAsTeamACoach('performance.update', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.updatePerformanceMetric).toBe(1)
   })
 
-  test('a team A coach deletes a team A metric', () => {
-    const result = runAsTeamACoach('performance.delete', 'teamA')
+  test('a team A coach deletes a team A metric', async () => {
+    const result = await runAsTeamACoach('performance.delete', 'teamA')
     expect(result.status).toBe(200)
     expect(result.calls.deletePerformanceMetric).toBe(1)
   })
@@ -322,15 +320,15 @@ describe('the same routes still work inside the caller scope', () => {
 
 describe('org-wide roles read the whole org', () => {
   for (const role of ['analyst', 'medical'] as const) {
-    test(`${role} is not narrowed: both teams are visible and unscoped`, () => {
-      const list = runProbe('attendance.list', { role, teams: [] })
+    test(`${role} is not narrowed: both teams are visible and unscoped`, async () => {
+      const list = await runProbe('attendance.list', { role, teams: [] })
       expect(list.status).toBe(200)
       expect(list.filters.listAttendance).toBeNull()
       expect(studentIdsIn(list.body).sort()).toEqual([STUDENT_A, STUDENT_B])
       // Org-wide means `null`, and `null` costs no roster lookup at all.
       expect(list.scopeLookups).toEqual([])
 
-      const summary = runProbe('attendance.summary', { role, teams: [] })
+      const summary = await runProbe('attendance.summary', { role, teams: [] })
       expect(summary.filters.attendanceSummary).toBeNull()
       expect(summary.body).toEqual({
         summary: {
@@ -343,17 +341,17 @@ describe('org-wide roles read the whole org', () => {
         },
       })
 
-      const trends = runProbe('performance.trends', { role, teams: [], target: 'teamB' })
+      const trends = await runProbe('performance.trends', { role, teams: [], target: 'teamB' })
       expect(trends.status).toBe(200)
       expect(trends.filters.getStudentTrends).toBeNull()
       expect((trends.body as { trends: unknown[] }).trends).toHaveLength(1)
     })
   }
 
-  test('analyst and medical cannot write attendance (capability, unchanged)', () => {
+  test('analyst and medical cannot write attendance (capability, unchanged)', async () => {
     // Scope is a second gate; the permission matrix still refuses the write.
     for (const role of ['analyst', 'medical'] as const) {
-      const result = runProbe('attendance.put', { role, teams: [] })
+      const result = await runProbe('attendance.put', { role, teams: [] })
       expect(result.status).toBe(403)
       expect(result.body).toEqual(
         forbidden('Recording attendance requires the attendance.write permission'),
@@ -364,22 +362,26 @@ describe('org-wide roles read the whole org', () => {
 })
 
 describe('owner is unaffected', () => {
-  test('owner lists the whole org without a scope lookup', () => {
-    const result = runProbe('attendance.list', { role: 'owner', teams: [], target: 'teamB' })
+  test('owner lists the whole org without a scope lookup', async () => {
+    const result = await runProbe('attendance.list', { role: 'owner', teams: [], target: 'teamB' })
     expect(result.status).toBe(200)
     expect(result.filters.listAttendance).toBeNull()
     expect(studentIdsIn(result.body).sort()).toEqual([STUDENT_A, STUDENT_B])
     expect(result.scopeLookups).toEqual([])
   })
 
-  test('owner writes attendance for a student on any team', () => {
-    const result = runProbe('attendance.put', { role: 'owner', teams: [], target: 'teamB' })
+  test('owner writes attendance for a student on any team', async () => {
+    const result = await runProbe('attendance.put', { role: 'owner', teams: [], target: 'teamB' })
     expect(result.status).toBe(200)
     expect(result.calls.upsertAttendance).toBe(1)
   })
 
-  test('owner updates a metric on any team', () => {
-    const result = runProbe('performance.update', { role: 'owner', teams: [], target: 'teamB' })
+  test('owner updates a metric on any team', async () => {
+    const result = await runProbe('performance.update', {
+      role: 'owner',
+      teams: [],
+      target: 'teamB',
+    })
     expect(result.status).toBe(200)
     expect(result.calls.updatePerformanceMetric).toBe(1)
   })
@@ -388,44 +390,48 @@ describe('owner is unaffected', () => {
 // ── A coach who manages no team manages nobody ──────────────────────────────
 
 describe('an unassigned coach sees nothing and writes nothing', () => {
-  test('attendance list is empty and the filter is an empty list, not null', () => {
-    const result = runProbe('attendance.list', { role: 'head_coach', teams: [] })
+  test('attendance list is empty and the filter is an empty list, not null', async () => {
+    const result = await runProbe('attendance.list', { role: 'head_coach', teams: [] })
     expect(result.status).toBe(200)
     // `[]` (sees nobody) must stay distinct from `null` (org-wide).
     expect(result.filters.listAttendance).toEqual([])
     expect(studentIdsIn(result.body)).toEqual([])
   })
 
-  test('the attendance summary counts nothing', () => {
-    const result = runProbe('attendance.summary', { role: 'coach', teams: [] })
+  test('the attendance summary counts nothing', async () => {
+    const result = await runProbe('attendance.summary', { role: 'coach', teams: [] })
     expect(result.status).toBe(200)
     expect(result.filters.attendanceSummary).toEqual([])
     expect((result.body as { summary: { total_records: number } }).summary.total_records).toBe(0)
   })
 
-  test('trends for any student are empty', () => {
-    const result = runProbe('performance.trends', { role: 'coach', teams: [], target: 'teamB' })
+  test('trends for any student are empty', async () => {
+    const result = await runProbe('performance.trends', {
+      role: 'coach',
+      teams: [],
+      target: 'teamB',
+    })
     expect(result.status).toBe(200)
     expect(result.filters.getStudentTrends).toEqual([])
     expect(result.body).toEqual({ trends: [] })
   })
 
-  test('attendance writes are refused with the scope 403, not the capability one', () => {
+  test('attendance writes are refused with the scope 403, not the capability one', async () => {
     for (const probeCase of ['attendance.put', 'attendance.batch', 'attendance.delete']) {
-      const result = runProbe(probeCase, { role: 'coach', teams: [], target: 'teamA' })
+      const result = await runProbe(probeCase, { role: 'coach', teams: [], target: 'teamA' })
       expect(result.status, probeCase).toBe(403)
       expect(result.body, probeCase).toEqual(forbidden(ATTENDANCE_SCOPE_MESSAGE))
       expect(result.calls, probeCase).toEqual(NO_CALLS)
     }
   })
 
-  test('performance writes are refused with the scope 403', () => {
+  test('performance writes are refused with the scope 403', async () => {
     const cases = [
       ['performance.update', 'updatePerformanceMetric'],
       ['performance.delete', 'deletePerformanceMetric'],
     ] as const
     for (const [probeCase, writeKey] of cases) {
-      const result = runProbe(probeCase, { role: 'coach', teams: [], target: 'teamA' })
+      const result = await runProbe(probeCase, { role: 'coach', teams: [], target: 'teamA' })
       expect(result.status, probeCase).toBe(403)
       expect(result.body, probeCase).toEqual(forbidden(PERFORMANCE_SCOPE_MESSAGE))
       expect(result.calls[writeKey], probeCase).toBe(0)
@@ -436,10 +442,10 @@ describe('an unassigned coach sees nothing and writes nothing', () => {
 // ── Capability and scope are independent gates ───────────────────────────────
 
 describe('capability is still checked before scope', () => {
-  test('a player member is denied on capability even inside their own team', () => {
+  test('a player member is denied on capability even inside their own team', async () => {
     // `player` has no attendance.write; the capability guard is the first
     // question asked, so its message must survive the new second gate.
-    const result = runProbe('attendance.put', {
+    const result = await runProbe('attendance.put', {
       role: 'player',
       teams: [TEAM_A],
       target: 'teamA',
@@ -451,8 +457,8 @@ describe('capability is still checked before scope', () => {
     expect(result.calls).toEqual(NO_CALLS)
   })
 
-  test('a non-member resolves to no scope and reaches no student', () => {
-    const result = runProbe('attendance.list', { role: null, teams: [] })
+  test('a non-member resolves to no scope and reaches no student', async () => {
+    const result = await runProbe('attendance.list', { role: null, teams: [] })
     expect(result.status).toBe(200)
     // A non-member resolves to no role: no capability, no teams, no visibility.
     expect(result.role).toBeNull()
@@ -463,8 +469,8 @@ describe('capability is still checked before scope', () => {
 })
 
 describe('the org in the path is the org being scoped', () => {
-  test('the visible-id lookup runs against the org from the path', () => {
-    const result = runAsTeamACoach('attendance.list')
+  test('the visible-id lookup runs against the org from the path', async () => {
+    const result = await runAsTeamACoach('attendance.list')
     expect(result.scopeLookups).toEqual([{ auth0Id: ORG, teamIds: [TEAM_A] }])
   })
 })

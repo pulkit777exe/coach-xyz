@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
+
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
 
 // `/api/email/:auth0Id/*` sat behind `serviceGuard` alone, which proves only
 // that the caller is *a* member of the org — membership, not authorization.
@@ -8,10 +11,15 @@ import { describe, expect, test } from 'bun:test'
 // permission matrix and team scope, and hiding the button in the UI did nothing
 // about it.
 //
-// Each case spawns a probe process so its `mock.module` stubs stay out of the
-// suite's shared module cache. The probe keeps the real `resolveCaller`, the
+// Each case spawns a probe process, bounded by runProbeProcess so a wedged
+// child is a probe failure carrying its output rather than an opaque suite
+// timeout (see tests/spawnProbe.ts), and so its `mock.module` stubs stay out of
+// the suite's shared module cache. The probe keeps the real `resolveCaller`, the
 // real matrix and the real scope seam, and captures the mail instead of
 // sending it.
+
+const SERVER_DIR = join(import.meta.dir, '..')
+const PROBE = join(import.meta.dir, 'emailRouteGuardsProbe.ts')
 
 type Row = {
   role: string | null
@@ -25,18 +33,16 @@ type Row = {
 }
 
 const run = async (probeCase: string, roles: string[]): Promise<Row[]> => {
-  const proc = Bun.spawn(['bun', 'run', 'tests/emailRouteGuardsProbe.ts'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, EMAIL_GUARD_CASE: probeCase, EMAIL_GUARD_ROLES: roles.join(',') },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const out = await new Response(proc.stdout).text()
-  const err = await new Response(proc.stderr).text()
-  await proc.exited
-  const last = out.trim().split('\n').at(-1) ?? ''
-  if (!last.startsWith('[')) throw new Error(`probe ${probeCase} produced no result: ${err}`)
-  return JSON.parse(last) as Row[]
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  env.EMAIL_GUARD_CASE = probeCase
+  env.EMAIL_GUARD_ROLES = roles.join(',')
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe ${probeCase} failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<Row[]>(proc.stdout)
 }
 
 const STUDENT_A = '00000000-0000-0000-0000-0000000000a1'

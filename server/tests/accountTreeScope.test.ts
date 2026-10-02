@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
+
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
 
 // `/api/auth/user/:auth0Id/*` is an org-scoped path, so `serviceGuard` admits any
 // member of the org named in the path — membership, not authorization. Nothing
@@ -10,11 +13,16 @@ import { describe, expect, test } from 'bun:test'
 // another team.
 //
 // Each case spawns a probe process so its `mock.module` stubs stay out of the
-// suite's shared module cache. The probe keeps the real `resolveCaller`, the
-// real matrix and the real scope seam, and reports both the status and the
-// data-layer entry points each handler reached — so a refusal can be shown to
-// have happened before the row was read, the transcript appended to, the engine
-// called, or the row deleted.
+// suite's shared module cache, bounded by runProbeProcess so a wedged child is
+// reported as a probe failure carrying its partial output rather than as an
+// opaque suite timeout (see tests/spawnProbe.ts). The probe keeps the real
+// `resolveCaller`, the real matrix and the real scope seam, and reports both the
+// status and the data-layer entry points each handler reached — so a refusal can
+// be shown to have happened before the row was read, the transcript appended to,
+// the engine called, or the row deleted.
+
+const SERVER_DIR = join(import.meta.dir, '..')
+const PROBE = join(import.meta.dir, 'accountTreeScopeProbe.ts')
 
 type Row = {
   role: string | null
@@ -27,18 +35,15 @@ type Row = {
 }
 
 const run = async (roles: string[]): Promise<Row[]> => {
-  const proc = Bun.spawn(['bun', 'run', 'tests/accountTreeScopeProbe.ts'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, ACCOUNT_SCOPE_ROLES: roles.join(',') },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const out = await new Response(proc.stdout).text()
-  const err = await new Response(proc.stderr).text()
-  await proc.exited
-  const last = out.trim().split('\n').at(-1) ?? ''
-  if (!last.startsWith('{')) throw new Error(`probe produced no result: ${err}`)
-  return (JSON.parse(last) as { rows: Row[] }).rows
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  env.ACCOUNT_SCOPE_ROLES = roles.join(',')
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<{ rows: Row[] }>(proc.stdout).rows
 }
 
 const STUDENT_A = '00000000-0000-0000-0000-0000000000a1'

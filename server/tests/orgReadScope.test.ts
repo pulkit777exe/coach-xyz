@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import type { OrgMemberRole } from '../src/lib/orgMembers'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Org read-scope guards ────────────────────────────────────────────────────
 // Four org surfaces used to answer org-wide no matter who asked: the rollup
 // (`/overview`) and the search box (`/search`) took no scope argument at all, the
@@ -13,12 +15,14 @@ import type { OrgMemberRole } from '../src/lib/orgMembers'
 // (`lib/org/scope.ts`) — `null` org-wide, a list those students, `[]` none.
 //
 // The probe (orgReadScopeProbe.ts) runs in a fresh Bun process per case so its
-// `mock.module` identity stubs cannot leak into the suite's module cache. It
-// keeps the REAL `resolveCaller`, the REAL `permissions.ts` matrix, the REAL
-// `scope.ts` seam, the REAL data layer and the REAL handlers, and wires the real
-// historyStore to a fixture connection that answers each query by applying the
-// scope it was handed — so these tests fail if the scope stops reaching SQL, not
-// only if a route forgets to pass it.
+// `mock.module` identity stubs cannot leak into the suite's module cache, and
+// the wait is bounded by runProbeProcess (see tests/spawnProbe.ts) so a wedged
+// child is a probe failure carrying its output. It keeps the REAL
+// `resolveCaller`, the REAL `permissions.ts` matrix, the REAL `scope.ts` seam,
+// the REAL data layer and the REAL handlers, and wires the real historyStore to
+// a fixture connection that answers each query by applying the scope it was
+// handed — so these tests fail if the scope stops reaching SQL, not only if a
+// route forgets to pass it.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'orgReadScopeProbe.ts')
@@ -50,11 +54,11 @@ type ProbeResult = {
 }
 
 /** One route (or data-layer) case, once per role, in a single isolated process. */
-const runProbe = (
+const runProbe = async (
   probeCase: string,
   roles: readonly (OrgMemberRole | null)[],
   teams: readonly string[] = [],
-): ProbeResult[] => {
+): Promise<ProbeResult[]> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -66,18 +70,9 @@ const runProbe = (
   env.ORG_READ_SCOPE_ROLES = roles.map((role) => role ?? '__non_member__').join(',')
   env.ORG_READ_SCOPE_TEAMS = teams.length > 0 ? teams.join(',') : 'none'
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed for ${probeCase}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  const results = JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult[]
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed for ${probeCase}:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  const results = lastJsonLine<ProbeResult[]>(proc.stdout)
   expect(results.length).toBe(roles.length)
   return results
 }
@@ -152,8 +147,8 @@ const labels = (body: unknown, key: string): string[] => {
 // ── A team-A coach sees team A and nothing else ──────────────────────────────
 
 describe('a team-A coach is narrowed to team A', () => {
-  test('GET /overview counts only team A', () => {
-    const results = runProbe('overview.get', TEAM_STAFF, [TEAM_A])
+  test('GET /overview counts only team A', async () => {
+    const results = await runProbe('overview.get', TEAM_STAFF, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect((result.body as { overview: unknown }).overview, `role: ${result.role}`).toEqual(
@@ -165,39 +160,39 @@ describe('a team-A coach is narrowed to team A', () => {
     }
   })
 
-  test('the scope reaches Postgres as a uuid-array literal, scoped or NULL', () => {
+  test('the scope reaches Postgres as a uuid-array literal, scoped or NULL', async () => {
     // The one thing a fixture store cannot check is whether the bind is legal in
     // Postgres: Bun sends a raw JS array as comma-joined text and `::uuid[]`
     // then fails with 22P02 at runtime. So pin the wire format — a literal for a
     // scoped caller, SQL NULL for an org-wide one.
-    const [scoped] = runProbe('overview.get', ['head_coach'], [TEAM_A])
+    const [scoped] = await runProbe('overview.get', ['head_coach'], [TEAM_A])
     expect(scoped.scopeLiteral).toBe(`{${TEAM_A}}`)
-    const [org] = runProbe('overview.get', ['analyst'])
+    const [org] = await runProbe('overview.get', ['analyst'])
     expect(org.scopeLiteral).toBeNull()
   })
 
-  test('the calendar counts and the schedule search each bind the team filter', () => {
+  test('the calendar counts and the schedule search each bind the team filter', async () => {
     // Counted from the statement text. A param-based fixture cannot catch this:
     // it keeps applying the team scope from the surviving subquery's bind even
     // after the filter is deleted from the other, so dropping the filter from
     // `sessions_this_month` alone left every test green.
-    const [overview] = runProbe('overview.get', ['head_coach'], [TEAM_A])
+    const [overview] = await runProbe('overview.get', ['head_coach'], [TEAM_A])
     // sessions_this_month + upcoming_events.
     expect(overview.store.calendarTeamFilters, 'overview calendar subqueries').toBe(2)
 
-    const [search] = runProbe('overview.search', ['head_coach'], [TEAM_A])
+    const [search] = await runProbe('overview.search', ['head_coach'], [TEAM_A])
     expect(search.store.calendarTeamFilters, 'schedule search').toBe(1)
   })
 
-  test('GET /overview counts are not the org rollup', () => {
-    const [scoped] = runProbe('overview.get', ['head_coach'], [TEAM_A])
-    const [org] = runProbe('overview.get', ['analyst'])
+  test('GET /overview counts are not the org rollup', async () => {
+    const [scoped] = await runProbe('overview.get', ['head_coach'], [TEAM_A])
+    const [org] = await runProbe('overview.get', ['analyst'])
     expect(scoped.body).not.toEqual(org.body)
     expect(org.body).toEqual({ overview: ORG_OVERVIEW })
   })
 
-  test('GET /search returns no team B student, report or clip', () => {
-    const results = runProbe('overview.search', TEAM_STAFF, [TEAM_A])
+  test('GET /search returns no team B student, report or clip', async () => {
+    const results = await runProbe('overview.search', TEAM_STAFF, [TEAM_A])
     for (const result of results) {
       const role = result.role
       expect(result.status, `role: ${role}`).toBe(200)
@@ -217,8 +212,8 @@ describe('a team-A coach is narrowed to team A', () => {
     }
   })
 
-  test('getStudent answers null for a team B student without probing the store', () => {
-    const results = runProbe('student.get.teamB', TEAM_STAFF, [TEAM_A])
+  test('getStudent answers null for a team B student without probing the store', async () => {
+    const results = await runProbe('student.get.teamB', TEAM_STAFF, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(404)
       expect(result.student, `role: ${result.role}`).toBeNull()
@@ -229,8 +224,8 @@ describe('a team-A coach is narrowed to team A', () => {
     }
   })
 
-  test('getStudent still returns a team A student', () => {
-    const results = runProbe('student.get.own', TEAM_STAFF, [TEAM_A])
+  test('getStudent still returns a team A student', async () => {
+    const results = await runProbe('student.get.own', TEAM_STAFF, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect(result.student, `role: ${result.role}`).toBe(S_A1)
@@ -242,8 +237,8 @@ describe('a team-A coach is narrowed to team A', () => {
 // ── The out-of-scope wellness write ──────────────────────────────────────────
 
 describe('a wellness check-in for another team is refused with nothing written', () => {
-  test('POST wellness for a team B student is 403 and the store is untouched', () => {
-    const results = runProbe('wellness.write.teamB', TEAM_MANAGERS, [TEAM_A])
+  test('POST wellness for a team B student is 403 and the store is untouched', async () => {
+    const results = await runProbe('wellness.write.teamB', TEAM_MANAGERS, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(403)
       expect(result.body, `role: ${result.role}`).toEqual(forbidden(SCOPE_MESSAGE))
@@ -253,8 +248,8 @@ describe('a wellness check-in for another team is refused with nothing written',
     }
   })
 
-  test('POST wellness for a team A student still records the check-in', () => {
-    const results = runProbe('wellness.write.own', TEAM_MANAGERS, [TEAM_A])
+  test('POST wellness for a team A student still records the check-in', async () => {
+    const results = await runProbe('wellness.write.own', TEAM_MANAGERS, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(201)
       expect(
@@ -269,10 +264,10 @@ describe('a wellness check-in for another team is refused with nothing written',
 // ── The §5 medical boundary is unchanged ────────────────────────────────────
 
 describe('the medical boundary on wellness is preserved', () => {
-  test('a coach without medical.read is refused on its own team too', () => {
+  test('a coach without medical.read is refused on its own team too', async () => {
     // Scope must not become the answer for a caller the §5 boundary already
     // rejects: the medical message and the 403 come first, unchanged.
-    const results = runProbe('wellness.read.own', TEAM_STAFF, [TEAM_A])
+    const results = await runProbe('wellness.read.own', TEAM_STAFF, [TEAM_A])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(403)
       expect(result.body, `role: ${result.role}`).toEqual(forbidden(MEDICAL_MESSAGE))
@@ -280,16 +275,19 @@ describe('the medical boundary on wellness is preserved', () => {
     }
   })
 
-  test('an analyst or non-member cannot read wellness either', () => {
-    for (const result of runProbe('wellness.read.teamB', ['analyst' as OrgMemberRole, null])) {
+  test('an analyst or non-member cannot read wellness either', async () => {
+    for (const result of await runProbe('wellness.read.teamB', [
+      'analyst' as OrgMemberRole,
+      null,
+    ])) {
       expect(result.status, `role: ${result.role}`).toBe(403)
       expect(result.body, `role: ${result.role}`).toEqual(forbidden(MEDICAL_MESSAGE))
       expect(result.store.wellnessSelect, `role: ${result.role}`).toBe(0)
     }
   })
 
-  test('medical reads wellness org-wide', () => {
-    const [result] = runProbe('wellness.read.teamB', ['medical'])
+  test('medical reads wellness org-wide', async () => {
+    const [result] = await runProbe('wellness.read.teamB', ['medical'])
     expect(result.status).toBe(200)
     expect(result.store.wellnessSelect).toBe(1)
     // The team B check-in is returned: the medical role is not narrowed.
@@ -297,15 +295,15 @@ describe('the medical boundary on wellness is preserved', () => {
     expect(checkins.map((c) => c.student_id)).toEqual([S_B1])
   })
 
-  test('the owner reads wellness org-wide', () => {
-    const [result] = runProbe('wellness.read.teamB', ['owner'])
+  test('the owner reads wellness org-wide', async () => {
+    const [result] = await runProbe('wellness.read.teamB', ['owner'])
     expect(result.status).toBe(200)
     const checkins = (result.body as { checkins: Array<{ student_id: string }> }).checkins
     expect(checkins.map((c) => c.student_id)).toEqual([S_B1])
   })
 
-  test('a role without player.manage is still refused before the scope check', () => {
-    const results = runProbe(
+  test('a role without player.manage is still refused before the scope check', async () => {
+    const results = await runProbe(
       'wellness.write.own',
       ['assistant_coach' as OrgMemberRole, 'analyst' as OrgMemberRole, null],
       [TEAM_A],
@@ -321,8 +319,8 @@ describe('the medical boundary on wellness is preserved', () => {
 // ── Org staff and owners keep the org-wide answers ───────────────────────────
 
 describe('org staff and owners are not narrowed', () => {
-  test('analyst and medical get the org-wide overview', () => {
-    const results = runProbe('overview.get', ORG_WIDE)
+  test('analyst and medical get the org-wide overview', async () => {
+    const results = await runProbe('overview.get', ORG_WIDE)
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect((result.body as { overview: unknown }).overview, `role: ${result.role}`).toEqual(
@@ -334,8 +332,8 @@ describe('org staff and owners are not narrowed', () => {
     }
   })
 
-  test('analyst, medical and owner search the whole org', () => {
-    const results = runProbe('overview.search', ORG_WIDE)
+  test('analyst, medical and owner search the whole org', async () => {
+    const results = await runProbe('overview.search', ORG_WIDE)
     for (const result of results) {
       const role = result.role
       expect(result.status, `role: ${role}`).toBe(200)
@@ -358,8 +356,8 @@ describe('org staff and owners are not narrowed', () => {
     }
   })
 
-  test('analyst, medical and owner resolve a team B student by id', () => {
-    const results = runProbe('student.get.teamB', ORG_WIDE)
+  test('analyst, medical and owner resolve a team B student by id', async () => {
+    const results = await runProbe('student.get.teamB', ORG_WIDE)
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect(result.student, `role: ${result.role}`).toBe(S_B1)
@@ -406,8 +404,8 @@ describe('the wellness read keeps its scope guard (source structure)', () => {
 // ── A caller who manages no team sees nothing ────────────────────────────────
 
 describe('a coach with no team assignment sees nothing', () => {
-  test('the overview is all zeroes and never reaches the store', () => {
-    const results = runProbe('overview.get', ['head_coach' as OrgMemberRole, null], [])
+  test('the overview is all zeroes and never reaches the store', async () => {
+    const results = await runProbe('overview.get', ['head_coach' as OrgMemberRole, null], [])
     for (const result of results) {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect((result.body as { overview: unknown }).overview, `role: ${result.role}`).toEqual(
@@ -417,8 +415,8 @@ describe('a coach with no team assignment sees nothing', () => {
     }
   })
 
-  test('the search returns no player at all', () => {
-    const [result] = runProbe('overview.search', ['head_coach'], [])
+  test('the search returns no player at all', async () => {
+    const [result] = await runProbe('overview.search', ['head_coach'], [])
     expect(result.status).toBe(200)
     expect(labels(result.body, 'students')).toEqual([])
     // "Sees nothing" outranks the org-wide schedule, matching the zero rollup.
@@ -428,17 +426,17 @@ describe('a coach with no team assignment sees nothing', () => {
     expect(result.store).toEqual(NO_STORE_QUERIES)
   })
 
-  test('getStudent answers null for every student', () => {
-    const [result] = runProbe('student.get.teamB', ['head_coach'], [])
+  test('getStudent answers null for every student', async () => {
+    const [result] = await runProbe('student.get.teamB', ['head_coach'], [])
     expect(result.status).toBe(404)
     expect(result.student).toBeNull()
     expect(result.store).toEqual(NO_STORE_QUERIES)
   })
 
-  test('no wellness check-in can be recorded', () => {
+  test('no wellness check-in can be recorded', async () => {
     // An unassigned coach is refused on scope; a non-member never gets that far,
     // because the capability floor (player.manage) answers first, unchanged.
-    const [coach, outsider] = runProbe(
+    const [coach, outsider] = await runProbe(
       'wellness.write.teamB',
       ['head_coach' as OrgMemberRole, null],
       [],

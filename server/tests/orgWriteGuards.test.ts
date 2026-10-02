@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 import type { OrgMemberRole } from '../src/lib/orgMembers'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Org write permission guards ──────────────────────────────────────────────
 // Report, roster and performance writes used to ride the broad app-level org
 // floor (membership), so a `medical` member could create/update/delete reports
@@ -13,9 +15,11 @@ import type { OrgMemberRole } from '../src/lib/orgMembers'
 //
 // The probe (orgWriteGuardsProbe.ts) runs in a fresh Bun process per route case
 // so its `mock.module` store/identity stubs cannot leak into the rest of the
-// suite's shared module cache. It keeps the real `resolveCaller` and the real
-// `permissions.ts` matrix, so an "allowed" case proves the route's own check
-// agreed with the role → capability table instead of a hard-coded stub.
+// suite's shared module cache, and the wait is bounded by runProbeProcess (see
+// tests/spawnProbe.ts) so a wedged child is a probe failure carrying its output
+// rather than an opaque suite timeout. It keeps the real `resolveCaller` and the
+// real `permissions.ts` matrix, so an "allowed" case proves the route's own
+// checks agreed with the role → capability table instead of a hard-coded stub.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'orgWriteGuardsProbe.ts')
@@ -40,7 +44,10 @@ type ProbeResult = {
 }
 
 /** Drive one route case once per role, in a single isolated process. */
-const runProbe = (probeCase: string, roles: readonly (OrgMemberRole | null)[]): ProbeResult[] => {
+const runProbe = async (
+  probeCase: string,
+  roles: readonly (OrgMemberRole | null)[],
+): Promise<ProbeResult[]> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -51,18 +58,9 @@ const runProbe = (probeCase: string, roles: readonly (OrgMemberRole | null)[]): 
   env.ORG_WRITE_GUARD_CASE = probeCase
   env.ORG_WRITE_GUARD_ROLES = roles.map((role) => role ?? '__non_member__').join(',')
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed for ${probeCase}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  const results = JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult[]
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed for ${probeCase}:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  const results = lastJsonLine<ProbeResult[]>(proc.stdout)
   expect(results.length).toBe(roles.length)
   return results
 }
@@ -154,52 +152,52 @@ const expectDenied = (
 // ── reports.ts → report.create ───────────────────────────────────────────────
 
 describe('report writes require report.create', () => {
-  test('POST /api/org/:auth0Id/reports allows every report-authoring role', () => {
+  test('POST /api/org/:auth0Id/reports allows every report-authoring role', async () => {
     expectAllowed(
-      runProbe('reports.create', REPORT_CREATE_ROLES),
+      await runProbe('reports.create', REPORT_CREATE_ROLES),
       201,
       'createReportRecord',
       REPORT_CREATE_ROLES,
     )
   })
 
-  test('POST /api/org/:auth0Id/reports denies a medical member and never writes', () => {
+  test('POST /api/org/:auth0Id/reports denies a medical member and never writes', async () => {
     expectDenied(
-      runProbe('reports.create', REPORT_CREATE_DENIED),
+      await runProbe('reports.create', REPORT_CREATE_DENIED),
       REPORT_CREATE_MESSAGE('Creating'),
       REPORT_CREATE_DENIED,
     )
   })
 
-  test('PUT /api/org/:auth0Id/reports/:id allows every report-authoring role', () => {
+  test('PUT /api/org/:auth0Id/reports/:id allows every report-authoring role', async () => {
     expectAllowed(
-      runProbe('reports.update', REPORT_CREATE_ROLES),
+      await runProbe('reports.update', REPORT_CREATE_ROLES),
       200,
       'updateReportRecord',
       REPORT_CREATE_ROLES,
     )
   })
 
-  test('PUT /api/org/:auth0Id/reports/:id denies a medical member and never writes', () => {
+  test('PUT /api/org/:auth0Id/reports/:id denies a medical member and never writes', async () => {
     expectDenied(
-      runProbe('reports.update', REPORT_CREATE_DENIED),
+      await runProbe('reports.update', REPORT_CREATE_DENIED),
       REPORT_CREATE_MESSAGE('Updating'),
       REPORT_CREATE_DENIED,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/reports/:id allows every report-authoring role', () => {
+  test('DELETE /api/org/:auth0Id/reports/:id allows every report-authoring role', async () => {
     expectAllowed(
-      runProbe('reports.delete', REPORT_CREATE_ROLES),
+      await runProbe('reports.delete', REPORT_CREATE_ROLES),
       200,
       'deleteReport',
       REPORT_CREATE_ROLES,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/reports/:id denies a medical member and never writes', () => {
+  test('DELETE /api/org/:auth0Id/reports/:id denies a medical member and never writes', async () => {
     expectDenied(
-      runProbe('reports.delete', REPORT_CREATE_DENIED),
+      await runProbe('reports.delete', REPORT_CREATE_DENIED),
       REPORT_CREATE_MESSAGE('Deleting'),
       REPORT_CREATE_DENIED,
     )
@@ -209,86 +207,86 @@ describe('report writes require report.create', () => {
 // ── students.ts → player.manage ──────────────────────────────────────────────
 
 describe('roster writes require player.manage', () => {
-  test('POST /api/org/:auth0Id/students allows the owning coaching roles', () => {
+  test('POST /api/org/:auth0Id/students allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('students.create', PLAYER_MANAGE_ROLES),
+      await runProbe('students.create', PLAYER_MANAGE_ROLES),
       201,
       'createStudent',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('POST /api/org/:auth0Id/students denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('POST /api/org/:auth0Id/students denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('students.create', PLAYER_MANAGE_DENIED),
+      await runProbe('students.create', PLAYER_MANAGE_DENIED),
       PLAYER_MANAGE_MESSAGE('Creating students'),
       PLAYER_MANAGE_DENIED,
     )
   })
 
-  test('PUT /api/org/:auth0Id/students/:id allows the owning coaching roles', () => {
+  test('PUT /api/org/:auth0Id/students/:id allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('students.update', PLAYER_MANAGE_ROLES),
+      await runProbe('students.update', PLAYER_MANAGE_ROLES),
       200,
       'updateStudent',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('PUT /api/org/:auth0Id/students/:id denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('PUT /api/org/:auth0Id/students/:id denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('students.update', PLAYER_MANAGE_DENIED),
+      await runProbe('students.update', PLAYER_MANAGE_DENIED),
       PLAYER_MANAGE_MESSAGE('Updating students'),
       PLAYER_MANAGE_DENIED,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/students/:id allows the owning coaching roles', () => {
+  test('DELETE /api/org/:auth0Id/students/:id allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('students.delete', PLAYER_MANAGE_ROLES),
+      await runProbe('students.delete', PLAYER_MANAGE_ROLES),
       200,
       'deleteStudent',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/students/:id denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('DELETE /api/org/:auth0Id/students/:id denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('students.delete', PLAYER_MANAGE_DENIED),
+      await runProbe('students.delete', PLAYER_MANAGE_DENIED),
       PLAYER_MANAGE_MESSAGE('Deleting students'),
       PLAYER_MANAGE_DENIED,
     )
   })
 
-  test('POST /api/org/:auth0Id/students/import allows the owning coaching roles', () => {
+  test('POST /api/org/:auth0Id/students/import allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('students.import', PLAYER_MANAGE_ROLES),
+      await runProbe('students.import', PLAYER_MANAGE_ROLES),
       200,
       'importStudents',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('POST /api/org/:auth0Id/students/import denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('POST /api/org/:auth0Id/students/import denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('students.import', PLAYER_MANAGE_DENIED),
+      await runProbe('students.import', PLAYER_MANAGE_DENIED),
       PLAYER_MANAGE_MESSAGE('Importing students'),
       PLAYER_MANAGE_DENIED,
     )
   })
 
-  test('POST /api/org/:auth0Id/students/:id/performance allows the owning coaching roles', () => {
+  test('POST /api/org/:auth0Id/students/:id/performance allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('students.performance', PLAYER_MANAGE_ROLES),
+      await runProbe('students.performance', PLAYER_MANAGE_ROLES),
       201,
       'createPerformanceMetric',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('POST /api/org/:auth0Id/students/:id/performance denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('POST /api/org/:auth0Id/students/:id/performance denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('students.performance', PLAYER_MANAGE_DENIED),
+      await runProbe('students.performance', PLAYER_MANAGE_DENIED),
       PLAYER_MANAGE_MESSAGE('Recording performance metrics'),
       PLAYER_MANAGE_DENIED,
     )
@@ -298,35 +296,35 @@ describe('roster writes require player.manage', () => {
 // ── performance.ts → player.manage ───────────────────────────────────────────
 
 describe('cross-student performance writes require player.manage', () => {
-  test('PUT /api/org/:auth0Id/performance/:id allows the owning coaching roles', () => {
+  test('PUT /api/org/:auth0Id/performance/:id allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('performance.update', PLAYER_MANAGE_ROLES),
+      await runProbe('performance.update', PLAYER_MANAGE_ROLES),
       200,
       'updatePerformanceMetric',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('PUT /api/org/:auth0Id/performance/:id denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('PUT /api/org/:auth0Id/performance/:id denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('performance.update', PLAYER_MANAGE_DENIED),
+      await runProbe('performance.update', PLAYER_MANAGE_DENIED),
       'Updating performance metrics requires the player.manage permission',
       PLAYER_MANAGE_DENIED,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/performance/:id allows the owning coaching roles', () => {
+  test('DELETE /api/org/:auth0Id/performance/:id allows the owning coaching roles', async () => {
     expectAllowed(
-      runProbe('performance.delete', PLAYER_MANAGE_ROLES),
+      await runProbe('performance.delete', PLAYER_MANAGE_ROLES),
       200,
       'deletePerformanceMetric',
       PLAYER_MANAGE_ROLES,
     )
   })
 
-  test('DELETE /api/org/:auth0Id/performance/:id denies assistant coaches, analysts, medical, players and strangers', () => {
+  test('DELETE /api/org/:auth0Id/performance/:id denies assistant coaches, analysts, medical, players and strangers', async () => {
     expectDenied(
-      runProbe('performance.delete', PLAYER_MANAGE_DENIED),
+      await runProbe('performance.delete', PLAYER_MANAGE_DENIED),
       'Deleting performance metrics requires the player.manage permission',
       PLAYER_MANAGE_DENIED,
     )

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
+import { lastJsonLine, runProbeProcess, type ProbeRun } from './spawnProbe'
+
 // ── Member offboarding (custodian model) ─────────────────────────────────────
 // Data stays with the org; the leaver loses team rows + membership, teams go
 // to a named successor or the owner custodians. Every case spawns a probe
@@ -11,15 +13,15 @@ import { join } from 'node:path'
 // - memberRoutesProbe.ts: route cases against a fixture stub (owner removal
 //   with successor + notifications, self-leave + owner notification, repeat
 //   calls 404 without re-notifying, invalid successor, owner/player refusals).
+//
+// Both spawns go through the shared `runProbeProcess` (tests/spawnProbe.ts) so a
+// wedged child is a probe failure carrying its output, not a suite timeout.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PG_PROBE = join(import.meta.dir, 'offboardPgProbe.ts')
 const ROUTES_PROBE = join(import.meta.dir, 'memberRoutesProbe.ts')
 
-const spawnProbe = (
-  probe: string,
-  extraEnv: Record<string, string>,
-): { exitCode: number; stdout: string; stderr: string } => {
+const spawnProbe = async (probe: string, extraEnv: Record<string, string>): Promise<ProbeRun> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -27,18 +29,7 @@ const spawnProbe = (
   )
   env.SERVICE_TOKEN = ''
   env.DATABASE_URL = ''
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, probe],
-    cwd: SERVER_DIR,
-    env: { ...env, ...extraEnv },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  return {
-    exitCode: proc.exitCode,
-    stdout: new TextDecoder().decode(proc.stdout),
-    stderr: new TextDecoder().decode(proc.stderr),
-  }
+  return runProbeProcess({ probe, cwd: SERVER_DIR, env: { ...env, ...extraEnv } })
 }
 
 type RouteProbeResult = {
@@ -47,13 +38,12 @@ type RouteProbeResult = {
   audits: Array<{ sql: string; values: unknown[] }>
 }
 
-const runRoutesProbe = (probeCase: string): RouteProbeResult => {
-  const { exitCode, stdout, stderr } = spawnProbe(ROUTES_PROBE, {
+const runRoutesProbe = async (probeCase: string): Promise<RouteProbeResult> => {
+  const { exitCode, stdout, stderr } = await spawnProbe(ROUTES_PROBE, {
     MEMBER_ROUTES_CASE: probeCase,
   })
   expect(exitCode, `probe failed for ${probeCase}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as RouteProbeResult
+  return lastJsonLine<RouteProbeResult>(stdout)
 }
 
 const statusOf = (result: RouteProbeResult, name: string): number => {
@@ -63,8 +53,8 @@ const statusOf = (result: RouteProbeResult, name: string): number => {
 }
 
 describe('offboard member (probe)', () => {
-  test('owner removal transfers teams and notifies the successor once', () => {
-    const result = runRoutesProbe('remove')
+  test('owner removal transfers teams and notifies the successor once', async () => {
+    const result = await runRoutesProbe('remove')
     expect(statusOf(result, 'remove')).toBe(200)
     expect(statusOf(result, 'remove-repeat')).toBe(404)
     // Exactly one notification, to the successor — the 404 repeat sends none.
@@ -75,20 +65,18 @@ describe('offboard member (probe)', () => {
     )
     const removed = result.audits.filter((a) => a.values.includes('member.removed'))
     expect(removed.length).toBe(1)
-    expect(
-      result.audits.filter((a) => a.values.includes('team.member_removed')).length,
-    ).toBe(2)
+    expect(result.audits.filter((a) => a.values.includes('team.member_removed')).length).toBe(2)
   })
 
-  test('unknown successor and owner removal are refused', () => {
-    const result = runRoutesProbe('remove-invalid')
+  test('unknown successor and owner removal are refused', async () => {
+    const result = await runRoutesProbe('remove-invalid')
     expect(statusOf(result, 'bad-successor')).toBe(422)
     expect(statusOf(result, 'owner')).toBe(400)
     expect(result.notifications).toEqual([])
   })
 
-  test('self-leave custodians to the owner and notifies once', () => {
-    const result = runRoutesProbe('leave')
+  test('self-leave custodians to the owner and notifies once', async () => {
+    const result = await runRoutesProbe('leave')
     expect(statusOf(result, 'leave')).toBe(200)
     expect(statusOf(result, 'leave-repeat')).toBe(404)
     expect(result.notifications.length).toBe(1)
@@ -98,29 +86,31 @@ describe('offboard member (probe)', () => {
     )
   })
 
-  test('leaving your own org and player self-leave are refused', () => {
-    expect(statusOf(runRoutesProbe('leave-own'), 'leave-own')).toBe(400)
-    expect(statusOf(runRoutesProbe('leave-player'), 'leave-player')).toBe(400)
+  test('leaving your own org and player self-leave are refused', async () => {
+    expect(statusOf(await runRoutesProbe('leave-own'), 'leave-own')).toBe(400)
+    expect(statusOf(await runRoutesProbe('leave-player'), 'leave-player')).toBe(400)
   })
 })
 
 const hasTestDb = Boolean(process.env.TEST_DATABASE_URL)
 
-;(hasTestDb ? describe : describe.skip)('offboard member against ephemeral Postgres (probe)', () => {
-  test('transfer, survival, refusals, and rollback all hold', () => {
-    const { exitCode, stdout, stderr } = spawnProbe(PG_PROBE, {})
-    expect(exitCode, `probe failed:\n${stdout}\n${stderr}`).toBe(0)
-    const lines = stdout.trim().split('\n')
-    const result = JSON.parse(lines[lines.length - 1] ?? '') as { done: string[] }
-    expect(result.done).toEqual([
-      'successor',
-      'cross-org',
-      'reinvite',
-      'custodian',
-      'owner-refused',
-      'player-refused',
-      'rollback',
-      'player-link',
-    ])
-  })
-})
+;(hasTestDb ? describe : describe.skip)(
+  'offboard member against ephemeral Postgres (probe)',
+  () => {
+    test('transfer, survival, refusals, and rollback all hold', async () => {
+      const { exitCode, stdout, stderr } = await spawnProbe(PG_PROBE, {})
+      expect(exitCode, `probe failed:\n${stdout}\n${stderr}`).toBe(0)
+      const result = lastJsonLine<{ done: string[] }>(stdout)
+      expect(result.done).toEqual([
+        'successor',
+        'cross-org',
+        'reinvite',
+        'custodian',
+        'owner-refused',
+        'player-refused',
+        'rollback',
+        'player-link',
+      ])
+    })
+  },
+)

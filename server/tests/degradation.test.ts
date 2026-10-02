@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Degradation contract ─────────────────────────────────────────────────────
 // Everything down at once (no DATABASE_URL, Redis failing, engine
 // refusing) against the real composed app. Fail-open where defaults exist
@@ -11,10 +13,15 @@ import { join } from 'node:path'
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'degradationProbe.ts')
 
+// The one probe that is genuinely slower than its peers: it waits out real
+// connection attempts against a Redis that is refusing, so it measured ~2.4s
+// where the median probe is ~0.9s. Its own budget rather than the shared one.
+const DEGRADATION_TIMEOUT_MS = 20_000
+
 type Check = { route: string; status: number; code?: unknown }
 
 describe('degradation contract (all dependencies down)', () => {
-  test('defaults serve, truth requires the store, ops sees the outage', () => {
+  test('defaults serve, truth requires the store, ops sees the outage', async () => {
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         (entry): entry is [string, string] => entry[1] !== undefined,
@@ -24,18 +31,14 @@ describe('degradation contract (all dependencies down)', () => {
     env.DATABASE_URL = ''
     env.ENGINE_URL = ''
 
-    const proc = Bun.spawnSync({
-      cmd: [process.execPath, PROBE],
+    const proc = await runProbeProcess({
+      probe: PROBE,
       cwd: SERVER_DIR,
       env,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      timeoutMs: DEGRADATION_TIMEOUT_MS,
     })
-    const stdout = new TextDecoder().decode(proc.stdout)
-    const stderr = new TextDecoder().decode(proc.stderr)
-    expect(proc.exitCode, `degradation probe failed:\n${stdout}\n${stderr}`).toBe(0)
-    const lines = stdout.trim().split('\n')
-    const { checks } = JSON.parse(lines[lines.length - 1] ?? '') as { checks: Check[] }
+    expect(proc.exitCode, `degradation probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+    const { checks } = lastJsonLine<{ checks: Check[] }>(proc.stdout)
     const byRoute = Object.fromEntries(checks.map((c) => [c.route, c]))
 
     // Fail-open: consent/prefs defaults render with no store.

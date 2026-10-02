@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Deep health ──────────────────────────────────────────────────────────────
 // /health/deep reports per-component status for ops monitoring: redis,
 // database, engine, queue depth. Shallow /health stays a fast 200 for the
@@ -9,6 +11,11 @@ import { join } from 'node:path'
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'healthDeepProbe.ts')
+
+// One of the two probes slower than the median (~0.9s): each scenario reports
+// on a backend that is down, so it pays the connection timeout. Measured ~2.2s
+// locally, hence its own budget rather than the shared one.
+const HEALTH_DEEP_TIMEOUT_MS = 20_000
 
 type DeepBody = {
   status: 'healthy' | 'degraded' | 'unhealthy'
@@ -20,7 +27,7 @@ type DeepBody = {
   }
 }
 
-const runCase = (scenario: string): { status: number; body: DeepBody } => {
+const runCase = async (scenario: string): Promise<{ status: number; body: DeepBody }> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -31,23 +38,22 @@ const runCase = (scenario: string): { status: number; body: DeepBody } => {
   env.ENGINE_URL = ''
   env.HEALTH_DEEP_CASE = scenario
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
+  const proc = await runProbeProcess({
+    probe: PROBE,
     cwd: SERVER_DIR,
     env,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    timeoutMs: HEALTH_DEEP_TIMEOUT_MS,
   })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `health probe failed for ${scenario}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as { status: number; body: DeepBody }
+  expect(
+    proc.exitCode,
+    `health probe failed for ${scenario}:\n${proc.stdout}\n${proc.stderr}`,
+  ).toBe(0)
+  return lastJsonLine<{ status: number; body: DeepBody }>(proc.stdout)
 }
 
 describe('/health/deep', () => {
-  test('healthy when every backend answers', () => {
-    const { status, body } = runCase('all-up')
+  test('healthy when every backend answers', async () => {
+    const { status, body } = await runCase('all-up')
     expect(status).toBe(200)
     expect(body.status).toBe('healthy')
     expect(body.checks.redis.ok).toBe(true)
@@ -55,23 +61,23 @@ describe('/health/deep', () => {
     expect(body.checks.engine.ok).toBe(true)
   })
 
-  test('redis down is unhealthy (503)', () => {
-    const { status, body } = runCase('redis-down')
+  test('redis down is unhealthy (503)', async () => {
+    const { status, body } = await runCase('redis-down')
     expect(status).toBe(503)
     expect(body.status).toBe('unhealthy')
     expect(body.checks.redis.ok).toBe(false)
   })
 
-  test('database down degrades (200), Redis still rules the 503', () => {
-    const { status, body } = runCase('db-down')
+  test('database down degrades (200), Redis still rules the 503', async () => {
+    const { status, body } = await runCase('db-down')
     expect(status).toBe(200)
     expect(body.status).toBe('degraded')
     expect(body.checks.database.ok).toBe(false)
     expect(body.checks.redis.ok).toBe(true)
   })
 
-  test('engine down degrades (200)', () => {
-    const { status, body } = runCase('engine-down')
+  test('engine down degrades (200)', async () => {
+    const { status, body } = await runCase('engine-down')
     expect(status).toBe(200)
     expect(body.status).toBe('degraded')
     expect(body.checks.engine.ok).toBe(false)

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── Authorization matrix ─────────────────────────────────────────────────────
 // Every non-capability route × every role, driven against the real composed
 // app (buildApp) with a fixture store. The policy table
@@ -42,7 +44,7 @@ type ProbeResult = {
   total: number
 }
 
-const runProbe = (): ProbeResult => {
+const runProbe = async (): Promise<ProbeResult> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -56,31 +58,18 @@ const runProbe = (): ProbeResult => {
   delete env.MATRIX_ONLY
   delete env.MATRIX_TRACE
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `matrix probe failed:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `matrix probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<ProbeResult>(proc.stdout)
 }
 
 describe('authorization matrix', () => {
-  test(
-    'every route × role matches the policy table with no uncovered routes',
-    () => {
-      const result = runProbe()
-      // Floor, not an exact count: new routes add cases, never remove them.
-      expect(result.total).toBeGreaterThan(1000)
-      expect(result.uncovered).toEqual([])
-      expect(result.failures).toEqual([])
-      expect(result.failureCount).toBe(0)
-    },
-    300000,
-  )
+  test('every route × role matches the policy table with no uncovered routes', async () => {
+    const result = await runProbe()
+    // Floor, not an exact count: new routes add cases, never remove them.
+    expect(result.total).toBeGreaterThan(1000)
+    expect(result.uncovered).toEqual([])
+    expect(result.failures).toEqual([])
+    expect(result.failureCount).toBe(0)
+  }, 300000)
 })

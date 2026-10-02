@@ -3,6 +3,8 @@ import { join } from 'path'
 
 import { buildFailedAnalysisStatus, classifyFailure, JOB_PRIORITY } from '../src/lib/queue'
 
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
+
 // ── queue.ts import hygiene + pure policy functions ─────────────────────────
 // Importing queue.ts must not connect Redis, start intervals, or register
 // signal handlers — production builds all of that in startQueueInfrastructure().
@@ -12,23 +14,31 @@ import { buildFailedAnalysisStatus, classifyFailure, JOB_PRIORITY } from '../src
 // configured (every handle stays null — the "queue disabled" posture), which
 // is as far as lifecycle testing can go without a live Redis; the real
 // Upstash-configured startup path is covered by the live smoke.
+//
+// Both children are `bun -e` one-liners rather than probe FILES — the script is
+// the fixture — but the wait is the same bounded one every other probe uses
+// (see tests/spawnProbe.ts), so a wedged child here is a probe failure carrying
+// its partial output, not an opaque 30s suite timeout.
 
 const QUEUE_MODULE = join(import.meta.dir, '../src/lib/queue.ts')
 const SERVER_DIR = join(import.meta.dir, '..')
 
-const runScript = (script: string, opts: { cwd: string; env?: Record<string, string> }) => {
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, '-e', script],
+/** A plain copy of the parent env; the lifecycle case then scrubs it below. */
+const parentEnv = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+
+const runScript = async (script: string, opts: { cwd: string; env?: Record<string, string> }) => {
+  const proc = await runProbeProcess({
+    script,
     cwd: opts.cwd,
-    env: opts.env ?? process.env,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    env: opts.env ?? parentEnv(),
   })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `subprocess failed:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  return JSON.parse(lines[lines.length - 1]) as Record<string, unknown>
+  expect(proc.exitCode, `subprocess failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<Record<string, unknown>>(proc.stdout)
 }
 
 const importOnlyScript = `
@@ -75,10 +85,10 @@ process.exit(0)
 `
 
 describe('import hygiene (fresh process, Redis env intact)', () => {
-  test('importing queue.ts registers no signal handlers, opens no sockets, builds no instances', () => {
+  test('importing queue.ts registers no signal handlers, opens no sockets, builds no instances', async () => {
     // cwd = server dir so Bun autoloads server/.env — the import must stay
     // inert even with a real Upstash configuration present.
-    const result = runScript(importOnlyScript, { cwd: SERVER_DIR })
+    const result = await runScript(importOnlyScript, { cwd: SERVER_DIR })
 
     expect(result.after).toEqual(result.before)
     expect(result.connects).toBe(0)
@@ -153,17 +163,14 @@ console.log(
 `
 
 describe('start/stop lifecycle (fresh process, no Redis configured)', () => {
-  test('start wires signals + ready callbacks once; stop closes them all back down', () => {
-    const env: Record<string, string> = {}
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) env[key] = value
-    }
+  test('start wires signals + ready callbacks once; stop closes them all back down', async () => {
+    const env = parentEnv()
     // Strip Redis/DB config so construction stays connectionless here.
     env.UPSTASH_REDIS_REST_URL = ''
     env.UPSTASH_REDIS_REST_TOKEN = ''
     env.UPSTASH_REDIS_IOREDIS_URL = ''
     env.DATABASE_URL = ''
-    const result = runScript(lifecycleScript, { cwd: '/tmp', env })
+    const result = await runScript(lifecycleScript, { cwd: '/tmp', env })
 
     const baseline = result.beforeStart as Record<string, number>
     const afterStart = result.afterStart as Record<string, number>

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
+
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
 
 // Match fixtures and the team list carry a team dimension, so a team coach must
 // see their own rows and not another team's. `team.manage` is a capability, not
@@ -6,6 +9,12 @@ import { describe, expect, test } from 'bun:test'
 //
 // A match with no team is a club-level fixture and stays org-wide, the same
 // rule the objectives/plans filter uses for a row that belongs to nobody.
+//
+// The probe spawn is bounded by runProbeProcess so a wedged child is a probe
+// failure carrying its output, not an opaque suite timeout (tests/spawnProbe.ts).
+
+const SERVER_DIR = join(import.meta.dir, '..')
+const PROBE = join(import.meta.dir, 'competeScopeProbe.ts')
 
 type Result = {
   role: string | null
@@ -16,18 +25,16 @@ type Result = {
 }
 
 const run = async (probeCase: string, roles: string[]): Promise<Result[]> => {
-  const proc = Bun.spawn(['bun', 'run', 'tests/competeScopeProbe.ts'], {
-    cwd: new URL('..', import.meta.url).pathname,
-    env: { ...process.env, COMPETE_SCOPE_CASE: probeCase, COMPETE_SCOPE_ROLES: roles.join(',') },
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const out = await new Response(proc.stdout).text()
-  const err = await new Response(proc.stderr).text()
-  await proc.exited
-  const last = out.trim().split('\n').at(-1) ?? ''
-  if (!last.startsWith('[')) throw new Error(`probe ${probeCase} produced no result: ${err}`)
-  return JSON.parse(last) as Result[]
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  env.COMPETE_SCOPE_CASE = probeCase
+  env.COMPETE_SCOPE_ROLES = roles.join(',')
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe ${probeCase} failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  return lastJsonLine<Result[]>(proc.stdout)
 }
 
 const TEAM_COACHES = ['coach', 'head_coach', 'assistant_coach']
