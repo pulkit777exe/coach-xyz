@@ -98,7 +98,13 @@ jobs:
 
       - name: Test
         working-directory: server
-        run: bun test
+        # `bun run test`, never bare `bun test` — the script's flags are the
+        # contract and re-spelling the command here silently drops both:
+        # --timeout 30000 (Bun's default is 5s, which kills the probe-spawning
+        # tests mid-flight) and --isolate (a mock.module in one file otherwise
+        # replaces that module for every file after it, so the suite's result
+        # depends on readdir order — alphabetical here, scrambled on the runner).
+        run: bun run test
 
   web-next:
     name: web-next (Next.js)

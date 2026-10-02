@@ -8,7 +8,7 @@
       "dev:web": "cd web-next && npm run dev",
       "typecheck": "cd server && bun run type-check && cd ../web-next && npx tsc --noEmit",
       "lint": "cd server && bun run lint && cd ../web-next && npm run lint",
-      "test": "cd server && bun test --timeout 30000 && cd ../web-next && npm test",
+      "test": "cd server && bun run test && cd ../web-next && npm test",
       "format": "prettier --write server web-next",
       "format:check": "prettier --check server web-next",
       "build": "cd web-next && npm run build",
