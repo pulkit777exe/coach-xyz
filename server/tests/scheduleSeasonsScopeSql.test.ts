@@ -9,6 +9,7 @@ import {
 import { getScheduleEvent, listSchedule } from '../src/lib/org/schedule'
 import { listSeasons } from '../src/lib/org/compete'
 import { uuidArrayLiteral } from '../src/lib/org/scope'
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 // ── Schedule/season scope in SQL, and the column that carries it ─────────────
 // scheduleScope.test.ts proves the handlers ask for the right scope; this file
@@ -37,8 +38,6 @@ const SEASON_B = '00000000-0000-4000-8000-0000000000d4'
 
 const LITERAL_A = `{${TEAM_A}}`
 const LITERAL_AB = `{${TEAM_A},${TEAM_B}}`
-
-const hasDb = Boolean(process.env.DATABASE_URL)
 
 type Statement = { sql: string; values: unknown[] }
 
@@ -218,8 +217,10 @@ describe('the team column is additive and idempotent', () => {
   })
 })
 
-// ── Live Postgres (requires DATABASE_URL) ────────────────────────────────────
-;(hasDb ? describe : describe.skip)('schedule + season scope against live Postgres', () => {
+// ── Live Postgres (needs a configured database) ─────────────────────────────
+describeLiveDb('schedule + season scope against live Postgres', () => {
+  useLiveTestDb()
+
   const cleanup = async (db: SQL) => {
     await db`delete from matches where org_auth0_id = ${ORG}`
     await db`delete from seasons where org_auth0_id = ${ORG}`

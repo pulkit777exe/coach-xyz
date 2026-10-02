@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 
 import { classifyFailure } from '../src/lib/queue'
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 // ── Notification row shape contract ─────────────────────────────────────────
 // These tests verify the data shapes and pure helpers that the notification
-// system depends on.  DB-touching functions are skipped when DATABASE_URL is
-// not set, keeping the baseline green in CI without external services.
+// system depends on.  The DB-touching half below runs whenever a database is
+// configured (TEST_DATABASE_URL in CI, DATABASE_URL locally) and skips
+// otherwise, so no external service is needed to keep the baseline green.
 //
 // The failed-job detection cases below run against the REAL predicate
 // (classifyFailure, exported by queue.ts — the module that owns retry
 // policy), not a copy of the logic. queue.ts is side-effect-free to import.
-
-const hasDb = Boolean(process.env.DATABASE_URL)
 
 describe('notification row shape', () => {
   test('CreateNotificationInput type matches expected fields', () => {
@@ -144,10 +144,12 @@ describe('SSE event formatting', () => {
   })
 })
 
-// ── Integration tests (require DATABASE_URL) ────────────────────────────────
-// 60s budgets: live Neon round trips (cold-pool handshakes, full-schema init
-// on first touch, 0.3-0.8s warm queries) all exceed bun's 5s unit default.
-;(hasDb ? describe : describe.skip)('notifications DB integration', () => {
+// ── Integration tests (need a configured database) ──────────────────────────
+// 60s budgets: cold-pool handshakes, full-schema init on first touch and warm
+// round trips all exceed bun's 5s unit default.
+describeLiveDb('notifications DB integration', () => {
+  useLiveTestDb()
+
   test(
     'createNotification inserts a row and returns it',
     async () => {

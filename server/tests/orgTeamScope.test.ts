@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import type { SQL } from 'bun'
 
-import { setHistoryStoreConnectionForTests, withHistoryStoreOrThrow } from '../src/lib/historyStore'
-import { getReport, listReports } from '../src/lib/org/reports'
+import { setHistoryStoreConnectionForTests } from '../src/lib/historyStore'
+import { listReports } from '../src/lib/org/reports'
 import { getObjective, listObjectives, objectiveVisibleTo } from '../src/lib/org/objectives'
 import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/org/plans'
 
@@ -14,10 +14,16 @@ import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/or
 // gated only by the capability, so a coach assigned to team A could read and
 // write team B's rows by guessing a student id.
 //
-// Three layers, each proving what it can and nothing more:
-//   1. live-DB (skipped without DATABASE_URL): the REAL SQL runs against REAL
-//      Postgres, so "team B rows are absent" and "a team-level objective IS the
-//      team A coach's" are observed, not simulated.
+// Three layers, each proving what it can and nothing more. Layer 1 used to live
+// in this file; it is now orgTeamScopeLive.test.ts, because a suite that mixes a
+// live database with process-spawning probes has two coupled costs — enabling the
+// live half made every probe spawn here jump to exactly PROBE_TIMEOUT_MS, which
+// is what got the gate fix reverted in f6b16fd. Read that file's header before
+// moving anything back.
+//
+//   1. live-DB (orgTeamScopeLive.test.ts, gated on the ephemeral Postgres): the
+//      REAL SQL runs against REAL rows, so "team B rows are absent" and "a
+//      team-level objective IS the team A coach's" are observed, not simulated.
 //   2. store-stub SQL: the emitted query text and the BOUND parameters, which
 //      pins the team_id-OR-student_id rule, the empty-scope NULL binding, and
 //      that an org-wide caller is not narrowed at all.
@@ -30,7 +36,6 @@ import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/or
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'orgTeamScopeProbe.ts')
-const hasDb = Boolean(process.env.DATABASE_URL)
 
 // Fixture world, mirrored in the probe.
 const ORG = 'auth0|org-team-scope-test'
@@ -125,145 +130,12 @@ const byRole = (results: ProbeResult[], role: string): ProbeResult => {
   return found as ProbeResult
 }
 
-const idsOf = (rows: unknown): string[] =>
-  ((rows ?? []) as Array<{ id: string }>).map((r) => r.id).sort()
-
 // A coach on team A: sees team A's student, must not see team B's.
 const COACH_A = 'coach'
 // The same role with no team membership — the empty visible set.
 const COACH_NONE = UNASSIGNED
 /** Org-wide readers: the policy says they see the whole org, unassigned. */
 const ORG_WIDE_READERS: readonly string[] = ['analyst', 'medical']
-
-// ── 1. Live Postgres: the real scope SQL against real rows ───────────────────
-
-;(hasDb ? describe : describe.skip)('scope SQL against live Postgres', () => {
-  const seed = async (db: SQL) => {
-    await db`delete from training_objectives where org_auth0_id = ${ORG}`
-    await db`delete from training_plans where org_auth0_id = ${ORG}`
-    await db`delete from reports where auth0_id = ${ORG}`
-    await db`delete from students where auth0_id = ${ORG}`
-    await db`
-      insert into students (id, auth0_id, full_name, team_id, status) values
-        (${STUDENT_A}::uuid, ${ORG}, 'Scope A', ${TEAM_A}::uuid, 'active'),
-        (${STUDENT_B}::uuid, ${ORG}, 'Scope B', ${TEAM_B}::uuid, 'active');
-    `
-    // Objectives: team-level for each team, a student-level one, an org-level one.
-    await db`
-      insert into training_objectives (org_auth0_id, team_id, student_id, title) values
-        (${ORG}, ${TEAM_A}::uuid, null, 'objective team A'),
-        (${ORG}, ${TEAM_B}::uuid, null, 'objective team B'),
-        (${ORG}, null, ${STUDENT_A}::uuid, 'objective student A'),
-        (${ORG}, null, null, 'objective org level');
-    `
-    await db`
-      insert into training_plans (org_auth0_id, team_id, student_id, title) values
-        (${ORG}, ${TEAM_A}::uuid, null, 'plan team A'),
-        (${ORG}, ${TEAM_B}::uuid, null, 'plan team B'),
-        (${ORG}, null, ${STUDENT_A}::uuid, 'plan student A'),
-        (${ORG}, null, null, 'plan org level');
-    `
-    // reports carry no team_id — only a student, or none at all.
-    await db`
-      insert into reports (auth0_id, student_id, report_type, title) values
-        (${ORG}, ${STUDENT_A}::uuid, 'progress', 'report A'),
-        (${ORG}, ${STUDENT_B}::uuid, 'progress', 'report B'),
-        (${ORG}, null, 'monthly', 'report org level');
-    `
-  }
-
-  const cleanup = async (db: SQL) => {
-    await db`delete from training_objectives where org_auth0_id = ${ORG}`
-    await db`delete from training_plans where org_auth0_id = ${ORG}`
-    await db`delete from reports where auth0_id = ${ORG}`
-    await db`delete from students where auth0_id = ${ORG}`
-  }
-
-  // Seed once for the group: every scoped read below is a pure read. The hook
-  // budget is generous because the first call also runs ensureInitialized.
-  beforeAll(() => withHistoryStoreOrThrow(seed), { timeout: 60000 })
-  afterAll(() => withHistoryStoreOrThrow(cleanup), { timeout: 60000 })
-
-  /** What team A's coach sees: { teamIds: [TEAM_A], studentIds: [STUDENT_A] }. */
-  const coachA = { teamIds: [TEAM_A], studentIds: [STUDENT_A] }
-  const noScope = undefined
-
-  test('a team A coach lists only team A objectives — team B and org-level rows are absent', async () => {
-    const rows = await listObjectives(ORG, { scope: coachA })
-    expect(rows.map((r) => r.title).sort()).toEqual(['objective student A', 'objective team A'])
-    expect(rows.every((r) => r.team_id === TEAM_A || r.student_id === STUDENT_A)).toBe(true)
-  })
-
-  test('a team-level objective (team_id set, student_id null) is visible to that team coach', async () => {
-    const rows = await listObjectives(ORG, { scope: coachA })
-    const teamLevel = rows.find((r) => r.title === 'objective team A')
-    expect(teamLevel).toBeDefined()
-    expect(teamLevel?.team_id).toBe(TEAM_A)
-    expect(teamLevel?.student_id).toBeNull()
-  })
-
-  test('an unassigned coach sees no objective at all, not even the org-level row', async () => {
-    const rows = await listObjectives(ORG, { scope: { teamIds: [], studentIds: [] } })
-    expect(rows).toEqual([])
-  })
-
-  test('an org-wide reader sees every objective, team-level and org-level alike', async () => {
-    const rows = await listObjectives(ORG, { scope: noScope })
-    expect(rows.map((r) => r.title).sort()).toEqual([
-      'objective org level',
-      'objective student A',
-      'objective team A',
-      'objective team B',
-    ])
-  })
-
-  test('the existing team_id/student_id/status query filters still compose with scope', async () => {
-    const scoped = await listObjectives(ORG, { scope: coachA, teamId: TEAM_A })
-    expect(scoped.map((r) => r.title)).toEqual(['objective team A'])
-    // A filter that points outside the scope matches nothing, not everything.
-    const outside = await listObjectives(ORG, { scope: coachA, teamId: TEAM_B })
-    expect(outside).toEqual([])
-    expect(idsOf(await listObjectives(ORG, { scope: noScope, status: 'active' })).length).toBe(4)
-  })
-
-  test('plans follow the same team_id-OR-student_id rule', async () => {
-    expect((await listTrainingPlans(ORG, { scope: coachA })).map((r) => r.title).sort()).toEqual([
-      'plan student A',
-      'plan team A',
-    ])
-    expect(await listTrainingPlans(ORG, { scope: { teamIds: [], studentIds: [] } })).toEqual([])
-    expect((await listTrainingPlans(ORG, { scope: noScope })).length).toBe(4)
-    expect(
-      (await listTrainingPlans(ORG, { scope: coachA, studentId: STUDENT_A })).map((r) => r.title),
-    ).toEqual(['plan student A'])
-  })
-
-  test('reports scope purely on the visible student set (they carry no team_id)', async () => {
-    expect(
-      (await listReports(ORG, { visibleStudentIds: [STUDENT_A] })).map((r) => r.title),
-    ).toEqual(['report A'])
-    expect(await listReports(ORG, { visibleStudentIds: [] })).toEqual([])
-    // A report with no student is org-level, so a scoped caller never sees it.
-    expect(
-      (await listReports(ORG, { visibleStudentIds: [STUDENT_A, STUDENT_B] }))
-        .map((r) => r.title)
-        .sort(),
-    ).toEqual(['report A', 'report B'])
-    // Unscoped stays org-wide — the analyst/medical path.
-    expect((await listReports(ORG)).length).toBe(3)
-  })
-
-  test("a single-object read of another student's report is absent, not merely filtered later", async () => {
-    const orgWide = await listReports(ORG)
-    const teamB = orgWide.find((r) => r.student_id === STUDENT_B) as { id: string }
-    expect(teamB).toBeDefined()
-    expect(await getReport(ORG, teamB.id)).toBeTruthy()
-    expect(await getReport(ORG, teamB.id, { visibleStudentIds: [STUDENT_A] })).toBeNull()
-    expect(
-      await getReport(ORG, teamB.id, { visibleStudentIds: [STUDENT_A, STUDENT_B] }),
-    ).toBeTruthy()
-  })
-})
 
 // ── 2. The emitted SQL and its bound parameters ──────────────────────────────
 
