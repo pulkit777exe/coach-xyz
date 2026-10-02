@@ -66,6 +66,11 @@ export type ImportRow = {
   notes?: string
   status?: string
   joined_on?: string
+  /**
+   * Team to file this row under. Optional per row — the request may also carry
+   * one batch-level `team_id` as a default for rows that omit it.
+   */
+  team_id?: string
 }
 
 /**
@@ -141,6 +146,17 @@ export function validateStudentRow(
       return { ok: false, reason: 'joined_on must be YYYY-MM-DD' }
     }
     cleaned.joined_on = row.joined_on
+  }
+
+  // team_id — passed through untouched on purpose. This function is pure and has
+  // no org context, so it cannot prove the team exists *in this org* (that is
+  // `resolveTeamId`'s job, and it is a `getTeam` round trip) nor that it is
+  // inside the caller's scope (that is the route's job). Validating the shape
+  // here would give three validators for one field and still miss the only two
+  // checks that matter. The route resolves and scope-checks it, and overwrites
+  // this value with the resolved (or defaulted) team before the insert.
+  if (typeof row.team_id === 'string' && row.team_id !== '') {
+    cleaned.team_id = row.team_id
   }
 
   return { ok: true, cleaned }
