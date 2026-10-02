@@ -117,6 +117,12 @@ mock.module('../src/lib/orgMembers', () => ({
 mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string) => teamsFor(currentRole),
+  // `students.ts` imports this for the team-reassignment branch. A partial mock
+  // fails the WHOLE probe process with "Export named 'setStudentTeam' not
+  // found", so every export the route reaches for has to be here even when the
+  // case under test never calls it. Returns null = "student or team not in this
+  // org", which is the honest answer for a stub.
+  setStudentTeam: async () => null,
 }))
 
 mock.module('../src/lib/analyses', () => ({
