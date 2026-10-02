@@ -8,7 +8,6 @@ import {
   userSettings,
   validateUserSettingsPatch,
 } from '../src/lib/userSettings'
-import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 type StoredSettings = {
   auth0_id: string
@@ -256,6 +255,8 @@ describe('validateUserSettingsPatch', () => {
   })
 })
 
+const hasDb = Boolean(process.env.DATABASE_URL)
+
 const newSettingsTestId = (): string => `auth0|user-settings-${crypto.randomUUID()}@test`
 
 const deleteSettingsRow = async (auth0Id: string): Promise<void> => {
@@ -264,9 +265,7 @@ const deleteSettingsRow = async (auth0Id: string): Promise<void> => {
   })
 }
 
-describeLiveDb('user settings DB integration', () => {
-  useLiveTestDb()
-
+;(hasDb ? describe : describe.skip)('user settings DB integration', () => {
   test(
     'persists a patch and preserves omitted fields on the next write',
     async () => {

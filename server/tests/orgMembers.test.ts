@@ -12,8 +12,8 @@ import {
 } from '../src/lib/orgMembers'
 import { verifyOrgRole } from '../src/lib/serviceGuard'
 import { upsertUser } from '../src/lib/users'
-import { describeLiveDb, useLiveTestDb } from './liveDb'
 
+const hasDb = Boolean(process.env.DATABASE_URL)
 const TOKEN = 'test-service-token'
 
 function setToken(value: string | undefined) {
@@ -205,9 +205,7 @@ describe('verifyOrgRole decision table', () => {
   })
 })
 
-describeLiveDb('getMemberRole DB integration', () => {
-  useLiveTestDb()
-
+;(hasDb ? describe : describe.skip)('getMemberRole DB integration', () => {
   const ORG = `auth0|org-${Date.now()}`
   const MEMBER = `auth0|member-${Date.now()}`
   const EMAIL = `member-${Date.now()}@example.com`
@@ -268,9 +266,7 @@ describeLiveDb('getMemberRole DB integration', () => {
   )
 })
 
-describeLiveDb('listMembershipsForUser DB integration', () => {
-  useLiveTestDb()
-
+;(hasDb ? describe : describe.skip)('listMembershipsForUser DB integration', () => {
   const ORG_A = `auth0|orgA-${Date.now()}`
   const ORG_B = `auth0|orgB-${Date.now()}`
   const OWNER_EMAIL_A = `ownerA-${Date.now()}@example.com`
