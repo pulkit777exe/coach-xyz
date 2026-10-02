@@ -72,8 +72,16 @@ export function createShareTokenStore(client: RedisLike = redis): ShareTokenStor
   return {
     async createShareToken({ auth0_id, server_job_id, expiresInHours = DEFAULT_EXPIRES_HOURS }) {
       const token = generateShareToken()
-      const created_at = new Date().toISOString()
-      const expires_at = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
+      // One clock read, not two. `new Date().toISOString()` and a later
+      // `Date.now()` are two samples of a moving clock, so whenever they
+      // straddle a millisecond boundary the recorded span is off by 1ms — and
+      // `createShareToken honours custom expiry` asserts the span exactly, so
+      // the suite went red roughly once every 2,700 runs, hermetic and
+      // unrelated to whatever else was running. Derive both ends from a single
+      // instant and the pair is exact by construction.
+      const createdAtMs = Date.now()
+      const created_at = new Date(createdAtMs).toISOString()
+      const expires_at = new Date(createdAtMs + expiresInHours * 60 * 60 * 1000).toISOString()
       const record: ShareTokenRecord = {
         auth0_id,
         server_job_id,
