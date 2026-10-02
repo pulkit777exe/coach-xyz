@@ -34,6 +34,7 @@ type CallKey =
   | 'deleteAttendance'
   | 'notifyAttendanceRecorded'
   | 'getStudent'
+  | 'getStudentsByIds'
   | 'listPerformance'
   | 'getStudentTrends'
   | 'compareStudents'
