@@ -22,6 +22,14 @@ const check = (cond: boolean, message: string): void => {
 const db = new SQL(TEST_DATABASE_URL)
 setHistoryStoreConnectionForTests(db)
 
+// Init FIRST. The pre-migration surgery below is plain `alter table students`,
+// and on a fresh database `students` does not exist yet — so running it before
+// the DDL owner died with 42P01 `relation "students" does not exist`, and only
+// on the ephemeral Postgres CI provides (every already-initialised database
+// hides it). Schema first, then rebuild the old world, then re-run init to
+// prove the migration.
+await ensureInitialized()
+
 // Rebuild the old world: drop the named constraint if present and install the
 // three-value inline check under its auto-generated name.
 await db.unsafe(`alter table if exists students drop constraint if exists students_status_check;`)
@@ -43,6 +51,12 @@ await db.unsafe(
   `alter table students add constraint students_status_old check (status in ('active','inactive','transferred'));`,
 )
 
+// Re-arm the DDL owner. `ensureInitialized` memoises its run in a shared
+// `initPromise`, so the second call below would return the FIRST call's already
+// resolved promise and never re-execute the migration — the very thing this
+// probe exists to prove. The test seam resets that memo along with the
+// connection, which is exactly the "start over" this needs.
+setHistoryStoreConnectionForTests(db)
 await ensureInitialized()
 
 const named = await db<{ conname: string }[]>`

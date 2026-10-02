@@ -448,6 +448,19 @@ export const ensureInitialized = async () => {
             updated_at timestamptz not null default now()
           );
         `
+            // Same block, not a sibling: `organizations.timezone` anchors
+            // scheduling and reporting so a club's "today" matches its own
+            // calendar. This used to be a separate IIFE in this same
+            // Promise.all level that probed information_schema and then
+            // ALTERed — so on a fresh database the ALTER could run before the
+            // CREATE committed (the store is a pool, not one connection) and
+            // init died with 42P01 `relation "organizations" does not exist`,
+            // which aborted the whole level and left every later store call
+            // failing. Invisible on a migrated DB; fatal on first boot, which
+            // is exactly the ephemeral-Postgres case CI runs.
+            await store`
+          alter table organizations add column if not exists timezone text;
+        `
           })(),
           (async () => {
             await store`
@@ -666,19 +679,6 @@ export const ensureInitialized = async () => {
             updated_at timestamptz not null default now()
           );
         `
-          })(),
-          // Organization settings. `organizations.name` already exists but was
-          // never editable or read — the switcher derived a display name from
-          // the owner's user row instead. `timezone` anchors scheduling and
-          // reporting so a club's "today" matches its own calendar.
-          (async () => {
-            const columns = await store<{ column_name: string }[]>`
-              select column_name from information_schema.columns
-              where table_name = 'organizations' and column_name = 'timezone';
-            `
-            if (columns.length === 0) {
-              await store`alter table organizations add column timezone text;`
-            }
           })(),
           // Player consent, recorded per purpose so a future policy version can be
           // re-consented. It is the player's own record, not an org field.
