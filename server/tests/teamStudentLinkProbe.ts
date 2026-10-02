@@ -44,7 +44,7 @@ const call = async (
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   )
-  return { status: res.status, body: (await res.json().catch(() => null)) ?? {} }
+  return { status: res.status, body: ((await res.json().catch(() => null)) ?? {}) as Record<string, unknown> }
 }
 
 const db = new SQL(TEST_DATABASE_URL)

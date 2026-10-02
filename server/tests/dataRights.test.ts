@@ -76,7 +76,7 @@ describe('org data rights (probe)', () => {
     expect(statusOf(result, 'foreign-patch')).toBe(404)
     expect(statusOf(result, 'list')).toBe(200)
     const list = result.results.find((r) => r.name === 'list')
-    expect(list?.extra).toEqual([
+    expect(list?.extra as unknown as string[]).toEqual([
       '00000000-0000-4000-8000-0000000000e1',
       '00000000-0000-4000-8000-0000000000e2',
     ])

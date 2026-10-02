@@ -94,6 +94,7 @@ type CallKey =
   | 'deleteAttendance'
   | 'notifyAttendanceRecorded'
   | 'getStudent'
+  | 'getStudentsByIds'
   | 'listPerformance'
   | 'getStudentTrends'
   | 'compareStudents'
@@ -109,6 +110,7 @@ const calls: Record<CallKey, number> = {
   deleteAttendance: 0,
   notifyAttendanceRecorded: 0,
   getStudent: 0,
+  getStudentsByIds: 0,
   listPerformance: 0,
   getStudentTrends: 0,
   compareStudents: 0,

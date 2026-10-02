@@ -40,6 +40,7 @@ let teamLinks: Array<{ team: string; sub: string }> = [
 
 const notifications: Array<Record<string, unknown>> = []
 const audits: Array<{ sql: string; values: unknown[] }> = []
+const mutations: Array<{ sql: string; values: unknown[] }> = []
 
 // `lib/redis.ts` connects on import (`export const redis =
 // createRedisClient()`), reached via me.ts → queue → jobs. The shared

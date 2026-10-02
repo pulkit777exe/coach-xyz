@@ -36,11 +36,11 @@ const student = (id: string) => ({
 const sources = (overrides: Partial<OrgExportSources> = {}): OrgExportSources => ({
   listStudents: (async () => [student('s1'), student('s2')]) as OrgExportSources['listStudents'],
   listAttendance: (async () => []) as OrgExportSources['listAttendance'],
-  attendanceSummary: (async () => null) as OrgExportSources['attendanceSummary'],
+  attendanceSummary: (async () => null) as unknown as OrgExportSources['attendanceSummary'],
   listReports: (async () => []) as OrgExportSources['listReports'],
   listObjectives: (async () => []) as OrgExportSources['listObjectives'],
   listTrainingPlans: (async () => []) as OrgExportSources['listTrainingPlans'],
-  listWellness: (async () => [{ id: 'w1' }]) as OrgExportSources['listWellness'],
+  listWellness: (async () => [{ id: 'w1' }]) as unknown as OrgExportSources['listWellness'],
   ...overrides,
 })
 
