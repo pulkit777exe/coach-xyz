@@ -36,6 +36,13 @@ const NO_WRITES = {
   deleteStudent: 0,
   createPerformanceMetric: 0,
   linkAnalysisToStudent: 0,
+  // The probe counts every write the students route could attempt, so a
+  // refused request is asserted against all of them. `createStudent` and
+  // `importStudents` arrived with the probe's counters; leaving them out here
+  // made `expect(writes).toEqual(NO_WRITES)` fail on the two extra keys
+  // (`toEqual` is exact, not a subset) for every case.
+  createStudent: 0,
+  importStudents: 0,
 }
 
 /** Roles that hold player.manage but are narrowed to team A. */
