@@ -26,6 +26,8 @@ const TEAM_A = '00000000-0000-4000-8000-00000000000a'
 const STUDENT_A = '00000000-0000-4000-8000-0000000000a1'
 const STUDENT_B = '00000000-0000-4000-8000-0000000000b1'
 
+// Mirrors the probe's CallKey union by hand: importing it from the probe
+// file would execute that module's mock.module calls in this process.
 type CallKey =
   | 'listAttendance'
   | 'attendanceSummary'
