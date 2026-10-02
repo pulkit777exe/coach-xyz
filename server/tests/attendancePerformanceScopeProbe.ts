@@ -200,6 +200,14 @@ mock.module('../src/lib/teams', () => ({
   getTeam: async (_orgAuth0Id: string, teamId: string) => ({ id: teamId }),
   listMemberTeamIdsInOrg: async (_orgAuth0Id: string, memberAuth0Id: string) =>
     memberAuth0Id === memberId ? callerTeams : [],
+  // A partial `mock.module` fails the WHOLE probe process with "Export named
+  // 'X' not found" the moment any module in the graph imports a name the
+  // factory omits — it is not a lazily-failing call. The students and teams
+  // routes both import these two, so they have to exist here even though no
+  // attendance case calls them. Null is the honest stub answer: no such
+  // student/team in this org.
+  setStudentTeam: async () => null,
+  getTeamMembership: async () => null,
 }))
 
 mock.module('../src/lib/notificationEvents', () => ({
