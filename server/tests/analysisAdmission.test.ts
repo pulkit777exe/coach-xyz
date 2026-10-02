@@ -6,6 +6,7 @@ import {
   type AnalysisAdmissionDeps,
 } from '../src/lib/analysisAdmission'
 import type { OrgTier } from '../src/lib/analyses'
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 // ── Analysis admission formula ──────────────────────────────────────────────
 // One module owns the §17 gate both admission sites share (quota → tier →
@@ -120,12 +121,14 @@ describe('admitAnalysis', () => {
   })
 })
 
-// ── Live atomicity race (requires DATABASE_URL) ─────────────────────────────
+// ── Live atomicity race (needs a configured database) ───────────────────────
 // Six concurrent admissions against a cap of 3 through the REAL stores must
 // admit exactly 3 — the row-lock-serialized increment cannot over-admit no
 // matter how the promises interleave. Unique org per run so parallel/repeat
 // runs never share a counter row.
-;(process.env.DATABASE_URL ? describe : describe.skip)('admitAnalysis live quota race', () => {
+describeLiveDb('admitAnalysis live quota race', () => {
+  useLiveTestDb()
+
   test(
     '6 concurrent admissions at cap 3 → exactly 3 admitted',
     async () => {

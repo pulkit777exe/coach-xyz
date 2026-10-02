@@ -16,6 +16,7 @@ import {
 } from '../src/lib/notifications'
 import { fanOutAttendanceNotifications } from '../src/routes/org/attendance'
 import type { AttendanceRecord, Student } from '../src/lib/orgData'
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 type StoredPreferences = {
   auth0_id: string
@@ -315,8 +316,6 @@ describe('notification fan-out recipients', () => {
   })
 })
 
-const hasDb = Boolean(process.env.DATABASE_URL)
-
 const newPreferenceRegressionId = (): string => `auth0|pref-regression-${crypto.randomUUID()}@test`
 
 const deletePreferenceRegressionRow = async (auth0Id: string): Promise<void> => {
@@ -325,7 +324,9 @@ const deletePreferenceRegressionRow = async (auth0Id: string): Promise<void> => 
   })
 }
 
-;(hasDb ? describe : describe.skip)('notification preferences DB integration', () => {
+describeLiveDb('notification preferences DB integration', () => {
+  useLiveTestDb()
+
   test(
     'persists a false event from a partial event patch',
     async () => {

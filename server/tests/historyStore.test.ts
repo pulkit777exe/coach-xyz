@@ -9,8 +9,7 @@ import {
   withHistoryStore,
   withHistoryStoreOrThrow,
 } from '../src/lib/historyStore'
-
-const hasDb = Boolean(process.env.DATABASE_URL)
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 // ── Stub connection ─────────────────────────────────────────────────────────
 // Pins the wrapper's guarantees without a live DB: the seam swaps `sql`, and
@@ -142,8 +141,13 @@ describe('degradation policy (single home: orDisabledDefault)', () => {
   })
 })
 
-// ── Live init (requires DATABASE_URL) ───────────────────────────────────────
-;(hasDb ? describe : describe.skip)('historyStore live initialization', () => {
+// ── Live init (needs a configured database) ─────────────────────────────────
+describeLiveDb('historyStore live initialization', () => {
+  // Points the store at the resolved URL and resets `initPromise` with it, so
+  // the concurrent callers below all race through a REAL first init rather than
+  // returning whatever a previous connection already memoised.
+  useLiveTestDb()
+
   test(
     'concurrent wrapper calls all observe an initialized schema',
     async () => {

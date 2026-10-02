@@ -1,11 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import type { SQL } from 'bun'
 
-import { setHistoryStoreConnectionForTests, withHistoryStoreOrThrow } from '../src/lib/historyStore'
+import { setHistoryStoreConnectionForTests } from '../src/lib/historyStore'
 import { getReport, listReports } from '../src/lib/org/reports'
 import { getObjective, listObjectives, objectiveVisibleTo } from '../src/lib/org/objectives'
 import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/org/plans'
+
+import { describeLiveDb, useLiveTestDb } from './liveDb'
+import { lastJsonLine, runProbeProcess } from './spawnProbe'
 
 // ── Org team scope: reports, objectives, training plans ────────────────────────
 // Capability is not scope. `report.create` / `player.manage` decide WHETHER a
@@ -23,14 +26,14 @@ import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/or
 //      that an org-wide caller is not narrowed at all.
 //   3. route probe (fresh process, real resolveCaller + permissions + scope
 //      seam + write-side predicates): what each handler hands the data layer,
-//      and that a refused write never reaches it.
+//      and that a refused write never reaches it. Bounded by runProbeProcess, so
+//      a wedged child is a probe failure carrying its output (tests/spawnProbe.ts).
 //
 // `studentScopeProbe.ts` (the students/performance agent) owns the roster
 // paths; this file owns the three coach-authored document domains.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'orgTeamScopeProbe.ts')
-const hasDb = Boolean(process.env.DATABASE_URL)
 
 // Fixture world, mirrored in the probe.
 const ORG = 'auth0|org-team-scope-test'
@@ -92,7 +95,7 @@ type ProbeResult = {
   createInput: unknown
 }
 
-const runProbe = (probeCase: string, roles: readonly string[]): ProbeResult[] => {
+const runProbe = async (probeCase: string, roles: readonly string[]): Promise<ProbeResult[]> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -103,18 +106,9 @@ const runProbe = (probeCase: string, roles: readonly string[]): ProbeResult[] =>
   env.ORG_TEAM_SCOPE_CASE = probeCase
   env.ORG_TEAM_SCOPE_ROLES = roles.join(',')
 
-  const proc = Bun.spawnSync({
-    cmd: [process.execPath, PROBE],
-    cwd: SERVER_DIR,
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const stdout = new TextDecoder().decode(proc.stdout)
-  const stderr = new TextDecoder().decode(proc.stderr)
-  expect(proc.exitCode, `probe failed for ${probeCase}:\n${stdout}\n${stderr}`).toBe(0)
-  const lines = stdout.trim().split('\n')
-  const results = JSON.parse(lines[lines.length - 1] ?? '') as ProbeResult[]
+  const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
+  expect(proc.exitCode, `probe failed for ${probeCase}:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
+  const results = lastJsonLine<ProbeResult[]>(proc.stdout)
   expect(results.length).toBe(roles.length)
   return results
 }
@@ -137,7 +131,14 @@ const ORG_WIDE_READERS: readonly string[] = ['analyst', 'medical']
 
 // ── 1. Live Postgres: the real scope SQL against real rows ───────────────────
 
-;(hasDb ? describe : describe.skip)('scope SQL against live Postgres', () => {
+// The gate and the wiring both come from ./liveDb: `DATABASE_URL` is the live
+// Neon URL, which CI deliberately leaves unset, so gating on it meant these ten
+// cases — the real scope SQL against real rows — never ran in CI. `useLiveTestDb`
+// is required as well as the gate, because `historyStore` builds its connection
+// from `DATABASE_URL` at import time, so a flipped gate alone would leave the
+// store pointing at no database at all and `orDisabledDefault` would hand these
+// assertions a stream of nulls to pass against.
+describeLiveDb('scope SQL against live Postgres', () => {
   const seed = async (db: SQL) => {
     await db`delete from training_objectives where org_auth0_id = ${ORG}`
     await db`delete from training_plans where org_auth0_id = ${ORG}`
@@ -181,8 +182,7 @@ const ORG_WIDE_READERS: readonly string[] = ['analyst', 'medical']
 
   // Seed once for the group: every scoped read below is a pure read. The hook
   // budget is generous because the first call also runs ensureInitialized.
-  beforeAll(() => withHistoryStoreOrThrow(seed), { timeout: 60000 })
-  afterAll(() => withHistoryStoreOrThrow(cleanup), { timeout: 60000 })
+  useLiveTestDb({ seed, cleanup })
 
   /** What team A's coach sees: { teamIds: [TEAM_A], studentIds: [STUDENT_A] }. */
   const coachA = { teamIds: [TEAM_A], studentIds: [STUDENT_A] }
@@ -459,8 +459,8 @@ describe('objectiveVisibleTo / planVisibleTo (the write-side twin of the SQL rul
 // ── 4. Route wiring: the handler hands the data layer the right narrowing ─────
 
 describe("org reads hand the data layer the caller's real visible set", () => {
-  test("a team A coach lists only team A reports; team B's report is absent", () => {
-    const [coach] = runProbe('reports.list', [COACH_A])
+  test("a team A coach lists only team A reports; team B's report is absent", async () => {
+    const [coach] = await runProbe('reports.list', [COACH_A])
     expect(coach.status).toBe(200)
     expect(
       (coach.body as { reports: Array<{ title: string }> }).reports.map((r) => r.title),
@@ -470,8 +470,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     expect(coach.listOpts).toEqual({ studentId: undefined, visibleStudentIds: [STUDENT_A] })
   })
 
-  test('a team A coach lists only team A objectives, including the team-level row', () => {
-    const [coach] = runProbe('objectives.list', [COACH_A])
+  test('a team A coach lists only team A objectives, including the team-level row', async () => {
+    const [coach] = await runProbe('objectives.list', [COACH_A])
     expect(coach.status).toBe(200)
     const rows = (coach.body as { objectives: Array<{ title: string }> }).objectives
     expect(rows.map((r) => r.title).sort()).toEqual(['Objective a4'])
@@ -483,8 +483,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     })
   })
 
-  test('a team A coach lists only team A plans', () => {
-    const [coach] = runProbe('plans.list', [COACH_A])
+  test('a team A coach lists only team A plans', async () => {
+    const [coach] = await runProbe('plans.list', [COACH_A])
     expect((coach.body as { plans: Array<{ title: string }> }).plans.map((p) => p.title)).toEqual([
       'Plan a6',
     ])
@@ -495,8 +495,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     })
   })
 
-  test('the existing query-param filters survive alongside the scope', () => {
-    const [coach] = runProbe('objectives.list.filters', [COACH_A])
+  test('the existing query-param filters survive alongside the scope', async () => {
+    const [coach] = await runProbe('objectives.list.filters', [COACH_A])
     expect(coach.listOpts).toEqual({
       studentId: null,
       teamId: TEAM_A,
@@ -505,8 +505,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     })
   })
 
-  test('analyst and medical read the whole org and are NOT narrowed', () => {
-    const results = runProbe('objectives.list', ORG_WIDE_READERS)
+  test('analyst and medical read the whole org and are NOT narrowed', async () => {
+    const results = await runProbe('objectives.list', ORG_WIDE_READERS)
     for (const role of ORG_WIDE_READERS) {
       const result = byRole(results, role)
       expect(result.status, role).toBe(200)
@@ -522,13 +522,13 @@ describe("org reads hand the data layer the caller's real visible set", () => {
       expect(result.storeQueries, role).toBe(0)
       expect((result.body as { objectives: unknown[] }).objectives.length, role).toBe(3)
     }
-    const [reports] = runProbe('reports.list', ORG_WIDE_READERS)
+    const [reports] = await runProbe('reports.list', ORG_WIDE_READERS)
     expect(Object.keys(reports.listOpts as object)).not.toContain('visibleStudentIds')
     expect(reports.storeQueries).toBe(0)
   })
 
-  test('owner is unaffected: org-wide reads, all fixture rows', () => {
-    const results = runProbe('objectives.list', ['owner', 'admin'])
+  test('owner is unaffected: org-wide reads, all fixture rows', async () => {
+    const results = await runProbe('objectives.list', ['owner', 'admin'])
     for (const role of ['owner', 'admin']) {
       const result = byRole(results, role)
       expect(result.listOpts, role).toEqual({
@@ -541,8 +541,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     }
   })
 
-  test('an unassigned coach is narrowed to the empty set — not the whole org', () => {
-    const [coach] = runProbe('objectives.list', [COACH_NONE])
+  test('an unassigned coach is narrowed to the empty set — not the whole org', async () => {
+    const [coach] = await runProbe('objectives.list', [COACH_NONE])
     expect(coach.listOpts).toEqual({
       studentId: null,
       teamId: null,
@@ -552,8 +552,8 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     expect((coach.body as { objectives: unknown[] }).objectives).toEqual([])
   })
 
-  test('GET a single report for a team B student reads as 404 to a team A coach', () => {
-    const results = runProbe('reports.read.teamB', [COACH_A, COACH_NONE, 'analyst', 'owner'])
+  test('GET a single report for a team B student reads as 404 to a team A coach', async () => {
+    const results = await runProbe('reports.read.teamB', [COACH_A, COACH_NONE, 'analyst', 'owner'])
     expect(byRole(results, COACH_A).status).toBe(404)
     expect(byRole(results, COACH_A).body).toEqual({
       code: 'NOT_FOUND',
@@ -568,37 +568,37 @@ describe("org reads hand the data layer the caller's real visible set", () => {
 })
 
 describe('out-of-scope writes are refused with 403 and never reach the store', () => {
-  test('a team A coach cannot author a report for a team B student', () => {
-    const [coach] = runProbe('reports.create.teamB', [COACH_A])
+  test('a team A coach cannot author a report for a team B student', async () => {
+    const [coach] = await runProbe('reports.create.teamB', [COACH_A])
     expect(coach.status).toBe(403)
     expect(coach.body).toEqual(forbidden(REPORT_SCOPE_MESSAGE))
     expect(coach.writes).toEqual(NO_WRITES)
     expect(coach.createInput).toBeNull()
   })
 
-  test('a team A coach cannot author an org-wide report either', () => {
-    const [coach] = runProbe('reports.create.org', [COACH_A])
+  test('a team A coach cannot author an org-wide report either', async () => {
+    const [coach] = await runProbe('reports.create.org', [COACH_A])
     expect(coach.status).toBe(403)
     expect(coach.body).toEqual(forbidden(REPORT_SCOPE_MESSAGE))
     expect(coach.writes).toEqual(NO_WRITES)
   })
 
-  test('the same coach CAN author for its own student', () => {
-    const [coach] = runProbe('reports.create.own', [COACH_A])
+  test('the same coach CAN author for its own student', async () => {
+    const [coach] = await runProbe('reports.create.own', [COACH_A])
     expect(coach.status).toBe(201)
     expect(coach.writes.createReportRecord).toBe(1)
     expect(coach.createInput).toMatchObject({ student_id: STUDENT_A })
   })
 
-  test('an unassigned coach is refused on every report write', () => {
-    const results = runProbe('reports.create.own', [COACH_NONE])
+  test('an unassigned coach is refused on every report write', async () => {
+    const results = await runProbe('reports.create.own', [COACH_NONE])
     expect(byRole(results, COACH_NONE).status).toBe(403)
     expect(byRole(results, COACH_NONE).writes).toEqual(NO_WRITES)
   })
 
-  test('PUT and DELETE a team B report are refused, after a fetch, before any write', () => {
+  test('PUT and DELETE a team B report are refused, after a fetch, before any write', async () => {
     for (const probeCase of ['reports.update.teamB', 'reports.delete.teamB']) {
-      const [coach] = runProbe(probeCase, [COACH_A])
+      const [coach] = await runProbe(probeCase, [COACH_A])
       expect(coach.status, probeCase).toBe(403)
       expect(coach.body, probeCase).toEqual(forbidden(REPORT_SCOPE_MESSAGE))
       expect(coach.writes, probeCase).toEqual(NO_WRITES)
@@ -607,7 +607,7 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
     }
   })
 
-  test('objective and plan writes for a team B student are refused with no write', () => {
+  test('objective and plan writes for a team B student are refused with no write', async () => {
     for (const [probeCase, message] of [
       ['objectives.create.teamB', OBJECTIVE_SCOPE_MESSAGE],
       ['objectives.patch.teamB', OBJECTIVE_SCOPE_MESSAGE],
@@ -616,7 +616,7 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
       ['plans.patch.teamB', PLAN_SCOPE_MESSAGE],
       ['plans.delete.teamB', PLAN_SCOPE_MESSAGE],
     ] as const) {
-      const [coach] = runProbe(probeCase, [COACH_A])
+      const [coach] = await runProbe(probeCase, [COACH_A])
       expect(coach.status, probeCase).toBe(403)
       expect(coach.body, probeCase).toEqual(forbidden(message))
       expect(coach.writes, probeCase).toEqual(NO_WRITES)
@@ -624,49 +624,49 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
     }
   })
 
-  test('PATCH/DELETE of an out-of-scope row read the row first (fetch-then-check)', () => {
-    const [objective] = runProbe('objectives.patch.teamB', [COACH_A])
+  test('PATCH/DELETE of an out-of-scope row read the row first (fetch-then-check)', async () => {
+    const [objective] = await runProbe('objectives.patch.teamB', [COACH_A])
     expect(objective.reads.getObjective).toBe(1)
-    const [plan] = runProbe('plans.delete.teamB', [COACH_A])
+    const [plan] = await runProbe('plans.delete.teamB', [COACH_A])
     expect(plan.reads.getTrainingPlan).toBe(1)
   })
 
-  test('a team-level write for its OWN team is allowed — the team half of the OR', () => {
+  test('a team-level write for its OWN team is allowed — the team half of the OR', async () => {
     for (const [probeCase, writeKey] of [
       ['objectives.create.teamA', 'createObjective'],
       ['plans.create.teamA', 'createTrainingPlan'],
     ] as const) {
-      const [coach] = runProbe(probeCase, [COACH_A])
+      const [coach] = await runProbe(probeCase, [COACH_A])
       expect(coach.status, probeCase).toBe(201)
       expect(coach.writes[writeKey], probeCase).toBe(1)
       expect(coach.createInput, probeCase).toMatchObject({ team_id: TEAM_A })
     }
-    const [patch] = runProbe('objectives.patch.own', [COACH_A])
+    const [patch] = await runProbe('objectives.patch.own', [COACH_A])
     expect(patch.status).toBe(200)
     expect(patch.writes.setObjectiveStatus).toBe(1)
   })
 
-  test('an org-level objective write is refused for a scoped coach', () => {
-    const [coach] = runProbe('objectives.create.org', [COACH_A])
+  test('an org-level objective write is refused for a scoped coach', async () => {
+    const [coach] = await runProbe('objectives.create.org', [COACH_A])
     expect(coach.status).toBe(403)
     expect(coach.body).toEqual(forbidden(OBJECTIVE_SCOPE_MESSAGE))
     expect(coach.writes).toEqual(NO_WRITES)
   })
 
-  test('an unassigned coach is refused on objective and plan writes', () => {
+  test('an unassigned coach is refused on objective and plan writes', async () => {
     for (const probeCase of [
       'objectives.create.teamA',
       'plans.create.teamA',
       'objectives.patch.teamB',
       'plans.delete.teamB',
     ]) {
-      const [coach] = runProbe(probeCase, [COACH_NONE])
+      const [coach] = await runProbe(probeCase, [COACH_NONE])
       expect(coach.status, probeCase).toBe(403)
       expect(coach.writes, probeCase).toEqual(NO_WRITES)
     }
   })
 
-  test('owner is unaffected by the scope check on every write', () => {
+  test('owner is unaffected by the scope check on every write', async () => {
     for (const [probeCase, status] of [
       ['reports.create.teamB', 201],
       ['reports.update.teamB', 200],
@@ -678,7 +678,7 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
       ['plans.patch.teamB', 200],
       ['plans.delete.teamB', 200],
     ] as const) {
-      const [owner] = runProbe(probeCase, ['owner'])
+      const [owner] = await runProbe(probeCase, ['owner'])
       expect(owner.status, probeCase).toBe(status)
       expect(
         Object.values(owner.writes).reduce((a, b) => a + b, 0),
@@ -687,10 +687,10 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
     }
   })
 
-  test('the capability guard is untouched: analyst writes reports, medical may not', () => {
+  test('the capability guard is untouched: analyst writes reports, medical may not', async () => {
     // report.create: analyst has it, medical does not — the 403 body proves which
     // guard answered, so the scope check did not replace the permission check.
-    const [analyst] = runProbe('reports.create.teamB', ['analyst'])
+    const [analyst] = await runProbe('reports.create.teamB', ['analyst'])
     expect(analyst.status).toBe(201)
     expect(analyst.writes.createReportRecord).toBe(1)
     for (const probeCase of [
@@ -698,7 +698,7 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
       'reports.update.teamB',
       'reports.delete.teamB',
     ]) {
-      const [medical] = runProbe(probeCase, ['medical'])
+      const [medical] = await runProbe(probeCase, ['medical'])
       expect(medical.status, probeCase).toBe(403)
       expect(medical.body, probeCase).toEqual(
         forbidden(
@@ -715,7 +715,7 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
     }
   })
 
-  test('player.manage still answers before scope for objective and plan writes', () => {
+  test('player.manage still answers before scope for objective and plan writes', async () => {
     for (const [probeCase, domain] of [
       ['objectives.create.teamA', 'objectives'],
       ['objectives.patch.own', 'objectives'],
@@ -723,18 +723,18 @@ describe('out-of-scope writes are refused with 403 and never reach the store', (
       ['plans.patch.teamB', 'plans'],
     ] as const) {
       // An analyst has report.create but NOT player.manage, and no teams.
-      const [analyst] = runProbe(probeCase, ['analyst'])
+      const [analyst] = await runProbe(probeCase, ['analyst'])
       expect(analyst.status, probeCase).toBe(403)
       expect(analyst.body, probeCase).toEqual(forbidden(PLAYER_MANAGE_MESSAGE(domain)))
       expect(analyst.writes, probeCase).toEqual(NO_WRITES)
     }
   })
 
-  test('a non-member is refused on write and reads nothing', () => {
-    const [reads] = runProbe('objectives.list', ['__non_member__'])
+  test('a non-member is refused on write and reads nothing', async () => {
+    const [reads] = await runProbe('objectives.list', ['__non_member__'])
     expect((reads.body as { objectives: unknown[] }).objectives).toEqual([])
     for (const probeCase of ['objectives.create.teamA', 'plans.patch.teamB']) {
-      const [stranger] = runProbe(probeCase, ['__non_member__'])
+      const [stranger] = await runProbe(probeCase, ['__non_member__'])
       expect(stranger.status, probeCase).toBe(403)
       expect(stranger.writes, probeCase).toEqual(NO_WRITES)
     }

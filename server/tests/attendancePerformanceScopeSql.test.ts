@@ -9,6 +9,7 @@ import {
   listPerformance,
 } from '../src/lib/org/performance'
 import { uuidArrayLiteral } from '../src/lib/org/scope'
+import { describeLiveDb, useLiveTestDb } from './liveDb'
 
 // ── Student scope in SQL ─────────────────────────────────────────────────────
 // The route tests (attendancePerformanceScope.test.ts) prove the handlers ask
@@ -33,8 +34,6 @@ const STUDENT_A = '00000000-0000-4000-8000-0000000000a1'
 const STUDENT_B = '00000000-0000-4000-8000-0000000000b1'
 const LITERAL_A = `{${STUDENT_A}}`
 const LITERAL_AB = `{${STUDENT_A},${STUDENT_B}}`
-
-const hasDb = Boolean(process.env.DATABASE_URL)
 
 type Query = { sql: string; values: unknown[] }
 
@@ -227,15 +226,33 @@ describe('performance queries carry the student scope', () => {
   })
 })
 
-// ── Live Postgres (requires DATABASE_URL) ────────────────────────────────────
+// ── Live Postgres (needs a configured database) ─────────────────────────────
 // A recording stub can only prove what was bound; only the server can prove the
 // `::uuid[]` cast accepts it. One student per team, and every read must come
 // back with exactly the rows that scope allows.
-;(hasDb ? describe : describe.skip)('attendance + performance scope against live Postgres', () => {
-  const seed = async (db: SQL) => {
+describeLiveDb('attendance + performance scope against live Postgres', () => {
+  useLiveTestDb()
+
+  const cleanup = async (db: SQL) => {
+    // analysis_history is keyed by server_job_id, not by an id column, and the
+    // series test seeds one for ORG. It has to go or the "trends" case above
+    // would see a second point and fail on a row it never created.
+    await db`delete from analysis_history where auth0_id = ${ORG}`
     await db`delete from performance_metrics where auth0_id = ${ORG}`
     await db`delete from attendance where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
+  }
+
+  const seed = async (db: SQL) => {
+    // Starts from `cleanup`, not just from the students row. analysis_history has
+    // no FK to students, so a run that died between the series test's insert and
+    // its `finally` leaves a row nothing below would remove — and the next run's
+    // `toHaveLength(1)` then sees two points and fails on residue it never
+    // created. Invisible while this suite only ran against a long-lived Neon
+    // database where an interrupted run was rare; routine against the ephemeral
+    // CI database. Same reason the probe files pre-clean FK-less tables by
+    // student id.
+    await cleanup(db)
     await db`
       insert into students (id, auth0_id, full_name, team_id, status) values
         (${STUDENT_A}::uuid, ${ORG}, 'Scope A', ${TEAM_A}::uuid, 'active'),
@@ -251,16 +268,6 @@ describe('performance queries carry the student scope', () => {
         (${ORG}, ${STUDENT_A}::uuid, 'sprint_time', 7, now()),
         (${ORG}, ${STUDENT_B}::uuid, 'sprint_time', 9, now());
     `
-  }
-
-  const cleanup = async (db: SQL) => {
-    // analysis_history is keyed by server_job_id, not by an id column, and the
-    // series test seeds one for ORG. It has to go or the "trends" case above
-    // would see a second point and fail on a row it never created.
-    await db`delete from analysis_history where auth0_id = ${ORG}`
-    await db`delete from performance_metrics where auth0_id = ${ORG}`
-    await db`delete from attendance where auth0_id = ${ORG}`
-    await db`delete from students where auth0_id = ${ORG}`
   }
 
   const withSeededStore = async <T>(fn: () => Promise<T>): Promise<T> => {
