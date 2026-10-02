@@ -249,7 +249,7 @@ coach-xyz/
 │   │   ├── config.py          # Engine configuration constants + ENGINE_VERSION
 │   │   ├── logging_config.py  # Structured logging setup
 │   │   └── errors.py          # Error types hierarchy
-│   ├── tests/                 # pytest suite (228 tests)
+│   ├── tests/                 # pytest suite (289 tests)
 │   └── requirements.txt       # Python dependencies (single runtime manifest — pyproject is tooling-only)
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -844,7 +844,7 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
-| Test suite: 228 tests pass (CONFIRMED 2026-09-25) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
+| Test suite: 289 tests pass (CONFIRMED 2026-10-02) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
 | Test suite: 418 pass / 42 files (CONFIRMED 2026-09-25) | `cd server && bun test` (live DB checks run when `DATABASE_URL` is reachable) |
 | Test suite: 231 tests / 23 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |

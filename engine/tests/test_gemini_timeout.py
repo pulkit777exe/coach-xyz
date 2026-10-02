@@ -17,6 +17,13 @@ indefinitely:
 
 These tests pin the executor's control flow (1) directly, and assert the client
 carries a finite timeout (2).
+
+Abandoning a worker is only safe because the work is *bounded*: the client's own
+finite timeout is what eventually lets the stray thread finish. A test that
+parks a worker on an unbounded wait instead leaks a non-daemon thread that
+`concurrent.futures`' atexit hook joins at interpreter shutdown — pytest prints
+its summary and then hangs forever. So every pool below is joined before it goes
+out of scope, even the ones whose assertion is about *not* waiting.
 """
 
 from __future__ import annotations
@@ -162,12 +169,20 @@ def test_a_future_that_never_completes_is_released_by_the_timeout() -> None:
     pool = ThreadPoolExecutor(max_workers=1)
     never: Future = Future()  # nothing will ever call set_result
     pool.submit(lambda: never.result())  # occupies the single worker
-    began = time.monotonic()
     try:
-        never.result(timeout=0.05)
-    except FuturesTimeoutError:
+        began = time.monotonic()
+        with pytest.raises(FuturesTimeoutError):
+            never.result(timeout=0.05)
         assert time.monotonic() - began < 0.4
-    pool.shutdown(wait=False)
+    finally:
+        # Abandoning the worker is what releases the *caller* (asserted above),
+        # but it also parks a non-daemon thread on an unbounded wait, and
+        # concurrent.futures' atexit hook joins every worker at interpreter
+        # shutdown — so the suite would print its summary and then hang until
+        # CI killed it. Resolving `never` and joining is what the production
+        # path gets for free from the Gemini client's own finite timeout.
+        never.set_result(None)
+        pool.shutdown(wait=True)
 
 
 class TestTheRealStageReleasesTheCaller:
