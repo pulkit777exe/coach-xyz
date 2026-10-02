@@ -168,7 +168,54 @@ export const ensureInitialized = async () => {
         await store.connect()
         const inList = (vals: readonly string[]) =>
           store.unsafe(`(${vals.map((v) => `'${v}'`).join(',')})`)
-        // Level: tables without foreign keys — independent, run together.
+        // Level 0: foreign-key targets first. students/teams used to be
+        // created in the same Promise.all as their dependents below, so on
+        // a fresh database the dependents' `references` clauses raced the
+        // target tables and init died with 42P01 — invisible on migrated
+        // DBs, fatal on first boot. This level is awaited before anything.
+        await Promise.all([
+          (async () => {
+            await store`
+          create table if not exists students (
+            id uuid primary key default gen_random_uuid(),
+            auth0_id text not null,
+            full_name text not null,
+            email text,
+            phone text,
+            sport text,
+            "position" text,
+            jersey_number integer,
+            date_of_birth date,
+            gender text,
+            guardian_name text,
+            guardian_phone text,
+            notes text,
+            status text not null default 'active'
+              check (status in ${inList(STUDENT_STATUSES)}),
+            joined_on date,
+            account_auth0_id text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now()
+          );
+        `
+          })(),
+          (async () => {
+            await store`
+          create table if not exists teams (
+            id uuid primary key default gen_random_uuid(),
+            org_auth0_id text not null,
+            name text not null,
+            sport text,
+            created_at timestamptz not null default now(),
+            updated_at timestamptz not null default now()
+          );
+        `
+            await store`
+          create index if not exists idx_teams_org_auth0_id
+          on teams (org_auth0_id);
+        `
+          })(),
+        ])
         await Promise.all([
           (async () => {
             await store`
@@ -450,8 +497,8 @@ export const ensureInitialized = async () => {
             created_at timestamptz not null default now()
           );
         `
-          })(),
-          (async () => {
+            // Same block, not a sibling: the index raced the table on
+            // fresh databases (same trap as the ADD COLUMN pairs).
             await store`
           create index if not exists idx_clips_server_job_id
           on clips (server_job_id);
@@ -491,31 +538,6 @@ export const ensureInitialized = async () => {
           })(),
           (async () => {
             await store`
-          create table if not exists students (
-            id uuid primary key default gen_random_uuid(),
-            auth0_id text not null,
-            full_name text not null,
-            email text,
-            phone text,
-            sport text,
-            "position" text,
-            jersey_number integer,
-            date_of_birth date,
-            gender text,
-            guardian_name text,
-            guardian_phone text,
-            notes text,
-            status text not null default 'active'
-              check (status in ${inList(STUDENT_STATUSES)}),
-            joined_on date,
-            account_auth0_id text,
-            created_at timestamptz not null default now(),
-            updated_at timestamptz not null default now()
-          );
-        `
-          })(),
-          (async () => {
-            await store`
           create table if not exists schedule_events (
             id uuid primary key default gen_random_uuid(),
             auth0_id text not null,
@@ -531,22 +553,6 @@ export const ensureInitialized = async () => {
             created_at timestamptz not null default now(),
             updated_at timestamptz not null default now()
           );
-        `
-          })(),
-          (async () => {
-            await store`
-          create table if not exists teams (
-            id uuid primary key default gen_random_uuid(),
-            org_auth0_id text not null,
-            name text not null,
-            sport text,
-            created_at timestamptz not null default now(),
-            updated_at timestamptz not null default now()
-          );
-        `
-            await store`
-          create index if not exists idx_teams_org_auth0_id
-          on teams (org_auth0_id);
         `
           })(),
           // org_members: create + role-check migration must run in order
@@ -1238,8 +1244,8 @@ export const ensureInitialized = async () => {
             await store`
           alter table analysis_history add column if not exists student_id uuid;
         `
-          })(),
-          (async () => {
+            // Same block, not a sibling: the index raced the column on
+            // fresh databases (the ADD COLUMN trap, fourth instance).
             await store`
           create index if not exists idx_analysis_history_student_id
           on analysis_history (student_id);
