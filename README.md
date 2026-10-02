@@ -42,7 +42,7 @@ Run everything from the repo root — the root `package.json` orchestrates both 
 # from repo root
 npm install                  # root tooling
 (cd server && bun install)
-(cd web-next && npm install)
+(cd web-next && bun install)
 
 # Engine (Python 3.12) — no root orchestration
 cd engine
@@ -80,7 +80,7 @@ Frontend at `:3000`, server at `:8000`, engine at `:8001` (start the engine sepa
 | `engine/` | Player detection, Gemini analysis, video annotation, caching, chat (streaming) |
 | `sports/` | Sport-specific event definitions and scoring rules |
 
-Tests: `cd engine && python -m pytest tests/ -q` · `cd server && bun test` · `cd web-next && npm test` · or all of the TS apps with `npm run check` from the root.
+Tests: `cd engine && python -m pytest tests/ -q` · `cd server && bun run test` · `cd web-next && bun run test` · or all of the TS apps with `npm run check` from the root. (Run each app's `test` **script**, not bare `bun test` — the server script carries the timeout and isolation flags that probe-spawning files depend on.)
 
 ## Supported sports
 

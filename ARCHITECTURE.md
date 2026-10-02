@@ -753,7 +753,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 231 tests / 23 files; server 418 pass / 42 files (`bun test`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-09-25. These are current-worktree counts; the notification-preference integration remains intentionally unstaged while the event-transport change is isolated.
+- Web test suite: 269 tests / 25 files; server 898 pass / 4 skip / 0 fail — 902 tests across 82 files (`bun test --timeout 30000 --isolate`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-10-02. These are current-worktree counts; the event-transport work they used to exclude is now committed (`lib/notificationCreate.ts` is the leaf seam, `notifications.ts` re-exports from it).
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -822,7 +822,9 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 
 ### Technical Debt
 
-1. **Notifications DB integration tests are env-gated** — `server/tests/notifications.test.ts` keeps three DB-touching tests under `describe.skip` unless `DATABASE_URL` points at a reachable database. Locally, Bun auto-loads `server/.env`, so those tests run against the live Neon DB (they hang only if the DB is unreachable). CI without `DATABASE_URL` stays green.
+None outstanding. The section's only entry — env-gated notifications DB integration tests — is now resolved, and its resolution is itself the one thing worth recording here, because the gate itself was the debt:
+
+23. ~~**Notifications DB integration tests are env-gated on the live Neon URL**~~ (fixed 2026-10-02) — `server/tests/notifications.test.ts` (and nine sibling files) used to gate on `Boolean(process.env.DATABASE_URL)`, which CI deliberately leaves unset, so **43 tests skipped on every CI run** while the workflow comment claimed the ephemeral service kept them green. They now gate through `server/tests/liveDb.ts`: `describeLiveDb` resolves `TEST_DATABASE_URL` → `PERF_DATABASE_URL` → `DATABASE_URL` (live last — it is the only one of the three that can destroy real data), and `useLiveTestDb()` re-points the `historyStore` connection, which is otherwise built from `DATABASE_URL` at import time. Skips are 4. The suites still skip when no database is configured at all, and a developer's `DATABASE_URL` still routes them at live Neon by design — see the `AGENTS.md` ledger for the two sub-traps (empty ≠ unset; a flipped gate alone leaves the store `null` and the suite green against nothing).
 
 ---
 
@@ -845,8 +847,8 @@ Six architecture candidates + a routing sync landed together (all uncommitted as
 | Pipeline states | `engine/core/jobs.py` |
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
 | Test suite: 289 tests pass (CONFIRMED 2026-10-02) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 418 pass / 42 files (CONFIRMED 2026-09-25) | `cd server && bun test` (live DB checks run when `DATABASE_URL` is reachable) |
-| Test suite: 231 tests / 23 files (CONFIRMED 2026-09-25) | `cd web-next && npx vitest run` |
+| Test suite: 898 pass / 4 skip / 0 fail — 902 tests across 82 files (CONFIRMED 2026-10-02) | `cd server && bun test --timeout 30000 --isolate` (the package `test` script; measured CI-shaped with `DATABASE_URL` empty and the ephemeral Postgres on `TEST_DATABASE_URL`/`PERF_DATABASE_URL`. Live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt. The committed tree is ~888 tests / 81 files; the delta is an untracked test file plus one edited file) |
+| Test suite: 269 tests / 25 files (CONFIRMED 2026-10-02) | `cd web-next && bun run test` (vitest) |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
 | New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |

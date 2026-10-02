@@ -13,7 +13,9 @@
 1. Supabase: restore the latest backup to a **new preview branch** (dashboard
    → Backups → Restore → new branch, or `supabase db branch`).
 2. Point a local server at the branch (`DATABASE_URL=<branch>`) and run:
-   `cd server && bun test` — the DB-gated notification tests exercise live reads.
+   `cd server && bun run test` — the live-Postgres suites (notifications, org
+   scope, retention sweep, …) exercise real reads against that branch. With only
+   `DATABASE_URL` set they resolve to it directly; see `AGENTS.md` for the gate.
 3. Spot-check: coach dashboard history, one analysis detail, findings trends.
 4. Record the result (date, backup id, branch, tester) in the ops log.
 

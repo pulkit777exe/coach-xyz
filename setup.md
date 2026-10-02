@@ -15,7 +15,7 @@ The CLI tool lives at `engine/cli/`.
 
 - Docker (recommended) — dev setup is driven by `docker-compose.yml`
 - Python 3.12 (for non-Docker engine)
-- Bun 1.x (for non-Docker server; web-next uses npm)
+- Bun 1.x (for non-Docker server **and** web-next — `web-next/bun.lock` is the only lockfile there)
 
 ## Quick start (Docker)
 
@@ -37,7 +37,7 @@ The server depends on the engine being healthy and will wait (`condition: servic
 
 ```bash
 cd engine
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.sample .env            # fill in GEMINI_API_KEY, UPSTASH_REDIS_*
@@ -72,9 +72,9 @@ cross-replica report/notification event bus. Rate limits are configured with `SC
 
 ```bash
 cd web-next
-npm install
+bun install
 cp .env.example .env.local     # set NEXT_PUBLIC_API_URL, Auth0 vars, NEXT_PUBLIC_SENTRY_DSN, SERVICE_TOKEN
-npm run dev
+bun run dev
 ```
 
 Frontend: http://localhost:3000
@@ -102,7 +102,7 @@ npm run smoke        # server live HTTP smoke (needs .env + running server + Neo
 npm run smoke:events # live Redis/SSE analysis + two-replica report/notification bus smoke
 ```
 
-Per-app: `npm run dev:server`, `npm run dev:web`. Server uses `bun`, web-next uses `npm`.
+Per-app: `npm run dev:server`, `npm run dev:web`. Both apps use `bun` for install and scripts (`web-next/bun.lock` is the only lockfile in `web-next/`, and CI installs with `bun install --frozen-lockfile`); Node 22 is still the runtime Next.js executes under, and the root `package.json` scripts above are driven with `npm run …` from the repo root.
 
 ## Environment variables
 
@@ -165,11 +165,20 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 
 ```bash
 cd engine   && .venv/bin/python -m pytest tests/ -q   # 289 tests
-cd server   && bun test                             # 418 tests / 42 files
-cd web-next && npm test                             # 231 tests / 23 files (vitest)
+cd server   && bun run test                          # = bun test --timeout 30000 --isolate
+                                                       # 898 pass / 4 skip, 902 tests / 82 files
+cd web-next && bun run test                          # 269 tests / 25 files (vitest)
 ```
 
-These counts are for the current worktree, including the notification-preference integration that is intentionally kept unstaged while the event-transport work is isolated.
+These counts are for the current worktree (re-confirmed 2026-10-02). The server suite runs under the
+flags its `package.json` declares (`bun test --timeout 30000 --isolate`) — run the script, not bare
+`bun test`, or probe-spawning files inherit Bun's 5s default and fail on a runner that never hung. It
+was measured CI-shaped (`DATABASE_URL` empty, ephemeral Postgres on `TEST_DATABASE_URL`); with a
+reachable `DATABASE_URL` the live-Postgres suites run instead of skipping. The committed server tree is
+~888 tests / 81 files — the difference is one untracked test file and one edited test file.
+
+In `web-next` the suite is vitest, so it is `bun run test` and **not** `bun test`, which would invoke
+Bun's own test runner over vitest specs.
 
 Or run both TypeScript suites at once with `npm run check` from the repo root.
 
