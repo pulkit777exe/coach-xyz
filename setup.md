@@ -166,7 +166,7 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ```bash
 cd engine   && .venv/bin/python -m pytest tests/ -q   # 289 tests
 cd server   && bun run test                          # = bun test --timeout 30000 --isolate
-                                                       # 898 pass / 4 skip, 904 tests / 83 files
+                                                       # 902 pass / 0 skip, 902 tests / 83 files
 cd web-next && bun run test                          # 269 tests / 25 files (vitest)
 ```
 

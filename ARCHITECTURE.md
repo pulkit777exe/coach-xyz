@@ -753,7 +753,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 269 tests / 25 files; server 898 pass / 4 skip / 0 fail — 904 tests across 83 files (`bun test --timeout 30000 --isolate`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-10-02. These are current-worktree counts; the event-transport work they used to exclude is now committed (`lib/notificationCreate.ts` is the leaf seam, `notifications.ts` re-exports from it).
+- Web test suite: 269 tests / 25 files; server 902 pass / 0 skip / 0 fail — 902 tests across 83 files (`bun test --timeout 30000 --isolate`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-10-02. These are current-worktree counts; the event-transport work they used to exclude is now committed (`lib/notificationCreate.ts` is the leaf seam, `notifications.ts` re-exports from it).
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -847,7 +847,7 @@ None outstanding. The section's only entry — env-gated notifications DB integr
 | Pipeline states | `engine/core/jobs.py` |
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
 | Test suite: 289 tests pass (CONFIRMED 2026-10-02) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 898 pass / 4 skip / 0 fail — 904 tests across 83 files (CONFIRMED 2026-10-02) | `cd server && bun test --timeout 30000 --isolate` (the package `test` script; measured CI-shaped with `DATABASE_URL` empty and the ephemeral Postgres on `TEST_DATABASE_URL`/`PERF_DATABASE_URL`. Live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt. The committed tree is 885 tests / 82 files (CI `37016149117`); the delta is an untracked test file plus one edited file) |
+| Test suite: 902 pass / 0 skip / 0 fail — 902 tests across 83 files (CONFIRMED 2026-10-02) | `cd server && bun test --timeout 30000 --isolate` (the package `test` script; measured CI-shaped with `DATABASE_URL` empty and the ephemeral Postgres on `TEST_DATABASE_URL`/`PERF_DATABASE_URL`. Live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt. The committed tree is 902 tests / 83 files (CI `37024952991`)) |
 | Test suite: 269 tests / 25 files (CONFIRMED 2026-10-02) | `cd web-next && bun run test` (vitest) |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
