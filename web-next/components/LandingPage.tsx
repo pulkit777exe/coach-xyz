@@ -571,6 +571,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               type="file"
               accept="video/*"
               className="sr-only"
+              // Visually hidden, but still in the tab order and still announced.
+              // The visible `<Button>` opens it programmatically, so it carries the
+              // affordance — but a keyboard or screen-reader user who tabs onto the
+              // input itself reached a file field with no announced purpose, which is
+              // the same defect class as the pointer-only rename affordance and the
+              // unnamed dialog that previously shipped through here.
+              aria-label="Upload a video to analyse"
               onChange={(e) => pick(e.target.files?.[0])}
             />
             <div className="grid size-12 place-items-center rounded-full bg-primary text-primary-foreground">
