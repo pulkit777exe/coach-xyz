@@ -128,7 +128,14 @@ jobs:
           # silently passes on a colourised summary is precisely the failure this
           # step exists to catch, so it must not depend on that holding.
           sed -e 's/\x1b\[[0-9;]*m//g' /tmp/server-test.log > /tmp/server-test.plain.log
-          skipped=$(grep -oE '[0-9]+[[:space:]]+skip\b' /tmp/server-test.plain.log | grep -oE '[0-9]+' | head -1)
+          # `|| true` is load-bearing, and its absence is a bug this gate shipped
+          # with on its first run. With NO matches grep exits 1, pipefail
+          # propagates that, and GitHub's default `bash -e` shell then aborts the
+          # step at the ASSIGNMENT — before the `if` below ever runs. So the
+          # healthy case (0 skips) failed the job and the unhealthy case was the
+          # only one that worked. Rehearsing the assertion outside `bash -e`
+          # cannot catch this; the shell's errexit is part of the behaviour.
+          skipped=$(grep -oE '[0-9]+[[:space:]]+skip\b' /tmp/server-test.plain.log | grep -oE '[0-9]+' | head -1 || true)
           skipped=${skipped:-0}
           if [ "$skipped" -ne 0 ]; then
             echo "::error::$skipped tests skipped in CI. Every suite must run against the ephemeral Postgres; a skip means a gate is reading the wrong variable — see the DATABASE_URL entry in AGENTS.md."
