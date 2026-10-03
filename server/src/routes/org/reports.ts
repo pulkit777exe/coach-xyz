@@ -7,7 +7,7 @@ import {
   listReports,
   updateReportRecord,
 } from '../../lib/orgData'
-import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
+import { defaultReportTitle, isDate, isIsoDate, readListLimit } from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { resolveCaller } from '../../lib/caller'
@@ -42,6 +42,7 @@ export default new Elysia()
       // Absent for an org-wide caller (owner/admin/analyst/medical) so the query
       // stays unfiltered; present-and-empty for an unassigned coach.
       ...(visible === null ? {} : { visibleStudentIds: visible }),
+      limit: readListLimit(url),
     })
     set.status = 200
     return { reports }

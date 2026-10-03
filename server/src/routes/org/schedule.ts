@@ -5,7 +5,7 @@ import {
   listSchedule,
   updateScheduleEvent,
 } from '../../lib/orgData'
-import { isIsoDate } from '../../lib/orgValidate'
+import { isIsoDate, readListLimit, scheduleWindow } from '../../lib/orgValidate'
 import { UUID_RE } from '../../lib/uuid'
 import { resolveCaller, type Caller } from '../../lib/caller'
 import { EVENT_STATUS_SET, EVENT_TYPE_SET, parseScheduleInput, resolveTeamId } from './shared'
@@ -36,15 +36,24 @@ export default new Elysia()
   .get('/api/org/:auth0Id/schedule', async ({ params, request, set }) => {
     const { auth0Id } = params
     const url = new URL(request.url)
+    const window = scheduleWindow(url)
+    if (!window.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid schedule filter', false)
+    }
     const caller = await resolveCaller(auth0Id, request)
     set.status = 200
     return {
       events: await listSchedule(auth0Id, {
-        from: url.searchParams.get('from') ?? undefined,
-        to: url.searchParams.get('to') ?? undefined,
+        from: window.from,
+        to: window.to,
         // A team coach sees their own fixtures plus the club-wide ones; org staff
         // see every event.
         teamIds: caller.studentScope.all ? undefined : caller.studentScope.teamIds,
+        // Never null: see readListLimit. Without a window this read is the org's
+        // whole calendar, and "oldest first, unlimited" is not a page anybody can
+        // use.
+        limit: readListLimit(url),
       }),
     }
   })

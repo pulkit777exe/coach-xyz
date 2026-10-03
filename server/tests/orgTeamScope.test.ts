@@ -8,6 +8,7 @@ import { runProbeProcess } from './spawnProbe'
 import { listReports } from '../src/lib/org/reports'
 import { getObjective, listObjectives, objectiveVisibleTo } from '../src/lib/org/objectives'
 import { getTrainingPlan, listTrainingPlans, planVisibleTo } from '../src/lib/org/plans'
+import { MAX_ORG_LIST_ROWS } from '../src/lib/orgValidate'
 
 // ── Org team scope: reports, objectives, training plans ────────────────────────
 // Capability is not scope. `report.create` / `player.manage` decide WHETHER a
@@ -337,7 +338,13 @@ describe("org reads hand the data layer the caller's real visible set", () => {
     ).toEqual(['Report a3'])
     // The seam actually ran (one roster query) and the ids it returned were bound.
     expect(coach.storeQueries).toBe(1)
-    expect(coach.listOpts).toEqual({ studentId: undefined, visibleStudentIds: [STUDENT_A] })
+    // `limit` is the readListLimit default, not an absence: the data layer reads a
+    // missing limit as SQL NULL (unlimited) and no web caller ever sent one.
+    expect(coach.listOpts).toEqual({
+      studentId: undefined,
+      visibleStudentIds: [STUDENT_A],
+      limit: MAX_ORG_LIST_ROWS,
+    })
   })
 
   test('a team A coach lists only team A objectives, including the team-level row', async () => {

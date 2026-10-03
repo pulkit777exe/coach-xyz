@@ -1,7 +1,7 @@
 // Reports data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
-import { ANALYSES_SELECT_COLUMNS } from '../analyses'
+import { ANALYSES_LIST_COLUMNS, ANALYSES_SELECT_COLUMNS } from '../analyses'
 import type { DashboardAnalysis } from '../analyses'
 import { REPORT_TYPES } from '../orgEnums'
 import type { ReportType } from '../orgEnums'
@@ -58,15 +58,31 @@ const normalizeContentJson = (value: unknown): ContentJson => {
   return {}
 }
 
+/**
+ * One player's analyses, newest first.
+ *
+ * Projected by default (`ANALYSES_LIST_COLUMNS`) because every one of its three
+ * callers wants a fraction of a row: the player's own hub reads
+ * `summary_json.form_score`, the org student page reads the labels, and the
+ * privacy-delete loop reads `server_job_id`. Only the portability export wants
+ * the blob itself, and it asks for it with `fullSummary` — a bundle of the
+ * caller's own data is exactly the read that must not be summarised away.
+ *
+ * §5: the player's own hub redacts this response unconditionally, so the
+ * projection cannot open that boundary; it can only remove more. See
+ * `ANALYSES_LIST_SUMMARY_JSON`.
+ */
 export const getStudentAnalyses = async (
   auth0Id: string,
   studentId: string,
   limit = 200,
+  opts: { fullSummary?: boolean } = {},
 ): Promise<DashboardAnalysis[]> => {
+  const columns = opts.fullSummary ? ANALYSES_SELECT_COLUMNS : ANALYSES_LIST_COLUMNS
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<DashboardAnalysis[]>`
-        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
+        select ${db.unsafe(columns)}
         from analysis_history a
         left join video_conversations v on a.session_token = v.session_token
         where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}
@@ -182,6 +198,14 @@ export const deleteReport = async (auth0Id: string, id: string): Promise<boolean
   return res ?? false
 }
 
+/**
+ * Recent completed analyses with a score, for the org-wide report block.
+ *
+ * Named for scores, and the query already says so — it filters on
+ * `(summary_json->>'form_score') is not null` — yet it selected the whole blob
+ * to hand `buildReportContent` twenty copies of it. It now takes the list
+ * projection, which is the one field it reads.
+ */
 export const listRecentAnalysisScores = async (
   auth0Id: string,
   limit = 20,
@@ -189,7 +213,7 @@ export const listRecentAnalysisScores = async (
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<DashboardAnalysis[]>`
-        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
+        select ${db.unsafe(ANALYSES_LIST_COLUMNS)}
         from analysis_history a
         left join video_conversations v on a.session_token = v.session_token
         where a.auth0_id = ${auth0Id}

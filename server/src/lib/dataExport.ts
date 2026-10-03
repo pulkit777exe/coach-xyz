@@ -45,6 +45,7 @@ export const EXPORT_FORMAT_VERSION = 1
 
 /** Bounded like every other paginated read: a bundle is a copy, not a dump. */
 export const EXPORT_ANALYSIS_LIMIT = 200
+export const EXPORT_SCHEDULE_LIMIT = 500
 export const EXPORT_NOTIFICATION_LIMIT = 200
 export const EXPORT_PRIVACY_REQUEST_LIMIT = 50
 
@@ -168,9 +169,17 @@ export const buildAccountExport = async (
       ? Promise.all([
           sources.listAttendance(link.coachAuth0Id, { studentId: link.student.id }),
           sources.attendanceSummary(link.coachAuth0Id, { studentId: link.student.id }),
-          sources.listSchedule(link.coachAuth0Id),
+          // The whole fixture history, capped: unlike the screens, a portability bundle
+          // is meant to be all of it, so this passes a limit and no window.
+          sources.listSchedule(link.coachAuth0Id, { limit: EXPORT_SCHEDULE_LIMIT }),
           sources.getStudentPerformanceSeries(link.coachAuth0Id, link.student.id),
-          sources.getStudentAnalyses(link.coachAuth0Id, link.student.id, EXPORT_ANALYSIS_LIMIT),
+          // `fullSummary` is the point of the bundle: a portability export is the
+          // one read that must carry the whole summary, not the list projection
+          // `getStudentAnalyses` defaults to (which is what every screen needs).
+          // Wellness is still stripped below — this is player scope.
+          sources.getStudentAnalyses(link.coachAuth0Id, link.student.id, EXPORT_ANALYSIS_LIMIT, {
+            fullSummary: true,
+          }),
           sources.listReports(link.coachAuth0Id, { studentId: link.student.id }),
           sources.listObjectives(link.coachAuth0Id, { studentId: link.student.id }),
         ])

@@ -21,6 +21,65 @@ export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   monthly: 'Monthly Summary',
 }
 
+/**
+ * Rows an org list route may return.
+ *
+ * `listStudents` / `listAttendance` / `listReports` / `listObjectives` /
+ * `listTrainingPlans` / `listSchedule` all resolve an absent `limit` to SQL NULL,
+ * which is **unlimited**. That is the right default for a data layer whose
+ * callers bound themselves (the exports pass explicit caps), and the wrong
+ * default for an HTTP route a browser can hit with no parameters at all — and no
+ * web caller ever sent `limit`, so every one of those reads was unbounded in
+ * production. The bound therefore lives HERE, at the door, and is also the
+ * `max` a caller can ask for.
+ */
+export const MAX_ORG_LIST_ROWS = 1000
+
+/**
+ * The `limit` a list route should use: the caller's value, or
+ * `MAX_ORG_LIST_ROWS` when they sent none (or sent something unusable).
+ *
+ * The fallback is the same number as the ceiling, so "no limit" means "as much
+ * as this endpoint will ever serve" rather than "all of it" — a roster of 10k is
+ * not something any of these screens renders, and the export, which does want
+ * more, calls the data layer directly with its own cap.
+ *
+ * Anything that is not a positive whole number counts as "not supplied" rather
+ * than being clamped up from `min`. `pickInt` clamps (`?limit=-5` → `min` → one
+ * row), which is the right answer for a page number and the wrong one here: a
+ * cap must never shrink a list below what the very same caller gets by sending
+ * nothing at all. `?limit=`, `?limit=abc` and `?limit=1e999` (Infinity, which
+ * would otherwise reach Postgres as "no limit") all take the default.
+ */
+export const readListLimit = (url: URL): number => {
+  const raw = url.searchParams.get('limit')
+  const parsed = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN
+  if (!Number.isFinite(parsed) || parsed < 1) return MAX_ORG_LIST_ROWS
+  return Math.min(Math.floor(parsed), MAX_ORG_LIST_ROWS)
+}
+
+/**
+ * `from`/`to` for a schedule read, or a refusal.
+ *
+ * Both reach a `::timestamptz` cast, so an unvalidated value is a 500: `/api/me/schedule`
+ * read them straight off the query string, so `?from=garbage` raised 22007 and
+ * `?from=` (blank, which `Number('')` and `Date.parse('')` both reject) did too —
+ * a client error reported as an outage. `isIsoDate` is the same test the schedule
+ * *write* route already applies to `starts_at`, and `starts_at` is a timestamptz
+ * in both directions.
+ *
+ * Both are instants rather than bare dates, unlike the attendance window's
+ * `::date` — the web sends `new Date().toISOString()` here.
+ */
+export const scheduleWindow = (
+  url: URL,
+): { ok: true; from?: string; to?: string } | { ok: false } => {
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
+  if ((from !== null && !isIsoDate(from)) || (to !== null && !isIsoDate(to))) return { ok: false }
+  return { ok: true, from: from ?? undefined, to: to ?? undefined }
+}
+
 export function defaultReportTitle(
   reportType: string,
   student: { full_name: string } | null,

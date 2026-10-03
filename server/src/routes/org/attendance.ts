@@ -10,7 +10,7 @@ import {
   type AttendanceStatus,
   type Student,
 } from '../../lib/orgData'
-import { isDate, MAX_ATTENDANCE_BATCH } from '../../lib/orgValidate'
+import { isDate, MAX_ATTENDANCE_BATCH, readListLimit } from '../../lib/orgValidate'
 import { pickUuid } from '../../lib/uuid'
 import { resolveCaller } from '../../lib/caller'
 import { canSeeStudent, visibleStudentIds } from '../../lib/org/scope'
@@ -145,6 +145,9 @@ export default new Elysia()
       // `null` = org-wide (owner/admin/analyst/medical); a list narrows the
       // query to the caller's teams, and `[]` yields nothing.
       studentIds: await visibleStudentIds(auth0Id, caller.studentScope),
+      // Never null: an absent `limit` means unlimited at the data layer, and no
+      // web caller sent one. The org export bounds itself by calling it directly.
+      limit: readListLimit(url),
     })
     set.status = 200
     return { records }

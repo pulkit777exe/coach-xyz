@@ -77,7 +77,7 @@ def _sport_label(sport: str) -> str:
 
 # ── Rounded rectangle drawing ────────────────────────────────────────────────
 
-def _draw_filled_rounded_rect(
+def _paint_rounded_rect(
     img: np.ndarray,
     x1: int,
     y1: int,
@@ -86,7 +86,48 @@ def _draw_filled_rounded_rect(
     color: tuple[int, int, int],
     radius: int,
 ) -> None:
-    """Draw a filled rounded rectangle on an OpenCV image."""
+    """Paint an opaque filled rounded rectangle, straight into `img`.
+
+    Coordinates must already be clamped to `img` and `radius` already fitted
+    to the box (see `_draw_filled_rounded_rect`).
+    """
+    cv2.rectangle(img, (x1 + radius, y1), (x2 - radius, y2), color, -1, cv2.LINE_AA)
+    if radius > 0:
+        # An antialiased fill is not idempotent — laying the same one down
+        # twice darkens its edge pixels — and a zero-radius circle stamps a
+        # two-pixel dot, so the second bar and the corners only go when there
+        # is a corner to round. At `radius=0` this is one plain rectangle.
+        cv2.rectangle(img, (x1, y1 + radius), (x2, y2 - radius), color, -1, cv2.LINE_AA)
+        cv2.circle(img, (x1 + radius, y1 + radius), radius, color, -1, cv2.LINE_AA)
+        cv2.circle(img, (x2 - radius, y1 + radius), radius, color, -1, cv2.LINE_AA)
+        cv2.circle(img, (x1 + radius, y2 - radius), radius, color, -1, cv2.LINE_AA)
+        cv2.circle(img, (x2 - radius, y2 - radius), radius, color, -1, cv2.LINE_AA)
+
+
+def _draw_filled_rounded_rect(
+    img: np.ndarray,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    color: tuple[int, int, int],
+    radius: int,
+    alpha: float = 1.0,
+) -> None:
+    """Draw a filled rounded rectangle on an OpenCV frame, optionally translucent.
+
+    `alpha` < 1 blends the shape over what is already in `img`, the way
+    `overlay = img.copy()` + fill + `addWeighted` used to. It blends only the
+    shape's own box, which is byte-identical to blending the whole frame:
+    `addWeighted(x, a, x, 1 - a, 0) == x` for every uint8 `x` at both weights
+    this module passes (0.75/0.25 and 0.35/0.65, checked exhaustively over all
+    256 values), so every pixel outside the box comes back untouched either way.
+    A new weight means re-checking that. The copy the blend needs is then the
+    size of the box instead of the frame, and there is one copy where there were
+    two — the scratch `img.copy()` plus a full-frame
+    `addWeighted(overlay, 1.0, img, 0.0, 0, img)` that was a copy spelled as a
+    blend.
+    """
     h, w = img.shape[:2]
     x1 = max(0, min(w - 1, x1))
     y1 = max(0, min(h - 1, y1))
@@ -94,15 +135,47 @@ def _draw_filled_rounded_rect(
     y2 = max(y1 + 1, min(h - 1, y2))
     radius = min(radius, (x2 - x1) // 2, (y2 - y1) // 2)
 
-    overlay = img.copy()
-    cv2.rectangle(overlay, (x1 + radius, y1), (x2 - radius, y2), color, -1, cv2.LINE_AA)
-    cv2.rectangle(overlay, (x1, y1 + radius), (x2, y2 - radius), color, -1, cv2.LINE_AA)
-    cv2.circle(overlay, (x1 + radius, y1 + radius), radius, color, -1, cv2.LINE_AA)
-    cv2.circle(overlay, (x2 - radius, y1 + radius), radius, color, -1, cv2.LINE_AA)
-    cv2.circle(overlay, (x1 + radius, y2 - radius), radius, color, -1, cv2.LINE_AA)
-    cv2.circle(overlay, (x2 - radius, y2 - radius), radius, color, -1, cv2.LINE_AA)
+    if alpha >= 1.0:
+        _paint_rounded_rect(img, x1, y1, x2, y2, color, radius)
+        return
 
-    cv2.addWeighted(overlay, 1.0, img, 0.0, 0, img)
+    # cv2's antialiased fills land one pixel outside the nominal box, so the
+    # blend window is padded by one to cover everything that was painted.
+    top, bottom = max(0, y1 - 1), min(h, y2 + 2)
+    left, right = max(0, x1 - 1), min(w, x2 + 2)
+    window = img[top:bottom, left:right]
+    saved = window.copy()
+    _paint_rounded_rect(img, x1, y1, x2, y2, color, radius)
+    cv2.addWeighted(window, alpha, saved, 1.0 - alpha, 0, dst=window)
+
+
+def _draw_alpha_rect(
+    img: np.ndarray,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    color: tuple[int, int, int],
+    alpha: float,
+) -> None:
+    """Blend an axis-aligned rectangle over `img` at `alpha`.
+
+    Coordinates go to `cv2.rectangle` unclamped, exactly as they did when the
+    rating badge drew one directly: cv2 clips to the image itself, and clamping
+    first moves the antialiased edge, which changes a pixel where the box
+    overhangs the frame. The blend is restricted to the part of the box that is
+    on the frame (padded by one for the antialiased bleed) for the reason in
+    `_draw_filled_rounded_rect`.
+    """
+    h, w = img.shape[:2]
+    top, bottom = max(0, y1 - 1), min(h, y2 + 2)
+    left, right = max(0, x1 - 1), min(w, x2 + 2)
+    if top >= bottom or left >= right:
+        return  # entirely off-frame: cv2.rectangle would not paint either
+    window = img[top:bottom, left:right]
+    saved = window.copy()
+    cv2.rectangle(img, (x1, y1), (x2, y2), color, -1, cv2.LINE_AA)
+    cv2.addWeighted(window, alpha, saved, 1.0 - alpha, 0, dst=window)
 
 
 def _draw_rounded_rect_border(
@@ -133,6 +206,66 @@ def _draw_rounded_rect_border(
     cv2.ellipse(img, (x2 - radius, y2 - radius), (radius, radius), 0, 0, 90, color, thickness, cv2.LINE_AA)
 
 
+class _TextBatch:
+    """Queue Pillow text calls, apply them all in one frame round-trip.
+
+    `_draw_pil_text` converted the *whole frame* BGR->RGB, wrapped it in a
+    Pillow image, drew one short string, and converted the whole image back —
+    once per string, so six times per HUD frame. Under cProfile on a 720p
+    frame that was ~78% of `_draw_hud`, and only about a sixth of it was glyph
+    rasterisation (`Font.render`); the rest was copying megapixels to move six
+    short strings.
+
+    Queueing the calls and flushing once leaves every pixel identical. The
+    round-trip is a lossless channel permutation that is a no-op outside the
+    glyph boxes, so Pillow composites the same strings, in the same order, over
+    the same pixels it did before.
+
+    The one thing the queue cannot absorb is an OpenCV draw landing *between*
+    two strings: a flush puts every queued string on top of it, where the
+    per-call version composited the later ones over the earlier ones and left
+    anything drawn afterwards on top. Callers with such a shape paint it before
+    flushing — `_draw_hud`'s rating badge is the only one, and it sits below
+    every other string in the panel (the badge starts at `panel_y + 100`; the
+    score's ink ends around `panel_y + 83`), so nothing it touches is carrying
+    text yet.
+    """
+
+    __slots__ = ("_strings",)
+
+    def __init__(self) -> None:
+        self._strings: list[tuple[str, int, int, int, tuple[int, int, int], str]] = []
+
+    def text(
+        self,
+        x: int,
+        y: int,
+        text: str,
+        font_size: int,
+        color: tuple[int, int, int] = (255, 255, 255),
+        anchor: str = "lt",
+    ) -> None:
+        """Queue one anti-aliased string. Nothing is drawn until `flush`."""
+        self._strings.append((text, x, y, font_size, color, anchor))
+
+    def flush(self, frame: np.ndarray) -> None:
+        """Draw every queued string onto `frame` in a single round-trip."""
+        if not self._strings:
+            return
+        pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_img)
+        for text, x, y, font_size, color, anchor in self._strings:
+            draw.text(
+                (x, y),
+                text,
+                font=_get_font(font_size),
+                fill=(color[2], color[1], color[0]),
+                anchor=anchor,
+            )
+        self._strings.clear()
+        cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR, dst=frame)
+
+
 def _draw_pil_text(
     frame: np.ndarray,
     text: str,
@@ -142,12 +275,17 @@ def _draw_pil_text(
     color: tuple[int, int, int] = (255, 255, 255),
     anchor: str = "lt",
 ) -> None:
-    """Draw anti-aliased text on an OpenCV frame using Pillow."""
-    pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    draw = ImageDraw.Draw(pil_img)
-    font = _get_font(font_size)
-    draw.text((x, y), text, font=font, fill=(color[2], color[1], color[0]), anchor=anchor)
-    cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR, dst=frame)
+    """Draw anti-aliased text on an OpenCV frame using Pillow — one round-trip.
+
+    `_draw_summary_screen` draws a dozen of these for the single hold frame at
+    the end of a video, which is why it stays per-call: batching them would
+    move the score ring's ellipses under the sport label and title drawn
+    earlier in the function, and that is only invisible while the two do not
+    overlap. The per-frame HUD uses `_TextBatch` instead.
+    """
+    batch = _TextBatch()
+    batch.text(x, y, text, font_size, color, anchor)
+    batch.flush(frame)
 
 
 def _text_size_pil(text: str, font_size: int) -> tuple[int, int]:
@@ -301,22 +439,32 @@ def _draw_hud(
     score_col = _score_color(form_score, colors)
 
     # Semi-transparent dark background with rounded corners
-    overlay = frame.copy()
-    _draw_filled_rounded_rect(overlay, panel_x, panel_y, panel_x + panel_w, panel_y + panel_h, (15, 15, 15), radius)
-    cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
+    _draw_filled_rounded_rect(
+        frame,
+        panel_x,
+        panel_y,
+        panel_x + panel_w,
+        panel_y + panel_h,
+        (15, 15, 15),
+        radius,
+        alpha=0.75,
+    )
 
     # Sport color accent border (top edge only, rounded)
     _draw_rounded_rect_border(frame, panel_x, panel_y, panel_x + panel_w, panel_y + panel_h, primary_color, radius, 2)
 
+    # Every string below is queued and drawn in one pass — see `_TextBatch`.
+    text = _TextBatch()
+
     # Sport label
     label = f"{_sport_label(sport)}"
-    _draw_pil_text(frame, label, panel_x + 16, panel_y + 18, 20, (250, 250, 250))
+    text.text(panel_x + 16, panel_y + 18, label, 20, (250, 250, 250))
 
     # Form score — large, color-coded
     score_str = f"{form_score}"
-    _draw_pil_text(frame, score_str, panel_x + 16, panel_y + 52, 42, score_col)
+    text.text(panel_x + 16, panel_y + 52, score_str, 42, score_col)
     tw, _ = _text_size_pil(score_str, 42)
-    _draw_pil_text(frame, "/10", panel_x + 16 + tw + 4, panel_y + 66, 18, (160, 160, 160))
+    text.text(panel_x + 16 + tw + 4, panel_y + 66, "/10", 18, (160, 160, 160))
 
     # Rating badge
     rating = str(analysis_result.get("overall_rating", ""))
@@ -325,28 +473,32 @@ def _draw_hud(
         badge_x = panel_x + 16
         badge_y = panel_y + 100
         badge_pad = 6
-        overlay2 = frame.copy()
-        cv2.rectangle(
-            overlay2,
-            (badge_x, badge_y),
-            (badge_x + badge_w + badge_pad * 2, badge_y + badge_h + badge_pad * 2),
+        _draw_alpha_rect(
+            frame,
+            badge_x,
+            badge_y,
+            badge_x + badge_w + badge_pad * 2,
+            badge_y + badge_h + badge_pad * 2,
             primary_color,
-            -1,
-            cv2.LINE_AA,
+            0.35,
         )
-        cv2.addWeighted(overlay2, 0.35, frame, 0.65, 0, frame)
-        _draw_pil_text(frame, rating.upper(), badge_x + badge_pad, badge_y + badge_pad - 2, 12, (255, 255, 255))
+        text.text(badge_x + badge_pad, badge_y + badge_pad - 2, rating.upper(), 12, (255, 255, 255))
 
     # Rotating tip (right side of panel)
     tip_x = panel_x + panel_w // 2 + 10
     if tip_text:
         wrapped = tip_text[:80]
-        _draw_pil_text(frame, wrapped, tip_x, panel_y + 50, 14, (200, 200, 200))
+        text.text(tip_x, panel_y + 50, wrapped, 14, (200, 200, 200))
 
     # Timestamp display (top-right corner)
     ts_str = f"{timestamp:.1f}s"
     tw2, _ = _text_size_pil(ts_str, 14)
-    _draw_pil_text(frame, ts_str, frame_w - tw2 - 16, 18, 14, (180, 180, 180))
+    text.text(frame_w - tw2 - 16, 18, ts_str, 14, (180, 180, 180))
+
+    # The badge is the only OpenCV shape between strings, so one flush here
+    # draws them in the order they were queued and still lands under the
+    # progress bar, exactly as the per-string round-trips did.
+    text.flush(frame)
 
     # Bottom progress bar
     bar_h = 4

@@ -91,7 +91,10 @@ export default new Elysia()
         },
       })
     }
-    return new Response(JSON.stringify(bundle, null, 2), {
+    // No indent, same as GET /api/me/export: a machine-consumed portability file
+    // where the 2-space form doubles the bytes and quadruples the stringify cost
+    // for nothing a consumer reads.
+    return new Response(JSON.stringify(bundle), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -182,6 +185,8 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'No linked player for this request', false)
     }
     try {
+      // Projected read is enough here and is the point: this loop only needs
+      // `server_job_id`, and it runs over every analysis the player has.
       const analyses = await getStudentAnalyses(auth0Id, linked, 200)
       for (const analysis of analyses) {
         await deleteAnalysis(auth0Id, analysis.server_job_id)

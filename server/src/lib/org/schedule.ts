@@ -39,20 +39,60 @@ const teamScopeFilter = (teamIds: string[] | undefined) => {
 
 // ── Schedule ─────────────────────────────────────────────────────────────────
 
+/**
+ * The columns a list read returns, spelled out instead of `select *`.
+ *
+ * `select *` had one real cost here: `team_id` arrived by accident, through the
+ * ADR-0002 §5 `add column`, not by decision — and this is the query that reads
+ * it, so nothing documented that a list response carries a team key. Spelling
+ * the list out makes that a contract instead of a side effect, and the next
+ * `add column` has to be added deliberately.
+ *
+ * `auth0_id` stays even though no screen renders it: it is the owner key the
+ * account export hands back, and `ScheduleEvent` declares it. Nothing is dropped
+ * from what `select *` returned, so no consumer can lose a field — the win here
+ * is the contract, not the bytes (a fixture row is a few hundred of them).
+ */
+const SCHEDULE_LIST_COLUMNS = `
+  id,
+  auth0_id,
+  title,
+  event_type,
+  starts_at,
+  ends_at,
+  location,
+  description,
+  status,
+  team_id,
+  created_at,
+  updated_at
+`
+
+/**
+ * The org calendar, oldest fixture first.
+ *
+ * `limit` follows the sibling convention (`listAttendance`, `listObjectives`,
+ * `listReports`): absent binds NULL, which Postgres reads as *unlimited*, and a
+ * present one is clamped. The routes are therefore the place the bound has to
+ * live — `readListLimit` there resolves an absent parameter to
+ * `MAX_ORG_LIST_ROWS`, which is what makes "defaults to null" safe in production
+ * rather than a promise nobody kept.
+ */
 export const listSchedule = async (
   auth0Id: string,
-  opts: { from?: string; to?: string; teamIds?: string[] } = {},
+  opts: { from?: string; to?: string; teamIds?: string[]; limit?: number } = {},
 ): Promise<ScheduleEvent[]> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const scope = teamScopeFilter(opts.teamIds)
       const rows = await db<ScheduleEvent[]>`
-        select * from schedule_events
+        select ${db.unsafe(SCHEDULE_LIST_COLUMNS)} from schedule_events
         where auth0_id = ${auth0Id}
           and (${opts.from ?? null}::timestamptz is null or starts_at >= ${opts.from ?? null}::timestamptz)
           and (${opts.to ?? null}::timestamptz is null or starts_at <= ${opts.to ?? null}::timestamptz)
           and (not ${scope.scoped} or team_id is null or team_id = any(${scope.param}::uuid[]))
-        order by starts_at asc;
+        order by starts_at asc
+        limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)) as number | null};
       `
       return rows ?? []
     })) ?? []

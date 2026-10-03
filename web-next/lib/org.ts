@@ -267,9 +267,25 @@ export type OrgOverview = {
 
 // ── Students ─────────────────────────────────────────────────────────────────
 
+/**
+ * List reads: the default cap lives on the SERVER, not here.
+ *
+ * `orgStudents`, `orgAttendance`, `orgSchedule` and `orgReports` all take an
+ * optional `limit` and simply forward it. `undefined` means "no parameter", and
+ * the server then applies `MAX_ORG_LIST_ROWS` (server/src/lib/orgValidate.ts) —
+ * the data layers themselves read an absent limit as SQL NULL, i.e. unlimited,
+ * which is why the explicit cap at the route is what actually bounds these. Pass
+ * `limit` to ask for fewer.
+ */
 export const orgStudents = async (
   auth0Id: string,
-  opts: { search?: string; sport?: string; status?: string; includeArchived?: boolean } = {},
+  opts: {
+    search?: string
+    sport?: string
+    status?: string
+    includeArchived?: boolean
+    limit?: number
+  } = {},
 ): Promise<{ students: Student[] }> => {
   return apiFetch<{ students: Student[] }>(
     org(
@@ -279,6 +295,7 @@ export const orgStudents = async (
         sport: opts.sport,
         status: opts.status,
         include_archived: opts.includeArchived ? '1' : undefined,
+        limit: opts.limit,
       })}`,
     ),
   )
@@ -409,10 +426,18 @@ export const orgStudentAnalyses = async (
 
 export const orgAttendance = async (
   auth0Id: string,
-  opts: { from?: string; to?: string; studentId?: string } = {},
+  opts: { from?: string; to?: string; studentId?: string; limit?: number } = {},
 ): Promise<{ records: AttendanceWithStudent[] }> => {
   return apiFetch<{ records: AttendanceWithStudent[] }>(
-    org(auth0Id, `/attendance${qs({ from: opts.from, to: opts.to, studentId: opts.studentId })}`),
+    org(
+      auth0Id,
+      `/attendance${qs({
+        from: opts.from,
+        to: opts.to,
+        studentId: opts.studentId,
+        limit: opts.limit,
+      })}`,
+    ),
   )
 }
 
@@ -462,10 +487,10 @@ export const orgDeleteAttendance = async (
 
 export const orgSchedule = async (
   auth0Id: string,
-  opts: { from?: string; to?: string } = {},
+  opts: { from?: string; to?: string; limit?: number } = {},
 ): Promise<{ events: ScheduleEvent[] }> => {
   return apiFetch<{ events: ScheduleEvent[] }>(
-    org(auth0Id, `/schedule${qs({ from: opts.from, to: opts.to })}`),
+    org(auth0Id, `/schedule${qs({ from: opts.from, to: opts.to, limit: opts.limit })}`),
   )
 }
 
@@ -503,10 +528,10 @@ export const orgDeleteEvent = async (
 
 export const orgReports = async (
   auth0Id: string,
-  opts: { studentId?: string } = {},
+  opts: { studentId?: string; limit?: number } = {},
 ): Promise<{ reports: ReportRecord[] }> => {
   return apiFetch<{ reports: ReportRecord[] }>(
-    org(auth0Id, `/reports${qs({ studentId: opts.studentId })}`),
+    org(auth0Id, `/reports${qs({ studentId: opts.studentId, limit: opts.limit })}`),
   )
 }
 

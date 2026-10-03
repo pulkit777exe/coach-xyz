@@ -52,9 +52,12 @@ type AnalysisStatusRecord = {
 }
 
 /** Shared column list for the analysis_history + video_conversations dashboard
-
-/** Shared column list for the analysis_history + video_conversations dashboard
- *  query. Used via `db.unsafe(ANALYSES_SELECT_COLUMNS)` inside a select. */
+ *  query. Used via `db.unsafe(ANALYSES_SELECT_COLUMNS)` inside a select.
+ *
+ *  This is the FULL row, `summary_json` included, and it belongs to the
+ *  single-row reads only — by id, by server job id, the `returning *` write, and
+ *  the account export. A LIST must use `ANALYSES_LIST_COLUMNS` instead; see the
+ *  note there for the size and the boundary reasons. */
 export const ANALYSES_SELECT_COLUMNS = `
   a.server_job_id,
   a.auth0_id,
@@ -68,6 +71,99 @@ export const ANALYSES_SELECT_COLUMNS = `
   a.complete,
   a.video_ready,
   a.summary_json,
+  a.error_code,
+  a.error_message,
+  a.requested_at,
+  a.completed_at,
+  a.download_count,
+  a.display_name,
+  a.requested_by,
+  a.student_id,
+  v.file_name,
+  v.file_size_bytes,
+  v.player_count
+`
+
+/**
+ * A LIST row's `summary_json`: `{"form_score": <number>}`, or SQL NULL.
+ *
+ * The blob is the whole reason this projection exists. `summary_json` carries
+ * `shot_events[]` — each with `biomechanics.joint_angles`, `weighted_scoring.criteria[]`
+ * and `injury_risk` — plus `findings[]`, `quality` and `top_tips`, measured at
+ * 57.5 KB for 12 events and 95.6 KB at the engine's 20-event frame budget. Every
+ * list consumer reads exactly one field of it (`summary_json.form_score`), so a
+ * 21-row History page was moving ~2 MB of JSON to render 21 numbers.
+ *
+ * Three properties, each of which a "just cast `->>` to float8" version gets wrong:
+ *
+ *  1. **An unscored row stays NULL.** `jsonb_build_object('form_score', NULL)` is
+ *     `{"form_score": null}` — an object that HAS the key, and every consumer
+ *     gates on having it: the History score tile (`'form_score' in a.summary_json`)
+ *     and `org/reports.ts`'s `analysesBlock`, whose `Number(summary.form_score)`
+ *     turns a JSON null into **0**, printing 0/10 for an analysis that was never
+ *     scored. The `case` keeps the NULL answer both for a NULL blob and for a blob
+ *     with no numeric score — which is exactly what those gates already read.
+ *
+ *  2. **The cast is total.** `->>` is text, so `(…)::float8` raises 22P02 on
+ *     anything non-numeric: ONE row whose `form_score` is the string "N/A" would
+ *     turn the 21-row History page into a 500, where the unprojected blob simply
+ *     rendered no score for it (the web requires `typeof score === 'number'`).
+ *     The pattern admits only a decimal, so everything unmatched takes the NULL
+ *     arm — the same answer the client used to compute for itself — and the
+ *     length bound rules out the other failure the cast has, float8 overflow
+ *     (22003) on a 300-digit integer. `org/performance.ts:220` still casts this
+ *     column bare on the much narrower series read; that 22P02 is pre-existing and
+ *     is deliberately not widened from here.
+ *
+ *  3. **It is a strict SUBSET, so the §5 medical boundary still fails closed.**
+ *     `redactWellness` only ever REMOVES keys, so projecting one away before the
+ *     read is strictly more restrictive than redacting after it — there is no
+ *     caller, medical or not, that the projection could disclose to. The one list
+ *     route that redacts at all is `GET /api/me/analyses`, and it redacts
+ *     unconditionally ("Player scope never carries wellness signals"); its object
+ *     here has no `shot_events` for `redactWellness` to walk, and `form_score` is
+ *     not a wellness key. The single-row reads that carry the real medical
+ *     decision (`resolveMedicalAccess` in routes/auth.ts, routes/status.ts,
+ *     routes/share.ts, routes/email.ts) keep `ANALYSES_SELECT_COLUMNS`, untouched.
+ *
+ * The regex's character class is written `[.]`, not `\.`: the dot is escaped by
+ * the brackets, so the pattern does not depend on `standard_conforming_strings`
+ * (with it off, `'\.'` degrades to a bare `.` — "any character" — and the cast
+ * would be reachable by `"1x2"`).
+ */
+export const ANALYSES_LIST_SUMMARY_JSON = `
+  case
+    when length(a.summary_json ->> 'form_score') <= 40
+     and (a.summary_json ->> 'form_score') ~ '^-?[0-9]+([.][0-9]+)?$'
+      then jsonb_build_object('form_score', (a.summary_json ->> 'form_score')::float8)
+    else null
+  end
+`
+
+/**
+ * The LIST projection of `ANALYSES_SELECT_COLUMNS`: every column the list
+ * consumers read, with `summary_json` replaced by `ANALYSES_LIST_SUMMARY_JSON`
+ * under the SAME column name, so the row shape the client and the server already
+ * agree on is unchanged and no consumer has to be taught a new field.
+ *
+ * Do not reach for this on a single-row read — the analysis detail page, the
+ * share link, the chat/clips/download handlers, the `returning *` link write and
+ * the account export all need the real blob, and they use
+ * `ANALYSES_SELECT_COLUMNS`.
+ */
+export const ANALYSES_LIST_COLUMNS = `
+  a.server_job_id,
+  a.auth0_id,
+  a.engine_job_id,
+  a.session_token,
+  a.player_index,
+  a.model,
+  a.stage,
+  a.stage_name,
+  a.progress,
+  a.complete,
+  a.video_ready,
+  ${ANALYSES_LIST_SUMMARY_JSON} as summary_json,
   a.error_code,
   a.error_message,
   a.requested_at,
@@ -653,6 +749,16 @@ export type DashboardStats = {
   total_downloads: number
 }
 
+/**
+ * The account tree's analysis LIST.
+ *
+ * Projected, not full: see `ANALYSES_LIST_SUMMARY_JSON`. Note the §5 boundary
+ * does NOT live here — `GET /api/auth/user/:auth0Id/analyses` hands these rows
+ * straight back, so the projection is what keeps wellness out of a list response
+ * for a caller who has no medical role. The one list route that *does* redact is
+ * `GET /api/me/analyses` (routes/me.ts), which redacts unconditionally and is
+ * strictly better off for it.
+ */
 export const getUserAnalyses = async (
   auth0Id: string,
   limit = 20,
@@ -676,8 +782,12 @@ export const getUserAnalyses = async (
       const scoped = opts.studentIds !== null && opts.studentIds !== undefined
       const ids = uuidArrayLiteral(opts.studentIds ?? [])
       const unlinkedFilter = opts.unlinked ? 'and a.student_id is null' : ''
+      // The list projection, not the full row: this feeds the History page, the
+      // dashboard's Recents and the student's linked/unlinked analysis lists, and
+      // every one of them reads `summary_json.form_score` and nothing else inside
+      // it (see ANALYSES_LIST_SUMMARY_JSON for the size and the boundary notes).
       const rows = await db<DashboardAnalysis[]>`
-      select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
+      select ${db.unsafe(ANALYSES_LIST_COLUMNS)}
       from analysis_history a
       left join video_conversations v on a.session_token = v.session_token
       where a.auth0_id = ${auth0Id}

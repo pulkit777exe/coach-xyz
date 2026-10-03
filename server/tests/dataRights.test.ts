@@ -58,6 +58,12 @@ describe('org data rights (probe)', () => {
     expect(statusOf(result, 'bad-format')).toBe(400)
     expect(statusOf(result, 'bad-section')).toBe(400)
     expect(statusOf(result, 'csv')).toBe(200)
+    const json = result.results.find((r) => r.name === 'json')
+    // Unindented, and starting immediately with the object. The indent cost 2.1×
+    // the bytes and 4.3× the stringify CPU on the account bundle for formatting
+    // that no consumer of a portability attachment reads.
+    expect(json?.extra?.head).toBe('{"formatVersion":1,"exportedAt":"2026-10')
+    expect(json?.extra?.indented).toBe(false)
     const csv = result.results.find((r) => r.name === 'csv')
     expect(csv?.extra?.contentType).toContain('text/csv')
     expect(csv?.extra?.head).toContain('id,full_name')

@@ -14,6 +14,7 @@ import {
   MAX_IMPORT_ROWS,
   isDate,
   isIsoDate,
+  readListLimit,
   validateStudentRow,
   type ImportRow,
 } from '../../lib/orgValidate'
@@ -65,6 +66,9 @@ export default new Elysia()
       teamId: url.searchParams.get('team_id') ?? '',
       includeArchived: url.searchParams.get('include_archived') === '1',
       ...(scope.all ? {} : { teamIds: scope.teamIds }),
+      // Never null: `listStudents` reads an absent limit as unlimited, and no web
+      // caller ever sent one. The export bounds itself by calling the data layer.
+      limit: readListLimit(url),
     })
     set.status = 200
     return { students }

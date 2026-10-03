@@ -42,6 +42,16 @@ const LITERAL_AB = `{${TEAM_A},${TEAM_B}}`
 type Statement = { sql: string; values: unknown[] }
 
 let statements: Statement[] = []
+/**
+ * The column lists spliced in through `db.unsafe(...)` inside a tagged template.
+ *
+ * They are NOT visible in `statements`: a nested unsafe reaches a stub as a
+ * placeholder (`select ? from …`) with the lazy query object in `values`, so the
+ * projection can only be read here — and the fact it is a separate channel is
+ * exactly why "pin the column set" needs its own recorder rather than a regex on
+ * the statement.
+ */
+let unsafeCalls: string[] = []
 let restore: (() => void) | null = null
 
 /**
@@ -53,6 +63,7 @@ let restore: (() => void) | null = null
  */
 const useRecordingStore = (): void => {
   statements = []
+  unsafeCalls = []
   if (restore) return
   const tag = (async (strings: TemplateStringsArray, ...values: unknown[]) => {
     // Joined with `?` so the recorded text reads as the statement Postgres
@@ -65,6 +76,7 @@ const useRecordingStore = (): void => {
     Object.assign(tag, {
       connect: async () => {},
       unsafe: async (sql: string, values: unknown[] = []) => {
+        if (typeof sql === 'string') unsafeCalls.push(sql.replace(/\s+/g, ' ').trim())
         statements.push({ sql, values })
         return []
       },
@@ -126,16 +138,19 @@ describe('the schedule list carries the team scope', () => {
     expect(scopeBinding(lastDataStatement())).toEqual({ scoped: false, ids: null })
   })
 
-  test('the date window still binds alongside the scope', async () => {
+  test('the date window still binds alongside the scope, and the row cap last', async () => {
     // The pre-existing callers (`/api/me/schedule`, the data export) pass only
-    // from/to, so their bind must not shift.
+    // from/to, so their bind must not shift. Positions, not types: `values` is
+    // parallel to the placeholders, and index 0 is the spliced column list (the
+    // nested `db.unsafe` reaches a stub as a lazy query object, not as text).
     useRecordingStore()
     await listSchedule(ORG, {
       from: '2026-03-01',
       to: '2026-03-31',
       teamIds: [TEAM_A, TEAM_B],
     })
-    expect(lastDataStatement().values).toEqual([
+    const values = lastDataStatement().values
+    expect(values.slice(1)).toEqual([
       ORG,
       '2026-03-01',
       '2026-03-01',
@@ -143,7 +158,58 @@ describe('the schedule list carries the team scope', () => {
       '2026-03-31',
       true,
       LITERAL_AB,
+      // `LIMIT NULL` is UNLIMITED in Postgres, so an absent limit must bind a real
+      // number here or "no cap" is what production does. The route supplies the
+      // number; this call deliberately does not, so the null IS the convention
+      // (`undefined → null`, clamped when present) the routes exist to cover.
+      null,
     ])
+  })
+
+  test('a limit is clamped, and an absurd one cannot reach Postgres', async () => {
+    useRecordingStore()
+    await listSchedule(ORG, { limit: 25 })
+    expect(lastDataStatement().values.at(-1)).toBe(25)
+
+    statements = []
+    await listSchedule(ORG, { limit: 0 })
+    expect(lastDataStatement().values.at(-1)).toBe(1)
+
+    statements = []
+    await listSchedule(ORG, { limit: Number.POSITIVE_INFINITY })
+    expect(lastDataStatement().values.at(-1)).toBe(10000)
+  })
+
+  test('the list spells its columns out instead of `select *`', async () => {
+    // `select *` is how `team_id` arrived on this read at all — it came with the
+    // ADR-0002 add column rather than by decision. Pinning the list makes it a
+    // contract and makes the next `add column` a deliberate act.
+    useRecordingStore()
+    await listSchedule(ORG)
+    expect(lastDataStatement().sql).not.toContain('select *')
+    // Found by what it contains, not by position: the recorder also sees
+    // `ensureInitialized`'s CHECK-value lists, so `at(-1)` is only accidentally
+    // right today.
+    const columns = unsafeCalls.find((call) => call.includes('team_id')) ?? ''
+    for (const column of [
+      'id',
+      'auth0_id',
+      'title',
+      'event_type',
+      'starts_at',
+      'ends_at',
+      'location',
+      'description',
+      'status',
+      // The scope predicate reads this column, so it MUST be projected: dropping
+      // it from the select would not narrow anything, it would just hide the
+      // dimension the whole team-scope feature is built on.
+      'team_id',
+      'created_at',
+      'updated_at',
+    ]) {
+      expect(columns, `missing column: ${column}`).toContain(column)
+    }
   })
 
   test('the by-id load the writes gate on is unscoped', async () => {

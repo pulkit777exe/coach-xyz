@@ -151,7 +151,15 @@ switch (probeCase) {
     results.push({
       name: 'json',
       status: json.status,
-      extra: { formatVersion: parsed.formatVersion, roster: parsed.roster },
+      extra: {
+        formatVersion: parsed.formatVersion,
+        roster: parsed.roster,
+        // The raw head of the attachment. A machine-consumed portability file is
+        // not indented: the 2-space form doubles the bytes and multiplies the
+        // stringify CPU for formatting nothing reads.
+        head: json.body.slice(0, 40),
+        indented: /^\{\n\s/.test(json.body),
+      },
     })
     const badFormat = await call('GET', `/api/org/${ORG}/export?format=xml`, ORG)
     results.push({ name: 'bad-format', status: badFormat.status })
