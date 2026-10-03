@@ -92,6 +92,24 @@ provider — both solvable without a DOM. So the render-based tier is available
 across most of `components/` right now, and the honest gap is much smaller than
 "no component tests".
 
+**Closed since (2026-10-03).** `components/a11y-name-sweep.test.tsx` now renders
+**every** component file under `components/` and asserts an accessible name on
+every interactive element — 129 tests, taking web-next from 330 to 459. Two
+findings came out of it: a genuinely unnamed `sr-only` file input in
+`LandingPage.tsx`, and a hole in the sweep itself (a `✕` glyph was being
+accepted as a name, so removing the drawer's Close button's `aria-label` went
+unnoticed until it was mutation-tested).
+
+What it still cannot reach, as named sets rather than prose: **7 `PORTAL_ONLY`**
+components render empty markup because 9ui's `DialogContent` wraps children in
+Base UI's `DialogPortal`, which has no server-render output — proved by rendering
+one with `open: true` and still getting nothing. **7 more are skipped** with a
+per-component reason (client-only provider, a store a client effect populates, a
+suspend, one non-component). Portal content, anything behind an interaction, and
+focus management remain out of reach; the last is covered against fake nodes by
+`a11yOverlay.test.ts`. **This is the honest remaining cost of having no DOM, and
+it is what a jsdom project would buy.**
+
 `modal` rendering **0 bytes** is the interesting one, and it is not a testing
 gap: the component is `useState`-gated closed, so it is empty in *every* server
 render. That is exactly why its accessibility check has to read the source
@@ -102,11 +120,10 @@ which runs no effects and dispatches no events.
 
 Ranked by defect-found-per-hour, not by coverage percentage:
 
-1. **Render the components that already render.** Five do today with zero new
-   dependencies. An accessible-name sweep over rendered markup is the same check
-   that already found four real accessibility blockers.
-2. **Supply props/providers**, which turns most of the remaining `components/`
-   into render-testable without a DOM.
+1. ~~**Render the components that already render.**~~ **Done** —
+   `components/a11y-name-sweep.test.tsx`, 129 tests, no new dependency.
+2. ~~**Supply props/providers**~~ **Done where it was free** — the sweep's
+   `withPrefs()` helper already existed and two entries simply were not using it.
 3. **A DOM environment (`happy-dom` or `jsdom`)** last. It needs a dependency
    added to `web-next/package.json` + `bun.lock`, and buys effect execution and
    focus management — real, but narrower than items 1 and 2.
