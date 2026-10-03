@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 
 import { orDisabledDefault, withHistoryStore } from './historyStore'
+import { uuidArrayLiteral } from './org/scope'
 export type UserRecord = {
   id: string
   auth0_id: string
@@ -76,18 +77,61 @@ export const upsertUser = async (user: {
       const existingByEmail = await db<UserRecord[]>`
         select * from users where email = ${user.email} limit 1;
       `
-      if (existingByEmail?.[0]) {
-        // Found existing account by email — link the new provider
-        // only when this login was email-verified. Unverified emails
-        // can't takeover an existing account. Never downgrade a
-        // verified flag to unverified.
-        const mergedLinked = user.email_verified
-          ? [...(existingByEmail[0].linked_auth0_ids || []), user.sub]
-          : existingByEmail[0].linked_auth0_ids
+      // Only a VERIFIED login may attach itself to an existing account — and,
+      // just as importantly, only a verified one may WRITE to it. The statement
+      // below sets name/nickname/picture, so letting an unverified login reach
+      // it would let anyone who can sign up with an unverified email rename a
+      // real account and repoint its avatar: measured, an unverified login
+      // renamed the canonical row from "Real Owner" to "Impostor" and left it
+      // that way. No privilege escalation (the link is withheld and
+      // `resolveAuth0Id` keeps the new sub separate, so the impostor still only
+      // ever acts as itself) — but a persistent integrity defect on someone
+      // else's record, and `email` is NOT unique, so the answer is simple.
+      //
+      // The unverified case falls through to the insert path below and gets its
+      // own row, unlinked and unverified. Nothing is lost: an unverified login
+      // was never entitled to the existing account in the first place.
+      //
+      // This is the coupling the dead bind was hiding. While the statement threw
+      // 22P02 on both arms, the "an unverified email must not take over an
+      // existing account" rule held FOR THE WRONG REASON — it was upheld by the
+      // crash, not by this conditional. Fixing the bind without this guard
+      // would have converted a broken write into a live takeover path.
+      if (existingByEmail?.[0] && user.email_verified === true) {
+        // Found existing account by email — link the new provider. Never
+        // downgrade a verified flag to unverified (guaranteed by the guard
+        // above: this branch only runs for a verified login).
+        const mergedLinked = [
+          ...(existingByEmail[0].linked_auth0_ids || []),
+          user.sub,
+        ]
         const uniqueLinked = [...new Set(mergedLinked)]
+        // The array must be bound as a Postgres array LITERAL, not as a JS array.
+        //
+        // Bun sends a JS array as comma-joined text, so the old
+        // `linked_auth0_ids = ${uniqueLinked}` handed Postgres the string
+        // `auth0|abc` and asked it to parse that as an array literal — which
+        // raises `22P02 malformed array literal`. Verified against a live
+        // Postgres for every arity that reaches here: one id, two ids, and the
+        // EMPTY array (`''`, from the unverified branch when the row has no
+        // links yet) all fail. So both arms of this branch always threw.
+        //
+        // The consequence was not a degraded link, it was a dead endpoint: the
+        // wrapper is `withHistoryStore`, which fails OPEN and returns null, and
+        // `POST /api/auth/sync` turns that into `500 Failed to sync user` for
+        // any second provider signing in on an already-registered email. Because
+        // the link never persisted, every later login retried the same failing
+        // statement — permanently broken rather than retryable.
+        //
+        // `uuidArrayLiteral` is named for uuids but is generic
+        // (`{${ids.join(',')}}`); it is the documented SSOT for this binding
+        // shape, so it is reused rather than duplicated with a text-flavoured
+        // name. An auth0 sub is `auth0|<hex>`, which needs no element quoting —
+        // a value containing `,` `{` `}` or whitespace would need it, and
+        // nothing that reaches this column can.
         const rows = await db<UserRecord[]>`
           update users set
-            linked_auth0_ids = ${uniqueLinked},
+            linked_auth0_ids = ${uuidArrayLiteral(uniqueLinked)}::text[],
             name = ${user.name || existingByEmail[0].name},
             nickname = ${user.nickname || existingByEmail[0].nickname},
             picture = ${user.picture || existingByEmail[0].picture},

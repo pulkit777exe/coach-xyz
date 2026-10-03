@@ -42,6 +42,9 @@ type StoreLabels = {
   getStudent: number
   wellnessSelect: number
   wellnessInsert: number
+  studentSports: number
+  sportsTeamFilters: number
+  trendSeries: number
 }
 
 type ProbeResult = {
@@ -131,7 +134,14 @@ const NO_STORE_QUERIES: StoreLabels = {
   getStudent: 0,
   wellnessSelect: 0,
   wellnessInsert: 0,
+  studentSports: 0,
+  sportsTeamFilters: 0,
+  trendSeries: 0,
 }
+
+/** Fixtures: `rugby` is played ONLY by team B (`Player B1`); team A is `soccer`. */
+const TEAM_A_SPORTS = ['soccer']
+const ORG_SPORTS = ['rugby', 'soccer']
 
 const TEAM_STAFF: readonly OrgMemberRole[] = ['head_coach', 'assistant_coach', 'coach']
 /** `assistant_coach` cannot manage the roster, so it is not a wellness writer. */
@@ -230,6 +240,88 @@ describe('a team-A coach is narrowed to team A', () => {
       expect(result.status, `role: ${result.role}`).toBe(200)
       expect(result.student, `role: ${result.role}`).toBe(S_A1)
       expect(result.store.getStudent, `role: ${result.role}`).toBe(1)
+    }
+  })
+})
+
+// ── The sport filter's value list ────────────────────────────────────────────
+
+describe('the student sports list is narrowed like the roster list', () => {
+  test("GET /students/sports returns team A sports and not team B's", async () => {
+    // An aggregate over the roster, so it answers the same question the roster
+    // list does. It used to answer org-wide with no scope argument at all, which
+    // told a team-A coach that this club fields `rugby` — a fact visible only on
+    // team B. Distinct on an org-wide row set, so one leaked sport is the whole
+    // difference between the right and the wrong answer here.
+    const results = await runProbe('students.sports', TEAM_STAFF, [TEAM_A])
+    for (const result of results) {
+      expect(result.status, `role: ${result.role}`).toBe(200)
+      expect((result.body as { sports: string[] }).sports, `role: ${result.role}`).toEqual(
+        TEAM_A_SPORTS,
+      )
+      expect(result.store.studentSports, `role: ${result.role}`).toBe(1)
+      // Counted from the statement text, not the bind: a fixture that only
+      // applied the bound literal would keep narrowing by team after the
+      // `team_id = any(...)` clause was deleted from the SQL.
+      expect(result.store.sportsTeamFilters, `role: ${result.role}`).toBe(1)
+    }
+  })
+
+  test('org staff still get every sport in the club', async () => {
+    const results = await runProbe('students.sports', ORG_WIDE)
+    for (const result of results) {
+      expect(result.status, `role: ${result.role}`).toBe(200)
+      expect((result.body as { sports: string[] }).sports, `role: ${result.role}`).toEqual(
+        ORG_SPORTS,
+      )
+      expect(result.store.studentSports, `role: ${result.role}`).toBe(1)
+    }
+  })
+
+  test('a coach with no team assignment gets no sport at all', async () => {
+    // The empty scope binds NULL, and `team_id = any(NULL::uuid[])` matches
+    // nothing — an honest empty list, not the org's. Same answer the empty
+    // roster list gives.
+    const [result] = await runProbe('students.sports', ['head_coach'], [])
+    expect(result.status).toBe(200)
+    expect((result.body as { sports: string[] }).sports).toEqual([])
+  })
+})
+
+// ── The trends read, the fourth view of one player ───────────────────────────
+
+describe("a trends read of another team's player is 404, not an empty 200", () => {
+  test('GET /students/:id/trends for a team B student is 404 with no by-id probe', async () => {
+    // This route looked the student up with NO scope for its 404 check and let
+    // the series query narrow itself, so the two halves disagreed about the same
+    // question: a real player on another team answered 200 with an empty trend
+    // list while an id that does not exist answered 404. That difference is a
+    // roster-enumeration oracle for any member — the thing `GET /students/:id`
+    // refuses to be. `getStudent(s, scope)` answers it below the route now, so
+    // the refusal costs no by-id store call either.
+    const results = await runProbe('trends.teamB', TEAM_STAFF, [TEAM_A])
+    for (const result of results) {
+      expect(result.status, `role: ${result.role}`).toBe(404)
+      expect(result.store.getStudent, `role: ${result.role}`).toBe(0)
+      // The series is never built for a player the caller cannot see.
+      expect(result.store.trendSeries, `role: ${result.role}`).toBe(0)
+    }
+  })
+
+  test("a coach still reads their own player's trends", async () => {
+    const results = await runProbe('trends.own', TEAM_STAFF, [TEAM_A])
+    for (const result of results) {
+      expect(result.status, `role: ${result.role}`).toBe(200)
+      expect((result.body as { trends: unknown[] }).trends, `role: ${result.role}`).toEqual([])
+      expect(result.store.trendSeries, `role: ${result.role}`).toBe(2)
+    }
+  })
+
+  test("org staff read any player's trends", async () => {
+    const results = await runProbe('trends.teamB', ORG_WIDE)
+    for (const result of results) {
+      expect(result.status, `role: ${result.role}`).toBe(200)
+      expect((result.body as { trends: unknown[] }).trends, `role: ${result.role}`).toEqual([])
     }
   })
 })

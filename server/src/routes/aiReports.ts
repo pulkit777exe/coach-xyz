@@ -13,6 +13,7 @@ import { checkAiReportLimit, rateLimited } from '../lib/ratelimit'
 import { REPORT_TYPES } from '../lib/orgEnums'
 import type { ReportType } from '../lib/orgEnums'
 import { isDate, defaultReportTitle } from '../lib/orgValidate'
+import { pickUuid } from '../lib/uuid'
 import { buildReportContent, getAiReportJob, subscribeAiReportJob } from '../lib/aiReportData'
 import type { AiReportJob } from '../lib/aiReportData'
 import { getReport } from '../lib/orgData'
@@ -85,6 +86,21 @@ export function validateAiReportBody(
     return {
       ok: false,
       error: buildError('INVALID_REQUEST', 'student_id must be a non-empty string', false),
+    }
+  }
+  // Shape, not just non-emptiness: this value is handed straight to
+  // `buildReportContent`, which casts it as `::uuid` in `attendanceSummary` and
+  // `getStudentPerformanceSeries`. "not-a-uuid" passed the non-empty check above,
+  // and because the scope gate treats an org-wide caller as seeing everything
+  // (`canSeeStudent(null, x) === true`), owner/admin/analyst got past it too —
+  // then Postgres raised 22P02 and the composed app's error shaper answered
+  // 500 INTERNAL_ERROR. Its twin `POST /api/org/:auth0Id/reports` already
+  // answers 400 for this exact value; the boundary is the only place that knows
+  // a malformed id, so it belongs here, in the one validator that owns this body.
+  if (b.student_id !== undefined && !pickUuid(b.student_id)) {
+    return {
+      ok: false,
+      error: buildError('INVALID_REQUEST', 'student_id must be a uuid', false),
     }
   }
   if (b.period_start !== undefined && b.period_start !== null && !isDate(b.period_start)) {

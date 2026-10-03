@@ -73,9 +73,23 @@ export default new Elysia()
     set.status = 200
     return { students }
   })
-  .get('/api/org/:auth0Id/students/sports', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/students/sports', async ({ params, request, set }) => {
     const { auth0Id } = params
-    const sports = await listStudentSports(auth0Id)
+    if (!auth0Id) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    // An AGGREGATE over the roster, so it answers the same question the roster
+    // list above does. This one did not ask it at all: it was a distinct-sport
+    // read over every row in the org, so a team-A coach's sport filter listed
+    // sports that only team B fields — the one read on this tree that shipped
+    // another team's roster shape to a scoped caller. The filter is the same
+    // `teamIds` filter `listStudents` already takes, narrowed in SQL rather than
+    // by filtering the org-wide answer in the route: the ids never leave.
+    const scope = await studentScope(auth0Id, request)
+    const sports = await listStudentSports(auth0Id, {
+      ...(scope.all ? {} : { teamIds: scope.teamIds }),
+    })
     set.status = 200
     return { sports }
   })

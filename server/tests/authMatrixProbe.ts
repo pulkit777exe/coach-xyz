@@ -75,8 +75,18 @@ const TEAMS = [
 
 // Generic row answered for any single-row table lookup by id.
 const ROW_BY_TABLE: Record<string, Record<string, unknown>> = {
-  training_objectives: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG, student_id: STU_A, team_id: TEAM_A },
-  training_plans: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG, student_id: STU_A, team_id: TEAM_A },
+  training_objectives: {
+    id: '00000000-0000-4000-8000-0000000000e1',
+    org_auth0_id: ORG,
+    student_id: STU_A,
+    team_id: TEAM_A,
+  },
+  training_plans: {
+    id: '00000000-0000-4000-8000-0000000000e1',
+    org_auth0_id: ORG,
+    student_id: STU_A,
+    team_id: TEAM_A,
+  },
   reports: { id: '00000000-0000-4000-8000-0000000000e1', auth0_id: ORG, student_id: STU_A },
   schedule_events: { id: '00000000-0000-4000-8000-0000000000e1', auth0_id: ORG, team_id: TEAM_A },
   seasons: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG },
@@ -97,7 +107,11 @@ const ROW_BY_TABLE: Record<string, Record<string, unknown>> = {
     measured_at: '2026-09-01T00:00:00.000Z',
     created_at: '2026-09-01T00:00:00.000Z',
   },
-  wellness_checkins: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG, student_id: STU_A },
+  wellness_checkins: {
+    id: '00000000-0000-4000-8000-0000000000e1',
+    org_auth0_id: ORG,
+    student_id: STU_A,
+  },
   findings: { id: 'job-matrix:e1', server_job_id: JOB },
   clips: { id: 'clip', server_job_id: JOB },
   notifications: { id: 'notif', auth0_id: ORG },
@@ -201,7 +215,8 @@ mock.module('../src/lib/shareTokens', () => ({
   DEFAULT_EXPIRES_HOURS: 72,
 }))
 
-mock.module('../src/lib/mailer', () => ({  emailConfigured: () => true,
+mock.module('../src/lib/mailer', () => ({
+  emailConfigured: () => true,
   isDeliverableAddress: (v: unknown) => typeof v === 'string' && v.includes('@'),
   escapeHtml: (v: unknown) => String(v ?? ''),
   inviteEmail: () => ({ subject: 'invite', html: '<p>invite</p>', text: 'invite' }),
@@ -230,9 +245,8 @@ mock.module('../src/lib/historyStore', () => ({
         // getMemberRole (role by sub), setOrgMemberRole pre-read (by row
         // id), and listOrgMembers (full list).
         if (/select role/.test(sql)) {
-          const byId = values.find(
-            (v) => typeof v === 'string' && MEMBER_BY_ID[v],
-          ) as string | undefined
+          const byId = values.find((v) => typeof v === 'string' && MEMBER_BY_ID[v]) as
+            string | undefined
           if (byId) return [{ role: MEMBER_BY_ID[byId].role }]
           const sub = values.find((v) => typeof v === 'string' && v !== ORG)
           const role = typeof sub === 'string' ? ROLE_OF[sub] : undefined
@@ -259,9 +273,7 @@ mock.module('../src/lib/historyStore', () => ({
       if (/from users/.test(sql)) {
         const sub = values.find((v) => typeof v === 'string')
         const known = [ORG, SUB.coach, SUB.player, SUB.other].includes(sub as string)
-        return known
-          ? [{ auth0_id: sub, email: `${sub}@matrix.test`, email_verified: true }]
-          : []
+        return known ? [{ auth0_id: sub, email: `${sub}@matrix.test`, email_verified: true }] : []
       }
       if (/insert into users/.test(sql)) {
         return [{ auth0_id: values[0] ?? ORG, email: 'new@matrix.test', email_verified: true }]
@@ -275,9 +287,7 @@ mock.module('../src/lib/historyStore', () => ({
       if (/team_memberships/.test(sql)) {
         if (/^delete/i.test(sql.trim())) return [{ id: 'matrix-row' }]
         if (/^insert/i.test(sql.trim())) {
-          const teamId = values.find(
-            (v) => typeof v === 'string' && v.startsWith('00000000'),
-          )
+          const teamId = values.find((v) => typeof v === 'string' && v.startsWith('00000000'))
           return [
             {
               id: '00000000-0000-4000-8000-0000000000d9',
@@ -313,8 +323,7 @@ mock.module('../src/lib/historyStore', () => ({
         // Org-wide callers bind NULL (the `not scoped` half admits them);
         // scoped callers bind a `{a,b}` literal to filter by.
         const literal = values.find((v) => typeof v === 'string' && v.startsWith('{')) as
-          | string
-          | undefined
+          string | undefined
         if (!literal) return []
         const ids = literal.slice(1, -1).split(',').filter(Boolean)
         return STUDENTS.filter((s) => ids.includes(s.team_id)).map((s) => ({ id: s.id }))
@@ -520,8 +529,8 @@ mock.module('../src/lib/historyStore', () => ({
       // Selects and the profile update both answer the same shape.
       if (/users/.test(sql)) {
         const sub =
-          (values.find((v) => typeof v === 'string' && v.includes('auth0|')) as string | undefined) ??
-          (values.find((v) => typeof v === 'string') as string | undefined)
+          (values.find((v) => typeof v === 'string' && v.includes('auth0|')) as
+            string | undefined) ?? (values.find((v) => typeof v === 'string') as string | undefined)
         if (!sub) return []
         return [
           {
@@ -554,8 +563,7 @@ mock.module('../src/lib/historyStore', () => ({
       if (/notifications/.test(sql)) {
         const id =
           (values.find((v) => typeof v === 'string' && v.startsWith('00000000')) as
-            | string
-            | undefined) ?? 'notif'
+            string | undefined) ?? 'notif'
         return [{ id, auth0_id: ORG, read_at: new Date().toISOString() }]
       }
       if (/delete from clips/.test(sql)) return [{ id: 'clip-1' }]
@@ -563,11 +571,12 @@ mock.module('../src/lib/historyStore', () => ({
     }
     const db = Object.assign(tag, {
       begin: (fn2: (tx: unknown) => unknown) => fn2(tag),
-      unsafe: (sql: unknown, ...vals: unknown[]) => (vals.length > 0 ? [{ id: 'matrix-row' }] : sql),
+      unsafe: (sql: unknown, ...vals: unknown[]) =>
+        vals.length > 0 ? [{ id: 'matrix-row' }] : sql,
     })
     return fn(db)
   },
-  orDisabledDefault: <T>(v: T | null, f: T) => (v ?? f),
+  orDisabledDefault: <T>(v: T | null, f: T) => v ?? f,
   historyStoreEnabled: () => true,
   shutdownHistoryStore: async () => undefined,
   setHistoryStoreConnectionForTests: () => () => undefined,
@@ -617,7 +626,13 @@ const headersFor = (role: MatrixRole): Record<string, string> => {
   }
 }
 
-const failures: Array<{ route: string; role: MatrixRole; variant?: string; expected: number; got: number | string }> = []
+const failures: Array<{
+  route: string
+  role: MatrixRole
+  variant?: string
+  expected: number
+  got: number | string
+}> = []
 const uncovered: string[] = []
 let total = 0
 
@@ -667,6 +682,23 @@ const runCase = async (
   }
 }
 
+// The lookup is driven from `app.routes`, so a policy entry whose route does not
+// exist is never visited — and an expectation nobody executes looks exactly like
+// a satisfied one. The three rows that used to pin 201/200 for team staff on
+// seasons/matches were found by reading handler bodies, not by this runner, and
+// `POST /api/org/:auth0Id/performance` was a row for a route that does not exist
+// at all (the write lives at `POST /students/:id/performance`), so its eleven
+// per-role expectations asserted nothing and no run could ever notice.
+//
+// Reverse direction: the set of route keys the table claims, minus the set the
+// app registers. A route ADDED without a row is already caught (`uncovered`); a
+// row for a route REMOVED or misnamed was not, and is the same blind spot in the
+// other direction.
+const registered = new Set(routes.map((r) => `${r.method} ${r.path}`))
+const orphanEntries = MATRIX.filter((e) => !registered.has(`${e.method} ${e.path}`)).map(
+  (e) => `${e.method} ${e.path}`,
+)
+
 for (const route of routes) {
   const key = `${route.method} ${route.path}`
   // Debug filter: MATRIX_ONLY="POST /api/org/:auth0Id/matches" runs one route.
@@ -699,4 +731,12 @@ for (const route of routes) {
   }
 }
 
-console.log(JSON.stringify({ failures: failures.slice(0, 60), failureCount: failures.length, uncovered, total }))
+console.log(
+  JSON.stringify({
+    failures: failures.slice(0, 60),
+    failureCount: failures.length,
+    uncovered,
+    orphanEntries,
+    total,
+  }),
+)

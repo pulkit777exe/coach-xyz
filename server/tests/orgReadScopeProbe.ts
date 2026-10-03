@@ -89,10 +89,14 @@ const STUDENTS: StudentRow[] = [
     team_id: TEAM_A,
   },
   {
+    // Deliberately the ONLY player in a sport no team-A player plays. The sports
+    // list is an aggregate over the roster, so without a value that only exists
+    // on the far side of the scope boundary there is nothing for the assertion to
+    // catch: `['soccer']` would be the right answer either way.
     id: S_B1,
     full_name: 'Player B1',
     email: 'b1@example.com',
-    sport: 'soccer',
+    sport: 'rugby',
     position: 'midfield',
     status: 'active',
     team_id: TEAM_B,
@@ -259,6 +263,9 @@ type StoreLabels = {
   getStudent: number
   wellnessSelect: number
   wellnessInsert: number
+  studentSports: number
+  sportsTeamFilters: number
+  trendSeries: number
 }
 
 const store: StoreLabels = {
@@ -276,6 +283,9 @@ const store: StoreLabels = {
   getStudent: 0,
   wellnessSelect: 0,
   wellnessInsert: 0,
+  studentSports: 0,
+  sportsTeamFilters: 0,
+  trendSeries: 0,
 }
 
 const resetStore = () => {
@@ -391,6 +401,26 @@ const answer = async (text: string, params: unknown[]): Promise<unknown[]> => {
     store.getStudent += 1
     return STUDENTS.filter((s) => s.id === params[1])
   }
+  // lib/org/students.ts — listStudentSports, the sport FILTER's value list. An
+  // aggregate over the roster, so it takes the same `teamIds` narrowing the
+  // roster list does. Counted from the statement text as well as answered from
+  // the bind: a fixture that only applied the bound literal would keep filtering
+  // by team even after the `team_id = any(...)` clause was deleted from the SQL,
+  // which is the failure this assertion exists to catch.
+  if (text.includes('select distinct sport from students')) {
+    store.studentSports += 1
+    store.sportsTeamFilters += (text.match(/team_id = any\(/g) ?? []).length
+    // `scoped`, NOT "a literal was bound": an unassigned coach binds the boolean
+    // true with a NULL literal (`uuidArrayLiteral([])` is skipped, so `::uuid[]`
+    // gets NULL), and reading the missing literal as org-wide would answer the
+    // whole club's sports for a caller who manages no team — the same
+    // empty-is-not-unset trap the SQL itself avoids.
+    const { scoped } = boundScope(params)
+    const teams = boundTeamScope(params) ?? new Set<string>()
+    const rows = scoped ? STUDENTS.filter((s) => teams.has(s.team_id)) : STUDENTS
+    const distinct = [...new Set(rows.map((s) => s.sport))].filter(Boolean).sort()
+    return distinct.map((sport) => ({ sport }))
+  }
   // lib/org/overview.ts — the rollup.
   if (text.includes('as student_count')) {
     store.overview += 1
@@ -458,6 +488,14 @@ const answer = async (text: string, params: unknown[]): Promise<unknown[]> => {
   if (text.includes('from wellness_checkins')) {
     store.wellnessSelect += 1
     return WELLNESS.filter((w) => w.student_id === params[1])
+  }
+  // lib/org/performance.ts — getStudentPerformanceSeries. Reached only after the
+  // trends route's own scope gate, so both cases here are IN-scope callers whose
+  // fixtures simply carry no metrics: the point of these cases is the STATUS, and
+  // an empty series is the honest answer for an org that has recorded nothing.
+  if (text.includes('from analysis_history') || text.includes('from performance_metrics')) {
+    store.trendSeries += 1
+    return []
   }
   if (text.includes('insert into wellness_checkins')) {
     store.wellnessInsert += 1
@@ -527,7 +565,16 @@ setHistoryStoreConnectionForTests(fixtureConnection)
 const { resolveCaller } = await import('../src/lib/caller')
 const overviewRoute = (await import('../src/routes/org/overview')).default
 const wellnessRoute = (await import('../src/routes/org/wellness')).default
+const studentsRoute = (await import('../src/routes/org/students')).default
+const performanceRoute = (await import('../src/routes/org/performance')).default
 const { getStudent } = await import('../src/lib/org/students')
+
+const ROUTES: Record<RouteModule, { handle: (r: Request) => Promise<Response> }> = {
+  overview: overviewRoute,
+  wellness: wellnessRoute,
+  students: studentsRoute,
+  trends: performanceRoute,
+}
 
 const orgPath = 'auth0%7Corg-owner'
 const call = async (
@@ -548,8 +595,10 @@ const call = async (
   return { status: response.status, body: await response.json().catch(() => null) }
 }
 
+type RouteModule = 'overview' | 'wellness' | 'students' | 'trends'
+
 type Case =
-  | { kind: 'route'; route: 'overview' | 'wellness'; path: string; method: string; body?: unknown }
+  | { kind: 'route'; route: RouteModule; path: string; method: string; body?: unknown }
   | { kind: 'student'; student: string }
 
 const CASES: Record<string, Case> = {
@@ -590,6 +639,28 @@ const CASES: Record<string, Case> = {
     method: 'POST',
     path: `/api/org/${orgPath}/students/${S_B1}/wellness`,
     body: { sleep_hours: 7, fatigue: 2, pain: 'calf' },
+  },
+  // lib/org/students.ts — the sport filter's value list. An aggregate over the
+  // roster, so a coach must not learn which sports another team fields.
+  'students.sports': {
+    kind: 'route',
+    route: 'students',
+    method: 'GET',
+    path: `/api/org/${orgPath}/students/sports`,
+  },
+  // lib/org/performance.ts — a student-keyed READ. The out-of-team id must be
+  // indistinguishable from an id that does not exist.
+  'trends.own': {
+    kind: 'route',
+    route: 'trends',
+    method: 'GET',
+    path: `/api/org/${orgPath}/students/${S_A1}/trends`,
+  },
+  'trends.teamB': {
+    kind: 'route',
+    route: 'trends',
+    method: 'GET',
+    path: `/api/org/${orgPath}/students/${S_B1}/trends`,
   },
   'student.get.own': { kind: 'student', student: 'a' },
   'student.get.teamB': { kind: 'student', student: 'b' },
@@ -637,7 +708,7 @@ for (const role of roleTokens) {
     continue
   }
 
-  const route = probe.route === 'overview' ? overviewRoute : wellnessRoute
+  const route = ROUTES[probe.route]
   const result = await call(route, probe.path, {
     method: probe.method,
     ...(probe.body === undefined ? {} : { body: JSON.stringify(probe.body) }),

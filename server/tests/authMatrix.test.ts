@@ -41,6 +41,8 @@ type ProbeResult = {
   }>
   failureCount: number
   uncovered: string[]
+  /** Policy rows matching no registered route — expectations nothing can run. */
+  orphanEntries: string[]
   total: number
 }
 
@@ -69,6 +71,13 @@ describe('authorization matrix', () => {
     // Floor, not an exact count: new routes add cases, never remove them.
     expect(result.total).toBeGreaterThan(1000)
     expect(result.uncovered).toEqual([])
+    // The other direction. The probe drives cases from the app's ROUTE list, so
+    // a row for a path no route serves is never visited — an expectation nobody
+    // executes reads exactly like a satisfied one, which is how a row came to
+    // pin 201 for `POST /api/org/:auth0Id/performance` (no such route; the write
+    // is `POST /students/:id/performance`). Deleting or renaming a route must
+    // delete or rename its row too.
+    expect(result.orphanEntries).toEqual([])
     expect(result.failures).toEqual([])
     expect(result.failureCount).toBe(0)
   }, 300000)

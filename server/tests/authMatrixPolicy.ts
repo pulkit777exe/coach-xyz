@@ -112,6 +112,13 @@ export const MATRIX: MatrixEntry[] = [
   },
   orgRead('GET', '/api/org/:auth0Id/students/sports', {
     expect: { ...ALL_200, player: 200 },
+    note:
+      'an AGGREGATE over the roster, so it consults the scope seam like the roster ' +
+      'list does (same `teamIds` filter). It was `select distinct sport from students ' +
+      'where auth0_id = $1` with no scope at all, so a team-A coach was told which ' +
+      'sports team B fields. `player: 200` is unchanged (it answers an EMPTY list, ' +
+      'the honest answer for an empty scope) — which is why this needed a fixture ' +
+      'holding out-of-team data, not a status change.',
   }),
   {
     ...orgRead('GET', '/api/org/:auth0Id/students/:id'),
@@ -464,30 +471,21 @@ export const MATRIX: MatrixEntry[] = [
     ...orgRead('GET', '/api/org/:auth0Id/performance', {
       query: '?studentId=00000000-0000-4000-8000-0000000000c1',
       expect: { ...ALL_200, player: 200 },
+      note: 'cross-student metric list, `?studentId` required; narrows in SQL',
     }),
+    // No out-of-team variant on purpose. The scope predicate is IN the query
+    // (listPerformance's `not scoped or student_id = any(...)`), so an
+    // out-of-scope studentId answers 200 with an empty array — identical to the
+    // answer for a student id that does not exist, so there is no existence
+    // oracle to pin. The by-path twin (GET /students/:id/performance) has one
+    // because it 404s.
   },
-  {
-    method: 'POST',
-    path: '/api/org/:auth0Id/performance',
-    body: {
-      student_id: '00000000-0000-4000-8000-0000000000c1',
-      metric_key: 'form_score',
-      metric_value: 7,
-    },
-    expect: {
-      anonymous: 403,
-      owner: 201,
-      admin: 201,
-      head_coach: 201,
-      coach: 201,
-      assistant_coach: 403,
-      analyst: 403,
-      medical: 403,
-      player: 403,
-      outsider: 403,
-      other: 403,
-    },
-  },
+  // There is deliberately NO `POST /api/org/:auth0Id/performance` row. The write
+  // lives at `POST /api/org/:auth0Id/students/:id/performance` (below) and no such
+  // route is registered. A row for a path the app does not serve is never visited
+  // by the runner — the probe iterates `app.routes` — so its eleven per-role
+  // expectations asserted nothing and no failure could ever come from them. The
+  // probe now reports entries matching no registered route as `orphanEntries`.
   // ── Reports ──
   orgRead('GET', '/api/org/:auth0Id/reports', {
     expect: { ...ALL_200, player: 200 },
@@ -554,12 +552,37 @@ export const MATRIX: MatrixEntry[] = [
   },
   // ── Trends, comparison, overview, search ──
   orgRead('GET', '/api/org/:auth0Id/students/:id/trends', {
-    expect: { ...ALL_200, player: 200 },
-    note: 'out-of-scope yields an empty series, still 200 (data-level narrowing)',
+    expect: { ...ALL_200, player: 404 },
+    note:
+      'STUDENT-KEYED READ → 404 out of scope (same rule as GET /students/:id). ' +
+      'It used to read the student UNSCOPED for its 404 check, so "exists in this ' +
+      'org but on another team" answered 200-empty while "no such student" answered ' +
+      '404 — an existence oracle of exactly the kind the roster read avoids. The ' +
+      'series was already empty either way (the scope predicate is in the query), ' +
+      'so the old note ("data-level narrowing") described narrowing, not the status.',
+    variants: [
+      {
+        name: 'out-of-team',
+        params: { id: '00000000-0000-4000-8000-0000000000c2' },
+        expect: {
+          ...ALL_200,
+          coach: 404,
+          assistant_coach: 404,
+          head_coach: 404,
+          player: 404,
+          outsider: 403,
+          other: 403,
+          anonymous: 403,
+        },
+      },
+    ],
   }),
   orgRead('GET', '/api/org/:auth0Id/students/comparison', {
     query: '?ids=00000000-0000-4000-8000-0000000000c1',
     expect: { ...ALL_200, player: 200 },
+    note:
+      'aggregate: invisible ids are dropped BEFORE the lookup, so the answer names ' +
+      'no player the caller cannot see',
   }),
   orgRead('GET', '/api/org/:auth0Id/overview', {
     expect: { ...ALL_200, player: 200 },
@@ -1544,6 +1567,23 @@ export const MATRIX: MatrixEntry[] = [
   {
     ...orgRead('GET', '/api/org/:auth0Id/students/:id/performance'),
     expect: { ...ALL_200, player: 404 },
+    variants: [
+      {
+        name: 'out-of-team',
+        params: { id: '00000000-0000-4000-8000-0000000000c2' },
+        expect: {
+          ...ALL_200,
+          coach: 404,
+          assistant_coach: 404,
+          head_coach: 404,
+          player: 404,
+          outsider: 403,
+          other: 403,
+          anonymous: 403,
+        },
+      },
+    ],
+    note: 'student-keyed read → 404 out of scope (studentVisible)',
   },
   {
     method: 'POST',
@@ -1562,10 +1602,47 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    variants: [
+      {
+        name: 'out-of-team',
+        params: { id: '00000000-0000-4000-8000-0000000000c2' },
+        body: { metric_key: 'form_score', metric_value: 7 },
+        expect: {
+          anonymous: 403,
+          owner: 201,
+          admin: 201,
+          head_coach: 403,
+          coach: 403,
+          assistant_coach: 403,
+          analyst: 403,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
   },
   {
     ...orgRead('GET', '/api/org/:auth0Id/students/:id/analyses'),
     expect: { ...ALL_200, player: 404 },
+    variants: [
+      {
+        name: 'out-of-team',
+        params: { id: '00000000-0000-4000-8000-0000000000c2' },
+        expect: {
+          ...ALL_200,
+          coach: 404,
+          assistant_coach: 404,
+          head_coach: 404,
+          player: 404,
+          outsider: 403,
+          other: 403,
+          anonymous: 403,
+        },
+      },
+    ],
+    note: 'student-keyed read → 404 out of scope; wellness keys redacted without medical access',
   },
   {
     ...orgRead('GET', '/api/org/:auth0Id/reports/:id', {

@@ -257,12 +257,28 @@ export const deleteStudent = async (auth0Id: string, id: string): Promise<boolea
     }),
   )) ?? false
 
-export const listStudentSports = async (auth0Id: string): Promise<string[]> => {
+/**
+ * Distinct sports in use across the roster — the `sport` filter's value list.
+ *
+ * SCOPED, with the same `teamIds` option and the same binding as `listStudents`
+ * (see its note for why an empty list binds NULL rather than `[]`). It is an
+ * aggregate over the roster, so it answers the same question the roster list
+ * does: a coach must not learn which sports a team they are not assigned to
+ * fields. Org-wide callers (`scope.all` → `teamIds` absent) are unnarrowed.
+ */
+export const listStudentSports = async (
+  auth0Id: string,
+  opts: { teamIds?: string[] } = {},
+): Promise<string[]> => {
+  const scopeIds = (opts.teamIds ?? []).filter((t) => typeof t === 'string' && t.length > 0)
+  const scoped = opts.teamIds !== undefined
+  const scopeParam = scopeIds.length > 0 ? uuidArrayLiteral(scopeIds) : null
   return (
     (await withHistoryStoreOrThrow(async (db) => {
       const rows = await db<{ sport: string | null }[]>`
         select distinct sport from students
         where auth0_id = ${auth0Id} and sport is not null
+          and (not ${scoped} or team_id = any(${scopeParam}::uuid[]))
         order by sport asc;
       `
       return (rows ?? []).map((r) => r.sport as string)

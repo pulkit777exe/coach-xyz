@@ -20,16 +20,18 @@ describe('validateAiReportBody', () => {
   })
 
   test('accepts optional period/student/title fields', () => {
+    // A real uuid, not a placeholder: the validator now enforces the `::uuid`
+    // shape because this value is cast as `::uuid` by `buildReportContent`.
     const result = validateAiReportBody({
       report_type: 'performance',
-      student_id: 's1',
+      student_id: '11111111-1111-1111-1111-111111111111',
       period_start: '2026-08-01',
       period_end: '2026-08-31',
       title: 'Summer review',
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.value.student_id).toBe('s1')
+      expect(result.value.student_id).toBe('11111111-1111-1111-1111-111111111111')
       expect(result.value.period_start).toBe('2026-08-01')
       expect(result.value.title).toBe('Summer review')
     }
@@ -186,7 +188,7 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
         },
         body: JSON.stringify({
           report_type: 'performance',
-          student_id: 's1',
+          student_id: '11111111-1111-1111-1111-111111111111',
           period_start: '2026-08-01',
           period_end: '2026-08-31',
         }),
@@ -199,7 +201,7 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
       to?: string
       report_type?: string
     }
-    expect(opts.student_id).toBe('s1')
+    expect(opts.student_id).toBe('11111111-1111-1111-1111-111111111111')
     expect(opts.from).toBe('2026-08-01')
     expect(opts.to).toBe('2026-08-31')
     expect(opts.report_type).toBe('performance')
@@ -219,6 +221,52 @@ describe('POST /api/org/:auth0Id/reports/ai', () => {
     )
     expect(res.status).toBe(400)
     expect(((await res.json()) as { code?: unknown }).code).toBe('INVALID_REQUEST')
+  })
+
+  // A malformed student_id is a 400 at this boundary, never a 500 from the
+  // `::uuid` cast inside buildReportContent. Before the fix this value passed
+  // the non-empty check, cleared the scope gate (an org-wide caller sees
+  // everything, so `canSeeStudent(null, 'not-a-uuid')` is true), reached
+  // attendanceSummary's `::uuid` cast, and Postgres raised 22P02 — which the
+  // composed app's error shaper turns into INTERNAL_ERROR.
+  //
+  // Two halves, and the second is the one that catches a regression of the fix:
+  // `buildContext` must NEVER be reached, because that is the call that performs
+  // the cast. Asserting only the status would pass against a refusal that still
+  // did the work.
+  test('returns 400 for a malformed student_id without building report context', async () => {
+    let contextBuilt = false
+    const app = makeApp({
+      buildContext: async () => {
+        contextBuilt = true
+        return defaultContext
+      },
+      enqueue: async () => 'job-1',
+    })
+    const res = await app.handle(
+      new Request('http://localhost/api/org/auth-coach-1/reports/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headersFor('auth-coach-1'),
+        },
+        body: JSON.stringify({ report_type: 'progress', student_id: 'not-a-uuid' }),
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { code?: unknown }).code).toBe('INVALID_REQUEST')
+    expect(contextBuilt).toBe(false)
+  })
+
+  // The counterpart, so the case above cannot be satisfied by a route that
+  // simply refuses every student_id: a well-formed one is accepted and reaches
+  // the context builder.
+  test('still accepts a well-formed student_id', () => {
+    const result = validateAiReportBody({
+      report_type: 'progress',
+      student_id: '11111111-1111-1111-1111-111111111111',
+    })
+    expect(result.ok).toBe(true)
   })
 
   test('returns 503 QUEUE_UNAVAILABLE when no worker is configured', async () => {

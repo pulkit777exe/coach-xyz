@@ -124,14 +124,23 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Invalid student id', false)
     }
-    const student = await getStudent(auth0Id, id)
+    const caller = await resolveCaller(auth0Id, request)
+    // SCOPED, and that is the whole fix for a read that used to be an existence
+    // oracle. This looked up the student with no scope for its 404 check, then
+    // let the series query narrow itself, so the two answers disagreed about the
+    // same question: a student on ANOTHER team answered 200 with an empty trend
+    // list, while a student id that does not exist at all answered 404 — which
+    // tells any member "that id is a real player on this org, just not yours".
+    // The series is empty either way (the predicate is in the query), so nothing
+    // was disclosed except the roster itself. `GET /students/:id`,
+    // `/students/:id/performance` and `/students/:id/analyses` already answered
+    // 404 here, and this is the fourth view of the same player.
+    const student = await getStudent(auth0Id, id, caller.studentScope)
     if (!student) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
-    const caller = await resolveCaller(auth0Id, request)
     const url = new URL(request.url)
-    // Single-student read: an out-of-scope id yields no series and no trends.
     const trends = await getStudentTrends(auth0Id, id, {
       metricKey: url.searchParams.get('metricKey') ?? undefined,
       from: url.searchParams.get('from') ?? undefined,
