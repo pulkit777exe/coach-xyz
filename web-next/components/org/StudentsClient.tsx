@@ -562,6 +562,7 @@ export default function StudentsClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, sport…"
+              aria-label="Search students"
               className="pl-9"
             />
           </div>

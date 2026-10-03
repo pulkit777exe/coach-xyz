@@ -120,17 +120,24 @@ export default function PlayerSelector({
           </div>
 
           {angles.length > 0 && (
+            // Toggle buttons, not tabs: each angle re-renders the ONE player
+            // grid below rather than owning a panel of its own, and there is no
+            // tabpanel to point aria-controls at. `role="tab"` on buttons that
+            // are not owned children of the tablist (the styled inner div sits
+            // between them) announced a broken tab set, and there was no arrow
+            // -key handling to match. aria-pressed states the same fact — this
+            // angle is the active one — and is operable by keyboard for free.
             <div
               className="flex flex-wrap items-center justify-center gap-1 mb-8"
-              role="tablist"
+              role="group"
               aria-label="Camera angles"
             >
               <div className="inline-flex rounded-[6px] bg-accent p-1">
                 {angles.map((angle) => (
                   <button
                     key={angle}
-                    role="tab"
-                    aria-selected={angle === activeAngle}
+                    type="button"
+                    aria-pressed={angle === activeAngle}
                     onClick={() => switchAngle(angle)}
                     className={`rounded-[4px] px-3.5 py-1.5 text-body font-medium capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                       angle === activeAngle

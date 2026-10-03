@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clientError,
   engineError,
   errorFromResponse,
   isCoachAIError,
@@ -118,6 +119,31 @@ describe('errorFromResponse (single response-mapping rule)', () => {
       code: 'REQUEST_FAILED',
       retryable: false,
     })
+  })
+})
+
+describe('clientError (client-layer shaping)', () => {
+  it('pins layer client and defaults to NOT retryable', () => {
+    // The counterpart to engineError, added so the scan flow stops
+    // hand-building the literal (`throw { … } as CoachAIError`) — a cast is
+    // unchecked, so a typo in `retryable` shipped silently.
+    expect(clientError('REQUEST_TIMEOUT', 'Scan cancelled.')).toEqual({
+      code: 'REQUEST_TIMEOUT',
+      message: 'Scan cancelled.',
+      layer: 'client',
+      retryable: false,
+    })
+  })
+
+  it('takes an explicit retryability verdict', () => {
+    expect(clientError('X', 'y', true)).toMatchObject({ layer: 'client', retryable: true })
+  })
+
+  it('produces a shape the consumers recognise', () => {
+    // isCoachAIError is what fetchNotificationsWithRetry reads to decide
+    // whether another attempt could ever succeed.
+    expect(isCoachAIError(clientError('X', 'y'))).toBe(true)
+    expect(isTransientError(clientError('X', 'y'))).toBe(false)
   })
 })
 

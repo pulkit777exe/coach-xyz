@@ -107,6 +107,18 @@ export function errorFromResponse(
 }
 
 /**
+ * Shape a client-layer failure: the browser refused the request before it was
+ * sent (a wrong file type, an oversized upload, a user-cancelled scan), so
+ * `layer` is always 'client'. Retryability is the caller's explicit verdict —
+ * a cancelled scan is not a timeout and must not be retried. The counterpart to
+ * `engineError`, and the reason callers do not hand-build the literal: this
+ * module is the one place that decides what a `CoachAIError` looks like.
+ */
+export function clientError(code: string, message: string, retryable = false): CoachAIError {
+  return { code, message, layer: 'client', retryable }
+}
+
+/**
  * Shape an engine-layer failure: the engine (or its SSE feed) reported the
  * problem, so layer is always 'engine' and retryability is the caller's
  * explicit verdict — never re-derived here. Consumed by the analysis

@@ -53,6 +53,10 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder}
+        // Not the placeholder: ChatPanel swaps it to "Loading..." while history
+        // is in flight, which as an accessible name would rename the field
+        // mid-session.
+        aria-label="Message"
         rows={1}
         maxLength={2000}
         className="flex-1 resize-none rounded-[8px] border border-border bg-background px-4 py-2.5 text-body text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"

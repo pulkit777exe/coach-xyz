@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { cn } from '@/lib/utils'
+import { focusInitial, inertOutside, restoreFocusOnClose } from './overlay-a11y'
 
 type DrawerSide = 'left' | 'right' | 'top' | 'bottom'
 
@@ -29,6 +30,10 @@ export function Drawer({
   children,
   className,
 }: DrawerProps) {
+  const titleId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -37,28 +42,41 @@ export function Drawer({
     document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // See modal.tsx — aria-modal alone leaves the page behind tabbable.
+    focusInitial(panelRef.current)
+    const undoInert = inertOutside(rootRef.current, document.body)
+    const undoFocus = restoreFocusOnClose(document)
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      undoInert()
+      undoFocus()
     }
   }, [open, onOpenChange])
 
   const { panel, closed } = sideStyles[side]
 
   return (
-    <div className={cn('fixed inset-0 z-[60]', !open && 'pointer-events-none')}>
-      <button
-        type="button"
-        aria-label="Close"
+    <div ref={rootRef} className={cn('fixed inset-0 z-[60]', !open && 'pointer-events-none')}>
+      {/* Scrim only, for the same reason as modal.tsx. */}
+      <div
+        aria-hidden="true"
         onClick={() => onOpenChange(false)}
         className={cn(
           'absolute inset-0 bg-black/45 dark:bg-black/65 transition-opacity duration-200 ease-[var(--ease-out)]',
           open ? 'opacity-100' : 'opacity-0',
         )}
       />
+      {/* A closed drawer is translated off-screen but still in the DOM, so it is
+          `inert` rather than merely invisible: an off-screen dialog that keeps
+          its Close button in the tab order is the defect, not the animation. */}
       <div
+        ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        {...(open ? {} : { inert: true })}
         className={cn(
           'absolute bg-popover shadow-lg transition-transform duration-200 ease-in-out',
           panel,
@@ -67,7 +85,9 @@ export function Drawer({
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-[16px] font-semibold text-foreground">{title}</h2>
+          <h2 id={titleId} className="text-[16px] font-semibold text-foreground">
+            {title}
+          </h2>
           <button
             type="button"
             onClick={() => onOpenChange(false)}

@@ -439,7 +439,12 @@ export default function StudentProfile({
             <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body">
               {student_.sport && <span>{student_.sport}</span>}
               {student_.position && <span>{student_.position}</span>}
-              {student_.jersey_number && <span>#{student_.jersey_number}</span>}
+              {/* Ternary: jersey 0 is falsy, so the old `{… && …}` rendered a
+                  bare `0` with no `#` and no chip span beside the other
+                  metadata. The form input is type="number" with no min. */}
+              {student_.jersey_number === null || student_.jersey_number === undefined ? null : (
+                <span>#{student_.jersey_number}</span>
+              )}
               {student_.gender && <span className="capitalize">{student_.gender}</span>}
             </div>
             <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-meta">
@@ -783,7 +788,7 @@ export default function StudentProfile({
               value={compareMetric}
               onValueChange={(v) => setCompareMetric(typeof v === 'string' ? v : 'form_score')}
             >
-              <SelectTrigger className="h-8 w-auto" data-size="sm">
+              <SelectTrigger className="h-8 w-auto" data-size="sm" aria-label="Metric to compare">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

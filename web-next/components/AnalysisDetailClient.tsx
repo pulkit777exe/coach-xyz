@@ -488,7 +488,14 @@ export default function AnalysisDetailClient({
             ) : shareUrl ? (
               <>
                 <div className="flex gap-2">
+                  {/* The <p> above is prose, not a label: without this the field
+                      is announced as an unnamed text box and a screen reader
+                      user reads the URL as an unlabelled edit box. */}
+                  <label htmlFor="analysis-share-url" className="sr-only">
+                    Share link
+                  </label>
                   <input
+                    id="analysis-share-url"
                     type="text"
                     value={shareUrl}
                     readOnly

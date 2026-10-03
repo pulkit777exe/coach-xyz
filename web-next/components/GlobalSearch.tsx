@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 import { Input } from '@/components/9ui/ui/input'
-import { Dialog, DialogContent } from '@/components/9ui/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/9ui/ui/dialog'
 import { Spinner } from '@/components/org/Spinner'
 import { orgSearch, type OrgSearchResult } from '@/lib/org'
 
@@ -166,7 +166,15 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
       </button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent showCloseButton={false} className="gap-0 p-0 sm:max-w-[540px]">
+        <DialogContent
+          showCloseButton={false}
+          aria-label="Search"
+          className="gap-0 p-0 sm:max-w-[540px]"
+        >
+          {/* Base UI names the popup from DialogTitle only — without this the
+              dialog is announced as a bare "dialog". Same pattern as
+              SidebarSearch. */}
+          <DialogTitle className="sr-only">Search</DialogTitle>
           <div className="border-b border-border p-3 pb-2">
             <Input
               autoFocus
@@ -182,6 +190,7 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                 }
               }}
               placeholder="Search students, reports, analyses..."
+              aria-label="Search students, reports, analyses"
               leadingIcon={<Search className="size-4" />}
               trailingIcon={loading ? <Spinner /> : undefined}
             />

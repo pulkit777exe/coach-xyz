@@ -1,5 +1,5 @@
 import { IDENTITY_BASE } from './api'
-import { errorFromResponse } from './errors'
+import { errorFromResponse, isCoachAIError } from './errors'
 import { parseEventStream } from './sse'
 
 /** Notification row as stored server-side. */
@@ -63,7 +63,14 @@ export async function fetchNotifications(signal?: AbortSignal): Promise<Notifica
     signal,
   })
   if (!res.ok) {
-    throw new Error(`Failed to fetch notifications (${res.status})`)
+    // Through the shared mapping, like markRead/markAllRead below: the status
+    // stays in the message (the snapshot retry log reads it) and the thrown
+    // value gains the `retryable` verdict fetchNotificationsWithRetry needs to
+    // stop spending its budget on a 401/403/404 that can never succeed.
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'NOTIFICATIONS_FETCH_FAILED',
+      message: `Failed to fetch notifications (${res.status})`,
+    })
   }
   return res.json()
 }
@@ -97,6 +104,12 @@ export async function fetchNotificationsWithRetry(
     } catch (error) {
       lastError = error
       if (signal?.aborted || attempt >= maxAttempts - 1) throw error
+      // Retry a mapped failure only when the mapping called it retryable: a
+      // 401/403/404 (expired session, org the caller is not in, route gone)
+      // is identical on every attempt, so three tries just delay the same
+      // failure by five seconds. Anything unmapped — a fetch TypeError from a
+      // dropped connection — is still worth the budget.
+      if (isCoachAIError(error) && error.retryable === false) throw error
       await waitForSnapshotRetry(SNAPSHOT_RETRY_DELAYS_MS[attempt]!, signal)
     }
   }

@@ -37,7 +37,30 @@ describe('notification snapshots', () => {
 
   it('rejects a failed snapshot instead of returning an empty list', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })))
+    await expect(fetchNotifications()).rejects.toMatchObject({
+      code: 'NOTIFICATIONS_FETCH_FAILED',
+      layer: 'server',
+      retryable: true,
+    })
+    // The status stays in the message so the log still says which one it was.
     await expect(fetchNotifications()).rejects.toThrow('503')
+  })
+
+  it('does not spend the retry budget on a status that cannot succeed', async () => {
+    // The mapping marks 401/403/404 non-retryable. Retrying them three times
+    // only delayed the identical failure by 5s before surfacing it.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'no session' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchNotificationsWithRetry(new AbortController().signal)).rejects.toMatchObject({
+      code: 'NOTIFICATIONS_FETCH_FAILED',
+      retryable: false,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

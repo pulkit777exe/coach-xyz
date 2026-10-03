@@ -35,7 +35,7 @@ export default function PreferencesSection() {
               }
             }}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-44" aria-label="Theme">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
