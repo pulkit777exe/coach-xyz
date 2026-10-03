@@ -1,4 +1,10 @@
-# Perf baseline (local, 2026-09-29)
+# Perf baseline (local, 2026-09-29 — **re-measured 2026-10-03**)
+
+> The 2026-09-29 table below is retained as the historical record. The
+> **Current state** table further down is the live one; where the two disagree,
+> the newer measurement wins. One entry in *Deliberately skipped* was wrong and
+> has been corrected in place — see the import-bulk line, which was listed as
+> "not a hot path" and is now the second-fastest write in the suite.
 
 Seed: `server/scripts/seedPerf.ts` (refuses non-local `PERF_DATABASE_URL`).
 Rig: local Postgres 16 + local Redis, server on :8000
@@ -22,6 +28,45 @@ sequential) and `scripts/loadPut.ts` / `scripts/loadBatch.ts`.
 | Overview | 9 | 12 | 13 | |
 | PUT student (coach) | 1–3 | 2–5 | 3–21 | 2 caller resolutions × 2 trips |
 | POST attendance/batch (200) | 141 med | — | 185 | 200 sequential upserts + verifies + sequential fan-out |
+
+## Current state (local, 2026-10-03)
+
+Same rig and seed as above, re-run after the optimisation round. Harness
+`/tmp/opencode/perf-latency.ts`: 5 discarded warmups, then **N=50 sequential**
+requests through the real service boundary, reporting **response body size** as
+well as latency - the size is the number CI can actually assert on, because
+latency on a shared runner is too noisy to gate.
+
+| Endpoint | p50 | p95 | p99 | body | vs 2026-09-29 |
+|---|---|---|---|---|---|
+| History (20) | 1 | 2 | 2 | **10.4 KB** | was ~1.4 MB before the list projection |
+| Roster (500 students) | 3 | 6 | 6 | 313 KB | 5 -> 3 ms |
+| Student detail (analyses) | 1 | 1 | 1 | 51.7 KB | was ~19 MB |
+| Attendance (month window) | 4 | 6 | 8 | 321 KB | - |
+| Attendance unfiltered | 4 | 6 | 7 | 321 KB | **811 -> 4 ms** |
+| Schedule (bounded) | 0 | 0 | 1 | 0.0 KB | was unbounded `select *` |
+| Overview | 9 | 13 | 13 | 0.1 KB | 9 -> 9 ms (unchanged) |
+| Findings trends | 21 | 26 | 34 | 2.2 KB | 22 -> 21 ms |
+| Student trends | 1 | 1 | 1 | 1.9 KB | - |
+| POST attendance/batch (200) | 2 | 4 | 4 | 0.3 KB | 141 -> 2 ms |
+| POST students/import (200) | 1 | 3 | 4 | 0.0 KB | was "not a hot path" |
+
+Two harness lessons, both of which produced a **phantom regression** before being
+caught, so they are recorded rather than quietly fixed:
+
+- **`isLocalRedis()` returns `redis://localhost:6379` and ignores the port the
+  container is actually on.** Pointing `UPSTASH_REDIS_REST_URL` at a local Redis
+  published on 56380 therefore left ioredis retrying a dead port, and **every**
+  Redis-touching request took a flat **5.01 s** - identical at 1 entry and at
+  500, which is the tell. Set `UPSTASH_REDIS_IOREDIS_URL` as well. A latency
+  number that does not move when you change N is not measuring your code.
+- The first harness also read "present"/"absent" where the route validates
+  `status`, so a 400 was being timed instead of the write.
+
+Round-trip counts behind the table are in the `AGENTS.md` ledger entry on
+one-round-trip-per-table: `persistFindings` 201 -> 1 at 200 rows,
+`persistPlayerEvents` 201 -> 1, `compareStudents` 30 -> 1 at the route's cap of 10
+ids, and the wellness export read 122 -> 1 for 120 students.
 
 ## EXPLAIN (ANALYZE, BUFFERS) summary
 
@@ -52,7 +97,17 @@ No index additions: every hot path is indexed or trivially small. Revisit past
 - jsonb repair scan at boot: 31ms on 280k rows — not worth a schema_meta flag.
 - Advisory lock for concurrent replicas: single-replica deploy; DDL already
   idempotent.
-- Import bulk rewrite: not a hot path; import region owned by parallel work.
+- ~~Import bulk rewrite: not a hot path; import region owned by parallel
+  work.~~ **WRONG on both counts, and now done (2026-10-03).** `importStudents`
+  did 1-2 sequential INSERTs per row inside one request, so a 500-row CSV held a
+  transaction across ~1000 serial round trips. It is now one
+  `insert ... select ... from jsonb_to_recordset` per 100 rows via
+  `lib/batchRows.ts`: **1001 -> 11 round trips** at the 500-row cap, and
+  end-to-end **~1 ms p50** for a 200-row import. Measured, not estimated. The
+  per-row error isolation the route contract requires is preserved by falling
+  back to the original row-at-a-time path when a batched statement raises, and
+  deliberately NO transaction was added - an aborted transaction poisons every
+  later statement, so the fallback could not run.
 - Pool tuning (`max: 5`, statement_timeout): no pooler in this deploy; revisit
   with one.
 - Unfiltered attendance cap: UI always filters; export path has own caps.
