@@ -40,7 +40,13 @@ const sources = (overrides: Partial<OrgExportSources> = {}): OrgExportSources =>
   listReports: (async () => []) as OrgExportSources['listReports'],
   listObjectives: (async () => []) as OrgExportSources['listObjectives'],
   listTrainingPlans: (async () => []) as OrgExportSources['listTrainingPlans'],
-  listWellness: (async () => [{ id: 'w1' }]) as unknown as OrgExportSources['listWellness'],
+  // Must answer rows shaped like the real batched read — `student_id` included —
+  // or the group-by has nothing to key on and the test passes vacuously.
+  listWellnessForStudents: (async () => [
+    { id: 'w1', student_id: 's1' },
+    { id: 'w2', student_id: 's1' },
+    { id: 'w3', student_id: 's2' },
+  ]) as unknown as OrgExportSources['listWellnessForStudents'],
   ...overrides,
 })
 
@@ -51,9 +57,91 @@ describe('buildOrgExport', () => {
     expect('wellness' in without).toBe(false)
     const withWellness = await buildOrgExport('auth0|org', { includeWellness: true }, sources())
     expect(withWellness.wellnessIncluded).toBe(true)
-    expect(withWellness.wellness?.length).toBe(2)
+    // Both check-ins of BOTH students, not one row per student.
+    expect(withWellness.wellness?.length).toBe(3)
     // Each check-in carries its student for review.
     expect(withWellness.wellness?.[0]).toMatchObject({ student_id: 's1' })
+  })
+
+  test('wellness is ONE read for the whole roster, not one per student', async () => {
+    // The defect: `roster.map(student => listWellness(...))` is up to
+    // ORG_EXPORT_LIMITS.students (2000) round trips. Count the reads instead of
+    // trusting the shape, and pin the cap that reaches the data layer.
+    const calls: Array<{ ids: number; limit: number }> = []
+    const roster = Array.from({ length: 50 }, (_, i) => student(`s${i + 1}`))
+    const recording = sources({
+      listStudents: (async () => roster) as OrgExportSources['listStudents'],
+      listWellnessForStudents: (async (_org: string, ids: string[], limit: number) => {
+        calls.push({ ids: ids.length, limit })
+        return ids.map((id) => ({ id: `w-${id}`, student_id: id }))
+      }) as unknown as OrgExportSources['listWellnessForStudents'],
+    })
+
+    const bundle = await buildOrgExport('auth0|org', { includeWellness: true }, recording)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual({ ids: 50, limit: ORG_EXPORT_LIMITS.wellnessPerStudent })
+    expect(bundle.wellness).toHaveLength(50)
+  })
+
+  test('wellness comes back in roster order regardless of the ids order', async () => {
+    // The batched read keys by student_id, so a row order that follows the ids
+    // would reorder the bundle versus the old per-student fan-out. Roster order
+    // is what the export documented, and the old implementation's, because
+    // `Promise.all` preserved the roster's order and `flat()` kept it.
+    const recording = sources({
+      listStudents: (async () => [
+        student('s3'),
+        student('s1'),
+        student('s2'),
+      ]) as OrgExportSources['listStudents'],
+      // Deliberately the OPPOSITE of roster order — a source that sorted by id.
+      listWellnessForStudents: (async (_org: string, ids: string[]) =>
+        [...ids].sort().map((id) => ({
+          id: `w-${id}`,
+          student_id: id,
+        }))) as unknown as OrgExportSources['listWellnessForStudents'],
+    })
+
+    const bundle = await buildOrgExport('auth0|org', { includeWellness: true }, recording)
+    expect(bundle.wellness?.map((w) => w.student_id)).toEqual(['s3', 's1', 's2'])
+  })
+
+  test('a student with no check-ins contributes nothing and drops no one else', async () => {
+    // A Map keyed by student_id with no entry for the empty student must not
+    // shift the others, and `flatMap` over the roster must still visit every
+    // student — so the empty case is a real assertion, not a null check.
+    const recording = sources({
+      listStudents: (async () => [
+        student('s1'),
+        student('s2'),
+        student('s3'),
+      ]) as OrgExportSources['listStudents'],
+      listWellnessForStudents: (async () => [
+        { id: 'w1', student_id: 's1' },
+        { id: 'w3', student_id: 's3' },
+      ]) as unknown as OrgExportSources['listWellnessForStudents'],
+    })
+
+    const bundle = await buildOrgExport('auth0|org', { includeWellness: true }, recording)
+    expect(bundle.wellness?.map((w) => w.student_id)).toEqual(['s1', 's3'])
+  })
+
+  test('an empty roster still calls the wellness source once, with nothing', async () => {
+    // The seam that makes this cheap is a short-circuit on an empty id list, so
+    // the call is made and the source sees an empty roster rather than the
+    // bundle skipping the source entirely.
+    const calls: number[] = []
+    const recording = sources({
+      listStudents: (async () => []) as OrgExportSources['listStudents'],
+      listWellnessForStudents: (async (_org: string, ids: string[]) => {
+        calls.push(ids.length)
+        return []
+      }) as unknown as OrgExportSources['listWellnessForStudents'],
+    })
+    const bundle = await buildOrgExport('auth0|org', { includeWellness: true }, recording)
+    expect(calls).toEqual([0])
+    expect(bundle.wellness).toEqual([])
   })
 
   test('every section is capped', async () => {

@@ -98,13 +98,19 @@ export const MAX_IMPORT_ROWS = 500
 /**
  * Bulk attendance contract: max entries accepted per request.
  *
- * Same reasoning as MAX_IMPORT_ROWS, and it matters more here: setAttendanceBatch
- * loops its entries **sequentially**, one upsert per entry inside the single
- * request, so the route's cost is linear in `entries.length`. It previously
- * checked only `Array.isArray(entries) && length > 0`, so any member holding
- * `attendance.write` could post 50,000 entries and hold a request open that long.
- * A class of 30 students over a fortnight is ~40 entries; 500 leaves ample room
- * for a whole season in one call.
+ * Same reasoning as MAX_IMPORT_ROWS. What it bounds is per-ENTRY work, not
+ * per-statement work: `setAttendanceBatch` already collapses its entries into ONE
+ * multi-row upsert (measured: 1 statement at 1, 10, 100 and 500 entries, and 1
+ * for 500 entries that all share a single conflict key), so a request is no
+ * longer paying a round trip per entry. The cap still bounds one request's
+ * statement size and how long a member holding `attendance.write` can hold it
+ * open. A class of 30 students over a fortnight is ~40 entries; 500 leaves ample
+ * room for a whole season in one call.
+ *
+ * This comment used to say the function "loops its entries **sequentially**, one
+ * upsert per entry inside the single request" — true when the cap was written,
+ * false since the batch landed, and exactly the kind of stale claim that
+ * survives in a doc comment because nothing executes it.
  */
 export const MAX_ATTENDANCE_BATCH = 500
 

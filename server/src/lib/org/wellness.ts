@@ -2,7 +2,7 @@
 
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { getStudent } from './students'
-import type { StudentScope } from './scope'
+import { uuidArrayLiteral, type StudentScope } from './scope'
 
 // ── Wellness check-ins (health data, §5) ─────────────────────────────────────
 
@@ -36,6 +36,85 @@ export const listWellness = async (
       return rows ?? []
     })) ?? []
   )
+}
+
+/**
+ * Wellness check-ins for a whole roster, in ONE round trip.
+ *
+ * This exists because `listWellness` per student does not scale to a bundle:
+ * `buildOrgExport` capped its roster at 2000 students and fanned out
+ * `roster.map(student => listWellness(...))`, so one export was up to 2000
+ * queries. `Promise.all` made it a concurrency problem rather than a stall, but
+ * against a `max: 5` pool it still serialised 2000 deep and competed with live
+ * traffic on the same pool.
+ *
+ * `uuidArrayLiteral`, because a raw JS array reaches `any($1)` as comma-joined
+ * TEXT and the `::uuid[]` cast dies with 22P02 — the opposite binding from
+ * `batchRows`, and the two must not be unified (see `batchRows`).
+ *
+ * ORDERING is part of the contract, not an implementation detail: rows come back
+ * grouped by `student_id` and, within a student, newest first — exactly what N
+ * separate `order by created_at desc limit N` queries produced.
+ * `row_number() over (partition by student_id …)` carries the per-student cap, so
+ * this is the same N-newest rule and not "all of them"; `distinct on` would have
+ * kept every row and then needed a second ranking pass anyway. The column list is
+ * spelled out because the ranking column has to be dropped before the row leaves —
+ * it is `listWellness`'s `select *`, in DDL order.
+ */
+export const listWellnessForStudents = async (
+  auth0Id: string,
+  studentIds: readonly string[],
+  limitPerStudent = 30,
+): Promise<WellnessCheckin[]> => {
+  // Short-circuit rather than binding an empty `{}`: `= any('{}')` is valid and
+  // matches nothing, but the round trip is still spent, and this is the shape a
+  // caller hits for an org with no players.
+  const ids = [...new Set(studentIds.filter((id) => typeof id === 'string' && id.length > 0))]
+  if (ids.length === 0) return []
+  const capped = Math.min(Math.max(limitPerStudent, 1), 200)
+  return (
+    (await withHistoryStoreOrThrow(async (db) => {
+      const rows = await db<WellnessCheckin[]>`
+        select id, org_auth0_id, student_id, sleep_hours, fatigue, pain,
+               availability, note, created_by, created_at
+        from (
+          select w.*, row_number() over (
+            partition by student_id order by created_at desc
+          ) as rn
+          from wellness_checkins w
+          where org_auth0_id = ${auth0Id}
+            and student_id = any(${uuidArrayLiteral(ids)}::uuid[])
+        ) ranked
+        where ranked.rn <= ${capped}
+        order by ranked.student_id;
+      `
+      return rows ?? []
+    })) ?? []
+  )
+}
+
+/**
+ * Group a batched wellness read back onto its students, newest first within each.
+ *
+ * The rows arrive keyed by `student_id`; a caller wants them keyed by the roster
+ * it asked about, so this is the client-side group-by that replaces the fan-out.
+ * A `Map` keyed by id, not a `find` per row: the export's roster is capped at
+ * 2000 and the result at 2000 × the per-student cap.
+ */
+export const groupWellnessByStudent = (
+  studentIds: readonly string[],
+  rows: readonly WellnessCheckin[],
+): Map<string, WellnessCheckin[]> => {
+  const byStudent = new Map<string, WellnessCheckin[]>()
+  for (const row of rows) {
+    const bucket = byStudent.get(row.student_id)
+    if (bucket) bucket.push(row)
+    else byStudent.set(row.student_id, [row])
+  }
+  // Every requested id gets an entry, so a student with no check-ins reads as an
+  // empty list rather than a missing key.
+  for (const id of studentIds) if (!byStudent.has(id)) byStudent.set(id, [])
+  return byStudent
 }
 
 /**

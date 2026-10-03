@@ -1,5 +1,8 @@
 // Students (roster) data layer — split from lib/orgData.ts.
 
+import type { SQL } from 'bun'
+
+import { batchRows } from '../batchRows'
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { STUDENT_STATUSES } from '../orgEnums'
 import { logger } from '../logger'
@@ -276,9 +279,88 @@ export type ImportResult = {
 }
 
 /**
+ * Rows per batched INSERT. 100 keeps the jsonb parameter small (a full CSV row is
+ * a few hundred bytes) while collapsing the 500-row cap from 500 statements to 5.
+ */
+const IMPORT_INSERT_BATCH = 100
+
+/**
+ * One batched statement: `insert … select … from jsonb_to_recordset(…)`.
+ *
+ * Two things make this more than a transcription of the per-row `values` list,
+ * and both are the reason it is written as a `select` from a recordset rather
+ * than a `values` list of parenthesised tuples:
+ *
+ *  1. Every row needs its own column list (the cleaner drops absent fields), and
+ *     a multi-row `values` list cannot vary its columns per row. `jsonb_to_recordset`
+ *     types each value from the column-type list below, and a MISSING key reads as
+ *     NULL, so one statement carries rows with different shapes. Grouping by
+ *     identical column sets (above) rather than unioning them is deliberate: a
+ *     union would write an explicit NULL where the old code omitted the column,
+ *     and `students.status` is `not null default 'active'` — omitting it lets the
+ *     default fire, writing NULL raises. The groups are therefore exact, and a
+ *     homogeneous import is one group.
+ *  2. `id` is generated here rather than by the column's `gen_random_uuid()`
+ *     default, because `RETURNING` cannot see the recordset alias on this
+ *     connection (`returning r.idx, t.id` → "missing FROM-clause entry for table r",
+ *     verified against PG 16) and the team mirror below needs to know WHICH row
+ *     got WHICH id. Both are v4 random uuids; supplying the value is what makes
+ *     the row-to-id mapping knowable in the same round trip.
+ */
+const studentInsertTypes: Record<string, string> = {
+  full_name: 'text',
+  email: 'text',
+  phone: 'text',
+  sport: 'text',
+  position: 'text',
+  jersey_number: 'integer',
+  date_of_birth: 'date',
+  gender: 'text',
+  guardian_name: 'text',
+  guardian_phone: 'text',
+  notes: 'text',
+  status: 'text',
+  joined_on: 'date',
+  team_id: 'uuid',
+}
+
+/** A row accepted for insertion, with the id it will be written under. */
+type PlannedRow = {
+  rowIndex: number
+  id: string
+  email: string | null
+  cols: string[]
+  cleaned: Record<string, unknown>
+}
+
+/**
  * Insert multiple student rows in a single transactional call.
  * Duplicates are detected by email (case-insensitive) within the org.
  * Rows that fail validation are reported in the failed array.
+ *
+ * SCOPE, unchanged. What changed is the SHAPE: one statement per group of rows
+ * sharing a column set (see `studentInsertTypes`) rather than one per row.
+ * Measured against a real Postgres at the 500-row cap, this function's own
+ * statements go from 501 to 6 teamless, and from 1001 to 11 with a `team_id` on
+ * every row (1 duplicate-detection read + 5 inserts + 5 team mirrors).
+ * `tests/studentImportBatch.test.ts` pins both bounds.
+ *
+ * NOT IN A TRANSACTION, deliberately, and that is a correction rather than an
+ * inheritance. There is no `db.begin` here and there never was — the per-row
+ * version relied on each INSERT autocommitting, which is what lets a bad row be
+ * reported in `failed` while every other row lands. Wrapping the batches in one
+ * would trade that for nothing: a single aborted transaction poisons every
+ * statement after it, so the per-row retry below could not run at all and one
+ * malformed cell would roll back the whole import. Batch size therefore buys
+ * round trips, and the existing partial-success contract is untouched.
+ *
+ * PER-ROW ERROR ISOLATION, the reason there is a fallback. A batched statement is
+ * atomic, so one malformed cell would fail all 100 rows with it — and the
+ * contract this function has always had is that a bad row is reported in
+ * `failed` and the rest still import (`tests/studentImportTeamProbe.ts` case 3
+ * pins exactly that: a `team_id` of "not-a-uuid" fails ONE row). So a batch that
+ * raises is retried row by row through the original per-row path, which restores
+ * the old outcome precisely. The happy path never pays for this.
  */
 export const importStudents = async (
   auth0Id: string,
@@ -300,7 +382,12 @@ export const importStudents = async (
     `
     const emailSet = new Set((existingEmails ?? []).map((r) => r.email))
 
-    // Process each row individually (best-effort within the transaction)
+    // ── Plan ─────────────────────────────────────────────────────────────────
+    // The duplicate check is inherently sequential — each accepted row claims
+    // its email for the rows after it — so this stays a serial pass. It is
+    // in-memory, so it costs nothing against the database; what it removes is
+    // the per-row round trip, which is the whole cost.
+    const planned: PlannedRow[] = []
     for (let i = 0; i < rows.length; i++) {
       const { cleaned } = rows[i]
 
@@ -311,9 +398,20 @@ export const importStudents = async (
         continue
       }
 
-      // Build insert
+      // Build insert. The column list is the cleaned row's own keys, and it is
+      // spliced into SQL as identifiers, so it is intersected with
+      // `studentInsertCols` — the same allowlist `createStudent` and
+      // `updateStudent` both filter through. The per-row `values` list spliced
+      // those keys the same way, so this closes an injection surface rather than
+      // adding one. Every real caller is unaffected: `validateStudentRow` is a
+      // closed shape over exactly these columns.
+      const unknown = Object.keys(cleaned).filter((k) => !(k in studentInsertCols))
       const cols = Object.keys(cleaned).filter(
-        (k) => cleaned[k] !== undefined && cleaned[k] !== null && cleaned[k] !== '',
+        (k) =>
+          k in studentInsertCols &&
+          cleaned[k] !== undefined &&
+          cleaned[k] !== null &&
+          cleaned[k] !== '',
       )
       if (cols.length === 0) {
         result.failed.push({
@@ -322,54 +420,203 @@ export const importStudents = async (
         })
         continue
       }
+      // Reported rather than dropped. The old code let Postgres raise "column
+      // does not exist" for this row and caught it, so a row carrying a field the
+      // roster has no column for has always been a `failed` entry — naming the
+      // field is a better reason than a driver error, and silently ignoring a
+      // caller's data would not be.
+      if (unknown.length > 0) {
+        result.failed.push({
+          row_index: i,
+          reason: `Unknown student field(s): ${unknown.join(', ')}`,
+        })
+        continue
+      }
 
-      try {
-        const placeholders = ['$1', ...cols.map((_, j) => `$${j + 2}`)].join(', ')
-        const sql = `
-          insert into students (auth0_id, ${cols.join(', ')})
-          values (${placeholders})
-          returning id;
-        `
-        const values = cols.map((k) => cleaned[k])
-        const rowsInserted = await db.unsafe<{ id: string }[]>(sql, [auth0Id, ...values])
-        if (rowsInserted?.[0]) {
-          result.imported++
-          if (email) emailSet.add(email)
-          // Mirror the team assignment: `students.team_id` alone leaves the
-          // player off the team roster (`team_memberships` side). Conflict-safe
-          // — a retry of the same row must not fail the batch. A mirror failure
-          // (e.g. the team vanished mid-import) is logged, not row-failing: the
-          // player is still visible through `team_id`, the scope source.
-          const assignedTeam = cleaned.team_id
-          if (typeof assignedTeam === 'string' && assignedTeam) {
+      // `status` carries the check constraint; a value outside the vocabulary
+      // fails in the statement below exactly as it would have per-row.
+      planned.push({ rowIndex: i, id: crypto.randomUUID(), email, cols, cleaned })
+      // Claim the email NOW, synchronously, rather than after the insert returns.
+      // The batch is one command, so there is no per-row insert to add it from;
+      // claiming during planning is what keeps two rows sharing an email in the
+      // same batch from both landing. Claimed only for rows that will be
+      // attempted, so a row rejected above does not block its twin.
+      if (email) emailSet.add(email)
+    }
+
+    if (planned.length === 0) return result
+
+    // ── Group by column set, then batch within each group ────────────────────
+    // See `studentInsertTypes`: identical column sets only, so an omitted column
+    // still reaches its DEFAULT rather than an explicit NULL.
+    const groups = new Map<string, PlannedRow[]>()
+    for (const row of planned) {
+      const key = row.cols.join(',')
+      const bucket = groups.get(key)
+      if (bucket) bucket.push(row)
+      else groups.set(key, [row])
+    }
+
+    for (const group of groups.values()) {
+      for (let start = 0; start < group.length; start += IMPORT_INSERT_BATCH) {
+        const batch = group.slice(start, start + IMPORT_INSERT_BATCH)
+        const inserted = await insertStudentBatch(db, auth0Id, batch)
+        if (inserted) {
+          // The statement is atomic and every row carries an id we generated, so
+          // "it did not raise" IS "every row in this batch landed" — there is no
+          // per-row outcome to inspect, and no `insert returned no rows` case to
+          // reproduce. That check survives only on the per-row path below.
+          result.imported += batch.length
+          await mirrorTeamAssignments(db, batch)
+        } else {
+          // The batch raised. Re-run its rows one at a time so the failure is
+          // attributed to the row that caused it and the rest still import.
+          // Safe precisely because nothing here is inside a transaction: the
+          // failed statement rolled itself back and left the connection usable.
+          for (const row of batch) {
             try {
-              await db`
-                insert into team_memberships (team_id, member_auth0_id, student_id, role)
-                values (${assignedTeam}::uuid, null, ${rowsInserted[0].id}::uuid, 'player')
-                on conflict (team_id, member_auth0_id, student_id) do nothing;
+              const placeholders = ['$1', '$2', ...row.cols.map((_, j) => `$${j + 3}`)].join(', ')
+              const sql = `
+                insert into students (id, auth0_id, ${row.cols.join(', ')})
+                values (${placeholders})
+                returning id;
               `
+              const rowsInserted = await db.unsafe<{ id: string }[]>(sql, [
+                row.id,
+                auth0Id,
+                ...row.cols.map((k) => row.cleaned[k]),
+              ])
+              if (rowsInserted?.[0]) {
+                result.imported++
+                await mirrorTeamAssignments(db, [row])
+              } else {
+                result.failed.push({
+                  row_index: row.rowIndex,
+                  reason: 'Insert returned no rows',
+                })
+              }
             } catch (err) {
-              logger.warn('import_team_mirror_failed', {
-                type: 'import_team_mirror_failed',
-                studentId: rowsInserted[0].id,
-                error: err instanceof Error ? err.message : 'unknown',
+              result.failed.push({
+                row_index: row.rowIndex,
+                reason: err instanceof Error ? err.message : 'Database error',
               })
             }
           }
-        } else {
-          result.failed.push({
-            row_index: i,
-            reason: 'Insert returned no rows',
-          })
         }
-      } catch (err) {
-        result.failed.push({
-          row_index: i,
-          reason: err instanceof Error ? err.message : 'Database error',
-        })
       }
     }
 
     return result
   })
+}
+
+/**
+ * One statement for a group of rows. `false` if the statement raised.
+ *
+ * `false` is a real answer here and not a missing store: it means "this batch is
+ * atomic and at least one row in it is bad", which is what selects the per-row
+ * retry. Swallowing the error into a default the caller cannot tell from
+ * "nothing to do" is the `orDisabledDefault` trap; this shape cannot be confused
+ * with absence, and the reason is logged before it returns.
+ */
+const insertStudentBatch = async (
+  db: SQL,
+  auth0Id: string,
+  batch: PlannedRow[],
+): Promise<boolean> => {
+  const cols = batch[0].cols
+  const recordset = batch.map((row) => {
+    const record: Record<string, unknown> = { id: row.id }
+    for (const c of cols) record[c] = row.cleaned[c]
+    return record
+  })
+  const colList = cols.map((c) => `${c} ${studentInsertTypes[c] ?? 'text'}`).join(', ')
+  // `db.unsafe`, not the tagged template: the column list is an IDENTIFIER and a
+  // tagged template binds `${…}` as `$1`, so splicing it there is a syntax error
+  // ("syntax error at or near $1"). Identifiers travel as text, values stay
+  // positional parameters. `cols` comes from the cleaned row's own keys, which is
+  // why `importStudents` intersects it with `studentInsertCols` before calling.
+  try {
+    await db.unsafe(
+      `insert into students (id, auth0_id, ${cols.join(', ')})
+       select r.id, $1, ${cols.map((c) => `r.${c}`).join(', ')}
+       from jsonb_to_recordset($2::jsonb) as r(id uuid, ${colList});`,
+      [auth0Id, batchRows(recordset)],
+    )
+    return true
+  } catch (err) {
+    logger.warn('import_batch_insert_failed', {
+      type: 'import_batch_insert_failed',
+      rows: batch.length,
+      error: err instanceof Error ? err.message : 'unknown',
+    })
+    return false
+  }
+}
+
+/**
+ * Mirror each row's `team_id` onto `team_memberships`, one statement per batch.
+ *
+ * `students.team_id` alone leaves the player off the team roster (the
+ * `team_memberships` side), so this is not optional bookkeeping. `on conflict …
+ * do nothing` makes it safe: a retry of the same row must not fail the batch, and
+ * a repeated key inside one batch is fine with `do nothing` (the first
+ * occurrence survives — see `batchRows`).
+ *
+ * A mirror failure (a team that vanished mid-import violates the FK) is logged,
+ * never row-failing: the player is still visible through `team_id`, the scope
+ * source. That is why the batch falls back to one statement per row rather than
+ * reporting anything — with one bad team in the batch, the fallback restores the
+ * per-row log-and-continue that the old code had.
+ */
+const mirrorTeamAssignments = async (db: SQL, batch: PlannedRow[]): Promise<void> => {
+  const mirrors = batch
+    .map((row) => {
+      const teamId = row.cleaned.team_id
+      return typeof teamId === 'string' && teamId
+        ? { team_id: teamId, student_id: row.id, row }
+        : null
+    })
+    .filter((m): m is { team_id: string; student_id: string; row: PlannedRow } => m !== null)
+  if (mirrors.length === 0) return
+
+  const insertMirror = async (teamId: string, studentId: string): Promise<void> => {
+    await db`
+      insert into team_memberships (team_id, member_auth0_id, student_id, role)
+      values (${teamId}::uuid, null, ${studentId}::uuid, 'player')
+      on conflict (team_id, member_auth0_id, student_id) do nothing;
+    `
+  }
+
+  try {
+    await db`
+      insert into team_memberships (team_id, member_auth0_id, student_id, role)
+      select r.team_id, null, r.student_id, 'player'
+      from jsonb_to_recordset(
+        ${batchRows(mirrors.map(({ team_id, student_id }) => ({ team_id, student_id })))}::jsonb
+      ) as r(team_id uuid, student_id uuid)
+      on conflict (team_id, member_auth0_id, student_id) do nothing;
+    `
+    return
+  } catch (err) {
+    logger.warn('import_team_mirror_failed', {
+      type: 'import_team_mirror_failed',
+      rows: mirrors.length,
+      error: err instanceof Error ? err.message : 'unknown',
+    })
+  }
+
+  // The batch raised — one statement per row, so a single vanished team costs
+  // one skipped mirror rather than all of them. This is the old code's shape.
+  for (const { team_id, student_id } of mirrors) {
+    try {
+      await insertMirror(team_id, student_id)
+    } catch (err) {
+      logger.warn('import_team_mirror_failed', {
+        type: 'import_team_mirror_failed',
+        studentId: student_id,
+        error: err instanceof Error ? err.message : 'unknown',
+      })
+    }
+  }
 }

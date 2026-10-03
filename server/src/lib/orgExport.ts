@@ -20,7 +20,11 @@ import {
   type TrainingObjective,
   type TrainingPlan,
 } from './orgData'
-import { listWellness, type WellnessCheckin } from './org/wellness'
+import {
+  groupWellnessByStudent,
+  listWellnessForStudents,
+  type WellnessCheckin,
+} from './org/wellness'
 
 /** Per-section caps: a bundle is a copy, not a dump. */
 export const ORG_EXPORT_LIMITS = {
@@ -67,7 +71,7 @@ export type OrgExportSources = {
   listReports: typeof listReports
   listObjectives: typeof listObjectives
   listTrainingPlans: typeof listTrainingPlans
-  listWellness: typeof listWellness
+  listWellnessForStudents: typeof listWellnessForStudents
 }
 
 export const DEFAULT_ORG_EXPORT_SOURCES: OrgExportSources = {
@@ -77,7 +81,7 @@ export const DEFAULT_ORG_EXPORT_SOURCES: OrgExportSources = {
   listReports,
   listObjectives,
   listTrainingPlans,
-  listWellness,
+  listWellnessForStudents,
 }
 
 export const buildOrgExport = async (
@@ -99,14 +103,21 @@ export const buildOrgExport = async (
 
   let wellness: OrgExport['wellness']
   if (opts.includeWellness) {
-    const perStudent = await Promise.all(
-      roster.map(async (student) =>
-        (await sources.listWellness(orgAuth0Id, student.id, ORG_EXPORT_LIMITS.wellnessPerStudent)).map(
-          (checkin) => ({ ...checkin, student_id: student.id }),
-        ),
-      ),
+    // ONE read for the whole roster, not one per student. `roster` is capped at
+    // ORG_EXPORT_LIMITS.students (2000), so this was up to 2000 round trips —
+    // `Promise.all`'d, so not a stall, but a 2000-deep queue against a `max: 5`
+    // pool, competing with live traffic for the same connections. The rows come
+    // back grouped by student_id; the group-by puts them back in ROSTER order
+    // (each student's own rows still newest first), which is the order the
+    // per-student fan-out produced, so the bundle is byte-identical.
+    const rosterIds = roster.map((student) => student.id)
+    const rows = await sources.listWellnessForStudents(
+      orgAuth0Id,
+      rosterIds,
+      ORG_EXPORT_LIMITS.wellnessPerStudent,
     )
-    wellness = perStudent.flat()
+    const byStudent = groupWellnessByStudent(rosterIds, rows)
+    wellness = roster.flatMap((student) => byStudent.get(student.id) ?? [])
   }
 
   return {

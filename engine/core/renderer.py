@@ -297,6 +297,20 @@ def _text_size_pil(text: str, font_size: int) -> tuple[int, int]:
 
 # ── Pose landmarks with glow ─────────────────────────────────────────────────
 
+# Thickness of the glow skeleton. Kept as a name because the blend window's
+# padding below is derived from it, and a thickness change without a padding
+# change is exactly how a blend window stops covering what was painted.
+_GLOW_THICKNESS = 8
+
+# Antialiasing margin the blend window needs around the glow's bounding box.
+# cv2's antialiased thick line paints up to 5px outside the nominal segment box at
+# thickness 8 (measured over 4000 random segments, worst case), so this is 8: a
+# little over the measurement, and about 1% of a typical player's box area. The
+# shape fills in `_draw_filled_rounded_rect` needed a pad of 1 because a
+# rectangle's AA bleed is one pixel; a thick line's is half its thickness.
+_GLOW_PAD = 8
+
+
 def _draw_pose_landmarks(
     frame: np.ndarray,
     landmarks: list[dict[str, float]],
@@ -319,8 +333,30 @@ def _draw_pose_landmarks(
         py = max(0, min(h - 1, y))
         points.append((px, py))
 
-    # Glow layer: thick semi-transparent lines
-    glow_layer = frame.copy()
+    # Glow layer: thick semi-transparent lines.
+    #
+    # This used to be `glow_layer = frame.copy()` plus a FULL-FRAME
+    # `addWeighted(glow_layer, 0.3, frame, 0.7, 0, frame)` — a whole-frame copy
+    # and two whole-frame blend passes, for a skeleton that only ever paints the
+    # player's own box. The blend is now restricted to that box, which is
+    # byte-identical for the reason `_draw_filled_rounded_rect` documents:
+    # `addWeighted(x, a, x, 1 - a, 0) == x` for every uint8 `x` at these weights,
+    # re-checked exhaustively over all 256 values for 0.3/0.7, so every pixel
+    # outside the window comes back untouched either way.
+    #
+    # The drawable segments are collected first, with their bounding box tracked
+    # as they are found, because the window needs that extent before anything is
+    # painted — and because a frame with no visible connection (every landmark
+    # below the visibility gate) must skip the copy and the blend entirely rather
+    # than pay for a rectangle over an empty skeleton.
+    #
+    # Drawing into `frame` and blending `window` against `saved` gives the same
+    # two-phase result the copy did: `frame` still holds the original pixels when
+    # the glow is composited, so overlapping glow lines do not accumulate and the
+    # 0.3 blend is applied once, afterwards — not per line.
+    segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    min_x = min_y = max(w, h)  # above any clamped point; `segments` gates the use
+    max_x = max_y = -1  # below any clamped point
     for start, end in connections:
         if start >= len(points) or end >= len(points):
             continue
@@ -328,8 +364,22 @@ def _draw_pose_landmarks(
         p2 = points[end]
         if p1 is None or p2 is None:
             continue
-        cv2.line(glow_layer, p1, p2, primary_color, 8, cv2.LINE_AA)
-    cv2.addWeighted(glow_layer, 0.3, frame, 0.7, 0, frame)
+        segments.append((p1, p2))
+        min_x = min(min_x, p1[0], p2[0])
+        max_x = max(max_x, p1[0], p2[0])
+        min_y = min(min_y, p1[1], p2[1])
+        max_y = max(max_y, p1[1], p2[1])
+
+    if segments:
+        top = max(0, min_y - _GLOW_PAD)
+        bottom = min(h, max_y + _GLOW_PAD + 1)
+        left = max(0, min_x - _GLOW_PAD)
+        right = min(w, max_x + _GLOW_PAD + 1)
+        window = frame[top:bottom, left:right]
+        saved = window.copy()
+        for p1, p2 in segments:
+            cv2.line(frame, p1, p2, primary_color, _GLOW_THICKNESS, cv2.LINE_AA)
+        cv2.addWeighted(window, 0.3, saved, 0.7, 0, dst=window)
 
     # Main skeleton lines
     for start, end in connections:
@@ -563,7 +613,12 @@ def _draw_summary_screen(frame: np.ndarray, analysis_result: dict, colors: dict)
     cv2.rectangle(overlay, (0, 0), (frame.shape[1], frame.shape[0]), (8, 8, 8), -1)
     cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
 
-    form_score = int(analysis_result.get("form_score", 0) or 0)
+    # `_coerce_score`, not `int(... or 0)`: this is the same model-supplied value
+    # `_draw_hud` coerces, and the bare int() raised ValueError on the numeric
+    # string "8.5" — here, which is one hold frame AFTER every frame of the video
+    # was rendered and written. `tests/test_render_robustness.py` exists because
+    # that reached the renderer through every gate intact.
+    form_score = _coerce_score(analysis_result.get("form_score"))
     overall_rating = str(analysis_result.get("overall_rating", "N/A"))
     summary = str(analysis_result.get("summary", ""))
     tips = analysis_result.get("top_tips", []) or []
