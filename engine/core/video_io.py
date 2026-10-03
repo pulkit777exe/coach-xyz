@@ -11,13 +11,28 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import cv2
 import numpy as np
 
 from core.errors import VideoDecodeError
 from core.config import FFMPEG_TIMEOUT_S
+
+
+class KeyframeExtraction(NamedTuple):
+    """Everything one ``cv2.VideoCapture`` open of a video tells us.
+
+    A NamedTuple so callers may unpack it positionally (as before) or read the
+    capture properties by name — at arity six, positional order is a trap.
+    """
+
+    keyframes: list[dict[str, Any]]
+    fps: float
+    frame_count: int
+    width: int
+    height: int
+    frame_cache: dict[int, np.ndarray]
 
 
 def tmp_dir() -> Path:
@@ -142,10 +157,15 @@ def preprocess_video_ffmpeg(video_path: str) -> str:
         return video_path
 
 
-def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int, dict[int, np.ndarray]]:
+def extract_keyframes(video_path: str) -> "KeyframeExtraction":
     """
     Extract keyframes at 3-second intervals (max 30).
-    Returns (keyframes, fps, frame_count, frame_cache).
+
+    Returns the decoded keyframes, the capture properties the caller always
+    needs from the same open (fps, frame_count, width, height) and a
+    `frame_cache` of the decoded frames. Width/height ride along because the
+    capture is already open here — the alternative is a second
+    `cv2.VideoCapture` open per job purely to read two properties.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -156,6 +176,8 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
         if fps <= 0:
             fps = 30.0
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         duration = frame_count / fps if frame_count > 0 else 90.0
 
@@ -187,7 +209,14 @@ def extract_keyframes(video_path: str) -> tuple[list[dict[str, Any]], float, int
         if not keyframes:
             raise VideoDecodeError("Could not extract keyframes from video")
 
-        return keyframes, fps, frame_count, frame_cache
+        return KeyframeExtraction(
+            keyframes=keyframes,
+            fps=fps,
+            frame_count=frame_count,
+            width=width,
+            height=height,
+            frame_cache=frame_cache,
+        )
     finally:
         cap.release()
 

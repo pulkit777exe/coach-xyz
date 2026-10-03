@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Optional
 
 from upstash_redis import Redis
@@ -38,13 +38,18 @@ def _publish_job_event(job: JobStatus) -> None:
     publisher = getattr(redis, "publish", None)
     if not callable(publisher):
         return
-    status = asdict(job)
-    status.pop("video_key", None)
-    status.pop("video_path", None)
     # Summaries are fetched through the authenticated status resolver at the
     # terminal boundary; never put potentially sensitive analysis content on a
     # shared Redis channel.
-    status["summary"] = None
+    #
+    # replace() first, then asdict(): asdict deep-copies every field, so
+    # dropping the summary afterwards copied the whole analysis payload (the
+    # summary alone is tens of KB) only to throw it away — ~100x the cost of
+    # copying a dict whose summary is already None, for a byte-identical
+    # payload.
+    status = asdict(replace(job, summary=None))
+    status.pop("video_key", None)
+    status.pop("video_path", None)
     try:
         publisher(
             JOB_EVENT_CHANNEL,

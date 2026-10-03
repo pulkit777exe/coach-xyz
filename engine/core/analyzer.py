@@ -16,8 +16,6 @@ import logging
 import os
 import time
 from pathlib import Path
-
-import cv2
 from typing import Any
 
 from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
@@ -521,7 +519,14 @@ def _stage_prepare(ctx: AnalysisContext) -> str:
         logging.info(f"[Analyzer] Deduplication: waiting for existing analysis of {ctx.video_hash}")
         _wait_start = time.time()
         while deduplicator.is_pending(ctx.dedup_key) and (time.time() - _wait_start) < 300:
-            time.sleep(2)
+            # Block on the holder's event instead of time.sleep(2): mark_done
+            # sets it on every terminal path (success, failure, exception, TTL
+            # sweep), so a duplicate stops pinning one of the two analysis slots
+            # and reads the cache as soon as the first run is actually done.
+            # The 2s bound is kept deliberately — it is not the wake-up path but
+            # the cadence at which the pending sweep runs, and the backstop that
+            # turns any missed set into polling rather than a hang.
+            deduplicator.wait_for_clear(ctx.dedup_key, timeout=2)
             cached_result = get_cached_analysis(ctx.video_hash, ctx.player_index)
             if cached_result is not None:
                 _safe_transition_to_completed(
@@ -600,18 +605,19 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
 
     # New loop per call: this runs inside an executor worker with no bound loop.
     with _worker_event_loop() as loop:
-        # Run keyframe extraction (CPU-bound) - returns frame cache.
-        keyframes, fps, _frame_count, frame_cache = loop.run_until_complete(
+        # Run keyframe extraction (CPU-bound) - returns frame cache + capture props.
+        extracted = loop.run_until_complete(
             asyncio.to_thread(extract_keyframes, ctx.preprocessed_path)
         )
-
-        cap = cv2.VideoCapture(ctx.preprocessed_path)
-        try:
-            video_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            video_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        finally:
-            cap.release()
-        video_duration = _frame_count / fps if _frame_count > 0 and fps > 0 else 90.0
+        keyframes = extracted.keyframes
+        fps = extracted.fps
+        frame_cache = extracted.frame_cache
+        # fps/frame_count/width/height all come off the capture extract_keyframes
+        # already opened; reopening the file here only to read two of them cost a
+        # third demux open per job.
+        video_width = extracted.width
+        video_height = extracted.height
+        video_duration = extracted.frame_count / fps if extracted.frame_count > 0 and fps > 0 else 90.0
 
         # Run detection and motion scoring in parallel (both use frame cache)
         active_tracks, motion_scores = loop.run_until_complete(
@@ -628,7 +634,7 @@ def _stage_tracking(ctx: AnalysisContext) -> None:
         )
     ctx.keyframes = keyframes
     ctx.fps = fps
-    ctx.frame_count = _frame_count
+    ctx.frame_count = extracted.frame_count
     ctx.video_width = video_width
     ctx.video_height = video_height
     ctx.video_duration = video_duration
