@@ -563,9 +563,35 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
+    // Wellness signals stay behind the medical boundary (§5). This route is the
+    // LIST twin of `GET /api/auth/user/:auth0Id/analyses/:jobId`, which asks
+    // `resolveMedicalAccess` and redacts for everyone else — this one returned
+    // `getStudentAnalyses(...)` verbatim, so any caller who could see the player
+    // also received `summary_json.shot_events[].injury_risk`,
+    // `weighted_scoring` and `biomechanics`.
+    //
+    // The check is explicit here rather than inherited from the list projection
+    // (`ANALYSES_LIST_COLUMNS` ships `form_score` only today, which narrows what
+    // a list can leak): a projection is a perf decision that can be revisited,
+    // and this route must be the thing that enforces the boundary if it is. It
+    // also stays correct when it is — `redactWellness` on `{form_score: n}` is a
+    // no-op, so the entitled caller loses nothing either way.
+    //
+    // Same rule as the twin, deliberately not a new one: the owning account (the
+    // `:auth0Id` in the path, whose analyses these rows are), or a member whose
+    // org role is `owner` or `medical`. `admin` holds every permission *except*
+    // `medical.read` (ROLE_PERMISSIONS), so it is redacted here too.
+    const maySee = await resolveMedicalAccess(
+      auth0Id,
+      request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+    )
     const analyses = await getStudentAnalyses(auth0Id, id)
     set.status = 200
-    return { analyses }
+    return {
+      analyses: maySee
+        ? analyses
+        : analyses.map((a) => ({ ...a, summary_json: redactWellness(a.summary_json) })),
+    }
   })
   .put('/api/org/:auth0Id/analyses/:jobId/student', async ({ params, body, request, set }) => {
     const { auth0Id, jobId } = params

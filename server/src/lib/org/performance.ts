@@ -4,7 +4,8 @@ import { withHistoryStoreOrThrow } from '../historyStore'
 import { computeMetricTrends as computeTrends, isDate } from '../orgValidate'
 import type { MetricTrend } from '../orgValidate'
 import { uuidArrayLiteral } from './scope'
-import { getStudent } from './students'
+import { getStudentsByIds } from './students'
+import { hasNumericFormScore, safeFormScore } from '../formScoreSql'
 
 /**
  * Bind pair for the student-scope filter (the list `visibleStudentIds` returns
@@ -208,6 +209,12 @@ export const getStudentPerformanceSeries = async (
     (await withHistoryStoreOrThrow(async (db) => {
       const filter = scopeFilter(opts.studentIds)
       const upper = toBound(opts.to)
+      // The score arrives through safeFormScore/hasNumericFormScore from
+      // lib/formScoreSql.ts — the one SSOT for "a form_score Postgres can cast". A
+      // bare (summary_json->>'form_score')::float8 raises 22P02 on ONE row whose
+      // score is "N/A", and it 500s the whole series for every caller. Both
+      // fragments go through db.unsafe() because a tagged template binds an
+      // interpolated value as a PARAMETER, not as SQL text.
       const analyses = await db<
         {
           requested_at: string | Date
@@ -217,14 +224,14 @@ export const getStudentPerformanceSeries = async (
       >`
         select
           requested_at,
-          (summary_json->>'form_score')::float8 as form_score,
+          ${db.unsafe(safeFormScore('summary_json'))} as form_score,
           server_job_id
         from analysis_history
         where auth0_id = ${auth0Id}
           and student_id = ${studentId}::uuid
           and complete = true
           and summary_json is not null
-          and (summary_json->>'form_score') is not null
+          and ${db.unsafe(hasNumericFormScore('summary_json'))}
           and (${opts.from ?? null}::timestamptz is null or requested_at >= ${opts.from ?? null}::timestamptz)
           and (${upper.to}::timestamptz is null or requested_at < ${upper.to}::timestamptz + (case when ${upper.toIsDay} then interval '1 day' else interval '0' end))
           and (not ${filter.scoped} or student_id = any(${filter.param}::uuid[]))
@@ -301,9 +308,35 @@ export type ComparisonStudent = {
   points: Array<{ measured_at: string; metric_value: number }>
 }
 
+/** Per-student cap on comparison points — the `limit 500` the per-student
+ *  `listPerformance` call used to apply, now a windowed rank so batching the
+ *  students into one query cannot truncate any single one of them. */
+const COMPARISON_POINT_CAP = 500
+
 /**
  * Compare multiple students on a single metric key.
  * Returns per-student latest, avg, and full points array.
+ *
+ * This was a 3N-query N+1 that ran entirely serially: per student it called
+ * `getStudentPerformanceSeries` (two statements — `analysis_history` for the
+ * form scores, `performance_metrics` for the manual ones) and then
+ * `getStudent`, i.e. exactly 3 round trips per id, so the route's 10-id cap
+ * meant 30 sequential queries. It is now three statements for the whole batch,
+ * issued concurrently, and each carries the id list as `= any(…::uuid[])`.
+ *
+ * Two deliberate changes inside those statements:
+ *
+ *  - `metric_key` is pushed down instead of filtered in JS. The per-student loop
+ *    read every metric for every id and then kept one key; the caller asked for
+ *    a single metric, so reading the others was pure volume. Same result set.
+ *  - The per-student `limit 500` becomes `row_number() over (partition by
+ *    student_id …) <= 500`, so the cap stays PER STUDENT. A single `limit 500`
+ *    across the batch would silently truncate a busy org's later ids, which the
+ *    per-student version could not do.
+ *
+ * `getStudentsByIds` is the existing batched name lookup (it already binds
+ * through `uuidArrayLiteral`), so there is no second spelling of
+ * `id = any(…::uuid[])` in this file.
  */
 export const compareStudents = async (
   auth0Id: string,
@@ -312,30 +345,117 @@ export const compareStudents = async (
 ): Promise<ComparisonStudent[]> => {
   if (studentIds.length === 0) return []
 
-  return withHistoryStoreOrThrow(async (_db) => {
-    const result: ComparisonStudent[] = []
+  const requested = studentIds.filter((id) => typeof id === 'string' && id.length > 0)
+  if (requested.length === 0) return []
 
-    for (const sid of studentIds) {
-      const series = await getStudentPerformanceSeries(auth0Id, sid, {})
-      const filtered = series.filter((s) => s.metric_key === metricKey)
-      const values = filtered.map((s) => s.metric_value)
+  const { analyses, manual, students } = await withHistoryStoreOrThrow(async (db) => {
+    const literal = uuidArrayLiteral(requested)
+    // Precomputed before any await, and exactly one target per id: a duplicate
+    // id in the query string is one id as far as the SQL is concerned, so no row
+    // is fetched twice and no `on conflict do update` cardinality trap applies.
+    // Only the completion is parallelised — nothing here depends on another's
+    // result, so emission order carries no meaning and nothing downstream has to
+    // sort to be correct.
+    const [analyses, manual, students] = await Promise.all([
+      // Same guarded cast as the single-student series above.
+      db<{ student_id: string; requested_at: string | Date; form_score: number | null }[]>`
+        select
+          student_id,
+          requested_at,
+          ${db.unsafe(safeFormScore('summary_json'))} as form_score
+        from analysis_history
+        where auth0_id = ${auth0Id}
+          and student_id = any(${literal}::uuid[])
+          and complete = true
+          and summary_json is not null
+          and ${db.unsafe(hasNumericFormScore('summary_json'))}
+        order by requested_at asc;
+      `,
+      db<PerformanceMetric[]>`
+        select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
+               source_analysis_id, measured_at, created_at
+        from (
+          select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
+                 source_analysis_id, measured_at, created_at,
+                 row_number() over (partition by student_id order by measured_at asc) as rn
+          from performance_metrics
+          where auth0_id = ${auth0Id}
+            and student_id = any(${literal}::uuid[])
+            and metric_key = ${metricKey}
+        ) ranked
+        where rn <= ${COMPARISON_POINT_CAP}
+        order by measured_at asc;
+      `,
+      // The route already dropped invisible ids, so this is the roster read for
+      // names only — same single statement `getStudentsByIds` would have run.
+      getStudentsByIds(auth0Id, requested),
+    ])
+    return { analyses: analyses ?? [], manual: manual ?? [], students: students ?? [] }
+  })
 
-      const student = await getStudent(auth0Id, sid)
-      result.push({
-        student_id: sid,
-        full_name: student?.full_name ?? 'Unknown',
-        latest: values.length > 0 ? values[values.length - 1] : null,
-        avg:
-          values.length > 0
-            ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100
-            : null,
-        points: filtered.map((s) => ({
-          measured_at: s.measured_at,
-          metric_value: s.metric_value,
-        })),
-      })
+  // Bun decodes a timestamptz to a Date, not the string these shapes declare.
+  // Normalize where the value enters the domain object — see the longer note in
+  // getStudentPerformanceSeries, whose one-row blind spot this is the same one.
+  const iso = (value: string | Date): string =>
+    value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+
+  const formScores = new Map<string, PerformanceSeriesPoint[]>()
+  for (const a of analyses) {
+    const points = formScores.get(a.student_id) ?? []
+    points.push({
+      id: null,
+      measured_at: iso(a.requested_at),
+      // The analysis half of the timeline is always the `form_score` metric; the
+      // per-student loop filtered it out unless that was the requested key.
+      metric_key: 'form_score',
+      metric_value: a.form_score as number,
+      unit: '/10',
+      source: 'analysis',
+      source_analysis_id: null,
+    })
+    formScores.set(a.student_id, points)
+  }
+
+  const manualByStudent = new Map<string, PerformanceSeriesPoint[]>()
+  for (const m of manual) {
+    const points = manualByStudent.get(m.student_id) ?? []
+    points.push({
+      id: m.id,
+      measured_at: iso(m.measured_at),
+      metric_key: m.metric_key,
+      metric_value: m.metric_value,
+      unit: m.unit,
+      source: 'manual',
+      source_analysis_id: m.source_analysis_id,
+    })
+    manualByStudent.set(m.student_id, points)
+  }
+
+  const nameById = new Map(students.map((s) => [s.id, s.full_name]))
+  const wanted = metricKey === 'form_score'
+
+  // One entry per REQUESTED id, in the requested order — including ids with no
+  // data, which the per-student loop still answered with a named, empty row (and
+  // which the route relies on to tell a scoreless player from a missing one).
+  return requested.map((sid) => {
+    const points = [
+      ...(wanted ? (formScores.get(sid) ?? []) : []),
+      ...(manualByStudent.get(sid) ?? []),
+    ]
+    points.sort((a, b) => a.measured_at.localeCompare(b.measured_at))
+    const values = points.map((p) => p.metric_value)
+    return {
+      student_id: sid,
+      full_name: nameById.get(sid) ?? 'Unknown',
+      latest: values.length > 0 ? values[values.length - 1] : null,
+      avg:
+        values.length > 0
+          ? Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 100) / 100
+          : null,
+      points: points.map((p) => ({
+        measured_at: p.measured_at,
+        metric_value: p.metric_value,
+      })),
     }
-
-    return result
   })
 }

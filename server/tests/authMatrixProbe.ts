@@ -81,7 +81,22 @@ const ROW_BY_TABLE: Record<string, Record<string, unknown>> = {
   schedule_events: { id: '00000000-0000-4000-8000-0000000000e1', auth0_id: ORG, team_id: TEAM_A },
   seasons: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG },
   matches: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG },
-  performance_metrics: { id: '00000000-0000-4000-8000-0000000000e1', auth0_id: ORG, student_id: STU_A },
+  // The metric row has to be COMPLETE: `org/performance.ts` normalizes
+  // `measured_at` with `new Date(value).toISOString()`, so a fixture that omits it
+  // answers an invalid Date and throws RangeError — which surfaced as a 500 on
+  // GET /students/comparison for every role, i.e. a fixture defect reading like a
+  // routing one.
+  performance_metrics: {
+    id: '00000000-0000-4000-8000-0000000000e1',
+    auth0_id: ORG,
+    student_id: STU_A,
+    metric_key: 'form_score',
+    metric_value: 7,
+    unit: '/10',
+    source_analysis_id: JOB,
+    measured_at: '2026-09-01T00:00:00.000Z',
+    created_at: '2026-09-01T00:00:00.000Z',
+  },
   wellness_checkins: { id: '00000000-0000-4000-8000-0000000000e1', org_auth0_id: ORG, student_id: STU_A },
   findings: { id: 'job-matrix:e1', server_job_id: JOB },
   clips: { id: 'clip', server_job_id: JOB },

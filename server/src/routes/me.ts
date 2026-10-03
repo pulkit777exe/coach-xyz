@@ -16,6 +16,7 @@ import {
   getReport,
   listObjectives,
 } from '../lib/orgData'
+import { attendanceWindow } from './org/attendance'
 import { serviceGuard } from '../lib/serviceGuard'
 import { missingVerifiedSelf, requireVerifiedSelf, type MissingVerifiedSelf } from '../lib/caller'
 import { admitAnalysis } from '../lib/analysisAdmission'
@@ -376,12 +377,35 @@ export default new Elysia()
     }
 
     const url = new URL(request.url)
-    const from = url.searchParams.get('from') ?? undefined
-    const to = url.searchParams.get('to') ?? undefined
+    // Shared with the org read routes (routes/org/attendance.ts) rather than a
+    // second copy of the predicate: `from`/`to` reach a `::date` cast in both
+    // `listAttendance` and `attendanceSummary`, so `?from=garbage` (and a blank
+    // `?from=`) raised 22007 here and surfaced as a 500 for any linked player.
+    // The window's `studentId` is deliberately ignored — the linked player row is
+    // the only student this route may answer with.
+    const window = attendanceWindow(url)
+    if (!window.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid attendance filter', false)
+    }
 
+    // No "anchor at now" default, unlike `/api/me/schedule`: this query orders
+    // `session_date desc`, so a cap keeps the MOST RECENT rows, which is the
+    // history the hub is asking for. Attendance is also backward-looking, so
+    // pinning `from` to today would drop every past session.
     const [records, summary] = await Promise.all([
-      listAttendance(coachAuth0Id, { from, to, studentId: student.id }),
-      attendanceSummary(coachAuth0Id, { from, to, studentId: student.id }),
+      listAttendance(coachAuth0Id, {
+        from: window.from,
+        to: window.to,
+        studentId: student.id,
+        // Never null: an absent `limit` binds SQL NULL, which is UNLIMITED.
+        limit: readListLimit(url),
+      }),
+      attendanceSummary(coachAuth0Id, {
+        from: window.from,
+        to: window.to,
+        studentId: student.id,
+      }),
     ])
 
     set.status = 200
@@ -433,12 +457,22 @@ export default new Elysia()
     }
 
     const url = new URL(request.url)
-    const from = url.searchParams.get('from') ?? undefined
-    const to = url.searchParams.get('to') ?? undefined
-
+    // Same class of defect as the two routes above, and the same fix: these two
+    // reach a `::timestamptz` cast inside `getStudentPerformanceSeries`, so
+    // `?from=garbage` used to raise 22007 and 500 for any linked player.
+    // `scheduleWindow` is the right predicate here — instants, not the bare
+    // `YYYY-MM-DD` an attendance window takes — and it is the one the sibling
+    // `/api/me/schedule` read already uses, so the two stay in step.
+    const window = scheduleWindow(url)
+    if (!window.ok) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid performance filter', false)
+    }
+    // No cap: the series is already narrowed to ONE student by the linked player
+    // row, and `readListLimit` is a list-route ceiling, not a series cap.
     const points = await getStudentPerformanceSeries(coachAuth0Id, student.id, {
-      from,
-      to,
+      from: window.from,
+      to: window.to,
     })
     set.status = 200
     return { points, linked: true }

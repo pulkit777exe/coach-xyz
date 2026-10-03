@@ -31,8 +31,16 @@ type NotificationSender = Parameters<typeof notifyAttendanceRecorded>[1]
  * belongs at the boundary. `studentId` is optional, so a bad value narrows to
  * "no filter" rather than erroring — except that would silently widen a scoped
  * caller, so it is validated too.
+ *
+ * Exported, not private: `GET /api/me/attendance` (routes/me.ts) reads the same
+ * two params off its own query string and hands them to the same
+ * `listAttendance` / `attendanceSummary` `::date` casts. It validated neither, so
+ * `?from=garbage` there raised 22007 and surfaced as a 500 for any linked player;
+ * a second hand-rolled copy of this predicate is how the two drift apart again.
+ * That route pins its own `studentId` (the linked player row) and ignores the one
+ * this returns.
  */
-const attendanceWindow = (
+export const attendanceWindow = (
   url: URL,
 ): { ok: true; from?: string; to?: string; studentId?: string } | { ok: false } => {
   const rawFrom = url.searchParams.get('from')

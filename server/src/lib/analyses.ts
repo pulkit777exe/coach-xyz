@@ -5,6 +5,7 @@ import type { RequestMeta } from './requestMeta'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { deleteResultVideo } from './engine'
 import { persistFindings, type FindingRecord } from './findings'
+import { listFormScoreJson } from './formScoreSql'
 import { persistPlayerEvents } from './registry'
 import { uuidArrayLiteral } from './org/scope'
 type VideoConversationRecord = RequestMeta & {
@@ -108,12 +109,10 @@ export const ANALYSES_SELECT_COLUMNS = `
  *     anything non-numeric: ONE row whose `form_score` is the string "N/A" would
  *     turn the 21-row History page into a 500, where the unprojected blob simply
  *     rendered no score for it (the web requires `typeof score === 'number'`).
- *     The pattern admits only a decimal, so everything unmatched takes the NULL
- *     arm — the same answer the client used to compute for itself — and the
- *     length bound rules out the other failure the cast has, float8 overflow
- *     (22003) on a 300-digit integer. `org/performance.ts:220` still casts this
- *     column bare on the much narrower series read; that 22P02 is pre-existing and
- *     is deliberately not widened from here.
+ *     Both the guard and the `case` are owned by `lib/formScoreSql.ts` — the one
+ *     SSOT for "a form_score Postgres can cast" — which `org/performance.ts`'s two
+ *     sites and `listRecentAnalysisScores`'s filter now share instead of each
+ *     spelling their own.
  *
  *  3. **It is a strict SUBSET, so the §5 medical boundary still fails closed.**
  *     `redactWellness` only ever REMOVES keys, so projecting one away before the
@@ -126,19 +125,13 @@ export const ANALYSES_SELECT_COLUMNS = `
  *     decision (`resolveMedicalAccess` in routes/auth.ts, routes/status.ts,
  *     routes/share.ts, routes/email.ts) keep `ANALYSES_SELECT_COLUMNS`, untouched.
  *
- * The regex's character class is written `[.]`, not `\.`: the dot is escaped by
- * the brackets, so the pattern does not depend on `standard_conforming_strings`
- * (with it off, `'\.'` degrades to a bare `.` — "any character" — and the cast
- * would be reachable by `"1x2"`).
+ * The regex and its length bound now live in `lib/formScoreSql.ts` (see
+ * `hasNumericFormScore` there for the `[.]`-vs-backslash trap), and this
+ * projection is not what enforces §5: `redactWellness` in the route is, which is
+ * why the medical check on the list routes is written out rather than assumed.
+ * Point 3 only says a projection cannot OPEN the boundary while it is in place.
  */
-export const ANALYSES_LIST_SUMMARY_JSON = `
-  case
-    when length(a.summary_json ->> 'form_score') <= 40
-     and (a.summary_json ->> 'form_score') ~ '^-?[0-9]+([.][0-9]+)?$'
-      then jsonb_build_object('form_score', (a.summary_json ->> 'form_score')::float8)
-    else null
-  end
-`
+export const ANALYSES_LIST_SUMMARY_JSON = listFormScoreJson('a.summary_json')
 
 /**
  * The LIST projection of `ANALYSES_SELECT_COLUMNS`: every column the list

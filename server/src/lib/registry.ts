@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 
+import { batchRows } from './batchRows'
 import { withHistoryStore } from './historyStore'
 
 // ── Organization + video + event registries ────────────────────────────────
@@ -130,25 +131,31 @@ export const persistPlayerEvents = async (
   const rows = (Array.isArray(events) ? events : [])
     .filter((e) => e && typeof e === 'object')
     .slice(0, 200)
+    .map((e) => ({
+      category: typeof e.event_type === 'string' ? e.event_type.slice(0, 120) : 'technique',
+      event_at_s:
+        typeof e.timestamp === 'number' && Number.isFinite(e.timestamp) ? e.timestamp : null,
+      form_score:
+        typeof e.form_score === 'number' && Number.isFinite(e.form_score) ? e.form_score : null,
+    }))
   await withHistoryStore(async (db: SQL) => {
     await db`delete from player_events where server_job_id = ${serverJobId};`
-    for (const e of rows) {
-      const ts =
-        typeof e.timestamp === 'number' && Number.isFinite(e.timestamp) ? e.timestamp : null
-      const score =
-        typeof e.form_score === 'number' && Number.isFinite(e.form_score) ? e.form_score : null
-      await db`
-        insert into player_events (
-          org_auth0_id, server_job_id, student_id, category, event_at_s, form_score
-        ) values (
-          ${orgAuth0Id},
-          ${serverJobId},
-          ${studentId}::uuid,
-          ${typeof e.event_type === 'string' ? e.event_type.slice(0, 120) : 'technique'},
-          ${ts},
-          ${score}
-        );
-      `
-    }
+    if (rows.length === 0) return
+    // ONE statement for the whole batch (see `batchRows` for the binding, and
+    // for why the duplicate-key collapse that `persistFindings` would need does
+    // NOT apply here): `player_events` has no unique key but its surrogate uuid,
+    // so two events at the same timestamp are two events. Deduping them would
+    // drop real timeline rows the per-row loop used to persist.
+    await db`
+      insert into player_events (
+        org_auth0_id, server_job_id, student_id, category, event_at_s, form_score
+      )
+      select
+        ${orgAuth0Id}, ${serverJobId}, ${studentId}::uuid,
+        r.category, r.event_at_s, r.form_score
+      from jsonb_to_recordset(${batchRows(rows)}::jsonb) as r(
+        category text, event_at_s double precision, form_score double precision
+      );
+    `
   })
 }

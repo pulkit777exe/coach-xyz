@@ -2,6 +2,7 @@
 
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { ANALYSES_LIST_COLUMNS, ANALYSES_SELECT_COLUMNS } from '../analyses'
+import { hasNumericFormScore } from '../formScoreSql'
 import type { DashboardAnalysis } from '../analyses'
 import { REPORT_TYPES } from '../orgEnums'
 import type { ReportType } from '../orgEnums'
@@ -201,10 +202,16 @@ export const deleteReport = async (auth0Id: string, id: string): Promise<boolean
 /**
  * Recent completed analyses with a score, for the org-wide report block.
  *
- * Named for scores, and the query already says so — it filters on
- * `(summary_json->>'form_score') is not null` — yet it selected the whole blob
- * to hand `buildReportContent` twenty copies of it. It now takes the list
- * projection, which is the one field it reads.
+ * Named for scores, and the query now says exactly that. It used to filter on
+ * `(summary_json->>'form_score') is not null`, which is "has the KEY", not "has a
+ * SCORE": a row whose score is the string "N/A" passed the filter, the list
+ * projection then handed `analysesBlock` a null summary (correct), and the
+ * report listed an analysis with no score under a heading that promises scores.
+ * `hasNumericFormScore` (lib/formScoreSql.ts) is the same guard the projection
+ * casts through, so "has a score" means one thing in both places.
+ *
+ * It also selected the whole blob to hand `buildReportContent` twenty copies of
+ * it; it now takes the list projection, which is the one field it reads.
  */
 export const listRecentAnalysisScores = async (
   auth0Id: string,
@@ -219,7 +226,7 @@ export const listRecentAnalysisScores = async (
         where a.auth0_id = ${auth0Id}
           and a.complete = true
           and a.summary_json is not null
-          and (a.summary_json->>'form_score') is not null
+          and ${db.unsafe(hasNumericFormScore('a.summary_json'))}
         order by a.requested_at desc
         limit ${limit};
       `
