@@ -4,6 +4,7 @@ import {
   deleteMatch,
   deleteSeason,
   getMatch,
+  getSeason,
   listMatches,
   listSeasons,
 } from '../../lib/orgData'
@@ -146,6 +147,18 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'team not found in this organization', false)
     }
+    // Same shape, same 400, one line down: `matches.season_id` is a loose link
+    // (no foreign key), so a season uuid is globally unique and nothing in the
+    // insert can tell org A's fixture from org B's. Validating `team_id` while
+    // writing `season_id` unvalidated left a cross-tenant row that only the read
+    // filter's `org_auth0_id` hid. `listSeasons` also matches on `season_id`, so
+    // a foreign season would otherwise leak org B's season name into org A's
+    // match list via the join.
+    const seasonId = pickId(raw.season_id)
+    if (seasonId && !(await getSeason(auth0Id, seasonId))) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'season not found in this organization', false)
+    }
     // team.manage is a capability, not a scope: it says a role may manage
     // fixtures, not another team's — and not the CLUB's either. Omitting
     // `team_id` used to short-circuit this check entirely (`teamId && …`), so a
@@ -166,7 +179,7 @@ export default new Elysia()
     }
     const match = await createMatch(auth0Id, {
       team_id: teamId,
-      season_id: pickId(raw.season_id),
+      season_id: seasonId,
       opponent: typeof raw.opponent === 'string' ? raw.opponent : null,
       match_on: typeof raw.match_on === 'string' ? raw.match_on : null,
       location: typeof raw.location === 'string' ? raw.location : null,

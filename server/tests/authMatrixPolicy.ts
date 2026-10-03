@@ -978,7 +978,13 @@ export const MATRIX: MatrixEntry[] = [
   {
     method: 'POST',
     path: '/api/org/:auth0Id/teams/:teamId/members',
-    body: { member_auth0_id: 'auth0|matrix-newcoach', role: 'coach' },
+    // An account that IS an org member. This row was written with
+    // `auth0|matrix-newcoach`, an id matching no `org_members` row, and it
+    // recorded the capability floor only — so the guard it exercised could not
+    // see the difference between "may manage this roster" and "may file any
+    // account id onto it". Naming a real member keeps the role expectations
+    // below meaningful and lets the refusal be its own variant.
+    body: { member_auth0_id: 'auth0|matrix-analyst', role: 'coach' },
     expect: {
       anonymous: 403,
       owner: 201,
@@ -992,6 +998,33 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    variants: [
+      {
+        // The rule that moved: `team_memberships.member_auth0_id` is a bare
+        // account id — no org column, no foreign key to `org_members` — so a
+        // caller could file another org's member, or a stranger, onto this
+        // org's team. Nothing is granted by the row (the role still resolves
+        // through `org_members`), but it is a durable cross-tenant write.
+        // 404, matching the sibling student branch: the submitted id names
+        // nothing in this org. `auth0|matrix-other-member` is the member of a
+        // DIFFERENT org, so this is the cross-tenant case specifically.
+        name: 'non-member',
+        body: { member_auth0_id: 'auth0|matrix-other-member', role: 'coach' },
+        expect: {
+          anonymous: 403,
+          owner: 404,
+          admin: 404,
+          head_coach: 404,
+          coach: 404,
+          assistant_coach: 403,
+          analyst: 403,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
   },
   // ── Share (write about the player on the video) ──
   {

@@ -1,4 +1,5 @@
 import { withHistoryStoreOrThrow } from './historyStore'
+import { getMemberRole } from './orgMembers'
 
 // ── Teams ────────────────────────────────────────────────────────────────────
 // Teams scope students, analyses, and coaching permissions inside an org.
@@ -172,7 +173,22 @@ export const listMemberTeamIdsInOrg = async (
   return rows.map((r) => r.team_id)
 }
 
+/**
+ * Is this account a member of the org? `getMemberRole` is the same predicate the
+ * identity boundary uses, so it admits the owner fast-path and refuses an
+ * invited-but-unlinked account — the two cases where "there is a row but the
+ * person is not really here".
+ */
+export const memberBelongsToOrg = async (
+  orgAuth0Id: string,
+  memberAuth0Id: string,
+): Promise<boolean> => {
+  const role = await getMemberRole(orgAuth0Id, memberAuth0Id)
+  return role !== null
+}
+
 export const addTeamMember = async (
+  orgAuth0Id: string,
   teamId: string,
   input: {
     memberAuth0Id?: string | null
@@ -183,6 +199,17 @@ export const addTeamMember = async (
   const memberAuth0Id = input.memberAuth0Id?.trim() || null
   const studentId = input.studentId?.trim() || null
   if (!memberAuth0Id && !studentId) return null
+  // The coach side of a membership row is a bare account id in a table with no
+  // org column and no foreign key to `org_members`, so nothing at the schema
+  // level stops org A from parking org B's (or a stranger's) sub on org A's
+  // team. Nothing is GRANTED by the row alone — the role still resolves through
+  // `org_members`, and `listMemberTeamIdsInOrg` joins `teams`, so the entry
+  // grants no scope to a non-member — which makes this roster pollution rather
+  // than privilege escalation. It is still a cross-tenant write, and it is
+  // durable: the row outlives any later cleanup of the membership that would
+  // have justified it. Refused here rather than at the route so every caller
+  // gets it, and so the check sits with the insert it protects.
+  if (memberAuth0Id && !(await memberBelongsToOrg(orgAuth0Id, memberAuth0Id))) return null
   const role: TeamMemberRole = TEAM_MEMBER_ROLES.includes(input.role as TeamMemberRole)
     ? (input.role as TeamMemberRole)
     : 'player'

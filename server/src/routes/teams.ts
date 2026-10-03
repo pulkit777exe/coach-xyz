@@ -241,14 +241,22 @@ export default new Elysia()
           set.status = 201
           return { member: change.member }
         }
-        const member = await addTeamMember(teamId, {
+        const member = await addTeamMember(auth0Id, teamId, {
           memberAuth0Id: typeof member_auth0_id === 'string' ? member_auth0_id : null,
           studentId: null,
           role: role === 'coach' ? 'coach' : 'player',
         })
         if (!member) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Could not add team member', false)
+          // Same 404 the sibling student branch answers, for the same reason: the
+          // id named in the body does not name anything in this org, so it is
+          // indistinguishable from one that does not exist. NOT 403 — that status
+          // is reserved for a caller who lacks the capability (answered above by
+          // `guard`) or reaches a resource outside their scope, and here the
+          // refusal is about the submitted id, exactly as `getTeam`/`getStudent`
+          // already are on this route. `addTeamMember` owns the check, so the
+          // data layer refuses it whatever route reaches it.
+          set.status = 404
+          return buildError('NOT_FOUND', 'Member not found in this organization', false)
         }
         logTeamAudit(request, auth0Id, 'team.member_added', teamId, {
           membership: member.id,
@@ -272,6 +280,19 @@ export default new Elysia()
           }
           const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
           if (!('caller' in g)) return g
+          // The org check the sibling POST already makes, and this handler was
+          // missing: `guard` asks `canAccessTeam`, which owners and admins bypass
+          // unconditionally — so nothing established that `teamId` is a team of
+          // THIS org, and `removeTeamMember` is keyed on `team_id` alone (a
+          // membership uuid is globally unique, so another org's row matches).
+          // An owner of org A could therefore delete org B's roster row by
+          // naming its team uuid. `getTeam` is org-scoped, so this refuses the
+          // cross-tenant delete before any write, with the same 404 the POST
+          // branch uses for the same reason.
+          if (!(await getTeam(auth0Id, teamId))) {
+            set.status = 404
+            return buildError('NOT_FOUND', 'Team not found in this organization', false)
+          }
           // A student removal clears `students.team_id` as well as the row:
           // deleting the membership alone would strand the player on a team
           // whose roster no longer lists them but whose scope still does.

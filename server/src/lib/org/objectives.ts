@@ -104,6 +104,51 @@ export const listObjectives = async (
 }
 
 /**
+ * Does an org own this analysis? `analysis_history` rows are owned by an org
+ * through `auth0_id` — the `server_job_id` itself is a caller-supplied text
+ * primary key, so existence proves nothing and only the org predicate does.
+ *
+ * This is the same loose-link shape as `students.team_id` (see the entry on
+ * `deleteTeam`): a uuid that is unique globally, a column with no foreign key,
+ * and a row that a caller can therefore aim at another tenant's data. The
+ * objective itself is org-scoped (`listObjectives` filters `org_auth0_id`), so
+ * without this a foreign `analysis_job_id` was stored and read back — the leak
+ * is in the stored pointer, not in the list.
+ */
+export const analysisBelongsToOrg = async (
+  auth0Id: string,
+  serverJobId: string,
+): Promise<boolean> => {
+  const rows = await withHistoryStoreOrThrow(async (db) => {
+    return db<{ n: number }[]>`
+      select count(*)::int as n from analysis_history
+      where auth0_id = ${auth0Id} and server_job_id = ${serverJobId};
+    `
+  })
+  return (rows?.[0]?.n ?? 0) > 0
+}
+
+/**
+ * Does an org own this finding? `findings` carries no org column at all — it is
+ * reachable only by joining to `analysis_history.auth0_id`, which is what makes
+ * the org predicate here non-optional. And because `findings_unique` is
+ * `(server_job_id, id)`, the same finding id CAN exist under two analyses in two
+ * orgs, so "a row with this id exists" would be satisfied by the victim's copy
+ * while the caller meant their own.
+ */
+export const findingBelongsToOrg = async (auth0Id: string, findingId: string): Promise<boolean> => {
+  const rows = await withHistoryStoreOrThrow(async (db) => {
+    return db<{ n: number }[]>`
+      select count(*)::int as n
+      from findings f
+      join analysis_history a on a.server_job_id = f.server_job_id
+      where a.auth0_id = ${auth0Id} and f.id = ${findingId};
+    `
+  })
+  return (rows?.[0]?.n ?? 0) > 0
+}
+
+/**
  * One objective by id, UNSCOPED. The PATCH/DELETE handlers must be able to tell
  * "no such objective" (404) from "not yours" (403), so they read the row first
  * and then apply `objectiveVisibleTo` — a scoped read would collapse both into
@@ -137,6 +182,25 @@ export const createObjective = async (
     const team = await getTeam(auth0Id, input.team_id)
     if (!team) return null
   }
+  // Normalized ONCE, and the same value is both checked and written. Validating
+  // `input.finding_id?.trim()` while inserting `input.finding_id?.slice(0, 200)`
+  // would leave the two disagreeing — a blank string skips the check and still
+  // stores `'   '`, and a >200-char id would be validated whole and stored
+  // truncated, i.e. validated as something other than what lands in the column.
+  const findingId = input.finding_id?.trim().slice(0, 200) || null
+  const analysisJobId = input.analysis_job_id?.trim().slice(0, 200) || null
+  // Same rule as the student/team guards above, for the two analysis-linked
+  // columns. `findings.id` is only unique PER ANALYSIS
+  // (`unique (server_job_id, id)`), so a bare finding id is not even globally
+  // unique — it needs the org-scoped join to mean anything at all. Both are
+  // checked rather than assumed because `training_objectives` stores them as
+  // free text with no foreign key, so an unvalidated value is a cross-tenant
+  // POINTER: the objective row itself stays org-scoped (which is why this is
+  // data integrity rather than a read leak), but the stored id can then be used
+  // to probe whether a given server_job_id or finding id exists elsewhere, and
+  // another tenant's finding can be attached to this one.
+  if (analysisJobId && !(await analysisBelongsToOrg(auth0Id, analysisJobId))) return null
+  if (findingId && !(await findingBelongsToOrg(auth0Id, findingId))) return null
   return withHistoryStoreOrThrow(async (db) => {
     const rows = await db<TrainingObjective[]>`
       insert into training_objectives (
@@ -146,8 +210,8 @@ export const createObjective = async (
         ${auth0Id},
         ${input.student_id ?? null}::uuid,
         ${input.team_id ?? null}::uuid,
-        ${input.finding_id?.slice(0, 200) ?? null},
-        ${input.analysis_job_id?.slice(0, 200) ?? null},
+        ${findingId},
+        ${analysisJobId},
         ${title},
         ${input.description?.trim().slice(0, 2000) || null},
         ${input.due_on ?? null}::date,

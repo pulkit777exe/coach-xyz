@@ -177,3 +177,54 @@ describe('a club-wide row is an org write, not a team one', () => {
     expect(matches.some((m) => m.team_id === null)).toBe(true)
   })
 })
+
+// `matches.season_id` has no foreign key, so a season uuid is globally unique
+// and the INSERT cannot tell org A's fixture from org B's — the same loose-link
+// shape as `students.team_id`, and `team_id` on this very route was already
+// validated against `getTeam`. `listSeasons` joins matches on `season_id`, so an
+// unvalidated value would also pull another org's season name into this org's
+// season list. Both directions are pinned: a foreign season is refused before the
+// insert, and the org's own season still authors a fixture.
+describe('a match cannot be filed under another org season', () => {
+  test('creating a fixture under a foreign season is refused and writes nothing', async () => {
+    const results = await run('write.createForeignSeason', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(400)
+      // The load-bearing half: a refusal checked after the insert would still
+      // have written the row.
+      expect(r.creates).toBe(0)
+    }
+  })
+
+  test('an org-wide caller is refused too — this is an org question, not a scope one', async () => {
+    // `team.manage` is a capability; ownership of the season is a separate,
+    // unconditional question. An owner of org A naming org B's season is the
+    // exact cross-tenant write, so the capability gate must not be what stops it.
+    const results = await run('write.createForeignSeason', ORG_FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(400)
+      expect(r.creates).toBe(0)
+    }
+  })
+
+  test('creating a fixture under the org own season still works', async () => {
+    const results = await run('write.createOwnSeason', [...FIXTURE_MANAGERS, ...ORG_FIXTURE_MANAGERS])
+    for (const r of results) {
+      expect(r.status).toBe(201)
+      expect(r.creates).toBe(1)
+    }
+  })
+
+  test('a match already carrying a foreign season is still deletable by its own org', async () => {
+    // The delete side needs no season check: `getMatch` is org-scoped, so the
+    // target row is proven to belong to the caller before the scope decision,
+    // and nothing in the delete touches the season. Refusing here would strand a
+    // legacy row that no caller could ever remove — the "you can see it but not
+    // clean it up" trap. The probe's fixture is exactly that row.
+    const results = await run('write.deleteForeignSeasonMatch', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(200)
+      expect(r.deletes).toBe(1)
+    }
+  })
+})

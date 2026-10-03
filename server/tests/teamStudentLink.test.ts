@@ -12,8 +12,13 @@ import { lastJsonLine, runProbeProcess } from './spawnProbe'
 // Postgres: the real routes + real transaction, isolated from every other
 // file's `mock.module` stubs, which share the suite's module cache, and bounded
 // by runProbeProcess (see tests/spawnProbe.ts). The probe performs each
-// scenario and throws on mismatch; a zero exit means all six passed
-// (mutation-verified — the old split-brain path fails add + foreign).
+// scenario and throws on mismatch; a zero exit means all of them passed
+// (mutation-verified — the old split-brain path fails add + foreign, and the
+// loose-link paths fail foreign-member + foreign-delete).
+//
+// Live Postgres rather than a fixture store is what makes the last three cases
+// mean anything: `addTeamMember`'s membership predicate and `removeTeamMember`'s
+// `team_id`-only delete are exactly the SQL that no stub of `db` can observe.
 
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'teamStudentLinkProbe.ts')
@@ -21,7 +26,7 @@ const PROBE = join(import.meta.dir, 'teamStudentLinkProbe.ts')
 const hasTestDb = Boolean(process.env.TEST_DATABASE_URL)
 
 ;(hasTestDb ? describe : describe.skip)('student team link (probe)', () => {
-  test('all six link scenarios pass against ephemeral Postgres', async () => {
+  test('every link and roster scenario passes against ephemeral Postgres', async () => {
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         (entry): entry is [string, string] => entry[1] !== undefined,
@@ -31,6 +36,16 @@ const hasTestDb = Boolean(process.env.TEST_DATABASE_URL)
     const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
     expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
     const result = lastJsonLine<{ done: string[] }>(proc.stdout)
-    expect(result.done).toEqual(['add', 'foreign', 'remove', 'move', 'unassign', 'delete-team'])
+    expect(result.done).toEqual([
+      'add',
+      'foreign',
+      'remove',
+      'move',
+      'unassign',
+      'delete-team',
+      'foreign-member',
+      'own-member',
+      'foreign-delete',
+    ])
   })
 })

@@ -26,6 +26,13 @@ const TEAM_A = '00000000-0000-4000-8000-0000000000a1'
 const TEAM_B = '00000000-0000-4000-8000-0000000000b1'
 const FOREIGN_TEAM = '00000000-0000-4000-8000-0000000000c1'
 const STUDENT = '00000000-0000-4000-8000-0000000000d1'
+// A coach who IS a member of ORG (so the same-org case is legitimate), one who is
+// a member of a DIFFERENT org, and one with no membership row at all. All three
+// are valid auth0 subs as far as the request is concerned — only the org
+// membership row distinguishes them.
+const MEMBER_COACH = 'auth0|link-coach'
+const FOREIGN_MEMBER = 'auth0|link-foreign-coach'
+const STRANGER = 'auth0|link-stranger'
 
 const check = (cond: boolean, message: string): void => {
   if (!cond) throw new Error(message)
@@ -36,11 +43,12 @@ const call = async (
   method: string,
   path: string,
   body?: unknown,
+  identity: string = ORG,
 ): Promise<{ status: number; body: Record<string, unknown> }> => {
   const res = await app.handle(
     new Request(`http://localhost${path}`, {
       method,
-      headers: { 'content-type': 'application/json', 'x-verified-auth0-id': ORG },
+      headers: { 'content-type': 'application/json', 'x-verified-auth0-id': identity },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   )
@@ -51,14 +59,31 @@ const db = new SQL(TEST_DATABASE_URL)
 setHistoryStoreConnectionForTests(db)
 await ensureInitialized()
 // Idempotent pre-clean: FK-less residue from a red run must not fail green.
+await db`delete from team_memberships where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER}, ${STRANGER});`
+await db`delete from org_members where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER}, ${STRANGER});`
 await db`delete from team_memberships where student_id = ${STUDENT}::uuid;`
 await db`delete from students where id = ${STUDENT}::uuid;`
 await db`delete from teams where id in (${TEAM_A}::uuid, ${TEAM_B}::uuid, ${FOREIGN_TEAM}::uuid);`
 await db`insert into teams (id, org_auth0_id, name) values (${TEAM_A}::uuid, ${ORG}, 'A'), (${TEAM_B}::uuid, ${ORG}, 'B');`
 await db`insert into teams (id, org_auth0_id, name) values (${FOREIGN_TEAM}::uuid, ${OTHER}, 'F');`
 await db`insert into students (id, auth0_id, full_name) values (${STUDENT}::uuid, ${ORG}, 'Link Test');`
+// ACTIVE is load-bearing: `getMemberRole` admits active rows only, so an
+// invited-but-unlinked account is refused exactly like a stranger. That is the
+// predicate the identity boundary itself uses, so it cannot drift from it.
+await db`
+  insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
+  values
+    (${ORG}, ${MEMBER_COACH}, 'link-coach@example.com', 'coach', 'active'),
+    (${OTHER}, ${FOREIGN_MEMBER}, 'link-foreign@example.com', 'coach', 'active');
+`
 
 const done: string[] = []
+
+const coachRows = (teamId: string) =>
+  db<{ member_auth0_id: string }[]>`
+    select member_auth0_id from team_memberships
+    where team_id = ${teamId}::uuid and member_auth0_id is not null;
+  `
 
 // Each scenario starts from a clean link: the team delete in setup cascades
 // memberships once, but scenarios share the tables afterwards.
@@ -159,5 +184,93 @@ const reset = async (): Promise<void> => {
   done.push('delete-team')
 }
 
+// ── Coach-side membership rows ───────────────────────────────────────────────
+// Scenario 6 deleted TEAM_A, so re-plant both teams before these run — otherwise
+// the add is refused by the org check for the wrong reason (a 404 on the team),
+// which would make the non-member case below pass vacuously.
+await db`delete from team_memberships where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER}, ${STRANGER});`
+await db`
+  insert into teams (id, org_auth0_id, name)
+  values (${TEAM_A}::uuid, ${ORG}, 'A'), (${TEAM_B}::uuid, ${ORG}, 'B')
+  on conflict (id) do nothing;
+`
+await db`insert into teams (id, org_auth0_id, name) values (${FOREIGN_TEAM}::uuid, ${OTHER}, 'F') on conflict (id) do nothing;`
+
+// `team_memberships.member_auth0_id` is a bare account id: no org column, no
+// foreign key to `org_members`. So `addTeamMember` could file ANY sub — another
+// org's member, or a stranger with no membership at all — onto this org's team.
+// Nothing is GRANTED by the row (the role still resolves through `org_members`,
+// and `listMemberTeamIdsInOrg` joins `teams`), which makes this roster pollution
+// rather than privilege escalation — but it is a durable cross-tenant write, and
+// the row outlives any later cleanup of the membership that justified it.
+
+// 7. The negative direction: a sub that is not a member of this org is refused
+// and NO row is written. Asserted against the table, not the status alone,
+// because a check made after the insert would still answer 404.
+{
+  for (const sub of [FOREIGN_MEMBER, STRANGER]) {
+    const res = await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
+      member_auth0_id: sub,
+      role: 'coach',
+    })
+    // 404, not 403: the id in the body names nothing in this org, which is
+    // indistinguishable from naming nothing at all — the same answer the sibling
+    // student branch already gives for a foreign student_id.
+    check(res.status === 404, `foreign-member(${sub}): expected 404, got ${res.status}`)
+  }
+  check(
+    (await coachRows(TEAM_A)).length === 0,
+    'foreign-member: a roster row was written for a non-member',
+  )
+  done.push('foreign-member')
+}
+
+// 8. The legitimate case still works: a real member of this org is added.
+{
+  const res = await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
+    member_auth0_id: MEMBER_COACH,
+    role: 'coach',
+  })
+  check(res.status === 201, `own-member: expected 201, got ${res.status}`)
+  const subs = (await coachRows(TEAM_A)).map((r) => r.member_auth0_id)
+  check(subs.includes(MEMBER_COACH), 'own-member: roster row missing')
+  // The negative direction needs its own positive, or case 7 is satisfied by a
+  // check that refuses everyone.
+  check(!subs.includes(FOREIGN_MEMBER), 'own-member: a foreign sub leaked in')
+  done.push('own-member')
+}
+
+// 9. DELETE is org-scoped too. `guard` asks `canAccessTeam`, which owners bypass
+// unconditionally, and `removeTeamMember` is keyed on `team_id` alone — a
+// membership uuid is globally unique, so naming another org's team uuid reached
+// its roster row. The caller is the org owner precisely because that is the role
+// the scope check does not constrain.
+{
+  // Set up as OTHER's own owner, so the victim row exists legitimately.
+  const foreignAdd = await call(
+    teamsRoutes,
+    'POST',
+    `/api/org/${OTHER}/teams/${FOREIGN_TEAM}/members`,
+    { member_auth0_id: FOREIGN_MEMBER, role: 'coach' },
+    OTHER,
+  )
+  check(foreignAdd.status === 201, `foreign-delete setup: expected 201, got ${foreignAdd.status}`)
+  const membershipId = (foreignAdd.body.member as { id: string }).id
+
+  // ORG's owner (the verified id on every `call`) targeting OTHER's team.
+  const res = await call(
+    teamsRoutes,
+    'DELETE',
+    `/api/org/${ORG}/teams/${FOREIGN_TEAM}/members/${membershipId}`,
+  )
+  check(res.status === 404, `foreign-delete: expected 404, got ${res.status}`)
+  // The victim's row must survive the refused delete.
+  const victimSubs = (await coachRows(FOREIGN_TEAM)).map((r) => r.member_auth0_id)
+  check(victimSubs.includes(FOREIGN_MEMBER), 'foreign-delete: the victim roster row was deleted')
+  done.push('foreign-delete')
+}
+
+await db`delete from team_memberships where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER});`
+await db`delete from org_members where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER});`
 await db.close()
 console.log(JSON.stringify({ done }))

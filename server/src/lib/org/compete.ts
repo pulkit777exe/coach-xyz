@@ -91,6 +91,23 @@ export const createSeason = async (
   })
 }
 
+/**
+ * One season by id, scoped to the org. `POST /matches` asks this before it
+ * writes a `season_id`, because `matches.season_id` is a loose link rather than
+ * a foreign key: a season uuid is globally unique, so the insert itself cannot
+ * tell org A's fixture from org B's, and the only thing that can is a lookup
+ * keyed by the org. Mirrors `getTeam`, which the same route already asks about
+ * `team_id`.
+ */
+export const getSeason = async (auth0Id: string, id: string): Promise<Season | null> => {
+  return withHistoryStoreOrThrow(async (db) => {
+    const rows = await db<Season[]>`
+      select * from seasons where org_auth0_id = ${auth0Id} and id = ${id} limit 1;
+    `
+    return rows?.[0] ?? null
+  })
+}
+
 export const deleteSeason = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
     (await withHistoryStoreOrThrow(async (db) => {

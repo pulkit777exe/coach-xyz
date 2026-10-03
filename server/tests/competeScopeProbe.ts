@@ -18,6 +18,10 @@ const MATCH_A = '00000000-0000-0000-0000-0000000000a2'
 const MATCH_B = '00000000-0000-0000-0000-0000000000b2'
 const MATCH_CLUB = '00000000-0000-0000-0000-0000000000c9'
 const SEASON_CLUB = '00000000-0000-0000-0000-0000000000ca'
+/** A season row that belongs to a DIFFERENT org. */
+const SEASON_FOREIGN = '00000000-0000-0000-0000-0000000000cb'
+/** A match in THIS org whose `season_id` points at SEASON_FOREIGN. */
+const MATCH_FOREIGN_SEASON = '00000000-0000-0000-0000-0000000000cc'
 
 const roleTokens = (process.env.COMPETE_SCOPE_ROLES ?? '')
   .split(',')
@@ -47,11 +51,11 @@ const teamsFor = (role: OrgMemberRole | null): string[] => (role ? (TEAM_FOR_ROL
 let deletes = 0
 let creates = 0
 
-const match = (id: string, teamId: string | null) => ({
+const match = (id: string, teamId: string | null, seasonId: string | null = null) => ({
   id,
   org_auth0_id: ORG_ID,
   team_id: teamId,
-  season_id: null,
+  season_id: seasonId,
   opponent: 'Rivals',
   match_on: '2026-03-01',
   location: null,
@@ -59,7 +63,15 @@ const match = (id: string, teamId: string | null) => ({
   created_at: new Date(0).toISOString(),
 })
 
-const MATCHES = [match(MATCH_A, TEAM_A), match(MATCH_B, TEAM_B), match(MATCH_CLUB, null)]
+const MATCHES = [
+  match(MATCH_A, TEAM_A),
+  match(MATCH_B, TEAM_B),
+  match(MATCH_CLUB, null),
+  // A fixture whose season_id was filed under another org's season. Written
+  // directly rather than through POST /matches (which now refuses it), so the
+  // DELETE case can prove a legacy row is still the caller's to remove.
+  match(MATCH_FOREIGN_SEASON, TEAM_A, SEASON_FOREIGN),
+]
 
 mock.module('../src/lib/orgMembers', () => ({
   getMemberRole: async (_orgAuth0Id: string, memberAuth0Id: string) =>
@@ -113,6 +125,13 @@ mock.module('../src/lib/orgData', () => ({
     deletes += 1
     return id === SEASON_CLUB
   },
+  // Org-scoped by construction: a season uuid from another org answers nothing,
+  // which is what makes the route's 400 real rather than a lookup that always
+  // hits.
+  getSeason: async (orgAuth0Id: string, id: string) =>
+    id === SEASON_CLUB && orgAuth0Id === ORG_ID
+      ? { id, org_auth0_id: ORG_ID, name: 'Spring', starts_on: '2026-03-01', ends_on: null }
+      : null,
   listMatches: async (_orgAuth0Id: string, opts: { teamIds?: string[] } = {}) => {
     // Mirror the SQL scope rule: a team-less match is a club fixture and stays
     // visible, so an assertion on the club row proves the filter is not a
@@ -191,6 +210,32 @@ const CASES: Record<string, Case> = {
     route: 'compete',
     method: 'DELETE',
     path: `/api/org/${orgPath}/seasons/${SEASON_CLUB}`,
+  },
+  // `matches.season_id` is a loose link — no foreign key — so a season uuid is
+  // globally unique and the insert cannot tell org A's fixture from org B's.
+  // `team_id` was validated a line above; this pair pins that `season_id` is
+  // held to the same standard, in both directions: refused for a foreign season,
+  // accepted for the org's own.
+  'write.createForeignSeason': {
+    route: 'compete',
+    method: 'POST',
+    path: `/api/org/${orgPath}/matches`,
+    body: { team_id: TEAM_A, season_id: SEASON_FOREIGN, opponent: 'Rivals', match_on: '2026-03-01' },
+  },
+  'write.createOwnSeason': {
+    route: 'compete',
+    method: 'POST',
+    path: `/api/org/${orgPath}/matches`,
+    body: { team_id: TEAM_A, season_id: SEASON_CLUB, opponent: 'Rivals', match_on: '2026-03-01' },
+  },
+  // The negative direction for the delete side: a match already carrying a
+  // foreign season_id is still THIS org's row, so the org-scoped `getMatch` is
+  // sufficient and the coach must be able to clean it up. Refusing it would
+  // leave a row nobody can remove.
+  'write.deleteForeignSeasonMatch': {
+    route: 'compete',
+    method: 'DELETE',
+    path: `/api/org/${orgPath}/matches/${MATCH_FOREIGN_SEASON}`,
   },
 }
 

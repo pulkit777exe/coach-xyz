@@ -39,6 +39,7 @@ export type { Season, Match } from './org/compete'
 export {
   listSeasons,
   createSeason,
+  getSeason,
   deleteSeason,
   listMatches,
   getMatch,

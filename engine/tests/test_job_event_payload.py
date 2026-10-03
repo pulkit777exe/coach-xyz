@@ -22,6 +22,7 @@ from dataclasses import asdict, replace
 import pytest
 
 from core import jobs
+from core.errors import EngineError, InvalidStateTransition
 from core.jobs import JobStatus, _publish_job_event
 
 
@@ -185,6 +186,189 @@ class TestPublishedPayload:
     def test_no_redis_client_is_a_silent_skip(self, monkeypatch):
         monkeypatch.setattr(jobs, "redis", None)
         _publish_job_event(_rich_job())  # must not raise
+
+
+class TestPublishFailureDoesNotFailTheTransition:
+    """The guarantee named at jobs.py:29-35, pinned at the level it is stated.
+
+    `test_publish_failure_does_not_raise` above proves the helper swallows a
+    publish error, but it calls `_publish_job_event` directly. Nothing proved
+    the property that actually matters: that a job's state transition still
+    COMMITS when event delivery fails. Those are different claims, and the
+    second one is the invariant — the persisted status key is authoritative and
+    the server re-reads it on reconnect, so a dead pub/sub channel must not be
+    able to fail a job.
+
+    Why this is pinned rather than assumed: collapsing the authoritative `set`
+    and the best-effort `publish` into one Upstash `/pipeline` batch looks like a
+    free round trip, but `Pipeline.exec()` raises `UpstashError` from the first
+    erroring element (upstash_redis/http.py: `format_response` raises per
+    sub-response, and `exec()` builds its list through it). A batched set+publish
+    would therefore raise from the same call that performed the authoritative
+    write, and a blanket `except` around it cannot tell "publish failed" from
+    "the state write failed" — it would silently swallow the second. These tests
+    are the tripwire for exactly that change.
+
+    `fail_job` matters most of the three: it is the terminal path, so a publish
+    error there must not leave a failed job stuck reporting its previous state.
+    """
+
+    @pytest.fixture
+    def exploding_pubsub(self, monkeypatch):
+        """A Redis whose reads and writes work and whose publish always raises."""
+
+        class _ExplodingPubsub:
+            def __init__(self) -> None:
+                self.store: dict[str, str] = {}
+
+            def get(self, key: str) -> str | None:
+                return self.store.get(key)
+
+            def set(self, key: str, value: str, ex: int | None = None) -> None:
+                self.store[key] = value
+
+            def publish(self, channel: str, message: str) -> int:
+                raise RuntimeError("redis pubsub down")
+
+        fake = _ExplodingPubsub()
+        monkeypatch.setattr(jobs, "redis", fake)
+        return fake
+
+    @staticmethod
+    def _seed(fake, job_id: str, state: str) -> None:
+        job = JobStatus(job_id=job_id, state=state)
+        info = jobs.PIPELINE_STATES[state]
+        job.stage, job.stage_name, job.progress = info["stage"], info["stage_name"], info["progress"]
+        fake.set(f"{jobs.KEY}{job_id}", job.to_redis(), ex=jobs.JOB_TTL)
+
+    def _stored(self, fake, job_id: str) -> JobStatus:
+        return JobStatus.from_redis(fake.store[f"{jobs.KEY}{job_id}"])
+
+    def test_transition_commits_when_publish_fails(self, exploding_pubsub):
+        self._seed(exploding_pubsub, "j1", "uploading")
+
+        jobs.transition_job("j1", "scanning")  # must not raise
+
+        stored = self._stored(exploding_pubsub, "j1")
+        assert stored.state == "scanning"
+        assert stored.progress == jobs.PIPELINE_STATES["scanning"]["progress"]
+
+    def test_update_commits_when_publish_fails(self, exploding_pubsub):
+        self._seed(exploding_pubsub, "j2", "analyzing")
+
+        jobs.update_job("j2", summary={"form_score": 71.5})  # must not raise
+
+        stored = self._stored(exploding_pubsub, "j2")
+        assert stored.summary == {"form_score": 71.5}
+
+    def test_fail_job_commits_when_publish_fails(self, exploding_pubsub):
+        """The terminal path — the worst one to lose, since nothing retries it."""
+        self._seed(exploding_pubsub, "j3", "analyzing")
+
+        error = EngineError(code="INTERNAL_ERROR", message="boom")
+        jobs.fail_job("j3", error)  # must not raise
+
+        stored = self._stored(exploding_pubsub, "j3")
+        assert stored.state == "failed"
+        assert stored.complete is True
+        assert stored.error_code == "INTERNAL_ERROR"
+
+    def test_create_job_commits_when_publish_fails(self, exploding_pubsub):
+        jobs.create_job("j4")  # must not raise
+
+        assert self._stored(exploding_pubsub, "j4").state == "uploading"
+
+    def test_the_transition_failure_is_still_raised(self, exploding_pubsub):
+        """The mirror image, so the fixture above cannot pass vacuously: the
+        guarantee is scoped to *publish*. An invalid transition must still
+        raise, which proves these tests observe a real enforcement path rather
+        than an everything-is-swallowed no-op."""
+
+        class _NoSetReached(Exception):
+            pass
+
+        self._seed(exploding_pubsub, "j5", "uploading")
+
+        with pytest.raises(InvalidStateTransition):
+            jobs.transition_job("j5", "completed")  # uploading -> completed is illegal
+
+        assert self._stored(exploding_pubsub, "j5").state == "uploading"
+
+
+class TestAFailedAuthoritativeWriteStillRaises:
+    """The other half of the guarantee, and the one batching would destroy.
+
+    The best-effort rule is scoped to *event delivery*. It is explicitly NOT a
+    licence to swallow any error raised near a job write, because the persisted
+    status key is the source of truth: if its write fails silently the job stops
+    advancing, the server's SSE consumers never see the new state, and nothing
+    retries it.
+
+    This is the specific tripwire for collapsing `set` + `publish` into one
+    Upstash `/pipeline` batch. `Pipeline.exec()` raises `UpstashError` from the
+    first erroring element, so a batch surfaces the publish's failure through
+    the same call that performed the write — and the only way to keep publish
+    non-fatal is a blanket `except` around the batch, which cannot distinguish
+    "publish failed" (harmless) from "the write failed" (catastrophic). These
+    tests assert the distinction is load-bearing, so that refactor has to solve
+    the discrimination rather than route around it.
+    """
+
+    @pytest.fixture
+    def failing_write(self, monkeypatch):
+        """A Redis that reads fine but fails every authoritative write."""
+
+        class _BrokenWrites:
+            def __init__(self) -> None:
+                self.store: dict[str, str] = {}
+                self.publish_attempts = 0
+
+            def get(self, key: str) -> str | None:
+                return self.store.get(key)
+
+            def set(self, key: str, value: str, ex: int | None = None) -> None:
+                raise RuntimeError("redis write down")
+
+            def publish(self, channel: str, message: str) -> int:
+                self.publish_attempts += 1
+                return 1
+
+        fake = _BrokenWrites()
+        monkeypatch.setattr(jobs, "redis", fake)
+        return fake
+
+    @staticmethod
+    def _seed(fake, job_id: str, state: str) -> None:
+        job = JobStatus(job_id=job_id, state=state)
+        info = jobs.PIPELINE_STATES[state]
+        job.stage, job.stage_name, job.progress = info["stage"], info["stage_name"], info["progress"]
+        fake.store[f"{jobs.KEY}{job_id}"] = job.to_redis()
+
+    def test_transition_raises_when_the_write_fails(self, failing_write):
+        self._seed(failing_write, "w1", "uploading")
+
+        with pytest.raises(RuntimeError, match="redis write down"):
+            jobs.transition_job("w1", "scanning")
+
+    def test_update_raises_when_the_write_fails(self, failing_write):
+        self._seed(failing_write, "w2", "analyzing")
+
+        with pytest.raises(RuntimeError, match="redis write down"):
+            jobs.update_job("w2", summary={"form_score": 1.0})
+
+    def test_fail_job_raises_when_the_write_fails(self, failing_write):
+        """Loud failure on the terminal path: a caller must be able to see that
+        the failure was not recorded, rather than assume the job is now failed."""
+        self._seed(failing_write, "w3", "analyzing")
+
+        with pytest.raises(RuntimeError, match="redis write down"):
+            jobs.fail_job("w3", EngineError(code="INTERNAL_ERROR", message="boom"))
+
+        assert failing_write.store[f"{jobs.KEY}w3"] != ""  # untouched by the failed set
+
+    def test_create_job_raises_when_the_write_fails(self, failing_write):
+        with pytest.raises(RuntimeError, match="redis write down"):
+            jobs.create_job("w4")
 
 
 class TestSnapshotCopyCost:
