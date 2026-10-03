@@ -1,7 +1,11 @@
 import { SQL } from 'bun'
 import { afterAll, beforeAll, describe } from 'bun:test'
 
-import { setHistoryStoreConnectionForTests, withHistoryStoreOrThrow } from '../src/lib/historyStore'
+import {
+  ensureInitialized,
+  setHistoryStoreConnectionForTests,
+  withHistoryStoreOrThrow,
+} from '../src/lib/historyStore'
 
 // ── Live-Postgres suites: which database, and how the store reaches it ────────
 // A suite gated on `Boolean(process.env.DATABASE_URL)` is gated on the LIVE Neon
@@ -124,6 +128,23 @@ export const useLiveTestDb = (opts?: {
       db = new SQL(url)
       restore = setHistoryStoreConnectionForTests(db)
     }
+    // Create the schema before seeding, ALWAYS — and not only in the already-wired
+    // branch, which is the subtle part.
+    //
+    // `seed` routinely starts with a `delete from <table>`, and in the swapped
+    // wiring `withDb` hands it the RAW connection, which does not run DDL. So on a
+    // genuinely fresh database the seed's first statement raised
+    // `relation "users" does not exist` and the suite failed — while passing on
+    // any developer machine whose database another test file had already
+    // initialised. It only reached CI because file order decided whether some
+    // earlier file happened to create the schema first, and adding two live files
+    // early in the alphabet shifted that order.
+    //
+    // That is the same class as the two traps this module already documents:
+    // a green run that was measuring something other than what it claimed. Here
+    // the honest reading is that these suites had a hidden inter-file dependency
+    // on someone else's DDL, and the fix is to not have one.
+    await ensureInitialized()
     await withDb(opts?.seed)
   })
 
