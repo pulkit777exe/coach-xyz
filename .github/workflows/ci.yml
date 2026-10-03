@@ -50,7 +50,24 @@ jobs:
   server:
     name: server (Bun)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Raised from 25 on 2026-10-03, and the distinction matters: this is the JOB's
+    # budget, not a test's. The suite spawns one fresh `bun` process per probe case
+    # (~57 across the scope suites alone), and on a GitHub runner those spawns
+    # intermittently take ~10s each instead of the ~0.9s median measured on a
+    # laptop — the bounded `PROBE_TIMEOUT_MS` fires, SIGTERM lets the child exit
+    # cleanly so the assertions still pass, and the suite finishes green while
+    # spending ~10 minutes waiting. 57 x 10s is inside a healthy run, and the old
+    # 25-minute job budget killed the job at 24m45s on a run whose tests were
+    # passing.
+    #
+    # This is deliberately NOT a raise of `--timeout` or `PROBE_TIMEOUT_MS`. Those
+    # govern how long ONE test waits; raising them would make a genuine wedge cost
+    # more, which is the wrong direction. The job budget only decides whether a
+    # slow-but-passing suite gets to finish. The underlying slowness is still
+    # unexplained and still CI-only — see the ledger entry — so if this number has
+    # to be raised again, that is the signal to go and find it rather than to keep
+    # buying headroom.
+    timeout-minutes: 45
     # Ephemeral Postgres: TEST_DATABASE_URL-gated suites (student delete,
     # offboarding, archive, data-rights, scope SQL) skip without it — the
     # service keeps them green in CI instead of silently skipped. PERF_*
