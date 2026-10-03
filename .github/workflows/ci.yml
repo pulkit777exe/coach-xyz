@@ -96,15 +96,45 @@ jobs:
         working-directory: server
         run: bun run lint
 
-      - name: Test
+      # `bun run test`, never bare `bun test` — the script's flags are the
+      # contract and re-spelling the command here silently drops both:
+      # --timeout 30000 (Bun's default is 5s, which kills the probe-spawning
+      # tests mid-flight) and --isolate (a mock.module in one file otherwise
+      # replaces that module for every file after it, so the suite's result
+      # depends on readdir order — alphabetical here, scrambled on the runner).
+      #
+      # The skip tally is asserted in the SAME step, off the same run, because a
+      # skipped test is not a failing test — and that is exactly why 43 of them
+      # survived here for months. Ten live-Postgres suites gated on
+      # `Boolean(process.env.DATABASE_URL)` — the LIVE Neon URL, which this
+      # workflow deliberately leaves unset — so every run reported green while the
+      # live-SQL scope enforcement never executed once. Nothing inside the suite
+      # can catch that, because a skip is a legitimate outcome; only the tally
+      # can. `TEST_DATABASE_URL` is set above, so 0 is the honest number. If a
+      # skip is ever genuinely correct, fix the gate rather than raising this
+      # count — it is pinned here BECAUSE it was silently wrong once already.
+      #
+      # `set -o pipefail` so the step still fails on a non-zero test exit; without
+      # it the pipe into `tee` would discard the status and a red suite would
+      # pass this step. The exit-code check is kept explicit because that is the
+      # one thing a reader cannot infer.
+      - name: Test (and assert nothing is skipped)
         working-directory: server
-        # `bun run test`, never bare `bun test` — the script's flags are the
-        # contract and re-spelling the command here silently drops both:
-        # --timeout 30000 (Bun's default is 5s, which kills the probe-spawning
-        # tests mid-flight) and --isolate (a mock.module in one file otherwise
-        # replaces that module for every file after it, so the suite's result
-        # depends on readdir order — alphabetical here, scrambled on the runner).
-        run: bun run test
+        run: |
+          set -o pipefail
+          bun run test 2>&1 | tee /tmp/server-test.log
+          # Strip ANSI first. Bun disables colour when stdout is not a TTY, and
+          # the pipe into `tee` guarantees that here — but an assertion that
+          # silently passes on a colourised summary is precisely the failure this
+          # step exists to catch, so it must not depend on that holding.
+          sed -e 's/\x1b\[[0-9;]*m//g' /tmp/server-test.log > /tmp/server-test.plain.log
+          skipped=$(grep -oE '[0-9]+[[:space:]]+skip\b' /tmp/server-test.plain.log | grep -oE '[0-9]+' | head -1)
+          skipped=${skipped:-0}
+          if [ "$skipped" -ne 0 ]; then
+            echo "::error::$skipped tests skipped in CI. Every suite must run against the ephemeral Postgres; a skip means a gate is reading the wrong variable — see the DATABASE_URL entry in AGENTS.md."
+            exit 1
+          fi
+          echo "0 skipped — full coverage"
 
   web-next:
     name: web-next (Next.js)
