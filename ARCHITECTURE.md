@@ -249,7 +249,7 @@ coach-xyz/
 │   │   ├── config.py          # Engine configuration constants + ENGINE_VERSION
 │   │   ├── logging_config.py  # Structured logging setup
 │   │   └── errors.py          # Error types hierarchy
-│   ├── tests/                 # pytest suite (289 tests)
+│   ├── tests/                 # pytest suite (343 tests)
 │   └── requirements.txt       # Python dependencies (single runtime manifest — pyproject is tooling-only)
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -753,7 +753,7 @@ Retention scheduling lives in `lib/retention.ts` (`startRetentionSweep`/`stopRet
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` `toCSVString` (OWASP formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` `scheduleMonthWindow`.
-- Web test suite: 269 tests / 25 files; server 902 pass / 0 skip / 0 fail — 902 tests across 83 files (`bun test --timeout 30000 --isolate`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-10-02. These are current-worktree counts; the event-transport work they used to exclude is now committed (`lib/notificationCreate.ts` is the leaf seam, `notifications.ts` re-exports from it).
+- Web test suite: 332 tests / 28 files; server 986 pass / 0 skip / 0 fail — 986 tests across 91 files (`bun test --timeout 30000 --isolate`, live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt); both re-confirmed 2026-10-03, engine 343 on the pinned 3.12 (process exits cleanly, checked under `timeout`). These are current-worktree counts; the event-transport work they used to exclude is now committed (`lib/notificationCreate.ts` is the leaf seam, `notifications.ts` re-exports from it).
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -846,9 +846,9 @@ None outstanding. The section's only entry — env-gated notifications DB integr
 | Local storage default, S3 optional | `engine/core/storage.py:46-53` (`is_local_backend()`; `STORAGE_BACKEND=s3` switches to the bucket + presigned URLs) |
 | Pipeline states | `engine/core/jobs.py` |
 | Analysis/report event streams | `server/src/routes/jobEvents.ts`, `server/src/routes/aiReports.ts`, `web-next/lib/analysisEvents.ts`; SSE primary + four-request reconciliation cap |
-| Test suite: 289 tests pass (CONFIRMED 2026-10-02) | `cd engine && ./.venv/bin/python -m pytest tests -q` |
-| Test suite: 902 pass / 0 skip / 0 fail — 902 tests across 83 files (CONFIRMED 2026-10-02) | `cd server && bun test --timeout 30000 --isolate` (the package `test` script; measured CI-shaped with `DATABASE_URL` empty and the ephemeral Postgres on `TEST_DATABASE_URL`/`PERF_DATABASE_URL`. Live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt. The committed tree is 902 tests / 83 files (CI `37024952991`)) |
-| Test suite: 269 tests / 25 files (CONFIRMED 2026-10-02) | `cd web-next && bun run test` (vitest) |
+| Test suite: 343 tests pass, process exits cleanly (CONFIRMED 2026-10-03) | `cd engine && ./.venv/bin/python -m pytest tests -q` on the pinned 3.12, run under `timeout` — a printed summary is not enough, see the abandoned-worker note in `AGENTS.md` |
+| Test suite: 986 pass / 0 skip / 0 fail — 986 tests across 91 files (CONFIRMED 2026-10-03) | `cd server && bun test --timeout 30000 --isolate` (the package `test` script; measured CI-shaped with `DATABASE_URL` empty and the ephemeral Postgres on `TEST_DATABASE_URL`/`PERF_DATABASE_URL`. Live DB checks run when `DATABASE_URL` is reachable — see §10 Tech Debt. This is a worktree measurement; the previous stamp's committed-tree cross-check, CI `37024952991`, was at the old 902 / 83 files, so read the pair off CI before trusting either) |
+| Test suite: 332 tests / 28 files (CONFIRMED 2026-10-03) | `cd web-next && bun run test` (vitest) |
 | Sole DDL owner | `rg -rniE "create table|create index" server/src` → only `lib/historyStore.ts` |
 | Error/status parity (all three layers) | `server/tests/errors.test.ts` (32) vs `engine/tests/test_errors.py` + `engine/tests/test_api_errors.py` (registry `STATUS_BY_CODE`/`RETRYABLE_BY_CODE`) |
 | New contract tests (2026-09-24 candidates + logging) | `server/tests/{historyStore,identityGuards,analysisAdmission,queue,redisUrl,sse,transcript,chatHistoryEngine,logger}.test.ts`, `engine/tests/test_chat_route.py` |

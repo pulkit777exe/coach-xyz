@@ -132,7 +132,23 @@ jobs:
 
       - name: Dependency audit
         working-directory: web-next
-        run: bun audit
+        # Same policy the image scan already applies (`ignore-unfixed: true` with
+        # severity HIGH,CRITICAL): a finding is fatal when a fix EXISTS, and an
+        # unfixable one must not hold the branch hostage. `bun audit` has no
+        # --ignore-unfixed, so the unfixable set is named explicitly instead.
+        #
+        # GHSA-vfj7-8cjw-p6xm — braces@3.0.3 stack-exhaustion DoS. No fixed
+        # version is published (3.0.3 is the newest; OSV reports no `fixed`
+        # event), so `bun audit fix` cannot clear it. It is reached only as
+        # eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch,
+        # i.e. ESLint's own glob matching: a devDependency that never reaches the
+        # browser bundle or the server runtime.
+        #
+        # DELETE THIS FLAG as soon as braces ships a fix — that is the whole
+        # condition, not a date. Named per-GHSA rather than by severity so any
+        # OTHER high or critical advisory still fails the job, and the step's
+        # output reports "1 ignored" rather than hiding it.
+        run: bun audit --ignore=GHSA-vfj7-8cjw-p6xm
 
       - name: Type check
         working-directory: web-next

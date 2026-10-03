@@ -164,18 +164,20 @@ Role enforcement lives in the server guard; the UI gates (`app/dashboard/layout.
 ## Test suites
 
 ```bash
-cd engine   && .venv/bin/python -m pytest tests/ -q   # 289 tests
+cd engine   && .venv/bin/python -m pytest tests/ -q   # 343 tests
 cd server   && bun run test                          # = bun test --timeout 30000 --isolate
-                                                       # 902 pass / 0 skip, 902 tests / 83 files
-cd web-next && bun run test                          # 269 tests / 25 files (vitest)
+                                                       # 986 pass / 0 skip, 986 tests / 91 files
+cd web-next && bun run test                          # 332 tests / 28 files (vitest)
 ```
 
-These counts are for the current worktree (re-confirmed 2026-10-02). The server suite runs under the
+These counts are for the current worktree (re-confirmed 2026-10-03). The server suite runs under the
 flags its `package.json` declares (`bun test --timeout 30000 --isolate`) — run the script, not bare
 `bun test`, or probe-spawning files inherit Bun's 5s default and fail on a runner that never hung. It
 was measured CI-shaped (`DATABASE_URL` empty, ephemeral Postgres on `TEST_DATABASE_URL`); with a
-reachable `DATABASE_URL` the live-Postgres suites run instead of skipping. The committed server tree is
-~888 tests / 81 files — the difference is one untracked test file and one edited test file.
+reachable `DATABASE_URL` the live-Postgres suites run instead of skipping, so read the two together
+before comparing a local run against these numbers. The committed tree is a separate measurement — read
+it off a CI run rather than assuming it matches, since a session's uncommitted test files are exactly
+what makes the two drift.
 
 In `web-next` the suite is vitest, so it is `bun run test` and **not** `bun test`, which would invoke
 Bun's own test runner over vitest specs.
