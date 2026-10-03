@@ -78,3 +78,6 @@ ehthumbs.db
 *.analyzed.mp4
 coach0
 .vercel
+
+# pytest-cov writes this next to the package when --cov-report= not given a path
+.coverage
