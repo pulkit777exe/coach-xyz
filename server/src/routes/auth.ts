@@ -13,7 +13,12 @@ import { getJob } from '../lib/jobs'
 import { pickInt } from '../lib/uuid'
 import { buildError } from '../lib/errors'
 import { logger } from '../lib/logger'
-import { serviceGuard, SERVICE_HEADERS, serviceGuardEnabled, verifyServiceIdentity } from '../lib/serviceGuard'
+import {
+  serviceGuard,
+  SERVICE_HEADERS,
+  serviceGuardEnabled,
+  verifyServiceIdentity,
+} from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 import { accountJobScope, resolveAccountScope } from '../lib/accountScope'
@@ -213,6 +218,20 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'display_name must be a string', false)
     }
 
+    // A write that returns a whole row is also a read, so this response carries
+    // the §5 boundary with it — exactly as the GET of the same resource does 30
+    // lines above. Both branches leak without it: updateAnalysisDisplayName is
+    // `update … returning *`, and the empty-body branch below performs NO write
+    // at all and still answers with the full row. `admin` is deliberately not
+    // entitled either (permissions.ts withholds medical.read from it).
+    const maySee = await resolveMedicalAccess(
+      auth0Id,
+      request.headers.get(SERVICE_HEADERS.verifiedAuth0Id),
+    )
+    const withBoundary = (
+      analysis: NonNullable<Awaited<ReturnType<typeof getUserAnalysisById>>>,
+    ) => (maySee ? analysis : { ...analysis, summary_json: redactWellness(analysis.summary_json) })
+
     if (display_name !== undefined) {
       const analysis = await updateAnalysisDisplayName(auth0Id, jobId, display_name)
       if (!analysis) {
@@ -220,7 +239,7 @@ export default new Elysia()
         return buildError('NOT_FOUND', 'Analysis not found', false)
       }
       set.status = 200
-      return { analysis }
+      return { analysis: withBoundary(analysis) }
     }
 
     const existing = await getUserAnalysisById(auth0Id, jobId)
@@ -229,7 +248,7 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'Analysis not found', false)
     }
     set.status = 200
-    return { analysis: existing }
+    return { analysis: withBoundary(existing) }
   })
   .use(findingsReviewRoutes)
   // Cancel a running analysis. Failing the engine job stops status polling

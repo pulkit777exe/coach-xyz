@@ -43,6 +43,10 @@ const TEAM_COACHES = ['coach', 'head_coach', 'assistant_coach']
 // deliberately lacks team.manage and is denied before scope is consulted.
 const FIXTURE_MANAGERS = ['coach', 'head_coach']
 const ORG_READERS = ['analyst', 'medical']
+// Org-wide callers that ALSO hold team.manage, so a club-wide write being allowed
+// is attributable to scope rather than to the capability check. analyst/medical
+// alone would be refused by the capability gate before scope is consulted.
+const ORG_FIXTURE_MANAGERS = ['admin', 'owner']
 const TEAM_A = '00000000-0000-0000-0000-0000000000a1'
 const TEAM_B = '00000000-0000-0000-0000-0000000000b1'
 
@@ -106,5 +110,70 @@ describe('the team list follows the same policy', () => {
       const { teams } = r.body as { teams: { id: string }[] }
       expect(teams.map((t) => t.id).sort()).toEqual([TEAM_A, TEAM_B].sort())
     }
+  })
+})
+
+// A row with no team belongs to the ORG, and `listMatches`/`listSeasons` keep
+// team-less rows visible to everyone — so authoring one writes into every
+// player's calendar. The guards read `if (teamId && …)`, which short-circuits
+// exactly when there is no team, and seasons had no scope check at all: a
+// team-scoped coach could publish to the whole club by omitting `team_id`.
+// Same rule as `eventTeamWritable` in org/schedule.ts, which names this exact
+// trap. The READ asymmetry is deliberate and asserted unchanged below.
+describe('a club-wide row is an org write, not a team one', () => {
+  test('creating a match with no team is refused for a team coach and writes nothing', async () => {
+    const results = await run('write.createNoTeam', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(403)
+      expect(r.creates).toBe(0)
+    }
+  })
+
+  test('deleting a club-wide match is refused for a team coach and deletes nothing', async () => {
+    const results = await run('write.deleteClub', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(403)
+      expect(r.deletes).toBe(0)
+    }
+  })
+
+  test('creating a season is refused for a team coach — a season has no team at all', async () => {
+    const results = await run('write.createSeason', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(403)
+      expect(r.creates).toBe(0)
+    }
+  })
+
+  test('deleting a season is refused for a team coach', async () => {
+    const results = await run('write.deleteSeason', FIXTURE_MANAGERS)
+    for (const r of results) {
+      expect(r.status).toBe(403)
+      expect(r.deletes).toBe(0)
+    }
+  })
+
+  test('an org-wide caller is unaffected by all four', async () => {
+    // The negative direction: a cap that refuses everyone would pass the four
+    // tests above, so prove the org still authors club-wide rows.
+    for (const [probeCase, counter] of [
+      ['write.createNoTeam', 'creates'],
+      ['write.deleteClub', 'deletes'],
+      ['write.createSeason', 'creates'],
+      ['write.deleteSeason', 'deletes'],
+    ] as const) {
+      const results = await run(probeCase, ORG_FIXTURE_MANAGERS)
+      for (const r of results) {
+        expect(r.status).not.toBe(403)
+        expect(r[counter]).toBe(1)
+      }
+    }
+  })
+
+  test('the READ is unchanged: a club-wide match stays visible to a team coach', async () => {
+    // The asymmetry is the point — visible to everyone, authorable by the org.
+    const [coach] = await run('read.list', TEAM_COACHES)
+    const { matches } = coach!.body as { matches: { id: string; team_id: string | null }[] }
+    expect(matches.some((m) => m.team_id === null)).toBe(true)
   })
 })

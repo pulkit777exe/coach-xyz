@@ -17,6 +17,7 @@ const TEAM_B = '00000000-0000-0000-0000-0000000000b1'
 const MATCH_A = '00000000-0000-0000-0000-0000000000a2'
 const MATCH_B = '00000000-0000-0000-0000-0000000000b2'
 const MATCH_CLUB = '00000000-0000-0000-0000-0000000000c9'
+const SEASON_CLUB = '00000000-0000-0000-0000-0000000000ca'
 
 const roleTokens = (process.env.COMPETE_SCOPE_ROLES ?? '')
   .split(',')
@@ -89,9 +90,29 @@ mock.module('../src/lib/audit', () => ({
 }))
 
 mock.module('../src/lib/orgData', () => ({
-  listSeasons: async () => [],
-  createSeason: async () => ({}),
-  deleteSeason: async () => true,
+  listSeasons: async () => [
+    {
+      id: SEASON_CLUB,
+      org_auth0_id: ORG_ID,
+      name: 'Spring',
+      starts_on: '2026-03-01',
+      ends_on: null,
+    },
+  ],
+  createSeason: async () => {
+    creates += 1
+    return {
+      id: SEASON_CLUB,
+      org_auth0_id: ORG_ID,
+      name: 'Spring',
+      starts_on: '2026-03-01',
+      ends_on: null,
+    }
+  },
+  deleteSeason: async (_orgAuth0Id: string, id: string) => {
+    deletes += 1
+    return id === SEASON_CLUB
+  },
   listMatches: async (_orgAuth0Id: string, opts: { teamIds?: string[] } = {}) => {
     // Mirror the SQL scope rule: a team-less match is a club fixture and stays
     // visible, so an assertion on the club row proves the filter is not a
@@ -144,6 +165,33 @@ const CASES: Record<string, Case> = {
     path: `/api/org/${orgPath}/matches/${MATCH_B}`,
   },
   'read.teams': { route: 'teams', method: 'GET', path: `/api/org/${orgPath}/teams` },
+  // Club-wide writes. A match with no team_id, and a season (which has no
+  // team_id at all), belong to the org — `listMatches`/`listSeasons` keep
+  // team-less rows visible to everyone, so authoring one writes into every
+  // player's calendar. These four existed only as reads before; the guards read
+  // `if (teamId && …)`, which short-circuits exactly when there is no team.
+  'write.createNoTeam': {
+    route: 'compete',
+    method: 'POST',
+    path: `/api/org/${orgPath}/matches`,
+    body: { opponent: 'Rivals', match_on: '2026-03-01' },
+  },
+  'write.deleteClub': {
+    route: 'compete',
+    method: 'DELETE',
+    path: `/api/org/${orgPath}/matches/${MATCH_CLUB}`,
+  },
+  'write.createSeason': {
+    route: 'compete',
+    method: 'POST',
+    path: `/api/org/${orgPath}/seasons`,
+    body: { name: 'Spring', starts_on: '2026-03-01' },
+  },
+  'write.deleteSeason': {
+    route: 'compete',
+    method: 'DELETE',
+    path: `/api/org/${orgPath}/seasons/${SEASON_CLUB}`,
+  },
 }
 
 const probe = CASES[probeCase]

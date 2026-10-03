@@ -47,6 +47,16 @@ export default new Elysia()
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
     }
+    // A season carries no team_id: it belongs to the org, and `listSeasons`
+    // deliberately keeps team-less rows org-visible (a season is hidden only
+    // when it holds a match and none of them is the caller's). So the same
+    // org-wide rule the match routes apply to a club-wide fixture applies here,
+    // and it used to be missing entirely — `team.manage` alone let any
+    // team-scoped coach create one. Same rule as `eventTeamWritable`.
+    if (!caller.studentScope.all) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing seasons requires org-wide scope', false)
+    }
     const raw = (body ?? {}) as Record<string, unknown>
     if (raw.starts_on !== undefined && raw.starts_on !== null && !isDate(raw.starts_on)) {
       set.status = 400
@@ -79,6 +89,12 @@ export default new Elysia()
     if (!hasPermission(role, 'team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
+    }
+    // Same org-wide rule as the create path: a season is an org-level object, so
+    // deleting one is an org-level write however it was reached.
+    if (!caller.studentScope.all) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Managing seasons requires org-wide scope', false)
     }
     const removed = await deleteSeason(auth0Id, id)
     if (!removed) {
@@ -131,10 +147,22 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'team not found in this organization', false)
     }
     // team.manage is a capability, not a scope: it says a role may manage
-    // fixtures, not another team's.
-    if (teamId && !caller.canAccessTeam(teamId)) {
+    // fixtures, not another team's — and not the CLUB's either. Omitting
+    // `team_id` used to short-circuit this check entirely (`teamId && …`), so a
+    // team-scoped coach could publish to everyone's calendar simply by leaving
+    // it out. Same rule as `eventTeamWritable` in org/schedule.ts: a club-wide
+    // row belongs to the org, so only an org-wide caller may author one. The
+    // READ asymmetry is deliberate and unchanged — `listMatches` still shows
+    // team-less fixtures to everyone.
+    if (teamId ? !caller.canAccessTeam(teamId) : !caller.studentScope.all) {
       set.status = 403
-      return buildError('FORBIDDEN', 'Managing matches requires access to that team', false)
+      return buildError(
+        'FORBIDDEN',
+        teamId
+          ? 'Managing matches requires access to that team'
+          : 'Managing club-wide matches requires org-wide scope',
+        false,
+      )
     }
     const match = await createMatch(auth0Id, {
       team_id: teamId,
@@ -170,9 +198,18 @@ export default new Elysia()
       set.status = 404
       return buildError('NOT_FOUND', 'Match not found', false)
     }
-    if (target.team_id && !caller.canAccessTeam(target.team_id)) {
+    // Same org-wide rule as the create path above, applied to the TARGET row
+    // rather than to a submitted id: a team-less fixture is the club's, and
+    // `target.team_id && …` let any team coach delete one by id.
+    if (target.team_id ? !caller.canAccessTeam(target.team_id) : !caller.studentScope.all) {
       set.status = 403
-      return buildError('FORBIDDEN', 'Managing matches requires access to that team', false)
+      return buildError(
+        'FORBIDDEN',
+        target.team_id
+          ? 'Managing matches requires access to that team'
+          : 'Managing club-wide matches requires org-wide scope',
+        false,
+      )
     }
     const removed = await deleteMatch(auth0Id, id)
     if (!removed) {
