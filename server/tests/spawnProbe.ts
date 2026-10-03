@@ -81,7 +81,16 @@ export const runProbeProcess = async (opts: {
   })
   const stdout = child.stdout ?? ''
   const stderr = child.stderr ?? ''
-  const killed = child.signal === 'SIGKILL'
+  // Detect the budget on EITHER signal, because they are not guaranteed together.
+  // `spawnSync` reports a timeout as `signal: 'SIGKILL'` AND
+  // `error.code: 'ETIMEDOUT'` (verified on bun 1.4.0/1.4.2), but `signal` is the
+  // field that describes how the child died and `error` the field that describes
+  // why the call returned — and the SIGKILL can be *delayed indefinitely* if the
+  // child is in uninterruptible I/O, which is exactly what a `bun` process
+  // reading a cold module graph off a runner's disk looks like. Checking both
+  // means a timeout is still named as one when only the error carries it.
+  const errCode = (child.error as { code?: string } | undefined)?.code
+  const killed = child.signal === 'SIGKILL' || errCode === 'ETIMEDOUT'
   if (killed) {
     throw new Error(
       `probe did not finish within ${timeoutMs}ms and was killed: ${label}\n` +
