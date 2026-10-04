@@ -108,10 +108,12 @@ export default new Elysia()
     }
 
     const owner = await getUserByAuth0Id(auth0Id)
-    const coachName = escapeHtml(owner?.name ?? 'Your coach')
-    const teamName = escapeHtml(
-      `${owner?.nickname || owner?.name || 'Your'} Team`.replace(/\.\s*$/, '') + "'s Team",
-    )
+    // RAW, not escaped. The templates own escaping, because only they know which
+    // of their uses is HTML and which is plain text — and they use `coachName` in
+    // the subject as well. Pre-escaping here put `&amp;` into every subject line.
+    const coachName = owner?.name ?? 'Your coach'
+    const teamName =
+      `${owner?.nickname || owner?.name || 'Your'} Team`.replace(/\.\s*$/, '') + "'s Team"
 
     if (!emailConfigured()) {
       set.status = 501
@@ -221,7 +223,7 @@ export default new Elysia()
     if (report.student_id) {
       const student = await getStudent(auth0Id, report.student_id)
       if (student) {
-        studentName = escapeHtml(student.full_name)
+        studentName = student.full_name
         if (!recipient && student.email) recipient = student.email
       }
     }
@@ -236,17 +238,12 @@ export default new Elysia()
 
     const content = (report.content_json ?? {}) as { summary?: string | null }
     const summary = content.summary
-      ? escapeHtml(content.summary).slice(0, 600)
+      ? content.summary.slice(0, 600)
       : 'Open the report to view the full breakdown.'
 
     const reportUrl = `${FRONTEND_URL}/dashboard/reports/${report_id}`
     try {
-      const { subject, html, text } = reportEmail(
-        studentName,
-        escapeHtml(report.title),
-        summary,
-        reportUrl,
-      )
+      const { subject, html, text } = reportEmail(studentName, report.title, summary, reportUrl)
       const sent = await sendEmail({ to: recipient, subject, html, text })
       auditRoute(request, auth0Id, 'report.exported', 'report', report_id, { to: recipient })
       set.status = 200
@@ -322,13 +319,18 @@ export default new Elysia()
     }
 
     const owner = await getUserByAuth0Id(auth0Id)
-    const teamName = escapeHtml(
-      `${owner?.nickname || owner?.name || 'Your'} Team`.replace(/\.\s*$/, '') + "'s Team",
-    )
-    const periodLabel = escapeHtml(
-      [from ? `from ${from}` : '', to ? `to ${to}` : ''].filter(Boolean).join(' ') || 'all time',
-    )
+    // RAW again — the template escapes these for its HTML and keeps them verbatim
+    // for its subject and text body.
+    const teamName =
+      `${owner?.nickname || owner?.name || 'Your'} Team`.replace(/\.\s*$/, '') + "'s Team"
+    const periodLabel =
+      [from ? `from ${from}` : '', to ? `to ${to}` : ''].filter(Boolean).join(' ') || 'all time'
 
+    // The ONE place escaping legitimately stays at the caller: this is genuinely
+    // HTML being built here (a `<tbody>`'s worth of `<tr>`s), so each cell is
+    // escaped as it is assembled and `attendanceEmail` inserts the result as
+    // markup. A blanket "escape every argument" in the template would show the
+    // coach a page of visible angle brackets.
     const rowsHtml = records
       .map(
         (r) => `

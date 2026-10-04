@@ -59,6 +59,19 @@ export async function sendEmail(args: SendEmailArgs): Promise<MailResult> {
 
 // ── Template helpers ────────────────────────────────────────────────────────
 
+/**
+ * Chrome around a template body.
+ *
+ * `title` is escaped HERE, at the sink, because this is the one place the
+ * subject is used as markup: it becomes the visible `<h1>`. It is safe today
+ * only by accident — callers pre-escaped before calling, so the value happened
+ * to arrive already encoded. That is the whole fragility of escaping at the
+ * caller: this `<h1>` is one refactor away from being injectable, and nothing
+ * would fail. Note the asymmetry this creates deliberately — the RETURNED
+ * `subject` field stays raw for plain text while the `<h1>` is escaped, so the
+ * same input is encoded in one place and not the other. That is correct: the
+ * question "is this text or markup?" has no answer at the call site.
+ */
 const wrap = (title: string, inner: string) => `
 <!doctype html>
 <html>
@@ -69,7 +82,7 @@ const wrap = (title: string, inner: string) => `
         <span style="font-weight:700;font-size:15px;">CoachXYZ</span>
       </div>
       <div style="background:#ffffff;border:1px solid #e8e0d5;border-radius:14px;padding:28px;">
-        <h1 style="font-size:20px;margin:0 0 12px;">${title}</h1>
+        <h1 style="font-size:20px;margin:0 0 12px;">${escapeHtml(title)}</h1>
         ${inner}
       </div>
       <p style="font-size:12px;color:#7a6e62;margin-top:20px;text-align:center;">
@@ -80,35 +93,64 @@ const wrap = (title: string, inner: string) => `
 </html>
 `
 
-export const inviteEmail = (coachName: string, teamName: string, inviteUrl: string) => {
-  const subject = `${coachName} invited you to ${teamName} on CoachXYZ`
+/**
+ * Build an email body.
+ *
+ * `esc` is the value already escaped for HTML; `raw` is the ORIGINAL. Passing
+ * both is the whole point of this helper: `subject` and `text` are plain text
+ * and must carry the value verbatim, while `inner` is markup and must not. When
+ * the templates escaped nothing and relied on callers to pre-escape, the escaped
+ * value leaked into the subject line, so a coach named `Tom & Jerry` produced
+ * "Tom &amp; Jerry invited you to ..." — visibly wrong in a mail client, in a
+ * notification list, and in any search over sent mail.
+ *
+ * Escaping belongs at the sink, where the distinction between "this is HTML" and
+ * "this is text" is actually knowable. The caller cannot know which of a
+ * template's uses is which.
+ */
+type Escaped = { esc: string; raw: string }
+
+/** Pair a caller-supplied value with its HTML-escaped form. */
+const value = (raw: string): Escaped => ({ esc: escapeHtml(raw), raw })
+
+export const inviteEmail = (coachNameArg: string, teamNameArg: string, inviteUrlArg: string) => {
+  const coachName = value(coachNameArg)
+  const teamName = value(teamNameArg)
+  // A URL needs the same treatment as any other attribute value: `&` in a query
+  // string becomes `&amp;`, which is correct HTML and decodes back to `&`.
+  const inviteUrl = value(inviteUrlArg)
+  const subject = `${coachName.raw} invited you to ${teamName.raw} on CoachXYZ`
   const inner = `
-    <p>You've been invited to join <strong>${teamName}</strong> on CoachXYZ.</p>
+    <p>You've been invited to join <strong>${teamName.esc}</strong> on CoachXYZ.</p>
     <p>Create your account to view your profile, video analyses, attendance and reports.</p>
-    <a href="${inviteUrl}"
+    <a href="${inviteUrl.esc}"
        style="display:inline-block;margin-top:12px;background:#BCF56C;color:#433B34;font-weight:600;font-size:14px;padding:10px 18px;border-radius:999px;text-decoration:none;">
       Accept invite
     </a>
-    <p style="color:#7a6e62;font-size:13px;margin-top:20px;">Or paste this link: ${inviteUrl}</p>
+    <p style="color:#7a6e62;font-size:13px;margin-top:20px;">Or paste this link: ${inviteUrl.esc}</p>
   `
   return {
     subject,
     html: wrap(subject, inner),
-    text: `${coachName} invited you to ${teamName} on CoachXYZ. Create your account here: ${inviteUrl}`,
+    text: `${coachName.raw} invited you to ${teamName.raw} on CoachXYZ. Create your account here: ${inviteUrl.raw}`,
   }
 }
 
 export const reportEmail = (
-  studentName: string,
-  reportTitle: string,
-  summary: string,
-  reportUrl: string,
+  studentNameArg: string,
+  reportTitleArg: string,
+  summaryArg: string,
+  reportUrlArg: string,
 ) => {
-  const subject = `Your report: ${reportTitle}`
+  const studentName = value(studentNameArg)
+  const reportTitle = value(reportTitleArg)
+  const summary = value(summaryArg)
+  const reportUrl = value(reportUrlArg)
+  const subject = `Your report: ${reportTitle.raw}`
   const inner = `
-    <p><strong>${studentName}</strong>, a new report is ready for you.</p>
-    ${summary ? `<div style="background:#f2ede6;border-radius:10px;padding:14px 16px;margin:14px 0;font-size:14px;line-height:1.6;">${summary}</div>` : ''}
-    <a href="${reportUrl}"
+    <p><strong>${studentName.esc}</strong>, a new report is ready for you.</p>
+    ${summary.raw ? `<div style="background:#f2ede6;border-radius:10px;padding:14px 16px;margin:14px 0;font-size:14px;line-height:1.6;">${summary.esc}</div>` : ''}
+    <a href="${reportUrl.esc}"
        style="display:inline-block;background:#BCF56C;color:#433B34;font-weight:600;font-size:14px;padding:10px 18px;border-radius:999px;text-decoration:none;">
       View report
     </a>
@@ -116,7 +158,7 @@ export const reportEmail = (
   return {
     subject,
     html: wrap(subject, inner),
-    text: `Your report "${reportTitle}" is ready. ${reportUrl}`,
+    text: `Your report "${reportTitle.raw}" is ready. ${reportUrl.raw}`,
   }
 }
 
@@ -127,9 +169,16 @@ export const attendanceEmail = (
   present: number,
   total: number,
 ) => {
-  const subject = `Attendance sheet — ${teamName} (${periodLabel})`
+  // `teamName` and `periodLabel` are plain values and are escaped for the HTML.
+  // `rowsHtml` is NOT: the caller builds a `<tbody>`'s worth of rows and escapes
+  // each cell itself, so escaping it here would show the coach a wall of angle
+  // brackets. That asymmetry is why the fix is not a blanket "escape every
+  // string argument".
+  const team = value(teamName)
+  const period = value(periodLabel)
+  const subject = `Attendance sheet — ${team.raw} (${period.raw})`
   const inner = `
-    <p>Attendance for <strong>${teamName}</strong> — ${periodLabel}.</p>
+    <p>Attendance for <strong>${team.esc}</strong> — ${period.esc}.</p>
     <p><strong>${present}</strong> of <strong>${total}</strong> recorded sessions attended.</p>
     <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;">
       <thead>
@@ -147,7 +196,7 @@ export const attendanceEmail = (
   return {
     subject,
     html: wrap(subject, inner),
-    text: `Attendance for ${teamName}: ${present}/${total} sessions attended.`,
+    text: `Attendance for ${team.raw}: ${present}/${total} sessions attended.`,
   }
 }
 
