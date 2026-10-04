@@ -74,7 +74,7 @@ beforeEach(() => {
   transcriptLoads.length = 0
   engineCalls = []
   process.env.SERVICE_TOKEN = 'test-service-token'
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
     engineCalls.push(String(input))
     return new Response('data: {"done":true}\n\n', {
       status: 200,
@@ -88,6 +88,8 @@ afterEach(() => {
   delete process.env.SERVICE_TOKEN
 })
 
+type Deps = Parameters<typeof chat.chatRoutes>[0]
+
 const post = async (
   deps: {
     getJob?: (id: string) => Promise<{ engine_job_id: string; owner_ids?: string[] } | null>
@@ -99,7 +101,10 @@ const post = async (
   // `chatRoutes` declares `/api/chat/stream` itself, so mounting the plugin is
   // enough — no second route declaration here, or the test would be exercising a
   // route the app does not have.
-  const app = new Elysia().use(chat.chatRoutes(deps))
+  // The fakes below are deliberately partial — they carry only the fields each case
+  // is about — so they are cast at this one seam rather than widening the route's
+  // own signature to accommodate a test.
+  const app = new Elysia().use(chat.chatRoutes(deps as unknown as Deps))
   const res = await app.handle(
     new Request('http://localhost/api/chat/stream', {
       method: 'POST',
@@ -198,8 +203,8 @@ test('a genuinely anonymous job is still readable by a bearer, or the feature is
 test('the history sent to the model carries only user and assistant turns', async () => {
   // `resolveChatContext` filters before handing the transcript over. A leaked
   // system row is the same class as a leaked conversation: it leaves the process.
-  let sent: { conversation_history?: { role: string }[] } | null = null
-  globalThis.fetch = (async (_i: RequestInfo | URL, init?: RequestInit) => {
+  let sent: unknown = null
+  globalThis.fetch = (async (_i: Parameters<typeof fetch>[0], init?: RequestInit) => {
     sent = JSON.parse(String(init?.body ?? '{}'))
     return new Response('data: {"done":true}\n\n', {
       status: 200,

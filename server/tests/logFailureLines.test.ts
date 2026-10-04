@@ -186,7 +186,7 @@ describe('markEngineJobFailed: engine_job_failed_not_delivered', () => {
     // forever) visible.
     globalThis.fetch = (async () => {
       throw new TypeError('fetch failed')
-    }) as typeof fetch
+    }) as unknown as typeof fetch
 
     await engine.markEngineJobFailed('engine-job-1', 'Gemini rejected the clip', 'INVALID_REQUEST', false)
 
@@ -202,7 +202,7 @@ describe('markEngineJobFailed: engine_job_failed_not_delivered', () => {
   test('a NON-connectivity error still propagates — swallowing it would hide a real bug', async () => {
     globalThis.fetch = (async () => {
       throw new Error('a bug in our own request construction')
-    }) as typeof fetch
+    }) as unknown as typeof fetch
 
     // The counterpart to the case above, and the reason `isConnectivityError`
     // exists: if every failure were swallowed, a malformed payload would look
