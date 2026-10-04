@@ -62,15 +62,56 @@ import { describe, expect, it, vi } from 'vitest'
 import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { relative } from 'node:path'
-import {
-  createElement,
-  type ComponentType,
-  type ReactElement,
-  type ReactNode,
-} from 'react'
+import { createElement, type ComponentType, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { PreferencesProvider } from '@/lib/preferences'
+
+// ── Inlining Base UI's portal ─────────────────────────────────────────────────
+//
+// 9ui's `DialogContent` wraps its children in Base UI's `DialogPortal`, which has
+// NO server-render output at all — a portal needs a document to portal into. That
+// put seven dialogs outside the sweep entirely, and `keepMounted` does not help:
+// verified directly, both a plain portal and a `keepMounted` one render as nothing,
+// with `aria-expanded` stuck at `false` on an `open` dialog.
+//
+// Mocking `Portal`, `Popup` and `Backdrop` to plain wrappers puts the CONTENT back
+// into the markup, which is what the name check needs. Measured effect: before,
+// `StudentFormDialog` rendered 0 bytes; after, 17 292 bytes with 10 inputs and 14
+// labels. Nothing is lost for this assertion — a control's accessible name does not
+// depend on whether it is portal-rendered — and the portal mechanics themselves are
+// out of scope, which is what the existing source-level greps are for.
+//
+// This is a deliberate fidelity reduction and is named as one: the sweep checks the
+// CONTENT of a dialog, not that Base UI mounts it into document.body. What it
+// cannot catch is a defect in the portal wiring itself.
+vi.mock('@base-ui/react', async () => {
+  const actual = await vi.importActual<{ Dialog: Record<string, unknown> }>('@base-ui/react')
+  return {
+    ...actual,
+    Dialog: {
+      ...actual.Dialog,
+      Portal: (props: Record<string, unknown>) =>
+        createElement('div', { 'data-swept-portal': '' }, props.children as ReactNode),
+      Popup: (props: Record<string, unknown>) => {
+        const { children, ...rest } = props
+        return createElement('div', { ...rest, 'data-swept-popup': '' }, children as ReactNode)
+      },
+      Backdrop: () => null,
+    },
+  }
+})
+
+/** `next/navigation` throws its "expected an app router to be mounted" invariant. */
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard',
+  useRouter: () => ({ push: () => {}, replace: () => {}, refresh: () => {}, back: () => {} }),
+  useParams: () => ({}),
+  useSelectedLayoutSegments: () => [],
+  useSearchParams: () => new URLSearchParams(),
+  redirect: () => {},
+  notFound: () => {},
+}))
 
 // ── Framework mocks ──────────────────────────────────────────────────────────
 // `next/navigation` hooks throw their "invariant expected an app router to be
@@ -191,7 +232,10 @@ const ENTITIES: Record<string, string> = {
 function decodeEntities(s: string): string {
   return s.replace(/&(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, name: string) => {
     if (name.startsWith('#')) {
-      const code = name[1] === 'x' || name[1] === 'X' ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10)
+      const code =
+        name[1] === 'x' || name[1] === 'X'
+          ? parseInt(name.slice(2), 16)
+          : parseInt(name.slice(1), 10)
       return Number.isFinite(code) ? String.fromCodePoint(code) : match
     }
     return ENTITIES[name.toLowerCase()] ?? match
@@ -241,7 +285,10 @@ export function parseHtml(markup: string): Node {
 
     if (markup.startsWith('</', lt)) {
       const end = findTagEnd(markup, lt)
-      const name = markup.slice(lt + 2, end).trim().toLowerCase()
+      const name = markup
+        .slice(lt + 2, end)
+        .trim()
+        .toLowerCase()
       let walk: Node | null = cur
       while (walk && walk.tag !== name) walk = walk.parent
       if (walk?.parent) cur = walk.parent
@@ -603,8 +650,7 @@ const jobStatus = {
 } as const
 
 /** Wraps a node in the preferences context the calendar and settings read. */
-const withPrefs = (node: ReactElement) =>
-  createElement(PreferencesProvider, null, node)
+const withPrefs = (node: ReactElement) => createElement(PreferencesProvider, null, node)
 
 /**
  * One entry per component file. `render` produces the initial markup a server
@@ -687,9 +733,8 @@ add(
     // ResponsiveContainer is mocked to pass children through (see the mock above);
     // otherwise it renders an empty 0x0 div and the tooltip is never in the markup.
     render: async () => {
-      const { ChartContainer, ChartTooltipContent, ChartLegend } = await import(
-        '@/components/9ui/ui/chart'
-      )
+      const { ChartContainer, ChartTooltipContent, ChartLegend } =
+        await import('@/components/9ui/ui/chart')
       const config = { pace: { label: 'Pace', color: 'var(--chart-1)' } }
       return h(
         ChartContainer as never,
@@ -720,9 +765,8 @@ add(
     // DialogPortal into document.body, which emits nothing in a server render.
     // See header limitation 1.
     render: async () => {
-      const { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogClose } = await import(
-        '@/components/9ui/ui/dialog'
-      )
+      const { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogClose } =
+        await import('@/components/9ui/ui/dialog')
       return h(
         Dialog,
         { defaultOpen: true },
@@ -746,11 +790,7 @@ add(
         DropdownMenu,
         null,
         h(DropdownMenuTrigger, null, 'Account'),
-        h(
-          DropdownMenuContent,
-          null,
-          h(DropdownMenuItem, null, 'Settings'),
-        ),
+        h(DropdownMenuContent, null, h(DropdownMenuItem, null, 'Settings')),
       )
     },
   },
@@ -786,11 +826,7 @@ add(
     // SelectTrigger renders <button role="combobox">; SelectContent is portal-only.
     render: async () => {
       const { Select, SelectTrigger } = await import('@/components/9ui/ui/select')
-      return h(
-        Select,
-        null,
-        h(SelectTrigger, { 'aria-label': 'Theme' }, 'Dark'),
-      )
+      return h(Select, null, h(SelectTrigger, { 'aria-label': 'Theme' }, 'Dark'))
     },
   },
   {
@@ -944,7 +980,10 @@ add(
       return h(
         ReorderList as never,
         {
-          items: [{ id: 'x', label: 'Primary lift' }, { id: 'y', label: 'Accessory' }],
+          items: [
+            { id: 'x', label: 'Primary lift' },
+            { id: 'y', label: 'Accessory' },
+          ],
           getId: (i: { id: string }) => i.id,
           getLabel: (i: { label: string }) => i.label,
           onReorder: noop,
@@ -1120,9 +1159,8 @@ add(
     // Portal-only content: Base UI DialogContent renders into document.body, so
     // only the trigger reaches the markup. The form inside is not swept here.
     render: async () => {
-      const { default: EmailAttendanceDialog } = await import(
-        '@/components/org/EmailAttendanceDialog'
-      )
+      const { default: EmailAttendanceDialog } =
+        await import('@/components/org/EmailAttendanceDialog')
       return h(EmailAttendanceDialog, {
         open: true,
         onOpenChange: noop,
@@ -1205,9 +1243,8 @@ add(
   {
     id: 'components/org/NotificationsSection.tsx',
     render: async () => {
-      const { default: NotificationsSection } = await import(
-        '@/components/org/NotificationsSection'
-      )
+      const { default: NotificationsSection } =
+        await import('@/components/org/NotificationsSection')
       return h(NotificationsSection)
     },
   },
@@ -1238,9 +1275,8 @@ add(
   {
     id: 'components/org/OrganizationSettingsSection.tsx',
     render: async () => {
-      const { default: OrganizationSettingsSection } = await import(
-        '@/components/org/OrganizationSettingsSection'
-      )
+      const { default: OrganizationSettingsSection } =
+        await import('@/components/org/OrganizationSettingsSection')
       return h(OrganizationSettingsSection, { auth0Id: ORG, role: 'owner' })
     },
   },
@@ -1386,20 +1422,17 @@ add(
     // Not a component: a pure function returning `SettingsSection[]`. Its consumer
     // (SettingsPanel) is swept below, and its data shape is pinned by the server
     // contract tests. Rendering it would exercise no markup of its own.
-    skip:
-      'not a component; it exports a pure data function with no JSX',
+    skip: 'not a component; it exports a pure data function with no JSX',
   },
   {
     id: 'components/org/SettingsClient.tsx',
 
-    skip:
-      'same: usePreferences() outside its provider, and it fetches sections on mount',
+    skip: 'same: usePreferences() outside its provider, and it fetches sections on mount',
   },
   {
     id: 'components/org/SettingsPanel.tsx',
 
-    skip:
-      'Element type is invalid: a client-only child resolves to undefined in a server render',
+    skip: 'Element type is invalid: a client-only child resolves to undefined in a server render',
   },
   {
     id: 'components/org/Spinner.tsx',
@@ -1449,8 +1482,7 @@ add(
   {
     id: 'components/org/StudentsClient.tsx',
 
-    skip:
-      'reads a store/context that is undefined until a client effect populates it',
+    skip: 'reads a store/context that is undefined until a client effect populates it',
   },
   {
     id: 'components/org/TeamsClient.tsx',
@@ -1540,8 +1572,7 @@ add(
     id: 'components/AuthHeader.tsx',
     // Server Component (async). Renders directly; reads headers via cookies the
     // caller's layout would normally provide, which is not needed for the markup.
-    skip:
-      'suspends during the server render (a component suspended while responding to synchronous input)',
+    skip: 'suspends during the server render (a component suspended while responding to synchronous input)',
   },
   {
     id: 'components/ChatInput.tsx',
@@ -1653,8 +1684,7 @@ add(
   {
     id: 'components/HeaderClient.tsx',
 
-    skip:
-      'throws reading preferences before its own markup renders (needs the client-side provider and its auth-dependent submenu state)',
+    skip: 'throws reading preferences before its own markup renders (needs the client-side provider and its auth-dependent submenu state)',
   },
   {
     id: 'components/HistoryChat.tsx',
@@ -1880,7 +1910,8 @@ add(
   {
     id: 'components/notifications/NotificationBell.tsx',
     render: async () => {
-      const { default: NotificationBell } = await import('@/components/notifications/NotificationBell')
+      const { default: NotificationBell } =
+        await import('@/components/notifications/NotificationBell')
       return h(NotificationBell)
     },
   },
@@ -1907,9 +1938,7 @@ describe('the sweep parser reads real React markup', () => {
       .map((n) => accessibleName(n, walk(parseHtml(markup))))
 
   it('names a button from its text', () => {
-    expect(names(renderToStaticMarkup(h('button', { type: 'button' }, 'Save')))).toEqual([
-      'Save',
-    ])
+    expect(names(renderToStaticMarkup(h('button', { type: 'button' }, 'Save')))).toEqual(['Save'])
   })
 
   it('names from aria-label, and treats an empty one as absent', () => {
@@ -1927,7 +1956,9 @@ describe('the sweep parser reads real React markup', () => {
     // button, and a screen reader announces "times" — not "Close".
     expect(unnamedInteractive('<button type="button">✕</button>')).toHaveLength(1)
     expect(unnamedInteractive('<button type="button">×</button>')).toHaveLength(1)
-    expect(unnamedInteractive('<button type="button"><span aria-hidden="true">✕</span></button>')).toHaveLength(1)
+    expect(
+      unnamedInteractive('<button type="button"><span aria-hidden="true">✕</span></button>'),
+    ).toHaveLength(1)
     // Short but real content IS announced and IS a name — this must not over-reject.
     expect(unnamedInteractive('<button type="button">2 items</button>')).toHaveLength(0)
     expect(unnamedInteractive('<button type="button">3 of 7</button>')).toHaveLength(0)
@@ -1935,7 +1966,8 @@ describe('the sweep parser reads real React markup', () => {
   })
 
   it('resolves aria-labelledby through the id map, including a multi-id value', () => {
-    const markup = '<h2 id="a">Share</h2><h2 id="b">Analysis</h2><button aria-labelledby="a b">x</button>'
+    const markup =
+      '<h2 id="a">Share</h2><h2 id="b">Analysis</h2><button aria-labelledby="a b">x</button>'
     expect(names(markup)).toEqual(['Share Analysis'])
   })
 
@@ -1971,7 +2003,9 @@ describe('the sweep parser reads real React markup', () => {
 
   it('ignores aria-hidden and inert subtrees as a name source', () => {
     expect(names('<button><span aria-hidden="true">★★★</span>Report</button>')).toEqual(['Report'])
-    expect(unnamedInteractive('<button><span aria-hidden="true">★★★</span></button>')).toHaveLength(1)
+    expect(unnamedInteractive('<button><span aria-hidden="true">★★★</span></button>')).toHaveLength(
+      1,
+    )
     // An inert DESCENDANT is not a name source…
     expect(names('<button><span inert="">★</span>Report</button>')).toEqual(['Report'])
     // …but inert is also a removal from the a11y tree, so an inert element is not
@@ -1994,9 +2028,9 @@ describe('the sweep parser reads real React markup', () => {
   it('keeps sr-only text, which is exposed even though it is visually hidden', () => {
     // sr-only is a CSS class, not aria-hidden — the name still counts. This is the
     // single most likely way to make this sweep wrong in the permissive direction.
-    expect(names('<button><span class="sr-only">Press and hold to confirm</span>Delete</button>')).toEqual([
-      'Press and hold to confirmDelete',
-    ])
+    expect(
+      names('<button><span class="sr-only">Press and hold to confirm</span>Delete</button>'),
+    ).toEqual(['Press and hold to confirmDelete'])
   })
 
   it('skips aria-hidden elements in the sweep itself', () => {
@@ -2015,9 +2049,9 @@ describe('the sweep parser reads real React markup', () => {
 
   it('falls back to title', () => {
     expect(names('<a href="/x"><svg viewBox="0 0 1 1"></svg></a>')).toEqual([''])
-    expect(names('<a href="/x" title="Analysis settings"><svg viewBox="0 0 1 1"></svg></a>')).toEqual(
-      ['Analysis settings'],
-    )
+    expect(
+      names('<a href="/x" title="Analysis settings"><svg viewBox="0 0 1 1"></svg></a>'),
+    ).toEqual(['Analysis settings'])
   })
 
   it('decodes the entities React emits, once, browser-style', () => {
@@ -2044,9 +2078,9 @@ describe('the sweep parser reads real React markup', () => {
   })
 
   it('is not fooled by a comment containing angle brackets', () => {
-    expect(unnamedInteractive('<!-- <button>x</button> --><button aria-label="real">y</button>')).toEqual(
-      [],
-    )
+    expect(
+      unnamedInteractive('<!-- <button>x</button> --><button aria-label="real">y</button>'),
+    ).toEqual([])
   })
 })
 
@@ -2087,10 +2121,9 @@ describe('every interactive element in a rendered component has an accessible na
         return
       }
 
-      expect(
-        outcome.status === 'error' ? outcome.reason : '',
-        `${entry.id} did not render`,
-      ).toBe('')
+      expect(outcome.status === 'error' ? outcome.reason : '', `${entry.id} did not render`).toBe(
+        '',
+      )
       if (outcome.status !== 'rendered') return
 
       expect(
@@ -2117,7 +2150,10 @@ describe('the sweep itself reports its own coverage', () => {
       'a component failed to import or render — fix it or document the skip',
     ).toEqual([])
 
-    const skipped = outcomes.filter((o) => o.status === 'skipped') as { id: string; reason: string }[]
+    const skipped = outcomes.filter((o) => o.status === 'skipped') as {
+      id: string
+      reason: string
+    }[]
     const rendered = outcomes.filter((o) => o.status === 'rendered') as {
       id: string
       interactive: number
@@ -2146,7 +2182,10 @@ describe('the sweep itself reports its own coverage', () => {
       'a component rendered empty markup without being portal-only — its content was never swept',
     ).toEqual([])
     expect(
-      rendered.filter((r) => r.markup.length === 0).map((r) => r.id).sort(),
+      rendered
+        .filter((r) => r.markup.length === 0)
+        .map((r) => r.id)
+        .sort(),
       'the set of portal-only components changed — update PORTAL_ONLY deliberately',
     ).toEqual([...PORTAL_ONLY].sort())
 
@@ -2174,7 +2213,9 @@ describe('the sweep itself reports its own coverage', () => {
     const ids = REGISTRY.map((c) => c.id)
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([])
     // …and each entry has exactly one of render / skip.
-    expect(REGISTRY.filter((c) => Boolean(c.render) === Boolean(c.skip)).map((c) => c.id)).toEqual([])
+    expect(REGISTRY.filter((c) => Boolean(c.render) === Boolean(c.skip)).map((c) => c.id)).toEqual(
+      [],
+    )
   })
 })
 
@@ -2218,12 +2259,14 @@ function componentFiles(): string[] {
  * means, and exactly what a jsdom project would close.
  */
 const PORTAL_ONLY = new Set([
+  // These two still render EMPTY even with the portal inlined, for different
+  // reasons, and both are named rather than dropped:
+  //
+  // AnalysisLinkControl renders its dialog only once an analysis has been linked,
+  // so the closed state has nothing in it — and the fix is a prop, not a mock.
   'components/org/AnalysisLinkControl.tsx',
-  'components/org/EmailAttendanceDialog.tsx',
-  'components/org/EmailReportDialog.tsx',
-  'components/org/EventFormDialog.tsx',
-  'components/org/InvitePlayersDialog.tsx',
-  'components/org/StudentFormDialog.tsx',
+  // NotificationBell's content is behind a mounted-state gate, and
+  // `renderToStaticMarkup` runs no effects, so the effect that sets it never runs.
   'components/notifications/NotificationBell.tsx',
 ])
 

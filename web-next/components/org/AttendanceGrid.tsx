@@ -671,6 +671,14 @@ export default function AttendanceGrid({
                           setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
                         }
                         placeholder="Add a note (e.g. injured, arrived late)…"
+                        // Named for the student it belongs to. A placeholder is an
+                        // EXAMPLE, not a label: it disappears the moment the coach
+                        // types, several students' fields look identical, and
+                        // placeholders are not announced reliably. This field is
+                        // inside a per-student loop, so without a name a screen
+                        // reader offers several identical unlabelled text boxes and
+                        // the coach cannot tell whose attendance they are editing.
+                        aria-label={`Attendance note for ${s.full_name}`}
                         className="h-8 text-body"
                       />
                     </div>
