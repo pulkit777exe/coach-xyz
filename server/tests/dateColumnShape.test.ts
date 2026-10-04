@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 
 import { withHistoryStoreOrThrow } from '../src/lib/historyStore'
 import { listAttendance, upsertAttendance } from '../src/lib/org/attendance'
+import { createObjective, getObjective, listObjectives } from '../src/lib/org/objectives'
 import {
   createMatch,
   createSeason,
@@ -215,5 +216,45 @@ describeLiveDb('season and match dates serialise as YYYY-MM-DD (live Postgres)',
     const wire = JSON.parse(JSON.stringify(created)) as Record<string, unknown>
     expect(wire.match_on).toBe('2026-09-10')
     expect(String(wire.match_on)).not.toContain('T')
+  })
+})
+
+// The last of the six, and the one the sweep found by enumerating the DDL rather
+// than by chasing symptoms: `training_objectives.due_on`. The player hub renders
+// it bare — `Due ${objective.due_on}` — so an objective's due date reached the
+// player as `Due 2026-10-01T00:00:00.000Z`. `period_day` also matches the
+// `date` pattern but is deliberately NOT here: `usage_counters` only ever
+// compares it to `current_date` inside SQL, so the decoder's output never
+// leaves the data layer and there is nothing to normalise.
+describeLiveDb('objective due dates serialise as YYYY-MM-DD (live Postgres)', () => {
+  useLiveTestDb({ seed, cleanup })
+
+  test('an objective round-trips its due date as a bare day', async () => {
+    const created = await createObjective(ORG, null, {
+      title: 'Block out the left foot',
+      student_id: STUDENT,
+      due_on: '2026-10-01',
+    })
+    expect(created?.due_on).toBe('2026-10-01')
+    // The by-id read and the list are separate queries; cover both.
+    expect((await getObjective(ORG, created!.id))?.due_on).toBe('2026-10-01')
+    const listed = await listObjectives(ORG, {})
+    expect(listed.find((o) => o.id === created!.id)?.due_on).toBe('2026-10-01')
+  })
+
+  test('an objective with no due date stays null, not an epoch day', async () => {
+    const created = await createObjective(ORG, null, { title: 'No deadline' })
+    expect(created?.due_on).toBeNull()
+    expect((await listObjectives(ORG, {})).find((o) => o.id === created!.id)?.due_on).toBeNull()
+  })
+
+  test('the wire shape carries no time component', async () => {
+    const created = await createObjective(ORG, null, {
+      title: 'Wire shape',
+      due_on: '2026-10-01',
+    })
+    const wire = JSON.parse(JSON.stringify(created)) as Record<string, unknown>
+    expect(wire.due_on).toBe('2026-10-01')
+    expect(String(wire.due_on)).not.toContain('T')
   })
 })

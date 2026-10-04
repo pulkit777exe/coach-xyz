@@ -1,6 +1,7 @@
 // Training objectives data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
+import { toDateOnly } from '../orgValidate'
 import { getStudent } from './students'
 import { getTeam } from '../teams'
 import { canSeeStudent, uuidArrayLiteral, type StudentScope } from './scope'
@@ -20,6 +21,25 @@ export type TrainingObjective = {
   created_at: string
   updated_at: string
 }
+
+/**
+ * `due_on` is a Postgres `date`, so Bun decodes it to a `Date` while the type
+ * says `string | null`. The web renders it with no formatting in three places —
+ * `PlayerHub` (`Due ${objective.due_on}`) and `ObjectivesSection` twice
+ * (`due ${objective.due_on} · ` / `due ${o.due_on}`) — so an objective's due date
+ * reached the player as `Due 2026-10-01T00:00:00.000Z`.
+ *
+ * Same invariant as `students.date_of_birth` and `attendance.session_date`;
+ * see `toDateOnly`.
+ */
+const withDueOn = <T extends { due_on?: Date | string | null }>(row: T): T => ({
+  ...row,
+  due_on: toDateOnly(row.due_on),
+})
+
+const withDueOnAll = <T extends { due_on?: Date | string | null }>(
+  rows: readonly T[] | null,
+): T[] => (rows ?? []).map(withDueOn)
 
 export type ObjectiveInput = {
   student_id?: string | null
@@ -98,7 +118,7 @@ export const listObjectives = async (
       order by created_at desc
       limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 10000)) as number | null};
     `
-      return rows ?? []
+      return withDueOnAll(rows)
     })) ?? []
   )
 }
@@ -162,7 +182,7 @@ export const getObjective = async (
     const rows = await db<TrainingObjective[]>`
       select * from training_objectives where org_auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withDueOn(rows[0]) : null
   })
 }
 
@@ -219,7 +239,7 @@ export const createObjective = async (
       )
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withDueOn(rows[0]) : null
   })
 }
 
@@ -235,7 +255,7 @@ export const setObjectiveStatus = async (
       where org_auth0_id = ${auth0Id} and id = ${id}
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withDueOn(rows[0]) : null
   })
 }
 
