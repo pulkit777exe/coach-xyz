@@ -14,6 +14,38 @@ export const isDate = (value: unknown): value is string =>
 export const isIsoDate = (value: unknown): value is string =>
   typeof value === 'string' && !Number.isNaN(Date.parse(value))
 
+/**
+ * A Postgres `date` column → the `YYYY-MM-DD` string the API contract promises.
+ *
+ * Bun decodes `date` to a `Date`, so a column typed `string | null` in the
+ * domain object is a lie (the same class as `measured_at`, which is a
+ * `timestamptz`). It matters here in a way it does not for a timestamp: a
+ * `date` has no time component, so the honest representation is a bare day and
+ * `toISOString()` is actively wrong — it appends `T00:00:00.000Z`.
+ *
+ * Left alone, `Student.date_of_birth` reaches the browser as
+ * `"2008-04-01T00:00:00.000Z"`, and then two things break in sequence: an
+ * `<input type="date">` refuses it as a value and renders blank, and the edit
+ * round-trip re-sends it and fails `isDate`, so saving that player 400s.
+ *
+ * Normalise here, at the boundary where the value enters the domain object —
+ * not defensively at each consumer. `reports.ts` already did this the wrong way
+ * with a `.slice(0, 10)` on its way into `new Date(...)`.
+ *
+ * UTC, not local: the `Date` is midnight UTC by construction, so shifting to the
+ * local zone would move a player born on the 1st into the 2nd for anyone west of
+ * Greenwich.
+ */
+export const toDateOnly = (value: Date | string | null | undefined): string | null => {
+  if (value === null || value === undefined) return null
+  // `isDate` cannot be used as a ternary test here: it is a type guard, so the
+  // negative branch narrows to `never`. Match the shape directly instead.
+  if (typeof value === 'string') {
+    return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) || null : null
+  }
+  return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10)
+}
+
 export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   progress: 'Progress Report',
   attendance: 'Attendance Report',

@@ -3,6 +3,7 @@
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { uuidArrayLiteral } from './scope'
 import type { AttendanceStatus } from '../orgEnums'
+import { toDateOnly } from '../orgValidate'
 
 /**
  * Bind pair for the student-scope filter (the list `visibleStudentIds` returns
@@ -32,6 +33,29 @@ export type AttendanceRecord = {
   created_at: string
   updated_at: string
 }
+
+/**
+ * `session_date` is a Postgres `date`, and Bun decodes `date` to a `Date` — so
+ * the declared `string` is a lie and the wire value is an ISO instant.
+ *
+ * That is not cosmetic here: `components/org/AttendanceGrid.tsx` keys its status
+ * and note maps on the EXACT string (`${studentId}|${session_date}`) and builds
+ * its own keys from the date picker's bare `YYYY-MM-DD`. An instant on one side
+ * and a bare day on the other means every lookup misses, so sessions that were
+ * recorded render as blank cells.
+ *
+ * Same rule as the students columns: normalise at the boundary, once. A
+ * `timestamptz` would want `toISOString()` — but a `date` has no time component,
+ * so the bare day is the honest form.
+ */
+const withDate = <T extends { session_date?: Date | string | null }>(row: T): T => ({
+  ...row,
+  session_date: toDateOnly(row.session_date) ?? '',
+})
+
+const withDates = <T extends { session_date?: Date | string | null }>(
+  rows: readonly T[] | null,
+): T[] => (rows ?? []).map(withDate)
 
 export type AttendanceWithStudent = AttendanceRecord & {
   full_name: string | null
@@ -73,7 +97,7 @@ export const listAttendance = async (
         order by a.session_date desc, s.full_name asc
         limit ${(opts.limit === undefined ? null : Math.min(Math.max(opts.limit, 1), 20000)) as number | null};
       `
-      return rows ?? []
+      return withDates(rows)
     })) ?? []
   )
 }
@@ -95,7 +119,7 @@ export const upsertAttendance = async (
         updated_at = now()
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withDate(rows[0]) : null
   })
 }
 
@@ -143,7 +167,7 @@ export const setAttendanceBatch = async (
          returning *;`,
         values,
       )
-      return rows ?? []
+      return withDates(rows)
     })) ?? []
   )
 }

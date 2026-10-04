@@ -5,6 +5,7 @@ import type { SQL } from 'bun'
 import { batchRows } from '../batchRows'
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { STUDENT_STATUSES } from '../orgEnums'
+import { toDateOnly } from '../orgValidate'
 import { logger } from '../logger'
 import { canSeeStudent, uuidArrayLiteral, visibleStudentIds, type StudentScope } from './scope'
 
@@ -31,6 +32,34 @@ export type Student = {
 }
 
 // ── Students ─────────────────────────────────────────────────────────────────
+
+/**
+ * Every function below returns rows straight out of the store, and Bun decodes
+ * Postgres `date` columns to `Date`. Left raw, `date_of_birth` and `joined_on`
+ * serialise as `"2008-04-01T00:00:00.000Z"`, which an `<input type="date">`
+ * refuses (blank field) and which the server's own `isDate` then rejects on the
+ * round-trip save. Normalise once, here, at the boundary — rather than teaching
+ * each consumer to slice, which is what `org/reports.ts` had already started.
+ *
+ * Applied per read/write function rather than inside one shared query builder
+ * because the row shapes differ (a bare row, a `{ student }` wrapper) and a
+ * missed site is exactly the bug being fixed.
+ */
+const withDates = <
+  T extends { date_of_birth?: Date | string | null; joined_on?: Date | string | null },
+>(
+  row: T,
+): T => ({
+  ...row,
+  date_of_birth: toDateOnly(row.date_of_birth),
+  joined_on: toDateOnly(row.joined_on),
+})
+
+const withDatesAll = <
+  T extends { date_of_birth?: Date | string | null; joined_on?: Date | string | null },
+>(
+  rows: readonly T[] | null,
+): T[] => (rows ?? []).map(withDates)
 
 export const listStudents = async (
   auth0Id: string,
@@ -79,7 +108,7 @@ export const listStudents = async (
         order by full_name asc
         limit ${cap};
       `
-      return rows ?? []
+      return withDatesAll(rows)
     })) ?? []
   )
 }
@@ -100,7 +129,7 @@ export const getStudentsByIds = async (
       select * from students
       where auth0_id = ${auth0Id} and id = any(${uuidArrayLiteral(unique)}::uuid[]);
     `
-      return rows ?? []
+      return withDatesAll(rows)
     })) ?? []
   )
 }
@@ -128,7 +157,7 @@ export const getStudent = async (
     const rows = await db<Student[]>`
       select * from students where auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withDates(rows[0]) : null
   })
 }
 
@@ -148,7 +177,7 @@ export const getLinkedPlayer = async (accountAuth0Id: string): Promise<LinkedPla
       select * from students where account_auth0_id = ${accountAuth0Id} limit 1;
     `
     if (!rows?.[0]) return null
-    return { student: rows[0], coachAuth0Id: rows[0].auth0_id }
+    return { student: withDates(rows[0]), coachAuth0Id: rows[0].auth0_id }
   })
 }
 
@@ -187,7 +216,7 @@ export const createStudent = async (
     `
     const values = cols.map((k) => input[k])
     const rows = await db.unsafe<Student[]>(sql, [auth0Id, ...values])
-    return rows[0] ?? null
+    return rows[0] ? withDates(rows[0]) : null
   })
 }
 
@@ -221,7 +250,7 @@ export const updateStudent = async (
       return typeof v === 'number' ? v : String(v)
     })
     const rows = await db.unsafe<Student[]>(sql, [...values, auth0Id, id])
-    return rows[0] ?? null
+    return rows[0] ? withDates(rows[0]) : null
   })
 }
 
