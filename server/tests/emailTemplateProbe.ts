@@ -86,7 +86,13 @@ mock.module('../src/lib/orgData', () => ({
   getAttendanceRecords: async () => [attendanceRow],
   getReport: async () => ({
     id: '22222222-2222-4222-8222-222222222222',
-    student_id: null,
+    // Attached to the player, deliberately. An ORG-LEVEL report (student_id null)
+    // can only be mailed by an org-wide caller, and those no longer supply `to` —
+    // there is no student address to derive — so this fixture could not exercise
+    // the template at all. `reportEmail` interpolates the same fields either way,
+    // so escaping coverage is unchanged, and the org-level refusal is the
+    // matrix's business rather than this probe's.
+    student_id: PLAYER,
     title: HOSTILE,
     // The summary carries markup: a template that trusted it would render it.
     content_json: { summary: `<b>${HOSTILE}</b>` },

@@ -134,9 +134,34 @@ describe('emailing a report needs report.create and the report in scope', () => 
     expect(coach.sentTo).toBeNull()
   })
 
-  test('an org-wide caller can still mail an org-wide report', async () => {
+  test('an org-wide caller can no longer redirect a report to an address of its choosing', async () => {
+    // The rule that moved (owner decision, 2026-10-04). An org-wide caller —
+    // owner, admin, analyst — may no longer supply `to`; the report goes to the
+    // student's own address. The capability (`report.create`) is untouched, and the
+    // refusal is a 400 rather than a 403 precisely so the two are not conflated: 403
+    // is the role floor, 400 is "no address was derivable".
+    //
+    // This replaces a test that asserted the opposite ("an org-wide caller can still
+    // mail an org-wide report", 200), on the reasoning that an org-wide reader gains
+    // nothing by mailing. That reasoning was sound about PRIVILEGE and wrong about
+    // EGRESS: the capability is unchanged, but the channel out is what was closed.
+    //
+    // The scenario is org-level, so there is no student to derive an address from —
+    // which is exactly the case with no remaining way to send. If an org-level report
+    // should still be mailable, honour `to` for org-level reports only; that is the
+    // one-line alternative recorded on the matrix row.
     const [owner] = await run('report.orgLevel', ['owner'])
-    expect(owner.status).toBe(200)
+    expect(owner.status).toBe(400)
+    expect(owner.sentTo).toBeNull()
+  })
+
+  test('a scoped caller keeps the ability to choose the recipient', async () => {
+    // The other half of the rule, and the reason it is a narrowing rather than a
+    // removal: a team coach may only reach their own team's reports, so redirecting
+    // one within that scope grants nothing they did not already have.
+    const [coach] = await run('report.student', TEAM_STAFF)
+    expect(coach.status).toBe(200)
+    expect(coach.sentTo).toBe('someone@example.com')
   })
 })
 

@@ -252,7 +252,20 @@ export default new Elysia()
       return buildError('FORBIDDEN', 'Org-wide reports cannot be sent from a team account', false)
     }
 
-    let recipient = typeof to === 'string' ? to.trim() : ''
+    // A caller-supplied `to` is honoured ONLY for a scoped caller. `visible` is
+    // null exactly when the caller is org-wide (owner/admin/analyst), and that is
+    // the case worth closing: such a caller can already read every report in the
+    // org through `GET /api/org/:auth0Id/reports/:id`, so letting them redirect one
+    // to an address of their choosing converts read access into egress — the exact
+    // channel an unguarded mail route is. They mail the student's own address
+    // instead, which is the action they actually meant.
+    //
+    // This is the compromise between the two positions this route sat between: the
+    // role floor in `app.ts` (which excludes `analyst` and never fires) and the
+    // capability in `emailGuard` (which admits `analyst` on `report.create`, and is
+    // asserted by `emailRouteGuards.test.ts`). The capability stands; the arbitrary
+    // recipient does not.
+    let recipient = visible !== null && typeof to === 'string' ? to.trim() : ''
     let studentName = 'Athlete'
     if (report.student_id) {
       const student = await getStudent(auth0Id, report.student_id)
@@ -265,7 +278,9 @@ export default new Elysia()
       set.status = 400
       return buildError(
         'INVALID_REQUEST',
-        'No valid recipient for this report (student has no email and no `to` given).',
+        visible === null
+          ? 'No valid recipient: an org-wide account mails the student, so this report needs the student to have an email address.'
+          : 'No valid recipient for this report (student has no email and no `to` given).',
         false,
       )
     }

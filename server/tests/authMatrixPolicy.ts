@@ -409,6 +409,30 @@ export const MATRIX: MatrixEntry[] = [
     method: 'POST',
     path: '/api/org/:auth0Id/matches',
     body: { opponent: 'Rivals', team_id: '00000000-0000-4000-8000-0000000000a1' },
+    // The base row's 201 for head_coach/coach is a fact about THIS BODY, not about the
+    // role: drop `team_id` and the same fixture becomes a club-wide fixture, which only
+    // an org-wide caller may author (`teamId ? canAccessTeam : !studentScope.all`).
+    // Without this variant the row reads as "team staff may create matches" — which is
+    // wrong, and wrong in the direction that would let a club-wide fixture be authored.
+    variants: [
+      {
+        name: 'no team_id is a club-wide fixture',
+        body: { opponent: 'Rivals' },
+        expect: {
+      anonymous: 403,
+      owner: 201,
+      admin: 201,
+          head_coach: 403,
+          coach: 403,
+          assistant_coach: 403,
+          analyst: 403,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
     expect: {
       anonymous: 403,
       owner: 201,
@@ -431,6 +455,29 @@ export const MATRIX: MatrixEntry[] = [
     method: 'POST',
     path: '/api/org/:auth0Id/objectives',
     body: { title: 'Objective', student_id: '00000000-0000-4000-8000-0000000000c1' },
+    // `objectiveVisibleTo` returns false when the body names NEITHER a team nor a student,
+    // so the base row's 201 for team staff is carried entirely by `student_id`. Omitting it
+    // makes the objective org-level, which no scoped caller may author — and the scope
+    // check runs BEFORE the title validation, so this is a 403 rather than a 400.
+    variants: [
+      {
+        name: 'no team and no student is an org-level objective',
+        body: { title: 'Objective' },
+        expect: {
+      anonymous: 403,
+      owner: 201,
+      admin: 201,
+          head_coach: 403,
+          coach: 403,
+          assistant_coach: 403,
+          analyst: 403,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
     expect: {
       anonymous: 403,
       owner: 201,
@@ -452,6 +499,28 @@ export const MATRIX: MatrixEntry[] = [
     method: 'POST',
     path: '/api/org/:auth0Id/plans',
     body: { title: 'Plan', student_id: '00000000-0000-4000-8000-0000000000c1' },
+    // Same shape as objectives: `planVisibleTo` is false when neither id is present, so the
+    // 201 above is carried by `student_id` alone. `training_plans.team_id` is never derived
+    // from the student's team either, so a body naming only a team would be org-level too.
+    variants: [
+      {
+        name: 'no team and no student is an org-level plan',
+        body: { title: 'Plan' },
+        expect: {
+      anonymous: 403,
+      owner: 201,
+      admin: 201,
+          head_coach: 403,
+          coach: 403,
+          assistant_coach: 403,
+          analyst: 403,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
     expect: {
       anonymous: 403,
       owner: 201,
@@ -498,6 +567,30 @@ export const MATRIX: MatrixEntry[] = [
       report_type: 'progress',
       student_id: '00000000-0000-4000-8000-0000000000c1',
     },
+    // The gate is `visible !== null && (target === null || !canSeeStudent(...))`, so
+    // dropping `student_id` refuses every SCOPED caller while leaving the org-wide
+    // roles at 201 — they skip the gate entirely. `analyst` is the cell to read: it
+    // holds report.create AND is org-wide, so 201 here is a real capability grant
+    // rather than an oversight, and it is the one role whose answer does not move.
+    variants: [
+      {
+        name: 'no student_id is refused to scoped callers only',
+        body: { title: 'Report', report_type: 'progress' },
+        expect: {
+          anonymous: 403,
+          owner: 201,
+          admin: 201,
+          head_coach: 403,
+          coach: 403,
+          assistant_coach: 403,
+          analyst: 201,
+          medical: 403,
+          player: 403,
+          outsider: 403,
+          other: 403,
+        },
+      },
+    ],
     expect: {
       anonymous: 403,
       owner: 201,
@@ -668,6 +761,8 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    note:
+      'FIXTURE-DEPENDENT: head_coach/coach answer 200 only because the seeded training_plans row carries student STU_A and team TEAM_A. An org-level plan (both ids null) is 403 for every scoped caller by planVisibleTo, and a team-B plan is 403 on scope. Same recorder limit as matches: one row per table.',
   },
   {
     method: 'DELETE',
@@ -742,6 +837,8 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    note:
+      'FIXTURE-DEPENDENT: the 200 for team staff holds because the seeded schedule_events row carries TEAM_A. A club-wide event (team_id null) is 403 for team staff via eventTeamWritable, which returns studentScope.all for the null branch — the one-line branch a reviewer is most likely to get backwards.',
   },
   {
     method: 'DELETE',
@@ -800,6 +897,8 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    note:
+      'FIXTURE-DEPENDENT, and the 403 for team staff is the interesting cell: the probe seeds matches with NO team_id, so the target is a CLUB-WIDE fixture and only an org-wide caller may delete it. A team-B match would be 403 on scope instead, and an in-scope team-A match would be 200 — three different reasons for one 403. This row cannot carry a variant because the probe recorder answers ANY id with the same single row per table (ROW_BY_TABLE), so a second id cannot produce a second row. Pinning the other branches needs the recorder extended to per-id rows, not another expectation here.',
   },
   // ── Analysis link ──
   {
@@ -897,8 +996,19 @@ export const MATRIX: MatrixEntry[] = [
   // ── Members (owner/admin floor, owner-only role/remove) ──
   {
     ...orgRead('GET', '/api/org/:auth0Id/members'),
-    expect: { ...ALL_200, player: 200 },
-    note: 'mount floor is membership-wide; the handler reports the caller role',
+    expect: { ...ALL_200, player: 403 },
+    // The rule that moved: reading the member roster requires a club-staff role.
+    // This cell read player=200 because the floor was `orgRoleGuard(ORG_MEMBER_ROLES)`
+    // — the whole vocabulary, which includes `player` — while the app-level floor that
+    // excludes `player` is an inert barrel-wrap in `app.ts`. So nothing else refused it,
+    // and `listOrgMembers` joins `users` for email: a player account could read every
+    // member's address. `resolveStudentScope('player')` gives players an EMPTY org view
+    // everywhere else, so the roster contradicted the model rather than implementing it.
+    // Enumerated as ROSTER_READ_ROLES, matching how `teams.ts` already spells its lists
+    // out. Deliberately scoped to this one route: the other player=200 org reads return
+    // empty bodies and were left alone.
+    note:
+      'roster read is club-staff only; the floor is enumerated in ROSTER_READ_ROLES rather than borrowed from ORG_MEMBER_ROLES, which includes player',
   },
   {
     method: 'POST',
@@ -1206,6 +1316,8 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
+    note:
+      'FIXTURE-DEPENDENT in a way one row cannot express: head_coach/coach/assistant_coach answer 200 because the seeded job is reachable to them, and would answer 404 for an analysis about another team\'s player. An analysis with student_id NULL is in scope for ANY org member by design, so an unlinked fixture job would also give 200 — this row is a statement about the fixture, not the rule.',
   },
   {
     method: 'DELETE',
@@ -2125,7 +2237,8 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 400,
       other: 400,
     },
-    note: 'unknown token: every verified caller reaches the uniform refusal',
+    note:
+      'unknown token: every verified caller reaches the uniform refusal. FIXTURE-DEPENDENT beyond that — acceptInvite binds to the VERIFIED CALLER email, so the flat 400 column states only that the seeded token belongs to no persona in the matrix. Measured with a token matching a persona, that one identity gets 200 and the other ten get 400, including the owner. Do not read the column as every role being refused.',
   },
   {
     method: 'POST',
@@ -2234,23 +2347,39 @@ export const MATRIX: MatrixEntry[] = [
     method: 'POST',
     path: '/api/email/:auth0Id/report',
     body: { report_id: '00000000-0000-4000-8000-0000000000e1', to: 'a@matrix.test' },
-    // `analyst=200` is DELIBERATE and asserted in emailRouteGuards.test.ts
+    // `analyst=200` was DELIBERATE and asserted in emailRouteGuards.test.ts
     // ("report.create is theirs by policy") — an analyst is an org-wide reader who
     // can already fetch every report through `GET /api/org/:auth0Id/reports/:id`, so
-    // mailing one escalates nothing. What this cell does NOT record is that
-    // `app.ts` wraps this tree in a role floor excluding `analyst` which never
-    // fires, so the code appears to promise 403 and delivers 200. Whether an
-    // org-wide reader may egress a report to a caller-supplied address is an open
-    // product question, not a settled rule — do not "fix" this cell in either
-    // direction without deciding it. See EMAIL_TREE_ROLES_NOT_ENFORCED.
+    // mailing one escalated nothing. What the table did not record is that `app.ts`
+    // wraps this tree in a role floor excluding `analyst` which never fires, so the
+    // code appeared to promise 403 and delivered 200.
+    //
+    // THE RULE THAT MOVED (owner decision, 2026-10-04): keep the capability, drop the
+    // arbitrary recipient. An org-wide caller — owner, admin, analyst — may no longer
+    // supply `to`, and the report goes to the student's own address instead. That closes
+    // the egress channel without removing `report.create`. Scoped callers
+    // (head_coach, coach, assistant_coach) are unaffected and keep `to` — note this
+    // body carries one, which is why their cells still read 200.
+    //
+    // THE COST, stated because it is real: an org-wide caller who relied on `to` now
+    // answers 400, either because no address is derivable (an org-level report has no
+    // student) or because the student has no email on file. So an owner can no longer
+    // mail a report to a parent who is not the registered contact. If that is not
+    // wanted, the narrow alternative is to keep honouring `to` when the report is
+    // org-level, where no student address exists to derive from — a one-line change at
+    // the recipient derivation, not here.
+    //
+    // 400 rather than 403 on purpose: 403 is the role floor refusing the capability,
+    // 400 is the recipient not being derivable. Conflating them would hide a capability
+    // grant that still stands.
     expect: {
       anonymous: 403,
-      owner: 200,
-      admin: 200,
+      owner: 400,
+      admin: 400,
       head_coach: 200,
       coach: 200,
       assistant_coach: 200,
-      analyst: 200,
+      analyst: 400,
       medical: 403,
       player: 403,
       outsider: 403,
@@ -2349,6 +2478,7 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 403,
       other: 403,
     },
-    note: 'mount floor is an inert barrel-wrap (same as orgRoute): the handler 404 answers for every member',
+    note:
+      'the handler 404 answers for every member, because the mount floor is an inert barrel-wrap (same as orgRoute). FIXTURE-DEPENDENT ON report STATUS: this uniform 404 is only the scoped answer when the seeded job is status=done. For queued/running/failed the scope check never runs — it sits inside the done branch — and EVERY role including player and medical answers 200 with report:null, so a lifecycle fixture would make this row assert the permissive answer as though it were the scoped one.',
   },
 ]

@@ -28,11 +28,36 @@ const INVITE_ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_INVITE_ROLES)
 const ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_ROLES)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/**
+ * Who may read the member roster.
+ *
+ * Enumerated rather than taken from `ORG_MEMBER_ROLES`, because that constant is
+ * the whole vocabulary INCLUDING `player`, and using it as a floor is how a
+ * `player` account came to read every member's email address: `listOrgMembers`
+ * joins `users` for email and picture, and the app-level org role floor that would
+ * have excluded `player` is an inert barrel-wrap in `app.ts`, so nothing else did.
+ *
+ * A `player` is a real logged-in human (the athlete, or a parent), and the design
+ * everywhere else gives them an EMPTY org view — `resolveStudentScope('player')` is
+ * `{all:false, teamIds:[]}` — so a full directory of the club's members contradicts
+ * that rather than implementing it. `teams.ts` enumerates its own lists for exactly
+ * this reason, which is what made the difference visible here.
+ */
+const ROSTER_READ_ROLES = [
+  'owner',
+  'admin',
+  'head_coach',
+  'assistant_coach',
+  'coach',
+  'analyst',
+  'medical',
+] as const satisfies readonly OrgMemberRole[]
+
 export default new Elysia()
   .use(serviceGuard)
   .use(
     new Elysia()
-      .use(orgRoleGuard(ORG_MEMBER_ROLES))
+      .use(orgRoleGuard(ROSTER_READ_ROLES))
       .get('/api/org/:auth0Id/members', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
