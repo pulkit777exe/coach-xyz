@@ -28,7 +28,9 @@ import { lastJsonLine, runProbeProcess } from './spawnProbe'
 const SERVER_DIR = join(import.meta.dir, '..')
 const PROBE = join(import.meta.dir, 'downloadOwnerBackstopProbe.ts')
 
-const runCase = async (scenario: string): Promise<{ status: number; caller: string | null }> => {
+const runCase = async (
+  scenario: string,
+): Promise<{ status: number; chatStatus: number; caller: string | null }> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -40,7 +42,7 @@ const runCase = async (scenario: string): Promise<{ status: number; caller: stri
 
   const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
   expect(proc.exitCode, `probe failed:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
-  return lastJsonLine<{ status: number; caller: string | null }>(proc.stdout)
+  return lastJsonLine<{ status: number; chatStatus: number; caller: string | null }>(proc.stdout)
 }
 
 describe('a job with an empty owner set still consults the persisted row', () => {

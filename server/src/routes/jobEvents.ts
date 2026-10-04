@@ -2,7 +2,8 @@ import { Elysia } from 'elysia'
 
 import { buildError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
-import { verifyJobAccess } from '../lib/jobAccess'
+import { needsPersistedOwnerBackstop, verifyJobAccess } from '../lib/jobAccess'
+import { getAnalysisByServerJobId } from '../lib/analyses'
 import { logger } from '../lib/logger'
 import {
   onJobEvent,
@@ -25,6 +26,8 @@ type ResolveStatus = (
 
 export type JobEventsDeps = {
   getJob?: typeof getJob
+  /** Owner backstop for a live job whose Redis owner set is empty. */
+  getAnalysisByServerJobId?: typeof getAnalysisByServerJobId
   resolveStatus?: ResolveStatus
   startBus?: typeof startJobEventBus
   onEvent?: typeof onJobEvent
@@ -94,7 +97,14 @@ export const jobEventsRoute = (deps: JobEventsDeps = {}) => {
         return new Response(`data: ${body}\n\n`, { headers: eventHeaders })
       }
 
-      const access = verifyJobAccess(request, serverJob)
+      // Same backstop as status/download/chat. An empty owner set reads as an
+      // anonymous demo job, and this is the stream that narrates the analysis, so
+      // without the persisted row a stranger holding the id would receive the whole
+      // progression live.
+      const backstop = needsPersistedOwnerBackstop(serverJob)
+        ? await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(jobId)
+        : null
+      const access = verifyJobAccess(request, serverJob, backstop)
       if (!access.ok) {
         set.status = access.status
         return access.body

@@ -3,7 +3,7 @@ import { Elysia } from 'elysia'
 import { buildError, chatEngineStatus, errorBody, wrapEngineError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import type { ServerJob } from '../lib/jobs'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
+import { needsPersistedOwnerBackstop, resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkChatLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { playerTranscript } from '../lib/transcript'
 import { getAnalysisByServerJobId } from '../lib/analyses'
@@ -29,17 +29,19 @@ type ChatContextDeps = {
   getAnalysisByServerJobId?: typeof getAnalysisByServerJobId
 }
 
-async function resolveChatContext(
-  jobId: string,
-  request: Request,
-  deps: ChatContextDeps = {},
-) {
+async function resolveChatContext(jobId: string, request: Request, deps: ChatContextDeps = {}) {
   const serverJob = await (deps.getJob ?? getJob)(jobId)
   // Redis mapping expired — fall back to the persisted row like status:
   // chat must survive the same 2h TTL the status poll does.
-  const persisted = serverJob
-    ? null
-    : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(jobId)
+  // Same rule as status/download: load the persisted row on the Redis MISS *and*
+  // when the owner set is empty. Chat is the most consequential of the three,
+  // because this is where the transcript is read and handed to the model — an
+  // empty-owner job that reached this line would have its whole conversation sent
+  // on the strength of a job id alone.
+  const persisted =
+    serverJob && !needsPersistedOwnerBackstop(serverJob)
+      ? null
+      : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(jobId)
   const source = serverJob ?? persisted
   if (!source)
     return {
@@ -80,169 +82,174 @@ export type ChatRouteDeps = ChatContextDeps
 
 export const chatRoutes = (deps: ChatRouteDeps = {}) =>
   new Elysia()
-  // Streaming chat — proxies SSE from engine to frontend
-  .post('/api/chat/stream', async ({ body, request, set }) => {
-    const { job_id, message } = ((body ?? {}) as { job_id?: unknown; message?: unknown })
+    // Streaming chat — proxies SSE from engine to frontend
+    .post('/api/chat/stream', async ({ body, request, set }) => {
+      const { job_id, message } = (body ?? {}) as { job_id?: unknown; message?: unknown }
 
-    if (typeof job_id !== 'string' || !job_id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'job_id is required.', false)
-    }
-    if (typeof message !== 'string' || !message.trim()) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'message is required.', false)
-    }
-
-    const limited = await checkChatRateLimit(request, set)
-    if (limited) return limited
-
-    const ctx = await resolveChatContext(job_id, request, deps)
-    if ('error' in ctx) {
-      set.status = ctx.status ?? 404
-      return ctx.error
-    }
-    const { engineJobId, historyForEngine } = ctx
-
-    try {
-      const engineRes = await withTimeout(
-        `${ENGINE_URL}/chat/stream`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...engineServiceHeaders(requestIdFrom(request)),
-          },
-          body: JSON.stringify({
-            job_id: engineJobId,
-            message: message.trim(),
-            conversation_history: historyForEngine,
-          }),
-        },
-        120_000,
-      )
-
-      if (!engineRes.ok) {
-        // Chat posture: engine-owned body, 4xx pass through, ≥500 → 502.
-        const errBody = (await engineRes.json().catch(() => ({}))) as Record<string, unknown>
-        const failure = {
-          ...wrapEngineError({
-            code: typeof errBody.code === 'string' ? errBody.code : 'CHAT_FAILED',
-            message: typeof errBody.message === 'string' ? errBody.message : 'AI service error.',
-            retryable:
-              typeof errBody.retryable === 'boolean' ? errBody.retryable : engineRes.status >= 500,
-          }),
-          status: engineRes.status,
-        }
-        set.status = chatEngineStatus(failure) ?? 502
-        return errorBody(failure)
+      if (typeof job_id !== 'string' || !job_id) {
+        set.status = 400
+        return buildError('INVALID_REQUEST', 'job_id is required.', false)
+      }
+      if (typeof message !== 'string' || !message.trim()) {
+        set.status = 400
+        return buildError('INVALID_REQUEST', 'message is required.', false)
       }
 
-      // Tee the stream: one copy goes to the client, we parse the other
-      // to save messages once the stream completes
-      const [clientStream, parseStream] = (engineRes.body as ReadableStream).tee()
+      const limited = await checkChatRateLimit(request, set)
+      if (limited) return limited
 
-      // Background: consume parseStream to save conversation on completion.
-      // Always saves the user message; saves assistant message only if
-      // the stream completed successfully with a "done" event.
-      const userMsg = message.trim()
-      const jobId = job_id
-      ;(async () => {
-        let fullText = ''
-        let timestampRefs: number[] = []
-        let eventRefs: number[] = []
+      const ctx = await resolveChatContext(job_id, request, deps)
+      if ('error' in ctx) {
+        set.status = ctx.status ?? 404
+        return ctx.error
+      }
+      const { engineJobId, historyForEngine } = ctx
 
-        try {
-          // Buffered SSE line parsing — a `data:` line straddling two chunks
-          // is reassembled before parsing (lib/sse.ts), not dropped.
-          for await (const event of parseSseDataEvents<ChatStreamEvent>(parseStream)) {
-            if (event.type === 'done') {
-              fullText = event.text || ''
-              timestampRefs = event.timestamp_refs || []
-              eventRefs = event.event_refs || []
-            }
+      try {
+        const engineRes = await withTimeout(
+          `${ENGINE_URL}/chat/stream`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...engineServiceHeaders(requestIdFrom(request)),
+            },
+            body: JSON.stringify({
+              job_id: engineJobId,
+              message: message.trim(),
+              conversation_history: historyForEngine,
+            }),
+          },
+          120_000,
+        )
+
+        if (!engineRes.ok) {
+          // Chat posture: engine-owned body, 4xx pass through, ≥500 → 502.
+          const errBody = (await engineRes.json().catch(() => ({}))) as Record<string, unknown>
+          const failure = {
+            ...wrapEngineError({
+              code: typeof errBody.code === 'string' ? errBody.code : 'CHAT_FAILED',
+              message: typeof errBody.message === 'string' ? errBody.message : 'AI service error.',
+              retryable:
+                typeof errBody.retryable === 'boolean'
+                  ? errBody.retryable
+                  : engineRes.status >= 500,
+            }),
+            status: engineRes.status,
           }
-        } catch (err) {
-          logger.error('chat_stream_parse_error', {
-            type: 'chat_stream_parse_error',
-            error: err instanceof Error ? err.message : 'unknown',
-          })
+          set.status = chatEngineStatus(failure) ?? 502
+          return errorBody(failure)
         }
 
-        try {
-          // Always save the user message
-          await playerTranscript.append({ serverJobId: jobId }, { role: 'user', content: userMsg })
-          // Save assistant reply only if we got a complete response
-          if (fullText) {
+        // Tee the stream: one copy goes to the client, we parse the other
+        // to save messages once the stream completes
+        const [clientStream, parseStream] = (engineRes.body as ReadableStream).tee()
+
+        // Background: consume parseStream to save conversation on completion.
+        // Always saves the user message; saves assistant message only if
+        // the stream completed successfully with a "done" event.
+        const userMsg = message.trim()
+        const jobId = job_id
+        ;(async () => {
+          let fullText = ''
+          let timestampRefs: number[] = []
+          let eventRefs: number[] = []
+
+          try {
+            // Buffered SSE line parsing — a `data:` line straddling two chunks
+            // is reassembled before parsing (lib/sse.ts), not dropped.
+            for await (const event of parseSseDataEvents<ChatStreamEvent>(parseStream)) {
+              if (event.type === 'done') {
+                fullText = event.text || ''
+                timestampRefs = event.timestamp_refs || []
+                eventRefs = event.event_refs || []
+              }
+            }
+          } catch (err) {
+            logger.error('chat_stream_parse_error', {
+              type: 'chat_stream_parse_error',
+              error: err instanceof Error ? err.message : 'unknown',
+            })
+          }
+
+          try {
+            // Always save the user message
             await playerTranscript.append(
               { serverJobId: jobId },
-              {
-                role: 'assistant',
-                content: fullText,
-                timestamp_refs: timestampRefs,
-                event_refs: eventRefs,
-              },
+              { role: 'user', content: userMsg },
             )
+            // Save assistant reply only if we got a complete response
+            if (fullText) {
+              await playerTranscript.append(
+                { serverJobId: jobId },
+                {
+                  role: 'assistant',
+                  content: fullText,
+                  timestamp_refs: timestampRefs,
+                  event_refs: eventRefs,
+                },
+              )
+            }
+          } catch (err) {
+            logger.error('chat_stream_save_error', {
+              type: 'chat_stream_save_error',
+              error: err instanceof Error ? err.message : 'unknown',
+            })
           }
-        } catch (err) {
-          logger.error('chat_stream_save_error', {
-            type: 'chat_stream_save_error',
-            error: err instanceof Error ? err.message : 'unknown',
-          })
+        })()
+
+        // Return the stream directly to the client
+        return new Response(clientStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          },
+        })
+      } catch (error) {
+        const isTimeout = error instanceof DOMException && error.name === 'AbortError'
+        const isConnectivity = error instanceof TypeError || isTimeout
+
+        if (isConnectivity) {
+          set.status = 502
+          return buildError(
+            'ENGINE_UNAVAILABLE',
+            'Analysis engine is temporarily unavailable. Please try again.',
+            true,
+          )
         }
-      })()
 
-      // Return the stream directly to the client
-      return new Response(clientStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-        },
-      })
-    } catch (error) {
-      const isTimeout = error instanceof DOMException && error.name === 'AbortError'
-      const isConnectivity = error instanceof TypeError || isTimeout
+        logger.error('chat_stream_proxy_error', {
+          type: 'chat_stream_proxy_error',
+          error: error instanceof Error ? error.message : 'unknown',
+        })
+        set.status = 500
+        return buildError('INTERNAL_ERROR', 'Chat service error.', true)
+      }
+    })
 
-      if (isConnectivity) {
-        set.status = 502
-        return buildError(
-          'ENGINE_UNAVAILABLE',
-          'Analysis engine is temporarily unavailable. Please try again.',
-          true,
-        )
+    // Load conversation history for a job
+    .get('/api/conversation/:jobId', async ({ params, request, set }) => {
+      const serverJob = await (deps.getJob ?? getJob)(params.jobId)
+      // Same persisted fallback as the stream route above.
+      const persisted = serverJob
+        ? null
+        : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
+      const source = serverJob ?? persisted
+      if (!source) {
+        set.status = 404
+        return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
       }
 
-      logger.error('chat_stream_proxy_error', {
-        type: 'chat_stream_proxy_error',
-        error: error instanceof Error ? error.message : 'unknown',
-      })
-      set.status = 500
-      return buildError('INTERNAL_ERROR', 'Chat service error.', true)
-    }
-  })
+      const access = verifyJobAccess(request, serverJob, persisted)
+      if (!access.ok) {
+        set.status = access.status
+        return access.body
+      }
 
-  // Load conversation history for a job
-  .get('/api/conversation/:jobId', async ({ params, request, set }) => {
-    const serverJob = await (deps.getJob ?? getJob)(params.jobId)
-    // Same persisted fallback as the stream route above.
-    const persisted = serverJob
-      ? null
-      : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
-    const source = serverJob ?? persisted
-    if (!source) {
-      set.status = 404
-      return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
-    }
-
-    const access = verifyJobAccess(request, serverJob, persisted)
-    if (!access.ok) {
-      set.status = access.status
-      return access.body
-    }
-
-    const messages = await playerTranscript.load({ serverJobId: params.jobId })
-    set.status = 200
-    return { messages }
-  })
+      const messages = await playerTranscript.load({ serverJobId: params.jobId })
+      set.status = 200
+      return { messages }
+    })
 
 export default chatRoutes()
