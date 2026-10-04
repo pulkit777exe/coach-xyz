@@ -2259,14 +2259,16 @@ function componentFiles(): string[] {
  * means, and exactly what a jsdom project would close.
  */
 const PORTAL_ONLY = new Set([
-  // These two still render EMPTY even with the portal inlined, for different
-  // reasons, and both are named rather than dropped:
+  // Both still render EMPTY with the portal inlined, and for the SAME reason: each
+  // gates its content on state that only a `useEffect` populates, and
+  // `renderToStaticMarkup` runs no effects. Neither is a portal problem any more —
+  // mocking the portal is what exposed that the real blocker is the effect.
   //
-  // AnalysisLinkControl renders its dialog only once an analysis has been linked,
-  // so the closed state has nothing in it — and the fix is a prop, not a mock.
+  // AnalysisLinkControl holds `students` at null until its fetch resolves, and
+  // returns early while it is null.
   'components/org/AnalysisLinkControl.tsx',
-  // NotificationBell's content is behind a mounted-state gate, and
-  // `renderToStaticMarkup` runs no effects, so the effect that sets it never runs.
+  // NotificationBell holds a `mounted` flag set in an effect, so it renders its
+  // trigger-less placeholder.
   'components/notifications/NotificationBell.tsx',
 ])
 
