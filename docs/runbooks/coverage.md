@@ -100,15 +100,52 @@ findings came out of it: a genuinely unnamed `sr-only` file input in
 accepted as a name, so removing the drawer's Close button's `aria-label` went
 unnoticed until it was mutation-tested).
 
-What it still cannot reach, as named sets rather than prose: **7 `PORTAL_ONLY`**
-components render empty markup because 9ui's `DialogContent` wraps children in
-Base UI's `DialogPortal`, which has no server-render output — proved by rendering
-one with `open: true` and still getting nothing. **7 more are skipped** with a
+### The portal was not the same thing as a DOM
+
+Seven components rendered **zero bytes** because 9ui's `DialogContent` wraps
+children in Base UI's `DialogPortal`, which has no server-render output. That was
+first recorded here as the honest cost of having no DOM — which was too quick. A
+portal needs a *document* to portal into, but nothing about a name check needs the
+portal mechanism: mocking `Portal`, `Popup` and `Backdrop` to plain wrappers puts
+the content back into the markup.
+
+`keepMounted` was checked first and does **not** help — a plain portal and a
+`keepMounted` one both render as nothing, with `aria-expanded` stuck at `false` on
+an `open` dialog — so the limit was real. It was just not the limit that mattered.
+
+| component | before | after |
+|---|---|---|
+| `StudentFormDialog` | 0 b | **17 292 b**, 10 inputs, 14 labels |
+| `EventFormDialog` | 0 b | **10 590 b**, 5 inputs, 8 labels |
+| `EmailAttendanceDialog` | 0 b | **4 522 b**, 1 input, 3 buttons |
+| `InvitePlayersDialog` | 0 b | **3 966 b**, 3 buttons |
+
+Five of the seven are now genuinely swept, including the densest form in the app.
+The remaining **2 `PORTAL_ONLY`** entries are named with the reason each still
+renders empty — one gated on a linked analysis, one on a mounted-state effect that
+`renderToStaticMarkup` never runs. **7 more components are skipped** with a
 per-component reason (client-only provider, a store a client effect populates, a
-suspend, one non-component). Portal content, anything behind an interaction, and
-focus management remain out of reach; the last is covered against fake nodes by
-`a11yOverlay.test.ts`. **This is the honest remaining cost of having no DOM, and
-it is what a jsdom project would buy.**
+suspend, one non-component).
+
+Reaching the dialogs found a **real defect** the portal had been hiding:
+`AttendanceGrid`'s per-student note field was named only by its placeholder, inside
+a per-student loop, so a screen reader offered several identical unlabelled boxes
+and the coach could not tell whose attendance they were editing.
+
+The fidelity reduction is deliberate and stated: the sweep checks the **content** of
+a dialog, not that Base UI mounts it into `document.body`.
+
+### What is still out of reach
+
+- Anything behind an interaction — no effects run and no events dispatch, so a
+  `useEffect`-gated panel renders in its initial state. `NotificationBell` is the one
+  that shows here.
+- Focus management (`focusInitial` / `inertOutside` / `restoreFocusOnClose`) is
+  effect-only and is covered against fake nodes by `a11yOverlay.test.ts`.
+- Portal wiring itself, per above.
+- A name is a name *in context*: name-from-content is accepted, so a combobox whose
+  only name is its current value passes. Correct for this assertion, not sufficient
+  for the product; `a11ySource.test.ts` holds the stricter greps.
 
 `modal` rendering **0 bytes** is the interesting one, and it is not a testing
 gap: the component is `useState`-gated closed, so it is empty in *every* server
