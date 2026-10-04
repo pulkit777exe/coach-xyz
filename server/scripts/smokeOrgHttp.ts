@@ -245,12 +245,27 @@ async function main() {
 
   // ── Schedule ──────────────────────────────────────────────────────────────
   console.log('schedule')
+  // Dates are computed from NOW, not hardcoded. Two of these fixtures were
+  // written as literal 2026-09-10 / 2026-09-11 timestamps, and they began failing
+  // on 2026-10-04 for a reason that had nothing to do with the code under test:
+  // `/api/me/schedule` defaults `from` to now (an all-time window would return
+  // the club's ENTIRE fixture history and make the row cap truncate the OLDEST
+  // page), so a past event is correctly excluded and `me schedule` answered
+  // `events: []`.
+  //
+  // The product behaviour was right and the assertion was stale — but a fixture
+  // with an expiry date is a fixture that will break again on an unrelated day,
+  // and it breaks looking like a regression. Both events are now relative: one in
+  // the past (to prove the past-exclusion) and one in the future (to prove the
+  // default window still returns upcoming).
+  const hoursFromNow = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
+
   r = await call('POST', `/api/org/${coachId}/schedule`, {
     identity: coachId,
     body: {
       title: 'Smoke Practice',
       event_type: 'practice',
-      starts_at: '2026-09-10T16:00:00Z',
+      starts_at: hoursFromNow(24),
       status: 'scheduled',
     },
   })
@@ -269,27 +284,34 @@ async function main() {
   // 500'd with "column starts_at is of type timestamp with time zone but
   // expression is of type text" — editing an event was impossible from the UI.
   // No fixture can catch it: they stub `db` as a plain tag function.
+  const movedStartsAt = hoursFromNow(48)
+  const movedEndsAt = hoursFromNow(49)
   r = await call('PUT', `/api/org/${coachId}/schedule/${eventId}`, {
     identity: coachId,
     body: {
       title: 'Smoke Practice (moved)',
       event_type: 'practice',
-      starts_at: '2026-09-11T18:30:00Z',
-      ends_at: '2026-09-11T19:30:00Z',
+      starts_at: movedStartsAt,
+      ends_at: movedEndsAt,
       location: 'Pitch 2',
       status: 'completed',
     },
   })
   check('edit event times → 200', r.status === 200, r.json)
+  // Compared against the value that was SENT, not a literal date: the literal is
+  // what made these assertions expire.
+  const movedStart = new Date(movedStartsAt).getTime()
+  const movedEnd = new Date(movedEndsAt).getTime()
   check(
     'edited starts_at persisted',
-    r.status === 200 && String(r.json?.event?.starts_at ?? '').startsWith('2026-09-11'),
+    r.status === 200 &&
+      Math.abs(new Date(String(r.json?.event?.starts_at ?? '')).getTime() - movedStart) < 1000,
     r.json,
   )
   check(
     'edited ends_at and text persisted',
     r.status === 200 &&
-      String(r.json?.event?.ends_at ?? '').startsWith('2026-09-11') &&
+      Math.abs(new Date(String(r.json?.event?.ends_at ?? '')).getTime() - movedEnd) < 1000 &&
       r.json?.event?.title === 'Smoke Practice (moved)' &&
       r.json?.event?.location === 'Pitch 2',
     r.json,
