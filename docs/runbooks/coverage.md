@@ -175,3 +175,21 @@ wrong, never a ceiling on what is.** `server/tests/payloadBudget.test.ts` is the
 model: it asserts bytes, because bytes fail for exactly one reason, whereas
 latency on a shared runner is too noisy to gate and a flaky perf gate gets
 disabled — which is worse than none.
+## web-next: reachability, not coverage
+
+`vitest --coverage` requires `@vitest/coverage-v8`, which is not a dependency this repo may add, so this tier is measured as **import-graph reachability** instead:
+
+```bash
+node scripts/webReachability.mjs          # last run saved to docs/web-reachability.txt
+```
+
+Current read: **191 source files, 30 test files, 134 statically imported (70.2%)**, 6 loaded only by the generic render sweep, 51 touched by nothing (13.6% of lines).
+
+Two limits decide what that means, and both are printed by the script rather than left for the reader to assume:
+
+1. **Reachability is not execution.** A file can be imported and have none of its branches run. The render sweep proves markup and accessible names; it never proves a value.
+2. **The sweep bucket is an upper bound, and measurably so.** `components/a11y-name-sweep.test.tsx` enumerates `components/**` with `readdirSync` and dynamically imports each file, so those components really are rendered — but they leave **no static import edge**, and a naive import-graph metric would report every one of them as untouched. The script therefore reports them separately as *loaded only by a generic sweep*, which is the six components with no test written for them, headed by `StudentsClient.tsx` (973 lines, the largest client component in the app). The separation is keyed on "some test calls `readdirSync`" rather than "this file was enumerated", so mutating the sweep so it walks nothing leaves the numbers unchanged. That is correct for this repo only because the sweep walks from the components directory itself, so enumerating means every component — revisit that line if the sweep's roots ever change.
+
+**The number worth acting on is the 6, not the 51.** Fifty of the untouched files are `app/` route modules, which no unit test can reach and which `next build` already type-checks. Treating them as gaps would be the same mistake as treating Bun's probe-reported sub-50% modules as gaps on the server: a number that points at the wrong files is worse than no number, because it looks like a priority list.
+
+Re-derive and read the LIMITS block at the bottom of the output before quoting any figure from it.
