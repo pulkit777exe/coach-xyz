@@ -2082,6 +2082,31 @@ export const MATRIX: MatrixEntry[] = [
       other: 200,
     },
     note: 'fixture report is about another player: the linked player 404s',
+    // Same omission as notifications/:id/read — no malformed-id case, so a 500 from
+    // the `::uuid` cast inside getReport went unpinned. Checked BEFORE the
+    // linked-player branch on purpose: that branch answers 200 without reading the
+    // id, so a malformed id would otherwise pass silently for exactly the unlinked
+    // callers most likely to mistype one. The base row's `player=404` is the
+    // ownership check; here every verified identity is a 400 on shape alone.
+    variants: [
+      {
+        name: 'a malformed id is a 400, never a 500 from the ::uuid cast',
+        params: { id: 'not-a-uuid' },
+        expect: {
+          anonymous: 403,
+          owner: 400,
+          admin: 400,
+          head_coach: 400,
+          coach: 400,
+          assistant_coach: 400,
+          analyst: 400,
+          medical: 400,
+          player: 400,
+          outsider: 400,
+          other: 400,
+        },
+      },
+    ],
   }),
   {
     method: 'POST',
@@ -2137,21 +2162,13 @@ export const MATRIX: MatrixEntry[] = [
     },
   }),
   // ── Notifications ──
-  orgRead('GET', '/api/me/notifications', {
-    expect: {
-      anonymous: 403,
-      owner: 200,
-      admin: 200,
-      head_coach: 200,
-      coach: 200,
-      assistant_coach: 200,
-      analyst: 200,
-      medical: 200,
-      player: 200,
-      outsider: 200,
-      other: 200,
-    },
-  }),
+  // NB: `GET /api/me/notifications` used to be declared here AND at line 1332. The
+  // probe resolves an entry with `MATRIX.find(e => method+path match)`, so the
+  // SECOND copy never ran — 11 cases of dead table, invisible to `orphanEntries`
+  // because the path itself was covered. It agreed with the first copy, so nothing
+  // was actually wrong; but editing the dead one would have silently done nothing,
+  // which is the same failure shape as a probe pinned to the wrong expectation.
+  // `authMatrix.test.ts` now asserts uniqueness, so a duplicate fails loudly.
   {
     method: 'POST',
     path: '/api/me/notifications/:id/read',
@@ -2169,6 +2186,30 @@ export const MATRIX: MatrixEntry[] = [
       outsider: 200,
       other: 200,
     },
+    // This route had NO malformed-id case, which is how a 500 survived: the table's
+    // header declares "malformed ids → 400" as a repo-wide convention, and this
+    // route was quietly exempt from it because nothing exercised it. `notifications.id`
+    // is a uuid primary key and `params.id` reached the `::uuid` cast unvalidated.
+    // `anonymous` stays 403 — the identity check runs before the shape check.
+    variants: [
+      {
+        name: 'a malformed id is a 400, never a 500 from the ::uuid cast',
+        params: { id: 'not-a-uuid' },
+        expect: {
+          anonymous: 403,
+          owner: 400,
+          admin: 400,
+          head_coach: 400,
+          coach: 400,
+          assistant_coach: 400,
+          analyst: 400,
+          medical: 400,
+          player: 400,
+          outsider: 400,
+          other: 400,
+        },
+      },
+    ],
   },
   {
     method: 'POST',
@@ -2193,6 +2234,15 @@ export const MATRIX: MatrixEntry[] = [
     method: 'POST',
     path: '/api/email/:auth0Id/report',
     body: { report_id: '00000000-0000-4000-8000-0000000000e1', to: 'a@matrix.test' },
+    // `analyst=200` is DELIBERATE and asserted in emailRouteGuards.test.ts
+    // ("report.create is theirs by policy") — an analyst is an org-wide reader who
+    // can already fetch every report through `GET /api/org/:auth0Id/reports/:id`, so
+    // mailing one escalates nothing. What this cell does NOT record is that
+    // `app.ts` wraps this tree in a role floor excluding `analyst` which never
+    // fires, so the code appears to promise 403 and delivers 200. Whether an
+    // org-wide reader may egress a report to a caller-supplied address is an open
+    // product question, not a settled rule — do not "fix" this cell in either
+    // direction without deciding it. See EMAIL_TREE_ROLES_NOT_ENFORCED.
     expect: {
       anonymous: 403,
       owner: 200,

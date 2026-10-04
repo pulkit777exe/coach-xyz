@@ -21,7 +21,7 @@ import { serviceGuard } from '../lib/serviceGuard'
 import { missingVerifiedSelf, requireVerifiedSelf, type MissingVerifiedSelf } from '../lib/caller'
 import { admitAnalysis } from '../lib/analysisAdmission'
 import { redactWellness } from '../lib/permissions'
-import { pickInt } from '../lib/uuid'
+import { pickInt, pickUuid } from '../lib/uuid'
 import { logger } from '../lib/logger'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { readRequestMeta } from '../lib/requestMeta'
@@ -554,13 +554,23 @@ export default new Elysia()
   .get('/api/me/reports/:id', async ({ request, params, set }) => {
     const verified = requireVerifiedSelf({ request, set })
     if (typeof verified !== 'string') return verified
+    // Checked before the linked-player branch below, so the rule holds for every
+    // caller: a malformed id is a 400, never a 500 from the `::uuid` cast inside
+    // `getReport`. Placed here rather than after the branch because that branch
+    // answers 200 without ever reading the id, which would let a malformed id
+    // pass silently for exactly the unlinked callers most likely to mistype one.
+    const reportId = pickUuid(params.id)
+    if (!reportId) {
+      set.status = 400
+      return buildError('INVALID_REQUEST', 'Invalid report id', false)
+    }
     const { student, coachAuth0Id } = await playerScope(verified)
     if (!student || !coachAuth0Id) {
       set.status = 200
       return { report: null, linked: false }
     }
 
-    const report = await getReport(coachAuth0Id, params.id)
+    const report = await getReport(coachAuth0Id, reportId)
     if (!report || report.student_id !== student.id) {
       set.status = 404
       return buildError('NOT_FOUND', 'Report not found', false)

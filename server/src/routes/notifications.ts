@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 
-import { pickInt } from '../lib/uuid'
+import { pickInt, pickUuid } from '../lib/uuid'
 import { buildError } from '../lib/errors'
 import { serviceGuard } from '../lib/serviceGuard'
 import { requireVerifiedSelf } from '../lib/caller'
@@ -158,8 +158,17 @@ export const notificationsRoute = (deps: NotificationsRouteDeps = {}) => {
       .post('/api/me/notifications/:id/read', async ({ request, params, set }) => {
         const verified = requireVerifiedSelf({ request, set })
         if (typeof verified !== 'string') return verified
+        // `notifications.id` is a uuid primary key and this id was never validated,
+        // so a non-uuid reached the `::uuid` cast and answered 500 INTERNAL_ERROR —
+        // on a route every sibling validates. A malformed id is a 400 at the
+        // boundary; `pickUuid` is the SSOT for that check.
+        const id = pickUuid(params.id)
+        if (!id) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Invalid notification id', false)
+        }
 
-        const updated = await markNotificationRead(verified, params.id)
+        const updated = await markNotificationRead(verified, id)
         if (!updated) {
           set.status = 404
           return buildError('NOT_FOUND', 'Notification not found', false)

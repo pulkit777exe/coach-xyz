@@ -23,7 +23,7 @@ import chatRoute from './routes/chat'
 import authRoute from './routes/auth'
 import orgRoute from './routes/org'
 import meRoute from './routes/me'
-import emailRoute from './routes/email'
+import emailRoute, { EMAIL_TREE_ROLES_NOT_ENFORCED } from './routes/email'
 import membersRoute from './routes/members'
 import teamsRoute from './routes/teams'
 import notificationsRoute from './routes/notifications'
@@ -160,7 +160,13 @@ export const buildApp = () => {
       ),
     )
     .use(meRoute)
-    .use(emailRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
+    // INERT: `emailRoute` is already composed by the time this `.use()` runs, and a
+    // scoped hook added to an instance after its routes never reaches them. The floor
+    // that actually applies is the capability inside `emailGuard`, which admits
+    // `analyst` on `report.create` — so this list disagrees with the behaviour it
+    // appears to describe. Referenced by name rather than inlined so the two cannot
+    // drift; the constant's own doc comment carries the open product question.
+    .use(emailRoute.use(orgRoleGuard(EMAIL_TREE_ROLES_NOT_ENFORCED)))
     .use(membersRoute)
     .use(teamsRoute)
     .use(notificationsRoute)

@@ -12,6 +12,7 @@ import {
 } from '../lib/mailer'
 import { getUserByAuth0Id } from '../lib/users'
 import { resolveCaller, type Caller } from '../lib/caller'
+import type { OrgMemberRole } from '../lib/orgMembers'
 import { canSeeStudent, visibleStudentIds } from '../lib/org/scope'
 import type { Permission } from '../lib/permissions'
 import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
@@ -50,6 +51,39 @@ const statusColor = (status: string): string => {
  *
  * So: one capability per route, checked once, before any data is read.
  */
+/**
+ * The `/api/email/*` tree's role floor.
+ *
+ * This list used to live at `app.ts` as `emailRoute.use(orgRoleGuard([...]))` — a
+ * mount-time guard wrapped around an ALREADY-COMPOSED barrel, a shape Elysia never
+ * applies to those routes. It read as enforcement and enforced nothing, which is
+ * worse than having no guard: it is what makes the list below look like the rule
+ * when the actual rule is the capability inside `emailGuard`. Four independent
+ * audits of this tree each read the list, derived a role floor from it, and had to
+ * be corrected by experiment.
+ *
+ * The two disagree on exactly one role, and the disagreement is a PRODUCT
+ * QUESTION rather than an obvious bug — so it is recorded here instead of silently
+ * resolved. `analyst` holds `report.create`, so on `POST /api/email/:auth0Id/report`
+ * it passes the capability gate, reads any report in the org through an unscoped
+ * `getReport`, and mails it to a caller-supplied `to`. The list above excludes it;
+ * `emailRouteGuards.test.ts` asserts it may ("report.create is theirs by policy"),
+ * reasoning that an analyst is an org-wide reader already and gains nothing. That
+ * reasoning holds — the same analyst can read every report through a plain
+ * `GET /api/org/:auth0Id/reports/:id` — so egress is the only thing at stake, and
+ * egress is exactly why this repo's own notes call an unguarded email route an
+ * exfiltration channel. It needs an owner's decision, not an auditor's.
+ *
+ * What is NOT in doubt: these routes mail data to an address the caller supplies.
+ */
+export const EMAIL_TREE_ROLES_NOT_ENFORCED = [
+  'owner',
+  'admin',
+  'head_coach',
+  'assistant_coach',
+  'coach',
+] as const satisfies readonly OrgMemberRole[]
+
 const emailGuard = async (
   auth0Id: string,
   request: Request,

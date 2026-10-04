@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
 import { lastJsonLine, runProbeProcess } from './spawnProbe'
+import { MATRIX } from './authMatrixPolicy'
 
 // ── Authorization matrix ─────────────────────────────────────────────────────
 // Every non-capability route × every role, driven against the real composed
@@ -66,6 +67,40 @@ const runProbe = async (): Promise<ProbeResult> => {
 }
 
 describe('authorization matrix', () => {
+  test('no two entries share a method+path, so no row can be dead', () => {
+    // The probe resolves one entry per route with `MATRIX.find(...)`, which returns
+    // the FIRST match. A duplicated method+path therefore disables the second copy's
+    // cases silently — `uncovered` stays empty because the path IS covered, and
+    // `orphanEntries` stays empty because it only looks for paths no route serves.
+    // This file had exactly that: `GET /api/me/notifications` declared twice, 11 dead
+    // cases, no signal. Found only by noticing the probe's `total` was 11 short of
+    // the table's own arithmetic — which is the general lesson, and the reason this
+    // asserts both numbers agree rather than only that they are plausible.
+    const seen = new Map<string, number>()
+    for (const entry of MATRIX) {
+      const key = `${entry.method} ${entry.path}`
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    const duplicates = [...seen.entries()].filter(([, n]) => n > 1).map(([k]) => k)
+    expect(duplicates).toEqual([])
+    expect(MATRIX.length).toBe(seen.size)
+  })
+
+  test("the table's own arithmetic equals the number of cases the probe runs", async () => {
+    // The duplicate above hid behind this mismatch: 1507 expected, 1496 run. A
+    // count that disagrees with the count is the only cheap signal that some row is
+    // being skipped, so it is asserted rather than eyeballed.
+    const result = await runProbe()
+    const declared = MATRIX.reduce(
+      (n, e) =>
+        n +
+        Object.keys(e.expect).length +
+        (e.variants ?? []).reduce((m, v) => m + Object.keys(v.expect).length, 0),
+      0,
+    )
+    expect(result.total).toBe(declared)
+  }, 300000)
+
   test('every route × role matches the policy table with no uncovered routes', async () => {
     const result = await runProbe()
     // Floor, not an exact count: new routes add cases, never remove them.
