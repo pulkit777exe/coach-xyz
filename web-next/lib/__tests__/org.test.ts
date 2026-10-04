@@ -140,6 +140,40 @@ describe('orgImportStudents', () => {
       rows: [{ full_name: 'Al', status: 'active' }, { full_name: 'Bo' }],
     })
   })
+
+  it('sends a batch-level team_id when one is given', async () => {
+    // The server scope-gates the import team: a team-scoped caller may only
+    // file players under a team they belong to, and a caller assigned to more
+    // than one team cannot fall back to a default. So the team has to be
+    // expressible from the client.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ imported: 0, failed: [], duplicates_skipped: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await orgImportStudents('auth|123', [{ full_name: 'Al' }], 'team-uuid')
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toEqual({
+      rows: [{ full_name: 'Al' }],
+      team_id: 'team-uuid',
+    })
+  })
+
+  it('omits team_id entirely when none is given', async () => {
+    // A `team_id: undefined` key would still show up in the serialised body, and
+    // the server reads an explicit blank as "chose no team" rather than
+    // "fall back to the default" — so the key must be absent, not undefined.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ imported: 0, failed: [], duplicates_skipped: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await orgImportStudents('auth|123', [{ full_name: 'Al' }])
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(Object.keys(JSON.parse(init.body as string))).toEqual(['rows'])
+  })
 })
 
 describe('orgStudentTrends', () => {
