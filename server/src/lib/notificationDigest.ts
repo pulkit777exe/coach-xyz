@@ -16,6 +16,7 @@
 // the same Redis gate as everything else, mirroring lib/retention.ts's
 // "domain owns its schedule" split.
 
+import { toDateOnly } from './orgValidate'
 import { orDisabledDefault, withHistoryStore } from './historyStore'
 import { digestEmail, emailConfigured, escapeHtml, isDeliverableAddress, sendEmail } from './mailer'
 import { DEFAULT_EVENTS, notificationPrefs, type NotificationEvent } from './notificationPrefs'
@@ -118,11 +119,15 @@ const appBaseUrl = (appUrl?: string): string => {
 }
 
 /** Human label for the group a day-heading belongs to. */
-const dayLabel = (iso: string): string => {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
-}
+/**
+ * The UTC day an instant belongs to, or `''` when it is unparseable.
+ *
+ * `''` rather than `null` is load-bearing: this is a Map key for grouping, and
+ * `dayHeading('')` deliberately falls through to returning its input. `toDateOnly`
+ * answers `null` for exactly the inputs this answered `''` with, so `?? ''` keeps
+ * the shape — and drops another inline copy of the truncation.
+ */
+const dayLabel = (iso: string): string => toDateOnly(iso) ?? ''
 
 const dayHeading = (day: string): string => {
   const date = new Date(`${day}T00:00:00.000Z`)

@@ -1,3 +1,4 @@
+import { toIsoString, toOptionalIsoString } from './isoTime'
 import { orDisabledDefault, withHistoryStore, withHistoryStoreOrThrow } from './historyStore'
 import { logger } from './logger'
 
@@ -60,17 +61,6 @@ export const defaultNotificationPreferences = (): NotificationPreferences => ({
   updatedAt: null,
   lastDigestAt: null,
 })
-
-const toIsoString = (value: string | Date): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-
-/** Optional column: NULL (or an absent projection) reads back as null, never
- *  as an Invalid Date string. */
-const toOptionalIsoString = (value: string | Date | null | undefined): string | null => {
-  if (value === null || value === undefined) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
-}
 
 const toNotificationPreferences = (row: NotificationPreferencesRow): NotificationPreferences => {
   const storedEvents =

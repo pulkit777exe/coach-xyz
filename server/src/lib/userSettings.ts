@@ -1,3 +1,4 @@
+import { toIsoString } from './isoTime'
 import { orDisabledDefault, withHistoryStore, withHistoryStoreOrThrow } from './historyStore'
 
 export type Theme = 'system' | 'light' | 'dark'
@@ -29,9 +30,6 @@ export const defaultUserSettings = (): UserSettings => ({
   weekStartsMonday: false,
   updatedAt: null,
 })
-
-const toIsoString = (value: string | Date): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 
 const toUserSettings = (row: UserSettingsRow): UserSettings => ({
   theme: THEME_SET.has(row.theme) ? (row.theme as Theme) : 'system',

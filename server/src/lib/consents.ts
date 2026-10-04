@@ -1,3 +1,4 @@
+import { toIsoString } from './isoTime'
 import { orDisabledDefault, withHistoryStore, withHistoryStoreOrThrow } from './historyStore'
 import { auditRoute } from './audit'
 import { buildError, type CoachAIError } from './errors'
@@ -47,9 +48,6 @@ type ConsentRow = {
   policy_version: string
   updated_at: string | Date
 }
-
-const toIsoString = (value: string | Date): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 
 /**
  * The answer for a linked player who has never recorded consent: every purpose
@@ -205,11 +203,18 @@ export const gateConsentWrite = async (input: {
     mode,
     action: input.action,
   })
-  auditRoute(input.request, input.orgAuth0Id, 'settings.changed', 'player_consent', input.studentId, {
-    purpose: input.purpose,
-    mode,
-    action: input.action,
-  })
+  auditRoute(
+    input.request,
+    input.orgAuth0Id,
+    'settings.changed',
+    'player_consent',
+    input.studentId,
+    {
+      purpose: input.purpose,
+      mode,
+      action: input.action,
+    },
+  )
   if (mode === 'enforce') {
     return {
       ok: false,

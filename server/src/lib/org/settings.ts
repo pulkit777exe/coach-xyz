@@ -6,6 +6,7 @@
 // to the club's own calendar. Both are org-wide, so only owners/admins write
 // them — the role floor lives on the route (orgRoleGuard), not here.
 
+import { toIsoString } from '../isoTime'
 import { orDisabledDefault, withHistoryStore, withHistoryStoreOrThrow } from '../historyStore'
 
 /** Longest accepted organization name. Matches ensureOrg()'s seed truncation. */
@@ -27,9 +28,6 @@ type OrgSettingsRow = {
   timezone: string | null
   created_at: string | Date
 }
-
-const toIsoString = (value: string | Date): string =>
-  value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 
 const toOrgSettings = (row: OrgSettingsRow): OrgSettings => ({
   name: row.name,

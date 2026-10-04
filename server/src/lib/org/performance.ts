@@ -1,5 +1,6 @@
 // Performance metrics data layer — split from lib/orgData.ts.
 
+import { toIsoString as iso } from '../isoTime'
 import { withHistoryStoreOrThrow } from '../historyStore'
 import { computeMetricTrends as computeTrends, isDate } from '../orgValidate'
 import type { MetricTrend } from '../orgValidate'
@@ -253,8 +254,6 @@ export const getStudentPerformanceSeries = async (
       // metric looked fine while a student with two threw
       // "a.measured_at.localeCompare is not a function", taking the performance
       // series and every report built from it with it.
-      const iso = (value: string | Date): string =>
-        value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 
       const points: PerformanceSeriesPoint[] = [
         ...(analyses ?? []).map((a) => ({
@@ -396,8 +395,6 @@ export const compareStudents = async (
   // Bun decodes a timestamptz to a Date, not the string these shapes declare.
   // Normalize where the value enters the domain object — see the longer note in
   // getStudentPerformanceSeries, whose one-row blind spot this is the same one.
-  const iso = (value: string | Date): string =>
-    value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 
   const formScores = new Map<string, PerformanceSeriesPoint[]>()
   for (const a of analyses) {

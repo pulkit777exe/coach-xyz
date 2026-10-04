@@ -11,6 +11,7 @@
 //  2. No new SQL. Every read is an existing self-scoped data function, so the
 //     export cannot drift from what the player hub itself shows.
 
+import { toDateOnly } from './orgValidate'
 import type { DashboardAnalysis } from './analyses'
 import { consentForStudent, unlinkedConsent, type PlayerConsent } from './consents'
 import {
@@ -216,6 +217,12 @@ export const buildAccountExport = async (
   }
 }
 
-/** The download filename the export route sets (and the UI mirrors). */
+/**
+ * The download filename the export route sets (and the UI mirrors).
+ *
+ * `toDateOnly` rather than an inline `.toISOString().slice(0, 10)`: the day in a
+ * filename is the same answer as the day in a `date` column, and a second copy of
+ * that expression is how the two start drifting.
+ */
 export const exportFilename = (now: Date = new Date()): string =>
-  `coachxyz-export-${now.toISOString().slice(0, 10)}.json`
+  `coachxyz-export-${toDateOnly(now)}.json`

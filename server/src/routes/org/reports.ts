@@ -7,7 +7,13 @@ import {
   listReports,
   updateReportRecord,
 } from '../../lib/orgData'
-import { defaultReportTitle, isDate, isIsoDate, readListLimit } from '../../lib/orgValidate'
+import {
+  defaultReportTitle,
+  isDate,
+  isIsoDate,
+  readListLimit,
+  toDateOnly,
+} from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { resolveCaller } from '../../lib/caller'
@@ -200,14 +206,16 @@ export default new Elysia()
 
     const { report_type, period_start, period_end, title } = body as Record<string, unknown>
 
+    // `existing.period_*` is a `date` column, so this is `toDateOnly`'s job and
+    // the fourth inline copy of it — the first three were in the data layer. The
+    // `unknown` branch stays for a hand-rolled projection, where a malformed
+    // value should stay legible in the error path instead of throwing.
     const toYmd = (v: unknown): string | null =>
-      v === null || v === undefined
-        ? null
-        : typeof v === 'string'
-          ? v
-          : v instanceof Date
-            ? v.toISOString().slice(0, 10)
-            : String(v)
+      v instanceof Date || typeof v === 'string'
+        ? toDateOnly(v)
+        : v === null || v === undefined
+          ? null
+          : String(v)
 
     const nextType = (
       report_type === undefined ? existing.report_type : String(report_type)

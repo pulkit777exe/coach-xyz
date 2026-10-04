@@ -5,6 +5,7 @@
 // INSERT and SELECT. Anything that mutates a request's status belongs to the
 // review flow, not to the requester, and lands in a separate module.
 
+import { toOptionalIsoString } from './isoTime'
 import { withHistoryStoreOrThrow } from './historyStore'
 
 export const PRIVACY_REQUEST_TYPES = ['export', 'delete'] as const
@@ -37,11 +38,6 @@ type PrivacyRequestRow = {
 /** A list is a UI, not a data dump — cap it like every other paginated read. */
 const MAX_LIST = 50
 
-const toIsoString = (value: string | Date | null): string | null => {
-  if (value === null || value === undefined) return null
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
 const toPrivacyRequest = (row: PrivacyRequestRow): PrivacyRequest => ({
   id: row.id,
   // The column CHECK constraint owns this vocabulary: a value outside
@@ -53,8 +49,8 @@ const toPrivacyRequest = (row: PrivacyRequestRow): PrivacyRequest => ({
   status: PRIVACY_REQUEST_STATUSES.includes(row.status as PrivacyRequestStatus)
     ? (row.status as PrivacyRequestStatus)
     : 'received',
-  createdAt: toIsoString(row.created_at) ?? new Date(0).toISOString(),
-  resolvedAt: toIsoString(row.resolved_at),
+  createdAt: toOptionalIsoString(row.created_at) ?? new Date(0).toISOString(),
+  resolvedAt: toOptionalIsoString(row.resolved_at),
 })
 
 /**
@@ -123,8 +119,9 @@ export const listOrgPrivacyRequests = async (
   opts: { limit?: number } = {},
 ): Promise<Array<PrivacyRequest & { auth0Id: string }>> => {
   const limit = Math.min(Math.max(opts.limit ?? MAX_LIST, 1), MAX_LIST)
-  return withHistoryStoreOrThrow(async (db) => {
-    const rows = await db<(PrivacyRequestRow & { auth0_id: string })[]>`
+  return (
+    withHistoryStoreOrThrow(async (db) => {
+      const rows = await db<(PrivacyRequestRow & { auth0_id: string })[]>`
       select r.id, r.auth0_id, r.request_type, r.status, r.created_at, r.resolved_at
       from privacy_requests r
       where r.auth0_id in (
@@ -137,8 +134,9 @@ export const listOrgPrivacyRequests = async (
       order by r.created_at desc
       limit ${limit};
     `
-    return (rows ?? []).map((row) => ({ ...toPrivacyRequest(row), auth0Id: row.auth0_id }))
-  }) ?? []
+      return (rows ?? []).map((row) => ({ ...toPrivacyRequest(row), auth0Id: row.auth0_id }))
+    }) ?? []
+  )
 }
 
 /** Reviewer transitions: received → in_progress → completed | declined. */
