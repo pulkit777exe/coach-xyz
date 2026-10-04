@@ -52,3 +52,6 @@ node_modules
 # Local Auth0 test personas (scripts/seedPersonas.mjs)
 web-next/.personas/
 web-next/.env.personas.local
+
+# Local agent tooling (skill definitions installed per-machine, not repo content)
+.agents/
