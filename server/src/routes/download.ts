@@ -4,7 +4,7 @@ import { getDownloadStream, requestIdFrom } from '../lib/engine'
 import { buildError, enginePassthroughStatus, errorBody, isCoachAIError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import type { ServerJob } from '../lib/jobs'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
+import { needsPersistedOwnerBackstop, resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { checkDownloadLimit, getIP, rateLimited } from '../lib/ratelimit'
 import { markAnalysisDownloaded, getAnalysisByServerJobId } from '../lib/analyses'
 import { auditRoute } from '../lib/audit'
@@ -21,9 +21,14 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
     const serverJob = await (deps.getJob ?? getJob)(params.jobId)
     // Redis mapping expired — fall back to the persisted row, mirroring
     // status: a 2h TTL must not brick downloads of finished analyses.
-    const persisted = serverJob
-      ? null
-      : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
+    // Loaded on BOTH the Redis miss AND the empty-owner-set case, not just the
+    // miss: an empty owner set is what makes a job anonymously readable, so that
+    // is precisely when the persisted row has to be consulted as a backstop.
+    // See `needsPersistedOwnerBackstop`.
+    const persisted =
+      serverJob && !needsPersistedOwnerBackstop(serverJob)
+        ? null
+        : await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(params.jobId)
 
     // Either mapping serves: narrows non-null for the engine id,
     // download count, and audit below.
@@ -49,10 +54,7 @@ export const downloadRoute = (deps: DownloadRouteDeps = {}) =>
     }
 
     try {
-      const engineResponse = await getDownloadStream(
-        source.engine_job_id,
-        requestIdFrom(request),
-      )
+      const engineResponse = await getDownloadStream(source.engine_job_id, requestIdFrom(request))
       const contentType = engineResponse.headers?.get('content-type') ?? 'video/mp4'
       const contentLength = engineResponse.headers?.get('content-length')
       const headers: Record<string, string> = {

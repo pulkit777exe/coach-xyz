@@ -52,7 +52,10 @@ const call = async (
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
   )
-  return { status: res.status, body: ((await res.json().catch(() => null)) ?? {}) as Record<string, unknown> }
+  return {
+    status: res.status,
+    body: ((await res.json().catch(() => null)) ?? {}) as Record<string, unknown>,
+  }
 }
 
 const db = new SQL(TEST_DATABASE_URL)
@@ -101,15 +104,12 @@ const reset = async (): Promise<void> => {
   check(res.status === 201, `add: expected 201, got ${res.status}`)
   check((await getStudent(ORG, STUDENT))?.team_id === TEAM_A, 'add: team_id not set')
   const members = await listTeamMembers(TEAM_A)
-  check(
-    members.map((m) => m.student_id).includes(STUDENT),
-    'add: roster row missing',
-  )
+  check(members.map((m) => m.student_id).includes(STUDENT), 'add: roster row missing')
   done.push('add')
 }
 
 // 2. A student from another org cannot be filed onto the team.
-  await reset()
+await reset()
 {
   await db`update students set auth0_id = ${OTHER} where id = ${STUDENT}::uuid;`
   const res = await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
@@ -122,7 +122,7 @@ const reset = async (): Promise<void> => {
 }
 
 // 3. Removing a student membership clears team_id, not just the row.
-  await reset()
+await reset()
 {
   const added = await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
     student_id: STUDENT,
@@ -140,7 +140,7 @@ const reset = async (): Promise<void> => {
 }
 
 // 4. PUT team_id moves the player and mirrors both sides.
-  await reset()
+await reset()
 {
   await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
     student_id: STUDENT,
@@ -159,7 +159,7 @@ const reset = async (): Promise<void> => {
 }
 
 // 5. PUT team_id null unassigns and drops the roster row.
-  await reset()
+await reset()
 {
   const res = await call(studentsRoutes, 'PUT', `/api/org/${ORG}/students/${STUDENT}`, {
     team_id: null,
@@ -172,7 +172,7 @@ const reset = async (): Promise<void> => {
 }
 
 // 6. Deleting the team unassigns the player and drops memberships.
-  await reset()
+await reset()
 {
   await call(teamsRoutes, 'POST', `/api/org/${ORG}/teams/${TEAM_A}/members`, {
     student_id: STUDENT,
@@ -270,7 +270,22 @@ await db`insert into teams (id, org_auth0_id, name) values (${FOREIGN_TEAM}::uui
   done.push('foreign-delete')
 }
 
-await db`delete from team_memberships where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER});`
+// Teardown, not just the pre-clean above.
+//
+// This probe's ids (…a1/…b1/…c1/…d1) are shared with several other fixtures, and it
+// previously exited without removing its own rows, so every run left three teams
+// and a student behind. Those leftovers then broke studentImportTeam.test.ts with a
+// `teams_pkey` duplicate — a failure three files away from its cause, reported
+// against a file that had done nothing wrong.
+//
+// Order matters: memberships, then students (FK to teams), then teams, then the
+// org_members rows.
+await db`delete from team_memberships where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER});`.catch(
+  () => {},
+)
+await db`delete from team_memberships where student_id = ${STUDENT}::uuid;`
+await db`delete from students where id = ${STUDENT}::uuid;`
+await db`delete from teams where id in (${TEAM_A}::uuid, ${TEAM_B}::uuid, ${FOREIGN_TEAM}::uuid);`
 await db`delete from org_members where member_auth0_id in (${MEMBER_COACH}, ${FOREIGN_MEMBER});`
 await db.close()
 console.log(JSON.stringify({ done }))

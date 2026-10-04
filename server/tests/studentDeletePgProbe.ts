@@ -73,8 +73,7 @@ const done: string[] = []
     'delete: student survives',
   )
   check(
-    (await db`select id from wellness_checkins where student_id = ${STUDENT}::uuid;`).length ===
-      0,
+    (await db`select id from wellness_checkins where student_id = ${STUDENT}::uuid;`).length === 0,
     'delete: wellness survives',
   )
   check(
@@ -87,8 +86,7 @@ const done: string[] = []
     'delete: plans survive',
   )
   check(
-    (await db`select id from team_memberships where student_id = ${STUDENT}::uuid;`).length ===
-      0,
+    (await db`select id from team_memberships where student_id = ${STUDENT}::uuid;`).length === 0,
     'delete: memberships survive',
   )
   check(
@@ -172,6 +170,13 @@ const done: string[] = []
   await sweep()
   done.push('rollback')
 }
+
+// Teardown. The probe inserts teams with fixed ids and previously exited without
+// removing them, so every run left rows behind under ids other fixtures also claim —
+// which is how a later suite died on `duplicate key value violates unique constraint
+// "teams_pkey"` with nothing in its own stack trace pointing here.
+await db`delete from students where auth0_id = ${ORG};`
+await db`delete from teams where org_auth0_id = ${ORG};`
 
 await db.close()
 console.log(JSON.stringify({ done }))

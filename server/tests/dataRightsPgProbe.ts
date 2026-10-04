@@ -18,9 +18,8 @@ mock.module('../src/lib/redis', () => ({
   redis: null,
 }))
 
-const { ensureInitialized, setHistoryStoreConnectionForTests } = await import(
-  '../src/lib/historyStore'
-)
+const { ensureInitialized, setHistoryStoreConnectionForTests } =
+  await import('../src/lib/historyStore')
 const { default: dataRights } = await import('../src/routes/org/dataRights')
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? ''
@@ -65,7 +64,9 @@ await db`insert into notifications (auth0_id, type, title) values (${PLAYER}, 'm
 await db`insert into player_consents (student_id) values (${STUDENT}::uuid);`
 await db`insert into privacy_requests (auth0_id, request_type, status) values (${PLAYER}, 'delete', 'in_progress');`
 const req = (
-  await db<{ id: string }[]>`select id from privacy_requests where auth0_id = ${PLAYER} order by created_at desc limit 1;`
+  await db<
+    { id: string }[]
+  >`select id from privacy_requests where auth0_id = ${PLAYER} order by created_at desc limit 1;`
 )[0]
 
 const res = await dataRights.handle(
@@ -81,8 +82,7 @@ check(
   'execute: student survives',
 )
 check(
-  (await db`select server_job_id from analysis_history where server_job_id = ${JOB};`).length ===
-    0,
+  (await db`select server_job_id from analysis_history where server_job_id = ${JOB};`).length === 0,
   'execute: analysis survives',
 )
 check(
@@ -98,6 +98,20 @@ const done = await db<{ status: string }[]>`
   select status from privacy_requests where id = ${req.id}::uuid;
 `
 check(done[0]?.status === 'completed', 'execute: request not completed')
+
+// Teardown, not just the pre-clean above.
+//
+// The probe inserted TEAM ...a1 and STUDENT ...b1 and previously exited without
+// removing them, so every run left two rows behind. That is invisible while those
+// ids are unique to this file and becomes a `duplicate key value violates unique
+// constraint "teams_pkey"` in an unrelated suite the moment anything else claims
+// the same uuid — which is what happened to studentImportTeam.test.ts. The residue
+// is also why the id collision below was hard to see: the offending row belonged
+// to a probe, not to the test that failed.
+//
+// Students first (FK to teams), then the team.
+await db`delete from students where id = ${STUDENT}::uuid;`
+await db`delete from teams where id = ${TEAM}::uuid;`
 
 await db.close()
 console.log(JSON.stringify({ executed: true }))

@@ -73,3 +73,32 @@ export function verifyJobAccess(
     body: buildError('FORBIDDEN', 'This analysis belongs to another account.', false),
   }
 }
+
+/**
+ * Whether the persisted row is needed as an owner backstop for a Redis job.
+ *
+ * Both `download.ts` and `status.ts` used to load the persisted row ONLY when the
+ * Redis mapping was missing (`serverJob ? null : await getAnalysisByServerJobId()`),
+ * and `status.ts` passed `serverJob` alone. That is fine while `owner_ids` is
+ * written correctly, because `analyze.ts` always seeds it — `orgAuth0Id` falls back
+ * to the verified sub, so `[orgAuth0Id, owner].filter(Boolean)` is never empty for
+ * an authenticated kickoff.
+ *
+ * But it makes the safety of a user's VIDEO rest entirely on that one array being
+ * non-empty at write time, with no second source. `owner_ids` is typed OPTIONAL on
+ * `ServerJob` and `enqueueAnalysis` persists `job.owner_ids ?? []`, so any future
+ * caller that omits it stores an empty set — and an empty set means
+ * "anonymous, bearer-accessible" here, i.e. anyone holding the job id can stream
+ * the video and read the status. There is no row to catch it, because the
+ * persisted owner is exactly what was not consulted.
+ *
+ * So the backstop is consulted on the ONE case where it can change the answer: a
+ * Redis job whose owner set is empty. That keeps the fast path free — the extra
+ * query only runs where the job would otherwise be treated as anonymous — and
+ * turns "the write path was correct" from a load-bearing assumption into something
+ * the read path no longer depends on.
+ */
+export function needsPersistedOwnerBackstop(job: Pick<ServerJob, 'owner_ids'> | null): boolean {
+  if (!job) return true
+  return (job.owner_ids ?? []).every((id) => !id)
+}

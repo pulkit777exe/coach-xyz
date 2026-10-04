@@ -3,7 +3,7 @@ import { Elysia } from 'elysia'
 import { buildError } from '../lib/errors'
 import { getJob } from '../lib/jobs'
 import type { ServerJob } from '../lib/jobs'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
+import { needsPersistedOwnerBackstop, resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
 import { getEngineJobStatus, requestIdFrom } from '../lib/engine'
 import { getIP, checkStatusLimit, rateLimited } from '../lib/ratelimit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
@@ -105,7 +105,16 @@ export async function resolveStatus(
     }
   }
 
-  const access = verifyJobAccess(request, serverJob)
+  // A Redis job with an EMPTY owner set would otherwise be treated as an
+  // anonymous demo job and stay bearer-readable, with the persisted row never
+  // consulted. The Redis-miss path above does consult it; it has to here too, or
+  // the read path depends on the write path having populated `owner_ids`.
+  // Skipped when the set is non-empty, so the common case costs no extra query.
+  const backstop = needsPersistedOwnerBackstop(serverJob)
+    ? await (deps.getAnalysisByServerJobId ?? getAnalysisByServerJobId)(jobId)
+    : null
+
+  const access = verifyJobAccess(request, serverJob, backstop)
   if (!access.ok) return { ok: false, status: access.status, body: access.body }
 
   // Read engine job status via HTTP (engine computes stage_name and video_ready).
