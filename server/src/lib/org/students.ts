@@ -216,7 +216,22 @@ export const createStudent = async (
     `
     const values = cols.map((k) => input[k])
     const rows = await db.unsafe<Student[]>(sql, [auth0Id, ...values])
-    return rows[0] ? withDates(rows[0]) : null
+    const student = rows[0]
+    if (!student) return null
+
+    // The roster mirror, in the SAME transaction as the insert. `setStudentTeam`
+    // states the invariant — `students.team_id` is the scope source of truth and
+    // the `team_memberships` row is the roster mirror, both halves written
+    // together — and this insert is a third way to assign a team, so it owes the
+    // same second half. Without it the player is visible to the team's coaches
+    // (scope reads `team_id`) while `listTeamMembers` omits them: the scope layer
+    // and the team page disagree about the same person, and only one of them
+    // says so.
+    const teamId = input.team_id
+    if (typeof teamId === 'string' && teamId !== '') {
+      await writeTeamMirrors(db, [{ team_id: teamId, student_id: student.id }])
+    }
+    return withDates(student)
   })
 }
 
@@ -614,16 +629,25 @@ const insertStudentBatch = async (
  * reporting anything — with one bad team in the batch, the fallback restores the
  * per-row log-and-continue that the old code had.
  */
-const mirrorTeamAssignments = async (db: SQL, batch: PlannedRow[]): Promise<void> => {
-  const mirrors = batch
-    .map((row) => {
-      const teamId = row.cleaned.team_id
-      return typeof teamId === 'string' && teamId
-        ? { team_id: teamId, student_id: row.id, row }
-        : null
-    })
-    .filter((m): m is { team_id: string; student_id: string; row: PlannedRow } => m !== null)
-  if (mirrors.length === 0) return
+/**
+ * Write `team_memberships` rows for `(team_id, student_id)` pairs. One
+ * `jsonb_to_recordset` statement, falling back to one statement per row so a
+ * single vanished team (an FK violation) costs one skipped mirror rather than
+ * all of them.
+ *
+ * EXTRACTED from `mirrorTeamAssignments` so `createStudent` uses the same
+ * statement and the same failure policy. `setStudentTeam` documents the
+ * invariant — `students.team_id` is the scope source of truth and the
+ * membership row is the roster mirror, "both halves written here, never
+ * separately" — and this is that second half for the two paths that do not go
+ * through `setStudentTeam`. Duplicating the SQL would be a third owner of the
+ * invariant, which is how the two halves drifted apart in the first place.
+ */
+const writeTeamMirrors = async (
+  db: SQL,
+  pairs: { team_id: string; student_id: string }[],
+): Promise<void> => {
+  if (pairs.length === 0) return
 
   const insertMirror = async (teamId: string, studentId: string): Promise<void> => {
     await db`
@@ -638,30 +662,38 @@ const mirrorTeamAssignments = async (db: SQL, batch: PlannedRow[]): Promise<void
       insert into team_memberships (team_id, member_auth0_id, student_id, role)
       select r.team_id, null, r.student_id, 'player'
       from jsonb_to_recordset(
-        ${batchRows(mirrors.map(({ team_id, student_id }) => ({ team_id, student_id })))}::jsonb
+        ${batchRows(pairs)}::jsonb
       ) as r(team_id uuid, student_id uuid)
       on conflict (team_id, member_auth0_id, student_id) do nothing;
     `
     return
   } catch (err) {
-    logger.warn('import_team_mirror_failed', {
-      type: 'import_team_mirror_failed',
-      rows: mirrors.length,
+    logger.warn('team_mirror_failed', {
+      type: 'team_mirror_failed',
+      rows: pairs.length,
       error: err instanceof Error ? err.message : 'unknown',
     })
   }
 
-  // The batch raised — one statement per row, so a single vanished team costs
-  // one skipped mirror rather than all of them. This is the old code's shape.
-  for (const { team_id, student_id } of mirrors) {
+  for (const { team_id, student_id } of pairs) {
     try {
       await insertMirror(team_id, student_id)
     } catch (err) {
-      logger.warn('import_team_mirror_failed', {
-        type: 'import_team_mirror_failed',
+      logger.warn('team_mirror_failed', {
+        type: 'team_mirror_failed',
         studentId: student_id,
         error: err instanceof Error ? err.message : 'unknown',
       })
     }
   }
+}
+
+const mirrorTeamAssignments = async (db: SQL, batch: PlannedRow[]): Promise<void> => {
+  const mirrors = batch
+    .map((row) => {
+      const teamId = row.cleaned.team_id
+      return typeof teamId === 'string' && teamId ? { team_id: teamId, student_id: row.id } : null
+    })
+    .filter((m): m is { team_id: string; student_id: string } => m !== null)
+  await writeTeamMirrors(db, mirrors)
 }
