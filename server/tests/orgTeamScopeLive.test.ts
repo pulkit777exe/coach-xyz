@@ -42,6 +42,7 @@ describeLiveDb('scope SQL against live Postgres', () => {
     await db`delete from training_plans where org_auth0_id = ${ORG}`
     await db`delete from reports where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
+    await db`delete from students where id in (${STUDENT_A}::uuid, ${STUDENT_B}::uuid)`
     await db`
       insert into students (id, auth0_id, full_name, team_id, status) values
         (${STUDENT_A}::uuid, ${ORG}, 'Scope A', ${TEAM_A}::uuid, 'active'),
@@ -76,6 +77,7 @@ describeLiveDb('scope SQL against live Postgres', () => {
     await db`delete from training_plans where org_auth0_id = ${ORG}`
     await db`delete from reports where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
+    await db`delete from students where id in (${STUDENT_A}::uuid, ${STUDENT_B}::uuid)`
   }
 
   // Seeded once for the group: every scoped read below is a pure read. Passed as

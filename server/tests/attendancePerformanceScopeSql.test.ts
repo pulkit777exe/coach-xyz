@@ -241,6 +241,11 @@ describeLiveDb('attendance + performance scope against live Postgres', () => {
     await db`delete from performance_metrics where auth0_id = ${ORG}`
     await db`delete from attendance where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
+    // Also by id: `students_pkey` is a GLOBAL primary key, so an org-scoped delete
+    // cannot see a row another org inserted under the same uuid, and the inserts
+    // below then die on a unique violation naming a table this file never mentions.
+    // Same failure `studentImportTeam.test.ts` had. Caught by fixtureIdCollisions.
+    await db`delete from students where id in (${STUDENT_A}::uuid, ${STUDENT_B}::uuid)`
   }
 
   const seed = async (db: SQL) => {

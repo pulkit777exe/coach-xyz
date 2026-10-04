@@ -118,6 +118,10 @@ describeLiveDb('an unscorable analysis does not take its page down', () => {
   const cleanup = async (db: SQL) => {
     await db`delete from analysis_history where auth0_id = ${ORG}`
     await db`delete from students where auth0_id = ${ORG}`
+    // Also by id: `students_pkey` is a GLOBAL primary key, so an org-scoped delete
+    // cannot see a row another org inserted under the same uuid, and the inserts
+    // below then die on a unique violation naming a table this file never mentions.
+    await db`delete from students where id in (${STUDENT}::uuid, ${OTHER}::uuid, ${SCORED}::uuid, ${NOT_A_NUMBER}::uuid, ${OVERFLOWS}::uuid, ${NO_SCORE_AT_ALL}::uuid)`
   }
 
   const seed = async (db: SQL) => {

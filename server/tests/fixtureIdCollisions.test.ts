@@ -80,22 +80,37 @@ describe('fixed uuids are claimed by at most one in-process fixture', () => {
     expect(liveDb.length).toBeGreaterThan(3)
 
     const unsafe: string[] = []
+    // Every table a live fixture can insert a FIXED uuid into. This used to be
+    // `teams` alone, which is how `listContentScopeLive.test.ts` got past it while
+    // inserting fixed uuids into three other tables under the same primary-key
+    // argument — the guard was narrower than the invariant it was written to state.
+    // A guard scoped to one table reads as a general one, so it under-reports.
+    const FIXED_ID_TABLES = ['teams', 'students', 'training_objectives'] as const
+
     for (const name of liveDb) {
       const source = sourceOf(name)
-      const insertsByFixedId = /insert\s+into\s+teams\s*\([^)]*\bid\b[^)]*\)/i.test(source)
-      if (!insertsByFixedId) continue
-      // Order-insensitive on purpose. The first version anchored the `id` keyword
-      // within 240 characters of the DELETE, which meant a file whose delete-by-id
-      // sat further away PASSED without one — verified by removing the delete and
-      // watching the guard stay green. Matching the two independently is the honest
-      // check: the file must delete teams BY ID somewhere, not near some statement.
-      const deletesTeams = /delete\s+from\s+teams/i.test(source)
-      // `[^;\`]*` is load-bearing: with `[\s\S]*?` the pattern happily spans
-      // statements and matched a standalone `id` several lines later, so removing
-      // the delete-by-id left the guard GREEN. Verified by mutation both ways.
-      const deletesTeamsById = /delete\s+from\s+teams\s+where[^;`]*\bid\b/i.test(source)
-      if (!deletesTeams || !deletesTeamsById) {
-        unsafe.push(`${name} inserts teams by fixed id but never deletes by id`)
+      for (const table of FIXED_ID_TABLES) {
+        const insertsByFixedId = new RegExp(
+          `insert\\s+into\\s+${table}\\s*\\([^)]*\\bid\\b[^)]*\\)`,
+          'i',
+        ).test(source)
+        if (!insertsByFixedId) continue
+        // Order-insensitive on purpose. The first version anchored the `id` keyword
+        // within 240 characters of the DELETE, which meant a file whose delete-by-id
+        // sat further away PASSED without one — verified by removing the delete and
+        // watching the guard stay green. Matching the two independently is the honest
+        // check: the file must delete teams BY ID somewhere, not near some statement.
+        const deletes = new RegExp(`delete\\s+from\\s+${table}`, 'i').test(source)
+        // `[^;\`]*` is load-bearing: with `[\s\S]*?` the pattern happily spans
+        // statements and matched a standalone `id` several lines later, so removing
+        // the delete-by-id left the guard GREEN. Verified by mutation both ways.
+        const deletesById = new RegExp(
+          `delete\\s+from\\s+${table}\\s+where[^;\`]*\\bid\\b`,
+          'i',
+        ).test(source)
+        if (!deletes || !deletesById) {
+          unsafe.push(`${name} inserts ${table} by fixed id but never deletes by id`)
+        }
       }
     }
     expect(unsafe).toEqual([])
