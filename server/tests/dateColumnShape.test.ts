@@ -3,6 +3,14 @@ import type { SQL } from 'bun'
 
 import { withHistoryStoreOrThrow } from '../src/lib/historyStore'
 import { listAttendance, upsertAttendance } from '../src/lib/org/attendance'
+import {
+  createMatch,
+  createSeason,
+  getMatch,
+  getSeason,
+  listMatches,
+  listSeasons,
+} from '../src/lib/org/compete'
 import { createStudent, getStudent, listStudents } from '../src/lib/org/students'
 import { describeLiveDb, useLiveTestDb } from './liveDb'
 
@@ -156,5 +164,56 @@ describeLiveDb('attendance session_date serialises as YYYY-MM-DD (live Postgres)
     // straight to the response body without passing through a list read.
     const record = await upsertAttendance(ORG, STUDENT, '2026-03-09', 'late', null)
     expect(record?.session_date).toBe('2026-03-09')
+  })
+})
+
+// The same lie in a third and fourth table. `seasons.starts_on` / `ends_on` and
+// `matches.match_on` are `date` columns typed `string | null`, and `TeamsClient`
+// renders `match_on` with no formatting at all
+// (`[match.match_on, match.location].filter(Boolean).join(' · ')`), so a club's
+// fixture list read `2026-09-10T00:00:00.000Z · Home ground`. Less severe than the
+// attendance case — verbose rather than blank — and fixed the same way, because
+// "a `date` column leaves the data layer as YYYY-MM-DD" is one rule and three
+// tables either got it or did not.
+describeLiveDb('season and match dates serialise as YYYY-MM-DD (live Postgres)', () => {
+  useLiveTestDb({ seed, cleanup })
+
+  test('a season round-trips its bounds as bare days', async () => {
+    const created = await createSeason(ORG, {
+      name: 'Autumn',
+      starts_on: '2026-09-01',
+      ends_on: '2026-11-30',
+    })
+    expect(created?.starts_on).toBe('2026-09-01')
+    expect(created?.ends_on).toBe('2026-11-30')
+    // The by-id read is a different query from the create, so cover both.
+    expect((await getSeason(ORG, created!.id))?.starts_on).toBe('2026-09-01')
+    const listed = await listSeasons(ORG)
+    expect(listed.find((x) => x.id === created!.id)?.ends_on).toBe('2026-11-30')
+  })
+
+  test('a match round-trips its date as a bare day', async () => {
+    const created = await createMatch(ORG, {
+      opponent: 'Riverside',
+      match_on: '2026-09-10',
+      location: 'Home ground',
+    })
+    expect(created?.match_on).toBe('2026-09-10')
+    expect((await getMatch(ORG, created!.id))?.match_on).toBe('2026-09-10')
+    expect((await listMatches(ORG)).find((m) => m.id === created!.id)?.match_on).toBe('2026-09-10')
+  })
+
+  test('an unscheduled match stays null rather than becoming an epoch day', async () => {
+    const created = await createMatch(ORG, { opponent: 'TBD' })
+    expect(created?.match_on).toBeNull()
+    const listed = await listMatches(ORG)
+    expect(listed.find((m) => m.id === created!.id)?.match_on).toBeNull()
+  })
+
+  test('the wire shape carries no time component', async () => {
+    const created = await createMatch(ORG, { opponent: 'Wire', match_on: '2026-09-10' })
+    const wire = JSON.parse(JSON.stringify(created)) as Record<string, unknown>
+    expect(wire.match_on).toBe('2026-09-10')
+    expect(String(wire.match_on)).not.toContain('T')
   })
 })

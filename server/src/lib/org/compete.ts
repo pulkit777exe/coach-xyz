@@ -1,6 +1,7 @@
 // Seasons & matches (compete) data layer — split from lib/orgData.ts.
 
 import { withHistoryStoreOrThrow } from '../historyStore'
+import { toDateOnly } from '../orgValidate'
 import { uuidArrayLiteral } from './scope'
 
 // ── Seasons & matches ────────────────────────────────────────────────────────
@@ -25,6 +26,39 @@ export type Match = {
   result: string | null
   created_at: string
 }
+
+/**
+ * `starts_on` / `ends_on` / `match_on` are Postgres `date` columns, and Bun
+ * decodes `date` to a `Date`, so the `string | null` above is a lie and the wire
+ * value is a full ISO instant. The web renders `match_on` directly
+ * (`TeamsClient`: `[match.match_on, match.location].filter(Boolean).join(' · ')`),
+ * so a club's fixture list showed `2026-09-10T00:00:00.000Z · Home ground`.
+ *
+ * Less severe than the attendance case — this degrades to verbose rather than
+ * blank — but it is the same invariant, so it gets the same treatment. Normalise
+ * at the boundary; see `toDateOnly` for why a `date` wants the bare day rather
+ * than `toISOString()`.
+ */
+const withSeasonDates = <
+  T extends { starts_on?: Date | string | null; ends_on?: Date | string | null },
+>(
+  row: T,
+): T => ({ ...row, starts_on: toDateOnly(row.starts_on), ends_on: toDateOnly(row.ends_on) })
+
+const withSeasonDatesAll = <
+  T extends { starts_on?: Date | string | null; ends_on?: Date | string | null },
+>(
+  rows: readonly T[] | null,
+): T[] => (rows ?? []).map(withSeasonDates)
+
+const withMatchDate = <T extends { match_on?: Date | string | null }>(row: T): T => ({
+  ...row,
+  match_on: toDateOnly(row.match_on),
+})
+
+const withMatchDatesAll = <T extends { match_on?: Date | string | null }>(
+  rows: readonly T[] | null,
+): T[] => (rows ?? []).map(withMatchDate)
 
 /**
  * Seasons, narrowed by the matches inside them rather than hidden outright.
@@ -70,7 +104,7 @@ export const listSeasons = async (
         )
       order by s.created_at desc;
     `
-      return rows ?? []
+      return withSeasonDatesAll(rows)
     })) ?? []
   )
 }
@@ -87,7 +121,7 @@ export const createSeason = async (
       values (${auth0Id}, ${name}, ${input.starts_on ?? null}::date, ${input.ends_on ?? null}::date)
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withSeasonDates(rows[0]) : null
   })
 }
 
@@ -104,7 +138,7 @@ export const getSeason = async (auth0Id: string, id: string): Promise<Season | n
     const rows = await db<Season[]>`
       select * from seasons where org_auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withSeasonDates(rows[0]) : null
   })
 }
 
@@ -143,7 +177,7 @@ export const listMatches = async (
         and (not ${scoped} or team_id is null or team_id = any(${scopeParam}::uuid[]))
       order by match_on desc nulls last, created_at desc;
     `
-      return rows ?? []
+      return withMatchDatesAll(rows)
     })) ?? []
   )
 }
@@ -153,7 +187,7 @@ export const getMatch = async (auth0Id: string, id: string): Promise<Match | nul
     const rows = await db<Match[]>`
       select * from matches where org_auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withMatchDate(rows[0]) : null
   })
 }
 
@@ -182,7 +216,7 @@ export const createMatch = async (
       )
       returning *;
     `
-    return rows?.[0] ?? null
+    return rows?.[0] ? withMatchDate(rows[0]) : null
   })
 }
 
