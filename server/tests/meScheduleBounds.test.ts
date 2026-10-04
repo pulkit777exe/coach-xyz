@@ -34,7 +34,7 @@ type ProbeResult = {
   list: { sql: string; values: unknown[] }[]
 }
 
-const runProbe = async (probeCase: string): Promise<ProbeResult> => {
+const runProbe = async (probeCase: string, playerTeam?: string): Promise<ProbeResult> => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => entry[1] !== undefined,
@@ -43,6 +43,7 @@ const runProbe = async (probeCase: string): Promise<ProbeResult> => {
   env.SERVICE_TOKEN = ''
   env.DATABASE_URL = ''
   env.ME_SCHED_CASE = probeCase
+  if (playerTeam !== undefined) env.ME_SCHED_PLAYER_TEAM = playerTeam
   const proc = await runProbeProcess({ probe: PROBE, cwd: SERVER_DIR, env })
   expect(proc.exitCode, `probe failed for ${probeCase}:\n${proc.stdout}\n${proc.stderr}`).toBe(0)
   return lastJsonLine<ProbeResult>(proc.stdout)
@@ -148,5 +149,83 @@ describe('readListLimit resolves an absent limit to a real number', () => {
     // nothing: `pickInt` would clamp `?limit=0` to its `min` and answer ONE row.
     expect(readListLimit(at('?limit=0'))).toBe(MAX_ORG_LIST_ROWS)
     expect(readListLimit(at('?limit=-5'))).toBe(MAX_ORG_LIST_ROWS)
+  })
+})
+
+// ── The read is scoped, and it agrees with its org sibling ───────────────────
+//
+// `/api/org/:auth0Id/schedule` has always narrowed through `caller.studentScope`
+// (`teamIds: caller.studentScope.all ? undefined : caller.studentScope.teamIds`).
+// `/api/me/schedule` passed no `teamIds` at all, so it read the owning club's
+// ENTIRE calendar: a player on team A saw team B's fixtures, and the same person
+// got two different answers from the two schedule routes depending on which one
+// the web happened to call.
+//
+// The assertion is on the BIND, not the rows. The probe's store is a recorder
+// that returns `[]`, so both a scoped and an unscoped query answer zero rows — the
+// result set cannot distinguish them, and a test that asserted on it would pass
+// against the bug. What differs is the `not ? or team_id is null or team_id =
+// any(?::uuid[])` predicate and its two values.
+//
+// Both branches are pinned, because an unassigned player is a real answer rather
+// than an absent one: `teamIds: []` yields `scoped = true` with a NULL id list,
+// which the predicate resolves to club-wide fixtures ONLY. Passing `[]` is not
+// "no filter", and omitting the key is what used to happen.
+
+const SCOPE_TEAM = '00000000-0000-4000-8000-00000000000a'
+
+/** The scope flag and the id list, in bind order, from the recorded statement. */
+const scopeBind = (result: ProbeResult): { scoped: unknown; ids: unknown } => {
+  const query = result.list[0]
+  expect(query, 'no schedule statement recorded').toBeDefined()
+  expect(query.sql).toMatch(/not \? or team_id is null or team_id = any\(\?::uuid\[\]\)/)
+  const flag = query.sql.slice(0, query.sql.indexOf('not ?')).split('?').length - 1
+  return { scoped: query.values[flag], ids: query.values[flag + 1] }
+}
+
+describe("the schedule read is narrowed to the viewer's team", () => {
+  test('a player on a team sees that team plus the club-wide fixtures', async () => {
+    const result = await runProbe('scope.playerTeam', SCOPE_TEAM)
+    expect(result.status).toBe(200)
+    const bind = scopeBind(result)
+    expect(bind.scoped).toBe(true)
+    // A uuid ARRAY LITERAL, not a raw array: Bun sends a raw array as
+    // comma-joined text and the ::uuid[] cast dies with 22P02.
+    expect(bind.ids).toBe(`{${SCOPE_TEAM}}`)
+  })
+
+  test('an unassigned player sees club-wide fixtures only', async () => {
+    const result = await runProbe('scope.unassigned', '')
+    expect(result.status).toBe(200)
+    const bind = scopeBind(result)
+    expect(bind.scoped).toBe(true)
+    // NULL, not `[]`. `[]` would be sent as '' — not a valid uuid[] literal — so
+    // `teamScopeFilter` maps the empty list to NULL on purpose.
+    expect(bind.ids).toBeNull()
+  })
+
+  test('the scoped read is bounded and windowed exactly like the unscoped one', async () => {
+    // Narrowing must not have cost the other two guarantees in this file: a cap
+    // on every call (LIMIT NULL is unlimited), and an anchor at now for the bare
+    // query so a cap cannot keep the oldest page.
+    const scoped = await runProbe('scope.playerTeam', SCOPE_TEAM)
+    const bare = await runProbe('bare')
+    expect(scoped.status).toBe(200)
+
+    // Positional, against a fixed bind order for a fixed statement — the first
+    // version searched for the ISO string and matched the wrong slot, because
+    // `auth0_id` and `from` are both strings and only one of them ends in "Z" on
+    // every run. Order is [columns, auth0_id, from, from, to, to, scoped, ids,
+    // limit]; the doubled pair is the `from`/`to` filter, bound twice each.
+    const values = scoped.list[0]!.values
+    expect(scoped.list[0]?.sql).toBe(bare.list[0]?.sql)
+    expect(values[1]).toBe('auth0|coach-1')
+    // `from` bound twice and NOT null: the default anchor at now is what makes
+    // the cap truncate nothing.
+    expect(typeof values[2]).toBe('string')
+    expect(values[2]).toBe(values[3])
+    expect(values[4]).toBeNull()
+    expect(values[5]).toBeNull()
+    expect(values.at(-1)).toBeGreaterThan(0)
   })
 })

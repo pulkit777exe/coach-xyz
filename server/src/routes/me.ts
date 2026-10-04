@@ -76,7 +76,14 @@ const playerScope = async (verifiedAuth0Id: string) => {
 
 export type PlayerScopeResult = {
   accountAuth0Id: string
-  student: { id: string } | null
+  // `team_id` is optional because not every caller needs it, and several test
+  // fixtures build this shape. It is here because `/api/me/schedule` narrows by
+  // it, and that narrowing is not decoration: the route used to read the whole
+  // org's calendar, so a player on team A saw team B's fixtures, and the same
+  // person got a DIFFERENT answer from `/api/org/:auth0Id/schedule`, which has
+  // always narrowed through `caller.studentScope`. Two routes, one person, two
+  // answers. Absent means "no team known", which reads as the unassigned case.
+  student: { id: string; team_id?: string | null } | null
   coachAuth0Id: string | null
 }
 
@@ -416,7 +423,8 @@ export default new Elysia()
   .get('/api/me/schedule', async ({ request, set }) => {
     const verified = requireVerifiedSelf({ request, set })
     if (typeof verified !== 'string') return verified
-    const { coachAuth0Id } = await playerScope(verified)
+    const playerScopeResult = await playerScope(verified)
+    const { coachAuth0Id } = playerScopeResult
     if (!coachAuth0Id) {
       set.status = 200
       return { events: [], linked: false }
@@ -437,9 +445,20 @@ export default new Elysia()
     // truncate nothing: a cap on an all-time window would keep the OLDEST page.
     const from = window.from ?? new Date().toISOString()
 
+    // Scoped exactly as `/api/org/:auth0Id/schedule` already is: club-wide
+    // fixtures (team_id is null) plus the viewer's own team. `listSchedule`'s
+    // predicate is `team_id is null or team_id = any(...)`, so passing `[]` is
+    // not "no filter" — it is the correct narrowing for an unassigned player,
+    // who should see the club's fixtures and nobody else's team's. Omitting the
+    // key entirely is what used to happen here, and it is the unscoped read.
+    const viewerTeamIds = playerScopeResult.student?.team_id
+      ? [playerScopeResult.student.team_id]
+      : []
+
     const events = await listSchedule(coachAuth0Id, {
       from,
       to: window.to,
+      teamIds: viewerTeamIds,
       limit: readListLimit(url),
     })
     set.status = 200

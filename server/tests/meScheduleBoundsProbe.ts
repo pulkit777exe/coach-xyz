@@ -21,6 +21,14 @@ import type { SQL } from 'bun'
 const VERIFIED = 'auth0|player-1'
 const COACH = 'auth0|coach-1'
 const STUDENT_ID = '00000000-0000-4000-8000-0000000000a1'
+/**
+ * The linked player's team, or empty for the unassigned case. The row the
+ * recorder returns for `getLinkedPlayer` carries it, because the route narrows
+ * the schedule by it — and "no team" is a real, distinct answer (it means the
+ * player sees the club's fixtures and nobody else's team's), so both branches
+ * need evidence.
+ */
+const PLAYER_TEAM = process.env.ME_SCHED_PLAYER_TEAM ?? ''
 
 const probeCase = process.env.ME_SCHED_CASE ?? ''
 
@@ -36,7 +44,15 @@ const fixture = (async (strings: TemplateStringsArray, ...values: unknown[]) => 
   statements.push({ sql, values })
   // `getLinkedPlayer`'s `select * from students where account_auth0_id = ?`.
   if (sql.includes('from students')) {
-    return [{ id: STUDENT_ID, auth0_id: COACH, account_auth0_id: VERIFIED, full_name: 'Alex' }]
+    return [
+      {
+        id: STUDENT_ID,
+        auth0_id: COACH,
+        account_auth0_id: VERIFIED,
+        full_name: 'Alex',
+        team_id: PLAYER_TEAM === '' ? null : PLAYER_TEAM,
+      },
+    ]
   }
   return []
 }) as unknown as SQL
@@ -80,6 +96,11 @@ const CASES: Record<string, Case> = {
   blankFrom: { query: '?from=', expectList: false },
   garbageTo: { query: '?to=2026-13-45', expectList: false },
   nonsenseLimit: { query: '?limit=abc', expectList: true },
+  // Scoping cases: the SAME query string as `bare`, so the only variable is the
+  // linked player's team. Asserting the bind rather than the answer is the
+  // point — a stubbed store returns [] either way, so the rows cannot show it.
+  'scope.playerTeam': { query: '', expectList: true },
+  'scope.unassigned': { query: '', expectList: true },
   negativeLimit: { query: '?limit=-5', expectList: true },
   hugeLimit: { query: '?limit=1e999', expectList: true },
 }
