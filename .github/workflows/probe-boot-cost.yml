@@ -1,0 +1,124 @@
+# ── Probe boot cost: why do spawned probes intermittently hit their budget? ────
+#
+# The server suite spawns ~57 fresh `bun` processes. On a laptop each is ~0.9s; on a
+# GitHub runner a large minority take the whole `PROBE_TIMEOUT_MS` budget, which is why
+# runs intermittently fail 46 and then 167 tests — every one a child killed at the budget,
+# none an assertion failure.
+#
+# Everything believed about that was inferred from the timeouts. This workflow runs
+# `scripts/probeBootCost.ts` on the runner so the number is MEASURED, splitting a spawn's
+# wall-clock into exec+load / module-graph / teardown, and reporting `NEVER BOOTED`
+# separately from `EXIT HANG`.
+#
+# It is `workflow_dispatch` only, on purpose: a step that spawns ~40 processes on every PR
+# would add measurable time to every run to answer a question asked rarely. Trigger it when
+# the failure recurs, read the numbers, and delete it once the cause is fixed.
+name: Probe boot cost
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: 'Spawns per case (median is reported)'
+        default: '5'
+        type: string
+      child_budget_ms:
+        description: 'Per-child budget in ms — raise above 10000 to see a slow boot at all'
+        default: '30000'
+        type: string
+
+jobs:
+  measure:
+    name: measure spawn cost on the runner
+    runs-on: ubuntu-latest
+    # Deliberately generous: the whole point is to observe spawns that take longer than the
+    # suite's budget, and a diagnostic that is itself killed at one cannot report on them.
+    timeout-minutes: 30
+    # The SAME service the suite uses, so the numbers are of the environment that fails.
+    # Without it, `TEST_DATABASE_URL` is absent and any target that touches the store takes
+    # a different path than the one under investigation.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: coachxyz
+          POSTGRES_PASSWORD: coachxyz
+          POSTGRES_DB: coachxyz
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U coachxyz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        working-directory: server
+        run: bun install --frozen-lockfile
+
+      # Every fact about the runner that could explain a slow spawn, collected in the same
+      # step as the measurement so the two cannot come from different machines. `nproc` and
+      # the cgroup CPU quota are read separately because GitHub-hosted runners report a host
+      # core count that is NOT what the cgroup allows — and "2 cores when the log says 16"
+      # is exactly the kind of thing that explains a 10x multiplier and that nobody checked.
+      - name: Runner facts
+        run: |
+          echo "cores (nproc):        $(nproc)"
+          echo "cores (proc/cpuinfo): $(grep -c ^processor /proc/cpuinfo)"
+          echo "cgroup cpu.max:       $(cat /sys/fs/cgroup/cpu.max 2>/dev/null || echo n/a)"
+          echo "cgroup cpu.weight:    $(cat /sys/fs/cgroup/cpu.weight 2>/dev/null || echo n/a)"
+          echo "cgroup memory.max:    $(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo n/a)"
+          echo "memory (free -m):"; free -m
+          echo "loadavg:              $(cat /proc/loadavg)"
+          echo "filesystem:           $(df -T . | tail -1)"
+          echo "bun:                  $(bun --version)"
+          echo "node:                 $(node --version)"
+          echo "runner:               ${RUNNER_OS} / ${ImageOS:-?} ${ImageVersion:-?}"
+
+      - name: Measure
+        working-directory: server
+        env:
+          PROBE_BOOT_REPEATS: ${{ inputs.repeats }}
+          PROBE_BOOT_CHILD_BUDGET_MS: ${{ inputs.child_budget_ms }}
+        run: bun scripts/probeBootCost.ts --preset=ci --json
+
+      # Uploaded rather than only echoed: the table is easy to read in the log, but the
+      # JSON is what lets two runs be compared, and this failure is intermittent — so the
+      # evidence has to outlive the log of the run that happened to catch it.
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-boot-cost
+          path: server/probe-boot-cost.json
+          if-no-files-found: warn
+
+      # The cost of NOT doing this: a failing run's evidence is the log of one attempt, and
+      # the next attempt usually passes, so the numbers get lost and the next person
+      # re-derives them. Surfacing a slow row as a job failure is the cheapest way to make
+      # an intermittent problem stop being invisible — `continue-on-error` keeps the
+      # workflow usable as a measurement while the warning makes the regression legible.
+      - name: Flag a slow spawn
+        working-directory: server
+        continue-on-error: true
+        run: |
+          bun -e '
+            const rows = JSON.parse(await Bun.file("probe-boot-cost.json").text())
+            // The composed app is the heaviest case the probes actually load, so it is the
+            // one to watch; the bare-spawn row is the control and must stay fast.
+            const app = rows.find(r => r.label.includes("composed app"))
+            const bare = rows.find(r => r.label.includes("bare bun"))
+            const budget = Number(process.env.PROBE_BOOT_CHILD_BUDGET_MS ?? 30000)
+            const slow = app && app.parent > 1000
+            console.log(`bare bun:     ${bare?.parent}ms`)
+            console.log(`composed app: ${app?.parent}ms  (exec+load ${app?.execAndLoader}, graph ${app?.childWork}, teardown ${app?.teardown})`)
+            if (app?.neverBooted) { console.log("::error::the composed app NEVER BOOTED — this is not slowness, it is a failure to start"); process.exit(1) }
+            if (app?.exitHang)    { console.log("::error::the composed app finished its work and hung on EXIT — the budget is not boot cost"); process.exit(1) }
+            if (slow)             { console.log(`::warning::composed app spawn is ${app.parent}ms against a ${budget}ms child budget`); process.exit(1) }
+            console.log("spawn cost within expectations")
+          '

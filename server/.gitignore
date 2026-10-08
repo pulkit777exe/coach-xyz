@@ -5,3 +5,6 @@ temp/
 uploads/
 *.log
 .DS_Store
+
+# local measurement artifact from scripts/probeBootCost.ts
+probe-boot-cost.json
