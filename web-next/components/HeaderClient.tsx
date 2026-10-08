@@ -100,7 +100,13 @@ function NavGroup({
         <div className="absolute top-full left-1/2 z-50 w-56 -translate-x-1/2 pt-2">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="rounded-[8px] border border-border bg-background p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+            // `dark:shadow-none`, not a deeper shadow. globals.css is explicit that
+            // dark surfaces "live on low-opacity white borders (shadows don't read on
+            // dark)", and every 9ui primitive follows it — card, dialog and
+            // dropdown-menu all pair their light shadow with `dark:shadow-none`. This
+            // one site had a hand-written rgba pair that went the other way and
+            // DEEPENED the shadow 5.6x in dark mode, inverting the system.
+            className="rounded-[8px] border border-border bg-background p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-none"
           >
             {items.map((it) => (
               <Link

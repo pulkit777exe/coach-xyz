@@ -37,8 +37,37 @@ import { join, relative } from 'node:path'
 
 const APP_DIR = join(import.meta.dirname, '..', '..', 'app')
 
-/** Modules whose exported FUNCTIONS perform requests. */
-const FETCHER_MODULES = ['@/lib/org', '@/lib/api', '@/lib/members', '@/lib/aiReports']
+/**
+ * Modules whose exported FUNCTIONS perform requests, and which therefore must be
+ * reached through `lib/serverData.ts` rather than imported directly by a page.
+ *
+ * This list was already stale when an independent audit read it: it named four
+ * modules and missed `@/lib/meApi` and `@/lib/teams`, both of which perform requests
+ * AND both of which have cached wrappers in `serverData` — so the dedup path existed
+ * for them while the guard watched neither. `parseImports` `continue`s on an unlisted
+ * specifier, so a page doing `import { listTeams } from '@/lib/teams'` passed the
+ * guard while re-fetching per call site, and the guard was green while it happened.
+ *
+ * A test below now asserts this list stays complete against `lib/serverData.ts`'s own
+ * imports, so the drift cannot come back — the lesson being that a hand-maintained
+ * list reads exactly like a derived one until something needs adding to it.
+ *
+ * `orgContext`, `orgCookie` and `session` are deliberately absent: `serverData`
+ * imports them but they hold no request-performing export of their own, so watching
+ * them would flag the wrapper module's own legitimate imports.
+ */
+const FETCHER_MODULES = [
+  '@/lib/api',
+  '@/lib/meApi',
+  '@/lib/members',
+  '@/lib/org',
+  '@/lib/teams',
+  // Performs requests too, and is legitimately imported by the UNAUTHENTICATED
+  // share page, which has no session to dedupe against (an exemption below). Watched
+  // anyway: the exemption is per-IMPORT while the guard is per-MODULE, so keeping it
+  // listed is what stops the share page becoming cover for a new violation elsewhere.
+  '@/lib/aiReports',
+]
 
 function appFiles(dir = APP_DIR, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -62,8 +91,7 @@ type Binding = { specifier: string; values: string[]; typeOnly: boolean }
  */
 function parseImports(source: string): Binding[] {
   const out: Binding[] = []
-  const stmt =
-    /import\s+(type\s+)?([\s\S]*?)\s*from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]/g
+  const stmt = /import\s+(type\s+)?([\s\S]*?)\s*from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]/g
   for (const m of source.matchAll(stmt)) {
     const typeOnly = Boolean(m[1])
     const clause = m[2] ?? ''
@@ -74,12 +102,19 @@ function parseImports(source: string): Binding[] {
     const braced = /\{([\s\S]*?)\}/.exec(clause)
     if (braced) {
       for (const raw of braced[1].split(',')) {
-        const name = raw.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim()
+        const name = raw
+          .trim()
+          .replace(/^type\s+/, '')
+          .split(/\s+as\s+/)[0]
+          .trim()
         if (name) values.push(name)
       }
     }
     // A default import binds the module's main export by convention.
-    const def = clause.replace(/\{[\s\S]*?\}/, '').replace(/,/g, '').trim()
+    const def = clause
+      .replace(/\{[\s\S]*?\}/, '')
+      .replace(/,/g, '')
+      .trim()
     if (def && !def.startsWith('*')) values.push('default')
     out.push({ specifier, values, typeOnly })
   }
@@ -142,11 +177,16 @@ describe('the RSC data-access rule holds across app/', () => {
   })
 
   test('no server page imports a REQUEST function from a non-cached module', () => {
-    const violations = serverFiles.filter((f) => !isExempt(f.path)).flatMap((f) =>
-      parseImports(f.source)
-        .filter((b) => !b.typeOnly && b.values.some(isRequestBinding))
-        .map((b) => `${f.path} imports ${b.values.filter(isRequestBinding).join(', ')} from ${b.specifier}`),
-    )
+    const violations = serverFiles
+      .filter((f) => !isExempt(f.path))
+      .flatMap((f) =>
+        parseImports(f.source)
+          .filter((b) => !b.typeOnly && b.values.some(isRequestBinding))
+          .map(
+            (b) =>
+              `${f.path} imports ${b.values.filter(isRequestBinding).join(', ')} from ${b.specifier}`,
+          ),
+      )
     expect(violations).toEqual([])
   })
 
@@ -170,6 +210,32 @@ describe('the RSC data-access rule holds across app/', () => {
     expect(Object.keys(EXEMPT).length).toBe(2)
   })
 
+  test('the watch list covers every module serverData wraps — derived, not remembered', () => {
+    // The guard's own blind spot, closed. `FETCHER_MODULES` was a hand-written list
+    // of four modules; `@/lib/meApi` and `@/lib/teams` were missing while BOTH had
+    // cached wrappers in `serverData`, which is the whole point of the wrapper. So a
+    // page could import `listTeams` straight from `@/lib/teams`, re-fetch per call
+    // site, and pass — and the guard was green the entire time.
+    //
+    // Derived from `serverData`'s own imports rather than restated, because the
+    // failure mode is precisely a list that reads complete until something is added
+    // to the thing it mirrors. `orgContext`, `orgCookie` and `session` are excluded
+    // by name: they hold no request-performing export.
+    const source = readFileSync(
+      join(import.meta.dirname, '..', '..', 'lib', 'serverData.ts'),
+      'utf8',
+    )
+    const NOT_FETCHERS = new Set(['orgContext', 'orgCookie', 'session'])
+    const wrapped = [...source.matchAll(/from\s*['"]\.\/([A-Za-z0-9_]+)['"]/g)]
+      .map((m) => m[1])
+      .filter((name) => !NOT_FETCHERS.has(name))
+    expect(wrapped.length).toBeGreaterThan(0)
+    const unwatched = [...new Set(wrapped)]
+      .filter((name) => !FETCHER_MODULES.includes(`@/lib/${name}`))
+      .map((name) => `@/lib/${name}`)
+    expect(unwatched).toEqual([])
+  })
+
   test("no 'use client' module imports a server-only data source", () => {
     // A client component has no render pass to cache within, so importing
     // `lib/serverData` is itself the bug: it loses the dedup the wrapper exists
@@ -185,7 +251,9 @@ describe('the RSC data-access rule holds across app/', () => {
     // which was wrong: `import type` is erased at compile time. Pinning the
     // distinction means a future edit to the parser cannot quietly re-break it.
     const typeOnly = serverFiles.flatMap((f) =>
-      parseImports(f.source).filter((b) => b.typeOnly).map((b) => `${f.path}:${b.specifier}`),
+      parseImports(f.source)
+        .filter((b) => b.typeOnly)
+        .map((b) => `${f.path}:${b.specifier}`),
     )
     // The scan must be able to SEE type-only imports…
     expect(typeOnly.length).toBeGreaterThan(0)
