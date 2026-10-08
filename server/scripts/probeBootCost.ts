@@ -70,7 +70,13 @@ mock.module(${JSON.stringify(join(SERVER, 'src/lib/redis.ts'))}, () => ({
     : ''
 }
 ${importBunTest ? `await import('bun:test')` : ''}
-${target === '(none)' ? '' : `await import(${JSON.stringify(target)})`}
+${
+  target.startsWith('run:')
+    ? `await (async () => { ${target.slice(4)} })()`
+    : target === '(none)'
+      ? ''
+      : `await import(${JSON.stringify(target)})`
+}
 const t1 = Date.now()
 process.stdout.write(JSON.stringify({ t0, t1 }))
 process.exit(0)
@@ -250,6 +256,22 @@ const CASES: {
     stubRedis: true,
   },
   { label: 'bun + app.ts (the composed app)', target: './src/app.ts', stubRedis: true },
+  {
+    // The one row that is a HYPOTHESIS rather than an import. 20 of the 41 probe files do
+    // not mock `lib/historyStore`, so each of those spawns runs the real
+    // `ensureInitialized()` — the full DDL for ~20 tables — against the ephemeral Postgres.
+    // `initPromise` is memoised PER PROCESS and every spawn is a new process, so that DDL
+    // is re-run by every one of them. On a laptop the database is fast and this is
+    // invisible; on a runner the Postgres container shares CPU and I/O with the suite.
+    // Measured here rather than reasoned about, because the last three hypotheses all
+    // measured fast and the cost is still 10 seconds somewhere.
+    label: 'ensureInitialized() DDL vs ephemeral PG',
+    // `setHistoryStoreConnectionForTests` takes a `SQL`, not a URL — it assigns the module's
+    // connection and clears the memoised `initPromise` so the DDL is genuinely re-run.
+    target:
+      "run: const { SQL } = await import('bun:sql'); const h = await import('./src/lib/historyStore.ts'); h.setHistoryStoreConnectionForTests(new SQL(process.env.TEST_DATABASE_URL)); await h.withHistoryStoreOrThrow(async () => {})",
+    stubRedis: false,
+  },
 ]
 
 const onlyPreset = process.argv.find((a) => a.startsWith('--preset='))?.split('=')[1]
