@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { useReducedMotion } from 'motion/react'
 import { Button } from '@/components/9ui/ui/button'
 import StatusPill from '@/components/org/StatusPill'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
@@ -51,6 +52,7 @@ export default function ResultsSummary({
 }: ResultsSummaryProps) {
   const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = useReducedMotion()
   const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
   const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
   if (downloadUrlJob !== jobId) {
@@ -69,7 +71,20 @@ export default function ResultsSummary({
 
   useGSAP(
     () => {
-      if (!summary) return
+      // Respect the OS "reduce motion" setting. This is the ONLY animation on the
+      // results view, and it moved six sections 24px while fading them in — which a
+      // user with vestibular sensitivity cannot opt out of, because nothing here
+      // consulted their preference. Three files in this app honour the setting
+      // (`interior/progress-bar`, `TypewriterHighlight`, the `globals.css` block);
+      // this was the one conspicuous place that did not.
+      //
+      // Skipping rather than shortening: `components/interior/progress-bar.tsx`
+      // reduces to `duration: 0`, and a 0s tween still lands the elements in their
+      // final state, which is the correct outcome for a reveal that exists only to
+      // decorate. `dependencies` is deliberately left off so the animation still
+      // runs exactly once on mount — adding `reduced` there would replay the whole
+      // reveal every time `summary` changed.
+      if (!summary || reducedMotion) return
       gsap.from('.gsap-item', {
         y: 24,
         opacity: 0,
