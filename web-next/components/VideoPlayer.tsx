@@ -27,10 +27,40 @@ const CALLOUT_FADE_MS = 400
 const TIMELINE_H = 32
 const MARKER_W = 3
 
-function _scoreColor(score: number): string {
-  if (score >= 8) return '#3cdc5a'
-  if (score >= 5) return '#fbbf24'
-  return '#ef4444'
+/**
+ * Resolve a design token to a literal colour, for canvas.
+ *
+ * `ctx.fillStyle` cannot take `var(--x)`, so a canvas that follows the theme has to
+ * read the token at paint time — which is also the only way to be correct here,
+ * because `--success` is NOT the same in both themes (`#0f7b6c` light,
+ * `#4d9078` dark). A hardcoded literal picks one theme and is wrong in the other.
+ *
+ * Fallbacks are the light-theme values, used only with no DOM (an SSR pass) or if
+ * the token is somehow absent.
+ */
+export const themeColor = (token: string, fallback: string): string => {
+  if (typeof window === 'undefined' || typeof getComputedStyle !== 'function') return fallback
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+  return value || fallback
+}
+
+/** `#rrggbb` + alpha -> `rgba(...)`, so a token can carry transparency. */
+export const withAlpha = (hex: string, alpha: number): string => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+export function scoreColor(score: number): string {
+  // Previously Tailwind's STOCK green-400 / amber-400 / red-500, which are not this
+  // app's colours at all — so every timeline marker and every callout bar was a
+  // different hue from the `--success` / `--warning` / `--danger` used everywhere
+  // else. It also read as dead code because of the leading underscore, which is how
+  // it survived an earlier full hex-to-token migration that touched this very file.
+  if (score >= 8) return themeColor('--success', '#0f7b6c')
+  if (score >= 5) return themeColor('--warning', '#d9730d')
+  return themeColor('--danger', '#e03e3e')
 }
 
 function _eventTypeLabel(eventType: string): string {
@@ -160,7 +190,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     const progress = Math.max(0, Math.min(1, now / dur))
     const fillW = barWidth * progress
     if (fillW > 0) {
-      ctx.fillStyle = 'rgba(0,165,255,0.9)'
+      ctx.fillStyle = withAlpha(themeColor('--primary', '#2383e2'), 0.9)
       ctx.beginPath()
       ctx.roundRect(barLeft, barY + 10, fillW, 6, 3)
       ctx.fill()
@@ -172,7 +202,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         const t = evt.timestamp
         if (t < 0 || t > dur) continue
         const x = barLeft + (t / dur) * barWidth
-        ctx.fillStyle = _scoreColor(evt.form_score)
+        ctx.fillStyle = scoreColor(evt.form_score)
         ctx.beginPath()
         ctx.roundRect(x - MARKER_W / 2, barY + 6, MARKER_W, 14, 1)
         ctx.fill()
@@ -249,7 +279,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       ctx.roundRect(pillX, pillY, pillW, pillH, 6)
       ctx.fill()
 
-      ctx.fillStyle = _scoreColor(callout.event.form_score)
+      ctx.fillStyle = scoreColor(callout.event.form_score)
       ctx.beginPath()
       ctx.roundRect(pillX, pillY, 4, pillH, 2)
       ctx.fill()
