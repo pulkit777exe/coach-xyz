@@ -37,30 +37,44 @@ export default async function AccountPage() {
 
   const provider = parseProvider(session.user.sub)
 
-  let user = null
-  let syncError = null
-  try {
-    const result = await syncUser({
+  // The profile sync and the memberships read are INDEPENDENT — both need only the
+  // session, already resolved above — so they run together rather than as two sequential
+  // round trips.
+  //
+  // Each keeps its own handler rather than sharing one `try`, because the two failures are
+  // NOT equivalent: a failed sync shows an error on the page, while a failed orgs read
+  // hides the Organizations card. Folding them into one `Promise.allSettled` would make
+  // that distinction a per-promise branch instead of what it is — two separate concerns
+  // that degrade independently.
+  const [synced, memberships] = await Promise.allSettled([
+    syncUser({
       sub: session.user.sub,
       email: session.user.email,
       name: session.user.name,
       nickname: session.user.nickname,
       picture: session.user.picture,
       email_verified: session.user.email_verified,
-    })
-    user = result.user
-  } catch (error) {
-    console.error('Failed to sync user with backend:', error)
-    syncError = error instanceof Error ? error.message : 'Failed to sync profile data'
+    }),
+    getMyOrgsCached(),
+  ])
+
+  let user = null
+  let syncError = null
+  if (synced.status === 'fulfilled') {
+    user = synced.value.user
+  } else {
+    console.error('Failed to sync user with backend:', synced.reason)
+    syncError =
+      synced.reason instanceof Error ? synced.reason.message : 'Failed to sync profile data'
   }
 
   // Memberships for the Organizations card. A failure hides the card instead
   // of breaking the page.
   let orgs = null
-  try {
-    orgs = (await getMyOrgsCached()).orgs
-  } catch (error) {
-    console.error('Failed to load organizations:', error)
+  if (memberships.status === 'fulfilled') {
+    orgs = memberships.value.orgs
+  } else {
+    console.error('Failed to load organizations:', memberships.reason)
   }
 
   return (
