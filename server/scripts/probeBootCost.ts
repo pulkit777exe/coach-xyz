@@ -56,13 +56,7 @@ const CHILD_BUDGET_MS = Number(process.env.PROBE_BOOT_CHILD_BUDGET_MS ?? 20_000)
 // `stubRedis` mirrors what 15 of the 57 real probes do: `mock.module('../src/lib/redis')`
 // registered BEFORE the dynamic import, because `lib/redis.ts` runs `new IORedis(...)` at
 // module scope and a live client holds the event loop open so the process never exits.
-const CHILD = (target: string, stubRedis: boolean, runtime: 'node' | 'bun' = 'bun') => {
-  // node resolves an ABSOLUTE PATH through its ESM loader only when it is a file:// URL —
-  // a bare path raises `ERR_MODULE_NOT_FOUND`, which is why the bun-vs-node row first read
-  // "NEVER BOOTED": a harness artefact that looked exactly like the failure mode under
-  // investigation. bun accepts the bare path.
-  const spec = runtime === 'node' ? pathToFileURL(join(SERVER, target.slice(2))).href : target
-  return `
+const CHILD = (target: string, stubRedis: boolean) => `
 const t0 = Date.now()
 ${
   stubRedis
@@ -79,7 +73,6 @@ const t1 = Date.now()
 process.stdout.write(JSON.stringify({ t0, t1 }))
 process.exit(0)
 `
-}
 
 interface Phase {
   label: string
@@ -147,10 +140,9 @@ const HEADER =
 const run = (
   label: string,
   target: string,
-  opts: { stubRedis: boolean; env: Record<string, string>; runtime?: 'node' },
+  opts: { stubRedis: boolean; env: Record<string, string> },
 ): Phase => {
-  const args = ['-e', CHILD(target, opts.stubRedis, opts.runtime ?? 'bun')]
-  const bin = opts.runtime === 'node' ? 'node' : process.execPath
+  const args = ['-e', CHILD(target, opts.stubRedis)]
   const parents: number[] = []
   const execs: number[] = []
   const works: number[] = []
@@ -162,11 +154,16 @@ const run = (
 
   // Discarded warm-up: the FIRST spawn in a process pays a cold module-resolution path,
   // and charging that to the median would make every machine look slow.
-  spawnSync(bin, args, { cwd: SERVER, env: opts.env, encoding: 'utf8', timeout: CHILD_BUDGET_MS })
+  spawnSync(process.execPath, args, {
+    cwd: SERVER,
+    env: opts.env,
+    encoding: 'utf8',
+    timeout: CHILD_BUDGET_MS,
+  })
 
   for (let i = 0; i < REPEATS; i++) {
     const p0 = Date.now()
-    const r = spawnSync(bin, args, {
+    const r = spawnSync(process.execPath, args, {
       cwd: SERVER,
       env: opts.env,
       encoding: 'utf8',
