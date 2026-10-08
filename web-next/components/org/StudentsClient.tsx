@@ -77,6 +77,59 @@ function initials(name: string) {
     .join('')
 }
 
+/**
+ * Apply a bulk status change, honouring what the server actually accepted.
+ *
+ * Extracted as a pure function because the invariant is the whole point and it was
+ * untestable inside a 973-line component: `setStudents` runs inside `act`, `selected` is
+ * component state, and the fetch is `Promise.allSettled` over injected props. So the
+ * rule — *only a fulfilled write may change local state* — had no test and the version
+ * that broke it shipped.
+ *
+ * The bug this encodes: the old code rewrote every selected row regardless of outcome,
+ * so a partial failure left the roster claiming a change the server rejected while the
+ * toast, built from the success count, reported "Updated 17".
+ *
+ * `results` must be positionally aligned with `ids` — both come from the same
+ * `Promise.allSettled` over the same array, which is what pairs a result with its id.
+ */
+export function applyBulkStatusResult<T extends { id: string; status: Student['status'] }>(
+  rows: T[],
+  ids: string[],
+  results: PromiseSettledResult<unknown>[],
+  nextStatus: Student['status'],
+): { rows: T[]; succeeded: string[]; failed: string[] } {
+  const succeeded = new Set(ids.filter((_, i) => results[i]?.status === 'fulfilled'))
+  return {
+    rows: rows.map((r) => (succeeded.has(r.id) ? { ...r, status: nextStatus } : r)),
+    succeeded: ids.filter((id) => succeeded.has(id)),
+    failed: ids.filter((id) => !succeeded.has(id)),
+  }
+}
+
+/**
+ * Remove bulk-deleted rows, honouring what the server actually accepted.
+ *
+ * Same invariant as above, and the same bug in a worse place: the old code filtered on
+ * the component's `selected` Set, which SURVIVES a filter change, while the request was
+ * built from `selectedIds` — derived from the filtered list. So it also removed rows that
+ * were never part of the request. The failed subset then vanished from the roster while
+ * still holding their attendance, objectives and plans, with the selection cleared so
+ * they could not be re-selected.
+ */
+export function applyBulkDeleteResult<T extends { id: string }>(
+  rows: T[],
+  ids: string[],
+  results: PromiseSettledResult<unknown>[],
+): { rows: T[]; succeeded: string[]; failed: string[] } {
+  const succeeded = new Set(ids.filter((_, i) => results[i]?.status === 'fulfilled'))
+  return {
+    rows: rows.filter((r) => !succeeded.has(r.id)),
+    succeeded: ids.filter((id) => succeeded.has(id)),
+    failed: ids.filter((id) => !succeeded.has(id)),
+  }
+}
+
 const IMPORT_COLUMN_FIELDS = [
   'full_name',
   'email',
@@ -122,14 +175,56 @@ const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, ' 
 const toJerseyNumber = (value: string): string | number =>
   /^\d+(\.\d+)?$/.test(value) ? Number(value) : value
 
+/**
+ * Does the first row read as a HEADER row rather than as the first player's data?
+ *
+ * The naive test — "does any cell match a known column name" — is one word away from
+ * silently DELETING a player. `IMPORT_COLUMN_ALIASES` contains bare `status`, `email`,
+ * `sport`, `notes` and `gender`, so a genuinely headerless export whose first data row
+ * carries that word in any column (a sport of "status"? a note reading "email"? a name
+ * like "Gender, Amara"?) was treated as a header, `body` dropped that row, and the
+ * player's details vanished with no error anywhere — the import simply reported one row
+ * fewer. A wrong guess here is not a parse error, it is data loss.
+ *
+ * So two conditions, and BOTH must hold:
+ *
+ *  1. At least two cells resolve to a known column. A real header names every column; a
+ *     coincidence matches one. Two is the floor that survives an accidental hit without
+ *     requiring an exact multi-column match.
+ *  2. No cell in the row looks like DATA for the column it names. An address in the
+ *     `email` column, or a date in a `date of birth` column, means this row is a player.
+ *
+ * Condition 2 is what catches the realistic case: a roster whose first player's row
+ * happens to begin with a name the aliases recognise, or contains an email address in a
+ * notes column. Positional parsing then applies, which is the documented fallback.
+ */
+function looksLikeHeaderRow(cells: string[], normalized: string[]): boolean {
+  const resolved = normalized.filter((h) => IMPORT_COLUMN_ALIASES[h])
+  if (resolved.length < 2) return false
+
+  // Data-shaped content ANYWHERE in the row means this is a player's row, not a header.
+  //
+  // Deliberately NOT restricted to the cells whose column name resolved: the realistic
+  // false-header case is a row whose *values* happen to be words like `email` and
+  // `status` — `email,status,ada@x.co,active` — where the alias words ARE the data. A
+  // per-column check reads that row as "two recognised columns, neither data-shaped" and
+  // accepts it as a header, deleting the player. That bug shipped in the first version of
+  // this function and was caught by a test written to exercise the check and quietly
+  // not: the earlier fixture resolved zero aliases, so it never reached the condition it
+  // named.
+  const DATA_SHAPED =
+    /@|\d{2,}[-/.]\d{1,2}[-/.]\d{2,}|\b\d{3}[- .]?\d{3}[- .]?\d{4}\b|^\+?[0-9][0-9 ()/-]{6,}$/
+  return !cells.some((raw) => DATA_SHAPED.test(raw.trim()))
+}
+
 /** Maps raw CSV cells to import rows: header-aware when the first row contains
  *  known column names, otherwise positional in roster-export order. */
-function csvToImportRows(csv: string): StudentImportRow[] {
+export function csvToImportRows(csv: string): StudentImportRow[] {
   const records = parseCSV(csv)
   if (!records.length) return []
 
   const header = records[0].map(normalizeHeader)
-  const hasHeader = header.some((h) => IMPORT_COLUMN_ALIASES[h])
+  const hasHeader = looksLikeHeaderRow(records[0], header)
   const mapping: (string | null)[] = hasHeader
     ? header.map((h) => IMPORT_COLUMN_ALIASES[h] ?? null)
     : []
@@ -160,7 +255,7 @@ function StudentImportDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   auth0Id: string
-  onImported: () => void
+  onImported: () => void | Promise<void>
 }) {
   const [text, setText] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
@@ -200,7 +295,10 @@ function StudentImportDialog({
     try {
       const res = await orgImportStudents(auth0Id, rows)
       setResult(res)
-      if (res.imported > 0) onImported()
+      // Awaited: this is the other end of the same unhandled-rejection path. Even with
+      // the handler fixed, a bare call here discards its promise, so a rejection inside
+      // the refresh would escape the dialog entirely.
+      if (res.imported > 0) await onImported()
       if (res.imported === 0 && res.failed.length > 0) {
         toast.error('No rows imported — review the errors below')
       }
@@ -410,12 +508,37 @@ export default function StudentsClient({
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgUpdateStudent(auth0Id, id, { status: nextStatus })),
       )
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      setStudents((prev) =>
-        prev.map((p) => (selected.has(p.id) ? { ...p, status: nextStatus } : p)),
+      // Only the ids whose write FULFILLED may change locally.
+      //
+      // This rewrote EVERY selected row regardless of outcome, so a partial failure made
+      // the roster claim a change the server rejected — and the toast, built from the
+      // `ok` count, said "Updated 17" beside twenty rows all reading `archived`. On
+      // reload the seventeen reappeared, which is the tell that the view had been lying.
+      //
+      // `succeeded` is a Set, so membership is O(1) and the row identity does not matter.
+      // Note the set is built from `results` in the SAME order as `selectedIds`, which is
+      // what pairs a result with its id; deriving both from one array is the whole fix.
+      const { rows, succeeded, failed } = applyBulkStatusResult(
+        students,
+        selectedIds,
+        results,
+        nextStatus,
       )
-      toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
-      setSelected(new Set())
+      const ok = succeeded.length
+      setStudents(rows)
+      if (ok > 0) toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
+      if (ok < selectedIds.length)
+        toast.error(
+          `${selectedIds.length - ok} student(s) could not be updated — still showing their previous status`,
+        )
+      // Prune rather than clear: a row whose write failed stays selected, so the coach can
+      // retry it. Clearing was part of the same lie — the failed subset became
+      // unrecoverable without re-selecting by hand.
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of failed) next.add(id)
+        return next
+      })
     } finally {
       setBulkBusy(false)
     }
@@ -428,12 +551,33 @@ export default function StudentsClient({
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgDeleteStudent(auth0Id, id)),
       )
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      setStudents((prev) => prev.filter((p) => !selected.has(p.id)))
+      // Only the ids whose delete FULFILLED leave the roster.
+      //
+      // This filtered out `selected.has(p.id)` wholesale, so a partial failure made every
+      // row vanish from the view while the toast — which used the `ok` count — reported
+      // "Removed 18 · 2 could not be removed". The two that survived still had their
+      // attendance, objectives and plans, and because the selection was then cleared they
+      // were unrecoverable from the UI: the coach could not see them, select them, or
+      // retry. In a product with erasure and data-rights surfaces, a false "removed" is a
+      // wrong belief about persisted data, not a cosmetic one.
+      //
+      // `selected.has(p.id)` was also the wrong SET: `selected` survives a filter change,
+      // while `selectedIds` is derived from the filtered list — so this rewrote rows that
+      // were never part of the request at all.
+      const { rows, succeeded, failed } = applyBulkDeleteResult(students, selectedIds, results)
+      const ok = succeeded.length
+      setStudents(rows)
       if (ok > 0) toast.success(`Removed ${ok} student(s)`)
       if (ok < selectedIds.length)
-        toast.error(`${selectedIds.length - ok} student(s) could not be removed`)
-      setSelected(new Set())
+        toast.error(
+          `${selectedIds.length - ok} student(s) could not be removed — still on the roster`,
+        )
+      // As above: a row that survived stays selected so the retry is one click.
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of failed) next.add(id)
+        return next
+      })
     } finally {
       setBulkBusy(false)
     }
@@ -962,9 +1106,24 @@ export default function StudentsClient({
         open={importOpen}
         onOpenChange={setImportOpen}
         auth0Id={auth0Id}
-        onImported={() => {
-          refreshStudents()
-          toast.success('Roster updated')
+        onImported={async () => {
+          // Awaited, and the toast fires AFTER. This called `refreshStudents()` bare —
+          // no `await`, no `.catch`, promise discarded — and then reported success. So a
+          // failed roster refresh was an unhandled rejection with a success toast already
+          // on screen: the coach was told the import landed while the imported players
+          // never appeared, and nothing said otherwise. The message now describes work
+          // that has actually completed.
+          try {
+            await refreshStudents()
+            toast.success('Roster updated')
+          } catch {
+            // The import DID land server-side; only the list refresh failed. Saying so is
+            // the honest outcome — a bare "failed" would wrongly suggest the upload was
+            // lost, and re-uploading would duplicate rows.
+            toast.error(
+              'Players were imported, but the roster could not be refreshed. Reload to see them.',
+            )
+          }
         }}
       />
     </div>
