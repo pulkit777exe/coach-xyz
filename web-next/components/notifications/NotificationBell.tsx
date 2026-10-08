@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/9ui/ui/dropdown-menu'
@@ -188,9 +189,11 @@ export default function NotificationBell() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={MENU_CLASS}>
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-          <DropdownMenuLabel className="px-0! py-0! text-xs font-medium text-muted-foreground">
-            Notifications
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="px-0! py-0! text-xs font-medium text-muted-foreground">
+              Notifications
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
           {unreadCount > 0 ? (
             <Button
               variant="ghost"
