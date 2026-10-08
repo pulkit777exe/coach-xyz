@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { formatDateNumeric } from '@/lib/date'
+import { EMAIL_RE } from '@/lib/email'
 import {
   ORG_MEMBER_INVITE_ROLES,
   ORG_MEMBER_ROLE_LABELS,
@@ -36,8 +37,6 @@ interface InvitesClientProps {
   /** May issue + revoke invitations (server floors: owner/admin only). */
   canInvite: boolean
 }
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function InvitesClient({ auth0Id, initialInvites, canInvite }: InvitesClientProps) {
   const [invites, setInvites] = useState<OrgInvite[]>(initialInvites)

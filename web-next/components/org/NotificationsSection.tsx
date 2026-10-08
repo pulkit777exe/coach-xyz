@@ -7,6 +7,7 @@ import SettingRow from '@/components/org/SettingRow'
 import { Spinner } from '@/components/org/Spinner'
 import { Switch } from '@/components/9ui/ui/switch'
 import { formatDateTime } from '@/lib/date'
+import { errorMessageOf } from '@/lib/errors'
 import {
   Select,
   SelectContent,
@@ -64,14 +65,6 @@ const CADENCE_ITEMS: Record<NotificationCadence, string> = {
   weekly: 'Weekly',
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string' && message.trim()) return message
-  }
-  return fallback
-}
-
 export default function NotificationsSection() {
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -92,7 +85,7 @@ export default function NotificationsSection() {
         // A missing row is already the server's enabled default. Keeping the
         // same local default also lets a user retry after a transient GET error.
         setPrefs(DEFAULT_PREFS)
-        setError(errorMessage(cause, 'Failed to load notification preferences.'))
+        setError(errorMessageOf(cause, 'Failed to load notification preferences.'))
       })
       .finally(() => {
         if (active) setIsLoading(false)
@@ -114,7 +107,7 @@ export default function NotificationsSection() {
       .then((saved) => setPrefs(saved))
       .catch((cause) => {
         setPrefs(previous)
-        setError(errorMessage(cause, 'Failed to save notification preferences.'))
+        setError(errorMessageOf(cause, 'Failed to save notification preferences.'))
       })
       .finally(() => setIsSaving(false))
   }
@@ -133,7 +126,7 @@ export default function NotificationsSection() {
       .then((saved) => setPrefs(saved))
       .catch((cause) => {
         setPrefs(previous)
-        setError(errorMessage(cause, 'Failed to save notification preferences.'))
+        setError(errorMessageOf(cause, 'Failed to save notification preferences.'))
       })
       .finally(() => setIsSaving(false))
   }
@@ -149,7 +142,7 @@ export default function NotificationsSection() {
       .then((saved) => setPrefs(saved))
       .catch((cause) => {
         setPrefs(previous)
-        setError(errorMessage(cause, 'Failed to save notification preferences.'))
+        setError(errorMessageOf(cause, 'Failed to save notification preferences.'))
       })
       .finally(() => setIsSaving(false))
   }

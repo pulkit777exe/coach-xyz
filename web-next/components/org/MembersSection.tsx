@@ -40,6 +40,8 @@ import {
 } from '@/lib/members'
 import type { CoachAIError } from '@/lib/api'
 import { initials } from '@/lib/initials'
+import { errorMessageOf } from '@/lib/errors'
+import { EMAIL_RE } from '@/lib/email'
 
 // role → label map for the base-ui Select `items` prop (renders the current
 // value's label inside the trigger).
@@ -59,20 +61,6 @@ const ROLE_TONE: Record<OrgMemberRole, StatusTone> = {
   analyst: 'blue',
   medical: 'gray',
   player: 'gray',
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function messageOf(err: unknown, fallback: string): string {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'message' in err &&
-    typeof (err as CoachAIError).message === 'string'
-  ) {
-    return (err as CoachAIError).message
-  }
-  return fallback
 }
 
 export default function MembersSection({
@@ -102,7 +90,7 @@ export default function MembersSection({
       }
     } catch (err) {
       if (requestSeq.current === seq) {
-        setError(messageOf(err, 'Failed to load staff'))
+        setError(errorMessageOf(err, 'Failed to load staff'))
       }
     } finally {
       if (requestSeq.current === seq) setLoading(false)
@@ -135,7 +123,7 @@ export default function MembersSection({
         }
       })
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to update role'))
+      toast.error(errorMessageOf(err, 'Failed to update role'))
     } finally {
       setBusyId(null)
     }
@@ -161,7 +149,7 @@ export default function MembersSection({
       )
       setPendingRemove(null)
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to remove member'))
+      toast.error(errorMessageOf(err, 'Failed to remove member'))
     } finally {
       setBusyId(null)
     }
@@ -318,10 +306,7 @@ export default function MembersSection({
               items={{
                 custodian: 'Owner (custodian)',
                 ...Object.fromEntries(
-                  successorCandidates.map((m) => [
-                    m.id,
-                    m.display_name ?? m.member_email ?? m.id,
-                  ]),
+                  successorCandidates.map((m) => [m.id, m.display_name ?? m.member_email ?? m.id]),
                 ),
               }}
               value={pendingSuccessor}
@@ -381,7 +366,7 @@ function InviteMemberForm({
       setEmail('')
       onClose()
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to invite member'))
+      toast.error(errorMessageOf(err, 'Failed to invite member'))
     } finally {
       setBusy(false)
     }

@@ -131,3 +131,34 @@ export function engineError(
 ): CoachAIError {
   return { code, message, layer: 'engine', retryable: retryable ?? true }
 }
+
+/**
+ * A human-readable message for an unknown thrown value, with a fallback when it has none.
+ *
+ * This replaces FIVE local copies across the settings sections, in two variants that
+ * DISAGREED on the case that matters most:
+ *
+ *   `errorMessage(error, fallback)` ×3  — checks `typeof message === 'string' && message.trim()`,
+ *                                        so a blank message yields the fallback
+ *   `messageOf(err, fallback)`      ×2  — checks only `typeof message === 'string'`, so a blank
+ *                                        message yields `''`
+ *
+ * So `POST /members` failing with `message: ""` toasted the fallback on three sections and
+ * **an empty toast** on the other two — the user sees a notification with no text and no
+ * explanation. The blank-message guard is kept, because a blank string is the absence of a
+ * message, not a message.
+ *
+ * It also handles the shapes the copies did not: an `Error` (whose `message` is on the
+ * prototype chain but still readable), a `CoachAIError` (which passes through), and a
+ * primitive (`throw 'nope'`) which stringifies rather than falling back.
+ */
+export function errorMessageOf(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  // An `Error` whose own `message` is blank but whose name is not — still say something.
+  if (err instanceof Error && err.name && err.name !== 'Error') return err.name
+  if (typeof err === 'string' && err.trim()) return err
+  return fallback
+}

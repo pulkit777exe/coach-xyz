@@ -8,18 +8,7 @@ import { Spinner } from './Spinner'
 import { leaveOrganization, type MyOrg } from '@/lib/meApi'
 import { clearOrgCookie, getOrgCookie } from '@/lib/orgCookie'
 import type { CoachAIError } from '@/lib/api'
-
-function messageOf(err: unknown, fallback: string): string {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'message' in err &&
-    typeof (err as CoachAIError).message === 'string'
-  ) {
-    return (err as CoachAIError).message
-  }
-  return fallback
-}
+import { errorMessageOf } from '@/lib/errors'
 
 // Owners manage the club and players are managed by their coach — neither
 // sees a leave control.
@@ -62,7 +51,7 @@ export default function LeaveOrganization({
       router.replace('/dashboard')
       router.refresh()
     } catch (err) {
-      setError(messageOf(err, 'Failed to leave the organization'))
+      setError(errorMessageOf(err, 'Failed to leave the organization'))
       setConfirming(false)
     } finally {
       setLeaving(false)

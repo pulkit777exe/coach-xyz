@@ -17,8 +17,7 @@ import { Spinner } from './Spinner'
 
 import { orgSendInvites } from '@/lib/org'
 import type { CoachAIError } from '@/lib/api'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import { EMAIL_RE } from '@/lib/email'
 
 function parseEmails(raw: string): string[] {
   const parts = raw

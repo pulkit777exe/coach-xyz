@@ -16,6 +16,7 @@ import {
 } from '@/components/9ui/ui/select'
 import { orgSettings, updateOrgSettings, type OrgSettings } from '@/lib/org'
 import type { OrgMemberRole } from '@/lib/members'
+import { errorMessageOf } from '@/lib/errors'
 
 /**
  * A short, familiar zone list — enough to cover the clubs we actually see. The
@@ -45,14 +46,6 @@ const TIMEZONES: ReadonlyArray<{ value: string; label: string }> = [
 const TIMEZONE_NONE = 'none'
 
 const MAX_NAME_LENGTH = 120
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string' && message.trim()) return message
-  }
-  return fallback
-}
 
 /**
  * Organization settings — the org's own name and calendar timezone. Reads are
@@ -87,7 +80,7 @@ export default function OrganizationSettingsSection({
       })
       .catch((cause) => {
         if (!active) return
-        setError(errorMessage(cause, 'Failed to load organization settings.'))
+        setError(errorMessageOf(cause, 'Failed to load organization settings.'))
       })
       .finally(() => {
         if (active) setIsLoading(false)
@@ -132,7 +125,7 @@ export default function OrganizationSettingsSection({
       .catch((cause) => {
         setSettings(previous)
         setNameDraft(previous.name ?? '')
-        setError(errorMessage(cause, 'Failed to save organization settings.'))
+        setError(errorMessageOf(cause, 'Failed to save organization settings.'))
       })
       .finally(() => setIsSaving(false))
   }

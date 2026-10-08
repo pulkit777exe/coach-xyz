@@ -7,6 +7,7 @@ import SettingRow from '@/components/org/SettingRow'
 import { Spinner } from '@/components/org/Spinner'
 import { Button } from '@/components/9ui/ui/button'
 import { Switch } from '@/components/9ui/ui/switch'
+import { errorMessageOf } from '@/lib/errors'
 import {
   Dialog,
   DialogContent,
@@ -64,14 +65,6 @@ const REQUEST_STATUS_COPY: Record<PrivacyRequest['status'], string> = {
 /** The date half of an ISO stamp (matches the server's export filename). */
 const dayOf = (iso: string): string => iso.slice(0, 10)
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message
-    if (typeof message === 'string' && message.trim()) return message
-  }
-  return fallback
-}
-
 /** Triggers a JSON download in the browser (same shape as lib/csv downloadCSV). */
 function downloadJson(filename: string, data: unknown): void {
   const url = window.URL.createObjectURL(
@@ -106,7 +99,7 @@ export default function PrivacySection() {
         if (consentResult.status === 'fulfilled') {
           setConsent(consentResult.value)
         } else {
-          setError(errorMessage(consentResult.reason, 'Failed to load consent settings.'))
+          setError(errorMessageOf(consentResult.reason, 'Failed to load consent settings.'))
         }
         if (requestsResult.status === 'fulfilled') setRequests(requestsResult.value.requests)
         setIsLoading(false)
@@ -129,7 +122,7 @@ export default function PrivacySection() {
       .then((saved) => setConsent(saved))
       .catch((cause) => {
         setConsent(previous)
-        setError(errorMessage(cause, 'Failed to save consent.'))
+        setError(errorMessageOf(cause, 'Failed to save consent.'))
       })
       .finally(() => setIsSaving(false))
   }
@@ -146,7 +139,7 @@ export default function PrivacySection() {
         setNotice('Your data was downloaded as a JSON file.')
       })
       .catch((cause) => {
-        setError(errorMessage(cause, 'Failed to download your data.'))
+        setError(errorMessageOf(cause, 'Failed to download your data.'))
       })
       .finally(() => setIsExporting(false))
   }
@@ -169,7 +162,7 @@ export default function PrivacySection() {
           .catch(() => setRequests((current) => [request, ...current]))
       })
       .catch((cause) => {
-        setError(errorMessage(cause, 'Failed to send your deletion request.'))
+        setError(errorMessageOf(cause, 'Failed to send your deletion request.'))
       })
       .finally(() => setIsRequesting(false))
   }
