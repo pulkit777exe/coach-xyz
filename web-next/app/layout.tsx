@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
-import { SentryProvider } from './sentry-provider'
 import AuthHeader from '@/components/AuthHeader'
 import SkipLink from '@/components/SkipLink'
 import { PreferencesProvider } from '@/lib/preferences'
@@ -56,12 +55,10 @@ export default function RootLayout({
         <Analytics />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PreferencesProvider>
-            <SentryProvider>
-              <AuthHeader />
-              <SkipLink />
-              <div className="root">{children}</div>
-              <Toaster position="bottom-right" richColors />
-            </SentryProvider>
+            <AuthHeader />
+            <SkipLink />
+            <div className="root">{children}</div>
+            <Toaster position="bottom-right" richColors />
           </PreferencesProvider>
         </ThemeProvider>
       </body>

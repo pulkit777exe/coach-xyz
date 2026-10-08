@@ -100,6 +100,17 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   if (videoSrcJob !== jobId) {
     setVideoSrcJob(jobId)
     setVideoSrc(getDownloadUrl(jobId))
+    // Resetting the error HERE rather than in an effect, because this is the same render
+    // pass that already swaps the source. An effect keyed on `[jobId]` was the one place
+    // in the app that called `setState` synchronously as an effect's first statement —
+    // the antipattern AGENTS.md names — and it was also redundant: `<video onLoadStart>`
+    // below already sets `isLoading` when the new source begins loading, so the effect
+    // ran one commit later than the event it duplicated.
+    //
+    // Deriving during render for a component's OWN state is sanctioned by React, and this
+    // is the documented alternative the rule points at. `setHasError(false)` belongs to
+    // the same transition: the previous job's error must not survive into the new one.
+    setHasError(false)
   }
   useEffect(() => {
     let cancelled = false
@@ -124,11 +135,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       }
     },
   }))
-
-  useEffect(() => {
-    setIsLoading(true)
-    setHasError(false)
-  }, [jobId])
 
   // Resize canvas to match container
   useEffect(() => {
