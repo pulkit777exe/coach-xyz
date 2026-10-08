@@ -178,7 +178,14 @@ jobs:
       # healthy runner, and bounded by the child budget otherwise. The bare row is the
       # control and must stay ~10ms — if IT is slow the problem is the runner's process
       # cost, not this repository's module graph.
+      # `if: always()` is LOAD-BEARING and its absence was the bug this step was written to
+      # fix. Without it a step runs only when every PREVIOUS step succeeded — so on a red
+      # run, the one step that explains WHY it was red was the one step skipped. I shipped
+      # exactly that on the first attempt, having written a whole ledger entry about gates
+      # that read the wrong variable, and the tell was the same: a step whose value is
+      # highest precisely when it is least likely to execute.
       - name: Measure probe spawn cost
+        if: always()
         working-directory: server
         env:
           PROBE_BOOT_REPEATS: '3'
@@ -195,6 +202,10 @@ jobs:
         continue-on-error: true
         run: |
           bun -e '
+            if (!(await Bun.file("probe-boot-cost.json").exists())) {
+              console.log("::error::no probe-boot-cost.json — the measurement step did not run")
+              process.exit(1)
+            }
             const rows = JSON.parse(await Bun.file("probe-boot-cost.json").text())
             const app = rows.find(r => r.label.includes("composed app"))
             const bare = rows.find(r => r.label.includes("bare bun"))
