@@ -139,7 +139,7 @@ export default function SettingsPanel({
         href={closeHref}
         aria-hidden="true"
         tabIndex={-1}
-        className="fixed inset-0 z-50 bg-black/45 dark:bg-black/65"
+        className="fixed inset-0 z-50 bg-overlay"
       />
       {/* Panel wrapper: full-bleed on mobile, centered with margins from md up. */}
       <div className="pointer-events-none fixed inset-0 z-50 flex justify-center p-0 md:items-center md:p-6">

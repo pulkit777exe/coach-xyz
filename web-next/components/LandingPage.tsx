@@ -562,7 +562,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             className={`mt-5 flex min-h-[200px] flex-col items-center justify-center rounded-[8px] border-2 border-dashed p-6 text-center transition-colors duration-150 ${
               isDragging
                 ? 'border-primary bg-primary/5'
-                : 'border-input bg-background hover:border-primary/50 dark:hover:border-primary/50'
+                : 'border-input bg-background hover:border-primary/50'
             }`}
           >
             <input

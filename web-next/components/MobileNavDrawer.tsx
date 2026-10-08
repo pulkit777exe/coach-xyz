@@ -76,7 +76,7 @@ export default function MobileNavDrawer({
           setOpen(false)
           toggleRef.current?.focus()
         }}
-        className={`fixed inset-0 z-[60] bg-black/45 transition-opacity duration-150 ease-out dark:bg-black/65 motion-reduce:transition-none ${
+        className={`fixed inset-0 z-[60] bg-overlay transition-opacity duration-150 ease-out motion-reduce:transition-none ${
           open ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
       />
