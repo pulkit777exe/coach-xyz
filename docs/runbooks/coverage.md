@@ -177,7 +177,7 @@ latency on a shared runner is too noisy to gate and a flaky perf gate gets
 disabled — which is worse than none.
 ## web-next: reachability, not coverage
 
-`vitest --coverage` requires `@vitest/coverage-v8`, which is not a dependency this repo may add, so this tier is measured as **import-graph reachability** instead:
+`vitest --coverage` still requires `@vitest/coverage-v8`, which this repo does not carry, so the *reachability* figure below stands as the graph metric. Note what has changed since this section was first written: the tier now has a **DOM** as well (see the next section), because `jsdom` became available once the manifest was released.
 
 ```bash
 node scripts/webReachability.mjs          # last run saved to docs/web-reachability.txt
@@ -193,3 +193,32 @@ Two limits decide what that means, and both are printed by the script rather tha
 **The number worth acting on is the 6, not the 51.** Fifty of the untouched files are `app/` route modules, which no unit test can reach and which `next build` already type-checks. Treating them as gaps would be the same mistake as treating Bun's probe-reported sub-50% modules as gaps on the server: a number that points at the wrong files is worse than no number, because it looks like a priority list.
 
 Re-derive and read the LIMITS block at the bottom of the output before quoting any figure from it.
+
+## web-next: a DOM tier, added once the manifest was free
+
+`jsdom` is now a devDependency, so component tests can **run** a component rather than render or grep it. That distinction matters more than the number of tests: `renderToStaticMarkup` never runs `useEffect`, and two components return `null` until an effect resolves state, so they produced **zero output** under every render the sweep performed while being counted as covered.
+
+```bash
+# the two DOM files; both opt in per-file so the other 30 files stay on environment: 'node'
+bun run test components/org/AnalysisLinkControl.dom.test.tsx
+bun run test components/notifications/NotificationBell.dom.test.tsx
+```
+
+Two decisions worth knowing before adding a third:
+
+1. **A per-file `// @vitest-environment jsdom` docblock, not a global flip.** Changing `environment` in `vitest.config.mts` would move all 32 files, including the 30 that were written for `node` and never had a DOM. The blast radius of a new environment should be the file that needs it.
+2. **`jsdom` alone, not `@testing-library/react`.** React 19 exports `act` from `react` itself, so `createRoot` + `act` + `querySelector` covers what these tests need. One dependency instead of three, and no version coupling to test between React and Testing Library.
+
+**Scope, stated because it is the limit:** the data layer is mocked at the module boundary. That pins the component's behaviour over its inputs, which is the branch that was previously unobservable — it does **not** pin the fetch path (URL construction, JSON handling, error mapping), which the server-side and API tests own. A `jsdom` test with a stubbed fetcher would happily pass while the real request shape was wrong.
+
+### What it found immediately
+
+`NotificationBell`'s dropdown threw on open: `DropdownMenuLabel` wraps Base UI's `Menu.GroupLabel`, which requires a `Menu.Group` ancestor, and the component used it bare. So clicking the bell produced `MenuGroupContext is missing` and the user saw no notifications. `components/org/OrgPill.tsx` — the only other `DropdownMenuLabel` call site — wraps it correctly, which is what identified the component as the outlier rather than the primitive.
+
+This is the strongest available argument for the tier: **a crash on the primary interaction of a shipped component, invisible to every test that existed.**
+
+### The metric that did not move
+
+`scripts/webReachability.mjs` still reports 134 statically imported, 6 sweep-only, 51 untouched — **identical before and after** — because the graph was never wrong. `lib/__tests__/a11ySource.test.ts` → `AnalysisDetailClient` → `AnalysisLinkControl` is a real static edge, so the metric has been calling that component covered for six rounds.
+
+That is not a bug in the metric; it is the limit the script's own LIMITS block states, and it is quoted verbatim in `AGENTS.md`. What the round establishes is that the limit ** bites in practice on the components most likely to matter**, so a reachability percentage should be read as "the import graph reaches this file" and never as "something observed this file". For behaviour, the honest number in this tier is a mutation count — 8 for `AnalysisLinkControl`, 6 for `NotificationBell` — not a coverage percentage.
