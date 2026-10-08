@@ -64,7 +64,7 @@ const timeProbe = (probe: string): { wall: number; killed: boolean; out: string 
   })
   return {
     wall: Date.now() - started,
-    killed: (r.error as { code?: string } | undefined)?.code === 'ETIMEDOUT' || r.signal != null,
+    killed: (r.error as { code?: string } | undefined)?.code === 'ETIMEDOUT' || r.signal !== null,
     out: (r.stderr ?? r.stdout ?? '').trim().slice(-120).replace(/\s+/g, ' '),
   }
 }
@@ -108,9 +108,13 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     // Printed unconditionally — a diagnostic whose output only appears on failure is a
     // diagnostic that is missing precisely when the failure is intermittent.
     console.log(`\nPROBE SPAWN COST (in-suite, ${REPEATS} runs each):\n${report.join('\n')}\n`)
+    // `heapUsed` is not on Bun's `MemoryUsageFn`, so the object is read once and narrowed
+    // rather than calling through the function — the typechecker caught it, which is the
+    // only reason this line is not also wrong on the runner.
+    const mem = process.memoryUsage() as { rss: number; heapUsed?: number }
     console.log(
-      `  parent: rss=${Math.round(process.memoryUsage.rss() / 1024 / 1024)}MB ` +
-        `uptime=${Math.round(process.uptime())}s heapUsed=${Math.round((process.memoryUsage.heapUsed ?? 0) / 1024 / 1024)}MB\n`,
+      `  parent: rss=${Math.round(mem.rss / 1024 / 1024)}MB uptime=${Math.round(process.uptime())}s ` +
+        `heapUsed=${Math.round((mem.heapUsed ?? 0) / 1024 / 1024)}MB\n`,
     )
   })
 })
