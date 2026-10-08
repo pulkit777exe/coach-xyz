@@ -7,6 +7,7 @@ import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { orgCreateWellness, orgWellness, type WellnessCheckin } from '@/lib/org'
 import Section from './Section'
+import { formatDateNumeric } from '@/lib/date'
 
 interface WellnessSectionProps {
   auth0Id: string
@@ -146,7 +147,7 @@ export default function WellnessSection({ auth0Id, studentId, canWrite }: Wellne
                   className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-meta last:border-b-0 hover:bg-accent/50 transition-colors"
                 >
                   <span className="text-muted-foreground tabular-nums">
-                    {new Date(checkin.created_at).toLocaleDateString()}
+                    {formatDateNumeric(checkin.created_at)}
                   </span>
                   <span className="text-foreground tabular-nums">
                     {[

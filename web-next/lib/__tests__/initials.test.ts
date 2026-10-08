@@ -7,10 +7,6 @@ import { initials } from '@/lib/initials'
 // `web-next/lib/__tests__/`, which is two levels below the app root, and `ROOT` is checked
 // against a known directory so a wrong value fails loudly rather than walking nothing.
 const ROOT = join(import.meta.dirname, '..', '..')
-/** `path.relative`, not a manual `slice`: this file lives inside `web-next/lib/`, so
- *  slicing `ROOT.length + 1` off a `lib/...` path returns `""` — the overlap bug that made
- *  the sibling `noBarrels` guard report `: './api'` for every file under `lib/`. */
-const rel = (f: string): string => relative(ROOT, f)
 
 /** Does this module define something that takes a name-ish parameter? */
 const takesNameParam = (src: string): boolean =>

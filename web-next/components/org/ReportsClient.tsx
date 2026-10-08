@@ -31,7 +31,7 @@ import EmptyState from './EmptyState'
 import ReportBody from './ReportBody'
 import EmailReportDialog from './EmailReportDialog'
 import { downloadCSV } from '@/lib/csv'
-import { formatDateMed } from '@/lib/date'
+import { formatDateMed, formatDayWeekdayYear } from '@/lib/date'
 
 import type { ReportRecord, Student, ReportType } from '@/lib/org'
 import {
@@ -373,11 +373,7 @@ export default function ReportsClient({
                         : 'All time'}
                     </p>
                     <p className="mt-0.5 text-meta text-muted-foreground">
-                      {new Date(r.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {formatDateMed(r.created_at)}
                     </p>
                   </div>
                   <StatusPill tone={TYPE_TONE[r.report_type] ?? 'gray'} className="shrink-0">
@@ -480,11 +476,7 @@ export default function ReportsClient({
                         : 'All time'}
                     </td>
                     <td className="text-muted-foreground px-4 py-2.5 tabular-nums">
-                      {new Date(r.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {formatDateMed(r.created_at)}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
@@ -768,12 +760,7 @@ export default function ReportsClient({
                 <DialogTitle>{viewing.title}</DialogTitle>
                 <DialogDescription>
                   {viewing.full_name || 'Organization'} · {typeLabel(viewing.report_type)} ·{' '}
-                  {new Date(viewing.created_at).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
+                  {formatDayWeekdayYear(viewing.created_at)}
                 </DialogDescription>
               </DialogHeader>
               <ReportBody report={viewing} />

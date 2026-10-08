@@ -6,6 +6,7 @@ import Section from '@/components/org/Section'
 import SettingRow from '@/components/org/SettingRow'
 import { Spinner } from '@/components/org/Spinner'
 import { Switch } from '@/components/9ui/ui/switch'
+import { formatDateTime } from '@/lib/date'
 import {
   Select,
   SelectContent,
@@ -211,7 +212,7 @@ export default function NotificationsSection() {
             {prefs.cadence !== 'instant' ? (
               <p className="mt-1 text-caption text-muted-foreground">
                 {prefs.lastDigestAt
-                  ? `Last digest: ${new Date(prefs.lastDigestAt).toLocaleString()}`
+                  ? `Last digest: ${formatDateTime(prefs.lastDigestAt)}`
                   : 'No digest sent yet.'}
               </p>
             ) : null}

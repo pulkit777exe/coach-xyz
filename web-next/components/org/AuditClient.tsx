@@ -12,6 +12,7 @@ import EmptyState from './EmptyState'
 import Section from './Section'
 import StatusPill from './StatusPill'
 import type { AuditLog } from '@/lib/members'
+import { formatDateTime } from '@/lib/date'
 
 interface AuditClientProps {
   initialLogs: AuditLog[]
@@ -89,7 +90,7 @@ export default function AuditClient({ initialLogs }: AuditClientProps) {
               <p className="mt-0.5 truncate text-meta text-muted-foreground tabular-nums">
                 {log.actor_auth0_id ?? 'system'} · {log.resource_type}
                 {log.resource_id ? ` · ${log.resource_id.slice(0, 8)}` : ''} ·{' '}
-                {new Date(log.created_at).toLocaleString()}
+                {formatDateTime(log.created_at)}
               </p>
             </div>
             <StatusPill tone={log.result && log.result !== 'ok' ? 'red' : 'gray'}>

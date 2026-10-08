@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/9ui/ui/select'
+import { formatDateNumeric } from '@/lib/date'
 import {
   ORG_MEMBER_INVITE_ROLES,
   ORG_MEMBER_ROLE_LABELS,
@@ -148,7 +149,7 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
                   {invite.email}
                 </p>
                 <p className="text-meta text-muted-foreground">
-                  Expires {new Date(invite.expires_at).toLocaleDateString()}
+                  Expires {formatDateNumeric(invite.expires_at)}
                 </p>
               </div>
               <div className="flex items-center gap-2">

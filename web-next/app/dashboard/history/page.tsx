@@ -10,6 +10,7 @@ import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
 import { HISTORY_NAV_ROLES } from '@/lib/nav'
 import { unstable_noStore as noStore } from 'next/cache'
+import { formatDateMed } from '@/lib/date'
 
 export const metadata: Metadata = {
   title: 'History | CoachXYZ',
@@ -95,13 +96,7 @@ export default async function HistoryPage({
                     {a.player_index !== null && ` — Player ${a.player_index}`}
                   </p>
                   <div className="mt-0.5 flex items-center gap-3 text-meta text-muted-foreground">
-                    <span>
-                      {new Date(a.requested_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </span>
+                    <span>{formatDateMed(a.requested_at)}</span>
                     <span>{a.model}</span>
                     {a.file_size_bytes ? (
                       <span className="tabular-nums">

@@ -71,7 +71,7 @@ import {
   orgStudentTrends,
   orgCompareStudents,
 } from '@/lib/org'
-import { formatDateLong, formatDateShort } from '@/lib/date'
+import { formatDateLong, formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
 import { capitalize } from '@/lib/utils'
@@ -912,11 +912,7 @@ export default function StudentProfile({
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 text-body text-muted-foreground">
-                      {new Date(a.requested_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {formatDateMed(a.requested_at)}
                     </td>
                     <td className="hidden px-4 py-2.5 text-body tabular-nums md:table-cell">
                       {analysisScore(a) ?? '—'}
@@ -972,11 +968,7 @@ export default function StudentProfile({
                   </Link>
                   <span className="flex items-center gap-3">
                     <span className="text-muted-foreground text-xs">
-                      {new Date(r.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {formatDateMed(r.created_at)}
                     </span>
                     {canWrite && (
                       <Button

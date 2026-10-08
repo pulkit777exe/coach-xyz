@@ -1,6 +1,6 @@
 import type { ReportContent, ReportRecord } from '@/lib/org'
 import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org'
-import { formatDateMed } from '@/lib/date'
+import { formatDateMed, formatDateTimeShort } from '@/lib/date'
 
 const TYPE_ORDER: Record<string, string[]> = {
   attendance: ['summary', 'org', 'attendance', 'performance', 'analyses'],
@@ -41,8 +41,7 @@ export default function ReportBody({
           if (!gen) return null
           return (
             <p className="text-muted-foreground text-meta tabular-nums">
-              Generated{' '}
-              {new Date(gen).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+              Generated {formatDateTimeShort(gen)}
             </p>
           )
         })()}

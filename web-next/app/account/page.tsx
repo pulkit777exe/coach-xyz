@@ -8,6 +8,7 @@ import PageHeader from '@/components/org/PageHeader'
 import StatusPill from '@/components/org/StatusPill'
 import OrganizationsCard from '@/components/org/OrganizationsCard'
 import { USER_ROLE_LABELS } from '@/lib/userRoles'
+import { formatDateTime } from '@/lib/date'
 
 export const metadata: Metadata = {
   title: 'Account | CoachXYZ',
@@ -147,13 +148,13 @@ export default async function AccountPage() {
               <div className="flex items-center justify-between px-6 py-3.5">
                 <span className="text-meta font-medium text-muted-foreground">Created</span>
                 <span className="text-meta text-foreground tabular-nums">
-                  {new Date(user.created_at).toLocaleString()}
+                  {formatDateTime(user.created_at)}
                 </span>
               </div>
               <div className="flex items-center justify-between px-6 py-3.5">
                 <span className="text-meta font-medium text-muted-foreground">Last Updated</span>
                 <span className="text-meta text-foreground tabular-nums">
-                  {new Date(user.updated_at).toLocaleString()}
+                  {formatDateTime(user.updated_at)}
                 </span>
               </div>
             </div>

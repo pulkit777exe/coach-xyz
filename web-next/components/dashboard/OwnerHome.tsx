@@ -18,6 +18,7 @@ import { ORG_MEMBER_ROLE_LABELS, type OrgMembersResponse } from '@/lib/members'
 import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
 import type { DashboardQuickActions } from '@/lib/permissions'
 import { initials } from '@/lib/initials'
+import { formatDayWeekday } from '@/lib/date'
 
 export const shellClass = 'mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
@@ -294,11 +295,7 @@ export function UpcomingList({ events }: { events: ScheduleEvent[] | null }) {
               meta={
                 <span className="inline-flex items-center gap-1">
                   <ClockIcon className="size-3" />
-                  {new Date(e.starts_at).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {formatDayWeekday(e.starts_at)}
                 </span>
               }
             />

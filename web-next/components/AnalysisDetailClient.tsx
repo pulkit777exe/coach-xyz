@@ -51,6 +51,7 @@ import { LoadingButton } from '@/components/interior/loading-button'
 import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
+import { formatDateTime } from '@/lib/date'
 
 const FALLBACK_POLL_ATTEMPTS = 4
 const STUCK_WARNING_MS = 5 * 60 * 1000
@@ -375,15 +376,7 @@ export default function AnalysisDetailClient({
             fileName={data.file_name}
           />
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground">
-            <span className="tabular-nums">
-              {new Date(data.requested_at).toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
+            <span className="tabular-nums">{formatDateTime(data.requested_at)}</span>
             {data.model && <span>{data.model}</span>}
             {data.player_count ? (
               <span className="tabular-nums">
@@ -519,7 +512,7 @@ export default function AnalysisDetailClient({
                 </div>
                 {shareExpires && (
                   <p className="text-meta text-muted-foreground tabular-nums">
-                    Expires {new Date(shareExpires).toLocaleString()}
+                    Expires {formatDateTime(shareExpires)}
                   </p>
                 )}
               </>
@@ -805,9 +798,7 @@ export default function AnalysisDetailClient({
               <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
                 Completed
               </dt>
-              <dd className="text-foreground tabular-nums">
-                {new Date(data.completed_at).toLocaleString()}
-              </dd>
+              <dd className="text-foreground tabular-nums">{formatDateTime(data.completed_at)}</dd>
             </div>
           )}
           {data.download_count > 0 && (
@@ -887,7 +878,7 @@ export default function AnalysisDetailClient({
                   Completed
                 </dt>
                 <dd className="text-foreground mt-1 tabular-nums">
-                  {new Date(data.completed_at).toLocaleString()}
+                  {formatDateTime(data.completed_at)}
                 </dd>
               </div>
             )}
