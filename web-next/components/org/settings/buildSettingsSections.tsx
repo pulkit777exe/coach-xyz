@@ -103,10 +103,11 @@ function buildDashboardTiles(overview: OrgOverview | null): SettingsTile[] {
     {
       icon: Gauge,
       label: 'Avg Attendance Rate',
-      value:
-        overview && overview.avg_attendance_rate !== null
-          ? `${overview.avg_attendance_rate}%`
-          : '—',
+      // `!= null` rather than `!== null`: a wire field typed `number | null` can be
+      // absent, and `undefined !== null` is true, so the old guard rendered the
+      // literal text "undefined%" in a dashboard tile. A null-only check is exactly
+      // the shape a server-side rename turns into a visible defect.
+      value: overview?.avg_attendance_rate != null ? `${overview.avg_attendance_rate}%` : '—',
       href: '/dashboard/reports',
     },
   ]
@@ -121,8 +122,16 @@ function CenterSpin() {
   )
 }
 
-function LoadFailed() {
-  return <p className="py-8 text-center text-body text-muted-foreground">Members failed to load.</p>
+/**
+ * `subject` is a parameter because this component is reused for two rosters, and the
+ * copy used to say "Members failed to load." even on the PLAYERS pane — so an
+ * `orgStudents` outage told a coach their members had failed. The wrong noun in a
+ * failure message sends the reader to the wrong subsystem.
+ */
+function LoadFailed({ subject }: { subject: string }) {
+  return (
+    <p className="py-8 text-center text-body text-muted-foreground">{subject} failed to load.</p>
+  )
 }
 
 function initials(name: string): string {
@@ -283,7 +292,7 @@ export default function buildSettingsSections({
           {auth0Id ? (
             <MembersSection auth0Id={auth0Id} />
           ) : orgFailed ? (
-            <LoadFailed />
+            <LoadFailed subject="Members" />
           ) : (
             <CenterSpin />
           )}
@@ -329,7 +338,7 @@ export default function buildSettingsSections({
                 </p>
               )
             ) : orgFailed ? (
-              <LoadFailed />
+              <LoadFailed subject="Players" />
             ) : (
               <CenterSpin />
             )}
@@ -348,7 +357,12 @@ export default function buildSettingsSections({
             <div className="flex flex-wrap items-center gap-8">
               <div>
                 <p className="text-[24px] font-semibold capitalize leading-[1.1] tracking-[-0.01em] text-foreground">
-                  {subscription.subscription.tier}
+                  {/* `subscription.subscription` was dereferenced unguarded. `subscription`
+                      is an async response, so a partial one (or a shape change) threw
+                      here and took the whole settings panel with it — the nav entry is
+                      gated on `subscription` being non-null, which says nothing about
+                      its shape. */}
+                  {subscription.subscription?.tier ?? '—'}
                 </p>
                 <p className="mt-1.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Plan
@@ -356,7 +370,12 @@ export default function buildSettingsSections({
               </div>
               <div>
                 <p className="text-[24px] font-semibold leading-[1.1] tabular-nums text-foreground">
-                  {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
+                  {/* Same class as the tier above: `usage_today` was a third unguarded
+                      dereference on the same async response. A partial payload threw
+                      here rather than degrading, so one missing counter blanked the
+                      whole panel instead of one number. */}
+                  {subscription.usage_today?.['analysis'] ?? 0} /{' '}
+                  {subscription.daily_analysis_limit ?? '—'}
                 </p>
                 <p className="mt-1.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Analyses today
