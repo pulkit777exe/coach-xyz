@@ -49,9 +49,16 @@ export default function ObjectivesSection({
   studentId,
   canWrite,
 }: ObjectivesSectionProps) {
-  const [objectives, setObjectives] = useState<TrainingObjective[]>([])
-  const [findings, setFindings] = useState<StoredFinding[]>([])
-  const [trends, setTrends] = useState<FindingsTrendPoint[]>([])
+  // `null` means "not loaded yet" — distinct from `[]`, which means "loaded, and there
+  // are none". Each fetch also carries its own failure flag, because collapsing a
+  // rejection to `[]` conflates three different answers into one indistinguishable
+  // empty list. See the effect below for what that cost.
+  const [objectives, setObjectives] = useState<TrainingObjective[] | null>(null)
+  const [findings, setFindings] = useState<StoredFinding[] | null>(null)
+  const [trends, setTrends] = useState<FindingsTrendPoint[] | null>(null)
+  const [objectivesFailed, setObjectivesFailed] = useState(false)
+  const [findingsFailed, setFindingsFailed] = useState(false)
+  const [trendsFailed, setTrendsFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -64,34 +71,49 @@ export default function ObjectivesSection({
 
   useEffect(() => {
     let cancelled = false
+    // Every one of these previously set its list to `[]` on rejection, which merged
+    // "failed" with "empty". The trends one is the reason this matters: `total` is
+    // summed from `trends`, so a failed fetch rendered the confident, wrong sentence
+    // "0 findings in 30 days" — a fabricated statistic rather than a missing one.
     void orgObjectives(auth0Id, { studentId })
       .then((res) => {
         if (!cancelled) setObjectives(res.objectives)
       })
       .catch(() => {
-        if (!cancelled) setObjectives([])
+        if (!cancelled) {
+          setObjectives([])
+          setObjectivesFailed(true)
+        }
       })
     void orgStudentFindings(auth0Id, studentId, 10)
       .then((res) => {
         if (!cancelled) setFindings(res.findings)
       })
       .catch(() => {
-        if (!cancelled) setFindings([])
+        if (!cancelled) {
+          setFindings([])
+          setFindingsFailed(true)
+        }
       })
     void getFindingsTrends(auth0Id, { days: 30, studentId })
       .then((res) => {
         if (!cancelled) setTrends(res.trends)
       })
       .catch(() => {
-        if (!cancelled) setTrends([])
+        if (!cancelled) {
+          setTrends([])
+          setTrendsFailed(true)
+        }
       })
     return () => {
       cancelled = true
     }
   }, [auth0Id, studentId])
 
-  const total = trends.reduce((n, p) => n + p.count, 0)
-  const reviewOpen = trends.reduce((n, p) => n + p.needs_review, 0)
+  // Only meaningful once `trends` has resolved; the sentence below checks
+  // `trendsFailed` before printing either figure.
+  const total = (trends ?? []).reduce((n, p) => n + p.count, 0)
+  const reviewOpen = (trends ?? []).reduce((n, p) => n + p.needs_review, 0)
 
   // Weekly measurement (§26): findings observed vs objectives completed.
   const weeks = useMemo(() => {
@@ -101,13 +123,13 @@ export default function ObjectivesSection({
       monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7))
       return monday.toISOString().slice(0, 10)
     }
-    for (const p of trends) {
+    for (const p of trends ?? []) {
       const key = keyOf(new Date(`${p.day}T00:00:00Z`))
       const b = buckets.get(key) ?? { findings: 0, done: 0 }
       b.findings += p.count
       buckets.set(key, b)
     }
-    for (const o of objectives) {
+    for (const o of objectives ?? []) {
       if (o.status !== 'done') continue
       const key = keyOf(new Date(o.updated_at))
       const b = buckets.get(key) ?? { findings: 0, done: 0 }
@@ -126,7 +148,7 @@ export default function ObjectivesSection({
     setBusy(true)
     setError(null)
     try {
-      const linked = findings.find((f) => f.id === findingId)
+      const linked = (findings ?? []).find((f) => f.id === findingId)
       const res = await orgCreateObjective(auth0Id, {
         student_id: studentId,
         finding_id: findingId || null,
@@ -135,7 +157,9 @@ export default function ObjectivesSection({
         description: description.trim() || null,
         due_on: dueOn || null,
       })
-      setObjectives((prev) => [res.objective, ...prev])
+      // `(prev ?? [])`, not `(prev ?? [res.objective])`: a successful create is real
+      // data and belongs at the top, even if the initial list never arrived.
+      setObjectives((prev) => [res.objective, ...(prev ?? [])])
       setTitle('')
       setDescription('')
       setDueOn('')
@@ -152,7 +176,10 @@ export default function ObjectivesSection({
     setBusy(true)
     try {
       const res = await orgSetObjectiveStatus(auth0Id, id, status)
-      setObjectives((prev) => prev.map((o) => (o.id === id ? res.objective : o)))
+      // `?? []` rather than a non-null assertion: the handlers are only reachable from
+      // the rendered list, but a write racing a failed initial load should degrade to
+      // "no rows" instead of throwing inside a state updater.
+      setObjectives((prev) => (prev ?? []).map((o) => (o.id === id ? res.objective : o)))
     } finally {
       setBusy(false)
     }
@@ -162,7 +189,7 @@ export default function ObjectivesSection({
     setBusy(true)
     try {
       await orgDeleteObjective(auth0Id, id)
-      setObjectives((prev) => prev.filter((o) => o.id !== id))
+      setObjectives((prev) => (prev ?? []).filter((o) => o.id !== id))
     } finally {
       setBusy(false)
     }
@@ -209,18 +236,38 @@ export default function ObjectivesSection({
     >
       <p className="mb-3 text-meta leading-[1.5] text-muted-foreground">
         Findings → objectives → training → measurement.{' '}
-        <span className="tabular-nums">{total}</span> findings in 30 days
-        {reviewOpen > 0 ? (
+        {/* A number is a claim about the player's record. When the trends read failed
+            there is no claim to make, so say that instead of summing an empty array
+            into a confident "0 findings in 30 days". */}
+        {trendsFailed ? (
+          'findings count unavailable.'
+        ) : (
           <>
-            {' · '}
-            <span className="tabular-nums">{reviewOpen}</span> need review
+            <span className="tabular-nums">{total}</span> findings in 30 days
+            {reviewOpen > 0 ? (
+              <>
+                {' · '}
+                <span className="tabular-nums">{reviewOpen}</span> need review
+              </>
+            ) : null}
+            .
           </>
-        ) : null}
-        .
+        )}
       </p>
 
       <div className="space-y-2">
-        {objectives.length === 0 ? (
+        {objectives === null ? (
+          <p className="py-6 text-center text-body text-muted-foreground">Loading objectives…</p>
+        ) : objectivesFailed ? (
+          // "No objectives yet" here would be a lie in the useful direction: it tells
+          // a coach to go create one, when the real answer is that the list could not
+          // be read. Distinct copy, because the reader's next action differs.
+          <EmptyState
+            compact
+            title="Objectives failed to load."
+            description="This is a loading problem, not an empty roster — retry the page."
+          />
+        ) : objectives.length === 0 ? (
           <EmptyState
             compact
             title="No objectives yet"
@@ -342,7 +389,11 @@ export default function ObjectivesSection({
           </div>
         )}
 
-        {findings.length > 0 && (
+        {findingsFailed && (
+          <p className="pt-3 text-meta text-muted-foreground">Recent findings failed to load.</p>
+        )}
+
+        {findings !== null && findings.length > 0 && (
           <div className="pt-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -441,7 +492,10 @@ export default function ObjectivesSection({
               <div className="space-y-2">
                 <Label htmlFor="objective-finding">Linked finding</Label>
                 <Select
-                  items={{ '': 'None', ...Object.fromEntries(findings.map((f) => [f.id, f.id])) }}
+                  items={{
+                    '': 'None',
+                    ...Object.fromEntries((findings ?? []).map((f) => [f.id, f.id])),
+                  }}
                   value={findingId}
                   onValueChange={(v) => setFindingId(typeof v === 'string' ? v : '')}
                 >
@@ -450,7 +504,7 @@ export default function ObjectivesSection({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
-                    {findings.map((f) => (
+                    {(findings ?? []).map((f) => (
                       <SelectItem key={f.id} value={f.id}>
                         {f.id.slice(-12)} · {(f.category ?? '').replace(/_/g, ' ')}
                       </SelectItem>
