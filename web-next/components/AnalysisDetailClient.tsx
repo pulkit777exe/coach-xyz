@@ -3,12 +3,22 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { Slide } from 'loading-dev'
 import AnalysisTitle from '@/components/AnalysisTitle'
 import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
-import ResultsSummary from '@/components/ResultsSummary'
+// Lazy for the same reason as in `AppClient`: GSAP has one importer app-wide and this
+// static import shipped the whole library on a route that usually has no summary yet.
+const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-screen items-center justify-center pt-20">
+      <Slide />
+    </div>
+  ),
+})
 import HistoryChat from '@/components/HistoryChat'
 import {
   getJobStatus,
