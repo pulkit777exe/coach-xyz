@@ -20,7 +20,7 @@ jobs:
           # Keep in step with engine/Dockerfile: CI must exercise the Python
           # the engine actually ships on, or version-specific breakage (e.g.
           # threading.Lock being a class only from 3.13) lands unnoticed.
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
           cache-dependency-path: engine/requirements.txt
 
