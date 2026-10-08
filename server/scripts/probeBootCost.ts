@@ -33,8 +33,9 @@
 //   it was. (That was not hypothetical — it is exactly what happened locally.)
 //
 // Usage:
-//   bun scripts/probeBootCost.ts               # every preset
-//   bun scripts/probeBootCost.ts --preset ci   # exactly what ci.yml gives a probe
+//   bun scripts/probeBootCost.ts                        # every preset, every case
+//   bun scripts/probeBootCost.ts --preset=ci            # exactly what ci.yml gives a probe
+//   bun scripts/probeBootCost.ts --only='composed app'  # one case, for a per-run CI step
 //   bun scripts/probeBootCost.ts --json
 //
 // It is a measurement tool, not a test, and deliberately not under `tests/` so it is not
@@ -233,8 +234,18 @@ const CASES: { label: string; target: string; stubRedis: boolean }[] = [
   { label: 'bun + app.ts (the composed app)', target: './src/app.ts', stubRedis: true },
 ]
 
-const only = process.argv.find((a) => a.startsWith('--preset='))?.split('=')[1]
-const presets = only ? [only] : Object.keys(PRESETS)
+const onlyPreset = process.argv.find((a) => a.startsWith('--preset='))?.split('=')[1]
+const presets = onlyPreset ? [onlyPreset] : Object.keys(PRESETS)
+
+/**
+ * `--only=<substring>` keeps a case by label. Exists so the server CI job can afford to
+ * measure this on EVERY run rather than only on a red one: two cases at three repeats is
+ * ~7s on a healthy runner, and a red run's evidence is otherwise lost because the next
+ * attempt usually passes.
+ */
+const onlyCase = process.argv.find((a) => a.startsWith('--only='))?.split('=')[1]
+const cases = onlyCase ? CASES.filter((c) => c.label.includes(onlyCase)) : CASES
+if (cases.length === 0) throw new Error(`--only=${onlyCase} matched no case`)
 
 const phases: Phase[] = []
 process.stdout.write(`${HEADER}\n${'-'.repeat(96)}\n`)
@@ -242,7 +253,7 @@ for (const preset of presets) {
   process.stdout.write(`\n── env preset: ${preset} ──\n`)
   const env = PRESETS[preset]()
   if (!env) throw new Error(`unknown preset: ${preset}`)
-  for (const c of CASES) phases.push(run(c.label, c.target, { stubRedis: c.stubRedis, env }))
+  for (const c of cases) phases.push(run(c.label, c.target, { stubRedis: c.stubRedis, env }))
 }
 
 process.stdout.write(

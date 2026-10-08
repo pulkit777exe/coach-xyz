@@ -160,6 +160,50 @@ jobs:
           fi
           echo "0 skipped — full coverage"
 
+      # ── Where the probe spawn cost actually goes ──────────────────────────────
+      # Runs on EVERY server run, not only red ones, because the failure is intermittent:
+      # the suite fails 46 tests, then 167, then passes the identical code — so the
+      # evidence from the run that happened to catch it is the only evidence there is,
+      # and gating this on `failure()` would collect nothing for exactly the runs that
+      # need it.
+      #
+      # Every previous claim about the cause was INFERRED from the timeouts. This is the
+      # one that was never measured: that a spawn costs ~10s on the runner against ~0.9s
+      # on a laptop. It splits the spawn into exec+load / module-graph / teardown, and
+      # separates `NEVER BOOTED` (the child never reached its first statement) from
+      # `EXIT HANG` (it finished all its work and never exited) — two defects the test
+      # helper cannot tell apart and with different fixes.
+      #
+      # Scoped to the composed app plus the bare-spawn control, at 3 repeats: ~7s on a
+      # healthy runner, and bounded by the child budget otherwise. The bare row is the
+      # control and must stay ~10ms — if IT is slow the problem is the runner's process
+      # cost, not this repository's module graph.
+      - name: Measure probe spawn cost
+        working-directory: server
+        env:
+          PROBE_BOOT_REPEATS: '3'
+          PROBE_BOOT_CHILD_BUDGET_MS: '30000'
+        run: bun scripts/probeBootCost.ts --preset=ci --only=app.ts --json
+
+      # Surfaced as a warning rather than a failure: this run's verdict is the tests, and a
+      # slow spawn that the bounded budget absorbed is not itself a red suite. It is
+      # annotated so the next run's log says "spawn was slow" instead of leaving the cause
+      # to be re-derived from a timeout count.
+      - name: Flag a slow spawn
+        working-directory: server
+        if: always()
+        continue-on-error: true
+        run: |
+          bun -e '
+            const rows = JSON.parse(await Bun.file("probe-boot-cost.json").text())
+            const app = rows.find(r => r.label.includes("composed app"))
+            const bare = rows.find(r => r.label.includes("bare bun"))
+            console.log(`::debug::bare bun ${bare?.parent}ms (control) | composed app ${app?.parent}ms = exec+load ${app?.execAndLoader} + graph ${app?.childWork} + teardown ${app?.teardown}`)
+            if (app?.neverBooted) console.log("::error::composed app NEVER BOOTED — not slowness, a failure to start")
+            else if (app?.exitHang) console.log("::error::composed app finished its work and hung on EXIT — the budget is not boot cost")
+            else if (app?.parent > 1000) console.log(`::warning::composed-app spawn is ${app.parent}ms (budget 10000ms). Module graph is the cost if exec+load is small; find the runner facts in this log before assuming the code changed.")
+          '
+
   web-next:
     name: web-next (Next.js)
     runs-on: ubuntu-latest
