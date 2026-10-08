@@ -42,7 +42,7 @@
 // part of the suite: it spawns ~40 processes and would add to the very cost it measures.
 
 import { spawnSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readdirSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { join } from 'node:path'
 
@@ -57,7 +57,7 @@ const CHILD_BUDGET_MS = Number(process.env.PROBE_BOOT_CHILD_BUDGET_MS ?? 20_000)
 // `stubRedis` mirrors what 15 of the 57 real probes do: `mock.module('../src/lib/redis')`
 // registered BEFORE the dynamic import, because `lib/redis.ts` runs `new IORedis(...)` at
 // module scope and a live client holds the event loop open so the process never exits.
-const CHILD = (target: string, stubRedis: boolean) => `
+const CHILD = (target: string, stubRedis: boolean, importBunTest = false) => `
 const t0 = Date.now()
 ${
   stubRedis
@@ -69,6 +69,7 @@ mock.module(${JSON.stringify(join(SERVER, 'src/lib/redis.ts'))}, () => ({
 }))`
     : ''
 }
+${importBunTest ? `await import('bun:test')` : ''}
 ${target === '(none)' ? '' : `await import(${JSON.stringify(target)})`}
 const t1 = Date.now()
 process.stdout.write(JSON.stringify({ t0, t1 }))
@@ -141,9 +142,9 @@ const HEADER =
 const run = (
   label: string,
   target: string,
-  opts: { stubRedis: boolean; env: Record<string, string> },
+  opts: { stubRedis: boolean; env: Record<string, string>; importBunTest?: boolean },
 ): Phase => {
-  const args = ['-e', CHILD(target, opts.stubRedis)]
+  const args = ['-e', CHILD(target, opts.stubRedis, opts.importBunTest)]
   const parents: number[] = []
   const execs: number[] = []
   const works: number[] = []
@@ -221,7 +222,24 @@ const run = (
   return phase
 }
 
-const CASES: { label: string; target: string; stubRedis: boolean }[] = [
+const CASES: {
+  label: string
+  target: string
+  stubRedis: boolean
+  importBunTest?: boolean
+}[] = [
+  {
+    label: 'bun:test ALONE (every probe imports it)',
+    target: '(none)',
+    stubRedis: false,
+    importBunTest: true,
+  },
+  {
+    label: 'bun:test + app.ts (what a probe does)',
+    target: './src/app.ts',
+    stubRedis: true,
+    importBunTest: true,
+  },
   { label: 'bare bun, no import', target: '(none)', stubRedis: false },
   { label: 'bun + lib/logger', target: './src/lib/logger.ts', stubRedis: false },
   { label: 'bun + lib/redis (real, ci env)', target: './src/lib/redis.ts', stubRedis: false },
@@ -243,17 +261,70 @@ const presets = onlyPreset ? [onlyPreset] : Object.keys(PRESETS)
  * ~7s on a healthy runner, and a red run's evidence is otherwise lost because the next
  * attempt usually passes.
  */
+/**
+ * `--probes=<substring>` runs the REAL probe files from `tests/`, not a synthetic import.
+ *
+ * This exists because every synthetic case measured FAST on a runner that was failing 41
+ * tests: a fresh spawn importing `src/app.ts` takes 284ms there, against 290ms on a
+ * laptop — 2% apart — while the probes it replaced were hitting a 10s budget. So the cost
+ * is in something a synthetic import does not do, and the only way to find it is to stop
+ * approximating and time the actual thing that fails.
+ */
+const onlyProbe = process.argv.find((a) => a.startsWith('--probes='))?.split('=')[1]
+
 const onlyCase = process.argv.find((a) => a.startsWith('--only='))?.split('=')[1]
 const cases = onlyCase ? CASES.filter((c) => c.label.includes(onlyCase)) : CASES
 if (cases.length === 0) throw new Error(`--only=${onlyCase} matched no case`)
 
 const phases: Phase[] = []
 process.stdout.write(`${HEADER}\n${'-'.repeat(96)}\n`)
+
+if (onlyProbe) {
+  const files = readdirSync(join(SERVER, 'tests'))
+    .filter((f) => f.endsWith('Probe.ts') && f.includes(onlyProbe))
+    .sort()
+  if (files.length === 0) throw new Error(`--probes=${onlyProbe} matched no probe file`)
+  process.stdout.write(`\n── REAL PROBES (tests/*${onlyProbe}*) ──\n`)
+  for (const f of files) {
+    const t0 = Date.now()
+    const r = spawnSync(process.execPath, [join('tests', f)], {
+      cwd: SERVER,
+      env: PRESETS.ci(),
+      encoding: 'utf8',
+      timeout: CHILD_BUDGET_MS,
+      maxBuffer: 32 * 1024 * 1024,
+    })
+    const wall = Date.now() - t0
+    const killed =
+      (r.error as { code?: string } | undefined)?.code === 'ETIMEDOUT' || r.signal != null
+    const tail = (r.stderr ?? r.stdout ?? '').trim().slice(-90).replace(/\s+/g, ' ')
+    phases.push({
+      label: `tests/${f}`,
+      parent: wall,
+      execAndLoader: null,
+      childWork: null,
+      teardown: null,
+      timedOut: killed,
+      exitHang: false,
+      neverBooted: false,
+      note: killed ? `KILLED at ${CHILD_BUDGET_MS}ms; last output: ${tail}` : tail,
+    })
+    process.stdout.write(
+      `  ${`tests/${f}`.padEnd(46)}${`${wall}ms`.padStart(10)}  ${killed ? `KILLED — ${tail}` : tail}\n`,
+    )
+  }
+  process.stdout.write(
+    `\nA probe above that boots fast is NOT evidence the suite is healthy: it ran on its own.\nThe suite runs them under \`bun test --isolate\`, so the difference between those two contexts\nis itself unmeasured and is the next thing to time.\n`,
+  )
+}
 for (const preset of presets) {
   process.stdout.write(`\n── env preset: ${preset} ──\n`)
   const env = PRESETS[preset]()
   if (!env) throw new Error(`unknown preset: ${preset}`)
-  for (const c of cases) phases.push(run(c.label, c.target, { stubRedis: c.stubRedis, env }))
+  for (const c of cases)
+    phases.push(
+      run(c.label, c.target, { stubRedis: c.stubRedis, env, importBunTest: c.importBunTest }),
+    )
 }
 
 process.stdout.write(

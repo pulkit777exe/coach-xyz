@@ -190,6 +190,11 @@ jobs:
         env:
           PROBE_BOOT_REPEATS: '3'
           PROBE_BOOT_CHILD_BUDGET_MS: '30000'
+        # `--only=app.ts` now matches TWO rows: a bare composed-app import, and the same
+        # import preceded by `bun:test` + a redis mock, which is what a real probe does.
+        # The gap between those two numbers, measured on the runner, is the whole question:
+        # a fresh import costs 284ms there against 290ms on a laptop, yet the probes it
+        # stands in for were hitting a 10s budget.
         run: bun scripts/probeBootCost.ts --preset=ci --only=app.ts --json
 
       # Surfaced as a warning rather than a failure: this run's verdict is the tests, and a
