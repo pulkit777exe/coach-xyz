@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { ORG_MEMBER_ROLE_LABELS, type OrgMembersResponse } from '@/lib/members'
 import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
 import type { DashboardQuickActions } from '@/lib/permissions'
+import { initials } from '@/lib/initials'
 
 export const shellClass = 'mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
@@ -413,13 +414,6 @@ function PlanCard({ subscription }: { subscription: OrgSubscription | null }) {
   )
 }
 
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  const first = words[0]?.charAt(0) ?? ''
-  const last = words.length > 1 ? words[words.length - 1].charAt(0) : ''
-  return `${first}${last}`.toUpperCase() || '?'
-}
-
 function StaffPreview({ members }: { members: OrgMembersResponse | null }) {
   const rows = members !== null ? members.members.slice(0, 5) : []
   return (
@@ -433,7 +427,7 @@ function StaffPreview({ members }: { members: OrgMembersResponse | null }) {
             return (
               <li key={member.id} className="flex h-9 items-center gap-2.5 px-2">
                 <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-label font-medium text-muted-foreground">
-                  {initialsOf(name)}
+                  {initials(name, '?')}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-body leading-[1.4] text-foreground">
                   {name}

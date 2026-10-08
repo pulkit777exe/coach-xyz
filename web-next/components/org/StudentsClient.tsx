@@ -61,20 +61,13 @@ import {
 } from '@/lib/org'
 import { formatDateMed } from '@/lib/date'
 import type { CoachAIError } from '@/lib/api'
+import { initials } from '@/lib/initials'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-success/15 text-success',
   inactive: 'bg-warning/15 text-warning',
   transferred: 'bg-muted text-muted-foreground',
   archived: 'bg-muted text-muted-foreground',
-}
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('')
 }
 
 /**

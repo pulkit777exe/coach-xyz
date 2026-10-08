@@ -28,6 +28,7 @@ import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import EmptyState from '@/components/org/EmptyState'
+import { initials } from '@/lib/initials'
 
 export const metadata: Metadata = {
   title: 'Organization | CoachXYZ',
@@ -42,14 +43,6 @@ const FEATURE_LINKS = [
   { label: 'Objectives', href: '/dashboard/students', icon: Target },
   { label: 'Teams', href: '/dashboard/teams', icon: Users },
 ] as const
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-  }
-  return parts[0].substring(0, 2).toUpperCase()
-}
 
 function roleTone(role: OrgMemberRole): StatusTone {
   if (role === 'owner') return 'primary'

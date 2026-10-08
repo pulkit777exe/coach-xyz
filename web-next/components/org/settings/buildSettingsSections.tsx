@@ -29,6 +29,7 @@ import { Spinner } from '@/components/org/Spinner'
 import type { OrgOverview, Student, orgSubscription } from '@/lib/org'
 import type { OrgMemberRole } from '@/lib/members'
 import type { UserRecord } from '@/lib/api'
+import { initials } from '@/lib/initials'
 
 /**
  * Session identity, passed down from the (light) server page. The panel must
@@ -132,14 +133,6 @@ function LoadFailed({ subject }: { subject: string }) {
   return (
     <p className="py-8 text-center text-body text-muted-foreground">{subject} failed to load.</p>
   )
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-  }
-  return parts[0].substring(0, 2).toUpperCase()
 }
 
 export default function buildSettingsSections({

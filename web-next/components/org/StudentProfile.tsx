@@ -75,6 +75,7 @@ import { formatDateLong, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
 import { capitalize } from '@/lib/utils'
+import { initials } from '@/lib/initials'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-success/15 text-success',
@@ -95,14 +96,6 @@ const METRIC_COLORS = [
   'var(--color-chart-4)',
   'var(--color-chart-5)',
 ]
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('')
-}
 
 export default function StudentProfile({
   auth0Id,

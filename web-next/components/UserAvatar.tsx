@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
 import { cn } from '@/lib/utils'
+import { initials } from '@/lib/initials'
 
 interface UserAvatarProps {
   picture?: string | null
@@ -18,20 +19,6 @@ const sizeClasses = {
   sm: 'size-6! text-[0.5rem]!',
   md: 'size-8! text-xs!',
   lg: 'size-14! text-lg!',
-}
-
-function getInitials(name?: string | null, email?: string | null): string {
-  if (name) {
-    const parts = name.trim().split(/\s+/)
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    }
-    return parts[0].substring(0, 2).toUpperCase()
-  }
-  if (email) {
-    return email.substring(0, 2).toUpperCase()
-  }
-  return '?'
 }
 
 export default function UserAvatar({
@@ -53,7 +40,7 @@ export default function UserAvatar({
           onError={() => setImgError(true)}
         />
       ) : null}
-      <AvatarFallback>{getInitials(name, email)}</AvatarFallback>
+      <AvatarFallback>{initials(name, email, '?')}</AvatarFallback>
     </Avatar>
   )
 }

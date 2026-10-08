@@ -39,6 +39,7 @@ import {
   type OrgMembersResponse,
 } from '@/lib/members'
 import type { CoachAIError } from '@/lib/api'
+import { initials } from '@/lib/initials'
 
 // role → label map for the base-ui Select `items` prop (renders the current
 // value's label inside the trigger).
@@ -61,14 +62,6 @@ const ROLE_TONE: Record<OrgMemberRole, StatusTone> = {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-  }
-  return parts[0].substring(0, 2).toUpperCase()
-}
 
 function messageOf(err: unknown, fallback: string): string {
   if (
