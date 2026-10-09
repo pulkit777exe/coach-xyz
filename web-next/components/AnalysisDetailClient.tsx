@@ -73,6 +73,19 @@ interface AnalysisDetailClientProps {
   auth0Id: string
   jobId: string
   initialData: DashboardAnalysis | null
+  /**
+   * The detail read FAILED, as distinct from the analysis not existing.
+   *
+   * The page used to collapse 404, 403 and 500 into `initialData: null`, and this component
+   * renders `null` as "Analysis Expired — Analysis not found or expired." So **one transient
+   * 5xx told a coach their analysis had expired** for an analysis that exists and that they
+   * own, with a "Start New Analysis" link inviting them to redo work they had already paid
+   * for. `errorFromResponse` already draws the distinction we need: it sets `retryable` from
+   * `status >= 500`, so the page passes `retryable: false` for a genuine absence and `true`
+   * for a transport or server failure. That is a real distinction already present in the
+   * error shape — the fix is not inventing a signal, it is refusing to throw one away.
+   */
+  initialLoadFailed?: boolean
   canShareTokens?: boolean
   canLinkToStudent?: boolean
 }
@@ -81,6 +94,7 @@ export default function AnalysisDetailClient({
   auth0Id,
   jobId,
   initialData,
+  initialLoadFailed = false,
   canShareTokens = true,
   canLinkToStudent = true,
 }: AnalysisDetailClientProps) {
@@ -299,6 +313,32 @@ export default function AnalysisDetailClient({
   }
 
   if (!initialData) {
+    // A failed READ is not an expiry verdict. The two are different facts about different
+    // things — one about the server's response, one about whether the analysis still exists —
+    // and collapsing them told a coach to discard work that was fine. A retry is offered here
+    // precisely because this state is expected to be transient.
+    if (initialLoadFailed) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+          <div className="max-w-md w-full text-center">
+            <h1 className="text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3">
+              Couldn&apos;t Load This Analysis
+            </h1>
+            <p className="text-muted-foreground text-body mb-6">
+              The analysis may still be here — we just couldn&apos;t read it. Try again, and check
+              your connection if it keeps failing.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.refresh()}
+              className="inline-block px-4 py-2 rounded-[6px] border border-border text-body font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full text-center">

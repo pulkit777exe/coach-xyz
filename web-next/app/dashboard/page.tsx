@@ -77,6 +77,11 @@ export default async function DashboardPage() {
   let teams: Team[] | null = null
   let members: OrgMembersResponse | null = null
   let subscription: OrgSubscription | null = null
+  // `subscription === null` is ambiguous on its own — the server answers 403 for a
+  // role that may not read the plan, and the fetch below rejects for everything else.
+  // The card has to say different things for the two, so the page (the only place
+  // that sees the rejection) carries the flag down with it.
+  let subscriptionFailed = false
   let error: string | null = null
 
   try {
@@ -101,10 +106,17 @@ export default async function DashboardPage() {
       orgReports(auth0Id),
       orgOverview(auth0Id),
       // Teams/members/subscription degrade to null rather than failing the page —
-      // members + subscription are owner/admin-only server-side.
+      // members + subscription are owner/admin-only server-side. The subscription
+      // rejection is recorded rather than swallowed, because "your role cannot see
+      // the plan" and "the plan read failed" are different answers for the reader.
       orgTeams(auth0Id).catch(() => null),
       isOwnerAdmin ? orgMembers(auth0Id).catch(() => null) : Promise.resolve(null),
-      isOwnerAdmin ? orgSubscription(auth0Id).catch(() => null) : Promise.resolve(null),
+      isOwnerAdmin
+        ? orgSubscription(auth0Id).catch(() => {
+            subscriptionFailed = true
+            return null
+          })
+        : Promise.resolve(null),
     ])
     stats = statsRes.stats
     analyses = analysesRes.analyses
@@ -134,6 +146,7 @@ export default async function DashboardPage() {
         overview={overview}
         members={members}
         subscription={subscription}
+        subscriptionFailed={subscriptionFailed}
         showHistoryLink={showHistoryLink}
         quickActions={quickActions}
       />

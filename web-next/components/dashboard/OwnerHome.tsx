@@ -312,7 +312,13 @@ export function ReportsList({ reports, limit }: { reports: ReportRecord[] | null
     <section className="mt-8">
       <SectionHeading title="Recent reports" href="/dashboard/reports" linkLabel="All reports" />
       {reports === null || reports.length === 0 ? (
-        <EmptyCard>No reports generated yet.</EmptyCard>
+        // `null` is a failed read (the page's shared catch), not an empty org: the
+        // old copy told a club with 20 reports it had none. Same shape as
+        // UpcomingList above — "no reports" and "could not read the reports" call
+        // for different next actions, so they must not share a sentence.
+        <EmptyCard>
+          {reports === null ? 'Reports failed to load.' : 'No reports generated yet.'}
+        </EmptyCard>
       ) : (
         <ListShell>
           {rows.map((r) => (
@@ -379,23 +385,46 @@ function HealthCard({
   )
 }
 
-function PlanCard({ subscription }: { subscription: OrgSubscription | null }) {
-  const used = subscription !== null ? (subscription.usage_today.analysis ?? 0) : 0
-  const limit = subscription !== null ? subscription.daily_analysis_limit : 0
-  const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+function PlanCard({
+  subscription,
+  subscriptionFailed,
+}: {
+  subscription: OrgSubscription | null
+  /**
+   * True only when the page's own `orgSubscription` call rejected. `subscription ===
+   * null` cannot say which it is — the same value covers "this role may not read
+   * the plan" and "the read failed" — and the second case used to answer an owner
+   * whose read 500'd with "Plan details are visible to owners", a false statement
+   * about the person reading it. The page is the only place that knows.
+   */
+  subscriptionFailed: boolean
+}) {
+  // `subscription` is an async response, so a partial one (or a shape change) must
+  // not throw here — `OrgSubscription` types both of these as required, so nothing
+  // but an explicit guard catches it. The same two dereferences were unguarded in
+  // components/org/settings/buildSettingsSections.tsx, where one missing counter
+  // blanked the whole panel.
+  const tier = subscription?.subscription?.tier
+  const used = subscription?.usage_today?.['analysis'] ?? 0
+  const limit = subscription?.daily_analysis_limit
+  const percent =
+    limit !== undefined && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
   return (
     <section className={cardClass}>
       <div className="flex items-center justify-between gap-3">
         <h2 className={headingClass}>Plan &amp; usage</h2>
         {subscription !== null ? (
-          <StatusPill tone="primary">{subscription.subscription.tier}</StatusPill>
+          <StatusPill tone="primary">{tier ?? '—'}</StatusPill>
         ) : null}
       </div>
       {subscription !== null ? (
         <>
           <p className={`mt-4 ${metricLabelClass}`}>Analyses today</p>
           <p className="mt-1 text-[20px] font-semibold leading-[1.2] tabular-nums text-foreground">
-            {used} / {limit}
+            {/* An unreadable limit prints `—`, never `0`: "0 / 0" would assert a plan
+                that permits no analyses at all, which is the invented number this card
+                must not print. */}
+            {used} / {limit ?? '—'}
           </p>
           <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
             <div
@@ -404,8 +433,15 @@ function PlanCard({ subscription }: { subscription: OrgSubscription | null }) {
             />
           </div>
         </>
+      ) : subscriptionFailed ? (
+        // Reads as a failure, because that is what it is: the page fetched this and
+        // the fetch rejected.
+        <p className="mt-4 text-meta text-muted-foreground">Plan details failed to load.</p>
       ) : (
-        <p className="mt-4 text-meta text-muted-foreground">Plan details are visible to owners.</p>
+        // The remaining null: the role is not entitled to read the plan, or a sibling
+        // fetch in the same Promise.all rejected before this one was assigned. Either
+        // way the page cannot see why, so it says nothing about the viewer's role.
+        <p className="mt-4 text-meta text-muted-foreground">Plan details are unavailable.</p>
       )}
     </section>
   )
@@ -416,7 +452,14 @@ function StaffPreview({ members }: { members: OrgMembersResponse | null }) {
   return (
     <section className="mt-8">
       <SectionHeading title="Staff" href="/dashboard/members" linkLabel="Manage members →" />
-      {rows.length > 0 ? (
+      {/* Same shape as TeamsCard in CoachHome: `null` is a failed read (the page
+          passes `.catch(() => null)` on orgMembers), and "No staff members yet"
+          told an owner of a full roster that they had none. OwnerHome only renders
+          for owner/admin — the two roles the fetch is gated on — so `null` here has
+          no third meaning. */}
+      {members === null ? (
+        <EmptyCard>Staff failed to load.</EmptyCard>
+      ) : rows.length > 0 ? (
         <ListShell>
           {rows.map((member) => {
             const name = member.display_name ?? member.member_email ?? 'Member'
@@ -461,6 +504,7 @@ export default function OwnerHome({
   overview,
   members,
   subscription,
+  subscriptionFailed,
   showHistoryLink,
   quickActions,
 }: {
@@ -473,6 +517,8 @@ export default function OwnerHome({
   overview: OrgOverview | null
   members: OrgMembersResponse | null
   subscription: OrgSubscription | null
+  /** Whether the page's own subscription read rejected — see PlanCard. */
+  subscriptionFailed: boolean
   showHistoryLink: boolean
   quickActions: DashboardQuickActions
 }) {
@@ -498,7 +544,7 @@ export default function OwnerHome({
       {/* Row 2 — the owner's focal read: org health + plan usage. */}
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <HealthCard overview={overview} staffCount={staffCount} />
-        <PlanCard subscription={subscription} />
+        <PlanCard subscription={subscription} subscriptionFailed={subscriptionFailed} />
       </div>
 
       <QuickActions {...quickActions} />
