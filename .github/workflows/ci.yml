@@ -203,6 +203,35 @@ jobs:
         # stands in for were hitting a 10s budget.
         run: bun scripts/probeBootCost.ts --preset=ci --only=app.ts --json
 
+      # ── Time the probes that ACTUALLY failed, on the runner ────────────────────────
+      # Every measurement so far has been of a SYNTHETIC import, and every one of them was
+      # fast: 284-522ms on the runner against 290ms on a laptop, while the probes they stood
+      # in for were hitting a 10s budget. So this runs the real probe files — the ones named
+      # in the red runs — through `--probes`, several times each, under the same CI env.
+      #
+      # It runs on EVERY run, not `failure()`, for the reason the step above does: the
+      # failure is intermittent, so the evidence from the run that happened to catch it is
+      # the only evidence there is. Three repeats over a filtered set is seconds on a healthy
+      # runner and bounded by the child budget otherwise.
+      #
+      # The output is a distribution, not a single number, because the claim under test is
+      # "a large minority of spawns take ~10s". If the distribution here is tight, the cost
+      # model is dead and the cause is a per-spawn FAILURE; if it has a tail, the tail is the
+      # thing to explain.
+      - name: Time the real probes
+        if: always()
+        working-directory: server
+        env:
+          PROBE_BOOT_CHILD_BUDGET_MS: '30000'
+          PROBE_BOOT_REPEATS: '3'
+        run: |
+          # The six named in the two red runs, by the substring `--probes` matches on.
+          for probe in downloadAudit emailTemplate archive analyzeOrg attendancePerformance emailRouteGuards; do
+            echo "::group::probe: $probe"
+            bun scripts/probeBootCost.ts --preset=ci --probes="$probe" || true
+            echo "::endgroup::"
+          done
+
       # Surfaced as a warning rather than a failure: this run's verdict is the tests, and a
       # slow spawn that the bounded budget absorbed is not itself a red suite. It is
       # annotated so the next run's log says "spawn was slow" instead of leaving the cause
