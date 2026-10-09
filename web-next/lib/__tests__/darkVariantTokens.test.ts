@@ -68,20 +68,30 @@ const hueOf = (cls: string) => cls.replace(new RegExp(COLOUR_PREFIX_SRC), '')
  * the point: the list should track the code, and half-deleting an entry is a change.
  */
 const GRANDFATHERED = [
-  // The ONLY surviving entry, and it is four SITES with four DIFFERENT deltas — which is why
-  // the list is keyed on multiplicity and why the ledger's old per-entry bucketing was wrong.
+  // The ONLY surviving entry: four SITES at one literal, with THREE distinct deltas —
+  // which is why the list is keyed on multiplicity and why the ledger's per-entry
+  // bucketing was wrong, and why the numbers below are measured rather than quoted.
   //
-  // The delta is a property of the SITE, not of the literal: each of these pairs
-  // `dark:bg-white/10` against a different base alpha (`bg-foreground/8` x2, `/9`, `/10`), so
-  // removing the dark: variant shifts them by 8, 8, 6 and 4 /255 respectively. A single
-  // "Δ8/255" bucket for the entry hid three of those. The backdrop cancels out of the
-  // comparison to a coefficient of (a_base - a_dark) <= 0.02, so these numbers do not depend
-  // on what the element sits on.
+  // The delta is a property of the SITE, not of the literal: each pairs `dark:bg-white/10`
+  // against a different base — `bg-foreground/8` (line 216), `bg-border` (line 268, whose
+  // TOKEN carries alpha 0.09, not a `/9` modifier), `bg-foreground/10` (line 375),
+  // `bg-foreground/8` (line 377) — so removing the variant shifts them by 8, 2, 4 and 8
+  // /255 respectively (unrounded 7.60–8.04, 2.08–2.30, 4.30 flat, 7.60–8.04, each a
+  // range across the theme surface tokens). An earlier version of this comment said
+  // "8, 8, 6 and 4" over bases "/8 x2, /9, /10"; both the deltas and the base classes
+  // were wrong, and only re-measuring caught it.
   //
-  // Five of the six original entries were deleted: all 7 sites at Δ1/255, which is below the
-  // 8-bit quantisation step of any display this ships to. They were not "kept because they
-  // are hard to see" — they were kept because nobody had measured them, and the measured
-  // answer turned out to be that they render the same value twice.
+  // Measured, not asserted: `node scripts/measureDarkVariantDeltas.mjs` re-derives every
+  // number from `globals.css`, prints both themes, and exits non-zero if this table, the
+  // code, or the census of first-party `dark:` literal sites disagree. Light Δ is 0 for
+  // all four — a `dark:` variant is inert in the light theme, so removing it moves no
+  // pixel there. The backdrop enters only through (a_base − a_dark) ≤ 0.02, so a 20/255
+  // backdrop shift moves Δ by at most 0.4/255.
+  //
+  // Five of the six original entries were deleted: 7 sites that measured Δ1/255 in the
+  // round that removed them (not re-measurable now — the sites are gone), below the 8-bit
+  // quantisation step of any display this ships to. They had been kept unmeasured, and
+  // the measured answer was that they render the same value twice.
   'components/LandingPage.tsx ×4:dark:bg-white/10',
 ]
 

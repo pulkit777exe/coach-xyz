@@ -11,7 +11,9 @@ import { stripComments } from './helpers/stripComments'
 // `text-[Npx]` regression in any component. This file is the part that was missing.
 //
 // SCOPE, and it is deliberately half the rule. This asserts one thing: no first-party
-// component may spell a DOCUMENTED size as a literal `text-[Npx]`. The six sizes are 11,
+// component may spell a DOCUMENTED size as a literal `text-[Npx]` or `text-[Nrem]` —
+// BOTH spellings, because a rem literal is a size like any other and the px-only
+// matcher this file started with could never see one. The six sizes are 11,
 // 12, 13, 14, 15, 16px; anything else is bespoke, and bespoke sizes are explicitly
 // permitted by `docs/DESIGN_FOUNDATIONS.md` ("Sizes outside the six … stay bespoke in the
 // components that own them"). `components/interior/**` is exempt because the vendored
@@ -70,16 +72,45 @@ interface Hit {
   class: string
 }
 
+/**
+ * The size class, in BOTH spellings the tree uses, and the one matcher every assertion
+ * in this file runs — the scan, the fixture control and the non-vacuity control all
+ * call it, because a control that re-implements the matcher measures the copy.
+ *
+ * `rem` is not an escape hatch: `text-[0.5rem]` is an 8px size, and the px-only
+ * matcher this file began with (`/text-\[(\d+)px\]/`) never saw it — which is how
+ * `UserAvatar`'s `sm:` variant sat outside BOTH size guards while `text-[9px]` was
+ * named and counted, and why the docs said five sub-floor sites when the tree holds
+ * six. `em` stays out deliberately: it resolves against the PARENT size, so it has no
+ * px value to judge without walking the box tree, and the two `em` sites are relative
+ * type that no fixed-size rule can speak to.
+ *
+ * rem → px uses the browser-default 16px root, pinned by its own test below: if a
+ * root `font-size` ever lands, every rem conversion here silently misreports.
+ */
+const REM_PX = 16
+const SIZE_CLASS = /text-\[(\d+(?:\.\d+)?)(px|rem)\]/g
+/** Numeric px value of one SIZE_CLASS match. Structural param: matchAll's and the
+ *  fixture's match shapes differ in type only. */
+// Typed against what `matchAll` actually yields. The first version of this took
+// `{ 1: string; 2: string }`, which reads fine and compiles to five TS2345s the
+// moment it is passed an `RegExpExecArray` — so the unit conversion was correct
+// and the file simply did not typecheck. Take the real type.
+const pxOf = (m: RegExpExecArray) => {
+  const n = Number.parseFloat(m[1])
+  return m[2] === 'rem' ? n * REM_PX : n
+}
+
 const hits: Hit[] = []
 /** Sizes BELOW the 11px floor — no token exists for them, so they are named separately. */
 const subFloor: Hit[] = []
 for (const rel of [...tsxFiles('app'), ...tsxFiles('components')]) {
   if (VENDORED.some((v) => rel.startsWith(v))) continue
   const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
-  // `text-` also prefixes colour, alignment and tracking, so bucket by the `px` unit:
-  // a `text-[0.92em]` or `text-[0.5rem]` is not a px size and must not be judged here.
-  for (const m of src.matchAll(/text-\[(\d+)px\]/g)) {
-    const px = Number(m[1])
+  // `text-` also prefixes colour, alignment and tracking, so bucket by UNIT: px and rem
+  // are absolute and judged here, `text-[0.92em]` is relative and cannot be.
+  for (const m of src.matchAll(SIZE_CLASS)) {
+    const px = pxOf(m)
     if (DOCUMENTED.includes(px)) hits.push({ file: rel, class: m[0] })
     else if (px < FLOOR) subFloor.push({ file: rel, class: m[0] })
   }
@@ -90,12 +121,18 @@ for (const rel of [...tsxFiles('app'), ...tsxFiles('components')]) {
  * conflating the two is how a guard ends up demanding a token that does not exist.
  * There is no `text-[9px]` utility, so the only available fixes are designing a 7th rung
  * or accepting the site. Both are design decisions, so these are named rather than
- * flagged: a count badge at 9px, a `<kbd>` at 10px, and three marketing divider labels.
+ * flagged: a count badge at 9px, a `<kbd>` at 10px, three marketing divider labels, and
+ * an 8px avatar — `UserAvatar`'s `sm:` variant, spelled `text-[0.5rem]!`, which no
+ * px-only scan could ever have counted (hence SIX sites where the docs said five).
+ *
+ * The key is the class AS WRITTEN, so respelling a site (`text-[0.5rem]` → `text-[8px]`)
+ * fails both directions below rather than sliding between the two matchers.
  */
 const SUB_FLOOR_GRANDFATHERED = [
   'components/DashboardNav.tsx ×1:text-[9px]',
   'components/GlobalSearch.tsx ×1:text-[10px]',
   'components/LandingPage.tsx ×3:text-[10px]',
+  'components/UserAvatar.tsx ×1:text-[0.5rem]',
 ]
 
 const parseCounted = (entry: string) => {
@@ -127,14 +164,23 @@ describe('no first-party component spells a documented size as text-[Npx]', () =
       writeFileSync(
         join(tmp, 'Offender.tsx'),
         'export const A = () => <p className="text-[13px]" />\n' +
-          'export const B = () => <p className="text-[28px]" />\n',
+          'export const B = () => <p className="text-[28px]" />\n' +
+          'export const C = () => <p className="text-[0.875rem]" />\n' +
+          'export const D = () => <p className="text-[0.5rem]" />\n',
       )
       const src = stripComments(readFileSync(join(tmp, 'Offender.tsx'), 'utf8'))
-      const found = [...src.matchAll(/text-\[(\d+)px\]/g)]
-        .map((m) => Number(m[1]))
+      const matched = [...src.matchAll(SIZE_CLASS)]
+      const found = matched
+        .map(pxOf)
         .filter((px) => DOCUMENTED.includes(px))
-      // 13 is documented and must be caught; 28 is bespoke and must not be.
-      expect(found).toEqual([13])
+      const sub = matched.map(pxOf).filter((px) => !DOCUMENTED.includes(px) && px < FLOOR)
+      // 13 (documented px) and 14 via `0.875rem` (documented rem) must BOTH be caught —
+      // the rem row is what fails if the conversion is dropped, which a px-only fixture
+      // could not have noticed. 28 is bespoke and must not count as documented; the
+      // `0.5rem` row is sub-floor, so it must not land in `found` and must be seen by
+      // the sub-floor branch (the branch `UserAvatar` now rides on in the real tree).
+      expect(found).toEqual([13, 14])
+      expect(sub).toEqual([8])
     } finally {
       rmSync(tmp, { recursive: true, force: true })
     }
@@ -149,14 +195,16 @@ describe('no first-party component spells a documented size as text-[Npx]', () =
 
   test('the matcher still finds text-[Npx] in general', () => {
     // The positive control, and the one that catches the regex breaking. Bespoke sizes
-    // exist and are permitted, so this proves the pattern matches something real while
-    // the guard above proves none of them is a documented size.
+    // exist and are permitted, so this proves the SHARED matcher matches something real
+    // while the guard above proves none of them is a documented size. It runs
+    // `SIZE_CLASS` itself rather than a private copy of it — a control that re-implements
+    // the matcher measures the copy, and the two drift the day either is edited.
     let bespoke = 0
     for (const rel of [...tsxFiles('app'), ...tsxFiles('components')]) {
       if (VENDORED.some((v) => rel.startsWith(v))) continue
       const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
-      for (const m of src.matchAll(/text-\[(\d+(?:\.\d+)?(?:px|em|rem))\]/g)) {
-        if (!DOCUMENTED.includes(Number.parseFloat(m[1]))) bespoke += 1
+      for (const m of src.matchAll(SIZE_CLASS)) {
+        if (!DOCUMENTED.includes(pxOf(m))) bespoke += 1
       }
     }
     expect(bespoke).toBeGreaterThan(20)
@@ -215,16 +263,37 @@ describe('no first-party component spells a documented size as text-[Npx]', () =
   test('the vendored exemption is load-bearing, not decorative', () => {
     // Without this exemption the guard would be RED on 16 correct sites across 12
     // `components/interior/**` files. Asserted so a future widening of the glob — or a
-    // change to the exempt list — cannot quietly turn those 16 into failures.
+    // change to the exempt list — cannot quietly turn those 16 into failures. Runs the
+    // shared matcher, so "the sites the guard would flag" is one definition, not two.
     let vendored = 0
     for (const rel of tsxFiles('components')) {
       if (!VENDORED.some((v) => rel.startsWith(v))) continue
       const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'))
-      for (const m of src.matchAll(/text-\[(\d+)px\]/g)) {
-        if (DOCUMENTED.includes(Number(m[1]))) vendored += 1
+      for (const m of src.matchAll(SIZE_CLASS)) {
+        if (DOCUMENTED.includes(pxOf(m))) vendored += 1
       }
     }
     expect(vendored).toBeGreaterThan(0)
+  })
+
+  test('rem is absolute: no rule sets the document root font-size', () => {
+    // `pxOf` converts rem → px at 16, and that is only true while nothing sets the root
+    // font-size. The day `html { font-size: 14px }` lands, every rem literal in the tree
+    // changes size and this file's arithmetic silently reports the old one — so the
+    // premise is pinned rather than assumed. Comments are stripped first: `globals.css`
+    // discusses font-size in prose (line 74), and a comment can satisfy a guard as
+    // readily as fail one.
+    const css = stripComments(readFileSync(join(ROOT, 'app/globals.css'), 'utf8'))
+    const rootFontSize = /(?:html|:root)\s*\{[^}]*font-size/
+    // Controls, both directions: the pattern must be able to match (a broken regex and
+    // a clean file are indistinguishable otherwise), and it must not fire on the real
+    // file, whose `:root` block carries token declarations and no `font-size`.
+    expect(rootFontSize.test('html { font-size: 14px; }')).toBe(true)
+    expect(rootFontSize.test(':root {\n  --background: #fff;\n  font-size: 14px;\n}')).toBe(true)
+    expect(rootFontSize.test(css)).toBe(false)
+    // And the conversion this pins is the one the fixture control above relies on.
+    expect(0.875 * REM_PX).toBe(14)
+    expect(0.5 * REM_PX).toBe(8)
   })
 
   test('the six utilities exist at the six sizes, and are font-size-only', () => {
