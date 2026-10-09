@@ -28,6 +28,14 @@ export default function SettingsClient({
   const isDashboard = variant === 'dashboard'
   const [profile, setProfile] = useState<UserRecord | null>(null)
   const [profileFailed, setProfileFailed] = useState(false)
+  // One flag PER READ. These three used to share a single `Promise.all` behind one
+  // `catch`, so `orgOverview` — an org-STATS call — could reject the whole block and
+  // land on `orgFailed`, which buildSettingsSections renders as `<LoadFailed
+  // subject="Players" />`: an org-overview outage told a coach their PLAYER ROSTER
+  // had failed. The wrong noun in a failure message sends triage to the wrong
+  // subsystem, and here it also sends the reader to fix the wrong thing.
+  const [rosterFailed, setRosterFailed] = useState(false)
+  const [overviewFailed, setOverviewFailed] = useState(false)
   const [orgFailed, setOrgFailed] = useState(false)
   const [auth0Id, setAuth0Id] = useState<string | null>(null)
   const [role, setRole] = useState<OrgMemberRole | null>(null)
@@ -52,25 +60,49 @@ export default function SettingsClient({
     // the player shell renders just My account + Preferences.
     if (isDashboard) {
       void (async () => {
+        // Step 1 is the ORG CONTEXT, not org data: without an org id there is
+        // nothing to read, so its failure is its own signal and it short-circuits.
+        let ctx: { auth0Id: string; role: OrgMemberRole }
         try {
           const { orgs } = await getMyOrgs()
           if (cancelled) return
-          const ctx = resolveOrgContext(identity.sub, orgs, preferredOrgCookie())
-          setAuth0Id(ctx.auth0Id)
-          setRole(ctx.role)
-          const [studentsRes, overviewRes, subscriptionRes] = await Promise.all([
-            orgStudents(ctx.auth0Id),
-            orgOverview(ctx.auth0Id),
-            // orgSubscription 403s for non-owner/admin — degrade to no Plan.
-            orgSubscription(ctx.auth0Id).catch(() => null),
-          ])
-          if (cancelled) return
-          setStudents(studentsRes.students)
-          setOverview(overviewRes.overview)
-          setSubscription(subscriptionRes)
+          ctx = resolveOrgContext(identity.sub, orgs, preferredOrgCookie())
         } catch {
           if (!cancelled) setOrgFailed(true)
+          return
         }
+        setAuth0Id(ctx.auth0Id)
+        setRole(ctx.role)
+
+        // Step 2: three INDEPENDENT reads. Not a `Promise.all`, because one
+        // rejection there discards the other two results and blames all three on
+        // whichever failed first.
+        void orgStudents(ctx.auth0Id)
+          .then((res) => {
+            if (!cancelled) setStudents(res.students)
+          })
+          .catch(() => {
+            if (!cancelled) setRosterFailed(true)
+          })
+
+        void orgOverview(ctx.auth0Id)
+          .then((res) => {
+            if (!cancelled) setOverview(res.overview)
+          })
+          .catch(() => {
+            if (!cancelled) setOverviewFailed(true)
+          })
+
+        void orgSubscription(ctx.auth0Id)
+          .then((res) => {
+            if (!cancelled) setSubscription(res)
+          })
+          .catch(() => {
+            // 403 for non-owner/admin is the documented degrade-to-no-Plan case
+            // (server/src/routes/org/billing.ts), not a loading problem — a
+            // caller without plan access is not entitled to a failure message.
+            // `subscription` simply stays null and its section is omitted.
+          })
       })()
     }
 
@@ -79,7 +111,7 @@ export default function SettingsClient({
     }
   }, [isDashboard, identity.sub])
 
-  const loadError = profileFailed || orgFailed
+  const loadError = profileFailed || orgFailed || rosterFailed || overviewFailed
   const emailVerified = profile ? profile.email_verified : identity.emailVerified
 
   const sections = buildSettingsSections({
@@ -93,7 +125,10 @@ export default function SettingsClient({
     students,
     overview,
     subscription,
-    orgFailed,
+    // `orgFailed` reaches the Players pane, so it must mean the ROSTER read
+    // failed — never "some org read failed". The two are separate reads and only
+    // one of them paints this pane.
+    orgFailed: orgFailed || rosterFailed,
   })
 
   return (
@@ -109,7 +144,15 @@ export default function SettingsClient({
       notice={
         loadError ? (
           <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body text-destructive">
-            Failed to load some settings data. Try refreshing the page.
+            {/* Named per read rather than a blanket "some settings data": an
+                org-overview outage previously reported here as a roster failure,
+                so the reader was pointed at a subsystem that was working. */}
+            {overviewFailed && !rosterFailed
+              ? 'Organization stats failed to load.'
+              : rosterFailed
+                ? 'The player roster failed to load.'
+                : 'Failed to load some settings data.'}{' '}
+            Try refreshing the page.
           </div>
         ) : null
       }

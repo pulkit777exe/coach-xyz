@@ -223,20 +223,25 @@ export default function OrganizationSettingsSection({
               Saving organization settings…
             </div>
           ) : null}
-          {error ? (
-            <p
-              className="mt-4 rounded-[6px] border border-destructive/20 bg-destructive/10 px-3 py-2 text-body text-destructive"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
           {canEdit ? null : (
             <p className="mt-4 text-meta text-muted-foreground">
               Only the owner and admins can change these settings.
             </p>
           )}
         </>
+      ) : null}
+      {/* Rendered OUTSIDE the `settings ?` branch on purpose. A failed READ leaves
+          `settings` null, so an error paragraph nested in that branch is unreachable
+          in exactly the case it exists for: the heading painted and then nothing at
+          all — no spinner, no message, no fields. A rejected fetch is a loading
+          problem, not an empty organization, and it has to be legible as one. */}
+      {error ? (
+        <p
+          className="mt-4 rounded-[6px] border border-destructive/20 bg-destructive/10 px-3 py-2 text-body text-destructive"
+          role="alert"
+        >
+          {error}
+        </p>
       ) : null}
     </Section>
   )
