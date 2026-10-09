@@ -37,6 +37,22 @@ const SERVER = join(import.meta.dirname, '..')
 const REPEATS = 3
 const BUDGET_MS = 30_000
 
+/**
+ * The environment a real test hands its child.
+ *
+ * `tests/downloadAudit.test.ts:18-22` builds it by copying `process.env` IN FULL and then
+ * adding `SERVICE_TOKEN` and `DATABASE_URL=''` — so on a GitHub runner the child inherits
+ * every variable Actions injects. My original measurement passed seven hand-picked variables
+ * instead, which is why it read 42ms while the same probe was hitting a 10s budget in the same
+ * run. **The two differ in exactly one thing, and that thing is the environment**, so timing
+ * both is the experiment: same probe, same machine, same moment, one variable changed.
+ */
+const INHERITED_ENV: Record<string, string> = Object.fromEntries(
+  Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined),
+)
+INHERITED_ENV.SERVICE_TOKEN = 'audit-token'
+INHERITED_ENV.DATABASE_URL = ''
+
 const CI_ENV: Record<string, string> = {
   PATH: process.env.PATH ?? '',
   HOME: process.env.HOME ?? '',
@@ -53,7 +69,10 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[s.length >> 1] : Math.round((s[s.length - 1] + s[s.length >> 1]) / 2)
 }
 
-const timeProbe = (probe: string): { wall: number; killed: boolean; out: string } => {
+const timeProbe = (
+  probe: string,
+  env: Record<string, string>,
+): { wall: number; killed: boolean; out: string } => {
   const started = Date.now()
   const r = spawnSync(process.execPath, [join('tests', probe)], {
     cwd: SERVER,
@@ -82,28 +101,42 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     // probe files that re-run the full DDL per spawn are represented. If they differ, DDL is
     // the cost.
     const probes = ['authMatrixProbe.ts', 'downloadAuditProbe.ts']
+    // The two envs, timed against each other on the same probe in the same process.
+    const ENVS: [string, Record<string, string>][] = [
+      ['minimal CI env', CI_ENV],
+      ['inherited process.env', INHERITED_ENV],
+    ]
     const report: string[] = []
 
     for (const probe of probes) {
-      const runs: number[] = []
-      let killed = false
-      let last = ''
-      for (let i = 0; i < REPEATS; i++) {
-        const r = timeProbe(probe)
-        runs.push(r.wall)
-        killed = killed || r.killed
-        last = r.out
+      for (const [envName, env] of ENVS) {
+        const runs: number[] = []
+        let killed = false
+        let last = ''
+        for (let i = 0; i < REPEATS; i++) {
+          const r = timeProbe(probe, env)
+          runs.push(r.wall)
+          killed = killed || r.killed
+          last = r.out
+        }
+        const m = median(runs)
+        report.push(
+          `  ${probe.padEnd(24)} ${envName.padEnd(22)} median ${String(m).padStart(6)}ms  ` +
+            `runs=[${runs.join(', ')}]` +
+            (killed ? `  KILLED at ${BUDGET_MS}ms` : ''),
+        )
+        if (last) report.push(`      last output: ${last}`)
+        // The ONLY assertion: the probe finished. A timing assertion here would fail on a slow
+        // machine and pass on a wedged one, which is the inverse of what is wanted.
+        expect(killed).toBe(false)
       }
-      const m = median(runs)
-      report.push(
-        `  ${probe.padEnd(34)} median ${String(m).padStart(6)}ms  runs=[${runs.join(', ')}]` +
-          (killed ? `  KILLED at ${BUDGET_MS}ms` : ''),
-      )
-      if (last) report.push(`      last output: ${last}`)
-      // The ONLY assertion: the probe finished. A timing assertion here would fail on a slow
-      // machine and pass on a wedged one, which is the inverse of what is wanted.
-      expect(killed).toBe(false)
     }
+    // The environment size is part of the finding: if the inherited env is three variables
+    // larger than the minimal one, "the environment" cannot be the cause and the hypothesis
+    // dies here rather than after another red run.
+    report.push(
+      `  env sizes: minimal=${Object.keys(CI_ENV).length} vars, inherited=${Object.keys(INHERITED_ENV).length} vars`,
+    )
 
     // Printed unconditionally — a diagnostic whose output only appears on failure is a
     // diagnostic that is missing precisely when the failure is intermittent.
