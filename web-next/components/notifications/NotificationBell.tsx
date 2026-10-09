@@ -22,13 +22,8 @@ import {
 } from '@/lib/notifications'
 import type { AppNotification, NotificationsState } from '@/lib/notifications'
 import { getNotificationPrefs } from '@/lib/meApi'
+import { formatTimeShort } from '@/lib/date'
 import { cn } from '@/lib/utils'
-
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
 
 /**
  * Notion popover pattern: hairline panel, radius 6, no entrance animation,
@@ -260,7 +255,7 @@ export default function NotificationBell() {
                       {n.title}
                     </span>
                     <span className="shrink-0 text-label text-muted-foreground/60">
-                      {formatTime(n.created_at)}
+                      {formatTimeShort(n.created_at)}
                     </span>
                   </div>
                   {n.body ? (

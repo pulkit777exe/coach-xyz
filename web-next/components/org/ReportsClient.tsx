@@ -31,7 +31,7 @@ import EmptyState from './EmptyState'
 import ReportBody from './ReportBody'
 import EmailReportDialog from './EmailReportDialog'
 import { downloadCSV } from '@/lib/csv'
-import { formatDateMed, formatDayWeekdayYear } from '@/lib/date'
+import { formatDateMed, formatDayWeekdayYear, toISODate } from '@/lib/date'
 
 import type { ReportRecord, Student, ReportType } from '@/lib/org'
 import {
@@ -210,7 +210,10 @@ export default function ReportsClient({
   }
 
   const exportCSV = () => {
-    downloadCSV(`reports-${new Date().toISOString().slice(0, 10)}.csv`, [
+    // The LOCAL day, not `toISOString()`'s UTC day: east of UTC just after midnight the
+    // export would otherwise be named for YESTERDAY, west of UTC in the evening for
+    // TOMORROW. Same rule as every other day in this app — the day the viewer is on.
+    downloadCSV(`reports-${toISODate(new Date())}.csv`, [
       ['Title', 'Type', 'Student', 'Period start', 'Period end', 'Generated'],
       ...reports.map((r) => [
         r.title,

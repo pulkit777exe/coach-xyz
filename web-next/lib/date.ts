@@ -150,3 +150,23 @@ export function formatDateTimeShort(iso: string): string {
 }
 
 const DATE_TIME_SHORT = { dateStyle: 'medium', timeStyle: 'short' } as const
+
+/**
+ * "9:00 PM" — the clock time of an instant, locale-pinned to `en-US`.
+ *
+ * Time only, so there is no calendar day to resolve: the day-from-the-string rule that
+ * governs every other formatter here simply does not apply, and a time cannot be off by a
+ * day. The TIME comes from the instant in the viewer's timezone, exactly as `formatDateTime`
+ * takes it — "what clock does this show" is a question about the viewer, not the string.
+ *
+ * The locale IS pinned. The notification bell passed `[]` (the browser's default locale),
+ * and `{ hour: 'numeric' }` renders `9:00 PM` on one machine and `21:00` on another — the
+ * same machine-variance `formatDateNumeric` records for dates, one formatter over. An
+ * unparseable value degrades to `''`, which is the behaviour of the call site this replaces
+ * (missing fields reach here from async response data, and `new Date('')` is Invalid Date).
+ */
+export function formatTimeShort(iso: string): string {
+  const instant = new Date(iso)
+  if (Number.isNaN(instant.getTime())) return ''
+  return instant.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}

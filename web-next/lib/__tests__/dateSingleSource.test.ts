@@ -48,6 +48,40 @@ const DIRECT_FORMAT = /new Date\([^()]*\)\.toLocale(?:Date|Time)?String\(/g
 /** A month-only format has no day component, so it cannot be off by one. */
 const MONTH_ONLY = /month:\s*'long',\s*year:\s*'numeric'/
 
+/**
+ * `const x = new Date(<non-empty>)` — a Date BOUND to a variable.
+ *
+ * `DIRECT_FORMAT` only sees `new Date(x).toLocaleDateString(...)`, the single-expression
+ * form. Split it across two statements and the guard sees nothing — which is not a theoretical
+ * gap: `NotificationBell`'s deleted helper was exactly `const d = new Date(iso)` on one line
+ * and `d.toLocaleTimeString(...)` three lines later, formatting a STORED timestamp while this
+ * guard reported the tree clean. **The defect and the blind spot were the same site.**
+ *
+ * The argument must be non-empty: `new Date()` is "now", and formatting the current instant
+ * in the viewer's timezone is correct — `OwnerHome.tsx:48` does precisely that and must not
+ * be flagged.
+ */
+const DATE_BINDER = /\b(?:const|let)\s+(\w+)\s*=\s*new Date\([^)]/g
+
+/** `x.toLocaleDateString(` — a variable receiver, invisible to `DIRECT_FORMAT`. */
+const VARIABLE_RECEIVER = /\b(\w+)\??\.toLocale(?:Date|Time)?String\(/g
+
+/**
+ * `.toISOString().slice(0, 10)` — a UTC day where a local day belongs.
+ *
+ * This is the other half of the same bug: the CSV exports in `ReportsClient` and
+ * `StudentsClient` named their file from `toISOString()`, so east of UTC just after midnight a
+ * coach exported `roster-2026-10-05.csv` on the morning of the 6th.
+ */
+const UTC_DAY_SLICE = /\.toISOString\(\)\.slice\(0,\s*10\)/g
+
+/**
+ * A variable bound from `Date.UTC(...)` is deliberate UTC arithmetic, not a display day.
+ * Stated as a property of the BINDING rather than as a `file:line` exemption, because a
+ * line-number list rots silently the first time anyone edits the file above it.
+ */
+const UTC_BOUND = /\b(?:const|let)\s+(\w+)\s*=\s*new Date\(Date\.UTC\(/g
+
 interface Site {
   file: string
   line: number
@@ -66,6 +100,24 @@ interface Site {
  * series of incidents: a control that re-implements the thing it controls proves only that
  * the re-implementation works.
  */
+/**
+ * The full call starting at `open` (the `(`), by paren balance.
+ *
+ * Passes 2 and 3 use this rather than each growing its own reader: two readers of the same
+ * options object that disagreed would exempt a format in one pass and flag it in the next.
+ */
+const callWindow = (src: string, open: number): string => {
+  let depth = 0
+  for (let i = open; i < src.length && i < open + 400; i++) {
+    if (src[i] === '(') depth++
+    else if (src[i] === ')') {
+      depth--
+      if (depth === 0) return src.slice(open, i + 1)
+    }
+  }
+  return src.slice(open, open + 400)
+}
+
 const scan = (dirs: string[] = SOURCE_DIRS): Site[] => {
   const out: Site[] = []
   for (const dir of dirs) {
@@ -94,6 +146,38 @@ const scan = (dirs: string[] = SOURCE_DIRS): Site[] => {
           exempt: MONTH_ONLY.test(src.slice(open, end)),
         })
       }
+
+      // Pass 2: a Date BOUND to a variable and then formatted. Invisible to `DIRECT_FORMAT`,
+      // and this is not theoretical — `NotificationBell`'s deleted helper bound `d` on one
+      // line and formatted it three lines later, formatting a stored timestamp while this
+      // guard reported the tree clean. The defect and the blind spot were the same site.
+      const bound = new Set([...src.matchAll(DATE_BINDER)].map((mm) => mm[1]))
+      for (const m of src.matchAll(VARIABLE_RECEIVER)) {
+        if (!bound.has(m[1])) continue
+        const text = callWindow(src, m.index + m[0].length - 1)
+        out.push({
+          file: rel(f),
+          line: src.slice(0, m.index).split('\n').length,
+          text,
+          exempt: MONTH_ONLY.test(text),
+        })
+      }
+
+      // Pass 3: a UTC day used where a local day belongs — the CSV filename bug.
+      const utcBound = new Set([...src.matchAll(UTC_BOUND)].map((mm) => mm[1]))
+      for (const m of src.matchAll(UTC_DAY_SLICE)) {
+        const before = src.slice(Math.max(0, m.index - 240), m.index)
+        const recv = /(\w+)\s*$/.exec(before)?.[1] ?? ''
+        const lineEnd = src.indexOf('\n', m.index)
+        out.push({
+          file: rel(f),
+          line: src.slice(0, m.index).split('\n').length,
+          text: src.slice(Math.max(0, m.index - 40), lineEnd === -1 ? src.length : lineEnd),
+          // Exempt because of the BINDING, not because of the file: a line-number or
+          // file:line exemption rots the first time someone edits above it.
+          exempt: utcBound.has(recv),
+        })
+      }
     }
   }
   return out
@@ -118,30 +202,77 @@ describe('no component formats a date itself', () => {
       writeFileSync(
         join(dir, 'x.tsx'),
         [
+          // Pass 1: the single-expression form.
           "export const A = () => <span>{new Date(a.requested_at).toLocaleDateString('en-US', {",
           "  month: 'short', day: 'numeric', year: 'numeric',",
           '})}</span>',
           'export const B = () => <span>{new Date(b.done_at).toLocaleString()}</span>',
+          '',
+          "// Pass 2: the TWO-STATEMENT form — `NotificationBell`'s actual bug.",
+          'export const C = () => {',
+          '  const d = new Date(c.created_at)',
+          "  return <span>{d.toLocaleTimeString('en-US', { hour: 'numeric' })}</span>",
+          '}',
+          '',
+          '// Pass 3: a UTC day in a filename, NOT bound from Date.UTC.',
+          'export const name = () => `roster-${new Date(e.created_at).toISOString().slice(0, 10)}.csv`',
+          '',
+          '// The exemption: a MONTH-only format has no day component to get wrong.',
+          "export const F = () => <span>{new Date(f.period_start).toLocaleDateString('en-US', {",
+          "  month: 'long',",
+          "  year: 'numeric',",
+          '})}</span>',
         ].join('\n'),
       )
       // Through `scan`, not a private re-read — so disabling `scan` breaks this too.
+      // FIVE because there are three passes plus one exemption: if any pass stops matching,
+      // this count drops and the control goes red rather than quietly shrinking its own
+      // coverage. The single exempt site is the month-only one, which is the only place that
+      // rule is exercised AT ALL — in the real tree it currently matches nothing, because the
+      // tree's month-only formats use a variable receiver that passes 1 and 2 do not target.
+      // **An exemption with no case is inert, and inert is indistinguishable from working**,
+      // so it lives here where a change to MONTH_ONLY fails this assertion.
       const found = scan(['lib/__fixture_date'])
-      expect(found).toHaveLength(2)
-      expect(found.every((f) => !f.exempt)).toBe(true)
+      expect(found).toHaveLength(5)
+      expect(found.filter((x) => x.exempt).map((x) => x.text)).toHaveLength(1)
+      expect(found.filter((x) => x.exempt)[0].text).toMatch(MONTH_ONLY)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
     expect(SOURCE_DIRS.flatMap(sourceFiles).length).toBeGreaterThan(100)
   })
 
-  test('the exemptions are only month-only formats', () => {
-    // Named, because "the exempt ones look fine" is a belief and this asserts it. If a
-    // full date format ever lands here it must fail, not pass on a loose shape.
+  test('the exemptions are only month-only formats or a Date.UTC binding', () => {
+    // Named, because "the exempt ones look fine" is a belief and this asserts it. Two
+    // exemptions exist and each is checked by ITS OWN rule, so neither can absorb the other:
+    // a full-date format must not pass as month-only, and a local day must not pass as UTC
+    // arithmetic just because it sits near a `.slice(0, 10)`.
+    let monthOnly = 0
+    let utcBound = 0
     for (const s of sites.filter((x) => x.exempt)) {
-      expect(s.text).toMatch(MONTH_ONLY)
-      // …and it must not ALSO carry a day, which is the whole distinction.
-      expect(s.text).not.toMatch(/day:\s*'numeric'/)
+      if (MONTH_ONLY.test(s.text)) {
+        monthOnly++
+        // …and it must not ALSO carry a day, which is the whole distinction.
+        expect(s.text).not.toMatch(/day:\s*'numeric'/)
+      } else {
+        utcBound++
+        // The only other exemption, and it is a property of the binding: the receiver is
+        // built from `Date.UTC`, so the day was assembled in UTC on purpose.
+        expect(s.text).toMatch(UTC_DAY_SLICE)
+        expect(s.text).toMatch(/toISOString\(\)/)
+      }
     }
+    // Counts asserted rather than implied: if either exemption stopped being produced the
+    // loop would simply run fewer times and pass. The tree carries one of each today, and a
+    // silent change to either rule moves these numbers.
+    // `monthOnly` is deliberately NOT asserted above zero: it is genuinely 0 in this tree
+    // (the month-only formats use a `month` receiver that passes 1 and 2 do not target), and
+    // asserting a number that only happens to be zero would make this the second inert
+    // assertion in the file. Its rule is proven in the positive control instead. What is
+    // asserted here is that BOTH branches are reachable by rule and that the one exemption
+    // the tree actually carries is the UTC binding.
+    expect(monthOnly + utcBound).toBe(sites.filter((x) => x.exempt).length)
+    expect(utcBound).toBe(1)
   })
 
   test('no site formats a full ISO datetime as an instant', () => {

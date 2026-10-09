@@ -59,7 +59,7 @@ import {
   STUDENT_STATUSES,
   STUDENT_STATUS_LABELS,
 } from '@/lib/org'
-import { formatDateMed } from '@/lib/date'
+import { formatDateMed, toISODate } from '@/lib/date'
 import type { CoachAIError } from '@/lib/api'
 import { initials } from '@/lib/initials'
 
@@ -592,7 +592,10 @@ export default function StudentsClient({
   }
 
   const exportCSV = () => {
-    downloadCSV(`roster-${new Date().toISOString().slice(0, 10)}.csv`, [
+    // The LOCAL day, not `toISOString()`'s UTC day: east of UTC just after midnight the
+    // export would otherwise be named for YESTERDAY, west of UTC in the evening for
+    // TOMORROW. Same rule as every other day in this app — the day the viewer is on.
+    downloadCSV(`roster-${toISODate(new Date())}.csv`, [
       [
         'Full name',
         'Email',
