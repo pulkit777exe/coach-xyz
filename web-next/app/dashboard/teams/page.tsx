@@ -19,9 +19,14 @@ export default async function TeamsPage() {
   const { auth0Id, role } = orgCtx
 
   const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
-    orgTeams(auth0Id).catch(() => ({ teams: [] })),
-    orgStudents(auth0Id).catch(() => ({ students: [] })),
-    orgSeasons(auth0Id).catch(() => ({ seasons: [] })),
+    // `null` rather than an empty list, for both lists that back a rendered claim.
+    // `teams` drives "No teams yet"; `students` populates the Teams→Players picker,
+    // where an empty list silently removes every player from the add-member control.
+    orgTeams(auth0Id).catch(() => null),
+    orgStudents(auth0Id).catch(() => null),
+    // Seasons only back the inline "No seasons yet." label rather than an EmptyState,
+    // but a rejected read is still not the same fact as an org with no seasons.
+    orgSeasons(auth0Id).catch(() => null),
   ])
 
   return (
@@ -35,9 +40,12 @@ export default async function TeamsPage() {
       <div className="mt-6">
         <TeamsClient
           auth0Id={auth0Id}
-          initialTeams={teamsRes.teams}
-          initialSeasons={seasonsRes.seasons}
-          students={studentsRes.students}
+          initialTeams={teamsRes?.teams ?? []}
+          teamsFailed={teamsRes === null}
+          initialSeasons={seasonsRes?.seasons ?? []}
+          seasonsFailed={seasonsRes === null}
+          students={studentsRes?.students ?? []}
+          studentsFailed={studentsRes === null}
           canManage={hasPermission(role, 'team.manage')}
           canDeleteTeam={TEAM_DELETE_ROLES.includes(role)}
         />

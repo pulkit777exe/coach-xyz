@@ -52,15 +52,41 @@ interface TeamsClientProps {
   canManage: boolean
   /** Team deletion — pinned to the server's owner/admin floor. */
   canDeleteTeam: boolean
+  /**
+   * The server's team list rejected, so `initialTeams` is empty because nothing
+   * arrived rather than because the club has no teams. Defaults false so the a11y
+   * render sweep (which has no server read) keeps plain empty semantics.
+   */
+  teamsFailed?: boolean
+  /** Same distinction for `initialSeasons`. */
+  seasonsFailed?: boolean
+  /** Same distinction for `students`, which populates the Teams→Players picker. */
+  studentsFailed?: boolean
 }
 
-function TrendBars({ points }: { points: FindingsTrendPoint[] }) {
+function TrendBars({
+  points,
+  loading,
+  failed,
+}: {
+  points: FindingsTrendPoint[]
+  loading: boolean
+  failed: boolean
+}) {
   const days = useMemo(() => {
     const byDay = new Map<string, number>()
     for (const p of points) byDay.set(p.day, (byDay.get(p.day) ?? 0) + p.count)
     return [...byDay.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).slice(-14)
   }, [points])
   const max = Math.max(1, ...days.map(([, n]) => n))
+  // Checked before the empty branch. "No findings in this window." is a claim about
+  // fourteen days of a team's record, and a failed read is not that claim.
+  if (loading) {
+    return <p className="text-meta text-muted-foreground">Loading findings…</p>
+  }
+  if (failed) {
+    return <p className="text-meta text-muted-foreground">Findings failed to load.</p>
+  }
   if (days.length === 0) {
     return <p className="text-meta text-muted-foreground">No findings in this window.</p>
   }
@@ -85,6 +111,9 @@ export default function TeamsClient({
   students,
   canManage,
   canDeleteTeam,
+  teamsFailed = false,
+  seasonsFailed = false,
+  studentsFailed = false,
 }: TeamsClientProps) {
   const [teams, setTeams] = useState<Team[]>(initialTeams)
   const [seasons, setSeasons] = useState<Season[]>(initialSeasons)
@@ -92,6 +121,23 @@ export default function TeamsClient({
   const [selectedId, setSelectedId] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [members, setMembers] = useState<TeamMember[]>([])
   const [trends, setTrends] = useState<FindingsTrendPoint[]>([])
+  // The three panel reads below each collapsed a rejection to `[]`, merging "still
+  // loading", "could not read it" and "genuinely empty" into one state — and since all
+  // three start as `[]`, EVERY first mount flashed "0 members", "No findings in this
+  // window.", "No members yet" and "No matches scheduled" before they resolved.
+  //
+  // `panelLoadedFor` records WHICH team the panel has settled for, and the three states
+  // are DERIVED from it rather than reset in the effect body (a synchronous setState in
+  // an effect is the thing this repo's re-render rules exist to prevent). Keying on the
+  // team id also closes a second hole: `selectedId` changing used to leave the previous
+  // team's rows on screen, so one coach saw another roster's "12 members".
+  const [panelLoadedFor, setPanelLoadedFor] = useState<string | null>(null)
+  const [panelError, setPanelError] = useState<{
+    teamId: string
+    members: boolean
+    trends: boolean
+    matches: boolean
+  } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
   const [sport, setSport] = useState('')
@@ -112,31 +158,61 @@ export default function TeamsClient({
     setRenameValue(selected.name)
   }
 
+  // Derived, not stored: the panel is loading whenever the settled team is not the one
+  // on screen, which covers the first mount, every team switch, and the brief window
+  // after a write re-fetches. `panelError` is read the same way, so a failure recorded
+  // against team A cannot be shown while team B is selected.
+  const panelLoading = selectedId !== null && panelLoadedFor !== selectedId
+  const membersFailed = !panelLoading && panelError?.teamId === selectedId && panelError.members
+  const trendsFailed = !panelLoading && panelError?.teamId === selectedId && panelError.trends
+  const matchesFailed = !panelLoading && panelError?.teamId === selectedId && panelError.matches
+
   useEffect(() => {
     const id = selectedId
     if (!id) return
     let cancelled = false
-    void listTeamMembers(auth0Id, id)
-      .then((res) => {
-        if (!cancelled) setMembers(res.members)
-      })
-      .catch(() => {
-        if (!cancelled) setMembers([])
-      })
-    void getFindingsTrends(auth0Id, { days: 14, teamId: id })
-      .then((res) => {
-        if (!cancelled) setTrends(res.trends)
-      })
-      .catch(() => {
-        if (!cancelled) setTrends([])
-      })
-    void orgMatches(auth0Id, { teamId: id })
-      .then((res) => {
-        if (!cancelled) setMatches(res.matches)
-      })
-      .catch(() => {
-        if (!cancelled) setMatches([])
-      })
+    // Each read reports its own outcome. The lists still reset to `[]` on failure so the
+    // downstream `.map`/`.length` stay total, but the failure is recorded rather than
+    // being the only thing the render can see — `[]` is also what a real empty answer
+    // looks like, which is the whole defect.
+    const error = { members: false, trends: false, matches: false }
+    const reads = [
+      listTeamMembers(auth0Id, id)
+        .then((res) => {
+          if (!cancelled) setMembers(res.members)
+        })
+        .catch(() => {
+          error.members = true
+          if (!cancelled) setMembers([])
+        }),
+      getFindingsTrends(auth0Id, { days: 14, teamId: id })
+        .then((res) => {
+          if (!cancelled) setTrends(res.trends)
+        })
+        .catch(() => {
+          error.trends = true
+          if (!cancelled) setTrends([])
+        }),
+      orgMatches(auth0Id, { teamId: id })
+        .then((res) => {
+          if (!cancelled) setMatches(res.matches)
+        })
+        .catch(() => {
+          error.matches = true
+          if (!cancelled) setMatches([])
+        }),
+    ]
+    // Resolves once all three have settled either way, so "loaded" means "the panel has
+    // an answer for this team" — which is what stops the empty states from flashing on
+    // every visit. Recorded as one object so a partial failure keeps its three answers
+    // apart rather than collapsing into a single boolean.
+    void Promise.all(reads).then(() => {
+      if (cancelled) return
+      setPanelLoadedFor(id)
+      setPanelError((prev) =>
+        prev?.teamId === id ? prev : { teamId: id, ...error },
+      )
+    })
     return () => {
       cancelled = true
     }
@@ -163,6 +239,14 @@ export default function TeamsClient({
       setBusy(false)
     }
   }
+
+  // A successful write re-reads its list below. That re-read is itself proof the list can
+  // be read now, so the failure flag has to be cleared with it — otherwise the panel
+  // keeps announcing "failed to load" on top of rows that just arrived.
+  const clearPanelFailure = (kind: 'members' | 'matches') =>
+    setPanelError((prev) =>
+      prev?.teamId === selectedId && prev[kind] ? { ...prev, [kind]: false } : prev,
+    )
 
   const handleCreate = () =>
     run(async () => {
@@ -205,7 +289,9 @@ export default function TeamsClient({
             </span>
           ))}
           {seasons.length === 0 && (
-            <span className="text-meta text-muted-foreground">No seasons yet.</span>
+            <span className="text-meta text-muted-foreground">
+              {seasonsFailed ? 'Seasons failed to load.' : 'No seasons yet.'}
+            </span>
           )}
         </div>
         {canManage && (
@@ -260,8 +346,14 @@ export default function TeamsClient({
           {teams.length === 0 && (
             <EmptyState
               compact
-              title="No teams yet"
-              description="Create your first team to scope coaching and trends."
+              // A failed read is not an org with no teams, and "Create your first team"
+              // here invites a duplicate of a team that already exists.
+              title={teamsFailed ? 'Teams failed to load.' : 'No teams yet'}
+              description={
+                teamsFailed
+                  ? 'This is a loading problem, not an empty club — reload the page to try again.'
+                  : 'Create your first team to scope coaching and trends.'
+              }
             />
           )}
           {canManage && (
@@ -325,13 +417,19 @@ export default function TeamsClient({
                 }
               >
                 <p className="text-meta text-muted-foreground mb-3">
-                  {members.length} member{members.length === 1 ? '' : 's'}
+                  {/* "0 members" was the worst of the four claims: a fabricated count,
+                      printed as a confident figure beside a coach's real roster. */}
+                  {panelLoading
+                    ? 'Loading members…'
+                    : membersFailed
+                      ? 'Member count unavailable'
+                      : `${members.length} member${members.length === 1 ? '' : 's'}`}
                   {selected.sport ? ` · ${selected.sport}` : ''}
                 </p>
                 <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-2">
                   Findings · last 14 days
                 </p>
-                <TrendBars points={trends} />
+                <TrendBars points={trends} loading={panelLoading} failed={trendsFailed} />
               </Section>
 
               <Section title="Members">
@@ -364,6 +462,7 @@ export default function TeamsClient({
                               await removeTeamMember(auth0Id, selected.id, member.id)
                               const res = await listTeamMembers(auth0Id, selected.id)
                               setMembers(res.members)
+                              clearPanelFailure('members')
                             })
                           }
                         >
@@ -373,13 +472,21 @@ export default function TeamsClient({
                     </div>
                   ))}
                 </div>
-                {members.length === 0 && (
+                {panelLoading ? (
+                  <p className="py-2 text-meta text-muted-foreground">Loading members…</p>
+                ) : membersFailed ? (
+                  <EmptyState
+                    compact
+                    title="Members failed to load."
+                    description="This is a loading problem, not an empty roster — reload the page to try again."
+                  />
+                ) : members.length === 0 ? (
                   <EmptyState
                     compact
                     title="No members yet"
                     description="Add coaches by account or players from the roster."
                   />
-                )}
+                ) : null}
                 {canManage && (
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
@@ -408,6 +515,13 @@ export default function TeamsClient({
                         aria-label="Coach member id"
                         className="h-9 flex-1 min-w-44"
                       />
+                    ) : studentsFailed ? (
+                      // The roster read failed, so this picker has nobody in it. An empty
+                      // "Select player" dropdown reads as "no unassigned players exist",
+                      // which is a different claim — say why it is empty instead.
+                      <p className="flex-1 min-w-44 text-meta text-muted-foreground">
+                        Players failed to load, so nobody can be picked here — reload the page.
+                      </p>
                     ) : (
                       <Select
                         items={Object.fromEntries(
@@ -442,6 +556,7 @@ export default function TeamsClient({
                           setAddRef('')
                           const res = await listTeamMembers(auth0Id, selected.id)
                           setMembers(res.members)
+                          clearPanelFailure('members')
                         })
                       }
                     >
@@ -456,13 +571,21 @@ export default function TeamsClient({
                   Fixtures and results for this team.
                 </p>
                 <div className="space-y-1">
-                  {matches.length === 0 && (
+                  {panelLoading ? (
+                    <p className="py-2 text-meta text-muted-foreground">Loading matches…</p>
+                  ) : matchesFailed ? (
+                    <EmptyState
+                      compact
+                      title="Matches failed to load."
+                      description="This is a loading problem, not an empty fixture list — reload the page to try again."
+                    />
+                  ) : matches.length === 0 ? (
                     <EmptyState
                       compact
                       title="No matches scheduled"
                       description="Add the next fixture for this team."
                     />
-                  )}
+                  ) : null}
                   {matches.map((match) => (
                     <div
                       key={match.id}
@@ -488,6 +611,7 @@ export default function TeamsClient({
                               await orgDeleteMatch(auth0Id, match.id)
                               const res = await orgMatches(auth0Id, { teamId: selected.id })
                               setMatches(res.matches)
+                              clearPanelFailure('matches')
                             })
                           }
                         >
@@ -549,6 +673,7 @@ export default function TeamsClient({
                             setMatchSeason('')
                             const res = await orgMatches(auth0Id, { teamId: selected.id })
                             setMatches(res.matches)
+                            clearPanelFailure('matches')
                           })
                         }
                       >

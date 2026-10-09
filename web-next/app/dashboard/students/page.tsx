@@ -19,7 +19,12 @@ export default async function StudentsPage() {
   const { auth0Id, role } = orgCtx
 
   const [studentsRes, sportsRes, teamsRes] = await Promise.all([
-    orgStudents(auth0Id).catch(() => ({ students: [] })),
+    // `null` rather than `{ students: [] }`. The roster read and the "there is no
+    // roster" answer are different facts, and collapsing them here made a coach with
+    // thirty players read "No students yet" — with a live Add button — on a failed
+    // fetch. `sports`/`teams` only populate the filter dropdowns, so an empty list
+    // there costs a filter, not a claim about the org.
+    orgStudents(auth0Id).catch(() => null),
     orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
     orgTeams(auth0Id).catch(() => ({ teams: [] })),
   ])
@@ -35,7 +40,8 @@ export default async function StudentsPage() {
       <div className="mt-6">
         <StudentsClient
           auth0Id={auth0Id}
-          initialStudents={studentsRes.students}
+          initialStudents={studentsRes?.students ?? []}
+          rosterFailed={studentsRes === null}
           sports={sportsRes.sports}
           teams={teamsRes.teams}
           canManage={hasPermission(role, 'player.manage')}

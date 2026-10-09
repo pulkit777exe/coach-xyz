@@ -437,6 +437,7 @@ export default function StudentsClient({
   teams,
   canManage,
   canInvite,
+  rosterFailed = false,
 }: {
   auth0Id: string
   initialStudents: Student[]
@@ -446,8 +447,20 @@ export default function StudentsClient({
   canManage: boolean
   /** Player-signup invites — pinned to the email-route floor. */
   canInvite: boolean
+  /**
+   * The server's roster read rejected, so `initialStudents` is empty because nothing
+   * arrived — not because the club has no players. Without this the empty state below
+   * told a coach with thirty players to "Add your first student", which is a false
+   * claim AND invites a duplicate row. Defaults false so every other caller (and the
+   * a11y render sweep, which has no server read) keeps the plain empty semantics.
+   */
+  rosterFailed?: boolean
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
+  // Seeded from the prop, then owned locally: `refreshStudents`/`toggleArchived` re-run
+  // the same roster read, so a success has to clear the flag or the failure banner would
+  // keep sitting over a roster that has since loaded.
+  const [rosterReadFailed, setRosterReadFailed] = useState(rosterFailed)
   const [search, setSearch] = useState('')
   const [sport, setSport] = useState('')
   const [status, setStatus] = useState('')
@@ -640,6 +653,7 @@ export default function StudentsClient({
   const refreshStudents = async (includeArchived = showArchived) => {
     const res = await orgStudents(auth0Id, { includeArchived })
     setStudents(res.students)
+    setRosterReadFailed(false)
   }
 
   const toggleArchived = async () => {
@@ -648,6 +662,7 @@ export default function StudentsClient({
     try {
       const res = await orgStudents(auth0Id, { includeArchived: next })
       setStudents(res.students)
+      setRosterReadFailed(false)
     } catch (err) {
       setShowArchived(!next)
       toast.error((err as CoachAIError).message ?? 'Failed to load roster')
@@ -881,7 +896,17 @@ export default function StudentsClient({
 
       {/* Table */}
       <div className="overflow-hidden rounded-[6px] border border-border bg-card">
-        {filtered.length === 0 ? (
+        {rosterReadFailed ? (
+          // Checked BEFORE `filtered.length === 0`: a failed read also leaves `students`
+          // empty, so the "No students yet" branch would otherwise match and send a coach
+          // with a full roster to create a duplicate. The Add action is withheld for the
+          // same reason — there is nothing here to add "the first" of. Reloading is the
+          // honest next step, and saying so beats a claim the data cannot support.
+          <EmptyState
+            title="Roster failed to load."
+            description="This is a loading problem, not an empty roster — reload the page to try again."
+          />
+        ) : filtered.length === 0 ? (
           <EmptyState
             title={students.length === 0 ? 'No students yet' : 'No matching students'}
             description={
