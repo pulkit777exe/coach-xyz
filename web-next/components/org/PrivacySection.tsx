@@ -80,6 +80,13 @@ function downloadJson(filename: string, data: unknown): void {
 export default function PrivacySection() {
   const [consent, setConsent] = useState<PlayerConsent | null>(null)
   const [requests, setRequests] = useState<PrivacyRequest[]>([])
+  // The request history has its OWN failure flag, separate from `error`. `error` is
+  // written by the consent read and by every write handler; the history read used to
+  // write nothing at all, so `requests` stayed `[]` and the `requests.length > 0 ? … :
+  // null` below rendered NOTHING. On a data-rights surface that is the worst way to be
+  // wrong: a user who has already submitted a DELETION request, whose history read
+  // fails, is shown no record of it and no reason why.
+  const [requestsError, setRequestsError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -101,7 +108,14 @@ export default function PrivacySection() {
         } else {
           setError(errorMessageOf(consentResult.reason, 'Failed to load consent settings.'))
         }
-        if (requestsResult.status === 'fulfilled') setRequests(requestsResult.value.requests)
+        if (requestsResult.status === 'fulfilled') {
+          setRequests(requestsResult.value.requests)
+          setRequestsError(null)
+        } else {
+          setRequestsError(
+            errorMessageOf(requestsResult.reason, 'Failed to load your request history.'),
+          )
+        }
         setIsLoading(false)
       },
     )
@@ -158,8 +172,20 @@ export default function PrivacySection() {
         // The POST response is authoritative for the new row; the refreshed
         // list replaces it with the server's own ordering.
         void listMyPrivacyRequests()
-          .then((body) => setRequests(body.requests))
-          .catch(() => setRequests((current) => [request, ...current]))
+          .then((body) => {
+            setRequests(body.requests)
+            setRequestsError(null)
+          })
+          // The optimistic prepend keeps the request the user just made visible, but
+          // it is NOT the whole history — so the failure is carried too. Without this
+          // the list would read as "these are all your requests" on the strength of one
+          // row the client already had.
+          .catch(() => {
+            setRequests((current) => [request, ...current])
+            setRequestsError(
+              'Only the request you just sent is shown — your full request history could not be read.',
+            )
+          })
       })
       .catch((cause) => {
         setError(errorMessageOf(cause, 'Failed to send your deletion request.'))
@@ -244,6 +270,19 @@ export default function PrivacySection() {
               </Button>
             </SettingRow>
           </div>
+
+          {/* The history read has its own block, because its failure is not the same
+              claim as its absence: a user with an open deletion request must never be
+              shown an empty list that reads as "no requests on file". The rows are
+              still rendered when some arrived, with the failure stated above them. */}
+          {requestsError ? (
+            <p className="mt-4 text-meta leading-[1.5] text-destructive" role="alert">
+              {requestsError}
+              {requests.length > 0
+                ? ' Requests listed below may be incomplete — we could not confirm your full history, so please contact us if something is missing.'
+                : ''}
+            </p>
+          ) : null}
 
           {requests.length > 0 ? (
             <div className="mt-4">

@@ -63,13 +63,16 @@ export default async function HistoryPage({
         description="Browse all your past video analyses."
       />
 
+      {/* Mutually exclusive on purpose. These two used to render together: on a failed
+          read `analyses` is still `[]`, so a coach saw a red banner AND a "No analyses
+          found — Upload a video" card with a live Start button. The state that invites a
+          DUPLICATE upload was the prominent one. `error` is assigned nowhere else, so
+          it can gate the list outright rather than being a banner above it. */}
       {error ? (
         <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 px-4 py-3 text-body text-destructive">
           Failed to load history. Please try again later.
         </div>
-      ) : null}
-
-      {analyses.length === 0 ? (
+      ) : analyses.length === 0 ? (
         <div className="rounded-[6px] border border-border bg-card">
           <EmptyState
             title="No analyses found"

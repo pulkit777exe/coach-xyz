@@ -49,6 +49,13 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  // The snapshot read has its own failure flag. It used to catch and drop the error,
+  // leaving `notifications` at `[]` — which rendered the confident sentence "No
+  // notifications yet" and an unread badge of 0. A coach reading that concludes no
+  // report finished, no analysis completed, no membership changed. `inAppEnabled`
+  // still fails OPEN below (a prefs outage must not hide the bell); that decision is
+  // about whether the bell exists, not about what an empty bell asserts.
+  const [loadFailed, setLoadFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const [inAppEnabled, setInAppEnabled] = useState<boolean | null>(null)
   const prefsRequestRef = useRef<Promise<boolean> | null>(null)
@@ -103,9 +110,18 @@ export default function NotificationBell() {
     }
     const fetchSnapshot = () => {
       const revisionAtStart = localRevisionRef.current
-      return fetchNotificationsWithRetry(controller.signal).then((state) =>
-        mergeSnapshot(state, revisionAtStart),
-      )
+      return fetchNotificationsWithRetry(controller.signal)
+        .then((state) => {
+          mergeSnapshot(state, revisionAtStart)
+          setLoadFailed(false)
+        })
+        .catch((err: unknown) => {
+          // Carried, not swallowed: the bell stays usable, but an empty list now
+          // reads as "this could not be read" rather than "you have none". An abort is
+          // the unmount/teardown path, not a failed read, so it sets nothing.
+          if (!controller.signal.aborted) setLoadFailed(true)
+          throw err
+        })
     }
 
     unsubscribe = subscribeNotifications(
@@ -210,6 +226,15 @@ export default function NotificationBell() {
         {isLoading ? (
           <div className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
             Loading…
+          </div>
+        ) : loadFailed && sorted.length === 0 ? (
+          // "No notifications yet" is a claim about the coach's account — that no
+          // report finished, no analysis completed, no membership changed. After a
+          // failed read we know nothing of the sort, so the sentence must be about the
+          // read. The badge above still shows 0 for the same reason; this is where the
+          // user is told why.
+          <div className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
+            Notifications failed to load. Open the menu again shortly.
           </div>
         ) : sorted.length === 0 ? (
           <div className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">

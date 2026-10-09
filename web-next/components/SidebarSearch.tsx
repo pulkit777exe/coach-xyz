@@ -78,12 +78,19 @@ export default function SidebarSearch({
     if (next) {
       setQuery('')
       setPlayers([])
+      setPlayersFailed(false)
       setActive(0)
     }
     setOpen(next)
   }
   const [query, setQuery] = useState('')
   const [players, setPlayers] = useState<{ id: string; full_name: string }[]>([])
+  // The player read has its OWN failure flag. Pages are filtered locally from the
+  // `PAGES` constant, so a page result is real the moment it renders; a rejected
+  // `orgStudents` used to leave `players` at `[]`, which the "No matches." branch
+  // then reported as "no such player exists". Partial failure must therefore be
+  // reported as partial failure, and must not hide the page results that did load.
+  const [playersFailed, setPlayersFailed] = useState(false)
   const [searching, setSearching] = useState(false)
   const [active, setActive] = useState(0)
   const seq = useRef(0)
@@ -107,18 +114,31 @@ export default function SidebarSearch({
       const q = query.trim()
       if (!open || q.length < 2) {
         setPlayers([])
+        setPlayersFailed(false)
         setSearching(false)
         return
       }
       const my = ++seq.current
       setSearching(true)
+      // Cleared HERE, when a new attempt begins — not only on success. A flag that
+      // outlives the request it describes would keep printing the previous failure
+      // through the whole retry, which is the same "failed reads look like empty
+      // reads" mistake in the other direction: a stale failure read as a live one.
+      setPlayersFailed(false)
       void orgStudents(auth0Id, { search: q })
         .then((res) => {
           if (seq.current !== my) return
           setPlayers(res.students.slice(0, 6).map((s) => ({ id: s.id, full_name: s.full_name })))
+          setPlayersFailed(false)
         })
         .catch(() => {
-          if (seq.current === my) setPlayers([])
+          // Clearing the list is still correct — a stale row from a previous query
+          // would be a worse lie than none — but the failure is now carried beside
+          // it, so the empty state below stops claiming the player does not exist.
+          if (seq.current === my) {
+            setPlayers([])
+            setPlayersFailed(true)
+          }
         })
         .finally(() => {
           if (seq.current === my) setSearching(false)
@@ -208,7 +228,16 @@ export default function SidebarSearch({
           <ul className="max-h-72 overflow-y-auto p-1">
             {results.length === 0 ? (
               <li className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
-                {query.trim() ? 'No matches.' : 'Type to search pages and players.'}
+                {/* "No matches." is a claim about the player's existence, and it is
+                    only true when the player read SUCCEEDED. On a rejected read the
+                    honest sentence is that the search failed. */}
+                {playersFailed
+                  ? 'Player search failed to load.'
+                  : searching
+                    ? 'Searching…'
+                    : query.trim()
+                      ? 'No matches.'
+                      : 'Type to search pages and players.'}
               </li>
             ) : (
               results.map((r, i) => (
@@ -245,6 +274,17 @@ export default function SidebarSearch({
                 </li>
               ))
             )}
+            {/* Partial failure: the page matches above are real (they come from the
+                static PAGES list), but the player half of the query is missing. Saying
+                nothing here would let the visible page results read as the complete
+                answer for the query. `results.length > 0` is load-bearing — with no rows
+                at all the branch above already says the search failed, and this would
+                print the same sentence twice. */}
+            {playersFailed && results.length > 0 ? (
+              <li className="px-2 py-3 text-center text-caption leading-4 text-muted-foreground">
+                Player search failed to load — page matches only.
+              </li>
+            ) : null}
           </ul>
         </DialogContent>
       </Dialog>
