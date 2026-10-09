@@ -31,9 +31,9 @@ export default function LoginPage() {
           </Button>
           {/* hairline "or" divider */}
           <div className="my-4 flex items-center gap-3 text-caption leading-4 text-muted-foreground">
-            <span className="h-px flex-1 bg-foreground/9 dark:bg-white/8" />
+            <span className="h-px flex-1 bg-foreground/9 " />
             or
-            <span className="h-px flex-1 bg-foreground/9 dark:bg-white/8" />
+            <span className="h-px flex-1 bg-foreground/9 " />
           </div>
           <Button
             nativeButton={false}

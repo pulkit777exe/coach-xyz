@@ -68,15 +68,21 @@ const hueOf = (cls: string) => cls.replace(new RegExp(COLOUR_PREFIX_SRC), '')
  * the point: the list should track the code, and half-deleting an entry is a change.
  */
 const GRANDFATHERED = [
-  // A — literal `white` over an already theme-flipping `--foreground`. Composited over
-  // `--background` these are Δ1/255 (redundant), Δ4/255 (near-invisible) and Δ8/255
-  // (visible) — hence listed rather than deleted.
-  'app/login/page.tsx ×2:dark:bg-white/8',
-  'app/pricing/page.tsx ×1:dark:divide-white/8',
+  // The ONLY surviving entry, and it is four SITES with four DIFFERENT deltas — which is why
+  // the list is keyed on multiplicity and why the ledger's old per-entry bucketing was wrong.
+  //
+  // The delta is a property of the SITE, not of the literal: each of these pairs
+  // `dark:bg-white/10` against a different base alpha (`bg-foreground/8` x2, `/9`, `/10`), so
+  // removing the dark: variant shifts them by 8, 8, 6 and 4 /255 respectively. A single
+  // "Δ8/255" bucket for the entry hid three of those. The backdrop cancels out of the
+  // comparison to a coefficient of (a_base - a_dark) <= 0.02, so these numbers do not depend
+  // on what the element sits on.
+  //
+  // Five of the six original entries were deleted: all 7 sites at Δ1/255, which is below the
+  // 8-bit quantisation step of any display this ships to. They were not "kept because they
+  // are hard to see" — they were kept because nobody had measured them, and the measured
+  // answer turned out to be that they render the same value twice.
   'components/LandingPage.tsx ×4:dark:bg-white/10',
-  'components/LandingPage.tsx ×1:dark:bg-white/8',
-  'components/LandingPage.tsx ×2:dark:divide-white/8',
-  'components/LandingPage.tsx ×1:dark:border-white/10',
 ]
 
 /**
