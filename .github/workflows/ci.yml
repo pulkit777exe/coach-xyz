@@ -111,6 +111,27 @@ jobs:
         # Fails the job on any known CVE (verified clean locally: 191 packages).
         run: bun audit
 
+      # The facts the probe-flake investigation has been reasoning about WITHOUT, for several
+      # rounds. Every hypothesis it ruled out was ruled out by measurement, and the one it never
+      # measured was the descriptor limit: `spawnSync` copies the parent's fd table, so a suite
+      # that leaks sockets across 117 files behaves very differently on a runner with
+      # `ulimit -n` 1024 than on a laptop with 524288 — which is exactly the difference between
+      # "works locally, fails there" and a cost model.
+      #
+      # AGENTS.md claimed this step existed. It did not. A step nobody has read is indistinguishable
+      # from one that does not exist, so this is unconditional rather than `failure()`-gated: the
+      # failure is intermittent, and the facts from the run that happened to catch it are the only
+      # facts there are.
+      - name: Runner facts
+        run: |
+          echo "ulimit -n (soft, open files): $(ulimit -n)"
+          echo "ulimit -Hn (hard, open files): $(ulimit -Hn)"
+          echo "ulimit -u (max processes): $(ulimit -u)"
+          echo "nproc: $(nproc)"
+          echo "loadavg: $(cat /proc/loadavg)"
+          echo "MemAvailable: $(awk '/MemAvailable/{print $2" kB"}' /proc/meminfo)"
+          echo "Bun version: $(bun --version)"
+
       - name: Type check
         working-directory: server
         run: bun run type-check

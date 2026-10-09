@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, rmSync } from 'node:fs'
+import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -253,9 +253,33 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     // rather than calling through the function — the typechecker caught it, which is the
     // only reason this line is not also wrong on the runner.
     const mem = process.memoryUsage() as { rss: number; heapUsed?: number }
+    // Open descriptors, read straight off /proc. This is the number the whole fd-exhaustion
+    // hypothesis turns on and the ONE thing never measured: `spawnSync` copies the parent's fd
+    // table, and the parent here is a single process running all 117 files under `--isolate`
+    // (module registry reset, NOT a fresh process), so sockets opened by one file survive into
+    // the next. Locally the limit is 524288 and nothing can go wrong; a runner's soft limit is
+    // commonly 1024. Reported with the limit alongside, because a count without a ceiling says
+    // nothing — 400 is healthy at 524288 and critical at 512.
+    // An IIFE rather than `let fds = -1` plus try/catch: the initializer is dead on both
+    // paths and eslint says so. It said so about the SAME shape in `exitStamp` a few commits
+    // ago, so this is the second time in this one file — the pattern is the habit to drop,
+    // not the line to patch.
+    const fds = (() => {
+      try {
+        return readdirSync('/proc/self/fd').length
+      } catch {
+        return -1
+      }
+    })()
+    const nofile = Bun.spawnSync(['sh', '-c', 'ulimit -n']).stdout.toString().trim() || '?'
     console.log(
       `  parent: rss=${Math.round(mem.rss / 1024 / 1024)}MB uptime=${Math.round(process.uptime())}s ` +
-        `heapUsed=${Math.round((mem.heapUsed ?? 0) / 1024 / 1024)}MB\n`,
+        `heapUsed=${Math.round((mem.heapUsed ?? 0) / 1024 / 1024)}MB\n` +
+        `  parent open fds: ${fds} of ulimit -n ${nofile}` +
+        (fds > 0 && nofile !== '?' && fds / Number(nofile) > 0.5
+          ? '   ← ABOVE HALF THE LIMIT'
+          : '') +
+        '\n',
     )
   }, 120_000)
 })
