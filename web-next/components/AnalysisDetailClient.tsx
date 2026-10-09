@@ -262,7 +262,7 @@ export default function AnalysisDetailClient({
     return (
       <>
         <AnalysisProgress status={status} />
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 rounded-[8px] bg-popover border border-border px-6 py-4 text-center shadow-lg">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 rounded-[8px] bg-popover border border-border px-6 py-4 text-center shadow-lg dark:shadow-none">
           <p className="text-muted-foreground text-body mb-3">
             This analysis is taking longer than usual.
           </p>

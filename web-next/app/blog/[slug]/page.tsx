@@ -16,7 +16,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
       <div className="border-b border-border bg-muted px-6 py-12 text-center lg:px-8">
         <Link
           href="/blog"
-          className="inline-block rounded-[6px] text-body leading-5 text-muted-foreground transition-colors duration-[120ms] hover:text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="inline-block rounded-[6px] text-body leading-5 text-muted-foreground transition-colors duration-[var(--dur-fast)] hover:text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           ← Back to blog
         </Link>
@@ -37,7 +37,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
         <div className="mt-10 border-t border-border pt-6">
           <Link
             href="/blog"
-            className="inline-block rounded-[6px] text-body leading-5 font-medium text-link transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="inline-block rounded-[6px] text-body leading-5 font-medium text-link transition-colors duration-[var(--dur-fast)] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             ← All posts
           </Link>

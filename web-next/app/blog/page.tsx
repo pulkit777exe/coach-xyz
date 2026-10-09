@@ -24,7 +24,7 @@ export default function BlogPage() {
             <Link
               key={p.slug}
               href={`/blog/${p.slug}`}
-              className="group overflow-hidden rounded-[6px] border border-border bg-background transition-colors duration-[180ms] hover:border-border-hover hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="group overflow-hidden rounded-[6px] border border-border bg-background transition-colors duration-[var(--dur-base)] hover:border-border-hover hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <div className="flex h-40 items-center justify-center border-b border-border bg-muted">
                 <span className="grid size-9 place-items-center rounded-[6px] bg-primary/10 text-meta font-bold text-link">

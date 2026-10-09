@@ -30,7 +30,7 @@ export default function ThemeToggle() {
       type="button"
       aria-label="Toggle theme"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="inline-flex size-8 items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]"
+      className="inline-flex size-8 items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]"
     >
       {/* Crossfade + slight rotate between sun/moon — ≤200ms ease-out. */}
       <span className="relative size-4">

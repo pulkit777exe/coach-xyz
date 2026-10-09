@@ -423,8 +423,7 @@ export default function StudentProfile({
                 {student_.full_name}
               </h2>
               <span
-                className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none ${STATUS_STYLE[student_.status] ?? 'bg-muted text-muted-foreground'}`}
-                style={{ fontSize: 11 }}
+                className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${STATUS_STYLE[student_.status] ?? 'bg-muted text-muted-foreground'}`}
               >
                 {student_.status}
               </span>

@@ -31,9 +31,9 @@ export default function LoginPage() {
           </Button>
           {/* hairline "or" divider */}
           <div className="my-4 flex items-center gap-3 text-caption leading-4 text-muted-foreground">
-            <span className="h-px flex-1 bg-foreground/9 " />
+            <span className="h-px flex-1 bg-border " />
             or
-            <span className="h-px flex-1 bg-foreground/9 " />
+            <span className="h-px flex-1 bg-border " />
           </div>
           <Button
             nativeButton={false}
@@ -48,14 +48,14 @@ export default function LoginPage() {
           By continuing you agree to our{' '}
           <Link
             href="/terms"
-            className="rounded-[4px] text-link transition-colors duration-[120ms] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded-[4px] text-link transition-colors duration-[var(--dur-fast)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             Terms
           </Link>{' '}
           and{' '}
           <Link
             href="/privacy"
-            className="rounded-[4px] text-link transition-colors duration-[120ms] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded-[4px] text-link transition-colors duration-[var(--dur-fast)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             Privacy
           </Link>

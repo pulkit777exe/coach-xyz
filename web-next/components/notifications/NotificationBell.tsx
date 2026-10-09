@@ -36,11 +36,11 @@ function formatTime(iso: string): string {
  * primitive's defaults (cn does not strip conflicting classes).
  */
 const MENU_CLASS =
-  'w-80 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
+  'w-80 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[var(--dur-fast)]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =
-  'rounded-[4px] px-2 py-1.5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+  'rounded-[4px] px-2 py-1.5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40'
 const TRIGGER_CLASS =
-  'relative inline-flex size-8 items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'relative inline-flex size-8 items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 /** 6px unread dot on Notion blue (add the bg class conditionally — cn does not strip conflicts). */
 const DOT_BASE = 'mt-1.5 size-1.5 shrink-0 rounded-full'
 

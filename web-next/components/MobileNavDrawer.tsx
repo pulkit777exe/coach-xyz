@@ -8,7 +8,7 @@ import { Menu, X } from 'lucide-react'
  * SettingsPanel's close button. Size is applied at each call site.
  */
 const GHOST =
-  'inline-flex shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'inline-flex shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 
 /**
  * Below md the sidebar collapses into a sticky workspace bar with a hamburger;

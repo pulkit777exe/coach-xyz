@@ -40,12 +40,12 @@ type ProfileMenuItem = {
  * Settings (→ /player/settings), a separator, the email row, and Log out.
  */
 const TRIGGER_CLASS =
-  'flex w-full items-center gap-2 rounded-[6px] px-1 py-1 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex w-full items-center gap-2 rounded-[6px] px-1 py-1 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 /** Notion popover pattern (shared with OrgPill/SidebarProfileMenu): exit fade only, no entrance. */
 const MENU_CLASS =
-  'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
+  'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[var(--dur-fast)]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =
-  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40'
 
 function menuItemsFor(
   variant: MenuVariant,

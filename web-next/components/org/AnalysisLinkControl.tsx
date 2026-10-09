@@ -116,7 +116,7 @@ export default function AnalysisLinkControl({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg">
+        <div className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg dark:shadow-none">
           <div className="border-b border-border px-4 py-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {linkedStudent ? 'Linked to' : 'Choose a student'}
           </div>

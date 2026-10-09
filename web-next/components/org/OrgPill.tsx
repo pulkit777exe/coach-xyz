@@ -36,11 +36,11 @@ const roleLabel = (role: MyOrg['role']) => role.replace(/_/g, ' ')
  * NO entrance animation — exit fade 120ms only.
  */
 const MENU_CLASS =
-  'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
+  'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[var(--dur-fast)]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =
-  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40'
 const TRIGGER_CLASS =
-  'flex h-8 items-center gap-1.5 rounded-[6px] px-2 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-8 items-center gap-1.5 rounded-[6px] px-2 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 const TILE = 'inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-muted'
 
 /**

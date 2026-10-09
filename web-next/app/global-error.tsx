@@ -35,7 +35,7 @@ export default function GlobalError({
               <button
                 type="button"
                 onClick={reset}
-                className="rounded-[4px] px-1 text-body leading-5 font-medium text-primary outline-none transition-colors duration-150 hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="rounded-[4px] px-1 text-body leading-5 font-medium text-primary outline-none transition-colors duration-150 hover:text-primary/80 focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Try again
               </button>
@@ -44,7 +44,7 @@ export default function GlobalError({
                 onClick={() => {
                   window.location.href = window.location.origin + '/'
                 }}
-                className="rounded-[4px] px-1 text-body leading-5 font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="rounded-[4px] px-1 text-body leading-5 font-medium text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Go home
               </button>

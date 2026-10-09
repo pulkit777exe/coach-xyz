@@ -997,8 +997,7 @@ export default function StudentsClient({
                   </td>
                   <td className="px-4 py-2.5">
                     <span
-                      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none ${STATUS_STYLE[s.status] ?? 'bg-muted text-muted-foreground'}`}
-                      style={{ fontSize: 11 }}
+                      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${STATUS_STYLE[s.status] ?? 'bg-muted text-muted-foreground'}`}
                     >
                       {s.status}
                     </span>

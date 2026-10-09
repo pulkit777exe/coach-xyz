@@ -60,10 +60,10 @@ export type SettingsSection = {
  * for the panel's close button and echoed by the profile menu trigger.
  */
 const CLOSE_BUTTON_CLASS =
-  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 
 const NAV_ITEM_CLASS =
-  'flex h-7 shrink-0 items-center gap-2 rounded-[4px] px-2 text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-7 shrink-0 items-center gap-2 rounded-[4px] px-2 text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 const NAV_ITEM_ACTIVE_CLASS = 'bg-accent font-medium text-foreground'
 const NAV_ITEM_IDLE_CLASS = 'text-foreground/90 hover:bg-accent'
 
@@ -143,7 +143,7 @@ export default function SettingsPanel({
       />
       {/* Panel wrapper: full-bleed on mobile, centered with margins from md up. */}
       <div className="pointer-events-none fixed inset-0 z-50 flex justify-center p-0 md:items-center md:p-6">
-        <div className="pointer-events-auto flex min-h-full w-full max-w-[960px] flex-col overflow-hidden border border-border bg-background shadow-[0_16px_70px_-12px_rgba(0,0,0,.35)] md:flex-row md:max-h-[calc(100vh-3rem)] md:min-h-[70vh] md:rounded-[8px]">
+        <div className="pointer-events-auto flex min-h-full w-full max-w-[960px] flex-col overflow-hidden border border-border bg-background shadow-[0_16px_70px_-12px_rgba(0,0,0,.35)] dark:shadow-none md:flex-row md:max-h-[calc(100vh-3rem)] md:min-h-[70vh] md:rounded-[8px]">
           {/* Left nav — gray sidebar tone; chip row on mobile, column from md. */}
           <nav
             aria-label="Settings sections"

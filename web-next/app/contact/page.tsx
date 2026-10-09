@@ -55,7 +55,7 @@ export default function ContactPage() {
             {channels.map((c) => (
               <div
                 key={c.title}
-                className={`flex gap-4 rounded-[6px] border bg-background p-5 transition-colors duration-[180ms] hover:bg-surface-hover ${hairline}`}
+                className={`flex gap-4 rounded-[6px] border bg-background p-5 transition-colors duration-[var(--dur-base)] hover:bg-surface-hover ${hairline}`}
               >
                 <div className="grid size-9 shrink-0 place-items-center rounded-[6px] bg-primary/10 text-link">
                   <c.icon className="size-[18px]" aria-hidden />
@@ -65,7 +65,7 @@ export default function ContactPage() {
                   <p className="mt-1 text-body leading-6 text-muted-foreground">{c.desc}</p>
                   <a
                     href={`mailto:${c.value}`}
-                    className="mt-1.5 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="mt-1.5 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[var(--dur-fast)] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
                     {c.value}
                   </a>
@@ -80,7 +80,7 @@ export default function ContactPage() {
               </p>
               <a
                 href="mailto:hello@coachxyz.app"
-                className="mt-2 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="mt-2 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[var(--dur-fast)] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 hello@coachxyz.app
               </a>

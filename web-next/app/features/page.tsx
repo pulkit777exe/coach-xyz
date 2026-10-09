@@ -39,7 +39,7 @@ const feats = [
 
 const hairline = 'border-border'
 const card =
-  'rounded-[8px] border bg-background transition-colors duration-[180ms] hover:bg-surface-hover border-border hover:border-border-hover'
+  'rounded-[8px] border bg-background transition-colors duration-[var(--dur-base)] hover:bg-surface-hover border-border hover:border-border-hover'
 
 export default function FeaturesPage() {
   return (

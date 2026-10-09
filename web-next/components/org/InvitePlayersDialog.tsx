@@ -103,7 +103,7 @@ export default function InvitePlayersDialog({
               onChange={(e) => setRaw(e.target.value)}
               placeholder={'one@email.com\ntwo@email.com'}
               rows={5}
-              className="border-input bg-input text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 focus-visible:border-ring rounded-[6px] border px-3 py-2 text-body outline-none focus-visible:ring-[3px]"
+              className="border-input bg-[var(--input-fill)] text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/40 focus-visible:border-ring rounded-[6px] border px-3 py-2 text-body outline-none focus-visible:ring-2"
             />
             {emails.length > 0 && (
               <p className="text-muted-foreground text-meta tabular-nums">

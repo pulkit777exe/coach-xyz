@@ -180,7 +180,7 @@ export default function PricingPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-foreground/9 ">
+              <tbody className="divide-y divide-border ">
                 {COMPARE_ROWS.map((row) => (
                   <tr key={row[0]}>
                     <th scope="row" className="py-3.5 pr-4 text-left font-normal">

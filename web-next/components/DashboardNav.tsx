@@ -108,9 +108,9 @@ const NAV_GROUPS: NavGroup[] = [
  * renders as the taller "tab" pill directly under search.
  */
 const NAV_ROW_CLASS =
-  'flex h-7 items-center gap-2 rounded-[4px] px-2 text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-7 items-center gap-2 rounded-[4px] px-2 text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 const NAV_TAB_CLASS =
-  'flex h-8 items-center gap-2 rounded-[6px] px-2 text-body leading-5 font-medium outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-8 items-center gap-2 rounded-[6px] px-2 text-body leading-5 font-medium outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]'
 const NAV_ACTIVE_CLASS = 'bg-accent text-foreground'
 const NAV_IDLE_CLASS = 'text-foreground/90 hover:bg-accent'
 const NAV_SECTION_LABEL_CLASS =

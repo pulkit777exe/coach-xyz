@@ -21,12 +21,12 @@ const eyebrow = 'text-caption font-medium uppercase tracking-[0.08em] text-muted
 const sectionTitle =
   'text-[26px] font-bold tracking-[-0.01em] text-balance sm:text-[34px] text-foreground-strong'
 const card =
-  'rounded-[8px] border bg-background transition-colors duration-[180ms] hover:bg-surface-hover border-border hover:border-border-hover'
+  'rounded-[8px] border bg-background transition-colors duration-[var(--dur-base)] hover:bg-surface-hover border-border hover:border-border-hover'
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 const statValue =
   'text-[30px] font-semibold leading-none tracking-[-0.01em] tabular-nums text-foreground-strong'
 const statLabel = 'text-label font-medium uppercase tracking-[0.08em] text-muted-foreground'
-const footerLink = `block text-body leading-5 text-foreground transition-colors duration-[120ms] hover:text-primary hover:underline ${focusRing}`
+const footerLink = `block text-body leading-5 text-foreground transition-colors duration-[var(--dur-fast)] hover:text-primary hover:underline ${focusRing}`
 
 const PREVIEW_CARDS = [
   { k: 'Analysis', d: 'Form 8.4 → 6.2' },
@@ -239,7 +239,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       {/* ── Stats bar — label above, tabular value ───────────────────────── */}
       <section className={`border-y px-6 lg:px-8 ${band} ${hairline}`}>
         <div
-          className={`mx-auto grid max-w-[1120px] grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0 divide-foreground/9 `}
+          className={`mx-auto grid max-w-[1120px] grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0 divide-border `}
         >
           {[
             { k: '500K+', l: 'analyses delivered', d: 'Across 6 sports and thousands of sessions' },
@@ -265,7 +265,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           >
             <div className="relative mx-auto h-[180px] w-full max-w-[560px]">
               <div className="absolute inset-x-12 top-6 bottom-0 rounded-t-[280px] border border-b-0 border-foreground/12 bg-gradient-to-b from-primary/[0.08] to-transparent dark:from-primary/[0.10]" />
-              <div className="absolute top-6 left-1/2 h-[140px] w-px -translate-x-1/2 bg-foreground/9 dark:bg-white/10" />
+              <div className="absolute top-6 left-1/2 h-[140px] w-px -translate-x-1/2 bg-border dark:bg-white/10" />
               <div className="absolute inset-0 flex items-end justify-between px-2">
                 {LIFECYCLE_STEPS.map((s) => (
                   <div key={s.l} className="flex flex-col items-center gap-2">
@@ -516,7 +516,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
         <div className="mx-auto max-w-[1120px]">
           <h2 className={`text-center ${sectionTitle}`}>What happens after you upload</h2>
           <div className="relative mx-auto mt-8 max-w-[760px]">
-            <div className="absolute top-0 bottom-0 left-4 w-px bg-foreground/9 sm:left-1/2 sm:-translate-x-px " />
+            <div className="absolute top-0 bottom-0 left-4 w-px bg-border sm:left-1/2 sm:-translate-x-px " />
             {TIMELINE_STEPS.map((s, i) => (
               <div
                 key={s.n}
@@ -641,7 +641,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       <section className={`px-6 py-14 lg:px-8 ${band}`}>
         <div className="mx-auto max-w-[760px]">
           <h2 className={`text-center ${sectionTitle}`}>Frequently Asked Questions</h2>
-          <div className={`mt-8 divide-y border-t ${hairline} divide-foreground/9 `}>
+          <div className={`mt-8 divide-y border-t ${hairline} divide-border `}>
             {FAQS.map((f, i) => (
               <div key={f.q} className="py-5">
                 <button
@@ -779,7 +779,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <span>© {new Date().getFullYear()} CoachXYZ, Inc.</span>
               <button
                 type="button"
-                className={`rounded-[6px] transition-colors duration-[120ms] hover:text-primary hover:underline ${focusRing}`}
+                className={`rounded-[6px] transition-colors duration-[var(--dur-fast)] hover:text-primary hover:underline ${focusRing}`}
               >
                 Cookie settings
               </button>

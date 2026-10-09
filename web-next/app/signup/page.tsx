@@ -35,7 +35,7 @@ export default function SignupPage() {
             Already have an account?{' '}
             <Link
               href="/login"
-              className="rounded-[4px] font-medium text-link transition-colors duration-[120ms] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="rounded-[4px] font-medium text-link transition-colors duration-[var(--dur-fast)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               Log in
             </Link>

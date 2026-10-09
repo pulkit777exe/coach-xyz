@@ -35,7 +35,7 @@ const values = [
 
 const hairline = 'border-border'
 const card =
-  'rounded-[8px] border bg-background transition-colors duration-[180ms] hover:bg-surface-hover border-border hover:border-border-hover'
+  'rounded-[8px] border bg-background transition-colors duration-[var(--dur-base)] hover:bg-surface-hover border-border hover:border-border-hover'
 const eyebrow = 'text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase'
 const sectionTitle =
   'text-[26px] font-bold tracking-[-0.01em] text-balance sm:text-[34px] text-foreground-strong'

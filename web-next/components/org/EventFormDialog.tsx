@@ -279,7 +279,7 @@ export function NativeSelect({
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-[6px] border px-3 py-1.5 text-body outline-none focus-visible:ring-[3px]"
+      className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-[6px] border px-3 py-1.5 text-body outline-none focus-visible:ring-2"
     >
       {placeholder !== undefined && <option value="">{placeholder}</option>}
       {options.map((opt) => (

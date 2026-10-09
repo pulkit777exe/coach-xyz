@@ -100,7 +100,7 @@ export default function PlayerSelector({
     <>
       <div className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-24 pb-20">
         <div className="max-w-5xl w-full">
-          <div className="text-center mb-10 animate-[fadeInDown_0.3s_cubic-bezier(0.23,1,0.32,1)]">
+          <div className="text-center mb-10 animate-[fadeInDown_0.3s_var(--ease-out)]">
             <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3 leading-tight">
               Who do you want to analyze?
             </h1>
@@ -162,7 +162,7 @@ export default function PlayerSelector({
                   tabIndex={0}
                   aria-label={`Select Subject ${player.player_index}, confidence ${(player.confidence * 100).toFixed(0)}%`}
                   aria-pressed={isSelected}
-                  className={`animate-[fadeInUp_0.3s_cubic-bezier(0.23,1,0.32,1)_both] cursor-pointer group relative rounded-[6px] p-[2px] overflow-hidden transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-primary' : 'bg-border hover:bg-muted-foreground/40'}`}
+                  className={`animate-[fadeInUp_0.3s_var(--ease-out)_both] cursor-pointer group relative rounded-[6px] p-[2px] overflow-hidden transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-primary' : 'bg-border hover:bg-muted-foreground/40'}`}
                   style={{ animationDelay: `${Math.min(0.25, 0.05 * i)}s` }}
                   onClick={() => setSelectedIndex(player.player_index)}
                   onKeyDown={(e) => {
@@ -224,7 +224,7 @@ export default function PlayerSelector({
             })}
           </div>
 
-          <div className="animate-[fadeInUp_0.3s_cubic-bezier(0.23,1,0.32,1)_0.25s_both] max-w-sm mx-auto">
+          <div className="animate-[fadeInUp_0.3s_var(--ease-out)_0.25s_both] max-w-sm mx-auto">
             <Button
               className="w-full h-12 rounded-[6px] text-body font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]"
               size="lg"

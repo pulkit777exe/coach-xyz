@@ -26,8 +26,7 @@ export default function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none ${TONES[tone]} ${className}`}
-      style={{ fontSize: 11 }}
+      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${TONES[tone]} ${className}`}
     >
       {children}
     </span>

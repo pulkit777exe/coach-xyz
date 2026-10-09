@@ -321,7 +321,7 @@ export default function ScheduleClient({
                 key={key}
                 type="button"
                 onClick={() => setDayView(date)}
-                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                   isToday ? 'bg-accent/40' : ''
                 }`}
               >
