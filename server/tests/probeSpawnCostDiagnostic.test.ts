@@ -102,6 +102,10 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     // the cost.
     const probes = ['authMatrixProbe.ts', 'downloadAuditProbe.ts']
     // The two envs, timed against each other on the same probe in the same process.
+    console.log(
+      `PROBE SPAWN COST env sizes: minimal=${Object.keys(CI_ENV).length} vars, ` +
+        `inherited=${Object.keys(INHERITED_ENV).length} vars`,
+    )
     const ENVS: [string, Record<string, string>][] = [
       ['minimal CI env', CI_ENV],
       ['inherited process.env', INHERITED_ENV],
