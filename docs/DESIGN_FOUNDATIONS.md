@@ -81,14 +81,32 @@ emit font-size alone — line-height, weight and tracking stay per the rules
 below at the call site, so `text-meta` is pixel-identical to `text-[13px]`
 while the scale itself moves from one place. Prefer them over `text-[Npx]`
 whenever the size is one of the six; pinned by
-`lib/__tests__/typeScale.test.ts`. Sizes outside the six (28–40px headings,
-56/68px marketing display) stay bespoke in the components that own them
-(`PageHeader`, `StatTiles`, hero sections), and vendored files
-(`components/9ui/**`, `components/interior/**`) stay registry-faithful and
-keep their own sizes. Round 10 adopted them first-party-wide — **538
-swaps** (430 core + 108 marketing/settings tail); the only literal
-`text-[Npx]` left in the repo are vendored `components/interior/**` (16)
-and comment references.
+`lib/__tests__/typeScale.test.ts`.
+
+**Everything above 16px is bespoke**, and bespoke is permitted in the
+component that owns it — 18px sub-headings, 26–68px marketing display,
+28–40px page headings, 44px stat figures (`PageHeader`, `StatTiles`, hero
+sections). The one rule is "outside the six and above the floor", rather
+than an enumerated list of sizes: this paragraph previously named
+*28–40px and 56/68px* while the journey table below named *26–68px*, so
+the 11 first-party sites at 26px and 44px were simultaneously violations
+and permitted depending on which sentence a reader stopped at, and the 8
+sites at 18px were named by neither. `lib/__tests__/bespokeTypeSizes.test.ts`
+now parses the range below and fails if a first-party literal size falls
+outside it, so the prose is load-bearing rather than decorative.
+
+**Below 11px is NOT bespoke** — it is a named exception, because there is
+no seventh rung below the floor and adding one is a design decision rather
+than a refactor. The five current sites (a 9px count badge, a 10px
+`<kbd>`, three 10px marketing dividers) are counted and rot-checked by
+`lib/__tests__/typeScaleComponents.test.ts`, and the floor is pinned from
+both sides so a `>= 17` style escape hatch cannot quietly admit 10px.
+
+Vendored files (`components/9ui/**`, `components/interior/**`) stay
+registry-faithful and keep their own sizes. Round 10 adopted the utilities
+first-party-wide — **538 swaps** (430 core + 108 marketing/settings tail);
+the only literal `text-[Npx]` left in the repo are vendored
+`components/interior/**` (16) and comment references.
 
 ### Rules
 
@@ -252,7 +270,7 @@ Two rules the settings surface follows:
 
 | Flow               | Surfaces                                                                 | Foundation in play                                                                                   |
 | ------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Discover → sign up | `/`, `/pricing`, `/features`, `/blog`, `/login`, `/signup` (topbar only) | theme-aware token pairs, CTA ladder `primary → primary-hover`, bespoke display type (26–68px)        |
+| Discover → sign up | `/`, `/pricing`, `/features`, `/blog`, `/login`, `/signup` (topbar only) | theme-aware token pairs, CTA ladder `primary → primary-hover`, bespoke display type (above 16px)        |
 | Coach work session | `/dashboard/*` — sidebar shell, tables, dialogs, forms                   | 9ui primitives, `tabular-nums` metrics, states contract, `dashboardQuickActions(role)` gating        |
 | Player session     | `/player` — topbar-only shell (no org pill, no Dashboard CTA)            | `PlayerHub` + interior `progress-bar`, analyze CTA                                                   |
 | Analysis run       | upload → `AnalysisProgress` → `ResultsSummary` → `VideoPlayer` → chat    | interior `progress-bar`/`loading-button`, `--dur-*` motion, media-space colors (player overlay only) |

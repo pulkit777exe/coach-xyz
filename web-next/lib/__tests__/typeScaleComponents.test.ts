@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
+import { stripComments } from './helpers/stripComments'
 
 // ── The type-scale rule, enforced against .tsx rather than only against the docs ──
 //
@@ -63,8 +64,6 @@ const tsxFiles = (dir: string): string[] => {
  * readily as fail one — the `isoTimeGuard.test.ts` lesson, which existed because a
  * comment quoting the old expression made a deleted implementation read as compliant.
  */
-const stripComments = (src: string): string =>
-  src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 
 interface Hit {
   file: string
