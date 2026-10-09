@@ -89,7 +89,10 @@ const median = (xs: number[]): number => {
  * `spawnSync` returned is the blocked read. `killSignal: 'SIGKILL'` on an already-exited child
  * is the same tell.
  */
-const exitStamp = (probe: string, env: Record<string, string>): number | null => {
+const exitStamp = (
+  probe: string,
+  env: Record<string, string>,
+): { gap: number | null; killed: boolean; wall: number } => {
   const stamp = join(tmpdir(), `probe-exit-${process.pid}-${Date.now()}`)
   const wrapper = `
     process.on('exit', () => { try { require('fs').writeFileSync(${JSON.stringify(stamp)}, String(Date.now())) } catch {} })
@@ -101,28 +104,40 @@ const exitStamp = (probe: string, env: Record<string, string>): number | null =>
     env,
     encoding: 'utf8',
     timeout: BUDGET_MS,
+    maxBuffer: 32 * 1024 * 1024,
   })
-  const returned = Date.now()
-  let exitedAt: number | null = null
+  const wall = Date.now() - t0
+  const killed =
+    (r.error as { code?: string } | undefined)?.code === 'ETIMEDOUT' || r.signal !== null
+
+  // `readFileSync` throwing IS the interesting case: the child never reached `process.on('exit')`,
+  // so it did not exit of its own accord within the budget. That is a genuinely slow or wedged
+  // child, and it is a DIFFERENT answer from "exited at T, parent returned at T+30s".
+  let exitedAt: number
   try {
     exitedAt = Number(readFileSync(stamp, 'utf8'))
     rmSync(stamp, { force: true })
   } catch {
-    exitedAt = null // never exited, or exited without flushing the stamp
+    return { gap: null, killed, wall }
   }
-  void t0
-  void r
-  return exitedAt === null ? null : returned - exitedAt
+  return { gap: wall - (exitedAt - t0), killed, wall }
 }
 
 const timeProbe = (
   probe: string,
   env: Record<string, string>,
 ): { wall: number; killed: boolean; out: string } => {
+  // `env`, NOT `CI_ENV`. The first version of this file ignored its own parameter and always
+  // passed `CI_ENV`, so both rows of the environment experiment measured the SAME environment
+  // while the report labelled one of them "inherited process.env" — and the conclusion drawn
+  // from them ("the environment is not it, 285ms against 288ms across an 8-var and a 111-var
+  // environment") was read off two runs of one env plus noise. The rows looked near-identical
+  // for exactly the reason a fake control always does. eslint's `no-unused-vars` would have
+  // caught it had the parameter been named `_env`; it was named `env` and used nowhere.
   const started = Date.now()
   const r = spawnSync(process.execPath, [join('tests', probe)], {
     cwd: SERVER,
-    env: CI_ENV,
+    env,
     encoding: 'utf8',
     timeout: BUDGET_MS,
     maxBuffer: 32 * 1024 * 1024,
@@ -135,6 +150,9 @@ const timeProbe = (
 }
 
 describe('probe spawn cost, measured in the context where it is slow', () => {
+  // The timeout is the DIAGNOSTIC's, not the probe's: `PROBE_TIMEOUT_MS` stays untouched
+  // (raising it converts a runner wedge into a longer wedge). This only lets the report finish
+  // when one spawn wedges, which is the case the report exists for.
   test('a probe completes, and its cost is printed', () => {
     // Chosen because they need NO extra environment, so they run their full body under the
     // CI env above. `emailRouteGuardsProbe` was the first choice and measured 13ms — it
@@ -159,6 +177,16 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     const report: string[] = []
     /** Any case killed — asserted ONCE after the report prints, never inside the loop. */
     let killedAny = false
+    /**
+     * Push AND print. Printing only at the end means a timeout mid-loop — which is exactly
+     * what a wedged spawn produces — discards every case already measured. That is the same
+     * defect this file has already had twice: it printed nothing on its own first
+     * reproduction, and it would do so again on any run slow enough to matter.
+     */
+    const emit = (line: string): void => {
+      report.push(line)
+      console.log(`PROBE SPAWN COST: ${line}`)
+    }
 
     for (const probe of probes) {
       for (const [envName, env] of ENVS) {
@@ -172,12 +200,12 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
           last = r.out
         }
         const m = median(runs)
-        report.push(
+        emit(
           `  ${probe.padEnd(24)} ${envName.padEnd(22)} median ${String(m).padStart(6)}ms  ` +
             `runs=[${runs.join(', ')}]` +
             (killed ? `  KILLED at ${BUDGET_MS}ms` : ''),
         )
-        if (last) report.push(`      last output: ${last}`)
+        if (last) emit(`      last output: ${last}`)
         // The ONLY assertion: the probe finished. A timing assertion here would fail on a slow
         // machine and pass on a wedged one, which is the inverse of what is wanted.
         killedAny = killedAny || killed
@@ -185,11 +213,22 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
         // The discriminator: how long after the CHILD EXITED did spawnSync return? ~0 means
         // any timeout was the child's own. Seconds means the child was already gone and the
         // parent's read was blocked on a pipe that never reached EOF.
-        const gap = exitStamp(probe, env)
-        report.push(
+        const s = exitStamp(probe, env)
+        // Three distinct answers, and conflating them is what made every previous conclusion
+        // from a kill message wrong:
+        //   gap ≈ 0, not killed  → the child took its own time and returned normally
+        //   gap ≈ 0, killed      → the CHILD was slow or wedged; the read was not the problem
+        //   gap > 1s             → the child was long gone and the parent's read never saw EOF,
+        //                          so the budget was spent on a pipe, not on a process
+        emit(
           `      child-exit → spawnSync-return gap: ${
-            gap === null ? 'child never stamped an exit' : `${gap}ms`
-          }${gap !== null && gap > 1000 ? '   ← THE CHILD WAS ALREADY GONE' : ''}`,
+            s.gap === null ? 'child never stamped an exit (never exited)' : `${s.gap}ms`
+          }${s.killed ? `  KILLED at ${BUDGET_MS}ms` : ''}` +
+            (s.gap !== null && s.gap > 1000
+              ? '   ← THE CHILD WAS ALREADY GONE; THE READ WAS BLOCKED'
+              : s.gap === null && s.killed
+                ? '   ← THE CHILD ITSELF NEVER EXITED'
+                : ''),
         )
       }
     }
@@ -218,5 +257,5 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
       `  parent: rss=${Math.round(mem.rss / 1024 / 1024)}MB uptime=${Math.round(process.uptime())}s ` +
         `heapUsed=${Math.round((mem.heapUsed ?? 0) / 1024 / 1024)}MB\n`,
     )
-  })
+  }, 120_000)
 })
