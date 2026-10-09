@@ -220,8 +220,14 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
         //   gap ≈ 0, killed      → the CHILD was slow or wedged; the read was not the problem
         //   gap > 1s             → the child was long gone and the parent's read never saw EOF,
         //                          so the budget was spent on a pipe, not on a process
+        //
+        // That last verdict is the one that identified the CI probe flake, and it can now
+        // only be produced by a caller that does NOT go through `runProbeProcess` — which
+        // resolves on the child's `exit` and never waits for EOF at all. The instrument
+        // stays because the two suites that still call `Bun.spawn` directly
+        // (`studentScope`, `studentImportTeam`) have not been converted yet.
         emit(
-          `      child-exit → spawnSync-return gap: ${
+          `      child-exit → runProbeProcess-resolve gap: ${
             s.gap === null ? 'child never stamped an exit (never exited)' : `${s.gap}ms`
           }${s.killed ? `  KILLED at ${BUDGET_MS}ms` : ''}` +
             (s.gap !== null && s.gap > 1000

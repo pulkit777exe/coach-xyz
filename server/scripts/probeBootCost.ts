@@ -268,8 +268,14 @@ const CASES: {
     label: 'ensureInitialized() DDL vs ephemeral PG',
     // `setHistoryStoreConnectionForTests` takes a `SQL`, not a URL — it assigns the module's
     // connection and clears the memoised `initPromise` so the DDL is genuinely re-run.
+    // `SQL` is a BUN BUILTIN exported from `'bun'` (see historyStore.ts:1), not a `'bun:sql'`
+    // module — this row read `await import('bun:sql')`, threw `Cannot find package 'sql'`
+    // before its first marker, and therefore reported `NEVER BOOTED — no markers at all` on
+    // every single run, green or red. A row that always reports the same scary verdict is
+    // worse than no row: it trains a reader to skip the ones that matter. Verified by
+    // running the snippet by hand first: `DDL OK in 320ms` locally.
     target:
-      "run: const { SQL } = await import('bun:sql'); const h = await import('./src/lib/historyStore.ts'); h.setHistoryStoreConnectionForTests(new SQL(process.env.TEST_DATABASE_URL)); await h.withHistoryStoreOrThrow(async () => {})",
+      "run: const { SQL } = await import('bun'); const h = await import('./src/lib/historyStore.ts'); h.setHistoryStoreConnectionForTests(new SQL(process.env.TEST_DATABASE_URL)); await h.withHistoryStoreOrThrow(async () => {});",
     stubRedis: false,
   },
 ]
