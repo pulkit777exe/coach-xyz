@@ -60,6 +60,12 @@ jobs:
     # 25-minute job budget killed the job at 24m45s on a run whose tests were
     # passing.
     #
+    # NOTE (2026-10-09): the ">10s per spawn" premise below has since been MEASURED and is
+    # false — a fresh spawn costs 284-522ms on the runner against 290ms on a laptop, and an
+    # in-suite probe 66-431ms against this suite's 10s budget. The budget was sized against
+    # a cost model that measurement contradicts. It is left in place because it is not what
+    # is breaking runs, but it must not be read as a fix for anything.
+    #
     # This is deliberately NOT a raise of `--timeout` or `PROBE_TIMEOUT_MS`. Those
     # govern how long ONE test waits; raising them would make a genuine wedge cost
     # more, which is the wrong direction. The job budget only decides whether a
