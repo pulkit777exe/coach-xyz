@@ -405,26 +405,31 @@ function PlanCard({
   // components/org/settings/buildSettingsSections.tsx, where one missing counter
   // blanked the whole panel.
   const tier = subscription?.subscription?.tier
-  const used = subscription?.usage_today?.['analysis'] ?? 0
+  const usage = subscription?.usage_today
+  // Absent `usage_today` is UNKNOWN; an empty one is a real zero. The distinction is
+  // load-bearing: the server builds `usage_today` from the usage rows it found
+  // (`getTodayUsage`), so an org that has run nothing today gets `{}` and must read
+  // as 0 — while a partial payload must not print a confident "0 analyses today".
+  const used = usage === undefined ? undefined : (usage['analysis'] ?? 0)
   const limit = subscription?.daily_analysis_limit
   const percent =
-    limit !== undefined && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+    used !== undefined && limit !== undefined && limit > 0
+      ? Math.min(100, Math.round((used / limit) * 100))
+      : 0
   return (
     <section className={cardClass}>
       <div className="flex items-center justify-between gap-3">
         <h2 className={headingClass}>Plan &amp; usage</h2>
-        {subscription !== null ? (
-          <StatusPill tone="primary">{tier ?? '—'}</StatusPill>
-        ) : null}
+        {subscription !== null ? <StatusPill tone="primary">{tier ?? '—'}</StatusPill> : null}
       </div>
       {subscription !== null ? (
         <>
           <p className={`mt-4 ${metricLabelClass}`}>Analyses today</p>
           <p className="mt-1 text-[20px] font-semibold leading-[1.2] tabular-nums text-foreground">
-            {/* An unreadable limit prints `—`, never `0`: "0 / 0" would assert a plan
-                that permits no analyses at all, which is the invented number this card
-                must not print. */}
-            {used} / {limit ?? '—'}
+            {/* An unreadable half reads `—`, never `0`: "0 / 0" would assert a plan that
+                permits no analyses at all, and "0 / 20" would assert no usage was made —
+                both numbers the response does not carry. */}
+            {used ?? '—'} / {limit ?? '—'}
           </p>
           <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-muted">
             <div
