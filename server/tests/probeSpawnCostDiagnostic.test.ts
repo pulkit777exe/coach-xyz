@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 // ── Measuring spawn cost from OUTSIDE the suite measured a machine that was fine ──
@@ -69,6 +71,50 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[s.length >> 1] : Math.round((s[s.length - 1] + s[s.length >> 1]) / 2)
 }
 
+/**
+ * Did the CHILD exit, or did the parent's read stay blocked waiting for EOF?
+ *
+ * This is the discriminator the whole investigation has been missing. `spawnSync` reports a
+ * timeout when the child's pipes never reach EOF, and that is indistinguishable from a slow
+ * child — both arrive as `signal: SIGKILL` with no output. Reproduced directly:
+ *
+ *   clean exit                       spawnSync returned in    17ms
+ *   exits + background grandchild    spawnSync returned in   8008ms  KILLED
+ *
+ * The second child had exited in under a millisecond. So `runProbeProcess`'s timeout means
+ * "no EOF within the budget", NOT "the child took too long" — and every conclusion drawn from
+ * those kill messages, including this repo's, has been reading the second as the first.
+ *
+ * A wrapper writes the timestamp of its own exit to a file; the gap between that and the moment
+ * `spawnSync` returned is the blocked read. `killSignal: 'SIGKILL'` on an already-exited child
+ * is the same tell.
+ */
+const exitStamp = (probe: string, env: Record<string, string>): number | null => {
+  const stamp = join(tmpdir(), `probe-exit-${process.pid}-${Date.now()}`)
+  const wrapper = `
+    process.on('exit', () => { try { require('fs').writeFileSync(${JSON.stringify(stamp)}, String(Date.now())) } catch {} })
+    await import(${JSON.stringify(join(SERVER, 'tests', probe))})
+  `
+  const t0 = Date.now()
+  const r = spawnSync(process.execPath, ['-e', wrapper], {
+    cwd: SERVER,
+    env,
+    encoding: 'utf8',
+    timeout: BUDGET_MS,
+  })
+  const returned = Date.now()
+  let exitedAt: number | null = null
+  try {
+    exitedAt = Number(readFileSync(stamp, 'utf8'))
+    rmSync(stamp, { force: true })
+  } catch {
+    exitedAt = null // never exited, or exited without flushing the stamp
+  }
+  void t0
+  void r
+  return exitedAt === null ? null : returned - exitedAt
+}
+
 const timeProbe = (
   probe: string,
   env: Record<string, string>,
@@ -111,6 +157,8 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
       ['inherited process.env', INHERITED_ENV],
     ]
     const report: string[] = []
+    /** Any case killed — asserted ONCE after the report prints, never inside the loop. */
+    let killedAny = false
 
     for (const probe of probes) {
       for (const [envName, env] of ENVS) {
@@ -132,7 +180,17 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
         if (last) report.push(`      last output: ${last}`)
         // The ONLY assertion: the probe finished. A timing assertion here would fail on a slow
         // machine and pass on a wedged one, which is the inverse of what is wanted.
-        expect(killed).toBe(false)
+        killedAny = killedAny || killed
+
+        // The discriminator: how long after the CHILD EXITED did spawnSync return? ~0 means
+        // any timeout was the child's own. Seconds means the child was already gone and the
+        // parent's read was blocked on a pipe that never reached EOF.
+        const gap = exitStamp(probe, env)
+        report.push(
+          `      child-exit → spawnSync-return gap: ${
+            gap === null ? 'child never stamped an exit' : `${gap}ms`
+          }${gap !== null && gap > 1000 ? '   ← THE CHILD WAS ALREADY GONE' : ''}`,
+        )
       }
     }
     // The environment size is part of the finding: if the inherited env is three variables
@@ -145,6 +203,13 @@ describe('probe spawn cost, measured in the context where it is slow', () => {
     // Printed unconditionally — a diagnostic whose output only appears on failure is a
     // diagnostic that is missing precisely when the failure is intermittent.
     console.log(`\nPROBE SPAWN COST (in-suite, ${REPEATS} runs each):\n${report.join('\n')}\n`)
+
+    // The ONLY assertion, and it comes AFTER the print. It was inside the loop, so a kill
+    // threw before a single line was emitted — which is why the first reproduction on the
+    // runner produced a red test and no evidence at all. **A diagnostic that reports on
+    // success is silent exactly when it matters**, and the cheapest way to be silent is to
+    // assert before printing.
+    expect(killedAny).toBe(false)
     // `heapUsed` is not on Bun's `MemoryUsageFn`, so the object is read once and narrowed
     // rather than calling through the function — the typechecker caught it, which is the
     // only reason this line is not also wrong on the runner.
