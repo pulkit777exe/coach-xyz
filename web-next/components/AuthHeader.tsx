@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/session'
 import { getMyOrgsCached, getOrgContext, getUserProfile } from '@/lib/serverData'
+import { appFace } from '@/lib/appFace'
 import type { MyOrg } from '@/lib/meApi'
 import HeaderClient from './HeaderClient'
 
@@ -21,12 +22,18 @@ export default async function AuthHeader() {
   // fall back to the user's own workspace so the org context never vanishes.
   let orgs: MyOrg[] = []
   let currentOrgId: string | null = null
-  // Account role steers the player variant of the app topbar: players get
-  // neither the org pill (their only "org" is the owner-of-self workspace the
-  // seed creates — labeled Owner, nothing to switch) nor the Dashboard CTA
-  // (a surface /dashboard bounces them out of). Failures leave role null →
-  // full topbar: gating never locks out unresolved context.
-  let role: string | null = null
+  // The player variant of the app topbar: players get neither the org pill
+  // (their only "org" is the owner-of-self workspace the seed creates —
+  // labeled Owner, nothing to switch) nor the Dashboard CTA (a surface
+  // /dashboard bounces them out of). WHICH viewers count as players is one
+  // rule shared with the routing gate — `lib/appFace`, not the raw account
+  // column: `users.role` is written once at account creation and never
+  // updated, so a head_coach whose account was born from a student link must
+  // still get the pill and a Dashboard link that lands. Failures leave
+  // `accountRole` null → dashboard face → full topbar: gating never locks out
+  // unresolved context.
+  let accountRole: string | null = null
+  let playerFace = false
   /** Did the org read FAIL, as opposed to legitimately returning none? See below. */
   let orgsFailed = false
   if (session) {
@@ -41,10 +48,9 @@ export default async function AuthHeader() {
     // owner-of-self, the whole app rendered as an empty personal workspace.
     //
     // A failure and an absence produce identical props otherwise, so the only honest fix
-    // is to carry the difference. `role` deliberately stays null on failure: `isPlayer`
-    // derives from it, and a null means the full topbar, which is the documented
-    // fail-open intent below. Fabricating a role to look tidy would be the same lie one
-    // level up.
+    // is to carry the difference. `accountRole` deliberately stays null on failure: a null
+    // resolves to the dashboard face → full topbar, which is the documented fail-open
+    // intent below. Fabricating a role to look tidy would be the same lie one level up.
     try {
       const [ctx, myOrgs, profile] = await Promise.all([
         getOrgContext(),
@@ -56,7 +62,7 @@ export default async function AuthHeader() {
       ])
       orgs = myOrgs.orgs
       currentOrgId = ctx.auth0Id
-      role = profile?.user?.role ?? null
+      accountRole = profile?.user?.role ?? null
     } catch (error) {
       console.error('Failed to resolve org switcher:', error)
       orgsFailed = true
@@ -71,7 +77,14 @@ export default async function AuthHeader() {
       ]
       currentOrgId = session.user.sub
     }
+    // After the fallback, so the fabricated owner-of-self row is visible to the
+    // decision — `appFace` excludes an own-sub row from "staff membership",
+    // which is what keeps a fresh account on the face its account row says.
+    playerFace =
+      appFace({ accountRole, orgs, ownSub: session.user.sub }) === 'player'
   }
 
-  return <HeaderClient user={user} orgs={orgs} currentOrgId={currentOrgId} role={role} />
+  return (
+    <HeaderClient user={user} orgs={orgs} currentOrgId={currentOrgId} playerFace={playerFace} />
+  )
 }

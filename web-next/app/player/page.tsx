@@ -23,6 +23,12 @@ export default async function PlayerPage() {
     console.error('Failed to resolve player role:', error)
   }
 
+  // The OTHER half of the face decision, and it deliberately stays on the
+  // ACCOUNT field. It only fires for account-`coach` viewers, while the
+  // dashboard half (`lib/appFace`) only returns `'player'` for
+  // account-`player` viewers — so the two redirects can never both fire for
+  // the same request, and pairing them on two different predicates cannot
+  // loop. Pinned by lib/__tests__/appFace.test.ts.
   if (role === 'coach') redirect('/dashboard')
 
   return <PlayerHub />

@@ -38,6 +38,15 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const requestSeq = useRef(0)
   const mountedRef = useRef(false)
+  // Signed out is a THIRD state, not "empty". The anonymous flow (`app/page.tsx` renders
+  // `ChatLayout` with a falsy `scopeId`) reaches this section with `auth0Id` null, the
+  // early return below skips the read, and for years the section then rendered
+  // "Clips (0)" over "No clips yet — mark a time range to revisit it instantly": a
+  // fabricated count plus an invitation to save clips there is no account to save them
+  // to (the Save form is gated on `auth0Id`, so it was absent — the instruction pointed
+  // at a control that was not on screen). `jobId` is React state here, lost on sign-in,
+  // so the honest copy promises no persistence either.
+  const signedOut = auth0Id === null
 
   const refresh = useCallback(async () => {
     if (!auth0Id) {
@@ -117,11 +126,12 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
         {/* The count is a claim about this analysis's saved clips. While the read is in
             flight — or has failed — there is no claim to make. Note this heading sits
             OUTSIDE the `loading` branch below, so it used to print a confident 0 during
-            loading as well as after a failure. */}
+            loading as well as after a failure. Signed out is the same absence of a claim:
+            no read happened, so no count. */}
         Clips
         {loading ? null : failed ? (
           <span> · unavailable</span>
-        ) : (
+        ) : signedOut ? null : (
           <>
             {' ('}
             <span className="tabular-nums">{clips.length}</span>
@@ -143,6 +153,13 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
             <p className="py-2 text-meta text-muted-foreground">
               Clips failed to load. This is a loading problem, not an empty list — reload to
               retry.
+            </p>
+          ) : signedOut ? (
+            // Signed out: no read was attempted, so neither the failed copy nor the empty
+            // copy is true. The empty copy would promise persistence this session cannot
+            // deliver, and the heading must not print a count for a list nobody fetched.
+            <p className="py-2 text-meta text-muted-foreground">
+              Clips are not available in this view.
             </p>
           ) : clips.length === 0 ? (
             <p className="py-2 text-meta text-muted-foreground">

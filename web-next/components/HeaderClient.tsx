@@ -276,21 +276,26 @@ export default function HeaderClient({
   user,
   orgs = [],
   currentOrgId = null,
-  role = null,
+  playerFace = false,
 }: {
   user: HeaderUser
   /** Orgs registered under the user (server-fed; [] when signed out/failed). */
   orgs?: MyOrg[]
   /** Org the current data context is scoped to (org-switcher selection). */
   currentOrgId?: string | null
-  /** Account role (users.role); null when unresolved → full topbar. */
-  role?: string | null
+  /**
+   * Does this viewer belong on the PLAYER face? One rule, shared with the
+   * `/dashboard` routing gate (`lib/appFace`): the account column alone does
+   * not decide it — a live staff membership keeps a student-born account on
+   * the coach face. `false` (including any unresolved read) → full topbar.
+   */
+  playerFace?: boolean
 }) {
   const pathname = usePathname()
   // Players: no workspace to switch (only the owner-of-self phantom) and no
   // dashboard to open (/dashboard redirects them to /player) — the sidebar's
   // My Hub is their nav.
-  const isPlayer = role === 'player'
+  const isPlayer = playerFace
 
   // Signed-in only: mirror theme/motion/week-start to the account so they
   // follow the user across devices. Marketing visitors never hit the API.

@@ -46,6 +46,8 @@ const load = async (opts: {
   orgs: Array<{ org_auth0_id: string; role: string; display_name: string }>
   orgsThrows?: boolean
   ctxThrows?: boolean
+  /** `users.role` for the profile fetch — `'coach'` unless a case says otherwise. */
+  accountRole?: string | null
 }) => {
   vi.doMock('@/lib/session', () => ({ getSession: async () => session }))
   vi.doMock('@/lib/serverData', () => ({
@@ -57,7 +59,8 @@ const load = async (opts: {
       if (opts.orgsThrows) throw new Error('orgs 500')
       return { orgs: opts.orgs }
     },
-    getUserProfile: async () => ({ user: { role: 'coach' } }),
+    getUserProfile: async () =>
+      opts.accountRole === null ? null : { user: { role: opts.accountRole ?? 'coach' } },
   }))
   // Mocked only so the module graph stays small; the element AuthHeader RETURNS carries
   // the props, and calling an async component returns that element without rendering it.
@@ -76,7 +79,7 @@ const render = async (AuthHeader: () => Promise<ReactElement>) => {
   return el.props as {
     orgs: unknown[]
     currentOrgId: string | null
-    role: string | null
+    playerFace: boolean
   }
 }
 
@@ -146,13 +149,14 @@ describe('AuthHeader — a failed org read must not fabricate an org', () => {
     expect(failed.orgs).toHaveLength(0)
   })
 
-  test('role stays null on failure, so a player is not mislabelled', async () => {
-    // `role` null means `isPlayer` false, i.e. the full topbar — the documented fail-open
-    // intent. Fabricating a role to look tidy would be the same lie one level up: a
-    // transient blip must not turn a coach's account into somebody else's role.
+  test('playerFace stays false on failure, so a player is not mislabelled', async () => {
+    // A null `accountRole` resolves to the DASHBOARD face, i.e. `playerFace` false —
+    // the documented fail-open intent: gating never locks out unresolved context.
+    // Fabricating a role to look tidy would be the same lie one level up: a transient
+    // blip must not turn a coach's account into somebody else's role.
     const AuthHeader = await load({ orgs: [], orgsThrows: true })
-    const { role } = await render(AuthHeader)
-    expect(role).toBeNull()
+    const { playerFace } = await render(AuthHeader)
+    expect(playerFace).toBe(false)
   })
 
   test('the failure is still logged — fail-open stays observable', async () => {
@@ -173,9 +177,61 @@ describe('AuthHeader — a failed org read must not fabricate an org', () => {
     }))
     vi.doMock('@/components/HeaderClient', () => ({ default: () => null }))
     const mod = await import('@/components/AuthHeader')
-    const { orgs, currentOrgId, role } = await render(mod.default as () => Promise<ReactElement>)
+    const { orgs, currentOrgId, playerFace } = await render(
+      mod.default as () => Promise<ReactElement>,
+    )
     expect(orgs).toEqual([])
     expect(currentOrgId).toBeNull()
-    expect(role).toBeNull()
+    expect(playerFace).toBe(false)
+  })
+})
+
+// ── `users.role` vs membership role: which vocabulary decides the app face ───────
+//
+// AGENTS.md records (from `docs/audits/2026-10-08-frontend.md`): `AuthHeader.tsx:41`
+// threw away `resolveOrgContext`'s membership `role` and took the ACCOUNT column
+// (`users.role`), which is written once at account creation (`server/src/lib/users.ts:40`
+// `linkPlayerToStudent`, called only from `upsertUser:158`) and never updated. So a
+// head_coach whose account row says `player` — a real account born from a student link
+// — lost the org pill and the Dashboard link entirely.
+//
+// The fix is `lib/appFace`: the account field can keep someone on the player face, but
+// a live non-`player` membership in an org that is not their own sub promotes to the
+// dashboard face; the owner-of-self row (whose `org_auth0_id` equals the caller's sub)
+// is excluded because every account gets one. Both cases below are the DEFECT and its
+// CONTROL; the shared rule itself is pinned in `lib/__tests__/appFace.test.ts`.
+describe('AuthHeader — the account column must not demote a live staff membership', () => {
+  test('DEFECT: head_coach with users.role=player still gets the dashboard face', async () => {
+    // The recorded case. Before the fix this prop was `role: 'player'` (the account
+    // column), so the pill and the Dashboard link vanished for a working head coach.
+    const AuthHeader = await load({
+      orgs: [{ org_auth0_id: 'auth0|club', role: 'head_coach', display_name: 'Club' }],
+      accountRole: 'player',
+    })
+    const { playerFace } = await render(AuthHeader)
+    expect(playerFace).toBe(false)
+  })
+
+  test('control: a genuine player in a club stays on the player face', async () => {
+    // The other direction, without which the fix would just delete the player face.
+    // `player` membership in a club that is NOT the caller's own sub is a real player.
+    const AuthHeader = await load({
+      orgs: [{ org_auth0_id: 'auth0|club', role: 'player', display_name: 'Club' }],
+      accountRole: 'player',
+    })
+    const { playerFace } = await render(AuthHeader)
+    expect(playerFace).toBe(true)
+  })
+
+  test('control: owner-of-self alone never promotes a player account', async () => {
+    // Every account is seeded with an owner-of-self row; if it counted as a staff
+    // membership, every player would land on the dashboard. `session.user.sub` is
+    // `auth0|coach` (the fixture above), so this row is the caller's own workspace.
+    const AuthHeader = await load({
+      orgs: [{ org_auth0_id: 'auth0|coach', role: 'owner', display_name: 'Ada Lovelace' }],
+      accountRole: 'player',
+    })
+    const { playerFace } = await render(AuthHeader)
+    expect(playerFace).toBe(true)
   })
 })
