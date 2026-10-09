@@ -7,7 +7,6 @@ import { Button } from '@/components/9ui/ui/button'
 import { Spinner } from './Spinner'
 import { leaveOrganization, type MyOrg } from '@/lib/meApi'
 import { clearOrgCookie, getOrgCookie } from '@/lib/orgCookie'
-import type { CoachAIError } from '@/lib/api'
 import { errorMessageOf } from '@/lib/errors'
 
 // Owners manage the club and players are managed by their coach — neither

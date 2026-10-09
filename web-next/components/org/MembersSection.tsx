@@ -38,7 +38,6 @@ import {
   type OrgMemberRole,
   type OrgMembersResponse,
 } from '@/lib/members'
-import type { CoachAIError } from '@/lib/api'
 import { initials } from '@/lib/initials'
 import { errorMessageOf } from '@/lib/errors'
 import { EMAIL_RE } from '@/lib/email'
