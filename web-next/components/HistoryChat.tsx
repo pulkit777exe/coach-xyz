@@ -177,7 +177,7 @@ export default function HistoryChat({
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder="Ask about your analysis..."
             aria-label="Ask about your analysis"
-            className="flex-1 rounded-[8px] border border-border bg-background px-4 py-3 text-body text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+            className="flex-1 rounded-[8px] border border-border bg-background px-4 py-3 text-body text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled"
             disabled={loading}
           />
           <Button onClick={handleSend} disabled={loading || !input.trim()} className="px-4">

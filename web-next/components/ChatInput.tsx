@@ -59,13 +59,13 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         aria-label="Message"
         rows={1}
         maxLength={2000}
-        className="flex-1 resize-none rounded-[8px] border border-border bg-background px-4 py-2.5 text-body text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+        className="flex-1 resize-none rounded-[8px] border border-border bg-background px-4 py-2.5 text-body text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled"
       />
       <button
         onClick={handleSubmit}
         disabled={disabled || !value.trim()}
         aria-label="Send message"
-        className="flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-primary text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="flex size-8 shrink-0 items-center justify-center rounded-[6px] bg-primary text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-disabled disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path

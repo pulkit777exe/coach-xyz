@@ -138,7 +138,7 @@ export default function AnalysisLinkControl({
                   type="button"
                   disabled={isLinked}
                   onClick={() => applyLink(s.id)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-body text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-50"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-body text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-disabled"
                 >
                   <span className="truncate">{s.full_name}</span>
                   <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">

@@ -547,7 +547,7 @@ export default function AttendanceGrid({
                                 : 'Click to mark present'
                             }
                             disabled={savingKey === k}
-                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40"
+                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled"
                             style={cellStyle}
                           >
                             {cellBody}
