@@ -81,6 +81,21 @@ export default function AttendanceGrid({
   )
   const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
   const [loading, setLoading] = useState(false)
+  /**
+   * Which month `records` ACTUALLY holds — not which month is displayed.
+   *
+   * `nav` calls `setMonth(next)` before `fetchMonth(next)`, so a failed navigation left the
+   * previous month's marks under the new month's heading, and the per-row total rendered as
+   * `oldMonthPresent / newMonthDays`: a ratio over two different months, which is not a
+   * number about anything. Worse, the CSV export names the file from the DISPLAYED month, so
+   * a coach exported `attendance-2026-11.csv` containing October's rows — a file that is wrong
+   * in the one way a spreadsheet cannot be argued about.
+   *
+   * Keyed on the month rather than a boolean for the reason `TeamsClient` does the same: a
+   * bare `loaded` flag cannot say WHICH read it belongs to, and survives a month change.
+   */
+  const [recordsMonth, setRecordsMonth] = useState<string | null>(null)
+  const [monthFailed, setMonthFailed] = useState(false)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [dayDialog, setDayDialog] = useState<Date | null>(null)
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
@@ -96,6 +111,12 @@ export default function AttendanceGrid({
     [year, monthNum, daysInMonth],
   )
   const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  /** The displayed month's first-of-month key, for comparison against `recordsMonth`. */
+  const displayedMonth = toISODate(new Date(year, monthNum, 1))
+  /** True while the grid is showing records that are NOT the month in the heading. */
+  const recordsAreStale = recordsMonth !== null && recordsMonth !== displayedMonth
+  /** The export must refuse while the on-screen rows are not the displayed month. */
+  const canExport = recordsMonth === displayedMonth && !loading
 
   const fetchMonth = async (targetMonth: Date) => {
     setLoading(true)
@@ -110,7 +131,13 @@ export default function AttendanceGrid({
       })
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
+      setRecordsMonth(toISODate(first))
+      setMonthFailed(false)
     } catch (err) {
+      // The records on screen belong to a DIFFERENT month, so they must not be presented as
+      // this one's. `recordsMonth` is deliberately NOT advanced — that is what makes the
+      // mismatch detectable below rather than something only the absence of a toast reveals.
+      setMonthFailed(true)
       toast.error((err as CoachAIError).message ?? 'Failed to load attendance')
     } finally {
       setLoading(false)
@@ -308,6 +335,11 @@ export default function AttendanceGrid({
         counts.excused,
       ]
     })
+    // Refuse rather than write a mislabelled file: the name comes from the DISPLAYED month
+    // and the rows come from `records`, so exporting during a failed or in-flight navigation
+    // produces a CSV whose contents contradict its filename. A missing file is recoverable;
+    // a spreadsheet that says November and holds October is not.
+    if (!canExport) return
     downloadCSV(`attendance-${year}-${String(monthNum + 1).padStart(2, '0')}.csv`, [
       header,
       ...rows,
@@ -368,6 +400,21 @@ export default function AttendanceGrid({
           You have read-only access to this page.
         </p>
       )}
+      {/*
+        The stale-rows banner. Without it the grid is not merely unlabelled, it is WRONG: the
+        heading reads November, the per-row totals divide October's present-count by November's
+        day count, and nothing on screen says so. A toast already fired and has gone.
+      */}
+      {recordsAreStale && (
+        <p
+          role="status"
+          className="mb-3 rounded-[6px] border border-border bg-muted px-3 py-2 text-meta text-muted-foreground"
+        >
+          {monthFailed
+            ? `${monthLabel} failed to load, so the marks below are from a different month.`
+            : `Loading ${monthLabel}…`}
+        </p>
+      )}
       {/* Month header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -414,7 +461,17 @@ export default function AttendanceGrid({
               <MailIcon /> Email sheet
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={exportCSV}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCSV}
+            disabled={!canExport}
+            title={
+              canExport
+                ? undefined
+                : 'Cannot export while the displayed month has not loaded — the file would be named for one month and contain another.'
+            }
+          >
             <DownloadIcon /> Export
           </Button>
         </div>

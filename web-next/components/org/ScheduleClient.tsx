@@ -98,6 +98,18 @@ export default function ScheduleClient({
   const weekStartsMonday = prefs.weekStartsMonday
   const [events, setEvents] = useState<ScheduleEvent[]>(initialEvents)
   const [loading, setLoading] = useState(false)
+  /**
+   * Which month `events` ACTUALLY holds, not which month is displayed.
+   *
+   * `nav` calls `setMonth(next)` before the fetch, so a failed navigation kept the previous
+   * month's events under the new month's heading — and `exportCSV` names the file from the
+   * DISPLAYED month while writing the rows from `events`, producing `schedule-2026-11.csv`
+   * containing October's fixtures. Same defect as `AttendanceGrid`, same fix, same reason for
+   * keying on the month instead of holding a boolean: a bare flag cannot say which read it
+   * belongs to and survives the very navigation that made it wrong.
+   */
+  const [eventsMonth, setEventsMonth] = useState<string | null>(toISODate(month))
+  const [monthFailed, setMonthFailed] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null)
   const [initialDate, setInitialDate] = useState<string | undefined>(undefined)
@@ -109,6 +121,9 @@ export default function ScheduleClient({
   const year = month.getFullYear()
   const monthNum = month.getMonth()
   const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const displayedMonth = toISODate(new Date(year, monthNum, 1))
+  const eventsAreStale = eventsMonth !== null && eventsMonth !== displayedMonth
+  const canExport = eventsMonth === displayedMonth && !loading
 
   const visibleEvents = useMemo(
     () => (statusFilter ? events.filter((e) => e.status === statusFilter) : events),
@@ -152,7 +167,11 @@ export default function ScheduleClient({
       const { from, to } = scheduleMonthWindow(target)
       const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
       setEvents(res.events)
+      setEventsMonth(toISODate(target))
+      setMonthFailed(false)
     } catch (err) {
+      // `eventsMonth` deliberately NOT advanced: that is what keeps the mismatch detectable.
+      setMonthFailed(true)
       toast.error((err as CoachAIError).message ?? 'Failed to load schedule')
     } finally {
       setLoading(false)
@@ -206,6 +225,10 @@ export default function ScheduleClient({
   }
 
   const exportCSV = () => {
+    // Refuse rather than write a file whose contents contradict its name: the name comes from
+    // the DISPLAYED month and the rows from `events`, which after a failed navigation belong
+    // to the previous one.
+    if (!canExport) return
     downloadCSV(`schedule-${year}-${String(monthNum + 1).padStart(2, '0')}.csv`, [
       ['Date', 'Start', 'End', 'Title', 'Type', 'Status', 'Location', 'Description'],
       ...visibleEvents
@@ -281,7 +304,17 @@ export default function ScheduleClient({
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCSV}
+            disabled={!canExport}
+            title={
+              canExport
+                ? undefined
+                : 'Cannot export while the displayed month has not loaded — the file would be named for one month and contain another.'
+            }
+          >
             <DownloadIcon /> Export
           </Button>
           {canWrite && (
@@ -366,7 +399,24 @@ export default function ScheduleClient({
         </div>
       </div>
 
-      {visibleEvents.length === 0 && (
+      {/*
+        The stale-rows banner. After a failed navigation `events` holds the PREVIOUS month, so
+        the grid and the empty-state copy below both describe a month they are not showing —
+        and the CSV export, which names the file from the DISPLAYED month, would have written
+        October's fixtures into `schedule-2026-11.csv`. The toast had already gone.
+      */}
+      {eventsAreStale && (
+        <p
+          role="status"
+          className="mt-4 rounded-[6px] border border-border bg-muted px-3 py-2 text-meta text-muted-foreground"
+        >
+          {monthFailed
+            ? `${monthLabel} failed to load, so the events below are from a different month.`
+            : `Loading ${monthLabel}…`}
+        </p>
+      )}
+
+      {!eventsAreStale && visibleEvents.length === 0 && (
         <p className="text-muted-foreground mt-4 text-meta">
           {events.length === 0
             ? canWrite
