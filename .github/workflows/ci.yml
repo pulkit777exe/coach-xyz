@@ -240,20 +240,14 @@ jobs:
         working-directory: server
         if: always()
         continue-on-error: true
-        run: |
-          bun -e '
-            if (!(await Bun.file("probe-boot-cost.json").exists())) {
-              console.log("::error::no probe-boot-cost.json — the measurement step did not run")
-              process.exit(1)
-            }
-            const rows = JSON.parse(await Bun.file("probe-boot-cost.json").text())
-            const app = rows.find(r => r.label.includes("composed app"))
-            const bare = rows.find(r => r.label.includes("bare bun"))
-            console.log(`::debug::bare bun ${bare?.parent}ms (control) | composed app ${app?.parent}ms = exec+load ${app?.execAndLoader} + graph ${app?.childWork} + teardown ${app?.teardown}`)
-            if (app?.neverBooted) console.log("::error::composed app NEVER BOOTED — not slowness, a failure to start")
-            else if (app?.exitHang) console.log("::error::composed app finished its work and hung on EXIT — the budget is not boot cost")
-            else if (app?.parent > 1000) console.log(`::warning::composed-app spawn is ${app.parent}ms (budget 10000ms). Module graph is the cost if exec+load is small; find the runner facts in this log before assuming the code changed.")
-          '
+        # A real file, not an inline `bun -e` block. The inline version shipped with an
+        # unbalanced backtick and died with `Unterminated string literal` on every run since
+        # ead12ba; `continue-on-error` swallowed it, so the step reported nothing for its whole
+        # life. Nothing could have caught it there: a YAML block scalar is not linted, not
+        # typechecked and not parsed by any gate. `eslint .` runs earlier in THIS job and does
+        # cover `server/scripts/`, so the same defect now fails at the Lint step instead of
+        # silently.
+        run: bun scripts/flagSlowSpawn.ts
 
   web-next:
     name: web-next (Next.js)
