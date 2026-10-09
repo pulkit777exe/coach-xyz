@@ -25,6 +25,12 @@ function formatRange(startMs: number, endMs: number): string {
 export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionProps) {
   const [clips, setClips] = useState<Clip[]>([])
   const [loading, setLoading] = useState(true)
+  // The existing `loading` flag already separated "still reading" from "read", so this is
+  // the only half that was missing: a rejected read collapsed to `[]`, which is the same
+  // value a genuinely empty clip list holds. The heading counts the clips, so a coach
+  // with saved clips read "Clips (0)" — a fabricated count, and an invitation to re-mark
+  // ranges they had already saved.
+  const [failed, setFailed] = useState(false)
   const [label, setLabel] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -41,9 +47,15 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
     const seq = ++requestSeq.current
     try {
       const res = await listClips(auth0Id, jobId)
-      if (requestSeq.current === seq) setClips(res.clips)
+      if (requestSeq.current === seq) {
+        setClips(res.clips)
+        setFailed(false)
+      }
     } catch {
-      if (requestSeq.current === seq) setClips([])
+      if (requestSeq.current === seq) {
+        setFailed(true)
+        setClips([])
+      }
     } finally {
       if (requestSeq.current === seq) setLoading(false)
     }
@@ -102,7 +114,20 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
   return (
     <div className="px-4 py-3">
       <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        Clips (<span className="tabular-nums">{clips.length}</span>)
+        {/* The count is a claim about this analysis's saved clips. While the read is in
+            flight — or has failed — there is no claim to make. Note this heading sits
+            OUTSIDE the `loading` branch below, so it used to print a confident 0 during
+            loading as well as after a failure. */}
+        Clips
+        {loading ? null : failed ? (
+          <span> · unavailable</span>
+        ) : (
+          <>
+            {' ('}
+            <span className="tabular-nums">{clips.length}</span>
+            {')'}
+          </>
+        )}
       </p>
 
       {loading ? (
@@ -111,7 +136,15 @@ export default function ClipsSection({ auth0Id, jobId, onSeek }: ClipsSectionPro
         </div>
       ) : (
         <>
-          {clips.length === 0 ? (
+          {failed ? (
+            // "No clips yet — mark a time range to revisit it instantly." is an
+            // instruction to act on data we do not have: a coach with saved clips would
+            // re-mark the same ranges and duplicate them.
+            <p className="py-2 text-meta text-muted-foreground">
+              Clips failed to load. This is a loading problem, not an empty list — reload to
+              retry.
+            </p>
+          ) : clips.length === 0 ? (
             <p className="py-2 text-meta text-muted-foreground">
               No clips yet — mark a time range to revisit it instantly.
             </p>

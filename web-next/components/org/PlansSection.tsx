@@ -38,6 +38,14 @@ const PLAN_TONE: Record<TrainingPlan['status'], StatusTone> = {
 
 export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSectionProps) {
   const [plans, setPlans] = useState<TrainingPlan[]>([])
+  // Records WHICH player's plans have settled and whether that read failed. `plans`
+  // itself starts as `[]`, so without this every visit flashed "No training plans yet."
+  // before the read resolved, and a permanent failure left that sentence there. Keying
+  // on `studentId` also stops the previous player's plans being shown against the newly
+  // selected player while the new read is in flight.
+  const [plansOutcome, setPlansOutcome] = useState<{ studentId: string; failed: boolean } | null>(
+    null,
+  )
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -46,17 +54,27 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
 
   useEffect(() => {
     let cancelled = false
+    // The list still resets to `[]` on failure so the `.map` below stays total, but the
+    // failure is now recorded rather than being the only thing the render can see.
+    let failed = false
     void orgPlans(auth0Id, { studentId })
       .then((res) => {
         if (!cancelled) setPlans(res.plans)
       })
       .catch(() => {
+        failed = true
         if (!cancelled) setPlans([])
+      })
+      .finally(() => {
+        if (!cancelled) setPlansOutcome({ studentId, failed })
       })
     return () => {
       cancelled = true
     }
   }, [auth0Id, studentId])
+
+  const plansLoading = plansOutcome?.studentId !== studentId
+  const plansFailed = !plansLoading && (plansOutcome?.failed ?? false)
 
   const create = async () => {
     if (!title.trim()) {
@@ -114,68 +132,81 @@ export default function PlansSection({ auth0Id, studentId, canWrite }: PlansSect
           Longer-running programs above day-to-day objectives.
         </p>
         <div>
-          {plans.length === 0 && (
+          {plansLoading ? (
+            <p className="text-meta text-muted-foreground">Loading training plans…</p>
+          ) : plansFailed ? (
+            // "No training plans yet." would be a lie in the useful direction: it tells
+            // the reader to go write one, when the real answer is that the list could not
+            // be read. Distinct copy, because the reader's next action differs.
+            <p className="text-meta text-muted-foreground">
+              Training plans failed to load. This is a loading problem, not an empty list —
+              reload the page.
+            </p>
+          ) : plans.length === 0 ? (
             <p className="text-meta text-muted-foreground">No training plans yet.</p>
-          )}
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0 hover:bg-accent/50 transition-colors"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-body font-medium text-foreground">{plan.title}</p>
-                {plan.description && (
-                  <p className="mt-0.5 text-meta text-muted-foreground line-clamp-2">
-                    {plan.description}
-                  </p>
-                )}
+          ) : null}
+          {/* Gated on `plansLoading` as well, so the previously selected player's rows
+              cannot sit underneath a "loading" line for the newly selected one. */}
+          {!plansLoading &&
+            plans.map((plan) => (
+              <div
+                key={plan.id}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0 hover:bg-accent/50 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-body font-medium text-foreground">{plan.title}</p>
+                  {plan.description && (
+                    <p className="mt-0.5 text-meta text-muted-foreground line-clamp-2">
+                      {plan.description}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusPill tone={PLAN_TONE[plan.status] ?? 'gray'}>
+                    <span className="capitalize">{plan.status}</span>
+                  </StatusPill>
+                  {plan.status !== 'done' && canWrite && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setStatus(plan.id, 'done')}
+                    >
+                      Done
+                    </Button>
+                  )}
+                  {plan.status === 'done' && canWrite && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setStatus(plan.id, 'active')}
+                    >
+                      Reopen
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true)
+                        try {
+                          await orgDeletePlan(auth0Id, plan.id)
+                          setPlans((prev) => prev.filter((p) => p.id !== plan.id))
+                        } finally {
+                          setBusy(false)
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <StatusPill tone={PLAN_TONE[plan.status] ?? 'gray'}>
-                  <span className="capitalize">{plan.status}</span>
-                </StatusPill>
-                {plan.status !== 'done' && canWrite && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => setStatus(plan.id, 'done')}
-                  >
-                    Done
-                  </Button>
-                )}
-                {plan.status === 'done' && canWrite && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => setStatus(plan.id, 'active')}
-                  >
-                    Reopen
-                  </Button>
-                )}
-                {canWrite && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-destructive"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true)
-                      try {
-                        await orgDeletePlan(auth0Id, plan.id)
-                        setPlans((prev) => prev.filter((p) => p.id !== plan.id))
-                      } finally {
-                        setBusy(false)
-                      }
-                    }}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </Section>
 

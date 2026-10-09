@@ -34,12 +34,31 @@ import {
 interface InvitesClientProps {
   auth0Id: string
   initialInvites: OrgInvite[]
+  /**
+   * The page's own read of the invite list failed. Same convention as `TeamsClient`'s
+   * `teamsFailed`: the page must resolve `null` rather than substituting `[]`, because
+   * an empty list here is indistinguishable from "this org has no invitations".
+   */
+  invitesFailed?: boolean
   /** May issue + revoke invitations (server floors: owner/admin only). */
   canInvite: boolean
 }
 
-export default function InvitesClient({ auth0Id, initialInvites, canInvite }: InvitesClientProps) {
+export default function InvitesClient({
+  auth0Id,
+  initialInvites,
+  invitesFailed = false,
+  canInvite,
+}: InvitesClientProps) {
   const [invites, setInvites] = useState<OrgInvite[]>(initialInvites)
+  // Every read reports its own outcome. A failed read must never render as "no
+  // invitations": the header counts this org's outstanding invitations, so a broken
+  // read showed an org with four outstanding invites as "0 pending." and "No
+  // invitations yet." — a fabricated count, not a missing one.
+  const [readFailed, setReadFailed] = useState(invitesFailed)
+  // Separate from the dialog's `error`: a revoke happens with the dialog closed, so its
+  // failure reported there would be rendered nowhere at all.
+  const [listError, setListError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<string>('assistant_coach')
@@ -48,10 +67,21 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const refresh = async () => {
+  /** Returns whether the refresh succeeded, so callers can report a failed read. */
+  const refresh = async (): Promise<boolean> => {
     const { orgInvites } = await import('@/lib/members')
-    const res = await orgInvites(auth0Id)
-    setInvites(res.invites)
+    try {
+      const res = await orgInvites(auth0Id)
+      setInvites(res.invites)
+      setReadFailed(false)
+      return true
+    } catch {
+      // This had no `.catch` at all, so a refresh that failed after a successful write
+      // became an unhandled rejection: the invite stayed on screen as pending, with a
+      // live Revoke button and nothing anywhere explaining why.
+      setReadFailed(true)
+      return false
+    }
   }
 
   const pending = invites.filter(
@@ -72,7 +102,12 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
       })
       setLastToken(res.token)
       setEmail('')
-      await refresh()
+      // The invitation WAS created. Whether the list can then be re-read is a separate
+      // question, and reporting the mint as failed because a later read broke would be
+      // its own false claim.
+      if (!(await refresh())) {
+        setError('Invitation created, but the list could not be refreshed — reload the page.')
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create invitation.')
     } finally {
@@ -114,10 +149,20 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
       }
     >
       <p className="mb-3 text-meta leading-[1.5] text-muted-foreground">
-        Single-use links, valid 7 days. <span className="tabular-nums">{pending.length}</span>{' '}
-        pending.
+        Single-use links, valid 7 days.{' '}
+        {/* A number here is a claim about this org's outstanding invitations. When the
+            read failed there is no claim to make, so say that rather than summarising an
+            empty list into a confident "0 pending." */}
+        {readFailed ? (
+          'Pending count unavailable.'
+        ) : (
+          <>
+            <span className="tabular-nums">{pending.length}</span> pending.
+          </>
+        )}
       </p>
       <div className="space-y-2">
+        {listError && <p className="text-body leading-5 text-destructive">{listError}</p>}
         {lastToken && inviteLink && (
           <div className="rounded-[6px] border border-primary/30 bg-primary/5 p-3">
             <p className="mb-1 text-meta font-medium text-foreground">
@@ -129,8 +174,18 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
             </Button>
           </div>
         )}
-        {invites.length === 0 && (
-          <p className="text-body text-muted-foreground">No invitations yet.</p>
+        {readFailed ? (
+          // Wording covers both cases the flag can be set in: a first read that never
+          // landed (so the list below really is empty) and a refresh that failed with
+          // rows from an earlier successful read still on screen.
+          <p className="text-body text-muted-foreground">
+            Invitations could not be read. This is a loading problem, not an empty list — reload
+            the page.
+          </p>
+        ) : (
+          invites.length === 0 && (
+            <p className="text-body text-muted-foreground">No invitations yet.</p>
+          )
         )}
         {invites.map((invite) => {
           const state = invite.accepted_at
@@ -167,9 +222,21 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
                     disabled={busy}
                     onClick={async () => {
                       setBusy(true)
+                      setListError(null)
                       try {
                         await orgRevokeInvite(auth0Id, invite.id)
-                        await refresh()
+                        // The revoke succeeded. A refresh that then failed is a different
+                        // problem from a revoke that failed, and saying the invitation
+                        // could not be revoked after it was would be its own false claim.
+                        if (!(await refresh())) {
+                          setListError(
+                            'Invitation revoked, but the list could not be refreshed — reload to confirm.',
+                          )
+                        }
+                      } catch (e) {
+                        setListError(
+                          e instanceof Error ? e.message : 'Could not revoke invitation.',
+                        )
                       } finally {
                         setBusy(false)
                       }

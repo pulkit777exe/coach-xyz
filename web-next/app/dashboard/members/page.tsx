@@ -24,9 +24,13 @@ export default async function MembersPage() {
     return <AccessDenied page="Members" allowedRoles={MEMBERS_NAV_ROLES} />
   }
 
+  // `null` on rejection, not `{ invites: [] }`. An empty list is indistinguishable from a
+  // failed read, so the header printed "0 pending" and the list said "No invitations yet." for
+  // an org with four outstanding invitations. `null` is what lets `InvitesClient` tell them
+  // apart — the same convention `app/dashboard/teams/page.tsx:44` uses for `teamsFailed`.
   const [membersRes, invitesRes] = await Promise.all([
     orgMembers(auth0Id),
-    orgInvites(auth0Id).catch(() => ({ invites: [] })),
+    orgInvites(auth0Id).catch(() => null),
   ])
 
   return (
@@ -41,7 +45,11 @@ export default async function MembersPage() {
         <MembersSection auth0Id={auth0Id} initialData={membersRes} />
         <InvitesClient
           auth0Id={auth0Id}
-          initialInvites={invitesRes.invites}
+          invitesFailed={invitesRes === null}
+          // Null on a FAILED read, so the prop takes an empty list — `invitesFailed` is what
+          // the client renders from; passing the null through would crash it. The two are
+          // separate signals on purpose: one is the data, one is whether the data is trustworthy.
+          initialInvites={invitesRes?.invites ?? []}
           canInvite={MEMBER_INVITE_ROLES.includes(role)}
         />
       </div>
