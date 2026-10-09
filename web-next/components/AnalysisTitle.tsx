@@ -68,7 +68,7 @@ export default function AnalysisTitle({
         className="cursor-pointer rounded-[4px] text-left transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         {name}
-        <span className="ml-2 opacity-0 group-hover:opacity-60 text-sm align-middle transition-opacity">
+        <span className="ml-2 opacity-0 group-hover:opacity-60 text-body leading-5 align-middle transition-opacity">
           ✎
         </span>
       </button>

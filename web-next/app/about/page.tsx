@@ -77,7 +77,7 @@ export default function AboutPage() {
             <h2 className="mt-2 text-[22px] font-bold tracking-[-0.01em]">
               Coaches drown in tape and spreadsheets
             </h2>
-            <p className="mt-3 text-sm leading-[1.6] text-muted-foreground">
+            <p className="mt-3 text-body leading-[1.6] text-muted-foreground">
               Every match generates hours of footage, but a coach has minutes. Analysis tools are
               built for analysts — export pipelines, clip decks, manual tagging. Meanwhile the
               roster, attendance and progress reports live in five different spreadsheets.
@@ -90,7 +90,7 @@ export default function AboutPage() {
             <h2 className="mt-2 text-[22px] font-bold tracking-[-0.01em]">
               One place, from upload to feedback
             </h2>
-            <p className="mt-3 text-sm leading-[1.6] text-foreground-strong">
+            <p className="mt-3 text-body leading-[1.6] text-foreground-strong">
               Upload match or drill footage and get a sport-aware analysis in about a minute. Link
               clips to athletes, mark attendance, and turn the whole thing into a report your
               players can actually see and understand.
@@ -113,7 +113,7 @@ export default function AboutPage() {
                   <v.icon className="size-[18px]" aria-hidden />
                 </div>
                 <h3 className="mt-4 text-title font-semibold">{v.title}</h3>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{v.desc}</p>
+                <p className="mt-1.5 text-body leading-6 text-muted-foreground">{v.desc}</p>
               </div>
             ))}
           </div>
@@ -130,14 +130,14 @@ export default function AboutPage() {
               <Video className="size-5" aria-hidden />
             </div>
             <p className="mt-3 text-title font-semibold">See the pipeline in action</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-body leading-5 text-muted-foreground">
               Upload → analysis → report, in under two minutes.
             </p>
             <Button
               nativeButton={false}
               render={<Link href="/features" />}
               variant="outline"
-              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-sm font-medium text-link hover:bg-muted"
+              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Explore features
             </Button>
@@ -152,7 +152,7 @@ export default function AboutPage() {
             <Button
               nativeButton={false}
               render={<Link href="/signup" />}
-              className="mt-5 h-10 rounded-[6px] bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="mt-5 h-10 rounded-[6px] bg-primary px-5 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Create your account
             </Button>

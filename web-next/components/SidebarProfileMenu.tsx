@@ -45,7 +45,7 @@ const TRIGGER_CLASS =
 const MENU_CLASS =
   'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =
-  'rounded-[4px] px-2 py-1.5 text-sm hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
 
 function menuItemsFor(
   variant: MenuVariant,
@@ -82,7 +82,7 @@ export default function SidebarProfileMenu({
       <DropdownMenuTrigger aria-label="Account menu" className={TRIGGER_CLASS}>
         <UserAvatar picture={picture} name={name} email={email} size="sm" />
         <span
-          className="min-w-0 flex-1 truncate text-sm text-foreground/90"
+          className="min-w-0 flex-1 truncate text-body leading-5 text-foreground/90"
           title={email ?? undefined}
         >
           {name || email || 'Account'}

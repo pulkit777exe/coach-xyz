@@ -9,9 +9,9 @@ import { Label } from '@/components/9ui/ui/label'
 const CONTACT_EMAIL = 'hello@coachxyz.app'
 
 const hairline = 'border-border'
-const inputClass = `h-9 rounded-[6px] bg-background text-sm text-foreground-strong placeholder:text-muted-foreground/60 ${hairline}`
-const labelClass = 'text-sm font-medium text-foreground-strong'
-const errorText = 'text-xs text-destructive'
+const inputClass = `h-9 rounded-[6px] bg-background text-body leading-5 text-foreground-strong placeholder:text-muted-foreground/60 ${hairline}`
+const labelClass = 'text-body leading-5 font-medium text-foreground-strong'
+const errorText = 'text-caption leading-4 text-destructive'
 
 type FieldErrors = { name?: string; email?: string; message?: string }
 
@@ -103,7 +103,7 @@ export default function ContactForm() {
           placeholder="Tell us what you’re building and how we can help."
           rows={5}
           aria-invalid={Boolean(errors.message)}
-          className={`w-full rounded-[6px] border bg-background px-3 py-2 text-sm leading-6 text-foreground-strong transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/40 ${hairline}`}
+          className={`w-full rounded-[6px] border bg-background px-3 py-2 text-body leading-6 text-foreground-strong transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring/40 ${hairline}`}
         />
         {errors.message && (
           <p role="alert" className={errorText}>
@@ -114,12 +114,12 @@ export default function ContactForm() {
       <div>
         <Button
           type="submit"
-          className="h-10 rounded-[6px] bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+          className="h-10 rounded-[6px] bg-primary px-5 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
         >
           <Send className="size-4" />
           Send message
         </Button>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="mt-2 flex items-center gap-1.5 text-caption leading-4 text-muted-foreground">
           <Mail className="size-3.5" aria-hidden />
           Opens in your email app — or write to {CONTACT_EMAIL}
         </p>

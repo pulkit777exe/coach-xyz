@@ -40,7 +40,7 @@ export default async function AuditPage() {
 
       <div className="mt-6">
         {logs === null ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body leading-5 text-muted-foreground">
             Audit log unavailable — you may not have permission, or the history store is not
             configured.
           </p>

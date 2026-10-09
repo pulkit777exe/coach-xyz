@@ -63,14 +63,14 @@ export default function FeaturesPage() {
                   <f.icon className="size-[18px]" aria-hidden />
                 </div>
                 <h2 className="mt-4 text-title font-semibold">{f.title}</h2>
-                <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{f.desc}</p>
+                <p className="mt-1.5 text-body leading-6 text-muted-foreground">{f.desc}</p>
               </div>
             ))}
           </div>
           <Button
             nativeButton={false}
             render={<Link href="/signup" />}
-            className="mt-10 h-10 rounded-[6px] bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+            className="mt-10 h-10 rounded-[6px] bg-primary px-6 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Start building
           </Button>
@@ -87,7 +87,7 @@ export default function FeaturesPage() {
             <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
               One place to run it all
             </h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
+            <ul className="mt-4 space-y-2.5 text-body leading-5 text-muted-foreground">
               <li className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-check" /> Unlimited roster
               </li>
@@ -106,7 +106,7 @@ export default function FeaturesPage() {
             <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
               Your hub, your progress
             </h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-foreground-strong">
+            <ul className="mt-4 space-y-2.5 text-body leading-5 text-foreground-strong">
               <li className="flex gap-2">
                 <Check className="mt-0.5 size-4 shrink-0 text-check" /> Personal hub
               </li>

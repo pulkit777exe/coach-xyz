@@ -79,7 +79,7 @@ export default function PrivacyPage() {
           <h1 className="mt-3 text-balance text-[32px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[40px]">
             Privacy Policy
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground tabular-nums">
+          <p className="mt-3 text-body leading-5 text-muted-foreground tabular-nums">
             Last updated: September 26, 2026
           </p>
         </div>

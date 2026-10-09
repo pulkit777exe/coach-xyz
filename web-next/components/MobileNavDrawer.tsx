@@ -66,7 +66,9 @@ export default function MobileNavDrawer({
         >
           <Menu className="size-4" />
         </button>
-        <span className="min-w-0 truncate px-1 text-sm font-medium text-foreground">{label}</span>
+        <span className="min-w-0 truncate px-1 text-body leading-5 font-medium text-foreground">
+          {label}
+        </span>
       </div>
 
       {/* Dimmed backdrop */}
@@ -99,7 +101,9 @@ export default function MobileNavDrawer({
         }`}
       >
         <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-2">
-          <span className="min-w-0 truncate px-1 text-sm font-medium text-foreground">{label}</span>
+          <span className="min-w-0 truncate px-1 text-body leading-5 font-medium text-foreground">
+            {label}
+          </span>
           <button
             type="button"
             aria-label="Close navigation"

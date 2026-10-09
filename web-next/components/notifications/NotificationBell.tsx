@@ -190,7 +190,7 @@ export default function NotificationBell() {
       <DropdownMenuContent align="end" className={MENU_CLASS}>
         <div className="flex items-center justify-between gap-2 px-2 py-1.5">
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="px-0! py-0! text-xs font-medium text-muted-foreground">
+            <DropdownMenuLabel className="px-0! py-0! text-caption leading-4 font-medium text-muted-foreground">
               Notifications
             </DropdownMenuLabel>
           </DropdownMenuGroup>
@@ -208,9 +208,11 @@ export default function NotificationBell() {
         </div>
         <DropdownMenuSeparator />
         {isLoading ? (
-          <div className="px-2 py-6 text-center text-sm text-muted-foreground">Loading…</div>
+          <div className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
+            Loading…
+          </div>
         ) : sorted.length === 0 ? (
-          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+          <div className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
             No notifications yet
           </div>
         ) : (
@@ -226,7 +228,7 @@ export default function NotificationBell() {
                   <div className="flex items-center justify-between gap-2">
                     <span
                       className={cn(
-                        'truncate text-sm',
+                        'truncate text-body leading-5',
                         n.read ? 'text-foreground/70' : 'font-medium text-foreground',
                       )}
                     >
@@ -237,7 +239,9 @@ export default function NotificationBell() {
                     </span>
                   </div>
                   {n.body ? (
-                    <span className="truncate text-xs text-muted-foreground">{n.body}</span>
+                    <span className="truncate text-caption leading-4 text-muted-foreground">
+                      {n.body}
+                    </span>
                   ) : null}
                 </div>
               </DropdownMenuItem>

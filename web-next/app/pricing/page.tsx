@@ -98,7 +98,7 @@ export default function PricingPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">{p.name}</p>
+                    <p className="text-body leading-5 font-semibold">{p.name}</p>
                     {p.highlight && (
                       <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-label font-semibold text-link">
                         Most popular
@@ -109,11 +109,13 @@ export default function PricingPage() {
                 <p className="text-[40px] font-bold leading-none tracking-[-0.02em] tabular-nums">
                   {p.price}
                   {p.name === 'Pro' && (
-                    <span className="ml-1 text-sm font-normal text-muted-foreground">/ mo</span>
+                    <span className="ml-1 text-body leading-5 font-normal text-muted-foreground">
+                      / mo
+                    </span>
                   )}
                 </p>
                 <p className="mt-2 text-meta text-muted-foreground">{p.note}</p>
-                <ul className="mt-6 space-y-2.5 text-sm">
+                <ul className="mt-6 space-y-2.5 text-body leading-5">
                   {p.features.map((f) => (
                     <li key={f} className="flex gap-2">
                       <Check className="mt-0.5 size-4 shrink-0 text-check" />
@@ -126,8 +128,8 @@ export default function PricingPage() {
                   render={<Link href={p.href} />}
                   className={
                     p.highlight
-                      ? 'mt-7 h-10 w-full rounded-[6px] bg-primary text-sm font-medium text-primary-foreground hover:bg-primary-hover'
-                      : 'mt-7 h-10 w-full rounded-[6px] border-input bg-transparent text-sm font-medium text-foreground-strong hover:bg-muted'
+                      ? 'mt-7 h-10 w-full rounded-[6px] bg-primary text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover'
+                      : 'mt-7 h-10 w-full rounded-[6px] border-input bg-transparent text-body leading-5 font-medium text-foreground-strong hover:bg-muted'
                   }
                   variant={p.highlight ? 'default' : 'outline'}
                 >
@@ -149,7 +151,7 @@ export default function PricingPage() {
             Swipe to compare all plans →
           </p>
           <div className="mt-8 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
+            <table className="w-full min-w-[520px] text-body leading-5">
               <thead>
                 <tr className="border-b border-border">
                   <th
@@ -201,14 +203,14 @@ export default function PricingPage() {
 
           <div className="mt-10 rounded-[8px] border border-border bg-background p-6 text-center">
             <p className="text-[17px] font-semibold">Need a custom plan?</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-body leading-5 text-muted-foreground">
               We&rsquo;ll tailor Pro for your academy.
             </p>
             <Button
               nativeButton={false}
               render={<Link href="/contact" />}
               variant="outline"
-              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-sm font-medium text-link hover:bg-muted"
+              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Talk to sales
             </Button>
@@ -226,7 +228,7 @@ export default function PricingPage() {
             <Button
               nativeButton={false}
               render={<Link href="/signup" />}
-              className="h-10 rounded-[6px] bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="h-10 rounded-[6px] bg-primary px-5 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Start for free
             </Button>
@@ -234,7 +236,7 @@ export default function PricingPage() {
               nativeButton={false}
               render={<Link href="/contact" />}
               variant="outline"
-              className="h-10 rounded-[6px] border-input bg-transparent px-5 text-sm font-medium text-link hover:bg-muted"
+              className="h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Get a demo
             </Button>

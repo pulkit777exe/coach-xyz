@@ -16,7 +16,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
       <div className="border-b border-border bg-muted px-6 py-12 text-center lg:px-8">
         <Link
           href="/blog"
-          className="inline-block rounded-[6px] text-sm text-muted-foreground transition-colors duration-[120ms] hover:text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="inline-block rounded-[6px] text-body leading-5 text-muted-foreground transition-colors duration-[120ms] hover:text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           ← Back to blog
         </Link>
@@ -26,7 +26,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
         <h1 className="mx-auto mt-2 max-w-[720px] text-balance text-[30px] font-bold leading-[1.15] tracking-[-0.02em] sm:text-[40px]">
           {p.title}
         </h1>
-        <p className="mt-3 text-sm text-muted-foreground tabular-nums">{p.date}</p>
+        <p className="mt-3 text-body leading-5 text-muted-foreground tabular-nums">{p.date}</p>
       </div>
       <article className="mx-auto max-w-[720px] px-6 py-10 lg:px-8">
         <div className="space-y-5 text-lead leading-[1.6] text-foreground-strong/85">
@@ -37,7 +37,7 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
         <div className="mt-10 border-t border-border pt-6">
           <Link
             href="/blog"
-            className="inline-block rounded-[6px] text-sm font-medium text-link transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="inline-block rounded-[6px] text-body leading-5 font-medium text-link transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             ← All posts
           </Link>

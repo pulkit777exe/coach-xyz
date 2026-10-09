@@ -226,7 +226,7 @@ export default function InvitesClient({ auth0Id, initialInvites, canInvite }: In
                 </SelectContent>
               </Select>
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-body leading-5 text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

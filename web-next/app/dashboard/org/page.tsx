@@ -53,12 +53,12 @@ function roleTone(role: OrgMemberRole): StatusTone {
 function DefRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 last:border-b-0">
-      <span className="w-[180px] shrink-0 text-sm text-muted-foreground">{label}</span>
+      <span className="w-[180px] shrink-0 text-body leading-5 text-muted-foreground">{label}</span>
       <span
         className={
           mono
-            ? 'min-w-0 break-all text-right font-mono text-xs text-muted-foreground'
-            : 'text-sm tabular-nums text-foreground'
+            ? 'min-w-0 break-all text-right font-mono text-caption leading-4 text-muted-foreground'
+            : 'text-body leading-5 tabular-nums text-foreground'
         }
       >
         {value}
@@ -75,7 +75,7 @@ function MemberRow({ member }: { member: OrgMember }) {
         {initials(name)}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{name}</p>
+        <p className="truncate text-body leading-5 font-medium text-foreground">{name}</p>
         <p className="truncate text-meta text-muted-foreground">
           {member.member_email ?? 'No email on file'}
         </p>
@@ -151,7 +151,7 @@ export default async function OrgPage() {
             <div className="min-w-0">
               <p className="truncate text-lg font-semibold text-foreground">{displayName}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="text-sm text-muted-foreground">Your role</span>
+                <span className="text-body leading-5 text-muted-foreground">Your role</span>
                 <StatusPill tone={roleTone(role)}>{roleLabel}</StatusPill>
               </div>
             </div>
@@ -180,7 +180,7 @@ export default async function OrgPage() {
               </ul>
               <Link
                 href="/dashboard/members"
-                className="mt-3 flex h-9 items-center justify-between rounded-[4px] px-3 text-sm font-medium text-primary transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="mt-3 flex h-9 items-center justify-between rounded-[4px] px-3 text-body leading-5 font-medium text-primary transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 View all members
                 <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -219,7 +219,7 @@ export default async function OrgPage() {
                 >
                   {subscriptionRes.subscription.status}
                 </StatusPill>
-                <span className="ml-auto text-sm tabular-nums text-foreground">
+                <span className="ml-auto text-body leading-5 tabular-nums text-foreground">
                   {usedAnalyses} / {analysisLimit} analyses today
                 </span>
               </div>
@@ -231,7 +231,7 @@ export default async function OrgPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body leading-5 text-muted-foreground">
               Plan details are available to organization owners.
             </p>
           )}
@@ -244,7 +244,7 @@ export default async function OrgPage() {
               <Link
                 key={f.label}
                 href={f.href}
-                className="inline-flex h-8 items-center gap-2 rounded-[6px] border border-border px-3 text-sm text-foreground transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="inline-flex h-8 items-center gap-2 rounded-[6px] border border-border px-3 text-body leading-5 text-foreground transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <f.icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
                 {f.label}

@@ -17,7 +17,7 @@ interface UserAvatarProps {
 /** Sidebar/topbar sizes: sm = 24px (20–24px Notion range), md = 32px, lg = 56px. */
 const sizeClasses = {
   sm: 'size-6! text-[0.5rem]!',
-  md: 'size-8! text-xs!',
+  md: 'size-8! text-caption leading-4!',
   lg: 'size-14! text-lg!',
 }
 

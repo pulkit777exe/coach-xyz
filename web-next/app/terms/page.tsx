@@ -80,7 +80,7 @@ export default function TermsPage() {
           <h1 className="mt-3 text-balance text-[32px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[40px]">
             Terms of Service
           </h1>
-          <p className="mt-3 text-sm text-muted-foreground tabular-nums">
+          <p className="mt-3 text-body leading-5 text-muted-foreground tabular-nums">
             Last updated: September 15, 2026
           </p>
         </div>

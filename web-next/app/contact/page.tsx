@@ -61,11 +61,11 @@ export default function ContactPage() {
                   <c.icon className="size-[18px]" aria-hidden />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">{c.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{c.desc}</p>
+                  <p className="text-body leading-5 font-semibold">{c.title}</p>
+                  <p className="mt-1 text-body leading-6 text-muted-foreground">{c.desc}</p>
                   <a
                     href={`mailto:${c.value}`}
-                    className="mt-1.5 inline-block rounded-[6px] text-sm font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="mt-1.5 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
                     {c.value}
                   </a>
@@ -73,14 +73,14 @@ export default function ContactPage() {
               </div>
             ))}
             <div className="rounded-[6px] border border-primary/25 bg-primary/[0.06] p-5 dark:bg-primary/[0.09]">
-              <p className="text-sm font-semibold leading-snug">
+              <p className="text-body font-semibold leading-snug">
                 Prefer email over forms?
                 <br />
                 Write to us directly — we read everything.
               </p>
               <a
                 href="mailto:hello@coachxyz.app"
-                className="mt-2 inline-block rounded-[6px] text-sm font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="mt-2 inline-block rounded-[6px] text-body leading-5 font-medium text-primary transition-colors duration-[120ms] hover:text-primary-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 hello@coachxyz.app
               </a>

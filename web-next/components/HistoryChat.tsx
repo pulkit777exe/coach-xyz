@@ -102,7 +102,7 @@ export default function HistoryChat({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {initialLoading ? (
-          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground text-sm py-8">
+          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground text-body leading-5 py-8">
             <Slide size={24} />
             Loading conversation...
           </div>
@@ -160,7 +160,7 @@ export default function HistoryChat({
         )}
         {loading && (
           <div className="flex justify-start">
-            <div className="rounded-[8px] border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
+            <div className="rounded-[8px] border border-border bg-card px-4 py-2 text-body leading-5 text-muted-foreground">
               Thinking...
             </div>
           </div>

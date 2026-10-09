@@ -26,7 +26,7 @@ const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible
 const statValue =
   'text-[30px] font-semibold leading-none tracking-[-0.01em] tabular-nums text-foreground-strong'
 const statLabel = 'text-label font-medium uppercase tracking-[0.08em] text-muted-foreground'
-const footerLink = `block text-sm text-foreground transition-colors duration-[120ms] hover:text-primary hover:underline ${focusRing}`
+const footerLink = `block text-body leading-5 text-foreground transition-colors duration-[120ms] hover:text-primary hover:underline ${focusRing}`
 
 const PREVIEW_CARDS = [
   { k: 'Analysis', d: 'Form 8.4 → 6.2' },
@@ -180,7 +180,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button
               onClick={open}
-              className="h-10 rounded-[6px] bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="h-10 rounded-[6px] bg-primary px-6 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Start analyzing for free
             </Button>
@@ -189,7 +189,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               onClick={() =>
                 document.getElementById('analyze')?.scrollIntoView({ behavior: 'smooth' })
               }
-              className="h-10 rounded-[6px] border-input bg-transparent px-6 text-sm font-medium text-link hover:bg-muted"
+              className="h-10 rounded-[6px] border-input bg-transparent px-6 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Talk to an expert
             </Button>
@@ -249,7 +249,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             <div key={s.k} className="px-6 py-7 text-center">
               <p className={statLabel}>{s.l}</p>
               <p className={`mt-2 ${statValue}`}>{s.k}</p>
-              <p className={`mt-2 text-xs ${textMuted}`}>{s.d}</p>
+              <p className={`mt-2 text-caption leading-4 ${textMuted}`}>{s.d}</p>
             </div>
           ))}
         </div>
@@ -270,23 +270,25 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 {LIFECYCLE_STEPS.map((s) => (
                   <div key={s.l} className="flex flex-col items-center gap-2">
                     <div
-                      className={`grid size-10 place-items-center rounded-full border bg-background text-xs font-bold text-foreground-strong ${hairline}`}
+                      className={`grid size-10 place-items-center rounded-full border bg-background text-caption leading-4 font-bold text-foreground-strong ${hairline}`}
                     >
                       {s.l[0]}
                     </div>
-                    <span className="text-xs font-semibold text-foreground-strong">{s.l}</span>
+                    <span className="text-caption leading-4 font-semibold text-foreground-strong">
+                      {s.l}
+                    </span>
                     <span className={`text-[10px] ${textMuted}`}>{s.sub}</span>
                   </div>
                 ))}
               </div>
-              <div className="absolute top-[22%] left-1/2 -translate-x-1/2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-link">
+              <div className="absolute top-[22%] left-1/2 -translate-x-1/2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-caption leading-4 font-semibold text-link">
                 Pipeline
               </div>
             </div>
             <div className="mt-6 flex justify-center">
               <Button
                 onClick={open}
-                className="h-9 rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+                className="h-9 rounded-[6px] bg-primary px-4 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
               >
                 Explore pipeline
               </Button>
@@ -329,7 +331,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   {c.n}
                 </div>
                 <p className="mt-4 text-title font-semibold text-foreground-strong">{c.t}</p>
-                <p className={`mt-2 text-sm leading-6 ${textMuted}`}>{c.d}</p>
+                <p className={`mt-2 text-body leading-6 ${textMuted}`}>{c.d}</p>
               </div>
             ))}
           </div>
@@ -349,7 +351,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 <h3 className="mt-3 text-[20px] font-bold leading-tight tracking-[-0.01em] text-foreground-strong sm:text-[24px]">
                   {f.title}
                 </h3>
-                <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <ul className="mt-4 space-y-2 text-body leading-5 text-muted-foreground">
                   {f.bullets.map((b) => (
                     <li key={b} className="flex gap-2">
                       <Check className="mt-0.5 size-4 shrink-0 text-check" />
@@ -360,7 +362,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 <Button
                   variant="outline"
                   onClick={open}
-                  className="mt-5 h-9 rounded-[6px] border-input bg-transparent px-4 text-sm font-medium text-link hover:bg-muted"
+                  className="mt-5 h-9 rounded-[6px] border-input bg-transparent px-4 text-body leading-5 font-medium text-link hover:bg-muted"
                 >
                   {f.cta} <ArrowRight className="size-3.5" />
                 </Button>
@@ -395,7 +397,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             {['Basketball', 'Football', 'Cricket', 'Tennis', 'Baseball', 'Hockey'].map((s) => (
               <span
                 key={s}
-                className={`rounded-full border bg-background px-3 py-1 text-xs font-medium text-foreground ${hairline}`}
+                className={`rounded-full border bg-background px-3 py-1 text-caption leading-4 font-medium text-foreground ${hairline}`}
               >
                 {s}
               </span>
@@ -408,13 +410,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <p className="text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
                 Featured
               </p>
-              <p className="mt-2 text-sm font-semibold text-foreground-strong">
+              <p className="mt-2 text-body leading-5 font-semibold text-foreground-strong">
                 Academy sprint analysis
               </p>
-              <p className={`mt-1 text-xs ${textMuted}`}>
+              <p className={`mt-1 text-caption leading-4 ${textMuted}`}>
                 U16 squad cut review time 37% in 3 weeks.
               </p>
-              <div className="mt-3 flex gap-4 text-xs tabular-nums">
+              <div className="mt-3 flex gap-4 text-caption leading-4 tabular-nums">
                 <span className="text-muted-foreground">
                   <strong className="font-semibold text-primary">74%</strong> faster
                 </span>
@@ -427,7 +429,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <p className="text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
                 Why coaches choose CoachXYZ
               </p>
-              <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+              <ul className="mt-3 space-y-2 text-body leading-5 text-muted-foreground">
                 <li className="flex gap-2">
                   <Check className="size-4 shrink-0 text-check" /> Event timeline for every rep
                 </li>
@@ -457,9 +459,11 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <span className="size-2.5 rounded-full bg-destructive/60" />
               <span className="size-2.5 rounded-full bg-warning/60" />
               <span className="size-2.5 rounded-full bg-success/60" />
-              <span className={`ml-3 font-mono text-xs ${textMuted}`}>POST /api/analyze-video</span>
+              <span className={`ml-3 font-mono text-caption leading-4 ${textMuted}`}>
+                POST /api/analyze-video
+              </span>
             </div>
-            <pre className="overflow-x-auto p-4 font-mono text-xs leading-5 text-foreground-strong/80">
+            <pre className="overflow-x-auto p-4 font-mono text-caption leading-5 text-foreground-strong/80">
               <code>{`curl -X POST https://api.coachxyz.app/analyze-video \\
   -H "Authorization: Bearer COACH_API_KEY" \\
   -F video=@training.mp4 \\
@@ -471,14 +475,14 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             <div className={`flex gap-2 border-t px-4 py-2.5 ${hairline}`}>
               <Button
                 size="sm"
-                className="h-8 rounded-[6px] bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary-hover"
+                className="h-8 rounded-[6px] bg-primary px-3 text-caption leading-4 font-medium text-primary-foreground hover:bg-primary-hover"
               >
                 Copy
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-[6px] border-input bg-transparent text-xs text-link hover:bg-background"
+                className="h-8 rounded-[6px] border-input bg-transparent text-caption leading-4 text-link hover:bg-background"
               >
                 Docs
               </Button>
@@ -522,13 +526,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   <div
                     className={`rounded-[8px] border p-4 ${hairline} ${surface} ${i % 2 === 0 ? 'sm:ml-auto' : ''} sm:max-w-[320px]`}
                   >
-                    <p className="text-sm font-semibold text-foreground-strong">
+                    <p className="text-body leading-5 font-semibold text-foreground-strong">
                       {s.n}. {s.t}
                     </p>
-                    <p className={`mt-1 text-xs ${textMuted}`}>{s.d}</p>
+                    <p className={`mt-1 text-caption leading-4 ${textMuted}`}>{s.d}</p>
                   </div>
                 </div>
-                <div className="absolute left-4 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs font-semibold text-link sm:left-1/2">
+                <div className="absolute left-4 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-caption leading-4 font-semibold text-link sm:left-1/2">
                   {s.n}
                 </div>
                 <div className="hidden flex-1 sm:block" />
@@ -542,7 +546,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       <section id="analyze" className={`px-6 pb-14 lg:px-8 ${band}`}>
         <div className={`mx-auto max-w-[760px] rounded-[8px] border p-6 ${hairline} ${surface}`}>
           <h2 className={`text-center ${sectionTitle}`}>Drop your training video here</h2>
-          <p className={`mt-3 text-center text-sm ${textMuted}`}>
+          <p className={`mt-3 text-center text-body leading-5 ${textMuted}`}>
             Six sports • Auto player detection • 60s analysis
           </p>
           <div
@@ -655,7 +659,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                   />
                 </button>
                 {openFaq === i && (
-                  <p id={`faq-${i}`} className={`mt-3 text-sm leading-[1.6] ${textMuted}`}>
+                  <p id={`faq-${i}`} className={`mt-3 text-body leading-[1.6] ${textMuted}`}>
                     {f.a}
                   </p>
                 )}
@@ -674,7 +678,7 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             </h2>
             <Button
               onClick={open}
-              className="mt-5 h-10 rounded-[6px] bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+              className="mt-5 h-10 rounded-[6px] bg-primary px-5 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Start for free
             </Button>
@@ -685,12 +689,14 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             <p className="text-[18px] font-semibold text-foreground-strong">
               Not ready to buy yet?
             </p>
-            <p className={`mt-1 text-sm ${textMuted}`}>Book a call with our coaching specialist</p>
+            <p className={`mt-1 text-body leading-5 ${textMuted}`}>
+              Book a call with our coaching specialist
+            </p>
             <Button
               variant="outline"
               nativeButton={false}
               render={<Link href="/contact" />}
-              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-sm font-medium text-link hover:bg-muted"
+              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Book a call
             </Button>
@@ -710,9 +716,11 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 <span className="grid size-6 place-items-center rounded-[6px] bg-primary text-label font-bold text-primary-foreground">
                   C
                 </span>
-                <span className="text-sm font-semibold text-foreground-strong">CoachXYZ</span>
+                <span className="text-body leading-5 font-semibold text-foreground-strong">
+                  CoachXYZ
+                </span>
               </Link>
-              <blockquote className="mt-5 max-w-[280px] border-l-2 border-input pl-4 text-sm italic leading-[1.6] text-muted-foreground">
+              <blockquote className="mt-5 max-w-[280px] border-l-2 border-input pl-4 text-body italic leading-[1.6] text-muted-foreground">
                 &ldquo;CoachXYZ cut our review time in half. Players get precise fixes same
                 day.&rdquo;
               </blockquote>
@@ -753,12 +761,12 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 type="email"
                 required
                 placeholder="you@academy.com"
-                className={`h-9 w-[220px] rounded-[6px] border bg-background px-3 text-sm text-foreground-strong transition-colors duration-150 placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${hairline}`}
+                className={`h-9 w-[220px] rounded-[6px] border bg-background px-3 text-body leading-5 text-foreground-strong transition-colors duration-150 placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${hairline}`}
               />
               <Button
                 type="submit"
                 size="sm"
-                className="h-9 rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
+                className="h-9 rounded-[6px] bg-primary px-4 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
               >
                 Subscribe
               </Button>

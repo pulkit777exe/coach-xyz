@@ -52,7 +52,7 @@ type Result = { key: string; label: string; hint: string; href: string; icon: 'p
  * right. Inset fill = the quiet-fill tokens (globals: --fill-quiet / -hover).
  */
 const TRIGGER_CLASS =
-  'mb-2 flex h-8 w-full items-center gap-2 rounded-[6px] bg-fill-quiet px-2 text-left text-sm text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-fill-quiet-hover focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'mb-2 flex h-8 w-full items-center gap-2 rounded-[6px] bg-fill-quiet px-2 text-left text-body leading-5 text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-fill-quiet-hover focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 const KBD_CHIP_CLASS =
   'shrink-0 rounded-[4px] bg-accent px-1.5 py-0.5 text-label leading-none font-medium text-muted-foreground'
 /** Panel: radius 8 + hairline; enter 200ms opacity+scale(.98→1) ease-out, exit 150ms ease-in. */
@@ -60,7 +60,7 @@ const PANEL_CLASS =
   'max-w-lg gap-0! rounded-[8px]! border border-border bg-popover p-0! shadow-lg duration-200! ease-[cubic-bezier(0.23,1,0.32,1)]! data-starting-style:scale-[0.98]! data-ending-style:duration-150! data-ending-style:ease-in! data-ending-style:scale-[0.98]!'
 /** 28px list rows — same pattern as the sidebar. */
 const ROW_CLASS =
-  'flex h-7 w-full items-center gap-2 rounded-[4px] px-2 text-left text-sm outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-7 w-full items-center gap-2 rounded-[4px] px-2 text-left text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
 export default function SidebarSearch({
   auth0Id,
@@ -199,7 +199,7 @@ export default function SidebarSearch({
               }}
               placeholder="Search pages and players…"
               inputContainerClassName="min-w-0 flex-1"
-              className="h-7! border-0! bg-transparent! px-0! text-sm! shadow-none focus-visible:border-0! focus-visible:ring-0!"
+              className="h-7! border-0! bg-transparent! px-0! text-body leading-5! shadow-none focus-visible:border-0! focus-visible:ring-0!"
               aria-label="Search pages and players"
             />
             {searching && <Spinner className="shrink-0 text-muted-foreground" />}
@@ -207,7 +207,7 @@ export default function SidebarSearch({
           </div>
           <ul className="max-h-72 overflow-y-auto p-1">
             {results.length === 0 ? (
-              <li className="px-2 py-6 text-center text-sm text-muted-foreground">
+              <li className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
                 {query.trim() ? 'No matches.' : 'Type to search pages and players.'}
               </li>
             ) : (

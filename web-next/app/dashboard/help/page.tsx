@@ -56,14 +56,14 @@ const SHORTCUTS = [
 function FaqRow({ q, a, first }: { q: string; a: string; first: boolean }) {
   return (
     <details className={`group border-b border-border ${first ? 'border-t' : ''}`}>
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-[4px] py-4 text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-[4px] py-4 text-body leading-5 font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
         {q}
         <ChevronDown
           className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180"
           aria-hidden="true"
         />
       </summary>
-      <p className="pb-4 pr-8 text-sm leading-relaxed text-muted-foreground">{a}</p>
+      <p className="pb-4 pr-8 text-body leading-relaxed text-muted-foreground">{a}</p>
     </details>
   )
 }
@@ -71,10 +71,10 @@ function FaqRow({ q, a, first }: { q: string; a: string; first: boolean }) {
 function StepCard({ n, title, body }: { n: string; title: string; body: string }) {
   return (
     <div className="rounded-[6px] border border-border bg-card p-5">
-      <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-xs font-medium tabular-nums text-primary">
+      <span className="grid size-6 place-items-center rounded-full bg-primary/10 text-caption leading-4 font-medium tabular-nums text-primary">
         {n}
       </span>
-      <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-3 text-body leading-5 font-medium text-foreground">{title}</p>
       <p className="mt-1.5 text-meta leading-relaxed text-muted-foreground">{body}</p>
     </div>
   )
@@ -83,7 +83,7 @@ function StepCard({ n, title, body }: { n: string; title: string; body: string }
 function ShortcutRow({ label, combo }: { label: string; combo: string }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
-      <span className="text-sm text-foreground">{label}</span>
+      <span className="text-body leading-5 text-foreground">{label}</span>
       <kbd className="rounded-[4px] bg-accent px-1.5 py-0.5 font-mono text-label text-muted-foreground">
         {combo}
       </kbd>
@@ -132,7 +132,7 @@ export default async function HelpPage() {
         <Section title="Contact support">
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] bg-muted p-5">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">Still stuck?</p>
+              <p className="text-body leading-5 font-medium text-foreground">Still stuck?</p>
               <p className="mt-1 text-meta leading-relaxed text-muted-foreground">
                 The support page lists every way to reach the CoachXYZ team.
               </p>

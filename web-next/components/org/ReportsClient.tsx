@@ -547,7 +547,7 @@ export default function ReportsClient({
               <div className="border-border bg-muted/30 flex items-center gap-3 rounded-md border px-4 py-3">
                 <Spinner className="text-primary" />
                 <div className="min-w-0">
-                  <p className="text-sm text-foreground">
+                  <p className="text-body leading-5 text-foreground">
                     Generating{' '}
                     {aiForm.title
                       ? `“${aiForm.title}”`
@@ -578,7 +578,7 @@ export default function ReportsClient({
                   id="ai_report_student"
                   value={aiForm.student_id}
                   onChange={(e) => setAiForm((f) => ({ ...f, student_id: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-[3px]"
                 >
                   <option value="all">Entire organization</option>
                   {students.map((s) => (
@@ -600,7 +600,7 @@ export default function ReportsClient({
                   id="ai_report_type"
                   value={aiForm.report_type}
                   onChange={(e) => setAiForm((f) => ({ ...f, report_type: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-[3px]"
                 >
                   {REPORT_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -678,7 +678,7 @@ export default function ReportsClient({
                 id="report_student"
                 value={form.student_id}
                 onChange={(e) => setForm((f) => ({ ...f, student_id: e.target.value }))}
-                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-[3px]"
               >
                 <option value="all">Entire organization</option>
                 {students.map((s) => (
@@ -700,7 +700,7 @@ export default function ReportsClient({
                 id="report_type"
                 value={form.report_type}
                 onChange={(e) => setForm((f) => ({ ...f, report_type: e.target.value }))}
-                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-[3px]"
               >
                 {REPORT_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -794,7 +794,7 @@ export default function ReportsClient({
                   id="edit_report_type"
                   value={editForm.report_type}
                   onChange={(e) => setEditForm((f) => ({ ...f, report_type: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-[3px]"
                 >
                   {REPORT_TYPES.map((t) => (
                     <option key={t} value={t}>

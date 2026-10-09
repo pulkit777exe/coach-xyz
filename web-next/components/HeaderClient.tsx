@@ -88,7 +88,7 @@ function NavGroup({
           e.stopPropagation()
           onToggle()
         }}
-        className={`inline-flex h-9 items-center gap-1 rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center gap-1 rounded-[6px] px-2.5 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         {label}
         <ChevronDown
@@ -113,7 +113,7 @@ function NavGroup({
                 key={it.href}
                 href={it.href}
                 onClick={onClose}
-                className={`block rounded-[6px] px-3 py-2 text-sm transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+                className={`block rounded-[6px] px-3 py-2 text-body leading-5 transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
               >
                 {it.label}
               </Link>
@@ -148,7 +148,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
       <Link
         href="/dashboard"
         onClick={() => setOpen(false)}
-        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         Dashboard
       </Link>
@@ -156,7 +156,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
         nativeButton={false}
         render={<Link href="/account" />}
         onClick={() => setOpen(false)}
-        className={`h-9 rounded-[6px] px-4 text-sm font-medium ${BLUE_CTA}`}
+        className={`h-9 rounded-[6px] px-4 text-body leading-5 font-medium ${BLUE_CTA}`}
       >
         Account
       </Button>
@@ -166,7 +166,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
       <Link
         href="/login"
         onClick={() => setOpen(false)}
-        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+        className={`inline-flex h-9 items-center rounded-[6px] px-3 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
         Log in
       </Link>
@@ -174,7 +174,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
         nativeButton={false}
         render={<Link href="/signup" />}
         onClick={() => setOpen(false)}
-        className={`h-9 rounded-[6px] px-4 text-sm font-medium ${BLUE_CTA}`}
+        className={`h-9 rounded-[6px] px-4 text-body leading-5 font-medium ${BLUE_CTA}`}
       >
         Get started free
       </Button>
@@ -188,7 +188,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
           <span className="grid size-6 place-items-center rounded-[6px] bg-primary text-label font-bold text-primary-foreground">
             C
           </span>
-          <span className="text-sm font-semibold text-foreground-strong">CoachXYZ</span>
+          <span className="text-body leading-5 font-semibold text-foreground-strong">CoachXYZ</span>
         </Link>
 
         {/* Center links — 14px/500 */}
@@ -207,7 +207,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
             <Link
               key={l.href}
               href={l.href}
-              className={`inline-flex h-9 items-center rounded-[6px] px-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+              className={`inline-flex h-9 items-center rounded-[6px] px-2.5 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
             >
               {l.label}
             </Link>
@@ -243,7 +243,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
                     key={it.href}
                     href={it.href}
                     onClick={() => setOpen(false)}
-                    className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+                    className={`block rounded-[6px] px-2 py-2.5 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
                   >
                     {it.label}
                   </Link>
@@ -256,7 +256,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className={`block rounded-[6px] px-2 py-2.5 text-sm font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
+                  className={`block rounded-[6px] px-2 py-2.5 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
                 >
                   {l.label}
                 </Link>
@@ -308,10 +308,12 @@ export default function HeaderClient({
             href="/"
             className="flex items-center gap-2.5 shrink-0 rounded-[6px] px-1 py-1 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            <span className="inline-flex size-7 items-center justify-center rounded-[6px] bg-primary text-primary-foreground text-xs font-bold">
+            <span className="inline-flex size-7 items-center justify-center rounded-[6px] bg-primary text-primary-foreground text-caption leading-4 font-bold">
               C
             </span>
-            <span className="hidden sm:inline text-sm font-semibold text-foreground">CoachXYZ</span>
+            <span className="hidden sm:inline text-body leading-5 font-semibold text-foreground">
+              CoachXYZ
+            </span>
           </Link>
           {/* Workspace context — the orgs registered under the user. The app
               brand lives only above; the sidebar stays nav-only. */}
@@ -333,7 +335,7 @@ export default function HeaderClient({
               {!isPlayer && (
                 <Link
                   href="/dashboard"
-                  className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="hidden sm:inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-body leading-5 font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   Dashboard
                 </Link>
@@ -349,13 +351,13 @@ export default function HeaderClient({
             <div className="flex items-center gap-1.5">
               <a
                 href="/auth/login"
-                className="hidden sm:inline-flex h-9 items-center rounded-[6px] px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="hidden sm:inline-flex h-9 items-center rounded-[6px] px-3 text-body leading-5 font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Log in
               </a>
               <a
                 href="/auth/login?screen_hint=signup"
-                className="inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="inline-flex h-9 items-center rounded-[6px] bg-primary px-4 text-body leading-5 font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 Sign up
               </a>

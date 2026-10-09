@@ -8,10 +8,10 @@ import { Button } from '@/components/9ui/ui/button'
 
 /** Blue text-button primary action (important overrides the ghost variant deterministically). */
 const ACTION_PRIMARY =
-  'h-auto! px-1 text-sm font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
+  'h-auto! px-1 text-body leading-5 font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
 /** Muted secondary text-button. */
 const ACTION_SECONDARY =
-  'h-auto! px-1 text-sm font-medium text-muted-foreground! transition-colors hover:bg-transparent! hover:text-foreground!'
+  'h-auto! px-1 text-body leading-5 font-medium text-muted-foreground! transition-colors hover:bg-transparent! hover:text-foreground!'
 
 export default function DashboardError({
   error,
@@ -31,12 +31,16 @@ export default function DashboardError({
         <p className="mt-3 text-label font-medium tracking-wider text-destructive uppercase">
           Error
         </p>
-        <h2 className="mt-2 text-base font-medium text-foreground">Something went wrong</h2>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+        <h2 className="mt-2 text-lead leading-6 font-medium text-foreground">
+          Something went wrong
+        </h2>
+        <p className="mt-1.5 text-body leading-5 text-muted-foreground">
           {error?.message || 'An unexpected error occurred.'}
         </p>
         {error?.digest && (
-          <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
+          <p className="mt-2 text-caption leading-4 text-muted-foreground/60">
+            Error ID: {error.digest}
+          </p>
         )}
         <div className="mt-5 flex flex-col items-center gap-2">
           <Button variant="ghost" onClick={reset} className={ACTION_PRIMARY}>

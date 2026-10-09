@@ -38,7 +38,7 @@ const roleLabel = (role: MyOrg['role']) => role.replace(/_/g, ' ')
 const MENU_CLASS =
   'w-64 rounded-[6px] border border-border bg-popover p-1 shadow-md duration-[120ms]! ease-in! data-starting-style:scale-100! data-starting-style:opacity-100! data-ending-style:scale-100!'
 const ITEM_CLASS =
-  'rounded-[4px] px-2 py-1.5 text-sm hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
+  'rounded-[4px] px-2 py-1.5 text-body leading-5 hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50'
 const TRIGGER_CLASS =
   'flex h-8 items-center gap-1.5 rounded-[6px] px-2 text-left outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 const TILE = 'inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-muted'
@@ -71,7 +71,7 @@ export default function OrgPill({
       <span className={TILE}>
         <Building2 className="size-3 text-muted-foreground" />
       </span>
-      <span className="min-w-0 truncate text-sm text-foreground/90">{label}</span>
+      <span className="min-w-0 truncate text-body leading-5 text-foreground/90">{label}</span>
       <span className="hidden shrink-0 items-center gap-1 text-label leading-none text-muted-foreground capitalize lg:inline-flex">
         <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[current.role])} />
         {roleLabel(current.role)}
@@ -112,7 +112,7 @@ export default function OrgPill({
         <DropdownMenuContent align="start" side="bottom" className={MENU_CLASS}>
           {/* Base UI GroupLabel requires a Menu.Group ancestor. */}
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+            <DropdownMenuLabel className="text-caption leading-4 font-medium text-muted-foreground">
               Organizations
             </DropdownMenuLabel>
           </DropdownMenuGroup>
@@ -134,8 +134,8 @@ export default function OrgPill({
                     )}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm leading-none">{name}</span>
-                    <span className="block text-xs leading-none text-muted-foreground capitalize">
+                    <span className="block truncate text-body leading-none">{name}</span>
+                    <span className="block text-caption leading-none text-muted-foreground capitalize">
                       {roleLabel(org.role)}
                     </span>
                   </span>

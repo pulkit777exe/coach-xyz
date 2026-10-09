@@ -606,7 +606,7 @@ export default function StudentProfile({
                   </Label>
                   <Input
                     id="metric_key"
-                    className="h-8 w-40 text-sm"
+                    className="h-8 w-40 text-body leading-5"
                     placeholder="form_score"
                     disabled={Boolean(editingMetric)}
                     value={metricForm.metric_key}
@@ -621,7 +621,7 @@ export default function StudentProfile({
                     id="metric_value"
                     type="number"
                     step="any"
-                    className="h-8 w-24 text-sm"
+                    className="h-8 w-24 text-body leading-5"
                     value={metricForm.metric_value}
                     onChange={(e) => setMetricForm((f) => ({ ...f, metric_value: e.target.value }))}
                   />
@@ -632,7 +632,7 @@ export default function StudentProfile({
                   </Label>
                   <Input
                     id="metric_unit"
-                    className="h-8 w-24 text-sm"
+                    className="h-8 w-24 text-body leading-5"
                     placeholder="pts"
                     value={metricForm.unit}
                     onChange={(e) => setMetricForm((f) => ({ ...f, unit: e.target.value }))}
@@ -645,7 +645,7 @@ export default function StudentProfile({
                   <Input
                     id="metric_at"
                     type="date"
-                    className="h-8 w-36 text-sm"
+                    className="h-8 w-36 text-body leading-5"
                     disabled={Boolean(editingMetric)}
                     value={metricForm.measured_at}
                     onChange={(e) => setMetricForm((f) => ({ ...f, measured_at: e.target.value }))}
@@ -675,7 +675,7 @@ export default function StudentProfile({
                 {manualPoints.map((p) => (
                   <li
                     key={p.id ?? `${p.metric_key}-${p.measured_at}`}
-                    className="flex items-center justify-between gap-2 py-1 text-sm"
+                    className="flex items-center justify-between gap-2 py-1 text-body leading-5"
                   >
                     <span className="text-foreground">
                       {formatKey(p.metric_key)}{' '}
@@ -685,7 +685,7 @@ export default function StudentProfile({
                       </span>
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="text-muted-foreground text-xs">
+                      <span className="text-muted-foreground text-caption leading-4">
                         {formatDateShort(p.measured_at)}
                       </span>
                       {p.id && canWrite && (
@@ -737,7 +737,7 @@ export default function StudentProfile({
         </p>
         {trends.length === 0 ? (
           <div className="border-border bg-card flex h-20 items-center justify-center rounded-[6px] border">
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground text-caption leading-4">
               No trend data yet — metrics appear as they are logged or analyzed.
             </p>
           </div>
@@ -805,7 +805,7 @@ export default function StudentProfile({
 
         <div className="border-border bg-card rounded-[6px] border p-4">
           {roster.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm">
+            <p className="text-muted-foreground py-8 text-center text-body leading-5">
               No other students on the roster to compare against yet.
             </p>
           ) : (
@@ -832,7 +832,7 @@ export default function StudentProfile({
           )}
 
           {compareIds.length >= 9 ? (
-            <p className="text-muted-foreground mt-2 text-xs">
+            <p className="text-muted-foreground mt-2 text-caption leading-4">
               Limit of 9 teammates per comparison.
             </p>
           ) : null}
@@ -846,7 +846,7 @@ export default function StudentProfile({
               />
             </div>
           ) : compareIds.length > 0 ? (
-            <p className="text-muted-foreground py-6 text-center text-sm">
+            <p className="text-muted-foreground py-6 text-center text-body leading-5">
               No {formatKey(compareMetric)} data for the selected students yet.
             </p>
           ) : null}
@@ -869,10 +869,10 @@ export default function StudentProfile({
 
         {linked.length === 0 ? (
           <div className="border-border bg-card flex flex-col items-center gap-2 rounded-[6px] border p-10 text-center">
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-body leading-5">
               No analyses linked to {student_.full_name}.
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption leading-4 text-muted-foreground">
               {unlinked.length
                 ? "Choose an analysis above to build this player's profile."
                 : 'Run a video analysis first, then link it here.'}
@@ -945,10 +945,13 @@ export default function StudentProfile({
         {reports.length === 0 ? (
           <div className="border-border bg-card flex flex-col items-center gap-2 rounded-[6px] border p-10 text-center">
             <FileTextIcon className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-body leading-5">
               No reports generated for {student_.full_name} yet.
             </p>
-            <Link href="/dashboard/reports" className="text-foreground text-xs underline">
+            <Link
+              href="/dashboard/reports"
+              className="text-foreground text-caption leading-4 underline"
+            >
               Go to Reports
             </Link>
           </div>
@@ -967,7 +970,7 @@ export default function StudentProfile({
                     {r.title}
                   </Link>
                   <span className="flex items-center gap-3">
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground text-caption leading-4">
                       {formatDateMed(r.created_at)}
                     </span>
                     {canWrite && (

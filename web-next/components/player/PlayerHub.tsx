@@ -149,7 +149,7 @@ export default function PlayerHub() {
   if (state.status === 'error') {
     return (
       <div className="p-8">
-        <p className="text-sm text-destructive">{state.message}</p>
+        <p className="text-body leading-5 text-destructive">{state.message}</p>
       </div>
     )
   }

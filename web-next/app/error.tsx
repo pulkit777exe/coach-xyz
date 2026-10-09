@@ -7,7 +7,7 @@ import { Button } from '@/components/9ui/ui/button'
 
 /** Blue text-button action — important keeps the override deterministic vs the ghost variant. */
 const ACTION_PRIMARY =
-  'h-auto! px-1 text-sm font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
+  'h-auto! px-1 text-body leading-5 font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
 
 export default function Error({
   error,
@@ -31,12 +31,16 @@ export default function Error({
         <p className="mt-3 text-label font-medium tracking-wider text-destructive uppercase">
           Error
         </p>
-        <h1 className="mt-2 text-base font-medium text-foreground">Something went wrong</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+        <h1 className="mt-2 text-lead leading-6 font-medium text-foreground">
+          Something went wrong
+        </h1>
+        <p className="mt-1.5 text-body leading-5 text-muted-foreground">
           {error?.message || 'An unexpected error occurred.'}
         </p>
         {error?.digest && (
-          <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
+          <p className="mt-2 text-caption leading-4 text-muted-foreground/60">
+            Error ID: {error.digest}
+          </p>
         )}
         <div className="mt-5">
           <Button variant="ghost" onClick={reset} className={ACTION_PRIMARY}>

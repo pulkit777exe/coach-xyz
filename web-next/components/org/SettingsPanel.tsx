@@ -63,7 +63,7 @@ const CLOSE_BUTTON_CLASS =
   'inline-flex size-7 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 
 const NAV_ITEM_CLASS =
-  'flex h-7 shrink-0 items-center gap-2 rounded-[4px] px-2 text-sm outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
+  'flex h-7 shrink-0 items-center gap-2 rounded-[4px] px-2 text-body leading-5 outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]'
 const NAV_ITEM_ACTIVE_CLASS = 'bg-accent font-medium text-foreground'
 const NAV_ITEM_IDLE_CLASS = 'text-foreground/90 hover:bg-accent'
 

@@ -27,7 +27,7 @@ export default async function PlayerLayout({ children }: { children: React.React
         <Link
           href="/player"
           aria-current="page"
-          className="flex h-7 items-center gap-2 rounded-[4px] bg-accent px-2 text-sm font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]"
+          className="flex h-7 items-center gap-2 rounded-[4px] bg-accent px-2 text-body leading-5 font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98]"
         >
           <House className="size-4 shrink-0 text-foreground" />
           <span className="min-w-0 flex-1 truncate">My Hub</span>

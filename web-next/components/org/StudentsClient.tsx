@@ -337,7 +337,9 @@ function StudentImportDialog({
               />
             </Label>
             {fileName ? (
-              <span className="text-muted-foreground truncate text-xs">{fileName}</span>
+              <span className="text-muted-foreground truncate text-caption leading-4">
+                {fileName}
+              </span>
             ) : null}
           </div>
 
@@ -350,7 +352,7 @@ function StudentImportDialog({
               value={text}
               onChange={(e) => applyText(e.target.value)}
               rows={6}
-              className="font-mono text-xs"
+              className="font-mono text-caption leading-4"
               placeholder={'full_name,email,status\nAlex Rivera,a@x.com,active'}
             />
           </div>

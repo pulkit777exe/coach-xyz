@@ -444,7 +444,7 @@ export default function AttendanceGrid({
                 }`
                 const dayHeaderBody = (
                   <>
-                    <span className="text-xs leading-none">{d.getDate()}</span>
+                    <span className="text-caption leading-none">{d.getDate()}</span>
                     {counts.marked > 0 && (
                       <span className="mt-0.5 flex gap-0.5 leading-none">
                         {counts.present > 0 && (

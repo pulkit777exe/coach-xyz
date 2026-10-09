@@ -8,7 +8,7 @@ export default function AnalysisLoading() {
       aria-label="Loading analysis"
     >
       <Slide size={48} />
-      <p className="text-sm text-muted-foreground">Loading analysis...</p>
+      <p className="text-body leading-5 text-muted-foreground">Loading analysis...</p>
     </div>
   )
 }

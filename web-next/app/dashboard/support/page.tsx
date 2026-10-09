@@ -47,7 +47,7 @@ type PrepRowProps = {
 function PrepRow({ title, meta, href }: PrepRowProps) {
   const content = (
     <>
-      <span className="text-sm text-foreground">{title}</span>
+      <span className="text-body leading-5 text-foreground">{title}</span>
       <span className="flex shrink-0 items-center gap-2 text-meta text-muted-foreground">
         {meta}
         {href ? <ArrowRight className="size-3.5" aria-hidden="true" /> : null}
@@ -95,7 +95,7 @@ function ChannelCard({
         <Icon className="size-4" aria-hidden="true" />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-body leading-5 font-medium text-foreground">{title}</span>
         <span className="mt-1 block text-meta leading-relaxed text-muted-foreground">
           {description}
         </span>
@@ -155,7 +155,9 @@ export default async function SupportPage() {
         </Section>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">Support hours: Mon–Fri, 9:00–18:00 UTC</p>
+          <p className="text-caption leading-4 text-muted-foreground">
+            Support hours: Mon–Fri, 9:00–18:00 UTC
+          </p>
           <p className="text-meta leading-relaxed text-muted-foreground">
             Reports, invites and attendance sheets are emailed from CoachXYZ — add us to your
             address book so they land in your inbox, not spam.

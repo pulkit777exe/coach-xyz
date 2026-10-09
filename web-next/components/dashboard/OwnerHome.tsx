@@ -178,7 +178,7 @@ function ActionTile({
       <span className="grid size-8 shrink-0 place-items-center rounded-[6px] bg-primary/10 text-primary">
         <Icon className="size-4" />
       </span>
-      <span className="text-sm font-medium text-foreground">{label}</span>
+      <span className="text-body leading-5 font-medium text-foreground">{label}</span>
     </Link>
   )
 }

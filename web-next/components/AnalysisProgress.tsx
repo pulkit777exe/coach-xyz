@@ -80,14 +80,14 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
           <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground">
             Reading the athlete&apos;s movement
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-xl text-body leading-6 text-muted-foreground">
             Detecting body position, scoring key events, and preparing the annotated video.
           </p>
         </div>
 
         {currentStageIndex === 0 && (
           <div className="mb-5 border border-border bg-muted rounded-[6px] p-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body leading-5 text-muted-foreground">
               Queued and waiting for analysis capacity.
             </p>
           </div>
@@ -155,7 +155,7 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
                   }`}
                 >
                   <div
-                    className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-[6px] border text-xs font-medium tabular-nums transition-colors ${
+                    className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-[6px] border text-caption leading-4 font-medium tabular-nums transition-colors ${
                       isActive
                         ? 'bg-primary text-primary-foreground border-primary'
                         : isCompleted
