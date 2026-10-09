@@ -44,11 +44,9 @@ import { Popover } from '@/components/interior/popover'
 import { ScrollSpy } from '@/components/interior/scroll-spy'
 import { TreeView } from '@/components/interior/tree-view'
 import { HoldToConfirm } from '@/components/interior/hold-to-confirm'
-import { ReorderList } from '@/components/interior/reorder-list'
 import { Modal } from '@/components/interior/modal'
 import { Drawer } from '@/components/interior/drawer'
 import { LoadingButton } from '@/components/interior/loading-button'
-import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
 import { formatDateTime } from '@/lib/date'
@@ -600,17 +598,18 @@ export default function AnalysisDetailClient({
         Array.isArray(summary.shot_events) &&
         shotEvents.length > 0 && (
           <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-            <CardHeading>Event Priority (drag to reorder)</CardHeading>
-            <ReorderList
-              items={shotEvents.slice(0, 5)}
-              getId={(e) => (typeof e.event_type === 'string' ? e.event_type : 'event')}
-              getLabel={(e) => (typeof e.event_type === 'string' ? e.event_type : 'Event')}
-              onReorder={() => {}}
-              label="Shot events"
-              className="[&_*]:!text-foreground"
-            >
-              {(event) => (
-                <div className="flex items-center gap-3 py-2">
+            {/* Heading says "Event Priority" and nothing more: `ReorderList` sets
+                `draggable` unconditionally, so the previous "drag to reorder" let a coach
+                move a row, see it move, and lose the order — there is no endpoint that
+                persists event priority and the ranking is the engine's. Same rows, same
+                order, stated as what it is. */}
+            <CardHeading>Event Priority</CardHeading>
+            <ol aria-label="Shot events, in engine priority order" className="m-0 list-none p-0">
+              {shotEvents.slice(0, 5).map((event, i) => (
+                <li
+                  key={`${typeof event.timestamp === 'number' ? event.timestamp : i}-${i}`}
+                  className="flex items-center gap-3 py-2"
+                >
                   <TimestampPill
                     seconds={typeof event.timestamp === 'number' ? event.timestamp : 0}
                   />
@@ -630,9 +629,9 @@ export default function AnalysisDetailClient({
                       <span className="tabular-nums">{event.form_score}/10</span>
                     </span>
                   )}
-                </div>
-              )}
-            </ReorderList>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 
@@ -824,23 +823,6 @@ export default function AnalysisDetailClient({
           >
             <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
           </div>
-        </div>
-      )}
-
-      {/* Feedback Poll Results */}
-      {summary && (
-        <div className="mt-8 rounded-[6px] border border-border bg-card p-6">
-          <CardHeading>Community Feedback</CardHeading>
-          <PollResults
-            label="Community feedback"
-            options={[
-              { id: 'helpful', label: 'Helpful', votes: 42 },
-              { id: 'accurate', label: 'Accurate', votes: 38 },
-              { id: 'clear', label: 'Clear', votes: 35 },
-            ]}
-            onVote={() => {}}
-            className="[&_*]:!text-foreground"
-          />
         </div>
       )}
 

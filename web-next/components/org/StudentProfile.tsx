@@ -386,22 +386,22 @@ export default function StudentProfile({
   const attStats = [
     {
       label: ATTENDANCE_STATUS_LABELS.present,
-      value: attendance?.present ?? 0,
+      value: attendance === null ? '\u2014' : (attendance.present ?? '\u2014'),
       color: 'var(--color-success)',
     },
     {
       label: ATTENDANCE_STATUS_LABELS.late,
-      value: attendance?.late ?? 0,
+      value: attendance === null ? '\u2014' : (attendance.late ?? '\u2014'),
       color: 'var(--color-warning)',
     },
     {
       label: ATTENDANCE_STATUS_LABELS.absent,
-      value: attendance?.absent ?? 0,
+      value: attendance === null ? '\u2014' : (attendance.absent ?? '\u2014'),
       color: 'var(--color-destructive)',
     },
     {
       label: ATTENDANCE_STATUS_LABELS.excused,
-      value: attendance?.excused ?? 0,
+      value: attendance === null ? '\u2014' : (attendance.excused ?? '\u2014'),
       color: 'var(--color-info)',
     },
   ]
@@ -542,7 +542,11 @@ export default function StudentProfile({
               Attendance Rate
             </p>
             <p className="mt-1.5 text-[28px] font-semibold leading-[1.1] tabular-nums text-foreground">
-              {attendance?.attendance_rate === null ? '—' : `${attendance?.attendance_rate ?? 0}%`}
+              {attendance === null ||
+              attendance.attendance_rate === null ||
+              attendance.attendance_rate === undefined
+                ? '\u2014'
+                : `${attendance.attendance_rate}%`}
             </p>
           </div>
         </div>

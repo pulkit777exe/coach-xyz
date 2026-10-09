@@ -11,6 +11,7 @@ import FindingsTimeline from '@/components/FindingsTimeline'
 import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
+import { summaryNumber } from '@/lib/analysis'
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP)
@@ -109,12 +110,20 @@ export default function ResultsSummary({
     )
   }
 
+  // Read through the SSOT rather than comparing a possibly-absent field directly: `null >= 8`
+  // and `null >= 5` are both false, so an ABSENT score used to land in the `text-destructive`
+  // branch and the headline tile rendered red with no number in it — the one screen a player
+  // sees first after their video finishes, reading as a failing score rather than a missing
+  // one. A missing score is muted and shown as an em dash, which is what it is.
+  const formScore = summaryNumber(summary, 'form_score')
   const formScoreColor =
-    summary.form_score >= 8
-      ? 'text-foreground'
-      : summary.form_score >= 5
-        ? 'text-warning'
-        : 'text-destructive'
+    formScore === null
+      ? 'text-muted-foreground'
+      : formScore >= 8
+        ? 'text-foreground'
+        : formScore >= 5
+          ? 'text-warning'
+          : 'text-destructive'
 
   return (
     <>
@@ -150,7 +159,7 @@ export default function ResultsSummary({
                     <div
                       className={`text-[32px] font-semibold leading-none tabular-nums ${formScoreColor}`}
                     >
-                      {summary.form_score}
+                      {formScore === null ? '\u2014' : formScore}
                     </div>
                     <span className="text-title text-muted-foreground font-medium tabular-nums">
                       / 10
