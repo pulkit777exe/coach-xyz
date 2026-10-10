@@ -180,15 +180,16 @@ disabled — which is worse than none.
 `vitest --coverage` still requires `@vitest/coverage-v8`, which this repo does not carry, so the *reachability* figure below stands as the graph metric. Note what has changed since this section was first written: the tier now has a **DOM** as well (see the next section), because `jsdom` became available once the manifest was released.
 
 ```bash
+# from the REPO ROOT — the script lives at scripts/, not web-next/scripts/
 node scripts/webReachability.mjs          # last run saved to docs/web-reachability.txt
 ```
 
-Current read: **191 source files, 30 test files, 134 statically imported (70.2%)**, 6 loaded only by the generic render sweep, 51 touched by nothing (13.6% of lines).
+Current read (re-stamped 2026-10-10): **198 source files, 69 test files, 143 statically imported (72.2%)**, 1 loaded only by the generic render sweep, 54 touched by nothing (13.6% of lines).
 
 Two limits decide what that means, and both are printed by the script rather than left for the reader to assume:
 
 1. **Reachability is not execution.** A file can be imported and have none of its branches run. The render sweep proves markup and accessible names; it never proves a value.
-2. **The sweep bucket is an upper bound, and measurably so.** `components/a11y-name-sweep.test.tsx` enumerates `components/**` with `readdirSync` and dynamically imports each file, so those components really are rendered — but they leave **no static import edge**, and a naive import-graph metric would report every one of them as untouched. The script therefore reports them separately as *loaded only by a generic sweep*, which is the six components with no test written for them, headed by `StudentsClient.tsx` (973 lines, the largest client component in the app). The separation is keyed on "some test calls `readdirSync`" rather than "this file was enumerated", so mutating the sweep so it walks nothing leaves the numbers unchanged. That is correct for this repo only because the sweep walks from the components directory itself, so enumerating means every component — revisit that line if the sweep's roots ever change.
+2. **The sweep bucket is an upper bound, and measurably so.** `components/a11y-name-sweep.test.tsx` enumerates `components/**` with `readdirSync` and dynamically imports each file, so those components really are rendered — but they leave **no static import edge**, and a naive import-graph metric would report every one of them as untouched. The script therefore reports them separately as *loaded only by a generic sweep*, which is the one component with no test written for it — `components/org/SettingsClient.tsx` (162 lines). (It was six when this section was first written, headed by `StudentsClient.tsx`; five have since gained tests of their own or were reached transitively, and the sweep now renders `StudentsClient` and `SettingsPanel` too — see the `a11y-name-sweep` skip-list entry in `AGENTS.md` for why two of those exclusions had rotted without being re-tested.) The separation is keyed on "some test calls `readdirSync`" rather than "this file was enumerated", so mutating the sweep so it walks nothing leaves the numbers unchanged. That is correct for this repo only because the sweep walks from the components directory itself, so enumerating means every component — revisit that line if the sweep's roots ever change.
 
 **The number worth acting on is the 6, not the 51.** Fifty of the untouched files are `app/` route modules, which no unit test can reach and which `next build` already type-checks. Treating them as gaps would be the same mistake as treating Bun's probe-reported sub-50% modules as gaps on the server: a number that points at the wrong files is worse than no number, because it looks like a priority list.
 
@@ -219,6 +220,6 @@ This is the strongest available argument for the tier: **a crash on the primary 
 
 ### The metric that did not move
 
-`scripts/webReachability.mjs` still reports 134 statically imported, 6 sweep-only, 51 untouched — **identical before and after** — because the graph was never wrong. `lib/__tests__/a11ySource.test.ts` → `AnalysisDetailClient` → `AnalysisLinkControl` is a real static edge, so the metric has been calling that component covered for six rounds.
+`scripts/webReachability.mjs` reported 134 statically imported, 6 sweep-only, 51 untouched — **identical before and after** — because the graph was never wrong. (Those are the figures as of that round; the script now reads 143 / 1 / 54, since then, and the point is unchanged.) `lib/__tests__/a11ySource.test.ts` → `AnalysisDetailClient` → `AnalysisLinkControl` is a real static edge, so the metric has been calling that component covered for six rounds.
 
 That is not a bug in the metric; it is the limit the script's own LIMITS block states, and it is quoted verbatim in `AGENTS.md`. What the round establishes is that the limit ** bites in practice on the components most likely to matter**, so a reachability percentage should be read as "the import graph reaches this file" and never as "something observed this file". For behaviour, the honest number in this tier is a mutation count — 8 for `AnalysisLinkControl`, 6 for `NotificationBell` — not a coverage percentage.

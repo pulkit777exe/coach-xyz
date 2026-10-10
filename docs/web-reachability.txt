@@ -1,50 +1,50 @@
 web-next source reachability from tests
 ========================================================================
-source files                     191
-test files                       42
+source files                     198
+test files                       69
 
-statically imported by a test     139
+statically imported by a test     143
 loaded only by a generic sweep    1    (readdirSync enumeration, no import edge)
-touched by nothing at all         51
-  static import edge              72.8% of files
-  any loader at all (edge+sweep)  73.3% of files
+touched by nothing at all         54
+  static import edge              72.2% of files
+  any loader at all (edge+sweep)  72.7% of files
 
-lines in source                  31522
-lines in untouched files         4235  (13.4%)
+lines in source                  32871
+lines in untouched files         4470  (13.6%)
 
 touched by nothing, by top-level directory
-  app            50 files    4218 lines
-  lib             1 files      17 lines
+  app            49 files    4402 lines
+  lib             5 files      68 lines
 
 components with NO test written for them (sweep-rendered only)
-    119  components/org/SettingsClient.tsx
+    162  components/org/SettingsClient.tsx
 
 the 25 largest untouched files
+    347  app/dashboard/org/page.tsx
     269  app/share/[token]/page.tsx
-    266  app/dashboard/org/page.tsx
-    247  app/pricing/page.tsx
+    249  app/pricing/page.tsx
     234  app/dashboard/features/page.tsx
-    175  app/dashboard/support/page.tsx
-    169  app/account/page.tsx
-    166  app/dashboard/history/page.tsx
+    184  app/account/page.tsx
+    177  app/dashboard/support/page.tsx
+    172  app/dashboard/page.tsx
     165  app/about/page.tsx
-    159  app/dashboard/page.tsx
+    164  app/dashboard/history/page.tsx
     149  app/dashboard/help/page.tsx
     132  app/privacy/page.tsx
     132  app/terms/page.tsx
+    131  app/dashboard/layout.tsx
     126  app/features/page.tsx
-    114  app/dashboard/layout.tsx
     103  app/contact/page.tsx
      83  app/dashboard/students/[id]/page.tsx
+     74  app/dashboard/analysis/[id]/page.tsx
      71  app/dashboard/analysis/[id]/chat/page.tsx
-     71  app/layout.tsx
      71  app/player/layout.tsx
+     68  app/layout.tsx
      68  app/login/page.tsx
-     65  app/dashboard/analysis/[id]/page.tsx
      65  app/dashboard/attendance/page.tsx
+     62  app/dashboard/error.tsx
+     62  app/dashboard/history/error.tsx
      62  app/signup/page.tsx
-     61  app/player/reports/[id]/page.tsx
-     58  app/dashboard/analysis/[id]/error.tsx
 
 LIMITS, stated so this number is not over-read:
   * Reachability is a graph fact, not an execution fact. A reachable file
