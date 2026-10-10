@@ -24,8 +24,28 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, resolve, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = '/home/pulkit/personal/coach-xyz/web-next'
+// Derived from this file's own location, NOT hardcoded. It used to be
+// `/home/pulkit/.../web-next`, which meant the script silently reported 0 source
+// files anywhere else: `walk()` returns [] when the root does not exist, so the
+// run "succeeded" with a plausible-looking empty report rather than failing. It
+// went unnoticed because the ledger only ever asked for a re-derive on the
+// machine the path named — the first run in CI (via reachabilityStamp.test.ts)
+// is what exposed it. An absolute path to one workstation is a bug that only
+// fires for everyone except its author.
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'web-next')
+
+// Fail LOUDLY, because the alternative is the worst possible report. With a root
+// that does not exist, `walk()` returns [], so the run prints "0 source files,
+// 0 untouched, static import edge 100.0%" and exits 0 — an empty set reported as
+// total coverage. That is a fail-open reading as good news, which is precisely
+// the shape this repo keeps paying for. Measured: pointing ROOT at CI's own
+// checkout path from a host that does not have it reproduces exactly that.
+if (!existsSync(ROOT)) {
+  console.error(`webReachability: web-next not found at ${ROOT}`)
+  process.exit(1)
+}
 const SOURCE_DIRS = ['app', 'components', 'lib']
 const EXTS = ['.ts', '.tsx']
 
