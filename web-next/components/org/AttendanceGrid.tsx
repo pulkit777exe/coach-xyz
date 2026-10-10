@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -96,6 +96,12 @@ export default function AttendanceGrid({
    */
   const [recordsMonth, setRecordsMonth] = useState<string | null>(null)
   const [monthFailed, setMonthFailed] = useState(false)
+  // `nav` and the "jump to today" control both fire `fetchMonth` without disabling
+  // the pager, so two month reads can be in flight at once. The stale-banner
+  // (`recordsMonth`) can only say the rows are NOT the displayed month — it cannot
+  // stop the EARLIER response landing last and replacing the newer month's rows.
+  // Only the newest read may answer.
+  const monthSeq = useRef(0)
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [dayDialog, setDayDialog] = useState<Date | null>(null)
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
@@ -119,6 +125,7 @@ export default function AttendanceGrid({
   const canExport = recordsMonth === displayedMonth && !loading
 
   const fetchMonth = async (targetMonth: Date) => {
+    const my = ++monthSeq.current
     setLoading(true)
     try {
       const y = targetMonth.getFullYear()
@@ -129,18 +136,23 @@ export default function AttendanceGrid({
         from: toISODate(first),
         to: toISODate(last),
       })
+      if (monthSeq.current !== my) return
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
       setRecordsMonth(toISODate(first))
       setMonthFailed(false)
     } catch (err) {
+      if (monthSeq.current !== my) return
       // The records on screen belong to a DIFFERENT month, so they must not be presented as
       // this one's. `recordsMonth` is deliberately NOT advanced — that is what makes the
       // mismatch detectable below rather than something only the absence of a toast reveals.
       setMonthFailed(true)
       toast.error((err as CoachAIError).message ?? 'Failed to load attendance')
     } finally {
-      setLoading(false)
+      // A superseded read must not clear `loading` while the read that is actually
+      // being displayed is still in flight — that would drop the spinner (and the
+      // export block) a beat early.
+      if (monthSeq.current === my) setLoading(false)
     }
   }
 
@@ -440,10 +452,12 @@ export default function AttendanceGrid({
             Today
           </Button>
         </div>
-        <p className="text-lead font-semibold text-foreground">
+        {/* A `div`, not a `p`: `loading-dev`'s `Slide` renders a `<div>`, and a `<div>`
+            inside a `<p>` is invalid nesting React warns will cause a hydration error. */}
+        <div className="text-lead font-semibold text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
-        </p>
+        </div>
         <div className="flex items-center gap-3">
           <div className="hidden items-center gap-3 text-meta sm:flex">
             {STATUSES.map((s) => (

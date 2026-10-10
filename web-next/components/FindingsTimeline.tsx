@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
 import TimestampPill from '@/components/TimestampPill'
+import { errorMessageOf } from '@/lib/errors'
 import type { Finding } from '@/types'
 
 interface FindingsTimelineProps {
@@ -31,14 +32,27 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
   // decision before the next fetch.
   const [reviewed, setReviewed] = useState<Record<string, 'approved' | 'flagged'>>({})
   const [pending, setPending] = useState<Set<string>>(new Set())
+  /**
+   * The last review WRITE that did not happen. `onReview` is an awaited network call and
+   * both call sites pass a promise straight into an `onClick`, so before this existed a
+   * rejection escaped `review`'s `try`, surfaced as an unhandled promise rejection, and
+   * told the coach nothing: the button simply stopped reading "Saving…" for a decision
+   * that was never recorded.
+   */
+  const [reviewError, setReviewError] = useState<string | null>(null)
   if (!findings || findings.length === 0) return null
 
   const review = async (id: string, state: 'approved' | 'flagged') => {
     if (!onReview || pending.has(id)) return
+    setReviewError(null)
     setPending((prev) => new Set(prev).add(id))
     try {
       await onReview(id, state)
       setReviewed((prev) => ({ ...prev, [id]: state }))
+    } catch (err) {
+      // `reviewed` is deliberately NOT advanced — the local override would claim a
+      // decision the server never took. The `finally` only releases the spinner.
+      setReviewError(errorMessageOf(err, 'Your review could not be saved. Try again.'))
     } finally {
       setPending((prev) => {
         const next = new Set(prev)
@@ -55,6 +69,11 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
           Key findings · <span className="tabular-nums">{findings.length}</span>
         </h3>
       </div>
+      {reviewError && (
+        <p role="alert" className="mx-5 mb-2 text-caption leading-[1.5] text-destructive">
+          {reviewError}
+        </p>
+      )}
       <ul className="max-h-64 overflow-y-auto px-3 pb-3 space-y-1">
         {findings.map((finding) => {
           const seconds = (finding.start_ms ?? 0) / 1000

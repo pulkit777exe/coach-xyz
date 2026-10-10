@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BellIcon, CheckCheckIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -23,6 +24,7 @@ import {
 import type { AppNotification, NotificationsState } from '@/lib/notifications'
 import { getNotificationPrefs } from '@/lib/meApi'
 import { formatTimeShort } from '@/lib/date'
+import { errorMessageOf } from '@/lib/errors'
 import { cn } from '@/lib/utils'
 
 /**
@@ -169,12 +171,30 @@ export default function NotificationBell() {
       setNotifications((prev) =>
         prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)),
       )
-      markRead(n.id).catch(() => {})
+      markRead(n.id).catch((err: unknown) => {
+        // The write did not happen, so the local one must not stand either. Without
+        // this the row stays marked read — authoritative over any later snapshot,
+        // because `locallyReadIdsRef` still holds the id — and the badge stays down:
+        // a claim about the coach's account that is false until reload, with nothing
+        // on screen saying so. `markRead` throws on a non-OK response precisely so
+        // this can be seen; swallowing it here was the half that made it invisible.
+        locallyReadIdsRef.current.delete(n.id)
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === n.id ? { ...item, read: false } : item)),
+        )
+        // The inverse of THIS request's optimistic decrement, kept relative so a count
+        // change that arrived while it was in flight is preserved.
+        setUnreadCount((prev) => prev + 1)
+        toast.error(errorMessageOf(err, 'Could not mark that notification as read.'))
+      })
     }
     setOpen(false)
   }
 
   const handleMarkAllRead = () => {
+    // Captured BEFORE the optimistic flip: these are the rows the server is being
+    // asked to change, and only they may be put back if it refuses.
+    const unreadBefore = notifications.filter((n) => !n.read).map((n) => n.id)
     for (const notification of notifications) {
       liveNotificationIdsRef.current.add(notification.id)
       locallyReadIdsRef.current.add(notification.id)
@@ -182,7 +202,15 @@ export default function NotificationBell() {
     localRevisionRef.current += 1
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
     setUnreadCount(0)
-    markAllRead().catch(() => {})
+    markAllRead().catch((err: unknown) => {
+      const failed = new Set(unreadBefore)
+      for (const id of unreadBefore) locallyReadIdsRef.current.delete(id)
+      setNotifications((prev) =>
+        prev.map((n) => (failed.has(n.id) ? { ...n, read: false } : n)),
+      )
+      setUnreadCount((prev) => prev + unreadBefore.length)
+      toast.error(errorMessageOf(err, 'Could not mark notifications as read.'))
+    })
     setOpen(false)
   }
 

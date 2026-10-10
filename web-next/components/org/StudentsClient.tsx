@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -471,6 +471,13 @@ export default function StudentsClient({
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showArchived, setShowArchived] = useState(false)
+  // `refreshStudents` and `toggleArchived` both re-read the roster, and neither the
+  // "Show archived" button nor the import dialog disables itself while the other's read
+  // is in flight. Without this token the earlier response can land last — a
+  // double-toggled roster would end up holding the `includeArchived: true` rows under a
+  // toggle that says they are hidden. Same rule as the debounced searches: only the
+  // newest roster read may answer.
+  const rosterSeq = useRef(0)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForBulk, setInviteForBulk] = useState(false)
@@ -654,7 +661,9 @@ export default function StudentsClient({
   }
 
   const refreshStudents = async (includeArchived = showArchived) => {
+    const my = ++rosterSeq.current
     const res = await orgStudents(auth0Id, { includeArchived })
+    if (rosterSeq.current !== my) return
     setStudents(res.students)
     setRosterReadFailed(false)
   }
@@ -662,11 +671,17 @@ export default function StudentsClient({
   const toggleArchived = async () => {
     const next = !showArchived
     setShowArchived(next)
+    const my = ++rosterSeq.current
     try {
       const res = await orgStudents(auth0Id, { includeArchived: next })
+      if (rosterSeq.current !== my) return
       setStudents(res.students)
       setRosterReadFailed(false)
     } catch (err) {
+      // The rollback belongs to THIS attempt only. A superseded attempt that failed
+      // must not flip a toggle a later attempt has already settled — that would undo
+      // the newer read on the strength of an older request's error.
+      if (rosterSeq.current !== my) return
       setShowArchived(!next)
       toast.error((err as CoachAIError).message ?? 'Failed to load roster')
     }

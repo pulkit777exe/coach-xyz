@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
 import {
   Dialog,
@@ -167,6 +167,29 @@ export default function TeamsClient({
   const trendsFailed = !panelLoading && panelError?.teamId === selectedId && panelError.trends
   const matchesFailed = !panelLoading && panelError?.teamId === selectedId && panelError.matches
 
+  // The four write handlers below capture `selected.id` when clicked, then re-read
+  // that team's list once the write lands. The team rail is NOT disabled while
+  // `busy`, so a coach can switch teams mid-write — and the follow-up response then
+  // arrives for the team they LEFT. Applying it would drop team A's rows into team B's
+  // panel, which `panelLoadedFor` already records as settled for B: a cross-entity
+  // stale write that no loading flag would ever hide, and one that persists because
+  // nothing re-reads after it lands. Mirror the live selection so each follow-up can
+  // refuse instead.
+  const selectedIdRef = useRef(selectedId)
+  /**
+   * The only place the selection changes: state and its mirror move together, from an
+   * event handler or an async callback — never during render (`react-hooks/refs`).
+   * The mirror cannot live in an effect instead of here: these write handlers settle
+   * inside promise callbacks, which can run in the microtask window between a
+   * `setSelectedId` commit and its passive effect, and that is exactly the moment a
+   * follow-up read lands for the team the coach just left.
+   */
+  const selectTeam = (id: string | null) => {
+    selectedIdRef.current = id
+    setSelectedId(id)
+  }
+  const stillOnTeam = (teamId: string) => selectedIdRef.current === teamId
+
   useEffect(() => {
     const id = selectedId
     if (!id) return
@@ -222,9 +245,9 @@ export default function TeamsClient({
     const { listTeams } = await import('@/lib/teams')
     const res = await listTeams(auth0Id)
     setTeams(res.teams)
-    if (selectId) setSelectedId(selectId)
+    if (selectId) selectTeam(selectId)
     else if (!res.teams.some((t) => t.id === selectedId)) {
-      setSelectedId(res.teams[0]?.id ?? null)
+      selectTeam(res.teams[0]?.id ?? null)
     }
   }
 
@@ -328,7 +351,7 @@ export default function TeamsClient({
               <button
                 key={team.id}
                 type="button"
-                onClick={() => setSelectedId(team.id)}
+                onClick={() => selectTeam(team.id)}
                 aria-pressed={team.id === selectedId}
                 className={`w-full text-left rounded-[4px] px-3 py-2 transition-colors ${
                   team.id === selectedId
@@ -404,7 +427,7 @@ export default function TeamsClient({
                           onClick={() =>
                             run(async () => {
                               await deleteTeam(auth0Id, selected.id)
-                              setSelectedId(null)
+                              selectTeam(null)
                               await refreshTeams()
                             })
                           }
@@ -459,8 +482,11 @@ export default function TeamsClient({
                           disabled={busy}
                           onClick={() =>
                             run(async () => {
-                              await removeTeamMember(auth0Id, selected.id, member.id)
-                              const res = await listTeamMembers(auth0Id, selected.id)
+                              const teamId = selected.id
+                              await removeTeamMember(auth0Id, teamId, member.id)
+                              const res = await listTeamMembers(auth0Id, teamId)
+                              // Refuse rather than paint another team's roster.
+                              if (!stillOnTeam(teamId)) return
                               setMembers(res.members)
                               clearPanelFailure('members')
                             })
@@ -548,13 +574,15 @@ export default function TeamsClient({
                       disabled={busy || !addRef.trim()}
                       onClick={() =>
                         run(async () => {
-                          await addTeamMember(auth0Id, selected.id, {
+                          const teamId = selected.id
+                          await addTeamMember(auth0Id, teamId, {
                             ...(addKind === 'coach'
                               ? { member_auth0_id: addRef.trim(), role: 'coach' as const }
                               : { student_id: addRef, role: 'player' as const }),
                           })
                           setAddRef('')
-                          const res = await listTeamMembers(auth0Id, selected.id)
+                          const res = await listTeamMembers(auth0Id, teamId)
+                          if (!stillOnTeam(teamId)) return
                           setMembers(res.members)
                           clearPanelFailure('members')
                         })
@@ -608,8 +636,10 @@ export default function TeamsClient({
                           disabled={busy}
                           onClick={() =>
                             run(async () => {
+                              const teamId = selected.id
                               await orgDeleteMatch(auth0Id, match.id)
-                              const res = await orgMatches(auth0Id, { teamId: selected.id })
+                              const res = await orgMatches(auth0Id, { teamId })
+                              if (!stillOnTeam(teamId)) return
                               setMatches(res.matches)
                               clearPanelFailure('matches')
                             })
@@ -662,8 +692,9 @@ export default function TeamsClient({
                         disabled={busy || !matchOpponent.trim()}
                         onClick={() =>
                           run(async () => {
+                            const teamId = selected.id
                             await orgCreateMatch(auth0Id, {
-                              team_id: selected.id,
+                              team_id: teamId,
                               season_id: matchSeason || null,
                               opponent: matchOpponent.trim(),
                               match_on: matchOn || null,
@@ -671,7 +702,8 @@ export default function TeamsClient({
                             setMatchOpponent('')
                             setMatchOn('')
                             setMatchSeason('')
-                            const res = await orgMatches(auth0Id, { teamId: selected.id })
+                            const res = await orgMatches(auth0Id, { teamId })
+                            if (!stillOnTeam(teamId)) return
                             setMatches(res.matches)
                             clearPanelFailure('matches')
                           })

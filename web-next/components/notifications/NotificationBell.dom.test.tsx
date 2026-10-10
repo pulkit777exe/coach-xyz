@@ -64,6 +64,46 @@ const settle = async (times = 3) => {
 }
 const text = () => document.body.textContent ?? ''
 
+/** The unread badge lives on the trigger, so it reads with the menu closed. */
+const badgeText = () => container.querySelector('[aria-label="Notifications"]')?.textContent ?? ''
+
+/**
+ * The unread dot of the row whose title matches — `DOT_BASE` plus `bg-primary` when
+ * unread, `bg-transparent` when read. `cn` is a plain join, so the class is the flip.
+ */
+const dotFor = (title: string) =>
+  [...document.body.querySelectorAll('span')].find(
+    (s) =>
+      typeof s.className === 'string' &&
+      s.className.includes('size-1.5') &&
+      (s.parentElement?.textContent ?? '').includes(title),
+  ) ?? null
+
+/** Click the row itself; the handler sits on the `DropdownMenuItem` this sits inside. */
+const clickRow = async (title: string) => {
+  const el = [...document.body.querySelectorAll('span')].find((s) =>
+    (s.textContent ?? '').includes(title),
+  )
+  expect(el).not.toBeNull()
+  await act(async () => {
+    el!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await settle()
+}
+
+const buttonByLabel = (label: string) =>
+  [...document.body.querySelectorAll('button')].find(
+    (b) => (b.textContent ?? '').trim() === label,
+  ) ?? null
+
+const click = async (el: HTMLElement | null) => {
+  expect(el).not.toBeNull()
+  await act(async () => {
+    el!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await settle()
+}
+
 /**
  * Open the dropdown. Rows live inside `DropdownMenuContent`, which is only mounted
  * while the menu is open — so an assertion on a notification title against the
@@ -110,12 +150,20 @@ const unsubscribed: number[] = []
 const load = async (opts: {
   prefs: () => Promise<{ inApp: boolean }>
   snapshot: () => Promise<{ notifications: Note[]; unread_count: number }>
+  /** Defaults to a succeeding write; pass one to make the optimistic flip face a refusal. */
+  markRead?: (id: string) => Promise<void>
+  markAllRead?: () => Promise<void>
 }) => {
   emit = null
   onReconnect = null
   unsubscribed.length = 0
   const pushed: string[] = []
+  const toastError = vi.fn()
 
+  vi.doMock('sonner', () => ({
+    toast: { success: vi.fn(), error: toastError, info: vi.fn(), warning: vi.fn() },
+    Toaster: () => null,
+  }))
   vi.doMock('next/navigation', () => ({
     useRouter: () => ({
       push: (href: string) => pushed.push(href),
@@ -128,12 +176,12 @@ const load = async (opts: {
   }))
   vi.doMock('@/lib/notifications', () => ({
     fetchNotificationsWithRetry: async () => opts.snapshot(),
-    markRead: async (id: string) => {
+    markRead: opts.markRead ?? (async (id: string) => {
       pushed.push(`read:${id}`)
-    },
-    markAllRead: async () => {
+    }),
+    markAllRead: opts.markAllRead ?? (async () => {
       pushed.push('read-all')
-    },
+    }),
     // Real behaviour: a `data.href` wins, otherwise fall back to the analysis route.
     notificationHref: (n: { data: Record<string, unknown> }) => {
       const href = n.data.href
@@ -158,7 +206,7 @@ const load = async (opts: {
   vi.doMock('lucide-react', () => ({ BellIcon: () => null, CheckCheckIcon: () => null }))
 
   const mod = await import('@/components/notifications/NotificationBell')
-  return { Bell: mod.default, pushed }
+  return { Bell: mod.default, pushed, toastError }
 }
 
 describe('NotificationBell — the gate no static render passes', () => {
@@ -334,5 +382,100 @@ describe('NotificationBell — the gate no static render passes', () => {
     await render(<Bell />)
     await settle()
     expect(container.querySelector('[aria-label="Notifications"]')).not.toBeNull()
+  })
+})
+describe('NotificationBell — an optimistic read the server refuses', () => {
+  test('a successful mark-read keeps the row read (positive control)', async () => {
+    // Proves the click reaches `markRead` and the happy path renders — without it a
+    // rollback that never restored anything would pass every case below by doing
+    // nothing at all.
+    const { Bell, toastError } = await load({
+      prefs: async () => ({ inApp: true }),
+      snapshot: async () => ({ notifications: [note('n1')], unread_count: 1 }),
+      markRead: async () => undefined,
+    })
+    await render(<Bell />)
+    await settle()
+    expect(badgeText()).toContain('1')
+
+    await openMenu()
+    expect(dotFor('Analysis n1')?.className).toContain('bg-primary')
+
+    // Optimistic flip lands immediately, before the write settles.
+    await clickRow('Analysis n1')
+    expect(badgeText()).not.toContain('1')
+
+    await openMenu()
+    expect(dotFor('Analysis n1')?.className).toContain('bg-transparent')
+    expect(toastError).not.toHaveBeenCalled()
+    expect(noise).toEqual([])
+  })
+
+  test('a failed mark-read puts the row and the badge back, and says why', async () => {
+    let rejectMark: (reason: unknown) => void = () => undefined
+    const { Bell, toastError } = await load({
+      prefs: async () => ({ inApp: true }),
+      snapshot: async () => ({ notifications: [note('n1')], unread_count: 1 }),
+      markRead: () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectMark = reject
+        }),
+    })
+    await render(<Bell />)
+    await settle()
+    expect(badgeText()).toContain('1')
+    await openMenu()
+    expect(dotFor('Analysis n1')?.className).toContain('bg-primary')
+
+    await clickRow('Analysis n1')
+    // The optimistic half really did happen…
+    expect(badgeText()).not.toContain('1')
+
+    await act(async () => {
+      rejectMark(new Error('Marking read failed'))
+    })
+    await settle()
+
+    // …and is put back when the server refuses: the badge, the row, and a message.
+    expect(badgeText()).toContain('1')
+    expect(toastError).toHaveBeenCalledWith('Marking read failed')
+    await openMenu()
+    expect(dotFor('Analysis n1')?.className).toContain('bg-primary')
+    expect(noise).toEqual([])
+  })
+
+  test('a failed mark-all restores every row it flipped and the count', async () => {
+    let rejectAll: (reason: unknown) => void = () => undefined
+    const { Bell, toastError } = await load({
+      prefs: async () => ({ inApp: true }),
+      snapshot: async () => ({
+        notifications: [note('n1'), note('n2'), note('n3')],
+        unread_count: 3,
+      }),
+      markAllRead: () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectAll = reject
+        }),
+    })
+    await render(<Bell />)
+    await settle()
+    expect(badgeText()).toContain('3')
+
+    await openMenu()
+    await click(buttonByLabel('Mark all read'))
+    expect(badgeText()).not.toContain('3')
+
+    await act(async () => {
+      rejectAll(new Error('read-all refused'))
+    })
+    await settle()
+
+    expect(badgeText()).toContain('3')
+    expect(toastError).toHaveBeenCalledWith('read-all refused')
+    await openMenu()
+    for (const title of ['Analysis n1', 'Analysis n2', 'Analysis n3']) {
+      expect(dotFor(title)?.className).toContain('bg-primary')
+    }
+    expect(noise).toEqual([])
   })
 })

@@ -71,10 +71,20 @@ export default function SidebarSearch({
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  // Sequence token for the debounced player search. Bumped whenever an in-flight
+  // search is abandoned (palette open/close, query reset) so a response that no
+  // longer describes what is on screen is dropped rather than applied.
+  const seq = useRef(0)
 
   // Reset query state whenever the palette opens (event handler, so the
   // set-state-in-effect rule stays satisfied).
   const setOpenState = (next: boolean) => {
+    // Either direction abandons whatever search is in flight: opening replaces the
+    // query with '', closing makes the answer irrelevant. Invalidate here rather than
+    // only in the debounce's reset branch, because that branch runs up to 200ms later
+    // — in that window the abandoned response can still land and paint player rows
+    // under an empty query.
+    seq.current += 1
     if (next) {
       setQuery('')
       setPlayers([])
@@ -93,7 +103,6 @@ export default function SidebarSearch({
   const [playersFailed, setPlayersFailed] = useState(false)
   const [searching, setSearching] = useState(false)
   const [active, setActive] = useState(0)
-  const seq = useRef(0)
 
   // Global ⌘K / Ctrl+K toggle (reset lives in setOpenState, an event).
   useEffect(() => {
@@ -113,6 +122,13 @@ export default function SidebarSearch({
     const id = window.setTimeout(() => {
       const q = query.trim()
       if (!open || q.length < 2) {
+        // Bump the sequence here, not only when a NEW attempt begins. This branch
+        // abandons whatever was in flight (palette closed, query cleared below the
+        // floor), and without the bump the abandoned response still matches the
+        // `seq.current` it captured — so it lands afterwards and paints results for
+        // a query that is no longer on screen. Same rule as GlobalSearch's reset
+        // branch: invalidating the request is part of clearing the state it feeds.
+        seq.current += 1
         setPlayers([])
         setPlayersFailed(false)
         setSearching(false)
@@ -177,6 +193,14 @@ export default function SidebarSearch({
     },
     [router],
   )
+  /**
+   * A handler per row, built during render. `go` reaches `seq` (a ref) through
+   * `setOpenState`, and `react-hooks/refs` refuses a ref-touching CALL made inside
+   * `results.map(...)` — the arrow `() => go(r.href)` is created in render scope, so
+   * it reads as reading the ref during render. This factory touches only `r.href`
+   * here; the ref is read when the returned handler runs, i.e. in the click.
+   */
+  const goFor = (href: string) => () => go(href)
 
   const onDialogKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -245,7 +269,7 @@ export default function SidebarSearch({
                   <button
                     type="button"
                     onMouseEnter={() => setActive(i)}
-                    onClick={() => go(r.href)}
+                    onClick={goFor(r.href)}
                     className={cn(
                       ROW_CLASS,
                       i === active

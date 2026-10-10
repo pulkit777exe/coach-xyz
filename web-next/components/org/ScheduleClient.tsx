@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   PlusIcon,
@@ -99,6 +99,14 @@ export default function ScheduleClient({
   const [events, setEvents] = useState<ScheduleEvent[]>(initialEvents)
   const [loading, setLoading] = useState(false)
   /**
+   * Identity of the newest month read. `nav` and the "jump to today" control both fire
+   * `fetchMonth` without disabling the pager, so two month reads can be in flight at once
+   * over DIFFERENT months — and neither response says which month it belongs to. Without
+   * this, whichever landed LAST won, so an abandoned month's rows replaced the month the
+   * heading names. Only the newest read may answer.
+   */
+  const monthSeq = useRef(0)
+  /**
    * Which month `events` ACTUALLY holds, not which month is displayed.
    *
    * `nav` calls `setMonth(next)` before the fetch, so a failed navigation kept the previous
@@ -159,6 +167,7 @@ export default function ScheduleClient({
   }, [visibleEvents])
 
   const fetchMonth = async (target: Date) => {
+    const my = ++monthSeq.current
     setLoading(true)
     try {
       // Widen by one day on each side so midnight (local) month-boundary
@@ -166,15 +175,19 @@ export default function ScheduleClient({
       // matching local-day cells, so out-of-month buffer rows are dropped.
       const { from, to } = scheduleMonthWindow(target)
       const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
+      if (monthSeq.current !== my) return
       setEvents(res.events)
       setEventsMonth(toISODate(target))
       setMonthFailed(false)
     } catch (err) {
+      if (monthSeq.current !== my) return
       // `eventsMonth` deliberately NOT advanced: that is what keeps the mismatch detectable.
       setMonthFailed(true)
       toast.error((err as CoachAIError).message ?? 'Failed to load schedule')
     } finally {
-      setLoading(false)
+      // A superseded read must not drop the spinner while the read actually being
+      // displayed is still in flight.
+      if (monthSeq.current === my) setLoading(false)
     }
   }
 
@@ -283,10 +296,12 @@ export default function ScheduleClient({
             Today
           </Button>
         </div>
-        <p className="text-lead font-semibold tracking-[-0.01em] text-foreground">
+        {/* A `div`, not a `p`: `loading-dev`'s `Slide` renders a `<div>`, and a `<div>`
+            inside a `<p>` is invalid nesting React warns will cause a hydration error. */}
+        <div className="text-lead font-semibold tracking-[-0.01em] text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
-        </p>
+        </div>
         <div className="flex items-center gap-2">
           <Select
             value={statusFilter || 'all'}
