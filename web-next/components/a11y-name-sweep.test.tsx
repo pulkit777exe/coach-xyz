@@ -1431,8 +1431,21 @@ add(
   },
   {
     id: 'components/org/SettingsPanel.tsx',
-
-    skip: 'Element type is invalid: a client-only child resolves to undefined in a server render',
+    // The old skip reason ("a client-only child resolves to undefined in a server
+    // render") no longer reproduces: rendered with its own props contract it emits
+    // 2,523 bytes of markup. An exclusion is a coverage CLAIM, and claims are not
+    // evidence — this one carried no test, so nothing ever re-checked it.
+    render: async () => {
+      const { default: SettingsPanel } = await import('@/components/org/SettingsPanel')
+      return h(SettingsPanel, {
+        title: 'Settings',
+        closeHref: '/dashboard/settings',
+        sections: [
+          { id: 'account', label: 'Account', icon: 'account', content: 'Account settings' },
+          { id: 'privacy', label: 'Privacy', icon: 'privacy', content: 'Privacy settings' },
+        ],
+      })
+    },
   },
   {
     id: 'components/org/Spinner.tsx',
@@ -1481,8 +1494,21 @@ add(
   },
   {
     id: 'components/org/StudentsClient.tsx',
-
-    skip: 'reads a store/context that is undefined until a client effect populates it',
+    // The old skip reason ("reads a store/context that is undefined until a client
+    // effect populates it") no longer reproduces: with its own props contract it
+    // emits 12,560 bytes. Its own behavioural tests also render it today, so the
+    // exclusion was doubly stale — the claim survived because nothing re-tested it.
+    render: async () => {
+      const { default: StudentsClient } = await import('@/components/org/StudentsClient')
+      return h(StudentsClient, {
+        auth0Id: ORG,
+        initialStudents: [student] as never,
+        sports: ['basketball'],
+        teams: [team] as never,
+        canManage: true,
+        canInvite: true,
+      })
+    },
   },
   {
     id: 'components/org/TeamsClient.tsx',
@@ -2275,8 +2301,8 @@ const PORTAL_ONLY = new Set([
 const EXPECTED_SKIPS: string[] = [
   // Not a component at all: a pure `buildSettingsSections()` that returns
   // `SettingsSection[]`. Rendering it would exercise no markup of its own; its
-  // consumer SettingsPanel is in this list for a different reason, and its data
-  // shape is pinned by the server contract tests.
+  // consumer SettingsPanel is rendered, and its data shape is pinned by the server
+  // contract tests.
   'components/org/settings/buildSettingsSections.tsx — not a component; it exports a pure data function with no JSX',
 
   // These read `usePreferences()` at the top level, and the context has no
@@ -2284,10 +2310,12 @@ const EXPECTED_SKIPS: string[] = [
   // principle — but each also reaches something else the server render cannot
   // satisfy, and the failure names which. Kept as skips with the specific cause
   // rather than a blanket "needs a provider", so the reason is falsifiable.
+  //
+  // `SettingsPanel` and `StudentsClient` used to be here on claims that no longer
+  // reproduce, and neither was ever re-tested: a skip entry carries no `render`,
+  // so CI had nothing that could have noticed. Both are rendered now.
   'components/HeaderClient.tsx — throws reading preferences before its own markup renders (needs the client-side provider and its auth-dependent submenu state)',
   'components/org/SettingsClient.tsx — same: usePreferences() outside its provider, and it fetches sections on mount',
-  'components/org/SettingsPanel.tsx — Element type is invalid: a client-only child resolves to undefined in a server render',
-  'components/org/StudentsClient.tsx — reads a store/context that is undefined until a client effect populates it',
 
   // Genuinely unreachable here, not a deferral: a component that SUSPENDS during
   // a server render throws instead of emitting markup, and `renderToStaticMarkup`
