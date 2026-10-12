@@ -1,4 +1,6 @@
-import { apiFetch, IDENTITY_BASE, type UserRecord } from './api'
+import type { UserRecord } from './api'
+import { mutateJson, queryJson } from './data/client'
+import { meUrl } from './data/transport'
 import type {
   AttendanceWithStudent,
   AttendanceSummary,
@@ -75,14 +77,14 @@ export type MyReports = {
   linked: boolean
 }
 
-const me = (path: string) => `${IDENTITY_BASE}/api/me${path}`
+const me = (path: string) => meUrl(path)
 
 export async function getMyOrgs(): Promise<MyOrgs> {
-  return apiFetch<MyOrgs>(me('/orgs'))
+  return queryJson<MyOrgs>(me('/orgs'))
 }
 
 export async function getMyProfile(): Promise<MyProfile> {
-  return apiFetch<MyProfile>(me('/profile'))
+  return queryJson<MyProfile>(me('/profile'))
 }
 
 export async function updateMyProfile(input: {
@@ -90,30 +92,27 @@ export async function updateMyProfile(input: {
   nickname?: string | null
   picture?: string | null
 }): Promise<{ user: UserRecord }> {
-  return apiFetch<{ user: UserRecord }>(me('/profile'), {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ user: UserRecord }>(me('/profile'), 'PUT', input)
 }
 
 export async function getMyAttendance(): Promise<MyAttendance> {
-  return apiFetch<MyAttendance>(me('/attendance'))
+  return queryJson<MyAttendance>(me('/attendance'))
 }
 
 export async function getMySchedule(): Promise<MySchedule> {
-  return apiFetch<MySchedule>(me('/schedule'))
+  return queryJson<MySchedule>(me('/schedule'))
 }
 
 export async function getMyPerformance(): Promise<MyPerformance> {
-  return apiFetch<MyPerformance>(me('/performance'))
+  return queryJson<MyPerformance>(me('/performance'))
 }
 
 export async function getMyAnalyses(): Promise<MyAnalyses> {
-  return apiFetch<MyAnalyses>(me('/analyses'))
+  return queryJson<MyAnalyses>(me('/analyses'))
 }
 
 export async function getMyReports(): Promise<MyReports> {
-  return apiFetch<MyReports>(me('/reports'))
+  return queryJson<MyReports>(me('/reports'))
 }
 
 export type MyObjectives = {
@@ -130,18 +129,20 @@ export type MyObjectives = {
 }
 
 export async function getMyObjectives(): Promise<MyObjectives> {
-  return apiFetch<MyObjectives>(me('/objectives'))
+  return queryJson<MyObjectives>(me('/objectives'))
 }
 
 export async function acceptInvite(token: string): Promise<{ org_auth0_id: string; role: string }> {
-  return apiFetch<{ org_auth0_id: string; role: string }>(me('/invites/accept'), {
-    method: 'POST',
-    body: JSON.stringify({ token }),
+  return mutateJson<{ org_auth0_id: string; role: string }>(me('/invites/accept'), 'POST', {
+    token,
   })
 }
 
 export async function getMyReport(
   id: string,
 ): Promise<{ report: (ReportRecord & { full_name: string | null }) | null; linked: boolean }> {
-  return apiFetch(me(`/reports/${encodeURIComponent(id)}`))
+  return queryJson<{
+    report: (ReportRecord & { full_name: string | null }) | null
+    linked: boolean
+  }>(me(`/reports/${encodeURIComponent(id)}`))
 }

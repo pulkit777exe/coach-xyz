@@ -1,4 +1,5 @@
-import { apiFetch, IDENTITY_BASE } from './api'
+import { mutateJson, queryJson } from './data/client'
+import { orgUrl as coreOrgUrl, publicUrl } from './data/transport'
 import type { ReportRecord } from './org'
 
 // ── AI report generation (FEATURE 1) ─────────────────────────────────────────
@@ -6,8 +7,11 @@ import type { ReportRecord } from './org'
 // BullMQ queue. Enqueue here, then poll the status endpoint until done.
 //   POST /api/org/:auth0Id/reports/ai        → { report_job_id, status }
 //   GET  /api/org/:auth0Id/reports/ai/:id    → { report_job_id, status, report }
-// Both are identity-bearing: they go through IDENTITY_BASE (identity proxy on
-// the client, direct backend with service headers on the server).
+// Both are identity-bearing: they go through the core identity URL builder
+// (identity proxy on the client, direct backend with service headers on the
+// server).
+
+const org = (auth0Id: string, path: string) => coreOrgUrl(auth0Id, path)
 
 export type AiReportJobStatus = 'queued' | 'running' | 'done' | 'failed'
 
@@ -29,9 +33,10 @@ export const orgGenerateAiReport = (
   auth0Id: string,
   input: AiReportRequest,
 ): Promise<{ report_job_id: string; status: 'queued' }> => {
-  return apiFetch<{ report_job_id: string; status: 'queued' }>(
-    `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}/reports/ai`,
-    { method: 'POST', body: JSON.stringify(input) },
+  return mutateJson<{ report_job_id: string; status: 'queued' }>(
+    org(auth0Id, '/reports/ai'),
+    'POST',
+    input,
   )
 }
 
@@ -39,9 +44,7 @@ export const orgAiReportStatus = (
   auth0Id: string,
   reportJobId: string,
 ): Promise<AiReportJobPoll> => {
-  return apiFetch<AiReportJobPoll>(
-    `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}/reports/ai/${encodeURIComponent(reportJobId)}`,
-  )
+  return queryJson<AiReportJobPoll>(org(auth0Id, `/reports/ai/${encodeURIComponent(reportJobId)}`))
 }
 
 // ── Share tokens (FEATURE 2) ─────────────────────────────────────────────────
@@ -49,7 +52,7 @@ export const orgAiReportStatus = (
 //   POST /api/org/:auth0Id/analyses/:jobId/share-token  (identity-bearing)
 //   GET  /api/share/:token                              (public, no identity)
 // The public resolve is NOT proxied through /api/service — /api/share is not an
-// identity path; it must hit the backend base URL directly.
+// identity path; it hits the backend base through the core public URL builder.
 
 export type ShareTokenIssue = {
   token: string
@@ -71,14 +74,12 @@ export type SharedAnalysis = {
 }
 
 export const createShareToken = (auth0Id: string, jobId: string): Promise<ShareTokenIssue> => {
-  return apiFetch<ShareTokenIssue>(
-    `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}/analyses/${encodeURIComponent(jobId)}/share-token`,
-    { method: 'POST' },
+  return mutateJson<ShareTokenIssue>(
+    org(auth0Id, `/analyses/${encodeURIComponent(jobId)}/share-token`),
+    'POST',
   )
 }
 
 export const resolveShareToken = (token: string): Promise<SharedAnalysis> => {
-  return apiFetch<SharedAnalysis>(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/share/${encodeURIComponent(token)}`,
-  )
+  return queryJson<SharedAnalysis>(publicUrl(`/api/share/${encodeURIComponent(token)}`))
 }

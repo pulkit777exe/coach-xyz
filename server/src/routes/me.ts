@@ -1,37 +1,23 @@
 import { Elysia } from 'elysia'
 
 import { buildError, type CoachAIError } from '../lib/errors'
+import { getUserByAuth0Id, updateUserProfile, resolveAuth0Id } from '../lib/users'
+import { admitAnalysis } from '../lib/admission'
+import { getLinkedPlayer } from '../lib/orgRoster'
+import { attendanceSummary, listAttendance, listSchedule } from '../lib/orgAttendance'
 import {
-  getUserByAuth0Id,
-  updateUserProfile,
-  resolveAuth0Id,
-} from '../lib/users'
-import {
-  persistAnalysisStart,
-  checkOrgDailyQuota,
-  getOrgTier,
-  recordUsage,
-} from '../lib/analyses'
-import {
-  getLinkedPlayer,
-  listAttendance,
-  attendanceSummary,
-  listSchedule,
-  getStudentPerformanceSeries,
-  getStudentAnalyses,
-  listReports,
   getReport,
-  listObjectives,
-} from '../lib/orgData'
+  getStudentAnalyses,
+  getStudentPerformanceSeries,
+  listReports,
+} from '../lib/orgReports'
+import { listObjectives } from '../lib/orgObjectives'
 import { SERVICE_HEADERS, serviceGuard } from '../lib/serviceGuard'
 import { redactWellness } from '../lib/permissions'
 import { listMembershipsForUser } from '../lib/orgMembers'
-import { readRequestMeta } from '../lib/requestMeta'
 import { mintAttributionToken } from '../lib/attribution'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
-import { enqueueAnalysis } from '../lib/queue'
-import { DEFAULT_MODEL } from '../types'
 
 /**
  * Resolves the verified caller (from the proxy-injected header) to their linked
@@ -395,57 +381,30 @@ export default new Elysia()
       return decision.error
     }
 
-    // Per-org daily quota (§17) on the owning coach's org.
-    const quota = await checkOrgDailyQuota(decision.coachAuth0Id)
-    if (!quota.allowed) {
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Organization daily analysis limit reached. Try again tomorrow.',
-          true,
-        ),
-        retry_after: quota.retryAfterSec,
-      }
-    }
-    const tier = await getOrgTier(decision.coachAuth0Id).catch(() => 'free' as const)
-    const priority = 10 + (tier === 'elite' ? 10 : tier === 'pro' ? 5 : 0)
-    await recordUsage(decision.coachAuth0Id, 'analysis').catch(() => {})
-
-    const server_job_id = crypto.randomUUID()
-    const engine_job_id = crypto.randomUUID()
-
+    // Admission (rate → validate → quota → tier → persist → enqueue → usage)
+    // lives in lib/admission; this route maps outcomes to HTTP. The roster
+    // scope keeps quota/tier/priority/owners on the owning coach's org.
     try {
-      // Save the server job mapping to Redis BEFORE enqueuing
-      await enqueueAnalysis({
-        server_job_id,
-        engine_job_id,
-        session_token: sessionToken,
-        player_index: playerIndex,
-        video_key: videoKey,
-        angle,
-        // Player-hub jobs are authenticated humans waiting on UX —
-        // outrank anonymous queue entries (tier-weighted above).
-        priority,
-        owner_ids: [decision.coachAuth0Id, decision.requestedBy].filter(
-          (id, i, arr) => id && arr.indexOf(id) === i,
-        ),
+      const outcome = await admitAnalysis({
+        request,
+        body: {
+          session_token: sessionToken,
+          player_index: playerIndex,
+          video_key: videoKey,
+          angle,
+        },
+        roster: {
+          coachAuth0Id: decision.coachAuth0Id,
+          requestedBy: decision.requestedBy,
+          studentId: decision.studentId,
+        },
       })
-
-      await persistAnalysisStart({
-        ...readRequestMeta(request),
-        serverJobId: server_job_id,
-        engineJobId: engine_job_id,
-        sessionToken,
-        playerIndex,
-        model: DEFAULT_MODEL,
-        auth0Id: decision.coachAuth0Id,
-        requestedBy: decision.requestedBy,
-        studentId: decision.studentId,
-      })
-
+      if (!outcome.ok) {
+        set.status = outcome.status
+        return outcome.body
+      }
       set.status = 200
-      return { job_id: server_job_id }
+      return { job_id: outcome.serverJobId }
     } catch (error) {
       if (error instanceof Error && error.message === 'QUEUE_UNAVAILABLE') {
         set.status = 503
@@ -488,9 +447,17 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', result.error, false)
     }
-    auditRoute(request, result.orgAuth0Id, 'member.invite_accepted', 'org_invite', null, {
-      role: result.role,
-    }, verified)
+    auditRoute(
+      request,
+      result.orgAuth0Id,
+      'member.invite_accepted',
+      'org_invite',
+      null,
+      {
+        role: result.role,
+      },
+      verified,
+    )
     set.status = 200
     return { org_auth0_id: result.orgAuth0Id, role: result.role }
   })

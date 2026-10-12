@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgStudents, orgAttendance } from '@/lib/serverData'
+import { orgStudents, orgAttendance } from '@/lib/serverData'
 import { toISODate } from '@/lib/date'
 import AttendanceGrid from '@/components/org/AttendanceGrid'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Attendance | CoachXYZ',
@@ -13,19 +11,18 @@ export const metadata: Metadata = {
 }
 
 export default async function AttendancePage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
-
   const today = new Date()
   const first = new Date(today.getFullYear(), today.getMonth(), 1)
   const last = new Date(today.getFullYear(), today.getMonth() + 1, 0)
 
-  const [studentsRes, attendanceRes] = await Promise.all([
-    orgStudents(auth0Id),
-    orgAttendance(auth0Id, { from: toISODate(first), to: toISODate(last) }),
-  ])
+  // Bare fan-out (no fallbacks): failures throw into error.tsx, as before.
+  const { auth0Id, data } = await loadPage('org', {
+    students: ({ auth0Id }) => orgStudents(auth0Id),
+    attendance: ({ auth0Id }) =>
+      orgAttendance(auth0Id, { from: toISODate(first), to: toISODate(last) }),
+  })
+  const studentsRes = data.students
+  const attendanceRes = data.attendance
 
   const active = studentsRes.students.filter((s) => s.status === 'active')
 

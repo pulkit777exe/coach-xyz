@@ -1,18 +1,14 @@
 import {
   attendanceSummary,
   deleteAttendance,
-  getStudent,
   listAttendance,
   setAttendanceBatch,
   upsertAttendance,
-  type AttendanceStatus,
-} from '../../lib/orgData'
-import {
-  isDate,
-} from '../../lib/orgValidate'
-import {
-  ATTENDANCE_STATUS_SET,
-} from './shared'
+} from '../../lib/orgAttendance'
+import type { AttendanceStatus } from '../../lib/orgEnums'
+import { getStudent } from '../../lib/orgRoster'
+import { isDate } from '../../lib/orgValidate'
+import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

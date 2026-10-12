@@ -1,28 +1,27 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgReport } from '@/lib/serverData'
+import { orgReport } from '@/lib/serverData'
 import { REPORT_TYPE_LABELS } from '@/lib/org'
 import type { ReportType } from '@/lib/org'
 import { formatDateMed } from '@/lib/date'
-import { unstable_noStore as noStore } from 'next/cache'
 import ReportBody from '@/components/org/ReportBody'
 import PrintReportButton from '@/components/org/PrintReportButton'
 import PageHeader from '@/components/org/PageHeader'
+import { loadPage } from '../../_shell'
 
 export function generateMetadata(): Metadata {
   return { title: 'Report | CoachXYZ', description: 'Generated coach report.' }
 }
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
   const { id } = await params
 
-  const { report } = await orgReport(auth0Id, id).catch(() => ({ report: null }))
+  const { data } = await loadPage(
+    'org',
+    { report: ({ auth0Id }) => orgReport(auth0Id, id) },
+    { report: { report: null } },
+  )
+  const { report } = data.report
   if (!report) notFound()
 
   return (

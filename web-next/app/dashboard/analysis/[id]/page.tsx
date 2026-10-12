@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
 import { getOrgContext, getDashboardAnalysisDetail } from '@/lib/serverData'
-import { redirect } from 'next/navigation'
-import { unstable_noStore as noStore } from 'next/cache'
 import AnalysisDetailClient from '@/components/AnalysisDetailClient'
+import { loadPage } from '../../_shell'
 
 export async function generateMetadata({
   params,
@@ -33,18 +32,18 @@ export async function generateMetadata({
 }
 
 export default async function AnalysisDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
   const { id } = await params
-  const session = await getSession()
-  if (!session) {
-    redirect('/auth/login')
-  }
-  const { auth0Id } = await getOrgContext()
+  // Gate first so auth0Id is always defined for the client (even when the
+  // detail fetch fails and renders its null state); the fetch keeps its own
+  // try/catch, as before.
+  const { auth0Id } = await loadPage('org', {})
 
   let data = null
   try {
-    const res = await getDashboardAnalysisDetail(auth0Id, id)
-    data = res.analysis
+    const { data: loaded } = await loadPage('org', {
+      detail: ({ auth0Id }) => getDashboardAnalysisDetail(auth0Id, id),
+    })
+    data = loaded.detail.analysis
   } catch (err) {
     console.error('Failed to load analysis detail:', err)
     data = null

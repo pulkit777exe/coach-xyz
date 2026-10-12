@@ -1,4 +1,5 @@
-import { apiFetch, IDENTITY_BASE } from './api'
+import { postJob } from './data/client'
+import { meUrl } from './data/transport'
 
 export type MeAnalyzeInput = {
   session_token: string | null
@@ -14,24 +15,18 @@ export type MeAnalyzeInput = {
  * (requested_by) while making it visible in the coach's history.
  *
  * Returns { job_id } — poll it with getJobStatus (same capability route the
- * coach flow uses).
+ * coach flow uses). Enqueue behavior (timeout + `{ job_id }` shape) is shared
+ * with the coach flow through the core `postJob` helper.
  */
 export async function meStartAnalysis(params: MeAnalyzeInput): Promise<{ job_id: string }> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30_000)
-  try {
-    return await apiFetch<{ job_id: string }>(`${IDENTITY_BASE}/api/me/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_token: params.session_token,
-        player_index: params.player_index ?? null,
-        video_key: params.video_key ?? null,
-        angle: params.angle ?? null,
-      }),
-      signal: controller.signal,
-    })
-  } finally {
-    clearTimeout(timeout)
-  }
+  return postJob(
+    meUrl('/analyze'),
+    {
+      session_token: params.session_token,
+      player_index: params.player_index ?? null,
+      video_key: params.video_key ?? null,
+      angle: params.angle ?? null,
+    },
+    { timeoutMs: 30_000 },
+  )
 }

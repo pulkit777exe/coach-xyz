@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import {
   Users,
   UserCheck,
@@ -13,10 +12,7 @@ import {
   Check,
 } from 'lucide-react'
 
-import { getSession } from '@/lib/session'
-import { unstable_noStore as noStore } from 'next/cache'
 import {
-  getOrgContext,
   getUserProfile,
   orgStudents,
   orgOverview,
@@ -31,6 +27,7 @@ import PageHeader from '@/components/org/PageHeader'
 import ProfileForm from '@/components/org/ProfileForm'
 import PreferencesSection from '@/components/org/PreferencesSection'
 import MembersSection from '@/components/org/MembersSection'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Settings | CoachXYZ',
@@ -59,11 +56,10 @@ function changePasswordUrl(): string | null {
 }
 
 export default async function SettingsPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
+  // Gate first: the render falls back to session fields when fetches fail,
+  // so the session must be resolved before the whole-block try/catch.
+  const { session, auth0Id } = await loadPage('org', {})
   const ownAuth0Id = session.user.sub
-  const { auth0Id } = await getOrgContext()
 
   let profile = null
   let students: Student[] | null = null
@@ -78,13 +74,18 @@ export default async function SettingsPage() {
   let error: string | null = null
 
   try {
-    const [profileRes, studentsRes, overviewRes, membersRes, subscriptionRes] = await Promise.all([
-      getUserProfile(ownAuth0Id),
-      orgStudents(auth0Id),
-      orgOverview(auth0Id),
-      orgMembers(auth0Id),
-      orgSubscription(auth0Id).catch(() => null),
-    ])
+    const { data } = await loadPage('org', {
+      profile: () => getUserProfile(ownAuth0Id),
+      students: ({ auth0Id }) => orgStudents(auth0Id),
+      overview: ({ auth0Id }) => orgOverview(auth0Id),
+      members: ({ auth0Id }) => orgMembers(auth0Id),
+      subscription: ({ auth0Id }) => orgSubscription(auth0Id).catch(() => null),
+    })
+    const profileRes = data.profile
+    const studentsRes = data.students
+    const overviewRes = data.overview
+    const membersRes = data.members
+    const subscriptionRes = data.subscription
     profile = profileRes.user
     students = studentsRes.students
     overview = overviewRes.overview

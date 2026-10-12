@@ -5,7 +5,7 @@
 // helpers and the engine adapter below.
 
 import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from './engine'
-import { buildReportContent, createReportRecord } from './orgData'
+import { buildReportContent, createReportRecord } from './orgReports'
 import type { ReportType } from './orgEnums'
 import type { CoachAIError } from '../types'
 import { redis } from './redis'
@@ -154,5 +154,5 @@ export const persistAiReportRecord = async (
 }
 
 // Re-exported so routes can build the context fed to the engine without
-// touching orgData directly (keeps the org route file read-only).
+// touching orgReports directly (keeps the org route file read-only).
 export { buildReportContent }

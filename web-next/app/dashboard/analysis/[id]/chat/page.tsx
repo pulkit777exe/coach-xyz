@@ -1,21 +1,19 @@
-import { getSession } from '@/lib/session'
-import { getOrgContext, getDashboardAnalysisDetail } from '@/lib/serverData'
+import { getDashboardAnalysisDetail } from '@/lib/serverData'
 import type { DashboardAnalysis } from '@/lib/api'
-import { notFound, redirect } from 'next/navigation'
-import { unstable_noStore as noStore } from 'next/cache'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import HistoryChat from '@/components/HistoryChat'
+import { loadPage } from '../../../_shell'
 
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  noStore()
-  const session = await getSession()
-  if (!session) {
-    redirect('/auth/login')
-  }
-  const { auth0Id } = await getOrgContext()
 
-  const result = await getDashboardAnalysisDetail(auth0Id, id).catch(() => null)
+  const { auth0Id, data: loaded } = await loadPage(
+    'org',
+    { detail: ({ auth0Id }) => getDashboardAnalysisDetail(auth0Id, id) },
+    { detail: null },
+  )
+  const result = loaded.detail
   if (!result?.analysis) {
     notFound()
   }

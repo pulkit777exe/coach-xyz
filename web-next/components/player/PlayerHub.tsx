@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CalendarIcon,
   TrendingUpIcon,
@@ -15,12 +15,9 @@ import { Spinner } from '@/components/org/Spinner'
 import PageHeader from '@/components/org/PageHeader'
 import { Button } from '@/components/9ui/ui/button'
 import type { CoachAIError } from '@/lib/api'
-import { getJobStatus } from '@/lib/api'
 import { meStartAnalysis } from '@/lib/playerUpload'
-import { useScanFlow } from '@/lib/useScanFlow'
-import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
-import { toCoachAIError } from '@/lib/errors'
-import { type JobStatus, type ScanResult } from '@/types'
+import { usePipeline } from '@/lib/usePipeline'
+import { type ScanResult } from '@/types'
 import {
   getMyProfile,
   getMyAttendance,
@@ -436,13 +433,15 @@ const STAGE_LABELS: Partial<Record<string, string>> = {
   uploading: 'Uploading video…',
   scanning: 'Scanning for players…',
   analyzing: 'Analyzing your video…',
+  rendering: 'Rendering your video…',
 }
 
 /**
- * Player-side upload + analysis kickoff. Shares the coach flow's scan-phase
- * module (useScanFlow: validate → upload → SSE → select → angles) but kicks
- * off through /api/me/analyze so the server attributes it to this player
+ * Player-side upload + analysis kickoff. Renders from the unified pipeline
+ * (usePipeline: validate → upload → SSE → select → poll) but kicks off
+ * through /api/me/analyze so the server attributes it to this player
  * (requested_by) while keeping it visible to the coach in their history.
+ * No navigation: completion stays on the card (toast + refresh).
  */
 function AnalyzeVideoCard({
   auth0Id,
@@ -452,153 +451,91 @@ function AnalyzeVideoCard({
   onCompleted: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const pollRef = useRef<JobPollingController | null>(null)
-  const liveRef = useRef(true)
-
-  const [finished, setFinished] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
-  const [percent, setPercent] = useState(0)
-  const [localError, setLocalError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  useEffect(() => {
-    return () => {
-      liveRef.current = false
-      pollRef.current?.stop()
-    }
+  // Injected differences vs the coach flow: player kickoff attributes the job
+  // to this player; no navigation (stay on the card); toasts + refresh on
+  // completion. Polling, 99-cap, and retry all live in the shared module.
+  const startAnalysisImpl = useCallback((scan: ScanResult, playerIndex: number) => {
+    return meStartAnalysis({
+      session_token: scan.session_token,
+      player_index: playerIndex,
+      video_key: scan.video_key,
+      angle: scan.angle ?? null,
+    })
   }, [])
 
-  const flowResetRef = useRef(() => {})
-  const lastToastKey = useRef<string | null>(null)
-
-  const toastOnce = useCallback((code: string, message: string) => {
-    const key = `${code}:${message}`
-    if (lastToastKey.current === key) return
-    lastToastKey.current = key
-    toast.error(message)
-  }, [])
-
-  const runAnalysis = useCallback(
-    (scan: ScanResult, playerIndex: number) => {
-      setFinished(false)
-      setLocalError(null)
-      setPercent(0)
-
-      const kickoff = async () => {
-        try {
-          const { job_id } = await meStartAnalysis({
-            session_token: scan.session_token,
-            player_index: playerIndex,
-            video_key: scan.video_key,
-            angle: scan.angle ?? null,
-          })
-          if (!liveRef.current) return
-          pollRef.current?.stop()
-          pollRef.current = startJobPolling<JobStatus>({
-            jobId: job_id,
-            fetchStatus: getJobStatus,
-            isComplete: (status) => status.complete,
-            intervalMs: 2000,
-            timeoutMs: 12 * 60 * 1000,
-            maxFailures: 5,
-            onStatus: (status) => setPercent(Math.min(status.progress, 99)),
-            onComplete: (status) => {
-              if (status.error) {
-                setLocalError(status.error)
-                flowResetRef.current()
-                toastOnce('ANALYSIS_FAILED', status.error)
-              } else {
-                setFinished(true)
-                toast.success('Analysis complete — check your analyses below.')
-                onCompleted()
-              }
-            },
-            onError: (failure) => {
-              setLocalError(failure.error.message)
-              flowResetRef.current()
-              toastOnce(failure.error.code, failure.error.message)
-            },
-          })
-        } catch (e: unknown) {
-          const err = toCoachAIError(e)
-          if (!liveRef.current) return
-          setLocalError(err.message)
-          flowResetRef.current()
-          toastOnce(err.code, err.message)
-        }
-      }
-      void kickoff()
-    },
-    [onCompleted, toastOnce],
+  const notify = useMemo(
+    () => ({
+      success: (message: string) => {
+        toast.success(message)
+      },
+      error: (_code: string, message: string) => {
+        toast.error(message)
+      },
+    }),
+    [],
   )
 
-  const flow = useScanFlow({ auth0Id: auth0Id ?? null, onAnalyze: runAnalysis })
+  const {
+    pipelineState,
+    scanResult,
+    angleScans,
+    activeAngle,
+    errorStatus,
+    snapshot,
+    handleFileSelected,
+    handlePlayerSelected,
+    handleReset,
+  } = usePipeline(auth0Id ?? null, null, { startAnalysisImpl, notify, onCompleted })
 
-  // Keep a stable reset that also clears card-local state.
+  // Card-local reset also clears the picked file name.
   const reset = useCallback(() => {
-    pollRef.current?.stop()
-    pollRef.current = null
-    flow.reset()
-    setFinished(false)
+    handleReset()
     setFileName(null)
-    setPercent(0)
-    setLocalError(null)
-    lastToastKey.current = null
-  }, [flow])
+  }, [handleReset])
 
-  useEffect(() => {
-    flowResetRef.current = reset
-  }, [reset])
-
-  // Surface flow errors inline; toast everything except client-side
-  // validation (which stays inline-only, as before — no toast spam for a
-  // wrong file pick). toastOnce dedupes against the analyze-path toasts.
-  const flowError = flow.errorStatus
-  useEffect(() => {
-    if (!flowError || !liveRef.current) return
-    setLocalError(flowError.message)
-    if (flowError.layer !== 'client') toastOnce(flowError.code, flowError.message)
-  }, [flowError, toastOnce])
-
-  const activeScan =
-    flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ??
-    flow.scanResult
+  const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
 
   const pick = useCallback(
     (file?: File) => {
       if (!file) return
-      setFinished(false)
-      setLocalError(null)
-      lastToastKey.current = null
       setFileName(file.name)
-      flow.handleFileSelected(file)
+      handleFileSelected(file)
     },
-    [flow],
+    [handleFileSelected],
   )
 
   const open = useCallback(() => fileInputRef.current?.click(), [])
 
-  const stage = finished ? 'finished' : flow.phase
-  const error = localError ?? flow.errorStatus?.message ?? null
+  const stage = pipelineState === 'completed' ? 'finished' : pipelineState
+  const error = errorStatus?.message ?? null
   const scanPlayers = activeScan?.players ?? []
-  // Upload/scan percent comes from the flow; analyzing percent from polling.
-  const displayPercent =
-    stage === 'analyzing' ? percent : (flow.uploadProgress?.percent ?? percent)
+  // Snapshot progress is already capped at 99 in the shared module.
+  const displayPercent = snapshot.progress
 
-  if (stage === 'uploading' || stage === 'scanning' || stage === 'analyzing') {
+  if (
+    stage === 'uploading' ||
+    stage === 'scanning' ||
+    stage === 'analyzing' ||
+    stage === 'rendering'
+  ) {
+    const labelStage = stage === 'rendering' ? 'rendering' : stage
+    const isAnalyzing = stage === 'analyzing' || stage === 'rendering'
     return (
       <div className="flex items-center gap-3">
         <Spinner />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">{STAGE_LABELS[stage]}</p>
+          <p className="text-sm font-medium text-foreground">{STAGE_LABELS[labelStage]}</p>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary/20">
             <div
               className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.max(2, Math.min(displayPercent, 99))}%` }}
+              style={{ width: `${Math.max(2, displayPercent)}%` }}
             />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {stage === 'analyzing'
+            {isAnalyzing
               ? 'This usually takes under a minute. The result will appear under Analyses.'
               : `${Math.round(displayPercent)}%`}
           </p>
@@ -619,7 +556,7 @@ function AnalyzeVideoCard({
               key={player.player_index}
               variant="outline"
               size="sm"
-              onClick={() => flow.handlePlayerSelected(player.player_index)}
+              onClick={() => handlePlayerSelected(player.player_index)}
             >
               Player {player.player_index} · {Math.round(player.confidence * 100)}%
             </Button>

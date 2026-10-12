@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 import { ENGINE_URL } from '../lib/engine'
-import { analysisQueue } from '../lib/queue'
+import { getAnalysisQueueStats } from '../lib/workerLifecycle'
 import { redis } from '../lib/redis'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
@@ -54,14 +54,13 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       )
     }
 
-    // Check queue depth
+    // Check queue depth (observer — no raw queue handle needed)
     let waiting = 0
     let failed = 0
     try {
-      if (analysisQueue) {
-        waiting = await analysisQueue.getWaitingCount()
-        failed = await analysisQueue.getFailedCount()
-      }
+      const stats = await getAnalysisQueueStats()
+      waiting = stats.waiting
+      failed = stats.failed
     } catch (err) {
       console.warn(
         JSON.stringify({

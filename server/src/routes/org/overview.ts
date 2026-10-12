@@ -1,7 +1,4 @@
-import {
-  getOrgOverview,
-  searchOrg,
-} from '../../lib/orgData'
+import { getOrgOverview, searchOrg } from '../../lib/orgReports'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 

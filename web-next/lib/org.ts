@@ -1,13 +1,12 @@
-import { apiFetch, IDENTITY_BASE } from './api'
 import type { DashboardAnalysis } from './api'
+import { mutateJson, pickDefined, queryJson } from './data/client'
+import { authUserUrl, emailUrl as coreEmailUrl, orgUrl as coreOrgUrl } from './data/transport'
 
-const org = (auth0Id: string, path: string) =>
-  `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
+const org = (auth0Id: string, path: string) => coreOrgUrl(auth0Id, path)
 
 // Email routes live under /api/email/:auth0Id/* (see server/src/routes/email.ts),
 // NOT under /api/org/:auth0Id/email/* — keep them on the right namespace.
-const email = (auth0Id: string, path: string) =>
-  `${IDENTITY_BASE}/api/email/${encodeURIComponent(auth0Id)}${path}`
+const email = (auth0Id: string, path: string) => coreEmailUrl(auth0Id, path)
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -268,25 +267,22 @@ export const orgStudents = async (
   if (opts.sport) params.set('sport', opts.sport)
   if (opts.status) params.set('status', opts.status)
   const qs = params.toString()
-  return apiFetch<{ students: Student[] }>(org(auth0Id, `/students${qs ? `?${qs}` : ''}`))
+  return queryJson<{ students: Student[] }>(org(auth0Id, `/students${qs ? `?${qs}` : ''}`))
 }
 
 export const orgStudentsSports = async (auth0Id: string): Promise<{ sports: string[] }> => {
-  return apiFetch<{ sports: string[] }>(org(auth0Id, '/students/sports'))
+  return queryJson<{ sports: string[] }>(org(auth0Id, '/students/sports'))
 }
 
 export const orgStudent = async (auth0Id: string, id: string): Promise<{ student: Student }> => {
-  return apiFetch<{ student: Student }>(org(auth0Id, `/students/${encodeURIComponent(id)}`))
+  return queryJson<{ student: Student }>(org(auth0Id, `/students/${encodeURIComponent(id)}`))
 }
 
 export const orgCreateStudent = async (
   auth0Id: string,
   input: Partial<StudentFormValues>,
 ): Promise<{ student: Student }> => {
-  return apiFetch<{ student: Student }>(org(auth0Id, '/students'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ student: Student }>(org(auth0Id, '/students'), 'POST', pickDefined(input))
 }
 
 export const orgUpdateStudent = async (
@@ -294,29 +290,28 @@ export const orgUpdateStudent = async (
   id: string,
   input: Partial<StudentFormValues>,
 ): Promise<{ student: Student }> => {
-  return apiFetch<{ student: Student }>(org(auth0Id, `/students/${encodeURIComponent(id)}`), {
-    method: 'PUT',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ student: Student }>(
+    org(auth0Id, `/students/${encodeURIComponent(id)}`),
+    'PUT',
+    pickDefined(input),
+  )
 }
 
 export const orgDeleteStudent = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/students/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/students/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 export const orgImportStudents = async (
   auth0Id: string,
   rows: StudentImportRow[],
 ): Promise<StudentImportResult> => {
-  return apiFetch<StudentImportResult>(org(auth0Id, '/students/import'), {
-    method: 'POST',
-    body: JSON.stringify({ rows }),
-  })
+  return mutateJson<StudentImportResult>(org(auth0Id, '/students/import'), 'POST', { rows })
 }
 
 export const orgStudentTrends = async (
@@ -329,7 +324,7 @@ export const orgStudentTrends = async (
   if (opts.from) params.set('from', opts.from)
   if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
-  return apiFetch<{ trends: MetricTrend[] }>(
+  return queryJson<{ trends: MetricTrend[] }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/trends${qs ? `?${qs}` : ''}`),
   )
 }
@@ -341,7 +336,7 @@ export const orgCompareStudents = async (
 ): Promise<{ comparison: ComparisonStudent[] }> => {
   const qsParts = [`ids=${ids.map(encodeURIComponent).join(',')}`]
   if (metricKey) qsParts.push(`metricKey=${encodeURIComponent(metricKey)}`)
-  return apiFetch<{ comparison: ComparisonStudent[] }>(
+  return queryJson<{ comparison: ComparisonStudent[] }>(
     org(auth0Id, `/students/comparison?${qsParts.join('&')}`),
   )
 }
@@ -358,7 +353,7 @@ export const orgStudentPerformance = async (
   if (opts.from) params.set('from', opts.from)
   if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
-  return apiFetch<{ series: PerformanceSeriesPoint[] }>(
+  return queryJson<{ series: PerformanceSeriesPoint[] }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance${qs ? `?${qs}` : ''}`),
   )
 }
@@ -368,9 +363,10 @@ export const orgAddPerformanceMetric = async (
   studentId: string,
   input: { metric_key: string; metric_value: number; unit?: string | null; measured_at?: string },
 ): Promise<{ metric: PerformanceMetric }> => {
-  return apiFetch<{ metric: PerformanceMetric }>(
+  return mutateJson<{ metric: PerformanceMetric }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/performance`),
-    { method: 'POST', body: JSON.stringify(input) },
+    'POST',
+    input,
   )
 }
 
@@ -378,7 +374,7 @@ export const orgStudentAnalyses = async (
   auth0Id: string,
   studentId: string,
 ): Promise<{ analyses: DashboardAnalysis[] }> => {
-  return apiFetch<{ analyses: DashboardAnalysis[] }>(
+  return queryJson<{ analyses: DashboardAnalysis[] }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/analyses`),
   )
 }
@@ -394,7 +390,7 @@ export const orgAttendance = async (
   if (opts.to) params.set('to', opts.to)
   if (opts.studentId) params.set('studentId', opts.studentId)
   const qs = params.toString()
-  return apiFetch<{ records: AttendanceWithStudent[] }>(
+  return queryJson<{ records: AttendanceWithStudent[] }>(
     org(auth0Id, `/attendance${qs ? `?${qs}` : ''}`),
   )
 }
@@ -408,7 +404,7 @@ export const orgAttendanceSummary = async (
   if (opts.to) params.set('to', opts.to)
   if (opts.studentId) params.set('studentId', opts.studentId)
   const qs = params.toString()
-  return apiFetch<{ summary: AttendanceSummary }>(
+  return queryJson<{ summary: AttendanceSummary }>(
     org(auth0Id, `/attendance/summary${qs ? `?${qs}` : ''}`),
   )
 }
@@ -417,19 +413,17 @@ export const orgUpsertAttendance = async (
   auth0Id: string,
   input: { student_id: string; session_date: string; status: AttendanceStatus; note?: string },
 ): Promise<{ record: AttendanceRecord }> => {
-  return apiFetch<{ record: AttendanceRecord }>(org(auth0Id, '/attendance'), {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ record: AttendanceRecord }>(org(auth0Id, '/attendance'), 'PUT', input)
 }
 
 export const orgBatchAttendance = async (
   auth0Id: string,
   entries: { student_id: string; session_date: string; status: AttendanceStatus; note?: string }[],
 ): Promise<{ records: AttendanceRecord[]; count: number }> => {
-  return apiFetch<{ records: AttendanceRecord[]; count: number }>(
+  return mutateJson<{ records: AttendanceRecord[]; count: number }>(
     org(auth0Id, '/attendance/batch'),
-    { method: 'POST', body: JSON.stringify({ entries }) },
+    'POST',
+    { entries },
   )
 }
 
@@ -438,12 +432,12 @@ export const orgDeleteAttendance = async (
   studentId: string,
   date: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(
+  return mutateJson<{ deleted: boolean }>(
     org(
       auth0Id,
       `/attendance?studentId=${encodeURIComponent(studentId)}&date=${encodeURIComponent(date)}`,
     ),
-    { method: 'DELETE' },
+    'DELETE',
   )
 }
 
@@ -457,17 +451,14 @@ export const orgSchedule = async (
   if (opts.from) params.set('from', opts.from)
   if (opts.to) params.set('to', opts.to)
   const qs = params.toString()
-  return apiFetch<{ events: ScheduleEvent[] }>(org(auth0Id, `/schedule${qs ? `?${qs}` : ''}`))
+  return queryJson<{ events: ScheduleEvent[] }>(org(auth0Id, `/schedule${qs ? `?${qs}` : ''}`))
 }
 
 export const orgCreateEvent = async (
   auth0Id: string,
   input: Partial<ScheduleEvent>,
 ): Promise<{ event: ScheduleEvent }> => {
-  return apiFetch<{ event: ScheduleEvent }>(org(auth0Id, '/schedule'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ event: ScheduleEvent }>(org(auth0Id, '/schedule'), 'POST', pickDefined(input))
 }
 
 export const orgUpdateEvent = async (
@@ -475,19 +466,21 @@ export const orgUpdateEvent = async (
   id: string,
   input: Partial<ScheduleEvent>,
 ): Promise<{ event: ScheduleEvent }> => {
-  return apiFetch<{ event: ScheduleEvent }>(org(auth0Id, `/schedule/${encodeURIComponent(id)}`), {
-    method: 'PUT',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ event: ScheduleEvent }>(
+    org(auth0Id, `/schedule/${encodeURIComponent(id)}`),
+    'PUT',
+    pickDefined(input),
+  )
 }
 
 export const orgDeleteEvent = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/schedule/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/schedule/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 // ── Reports ──────────────────────────────────────────────────────────────────
@@ -497,11 +490,11 @@ export const orgReports = async (
   opts: { studentId?: string } = {},
 ): Promise<{ reports: ReportRecord[] }> => {
   const qs = opts.studentId ? `?studentId=${encodeURIComponent(opts.studentId)}` : ''
-  return apiFetch<{ reports: ReportRecord[] }>(org(auth0Id, `/reports${qs}`))
+  return queryJson<{ reports: ReportRecord[] }>(org(auth0Id, `/reports${qs}`))
 }
 
 export const orgReport = async (auth0Id: string, id: string): Promise<{ report: ReportRecord }> => {
-  return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`))
+  return queryJson<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`))
 }
 
 export const orgCreateReport = async (
@@ -514,19 +507,17 @@ export const orgCreateReport = async (
     title?: string
   },
 ): Promise<{ report: ReportRecord }> => {
-  return apiFetch<{ report: ReportRecord }>(org(auth0Id, '/reports'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ report: ReportRecord }>(org(auth0Id, '/reports'), 'POST', pickDefined(input))
 }
 
 export const orgDeleteReport = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/reports/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 export const orgUpdateReport = async (
@@ -539,10 +530,11 @@ export const orgUpdateReport = async (
     title?: string
   },
 ): Promise<{ report: ReportRecord }> => {
-  return apiFetch<{ report: ReportRecord }>(org(auth0Id, `/reports/${encodeURIComponent(id)}`), {
-    method: 'PUT',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ report: ReportRecord }>(
+    org(auth0Id, `/reports/${encodeURIComponent(id)}`),
+    'PUT',
+    pickDefined(input),
+  )
 }
 
 // ── Training objectives (§26 loop) ──────────────────────────────────────────
@@ -571,7 +563,7 @@ export const orgObjectives = async (
   if (opts.teamId) params.set('team_id', opts.teamId)
   if (opts.status) params.set('status', opts.status)
   const qs = params.toString()
-  return apiFetch<{ objectives: TrainingObjective[] }>(
+  return queryJson<{ objectives: TrainingObjective[] }>(
     org(auth0Id, `/objectives${qs ? `?${qs}` : ''}`),
   )
 }
@@ -588,10 +580,11 @@ export const orgCreateObjective = async (
     due_on?: string | null
   },
 ): Promise<{ objective: TrainingObjective }> => {
-  return apiFetch<{ objective: TrainingObjective }>(org(auth0Id, '/objectives'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  return mutateJson<{ objective: TrainingObjective }>(
+    org(auth0Id, '/objectives'),
+    'POST',
+    pickDefined(input),
+  )
 }
 
 export const orgSetObjectiveStatus = async (
@@ -599,12 +592,10 @@ export const orgSetObjectiveStatus = async (
   id: string,
   status: 'active' | 'done' | 'archived',
 ): Promise<{ objective: TrainingObjective }> => {
-  return apiFetch<{ objective: TrainingObjective }>(
+  return mutateJson<{ objective: TrainingObjective }>(
     org(auth0Id, `/objectives/${encodeURIComponent(id)}`),
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    },
+    'PATCH',
+    { status },
   )
 }
 
@@ -612,9 +603,10 @@ export const orgDeleteObjective = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/objectives/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/objectives/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 export type StoredFinding = {
@@ -642,15 +634,15 @@ export const orgStudentFindings = async (
   limit = 20,
 ): Promise<{ findings: StoredFinding[] }> => {
   const params = new URLSearchParams({ student_id: studentId, limit: String(limit) })
-  return apiFetch<{ findings: StoredFinding[] }>(
-    `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings?${params.toString()}`,
+  return queryJson<{ findings: StoredFinding[] }>(
+    authUserUrl(auth0Id, `/findings?${params.toString()}`),
   )
 }
 
 /** Export URL for a student's findings CSV (server-serialized, BOM-prefixed). */
 export const studentFindingsExportUrl = (auth0Id: string, studentId: string, limit = 200) => {
   const params = new URLSearchParams({ student_id: studentId, limit: String(limit) })
-  return `${IDENTITY_BASE}/api/auth/user/${encodeURIComponent(auth0Id)}/findings/export?${params.toString()}`
+  return authUserUrl(auth0Id, `/findings/export?${params.toString()}`)
 }
 
 /**
@@ -708,21 +700,16 @@ export type Match = {
 }
 
 export const orgSeasons = async (auth0Id: string): Promise<{ seasons: Season[] }> =>
-  apiFetch<{ seasons: Season[] }>(org(auth0Id, '/seasons'))
+  queryJson<{ seasons: Season[] }>(org(auth0Id, '/seasons'))
 
 export const orgCreateSeason = async (
   auth0Id: string,
   input: { name: string; starts_on?: string | null; ends_on?: string | null },
 ): Promise<{ season: Season }> =>
-  apiFetch<{ season: Season }>(org(auth0Id, '/seasons'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  mutateJson<{ season: Season }>(org(auth0Id, '/seasons'), 'POST', pickDefined(input))
 
 export const orgDeleteSeason = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
-  apiFetch<{ deleted: boolean }>(org(auth0Id, `/seasons/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  mutateJson<{ deleted: boolean }>(org(auth0Id, `/seasons/${encodeURIComponent(id)}`), 'DELETE')
 
 export const orgMatches = async (
   auth0Id: string,
@@ -732,7 +719,7 @@ export const orgMatches = async (
   if (opts.teamId) params.set('team_id', opts.teamId)
   if (opts.seasonId) params.set('season_id', opts.seasonId)
   const qs = params.toString()
-  return apiFetch<{ matches: Match[] }>(org(auth0Id, `/matches${qs ? `?${qs}` : ''}`))
+  return queryJson<{ matches: Match[] }>(org(auth0Id, `/matches${qs ? `?${qs}` : ''}`))
 }
 
 export const orgCreateMatch = async (
@@ -746,15 +733,10 @@ export const orgCreateMatch = async (
     result?: string | null
   },
 ): Promise<{ match: Match }> =>
-  apiFetch<{ match: Match }>(org(auth0Id, '/matches'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  mutateJson<{ match: Match }>(org(auth0Id, '/matches'), 'POST', pickDefined(input))
 
 export const orgDeleteMatch = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
-  apiFetch<{ deleted: boolean }>(org(auth0Id, `/matches/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  mutateJson<{ deleted: boolean }>(org(auth0Id, `/matches/${encodeURIComponent(id)}`), 'DELETE')
 
 // ── Training plans ─────────────────────────────────────────────────────────
 
@@ -779,7 +761,7 @@ export const orgPlans = async (
   if (opts.teamId) params.set('team_id', opts.teamId)
   if (opts.studentId) params.set('student_id', opts.studentId)
   const qs = params.toString()
-  return apiFetch<{ plans: TrainingPlan[] }>(org(auth0Id, `/plans${qs ? `?${qs}` : ''}`))
+  return queryJson<{ plans: TrainingPlan[] }>(org(auth0Id, `/plans${qs ? `?${qs}` : ''}`))
 }
 
 export const orgCreatePlan = async (
@@ -791,25 +773,19 @@ export const orgCreatePlan = async (
     description?: string | null
   },
 ): Promise<{ plan: TrainingPlan }> =>
-  apiFetch<{ plan: TrainingPlan }>(org(auth0Id, '/plans'), {
-    method: 'POST',
-    body: JSON.stringify(pickDefined(input)),
-  })
+  mutateJson<{ plan: TrainingPlan }>(org(auth0Id, '/plans'), 'POST', pickDefined(input))
 
 export const orgSetPlanStatus = async (
   auth0Id: string,
   id: string,
   status: 'active' | 'done' | 'archived',
 ): Promise<{ plan: TrainingPlan }> =>
-  apiFetch<{ plan: TrainingPlan }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), {
-    method: 'PATCH',
-    body: JSON.stringify({ status }),
+  mutateJson<{ plan: TrainingPlan }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), 'PATCH', {
+    status,
   })
 
 export const orgDeletePlan = async (auth0Id: string, id: string): Promise<{ deleted: boolean }> =>
-  apiFetch<{ deleted: boolean }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  mutateJson<{ deleted: boolean }>(org(auth0Id, `/plans/${encodeURIComponent(id)}`), 'DELETE')
 
 // ── Wellness check-ins (health data, §5 — medical permission to read) ──────
 
@@ -830,7 +806,7 @@ export const orgWellness = async (
   auth0Id: string,
   studentId: string,
 ): Promise<{ checkins: WellnessCheckin[] }> =>
-  apiFetch<{ checkins: WellnessCheckin[] }>(
+  queryJson<{ checkins: WellnessCheckin[] }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/wellness`),
   )
 
@@ -845,9 +821,10 @@ export const orgCreateWellness = async (
     note?: string | null
   },
 ): Promise<{ checkin: WellnessCheckin }> =>
-  apiFetch<{ checkin: WellnessCheckin }>(
+  mutateJson<{ checkin: WellnessCheckin }>(
     org(auth0Id, `/students/${encodeURIComponent(studentId)}/wellness`),
-    { method: 'POST', body: JSON.stringify(pickDefined(input)) },
+    'POST',
+    pickDefined(input),
   )
 
 // ── Subscription & usage ───────────────────────────────────────────────────
@@ -859,7 +836,7 @@ export type OrgSubscription = {
 }
 
 export const orgSubscription = async (auth0Id: string): Promise<OrgSubscription> =>
-  apiFetch<OrgSubscription>(org(auth0Id, '/subscription'))
+  queryJson<OrgSubscription>(org(auth0Id, '/subscription'))
 
 // ── Performance metrics ──────────────────────────────────────────────────────
 
@@ -871,7 +848,7 @@ export const orgPerformanceMetrics = async (
   if (opts.metricKey) params.set('metricKey', opts.metricKey)
   if (opts.from) params.set('from', opts.from)
   if (opts.to) params.set('to', opts.to)
-  return apiFetch<{ metrics: PerformanceMetric[] }>(
+  return queryJson<{ metrics: PerformanceMetric[] }>(
     org(auth0Id, `/performance?${params.toString()}`),
   )
 }
@@ -880,9 +857,10 @@ export const orgDeletePerformanceMetric = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/performance/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/performance/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 export const orgUpdatePerformanceMetric = async (
@@ -890,16 +868,17 @@ export const orgUpdatePerformanceMetric = async (
   id: string,
   input: { metric_value: number; unit?: string | null },
 ): Promise<{ metric: PerformanceMetric }> => {
-  return apiFetch<{ metric: PerformanceMetric }>(
+  return mutateJson<{ metric: PerformanceMetric }>(
     org(auth0Id, `/performance/${encodeURIComponent(id)}`),
-    { method: 'PUT', body: JSON.stringify(input) },
+    'PUT',
+    input,
   )
 }
 
 // ── Overview & analysis linking ──────────────────────────────────────────────
 
 export const orgOverview = async (auth0Id: string): Promise<{ overview: OrgOverview }> => {
-  return apiFetch<{ overview: OrgOverview }>(org(auth0Id, '/overview'))
+  return queryJson<{ overview: OrgOverview }>(org(auth0Id, '/overview'))
 }
 
 // ── Global search ────────────────────────────────────────────────────────────
@@ -918,7 +897,7 @@ export type OrgSearchResult = {
 }
 
 export const orgSearch = async (auth0Id: string, query: string): Promise<OrgSearchResult> => {
-  return apiFetch<OrgSearchResult>(org(auth0Id, `/search?q=${encodeURIComponent(query)}`))
+  return queryJson<OrgSearchResult>(org(auth0Id, `/search?q=${encodeURIComponent(query)}`))
 }
 
 // ── Email (Resend) ───────────────────────────────────────────────────────────
@@ -932,30 +911,33 @@ export const orgSendInvites = async (
   auth0Id: string,
   input: { emails: string[]; student_ids?: string[] },
 ): Promise<{ sent: EmailSendOutcome[]; total: number; failed: number }> => {
-  return apiFetch(email(auth0Id, '/invite'), {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ sent: EmailSendOutcome[]; total: number; failed: number }>(
+    email(auth0Id, '/invite'),
+    'POST',
+    input,
+  )
 }
 
 export const orgEmailReport = async (
   auth0Id: string,
   input: { report_id: string; to?: string },
 ): Promise<{ sent: { id: string | null; to: string; subject: string } }> => {
-  return apiFetch(email(auth0Id, '/report'), {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ sent: { id: string | null; to: string; subject: string } }>(
+    email(auth0Id, '/report'),
+    'POST',
+    input,
+  )
 }
 
 export const orgEmailAttendance = async (
   auth0Id: string,
   input: { student_id?: string; from?: string; to?: string; recipient?: string },
 ): Promise<{ sent: unknown; records: number }> => {
-  return apiFetch(email(auth0Id, '/attendance'), {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ sent: unknown; records: number }>(
+    email(auth0Id, '/attendance'),
+    'POST',
+    input,
+  )
 }
 
 export const linkAnalysisToStudent = async (
@@ -963,21 +945,9 @@ export const linkAnalysisToStudent = async (
   jobId: string,
   studentId: string | null,
 ): Promise<{ analysis: DashboardAnalysis }> => {
-  return apiFetch<{ analysis: DashboardAnalysis }>(
+  return mutateJson<{ analysis: DashboardAnalysis }>(
     org(auth0Id, `/analyses/${encodeURIComponent(jobId)}/student`),
-    {
-      method: 'PUT',
-      body: JSON.stringify({ student_id: studentId }),
-    },
+    'PUT',
+    { student_id: studentId },
   )
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const out: Partial<T> = {}
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined && value !== '') out[key as keyof T] = value as T[keyof T]
-  }
-  return out
 }

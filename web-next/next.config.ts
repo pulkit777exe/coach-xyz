@@ -1,5 +1,5 @@
 import type { NextConfig } from 'next'
-import { withSentryConfig } from '@sentry/nextjs'
+import { withSentryConfig } from '@sentry/nextjs/config'
 
 const API_PROXY = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 

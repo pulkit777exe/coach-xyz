@@ -1,7 +1,7 @@
-import { apiFetch, IDENTITY_BASE } from './api'
+import { mutateJson, queryJson } from './data/client'
+import { orgUrl as coreOrgUrl } from './data/transport'
 
-const org = (auth0Id: string, path: string) =>
-  `${IDENTITY_BASE}/api/org/${encodeURIComponent(auth0Id)}${path}`
+const org = (auth0Id: string, path: string) => coreOrgUrl(auth0Id, path)
 
 // ── Org-member role vocabulary ──────────────────────────────────────────────
 // Mirrors server/src/lib/orgMembers.ts (same values AND order — order is
@@ -62,17 +62,14 @@ export type OrgMembersResponse = {
 }
 
 export const orgMembers = async (auth0Id: string): Promise<OrgMembersResponse> => {
-  return apiFetch<OrgMembersResponse>(org(auth0Id, '/members'))
+  return queryJson<OrgMembersResponse>(org(auth0Id, '/members'))
 }
 
 export const orgInviteMember = async (
   auth0Id: string,
   input: { email: string; role: OrgMemberInviteRole },
 ): Promise<{ member: OrgMember }> => {
-  return apiFetch<{ member: OrgMember }>(org(auth0Id, '/members'), {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ member: OrgMember }>(org(auth0Id, '/members'), 'POST', input)
 }
 
 export const orgSetMemberRole = async (
@@ -80,19 +77,21 @@ export const orgSetMemberRole = async (
   id: string,
   role: OrgMemberRole,
 ): Promise<{ member: OrgMember }> => {
-  return apiFetch<{ member: OrgMember }>(org(auth0Id, `/members/${encodeURIComponent(id)}/role`), {
-    method: 'PATCH',
-    body: JSON.stringify({ role }),
-  })
+  return mutateJson<{ member: OrgMember }>(
+    org(auth0Id, `/members/${encodeURIComponent(id)}/role`),
+    'PATCH',
+    { role },
+  )
 }
 
 export const orgRemoveMember = async (
   auth0Id: string,
   id: string,
 ): Promise<{ deleted: boolean }> => {
-  return apiFetch<{ deleted: boolean }>(org(auth0Id, `/members/${encodeURIComponent(id)}`), {
-    method: 'DELETE',
-  })
+  return mutateJson<{ deleted: boolean }>(
+    org(auth0Id, `/members/${encodeURIComponent(id)}`),
+    'DELETE',
+  )
 }
 
 export type OrgInvite = {
@@ -108,26 +107,24 @@ export type OrgInvite = {
 }
 
 export const orgInvites = async (auth0Id: string): Promise<{ invites: OrgInvite[] }> => {
-  return apiFetch<{ invites: OrgInvite[] }>(org(auth0Id, '/invites'))
+  return queryJson<{ invites: OrgInvite[] }>(org(auth0Id, '/invites'))
 }
 
 export const orgMintInvite = async (
   auth0Id: string,
   input: { email: string; role: OrgMemberInviteRole },
 ): Promise<{ invite: OrgInvite; token: string }> => {
-  return apiFetch<{ invite: OrgInvite; token: string }>(org(auth0Id, '/invites'), {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return mutateJson<{ invite: OrgInvite; token: string }>(org(auth0Id, '/invites'), 'POST', input)
 }
 
 export const orgRevokeInvite = async (
   auth0Id: string,
   id: string,
 ): Promise<{ revoked: boolean }> => {
-  return apiFetch<{ revoked: boolean }>(org(auth0Id, `/invites/${encodeURIComponent(id)}/revoke`), {
-    method: 'POST',
-  })
+  return mutateJson<{ revoked: boolean }>(
+    org(auth0Id, `/invites/${encodeURIComponent(id)}/revoke`),
+    'POST',
+  )
 }
 
 export type AuditLog = {
@@ -144,5 +141,5 @@ export type AuditLog = {
 }
 
 export const orgAuditLogs = async (auth0Id: string, limit = 50): Promise<{ logs: AuditLog[] }> => {
-  return apiFetch<{ logs: AuditLog[] }>(org(auth0Id, `/audit?limit=${limit}`))
+  return queryJson<{ logs: AuditLog[] }>(org(auth0Id, `/audit?limit=${limit}`))
 }

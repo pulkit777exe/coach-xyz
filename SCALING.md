@@ -1,6 +1,8 @@
 # Coach-XYZ Scaling Plan
 
-> **Current Status:** Local storage only. S3/R2 integration required for horizontal scaling.
+> **Current Status:** Dual storage (local disk by default, S3-compatible backend
+> available via `STORAGE_BACKEND=s3`). Single engine + single worker by default;
+> scale by adding engine instances and raising `WORKER_CONCURRENCY`.
 
 ## Current Architecture (Single Instance)
 
@@ -19,9 +21,9 @@
 ```
 
 **Bottlenecks:**
-1. Engine: Single instance, ~512MB RAM limit (free tier)
-2. Worker: `concurrency: 1` (single job at a time, up to 12 min per job)
-3. Storage: Local filesystem only (no S3/R2 integration yet)
+1. Engine: Single instance, ~512MB RAM limit (free tier); single uvicorn worker
+2. Worker: `WORKER_CONCURRENCY: 1` by default (single job at a time, 12 min engine timeout + 13 min stuck-job recovery)
+3. Storage: Local disk by default; S3-compatible backend exists (`engine/core/storage.py`) but needs a bucket for multi-instance setups
 4. Redis: Free tier limits (10K commands/day)
 
 **Current Capacity (Free Tier):**
@@ -61,15 +63,19 @@ Scale the **Engine** and **Server** independently:
 
 **Changes Required:**
 
-#### 1. Engine: Stateless + Shared Storage
-```dockerfile
-# Add S3/R2 storage backend
+#### 1. Engine: Shared Storage (already implemented — just configure it)
+```bash
+# Engine env (see engine/.env.sample)
 STORAGE_BACKEND=s3
 S3_BUCKET=coachai-videos
 S3_REGION=auto
-S3_ACCESS_KEY_ID=xxx
-S3_SECRET_ACCESS_KEY=xxx
+S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=xxx
+AWS_SECRET_ACCESS_KEY=xxx
 ```
+Layout is bucket-ready today: immutable `raw/{session}/{angle}/{uuid}.mp4`
+sources plus one `results/{job}.mp4` per analysis, with presigned
+browser-direct uploads (`POST /upload-intent` → `POST /scan-from-key`).
 
 #### 2. Server: Multiple Workers
 ```yaml
@@ -116,8 +122,10 @@ spec:
             cpu: "2"
             memory: "4Gi"
         env:
-        - name: WORKER_CONCURRENCY
-          value: "2"
+        - name: SENTRY_DSN
+          value: "..."
+      # NOTE: WORKER_CONCURRENCY lives on the server (BullMQ), not the engine.
+      # Set it there (default 1) alongside ENGINE_URL pointing at the pool.
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -180,8 +188,8 @@ Use serverless functions for bursty workloads:
 | **Total** | | **~$20/mo** |
 
 **Changes:**
-1. Add S3/R2 storage backend to engine
-2. Increase `WORKER_CONCURRENCY` to 4
+1. Point `STORAGE_BACKEND=s3` at a shared bucket (backend exists; local disk is fine for one instance)
+2. Increase `WORKER_CONCURRENCY` (server) past 1
 3. Upgrade Redis to pay-as-you-go
 
 ---
@@ -224,43 +232,25 @@ Use serverless functions for bursty workloads:
 
 ## Code Changes for Scaling
 
-### 1. Add S3/R2 Storage Backend
+### 1. S3/R2 Storage Backend — ✅ implemented (`engine/core/storage.py`)
+
+Local vs S3 switches on `STORAGE_BACKEND`; S3 uses lazily-imported boto3 with
+presigned uploads/downloads. The sample below is kept for reference only:
 
 ```python
-# engine/core/storage.py
-import boto3
-from botocore.config import Config
-
+# engine/core/storage.py (current shape, simplified)
 class S3Storage:
-    def __init__(self):
-        self.s3 = boto3.client('s3',
-            endpoint_url=os.environ.get('S3_ENDPOINT'),
-            aws_access_key_id=os.environ.get('S3_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('S3_SECRET_ACCESS_KEY'),
-            config=Config(signature_version='s3v4')
-        )
-        self.bucket = os.environ.get('S3_BUCKET')
-    
-    def upload(self, key: str, data: bytes) -> str:
-        self.s3.put_object(Bucket=self.bucket, Key=key, Body=data)
-        return f"s3://{self.bucket}/{key}"
-    
-    def download(self, key: str) -> bytes:
-        response = self.s3.get_object(Bucket=self.bucket, Key=key)
-        return response['Body'].read()
-    
-    def get_presigned_url(self, key: str, expires: int = 3600) -> str:
-        return self.s3.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': self.bucket, 'Key': key},
-            ExpiresIn=expires
-        )
+    def presigned_upload(self, key: str, ...) -> str: ...    # POST /upload-intent
+    def presigned_download(self, key: str, ...) -> str: ...  # GET /download/:jobId → 302
 ```
 
-### 2. Add Queue-Based Routing
+### 2. Add Queue-Based Routing — ❌ proposal (not implemented)
+
+The server talks to a single engine via `ENGINE_URL`. Multi-engine routing
+would look like:
 
 ```typescript
-// server/src/lib/queue.ts
+// server/src/lib/queue.ts (proposal)
 // Route jobs to specific engine instances based on load
 const engineEndpoints = (process.env.ENGINE_URLS ?? '').split(',')
 let currentEndpoint = 0
@@ -272,26 +262,20 @@ function getNextEngine(): string {
 }
 ```
 
-### 3. Add Job Prioritization
+### 3. Job Prioritization — ✅ partially implemented
 
-```typescript
-// server/src/lib/queue.ts
-// Prioritize jobs based on user tier
-const priorityConfig = {
-  beta: 1,      // High priority
-  free: 5,      // Low priority
-  paid: 2,      // Medium priority
-}
-
-// Add to job options
-await analysisQueue.add('analysis', payload, {
-  priority: priorityConfig[userTier] ?? 5,
-})
-```
+BullMQ honors `priority` (higher = sooner). Signed-in player-hub jobs enqueue
+at base 10 over anonymous base 0, plus a subscription tier bump
+(`+10` elite / `+5` pro). Per-org quotas (`ORG_DAILY_ANALYSIS_LIMIT`, default
+50/day) are the fairness backstop; per-org queue aging is still open.
 
 ---
 
-## Monitoring & Observability
+## Monitoring & Observability — ❌ proposal (not implemented)
+
+No Prometheus `/metrics` endpoint exists today; logging is structured JSON +
+Sentry on all three layers, correlated by job/request id. The sketches below
+are proposals for when the workload justifies them.
 
 ### Key Metrics to Track
 ```yaml
@@ -355,12 +339,12 @@ groups:
 # Engine
 STORAGE_BACKEND=s3
 S3_BUCKET=coachai-videos
-S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_ACCESS_KEY_ID=<token>
-S3_SECRET_ACCESS_KEY=<secret>
+S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=<token>
+AWS_SECRET_ACCESS_KEY=<secret>
 
 # Server
-ENGINE_URLS=http://engine1:8001,http://engine2:8001
+ENGINE_URL=http://engine1:8001   # single engine today; a pool needs the §"Queue-Based Routing" proposal
 WORKER_CONCURRENCY=4
 ```
 
@@ -386,9 +370,9 @@ docker compose -f docker-compose.prod.yml up -d --scale engine=2 --scale server=
 
 ### For Beta (Now):
 1. **Upgrade Redis** to pay-as-you-go ($5/mo)
-2. **Add Cloudflare R2** for shared storage ($1/mo)
-3. **Increase WORKER_CONCURRENCY** to 4
-4. **Deploy 2 engine instances** on Render
+2. **Point `STORAGE_BACKEND=s3`** at a Cloudflare R2 bucket ($1/mo) once a second engine instance is needed — single-instance deploys are fine on local disk
+3. **Increase WORKER_CONCURRENCY** (server) past 1 once the engine keeps up
+4. **Deploy 2 engine instances** on Render (requires the queue-routing proposal above, else both servers would each need their own engine)
 
 ### For Growth (Next Month):
 1. **Add load balancer** (Render / Cloudflare)

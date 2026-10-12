@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgAuditLogs } from '@/lib/serverData'
+import { orgAuditLogs } from '@/lib/serverData'
 import AuditClient from '@/components/org/AuditClient'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Audit Log | CoachXYZ',
@@ -12,15 +10,16 @@ export const metadata: Metadata = {
 }
 
 export default async function AuditPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
+  // Gate first so the log fetch below runs gated; the fetch keeps its own
+  // try/catch so failures render the unavailable notice (not an empty list).
+  await loadPage('org', {})
 
   let logs = null
   try {
-    const res = await orgAuditLogs(auth0Id, 100)
-    logs = res.logs
+    const { data } = await loadPage('org', {
+      logs: ({ auth0Id }) => orgAuditLogs(auth0Id, 100),
+    })
+    logs = data.logs.logs
   } catch {
     logs = null
   }

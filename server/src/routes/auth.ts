@@ -1,9 +1,5 @@
 import { Elysia } from 'elysia'
-import {
-  upsertUser,
-  getUserByAuth0Id,
-  resolveAuth0Id,
-} from '../lib/users'
+import { upsertUser, getUserByAuth0Id, resolveAuth0Id } from '../lib/users'
 import {
   getUserAnalyses,
   getUserAnalysisById,
@@ -13,12 +9,7 @@ import {
   persistAnalysisStatus,
   updateAnalysisDisplayName,
 } from '../lib/analyses'
-import {
-  findingsToCsv,
-  getFindingsTrend,
-  getStudentFindings,
-  reviewFinding,
-} from '../lib/findings'
+import { findingsToCsv, getFindingsTrend, getStudentFindings, reviewFinding } from '../lib/findings'
 import {
   MAX_CLIPS_PER_ANALYSIS,
   countClips,
@@ -27,55 +18,22 @@ import {
   listClips,
   parseClipInput,
 } from '../lib/clips'
-import {
-  saveChatMessage,
-  getChatMessages,
-} from '../lib/chatMessages'
-import { markEngineJobFailed } from '../lib/engine'
-import { getJob } from '../lib/jobs'
+import { saveChatMessage, getChatMessages } from '../lib/chatMessages'
+import { authorizeJob, failEngineJobForServerJob } from '../lib/jobGuard'
+import { answerChatTurn, keywordFallback } from '../lib/chatTurn'
 import { checkClipLimit, getIP } from '../lib/ratelimit'
 import { buildError } from '../lib/errors'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
-import { resolveCaller } from '../lib/caller'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
 
-function generateSimpleResponse(question: string, summary: Record<string, unknown> | null): string {
-  if (!summary) {
-    return "I don't have the analysis details available. Please try again later."
-  }
-
-  const q = question.toLowerCase()
-
-  if (q.includes('score') || q.includes('rating')) {
-    return `Based on the analysis, the form score is ${summary.form_score ?? 'N/A'}/10 with an overall rating of "${summary.overall_rating ?? 'N/A'}". ${summary.summary || ''}`
-  }
-  if (q.includes('tip') || q.includes('improve') || q.includes('focus')) {
-    const tips = summary.top_tips as string[] | undefined
-    return tips?.length
-      ? `Here are the key areas to focus on:\n${tips.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
-      : 'Focus on the fundamentals shown in the analysis summary.'
-  }
-  if (q.includes('strength') || q.includes('good')) {
-    const strengths = summary.strengths as string[] | undefined
-    return strengths?.length
-      ? `Your strengths from this session:\n${strengths.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
-      : "The analysis didn't highlight specific strengths."
-  }
-  if (q.includes('drill') || q.includes('practice')) {
-    return summary.priority_drill
-      ? `Recommended drill: ${summary.priority_drill}`
-      : 'No specific drill recommended for this session.'
-  }
-  if (q.includes('event') || q.includes('shot')) {
-    const events = summary.shot_events as Array<Record<string, unknown>> | undefined
-    if (events?.length) {
-      return `There were ${events.length} events detected. Here's a summary:\n${events.map((e, i) => `${i + 1}. ${e.timestamp}s - ${e.event_type}: Score ${e.form_score}/10`).join('\n')}`
-    }
-    return `The analysis detected ${summary.total_events ?? 0} events.`
-  }
-
-  return `${summary.summary || "Here's a summary of the analysis."} The form score was ${summary.form_score ?? 'N/A'}/10. Feel free to ask about specific events, tips, strengths, or drills.`
+export function generateSimpleResponse(
+  question: string,
+  summary: Record<string, unknown> | null,
+): string {
+  // Single-sourced in lib/chatTurn (the interactor's fallback). This export
+  // stays for compatibility; do not fork the logic here.
+  return keywordFallback(question, summary)
 }
 
 export type FindingsTrendQuery = {
@@ -299,15 +257,16 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
     }
-    const caller = await resolveCaller(auth0Id, request)
-    if (!caller.verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
+    const guard = await authorizeJob(
+      auth0Id,
+      request,
+      'Clip creation requires the finding.review permission',
+    )
+    if (!guard.ok) {
+      set.status = guard.status
+      return guard.error
     }
-    if (caller.verified !== auth0Id && !caller.can('finding.review')) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Clip creation requires the finding.review permission', false)
-    }
+    const caller = guard.caller
     const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
     if (!allowed) {
       set.status = 429
@@ -339,38 +298,42 @@ export default new Elysia()
     set.status = 201
     return { clip }
   })
-  .delete('/api/auth/user/:auth0Id/analyses/:jobId/clips/:clipId', async ({ params, request, set }) => {
-    const { auth0Id, jobId, clipId } = params
-    if (!auth0Id || !jobId || !clipId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
-    }
-    const caller = await resolveCaller(auth0Id, request)
-    if (!caller.verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
-    if (caller.verified !== auth0Id && !caller.can('finding.review')) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Clip deletion requires the finding.review permission', false)
-    }
-    const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
-    if (!allowed) {
-      set.status = 429
-      return {
-        ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
-        retry_after: Math.ceil((reset - Date.now()) / 1000),
+  .delete(
+    '/api/auth/user/:auth0Id/analyses/:jobId/clips/:clipId',
+    async ({ params, request, set }) => {
+      const { auth0Id, jobId, clipId } = params
+      if (!auth0Id || !jobId || !clipId) {
+        set.status = 400
+        return buildError('INVALID_REQUEST', 'Missing required parameters', false)
       }
-    }
-    const removed = await deleteClip(auth0Id, jobId, clipId)
-    if (!removed) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Clip not found', false)
-    }
-    auditRoute(request, auth0Id, 'clip.deleted', 'clip', clipId, { jobId })
-    set.status = 200
-    return { deleted: true }
-  })
+      const guard = await authorizeJob(
+        auth0Id,
+        request,
+        'Clip deletion requires the finding.review permission',
+      )
+      if (!guard.ok) {
+        set.status = guard.status
+        return guard.error
+      }
+      const caller = guard.caller
+      const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
+      if (!allowed) {
+        set.status = 429
+        return {
+          ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
+          retry_after: Math.ceil((reset - Date.now()) / 1000),
+        }
+      }
+      const removed = await deleteClip(auth0Id, jobId, clipId)
+      if (!removed) {
+        set.status = 404
+        return buildError('NOT_FOUND', 'Clip not found', false)
+      }
+      auditRoute(request, auth0Id, 'clip.deleted', 'clip', clipId, { jobId })
+      set.status = 200
+      return { deleted: true }
+    },
+  )
   .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
@@ -428,14 +391,14 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'review_state must be approved or flagged', false)
     }
-    const caller = await resolveCaller(auth0Id, request)
-    if (!caller.verified) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Missing verified identity', false)
-    }
-    if (caller.verified !== auth0Id && !caller.can('finding.review')) {
-      set.status = 403
-      return buildError('FORBIDDEN', 'Finding review requires the finding.review permission', false)
+    const guard = await authorizeJob(
+      auth0Id,
+      request,
+      'Finding review requires the finding.review permission',
+    )
+    if (!guard.ok) {
+      set.status = guard.status
+      return guard.error
     }
     const updated = await reviewFinding(auth0Id, findingId, review_state)
     if (!updated) {
@@ -463,16 +426,7 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Analysis is already complete', false)
     }
-    const serverJob = await getJob(jobId)
-    if (serverJob) {
-      await markEngineJobFailed(
-        serverJob.engine_job_id,
-        'Analysis cancelled.',
-        'ANALYSIS_CANCELLED',
-        false,
-        jobId,
-      )
-    }
+    await failEngineJobForServerJob(jobId, 'Analysis cancelled.')
     await persistAnalysisStatus({
       serverJobId: jobId,
       engineJobId: analysis.engine_job_id,
@@ -501,16 +455,7 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
     }
-    const serverJob = await getJob(jobId)
-    if (serverJob) {
-      await markEngineJobFailed(
-        serverJob.engine_job_id,
-        'Analysis deleted.',
-        'ANALYSIS_CANCELLED',
-        false,
-        jobId,
-      )
-    }
+    await failEngineJobForServerJob(jobId, 'Analysis deleted.')
     const removed = await deleteAnalysis(auth0Id, jobId)
     if (!removed) {
       set.status = 404
@@ -567,70 +512,16 @@ export default new Elysia()
     }
 
     const summary = analysis.summary_json as Record<string, unknown> | null
-    const contextParts: string[] = []
-    if (summary) {
-      if (summary.sport) contextParts.push(`Sport: ${summary.sport}`)
-      if (summary.form_score) contextParts.push(`Form Score: ${summary.form_score}/10`)
-      if (summary.overall_rating) contextParts.push(`Rating: ${summary.overall_rating}`)
-      if (summary.summary) contextParts.push(`Summary: ${summary.summary}`)
-      if (summary.top_tips && Array.isArray(summary.top_tips)) {
-        contextParts.push(`Top Tips: ${summary.top_tips.join('; ')}`)
-      }
-      if (summary.strengths && Array.isArray(summary.strengths)) {
-        contextParts.push(`Strengths: ${summary.strengths.join('; ')}`)
-      }
-      if (summary.priority_drill) contextParts.push(`Priority Drill: ${summary.priority_drill}`)
-      if (summary.shot_events && Array.isArray(summary.shot_events)) {
-        const events = summary.shot_events as Array<Record<string, unknown>>
-        contextParts.push(`Shot Events (${events.length}):`)
-        events.forEach((e, i) => {
-          contextParts.push(
-            `  ${i + 1}. ${e.timestamp}s - ${e.event_type}: Score ${e.form_score}/10. ${e.feedback || ''}`,
-          )
-        })
-      }
-    }
-
-    const systemPrompt = `You are a sports analysis AI assistant. You have previously analyzed a video and here is the analysis context:\n\n${contextParts.join('\n')}\n\nAnswer questions about this analysis. Be helpful, specific, and reference timestamps when relevant. Keep responses concise.`
-
     const history = await getChatMessages(jobId, auth0Id)
-    const conversationHistory = history.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }))
-
-    let assistantMessage = ''
-    try {
-      const { ENGINE_URL, engineServiceHeaders } = await import('../lib/engine')
-      const engineRes = await fetch(`${ENGINE_URL}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...engineServiceHeaders(),
-        },
-        body: JSON.stringify({
-          job_id: analysis.engine_job_id,
-          message,
-          conversation_history: conversationHistory,
-          system_prompt: systemPrompt,
-        }),
-        signal: AbortSignal.timeout(30000),
-      })
-
-      if (engineRes.ok) {
-        const data = (await engineRes.json()) as {
-          reply?: string
-          message?: string
-        }
-        assistantMessage = data.reply || data.message || ''
-      }
-    } catch {
-      assistantMessage = generateSimpleResponse(message, summary)
-    }
-
-    if (!assistantMessage) {
-      assistantMessage = generateSimpleResponse(message, summary)
-    }
+    const assistantMessage = await answerChatTurn({
+      message,
+      summary,
+      engineJobId: analysis.engine_job_id,
+      conversationHistory: history.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    })
 
     await saveChatMessage({
       serverJobId: jobId,

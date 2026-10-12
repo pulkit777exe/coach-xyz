@@ -4,7 +4,7 @@
 
 | Data | Store | Backup mechanism |
 |---|---|---|
-| `analysis_history`, `findings`, `chat_messages`, org tables, users | Supabase PostgreSQL (`DATABASE_URL`) | Supabase automated daily backups + point-in-time recovery (project dashboard → Database → Backups) |
+| `analysis_history`, `findings`, `clips`, `player_events`, `chat_messages`, objectives/plans, seasons/matches, wellness, subscriptions, `audit_logs`, org tables, users | Supabase PostgreSQL (`DATABASE_URL`) | Supabase automated daily backups + point-in-time recovery (project dashboard → Database → Backups) |
 | Engine jobs, server jobs, rate limits, conversations | Upstash Redis | Ephemeral by design (2h TTLs); **not backed up** — completion truth lives in Supabase |
 | Source uploads, rendered videos | Engine local disk (`LOCAL_STORAGE_DIR`) | Ephemeral (session TTL / retention sweep); re-uploadable from the coach's originals |
 
@@ -19,8 +19,8 @@
 
 ## Retention
 
-- Analyses + findings + chat prune after `RETENTION_DAYS` (default 365, min
-  30) via the server's daily sweep (`pruneRetention` in `supabaseHistory.ts`,
+- Analyses + findings + clips + player events + chat prune after `RETENTION_DAYS` (default 365, min
+  30) via the server's daily sweep (`pruneRetention` in `historyStore.ts`/`analyses.ts`,
   scheduled in `queue.ts`).
 - Engine uploads die with their session (2h TTL / 10-session cap); rendered
   videos expire with the engine job record (2h TTL).

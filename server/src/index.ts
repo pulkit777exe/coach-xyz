@@ -4,7 +4,7 @@ import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { swagger } from '@elysiajs/swagger'
 
-import './lib/queue'
+import { bootWorkers } from './lib/workerLifecycle'
 
 import scanRoute from './routes/scan'
 import analyzeRoute from './routes/analyze'
@@ -74,6 +74,10 @@ try {
   )
   // Continue — history is non-critical
 }
+
+// One explicit boot: workers, QueueEvents, sweeps, and signal handlers.
+// (Replaces the former queue side-effect import; enqueue works pre-boot.)
+await bootWorkers()
 
 // Swagger docs are dev-only — don't expose the route surface in production.
 const swaggerPlugin =

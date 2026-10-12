@@ -1,14 +1,12 @@
 import {
   compareStudents,
   deletePerformanceMetric,
-  getStudent,
   getStudentTrends,
   listPerformance,
   updatePerformanceMetric,
-} from '../../lib/orgData'
-import {
-  DEFAULT_COMPARISON_METRIC_KEY,
-} from '../../lib/orgValidate'
+} from '../../lib/orgReports'
+import { getStudent } from '../../lib/orgRoster'
+import { DEFAULT_COMPARISON_METRIC_KEY } from '../../lib/orgValidate'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

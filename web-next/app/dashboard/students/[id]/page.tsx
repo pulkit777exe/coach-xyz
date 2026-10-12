@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
-import { redirect, notFound } from 'next/navigation'
-import { getOrgContext, getDashboardAnalyses } from '@/lib/serverData'
+import { getDashboardAnalyses, getOrgContext } from '@/lib/serverData'
 import {
   orgStudent,
   orgStudentPerformance,
@@ -13,7 +13,7 @@ import {
 } from '@/lib/serverData'
 import StudentProfile from '@/components/org/StudentProfile'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../../_shell'
 
 export async function generateMetadata({
   params,
@@ -33,24 +33,43 @@ export async function generateMetadata({
 }
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
   const { id } = await params
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
 
-  const studentRes = await orgStudent(auth0Id, id).catch(() => null)
+  // Critical fetch first: missing student → notFound before the fan-out.
+  const { auth0Id, data: header } = await loadPage(
+    'org',
+    { student: ({ auth0Id }) => orgStudent(auth0Id, id) },
+    { student: null },
+  )
+  const studentRes = header.student
   if (!studentRes) notFound()
   const student = studentRes.student
 
-  const [seriesRes, attRes, linkedRes, unlinkedRes, sportsRes, reportsRes] = await Promise.all([
-    orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
-    orgAttendanceSummary(auth0Id, { studentId: id }).catch(() => null),
-    orgStudentAnalyses(auth0Id, id).catch(() => ({ analyses: [] })),
-    getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }).catch(() => ({ analyses: [] })),
-    orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
-    orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
-  ])
+  const { data } = await loadPage(
+    'org',
+    {
+      series: ({ auth0Id }) => orgStudentPerformance(auth0Id, id),
+      attendance: ({ auth0Id }) => orgAttendanceSummary(auth0Id, { studentId: id }),
+      linked: ({ auth0Id }) => orgStudentAnalyses(auth0Id, id),
+      unlinked: ({ auth0Id }) => getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }),
+      sports: ({ auth0Id }) => orgStudentsSports(auth0Id),
+      reports: ({ auth0Id }) => orgReports(auth0Id, { studentId: id }),
+    },
+    {
+      series: { series: [] },
+      attendance: null,
+      linked: { analyses: [] },
+      unlinked: { analyses: [] },
+      sports: { sports: [] },
+      reports: { reports: [] },
+    },
+  )
+  const seriesRes = data.series
+  const attRes = data.attendance
+  const linkedRes = data.linked
+  const unlinkedRes = data.unlinked
+  const sportsRes = data.sports
+  const reportsRes = data.reports
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">

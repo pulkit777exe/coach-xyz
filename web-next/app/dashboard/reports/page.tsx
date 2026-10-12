@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgReports, orgStudents } from '@/lib/serverData'
+import { orgReports, orgStudents } from '@/lib/serverData'
 import ReportsClient from '@/components/org/ReportsClient'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Reports | CoachXYZ',
@@ -12,12 +10,13 @@ export const metadata: Metadata = {
 }
 
 export default async function ReportsPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
-
-  const [reportsRes, studentsRes] = await Promise.all([orgReports(auth0Id), orgStudents(auth0Id)])
+  // Bare fan-out (no fallbacks): failures throw into error.tsx, as before.
+  const { auth0Id, data } = await loadPage('org', {
+    reports: ({ auth0Id }) => orgReports(auth0Id),
+    students: ({ auth0Id }) => orgStudents(auth0Id),
+  })
+  const reportsRes = data.reports
+  const studentsRes = data.students
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">

@@ -3,15 +3,9 @@ import {
   deleteScheduleEvent,
   listSchedule,
   updateScheduleEvent,
-} from '../../lib/orgData'
-import {
-  isIsoDate,
-} from '../../lib/orgValidate'
-import {
-  EVENT_STATUS_SET,
-  EVENT_TYPE_SET,
-  parseScheduleInput,
-} from './shared'
+} from '../../lib/orgAttendance'
+import { isIsoDate } from '../../lib/orgValidate'
+import { EVENT_STATUS_SET, EVENT_TYPE_SET, parseScheduleInput } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

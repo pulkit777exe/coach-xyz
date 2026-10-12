@@ -1,10 +1,8 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
+import { orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
 import TeamsClient from '@/components/org/TeamsClient'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Teams | CoachXYZ',
@@ -12,16 +10,18 @@ export const metadata: Metadata = {
 }
 
 export default async function TeamsPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
-
-  const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
-    orgTeams(auth0Id).catch(() => ({ teams: [] })),
-    orgStudents(auth0Id).catch(() => ({ students: [] })),
-    orgSeasons(auth0Id).catch(() => ({ seasons: [] })),
-  ])
+  const { auth0Id, data } = await loadPage(
+    'org',
+    {
+      teams: ({ auth0Id }) => orgTeams(auth0Id),
+      students: ({ auth0Id }) => orgStudents(auth0Id),
+      seasons: ({ auth0Id }) => orgSeasons(auth0Id),
+    },
+    { teams: { teams: [] }, students: { students: [] }, seasons: { seasons: [] } },
+  )
+  const teamsRes = data.teams
+  const studentsRes = data.students
+  const seasonsRes = data.seasons
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">

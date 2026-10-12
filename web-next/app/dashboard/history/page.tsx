@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
 import { getDashboardAnalyses } from '@/lib/serverData'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/9ui/ui/badge'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'History | CoachXYZ',
@@ -17,12 +15,6 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ page?: string }>
 }) {
-  noStore()
-  const session = await getSession()
-  if (!session) {
-    redirect('/auth/login')
-  }
-  const auth0Id = session.user.sub
   const params = await searchParams
   const rawPage = Number(params.page)
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1
@@ -35,7 +27,11 @@ export default async function HistoryPage({
   let error = null
 
   try {
-    const res = await getDashboardAnalyses(auth0Id, perPage + 1, offset)
+    // Personal scope (session sub), not the org gate id — preserved as-is.
+    const { data } = await loadPage('org', {
+      history: ({ session }) => getDashboardAnalyses(session.user.sub, perPage + 1, offset),
+    })
+    const res = data.history
     hasNextPage = res.analyses.length > perPage
     analyses = res.analyses.slice(0, perPage)
   } catch (err) {

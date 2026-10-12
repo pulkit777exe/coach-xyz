@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { redirect } from 'next/navigation'
-import { getOrgContext, orgInvites, orgMembers } from '@/lib/serverData'
+import { orgInvites, orgMembers } from '@/lib/serverData'
 import MembersSection from '@/components/org/MembersSection'
 import InvitesClient from '@/components/org/InvitesClient'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { loadPage } from '../_shell'
 
 export const metadata: Metadata = {
   title: 'Members | CoachXYZ',
@@ -13,15 +11,17 @@ export const metadata: Metadata = {
 }
 
 export default async function MembersPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id } = await getOrgContext()
-
-  const [membersRes, invitesRes] = await Promise.all([
-    orgMembers(auth0Id),
-    orgInvites(auth0Id).catch(() => ({ invites: [] })),
-  ])
+  // orgMembers stays bare (throws into error.tsx); invites degrade to [].
+  const { auth0Id, data } = await loadPage(
+    'org',
+    {
+      members: ({ auth0Id }) => orgMembers(auth0Id),
+      invites: ({ auth0Id }) => orgInvites(auth0Id),
+    },
+    { invites: { invites: [] } },
+  )
+  const membersRes = data.members
+  const invitesRes = data.invites
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">

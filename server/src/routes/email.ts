@@ -9,10 +9,10 @@ import {
   attendanceEmail,
   escapeHtml,
 } from '../lib/mailer'
-import {
-  getUserByAuth0Id,
-} from '../lib/users'
-import { listStudents, getStudent, getReport, listAttendance } from '../lib/orgData'
+import { getUserByAuth0Id } from '../lib/users'
+import { getStudent, listStudents } from '../lib/orgRoster'
+import { getReport } from '../lib/orgReports'
+import { listAttendance } from '../lib/orgAttendance'
 import { serviceGuard } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { checkEmailLimit } from '../lib/ratelimit'

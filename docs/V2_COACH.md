@@ -2,9 +2,12 @@
 
 > Transform Coach-XYZ from a one-shot analysis tool into a conversational sports coaching interface.
 
-> **Status (2026-09-11): largely implemented.** Streaming SSE chat, Redis + Supabase persistence,
-> split-screen video + chat layout, timestamp seeking, and quick actions ship in the app. V2 features
-> that remain unbuilt are explicitly marked below. This doc keeps the original design text for reference.
+> **Status (2026-10-11): implemented.** Streaming SSE chat, Redis + Supabase persistence,
+> split-screen video + chat layout, timestamp seeking, quick actions, per-analysis
+> history chat, and findings-aware prompts ship in the app. Export arrived in a
+> different shape (share links, findings CSV, print/email/AI reports) rather than
+> the planned conversation export. Still open: a conversation-list sidebar and
+> structured drill cards. This doc keeps the original design text for reference.
 
 ---
 
@@ -170,7 +173,7 @@ Response (streaming):
    - Conversation history (previous Q&A)
    - User's new question
    - Instructions to reference timestamps and events
-3. **Call Gemini** — Non-streaming initially (streaming in V2.1)
+3. **Call Gemini** — streaming via `/chat/stream` (SSE token events + `:ping` heartbeats), non-streaming via `/chat`
 4. **Parse response** — Extract timestamp references, event references
 5. **Return reply** — Text response with embedded references
 
@@ -262,7 +265,7 @@ clearConversation(serverJobId: string): Promise<void>
 | `AnalysisCard` | Embedded analysis summary in chat |
 | `DrillCard` | Embedded drill response in chat |
 | `TimestampLink` | Clickable timestamp that seeks video |
-| `ConversationHistory` | Sidebar listing past conversations |
+| `ConversationHistory` | Sidebar listing past conversations (not built — history lives in `/dashboard/history` + per-analysis `HistoryChat`) |
 
 #### New State: `useConversation()`
 
@@ -281,6 +284,10 @@ function useConversation(jobId: string) {
 #### Updated `usePipeline()`
 
 Add a new pipeline state: `chatting` (after analysis completes).
+
+> Shipped shape: `usePipeline.ts` owns the `chatting` state; history loading goes
+> through `getConversation` and streaming through `sendChatMessageStream`
+> (`lib/api.ts`), with seek wired via the `onSeekTo` handle.
 
 ```
 idle → uploading → scanning → selecting → analyzing → rendering → chatting
@@ -313,12 +320,11 @@ The chat prompt includes:
 4. **Honest** — If the data doesn't support a conclusion, say so
 5. **Concise** — Sports coaches don't want essays
 
-### 6.3 Streaming (V2.1)
+### 6.3 Streaming (shipped — was V2.1)
 
-Initial V2 uses non-streaming Gemini calls. V2.1 adds:
 - `generate_content_stream()` for real-time token delivery
-- Server-Sent Events (SSE) from server to frontend
-- Typewriter effect in chat bubbles
+- Server-Sent Events (SSE) from server to frontend (`tee()`d proxy, no gzip buffering)
+- Typewriter effect in chat bubbles + typing indicator
 
 ---
 
@@ -345,8 +351,8 @@ A slide-out panel showing:
 ### 7.3 Session Expiry
 
 - Conversations expire with the job (2h TTL)
-- Users can "Export" to save to Supabase before expiry
-- Exported conversations are browsable from the history panel
+- Auth-scoped chat auto-persists to Supabase `chat_messages`; completions double-persist to `analysis_history`
+- Report/share exports (`/share/[token]`, findings CSV, AI reports) preserve results beyond expiry
 
 ---
 
@@ -411,10 +417,10 @@ When the AI response includes `timestamp_refs`, the video player automatically:
 - Wire `useConversation()`-equivalent state (loading via `getConversation`, streaming via `sendChatMessageStream`)
 - Connect video player seek to AI timestamp references (`onSeekTo` handle)
 
-### Phase 5: Polish + History — ⚠️ Partial
+### Phase 5: Polish + History — ✅ Done (in adapted shape)
 - ✅ Conversation history in dashboard (`GET/POST /api/auth/user/:id/analyses/:jobId/chat`, `HistoryChat.tsx`)
-- ❌ Conversation-history *sidebar* listing past conversations (planned `ConversationHistory` component)
-- ❌ Export functionality (report export not built)
+- ❌ Conversation-history *sidebar* listing past conversations (planned `ConversationHistory` component; ⌘K `SidebarSearch` covers pages + students, not conversations)
+- ✅ Export functionality (adapted: share links + public `/share/[token]`, findings CSV export, print/email reports, one-click AI reports — instead of the planned conversation export)
 - ✅ Typing indicator + streaming done (beyond the old "V2.1" plan)
 
 ---

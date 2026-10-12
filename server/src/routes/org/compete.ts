@@ -5,16 +5,12 @@ import {
   deleteSeason,
   listMatches,
   listSeasons,
-} from '../../lib/orgData'
-import {
-  isDate,
-} from '../../lib/orgValidate'
+} from '../../lib/orgRoster'
+import { isDate } from '../../lib/orgValidate'
 import { getTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
 import { hasPermission } from '../../lib/permissions'
-import {
-  UUID_RE,
-} from './shared'
+import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'

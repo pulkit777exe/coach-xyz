@@ -30,8 +30,8 @@ creating a tenant or rotating credentials.
 - [ ] Database connection (`Username-Password-Authentication`) enabled for the app.
 - [ ] Password policy at least Fair; breached-password detection on.
 - [ ] Brute-force protection on.
-- [ ] Social connections (Google, etc.) only if the product needs them — each
-      one must be enabled per-application, not just per-tenant.
+- [ ] Social connections (Google and GitHub — the login UI and CSP `img-src` assume both) must each
+      be enabled per-application, not just per-tenant.
 - [ ] Email provider configured (Auth0 built-in is dev-only; attach a custom
       provider before inviting real staff).
 

@@ -1,9 +1,6 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
-import { getUserProfile } from '@/lib/serverData'
-import { redirect } from 'next/navigation'
-import { unstable_noStore as noStore } from 'next/cache'
 import PlayerHub from '@/components/player/PlayerHub'
+import { loadPage } from '../dashboard/_shell'
 
 export const metadata: Metadata = {
   title: 'My Hub | CoachXYZ',
@@ -11,19 +8,8 @@ export const metadata: Metadata = {
 }
 
 export default async function PlayerPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-
-  let role: 'coach' | 'player' | null = null
-  try {
-    const { user } = await getUserProfile(session.user.sub)
-    role = user?.role ?? null
-  } catch (error) {
-    console.error('Failed to resolve player role:', error)
-  }
-
-  if (role === 'coach') redirect('/dashboard')
+  // Player gate: fresh render + login guard + coach bounce to /dashboard.
+  await loadPage('player')
 
   return <PlayerHub />
 }

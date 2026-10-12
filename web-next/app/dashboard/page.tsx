@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
-import { getSession } from '@/lib/session'
 import {
-  getOrgContext,
   getDashboardStats,
   getDashboardAnalyses,
   getMySchedule,
@@ -12,7 +10,6 @@ import {
 import { orgSchedule, orgReports, orgOverview } from '@/lib/serverData'
 import type { ScheduleEvent, ReportRecord, OrgOverview } from '@/lib/org'
 import type { DashboardPlayerAnalysis, MyObjectives } from '@/lib/meApi'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   CalendarIcon,
@@ -25,9 +22,8 @@ import {
   Plus,
   Video,
 } from 'lucide-react'
-import { unstable_noStore as noStore } from 'next/cache'
-
 import { Badge } from '@/components/9ui/ui/badge'
+import { loadPage } from './_shell'
 
 export const metadata: Metadata = {
   title: 'Dashboard | CoachXYZ',
@@ -58,10 +54,9 @@ function overviewTiles(overview: OrgOverview) {
 }
 
 export default async function DashboardPage() {
-  noStore()
-  const session = await getSession()
-  if (!session) redirect('/auth/login')
-  const { auth0Id, role } = await getOrgContext()
+  // Gate first: org-role players branch to the personal view before any org
+  // fetches run. The second call is gate-deduped; it only runs its fetchers.
+  const { role } = await loadPage('org', {})
 
   // ── Personal view for players (org role) ───────────────────────────────
   // Players see only their own data via the self-scoped /api/me/* APIs —
@@ -87,13 +82,19 @@ export default async function DashboardPage() {
     const now = new Date()
     const inThirtyDays = new Date()
     inThirtyDays.setDate(inThirtyDays.getDate() + 30)
-    const [statsRes, analysesRes, scheduleRes, reportsRes, overviewRes] = await Promise.all([
-      getDashboardStats(auth0Id),
-      getDashboardAnalyses(auth0Id, 20, 0),
-      orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
-      orgReports(auth0Id),
-      orgOverview(auth0Id),
-    ])
+    const { data } = await loadPage('org', {
+      stats: ({ auth0Id }) => getDashboardStats(auth0Id),
+      analyses: ({ auth0Id }) => getDashboardAnalyses(auth0Id, 20, 0),
+      schedule: ({ auth0Id }) =>
+        orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
+      reports: ({ auth0Id }) => orgReports(auth0Id),
+      overview: ({ auth0Id }) => orgOverview(auth0Id),
+    })
+    const statsRes = data.stats
+    const analysesRes = data.analyses
+    const scheduleRes = data.schedule
+    const reportsRes = data.reports
+    const overviewRes = data.overview
     stats = statsRes.stats
     analyses = analysesRes.analyses
     upcomingEvents = scheduleRes.events

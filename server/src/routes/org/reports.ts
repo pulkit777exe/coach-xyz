@@ -3,18 +3,12 @@ import {
   createReportRecord,
   deleteReport,
   getReport,
-  getStudent,
   listReports,
   updateReportRecord,
-} from '../../lib/orgData'
-import {
-  defaultReportTitle,
-  isDate,
-  isIsoDate,
-} from '../../lib/orgValidate'
-import {
-  REPORT_TYPE_SET,
-} from './shared'
+} from '../../lib/orgReports'
+import { getStudent } from '../../lib/orgRoster'
+import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
+import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'

@@ -7,7 +7,8 @@ import {
   REPORT_TYPES,
   STUDENT_STATUSES,
 } from '../../lib/orgEnums'
-import type { ScheduleInput, StudentInput } from '../../lib/orgData'
+import type { StudentInput } from '../../lib/orgRoster'
+import type { ScheduleInput } from '../../lib/orgAttendance'
 
 export const ATTENDANCE_STATUS_SET: ReadonlySet<string> = new Set(ATTENDANCE_STATUSES)
 export const EVENT_TYPE_SET: ReadonlySet<string> = new Set(EVENT_TYPES)
