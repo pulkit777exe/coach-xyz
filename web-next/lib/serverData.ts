@@ -10,7 +10,11 @@ import {
 } from './meApi'
 import { ORG_COOKIE } from './orgCookie'
 import { getUserProfile as apiGetUserProfile } from './user'
-import { getDashboardStats as apiGetDashboardStats, getDashboardAnalyses as apiGetDashboardAnalyses, getDashboardAnalysisDetail as apiGetDashboardAnalysisDetail } from './library'
+import {
+  getDashboardStats as apiGetDashboardStats,
+  getDashboardAnalyses as apiGetDashboardAnalyses,
+  getDashboardAnalysisDetail as apiGetDashboardAnalysisDetail,
+} from './library'
 import {
   orgOverview as libOrgOverview,
   orgSchedule as libOrgSchedule,
@@ -26,6 +30,7 @@ import {
   orgSeasons as libOrgSeasons,
 } from './org'
 import { orgMembers as libOrgMembers } from './members'
+import type { OrgMemberRole } from './members'
 import { orgSubscription as libOrgSubscription } from './org'
 import { orgAuditLogs as libOrgAuditLogs, orgInvites as libOrgInvites } from './members'
 import { listTeams as libListTeams } from './teams'
@@ -106,15 +111,7 @@ export const orgTeams = cache((auth0Id: string) => libListTeams(auth0Id))
 
 export const orgSeasons = cache((auth0Id: string) => libOrgSeasons(auth0Id))
 
-export type OrgRole =
-  | 'owner'
-  | 'admin'
-  | 'head_coach'
-  | 'assistant_coach'
-  | 'coach'
-  | 'analyst'
-  | 'medical'
-  | 'player'
+export type OrgRole = OrgMemberRole
 
 export type OrgContext = {
   /** The auth0Id to scope every org/email/auth-user call against. */

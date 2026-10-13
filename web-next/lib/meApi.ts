@@ -1,4 +1,5 @@
 import type { UserRecord } from './user'
+import type { OrgMemberRole } from './members'
 import { mutateJson, queryJson } from './data/client'
 import { meUrl } from './data/transport'
 import type {
@@ -17,15 +18,7 @@ import type {
 
 export type MyOrg = {
   org_auth0_id: string
-  role:
-    | 'owner'
-    | 'admin'
-    | 'head_coach'
-    | 'assistant_coach'
-    | 'coach'
-    | 'analyst'
-    | 'medical'
-    | 'player'
+  role: OrgMemberRole
   display_name: string | null
 }
 

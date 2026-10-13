@@ -26,6 +26,7 @@ import {
   createTeam,
   deleteTeam,
   listTeamMembers,
+  listTeams,
   removeTeamMember,
   renameTeam,
   type Team,
@@ -138,7 +139,6 @@ export default function TeamsClient({
   }, [auth0Id, selectedId])
 
   const refreshTeams = async (selectId?: string) => {
-    const { listTeams } = await import('@/lib/teams')
     const res = await listTeams(auth0Id)
     setTeams(res.teams)
     if (selectId) setSelectedId(selectId)
@@ -258,7 +258,10 @@ export default function TeamsClient({
               </button>
             ))}
             {teams.length === 0 && (
-              <EmptyState title="No teams yet" description="Create your first team to scope coaching and trends." />
+              <EmptyState
+                title="No teams yet"
+                description="Create your first team to scope coaching and trends."
+              />
             )}
             <Button className="w-full mt-2" onClick={() => setCreateOpen(true)}>
               New team
@@ -362,7 +365,10 @@ export default function TeamsClient({
                     </div>
                   ))}
                   {members.length === 0 && (
-                    <EmptyState title="No members yet" description="Add coaches by account or players from the roster." />
+                    <EmptyState
+                      title="No members yet"
+                      description="Add coaches by account or players from the roster."
+                    />
                   )}
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Select
@@ -441,7 +447,10 @@ export default function TeamsClient({
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {matches.length === 0 && (
-                  <EmptyState title="No matches scheduled" description="Add the next fixture for this team." />
+                    <EmptyState
+                      title="No matches scheduled"
+                      description="Add the next fixture for this team."
+                    />
                   )}
                   {matches.map((match) => (
                     <div

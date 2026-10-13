@@ -1,4 +1,5 @@
-import { identityBase } from './data/transport'
+import { mutateJson, queryJson } from './data/client'
+import { identityBase, meUrl } from './data/transport'
 import { parseEventStream } from './sse'
 
 const IDENTITY_BASE: string = identityBase()
@@ -37,33 +38,25 @@ function rememberDelivered(id: string): boolean {
  * No auth0Id needed — the proxy injects identity via the session.
  */
 export async function fetchNotifications(): Promise<NotificationsState> {
-  const res = await fetch(`${IDENTITY_BASE}/api/me/notifications?limit=20`, {
-    credentials: 'include',
-  })
-  if (!res.ok) {
+  try {
+    return await queryJson<NotificationsState>(meUrl('/notifications?limit=20'))
+  } catch {
     return { notifications: [], unread_count: 0 }
   }
-  return res.json()
 }
 
 /**
  * Mark a single notification as read.
  */
 export async function markRead(id: string): Promise<void> {
-  await fetch(`${IDENTITY_BASE}/api/me/notifications/${id}/read`, {
-    method: 'POST',
-    credentials: 'include',
-  })
+  await mutateJson(meUrl(`/notifications/${id}/read`), 'POST').catch(() => undefined)
 }
 
 /**
  * Mark all notifications as read.
  */
 export async function markAllRead(): Promise<void> {
-  await fetch(`${IDENTITY_BASE}/api/me/notifications/read-all`, {
-    method: 'POST',
-    credentials: 'include',
-  })
+  await mutateJson(meUrl('/notifications/read-all'), 'POST').catch(() => undefined)
 }
 
 /**

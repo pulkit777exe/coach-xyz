@@ -24,6 +24,7 @@ import {
 import {
   ORG_MEMBER_INVITE_ROLES,
   ORG_MEMBER_ROLE_LABELS,
+  orgInvites,
   orgMintInvite,
   orgRevokeInvite,
   type OrgInvite,
@@ -47,7 +48,6 @@ export default function InvitesClient({ auth0Id, initialInvites }: InvitesClient
   const [copied, setCopied] = useState(false)
 
   const refresh = async () => {
-    const { orgInvites } = await import('@/lib/members')
     const res = await orgInvites(auth0Id)
     setInvites(res.invites)
   }

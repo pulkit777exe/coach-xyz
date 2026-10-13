@@ -1,3 +1,6 @@
+import { queryJson } from './data/client'
+import { identityUrl } from './data/transport'
+
 export const SPORT_EMOJI: Record<string, string> = {
   basketball: '🏀',
   football: '⚽',
@@ -27,8 +30,6 @@ export async function getSportPositions(sport: string): Promise<SportPosition[]>
   const hit = positionsCache.get(key)
   if (hit) return hit
   try {
-    const { queryJson } = await import('./data/client')
-    const { identityUrl } = await import('./data/transport')
     const res = await queryJson<{ positions: SportPosition[] }>(
       identityUrl(`/api/sports/${encodeURIComponent(key)}/positions`),
     )
