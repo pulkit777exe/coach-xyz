@@ -25,3 +25,10 @@ depth, seam, adapter, leverage, locality).
 - **analysis driver** — the single staged pipeline (`run_analysis`: tracking → reasoning → scoring → quality → render) crossed by server, CLI, and retries; job state behind a store seam (Redis in prod, local adapter otherwise).
 - **user-job adapter** — the server adapter owning the curatorial handler chain (params → guard → store → audit → errors) behind `withUserJob` (`server/src/lib/userJob.ts`).
 - **analysis policy** — the server module owning org quota/tier/usage + retention policy, split from the analyses persistence seam (`server/src/lib/analysisPolicy.ts`).
+- **org subdomains (web)** — per-domain entity facades under `web-next/lib/org/` (students, attendance, schedule, reports, objectives, findings, compete, plans, wellness, subscription, performance, overview, email) re-exported via the `lib/org.ts` shim.
+- **capability kernel** — the server adapter owning the browser-direct route chain (rate gate → job access → engine error map) (`server/src/lib/capability.ts`).
+- **player scope** — the server adapter owning the self-scoped chain (verified guard → linked scope → uniform linked handling) (`server/src/lib/playerScope.ts`).
+- **scoring** — the engine module owning criterion + weighted-composite form scoring (`engine/core/scoring.py`).
+- **biomechanics** — the engine module owning nearest-track metric attach + injury-risk delegation (`engine/core/biomechanics.py`).
+- **storage backend** — the engine seam with Local/S3 adapters behind capability methods (`engine/core/storage.py`).
+- **crud list** — the shared web hook owning the load → create → setStatus → remove loop (`web-next/lib/useOrgCrudList.ts`).

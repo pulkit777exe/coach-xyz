@@ -145,7 +145,10 @@ coach-xyz/
 │   │   ├── scan.ts / chat.ts / library.ts / user.ts
 │   │   │                      # Entity facades over the data core (scan, chat, library, identity)
 │   │   ├── auth0.ts           # Auth0Client singleton (30s HTTP timeout)
-│   │   ├── org.ts / teams.ts / members.ts / meApi.ts / aiReports.ts
+│   │   ├── org.ts             # Compat shim re-exporting lib/org/* subdomains (students,
+│   │   │                      #   student, attendance, schedule, reports, objectives, findings,
+│   │   │                      #   compete, plans, wellness, subscription, performance, overview, email)
+│   │   ├── teams.ts / members.ts / meApi.ts / aiReports.ts
 │   │   │                      # Org / teams / members / player-hub / AI-report clients
 │   │   ├── playerUpload.ts    # Player self upload (POST /api/me/analyze)
 │   │   ├── serviceProxy.ts    # Proxy allowlist (identity vs static-vocab paths)
@@ -158,6 +161,7 @@ coach-xyz/
 │   │   ├── sports.ts          # Sport emoji + positions helpers
 │   │   ├── usePipeline.ts     # Unified pipeline machine (idle→…→chatting→error, both surfaces)
 │   │   ├── useScanFlow.ts     # Scan/upload seam (feeds usePipeline)
+│   │   ├── useOrgCrudList.ts  # Shared load→create→setStatus→remove hook (objectives/plans/wellness)
 │   │   ├── jobPolling.ts      # Job-status poll engine (clock/fetch/callbacks)
 │   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
 │   │   ├── errors.ts          # Client error normalization + transient check
@@ -165,7 +169,7 @@ coach-xyz/
 │   │   ├── notifications.ts   # Notification fetch/read/subscribe
 │   │   ├── preferences.tsx    # LocalStorage prefs (theme/week-start/motion)
 │   │   ├── utils.ts           # cn() class-name helper + capitalize
-│   │   └── __tests__/         # lib unit tests (18 files, 187 tests)
+│   │   └── __tests__/         # lib unit tests (19 files, 197 tests)
 │   ├── proxy.ts               # Next 16 Auth0 middleware (passthrough)
 │   ├── next.config.ts         # Security headers + /api/download rewrite
 │   └── types/index.ts         # Shared type definitions
@@ -173,11 +177,11 @@ coach-xyz/
 ├── server/                    # Middleware server (Bun + Elysia)
 │   ├── src/index.ts           # Entry point, CORS, security headers, error handler
 │   ├── src/routes/
-│   │   ├── scan.ts            # POST /api/scan-video|/scan-intent|/scan-from-key + SSE progress
+│   │   ├── scan.ts            # POST /api/scan-video|/scan-intent|/scan-from-key + SSE progress (via capability kernel)
 │   │   ├── analyze.ts         # POST /api/analyze-video — thin, via lib/admission.ts
 │   │   ├── status.ts          # GET /api/job-status/:jobId + conversation (persist, medical-redact)
-│   │   ├── download.ts        # GET /api/download/:jobId — stream (owner-checked)
-│   │   ├── chat.ts            # POST /api/chat + /api/chat/stream → engine
+│   │   ├── download.ts        # GET /api/download/:jobId — stream (via capability kernel)
+│   │   ├── chat.ts            # POST /api/chat + /api/chat/stream → engine (via capability kernel)
 │   │   ├── email.ts           # POST /api/email/:auth0Id/{invite|report|attendance} (Resend)
 │   │   ├── auth.ts            # /api/auth/* — sync, user, analyses/findings/clips/chat/stages/stats (curatorial routes via userJob adapter; jobGuard + chatTurn inside)
 │   │   ├── org/               # /api/org/:auth0Id/* — students, attendance, schedule,
@@ -185,7 +189,7 @@ coach-xyz/
 │   │   │                      #   plans, wellness, performance, overview (guarded)
 │   │   ├── members.ts         # Members + token invites + audit reads
 │   │   ├── teams.ts           # Team CRUD + membership
-│   │   ├── me.ts              # /api/me/* — player self-scoped hub + attribution mint + analyze (via admission)
+│   │   ├── me.ts              # /api/me/* — player self-scoped hub + attribution mint + analyze (via playerScope adapter + admission)
 │   │   ├── share.ts           # Share-token mint/list/revoke + public GET /api/share/:token
 │   │   ├── sports.ts          # Guard-exempt sport-positions proxy (cached, fail-open)
 │   │   ├── aiReports.ts       # AI report enqueue + poll (BullMQ coachai-report)
@@ -209,6 +213,8 @@ coach-xyz/
 │   │   ├── jobAccess.ts       # Owner-set vs anonymous job access
 │   │   ├── jobGuard.ts        # Ownership + review + failed-mark checks
 │   │   ├── userJob.ts         # Curatorial handler adapter (params→guard→store→audit→errors)
+│   │   ├── capability.ts      # Capability route kernel (rate gate→job access→engine error map)
+│   │   ├── playerScope.ts     # Self-scoped adapter (verified guard→linked scope→decision)
 │   │   ├── caller.ts          # resolveCaller (role/teams/scope) + permissions.ts (14 perms)
 │   │   ├── orgEnums.ts        # Shared org vocab (contract w/ web lib/org.ts)
 │   │   ├── orgData.ts         # Compat barrel over orgRoster/orgAttendance/orgReports/orgObjectives
@@ -236,6 +242,8 @@ coach-xyz/
 │   ├── main.py                # FastAPI app, routes, sessions, multicam, SSE
 │   ├── core/
 │   │   ├── analyzer.py        # Orchestrator (prepare/resume/tracking/reasoning/scoring/render)
+│   │   ├── scoring.py         # Criterion + weighted-composite form scoring
+│   │   ├── biomechanics.py    # Nearest-track metric attach + injury-risk delegation
 │   │   ├── detector.py / tracking.py / pose_backend.py / detection_utils.py
 │   │   │                      # Unified pose-candidate seam (PoseDetectionOptions: SCAN/TRACKING presets) + MediaPipe abstraction, HOG/IoU
 │   │   ├── player_detector.py # Legacy OpenCV HOG+SVM path
@@ -253,7 +261,7 @@ coach-xyz/
 │   │   ├── sessions.py        # Scan-session registry (resolve/store/progress/evict/teardown)
 │   │   ├── cache.py           # Video hash + Redis caching (24h TTL)
 │   │   ├── dedup.py           # In-memory request deduplication (300s)
-│   │   ├── storage.py         # Local disk or S3 (raw/{session}/{angle} + results/{job})
+│   │   ├── storage.py         # StorageBackend seam: Local (in-place) / S3 (tmp copies); raw/{session}/{angle} + results/{job}
 │   │   ├── video_io.py        # ffprobe + ffmpeg preprocessing + keyframes
 │   │   ├── multicam.py        # Multi-angle session helpers (primary + angles)
 │   │   ├── sport_config.py    # sports/*.json loader (positions + versions)
@@ -261,7 +269,7 @@ coach-xyz/
 │   │   ├── logging_config.py  # JSON structured logging (job-id correlation)
 │   │   └── errors.py          # Error types hierarchy
 │   ├── cli/                   # Local CLI (frame_selector; drives run_analysis)
-│   ├── tests/                 # pytest suite (20 files, 218 tests)
+│   ├── tests/                 # pytest suite (23 files, 243 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -871,4 +879,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-10-13 (deepening pass 2 built + verified green: detection seam w/ options object, session registry, analysis driver w/ JobStore seam + dead-path deletes, client facades + api.ts delete, userJob guard/audit/errors adapter, analysisPolicy split; baselines 369/187/218)*
+*Last verified: 2026-10-13 (deepening pass 3 built + verified green: org facade subdomains, capability kernel, player-scope adapter, scoring/biomechanics split, storage backend seam, shared CRUD hook; baselines 385/197/243)*
