@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { parseFindingsTrendQuery } from '../src/routes/auth'
+import { parseFindingsTrendQuery } from '../src/lib/findingsPolicy'
 
 const params = (qs: string) => new URLSearchParams(qs)
 

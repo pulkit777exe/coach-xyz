@@ -1,11 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import {
-  FINDINGS_CSV_COLUMNS,
-  applyEvidenceGate,
-  findingsToCsv,
-  type StoredFinding,
-} from '../src/lib/findings'
+import { FINDINGS_CSV_COLUMNS, applyEvidenceGate, findingsToCsv } from '../src/lib/findingsPolicy'
+import type { StoredFinding } from '../src/lib/findings'
 
 const finding = (overrides: Partial<StoredFinding> = {}): StoredFinding => ({
   id: 'job1:e1',

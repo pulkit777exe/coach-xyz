@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { MAX_CLIP_DURATION_MS, parseClipInput } from '../src/lib/clips'
+import { MAX_CLIP_DURATION_MS, parseClipInput } from '../src/lib/clipsPolicy'
 
 describe('parseClipInput', () => {
   test('accepts a clean clip and trims the label', () => {

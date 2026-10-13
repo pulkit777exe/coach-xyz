@@ -10,6 +10,8 @@ import {
   updateAnalysisDisplayName,
 } from '../lib/analyses'
 import { findingsToCsv, getFindingsTrend, getStudentFindings, reviewFinding } from '../lib/findings'
+import { parseFindingsTrendQuery, type FindingsTrendQuery } from '../lib/findingsPolicy'
+export type { FindingsTrendQuery }
 import {
   MAX_CLIPS_PER_ANALYSIS,
   countClips,
@@ -37,46 +39,7 @@ export function generateSimpleResponse(
   return keywordFallback(question, summary)
 }
 
-export type FindingsTrendQuery = {
-  days: number
-  category: string | null
-  severity: string | null
-  studentId: string | null
-  teamId: string | null
-}
-
 const UUID_PARAM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * Pure parser for the findings-trends query string. Bounds days to 1..365,
- * strips text filters to a safe alphabet, and accepts only well-formed UUIDs
- * for id filters (they are interpolated as bound parameters, but tight input
- * keeps logs/URLs clean).
- */
-export const parseFindingsTrendQuery = (params: URLSearchParams): FindingsTrendQuery => {
-  const daysRaw = Number(params.get('days') || 30)
-  const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.floor(daysRaw), 1), 365) : 30
-  const clean = (v: string | null): string | null => {
-    if (!v) return null
-    const t = v
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_ -]/g, '')
-      .slice(0, 60)
-    return t || null
-  }
-  const uuid = (v: string | null): string | null => {
-    const t = v?.trim() ?? ''
-    return UUID_PARAM_RE.test(t) ? t : null
-  }
-  return {
-    days,
-    category: clean(params.get('category')),
-    severity: clean(params.get('severity')),
-    studentId: uuid(params.get('student_id')),
-    teamId: uuid(params.get('team_id')),
-  }
-}
 
 export default new Elysia()
   .use(serviceGuard)

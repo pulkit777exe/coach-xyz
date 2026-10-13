@@ -1,4 +1,20 @@
 import { ensureInitialized, withHistoryStore } from './historyStore'
+import { applyEvidenceGate, findingNumber, findingText, type ReviewState } from './findingsPolicy'
+
+// ── Findings persistence lives here; pure curation rules live in ─────────
+// ./findingsPolicy (evidence gate, CSV shape, sanitizers, trend parser).
+// Re-exported below so existing importers keep working during migration.
+export {
+  FINDINGS_CSV_COLUMNS,
+  REVIEW_STATES,
+  applyEvidenceGate,
+  findingNumber,
+  findingText,
+  findingsToCsv,
+  parseFindingsTrendQuery,
+  type FindingsTrendQuery,
+  type ReviewState,
+} from './findingsPolicy'
 export type FindingRecord = {
   id: string
   category?: string | null
@@ -14,17 +30,6 @@ export type FindingRecord = {
   measured_at_timestamp?: number | null
   model_versions?: unknown
   review_state?: string | null
-}
-
-const findingText = (value: unknown, max = 2000): string | null => {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed ? trimmed.slice(0, max) : null
-}
-
-const findingNumber = (value: unknown): number | null => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-  return value
 }
 
 /** Replace an analysis's findings (idempotent; safe to call per persist). */ export const persistFindings =
@@ -115,72 +120,6 @@ export const getStudentFindings = async (
     `
       return rows ?? []
     })) ?? []
-  )
-}
-
-export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
-export type ReviewState = (typeof REVIEW_STATES)[number]
-
-/**
- * Defense-in-depth evidence gate (§21): a stored finding must never claim a
- * strong band with no supporting frames. The engine enforces this at build
- * time; persistence re-applies it so backfilled or third-party rows cannot
- * smuggle an unsupported high/moderate claim into review queues. Pure.
- */
-export const applyEvidenceGate = (finding: FindingRecord): FindingRecord => {
-  const frames = Array.isArray(finding.evidence_frames) ? finding.evidence_frames : []
-  const band = typeof finding.confidence_band === 'string' ? finding.confidence_band : null
-  if ((band === 'high' || band === 'moderate') && frames.length === 0) {
-    return { ...finding, confidence_band: 'needs_review', review_state: 'needs_review' }
-  }
-  return finding
-}
-
-/** Column order for the findings CSV export (stable for spreadsheets). */export const FINDINGS_CSV_COLUMNS = [
-  'id',
-  'server_job_id',
-  'category',
-  'start_ms',
-  'end_ms',
-  'confidence',
-  'confidence_band',
-  'severity',
-  'observation',
-  'feedback',
-  'form_score',
-  'review_state',
-  'created_at',
-] as const
-
-const CSV_FORMULA_RE = /^[=+\-@\t\r]/
-
-/** Escape one CSV cell: defuse formula injection, quote delimiters. */
-const csvCell = (value: unknown): string => {
-  if (value === null || value === undefined) return ''
-  const raw = String(value)
-  const safe = CSV_FORMULA_RE.test(raw) ? `'${raw}` : raw
-  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
-}
-
-/** Serialize findings rows to CSV text (pure; BOM-free — the route adds it). */
-export const findingsToCsv = (findings: StoredFinding[]): string => {
-  const rows = (Array.isArray(findings) ? findings : []).map((f) => [
-    f.id,
-    f.server_job_id,
-    f.category ?? '',
-    f.start_ms ?? '',
-    f.end_ms ?? '',
-    f.confidence ?? '',
-    f.confidence_band ?? '',
-    f.severity ?? '',
-    f.observation ?? '',
-    f.feedback ?? '',
-    f.form_score ?? '',
-    f.review_state,
-    f.created_at,
-  ])
-  return [FINDINGS_CSV_COLUMNS.join(','), ...rows.map((r) => r.map(csvCell).join(','))].join(
-    '\n',
   )
 }
 
