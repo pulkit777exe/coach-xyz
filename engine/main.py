@@ -86,6 +86,17 @@ from core.errors import (
     error_status,
 )
 from core.jobs import create_job, get_job, update_job, fail_job
+from core.http import (
+    error_response as _error_response,
+    extract_timestamp_refs,
+    get_job_or_404,
+    is_quota_error,
+    map_gemini_error,
+    require_completed_summary,
+    require_gemini,
+    require_json_body,
+    require_json_content,
+)
 
 try:
     from google import genai
@@ -255,18 +266,6 @@ async def validation_handler(request: Request, exc: RequestValidationError):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-
-def _error_response(status_code: int, error: str, message: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "code": error,
-            "message": message,
-            "layer": "engine",
-            "retryable": status_code >= 500,
-        },
-    )
 
 
 def _safe_int(value: Any) -> Optional[int]:
@@ -605,12 +604,9 @@ async def upload_intent(request: Request) -> JSONResponse:
     /scan endpoint on local (the app server still proxies small uploads).
     The bytes themselves are always re-validated by ffprobe at scan time.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
-    if not isinstance(payload, dict):
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     filename = payload.get("filename")
     mime_type = payload.get("mime_type")
@@ -667,12 +663,9 @@ async def scan_from_key(request: Request) -> JSONResponse:
     Only keys minted by /upload-intent are accepted (raw/ prefix + strict
     shape) — never result keys or arbitrary paths.
     """
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
-    if not isinstance(payload, dict):
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     storage_key = payload.get("storage_key")
     if not isinstance(storage_key, str) or not _STORAGE_KEY_RE.match(storage_key):
@@ -787,15 +780,12 @@ async def analyze(request: Request) -> JSONResponse:
     Called by BullMQ worker (server), NOT by end users directly.
     Runs analysis SYNCHRONOUSLY — BullMQ handles concurrency.
     """
-    content_type = (request.headers.get("content-type") or "").lower()
+    if (err := require_json_content(request)) is not None:
+        return err
 
-    if not content_type.startswith("application/json"):
-        return _error_response(415, "INVALID_REQUEST", "JSON required")
-
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     engine_job_id = payload.get("engine_job_id")
     session_token = payload.get("session_token")
@@ -870,10 +860,9 @@ async def analyze(request: Request) -> JSONResponse:
 
 @app.get("/status/{job_id}")
 def status(job_id: str) -> JSONResponse:
-    try:
-        job = get_job(job_id)
-    except JobNotFoundError:
-        return _error_response(404, "JOB_NOT_FOUND", "Job not found")
+    job, err = get_job_or_404(job_id)
+    if err is not None:
+        return err
 
     return JSONResponse(
         status_code=200,
@@ -940,14 +929,12 @@ async def chat(request: Request) -> JSONResponse:
     Uses asyncio.to_thread for the blocking Gemini call so the event loop
     stays responsive.
     """
-    content_type = (request.headers.get("content-type") or "").lower()
-    if not content_type.startswith("application/json"):
-        return _error_response(415, "INVALID_REQUEST", "JSON required")
+    if (err := require_json_content(request)) is not None:
+        return err
 
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     job_id = payload.get("job_id")
     user_message = (payload.get("message") or "").strip()
@@ -959,13 +946,12 @@ async def chat(request: Request) -> JSONResponse:
         return _error_response(400, "INVALID_REQUEST", "message required")
 
     # Load the job's analysis result
-    try:
-        job = get_job(job_id)
-    except JobNotFoundError:
-        return _error_response(404, "JOB_NOT_FOUND", "Job not found or expired")
+    job, err = get_job_or_404(job_id, "Job not found or expired")
+    if err is not None:
+        return err
 
-    if not job.summary:
-        return _error_response(400, "INVALID_REQUEST", "Analysis not complete yet — no summary available")
+    if (err := require_completed_summary(job)) is not None:
+        return err
 
     # Build the chat prompt
     from core.chat_prompt import get_chat_prompt
@@ -980,10 +966,10 @@ async def chat(request: Request) -> JSONResponse:
     # Call Gemini in a thread to avoid blocking the event loop, with an
     # overall deadline so a hung model call fails fast (the server gives
     # /chat 60s — this deadline sits inside it).
-    try:
-        if _gemini_client is None:
-            return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+    if (err := require_gemini(_gemini_client)) is not None:
+        return err
 
+    try:
         def _call_gemini():
             return _gemini_client.models.generate_content(
                 model=GEMINI_MODEL,
@@ -999,21 +985,9 @@ async def chat(request: Request) -> JSONResponse:
         logging.error("Chat Gemini timeout")
         return _error_response(504, "GEMINI_TIMEOUT", "AI service timed out. Please try again.")
     except Exception as exc:
-        status_code = getattr(exc, "status_code", None)
-        message = str(exc)
-        is_quota = (
-            status_code == 429
-            or "RESOURCE_EXHAUSTED" in message
-            or "quota" in message.lower()
-        )
-        if is_quota:
-            return _error_response(429, "GEMINI_QUOTA_EXCEEDED", "AI quota exceeded. Please try again later.")
-        logging.error(f"Chat Gemini error: {exc}")
-        return _error_response(500, "GEMINI_ERROR", "AI service error. Please try again.")
+        return map_gemini_error(exc, "Chat Gemini error")
 
-    # Extract timestamp references from the reply
-    import re
-    timestamp_refs = [float(m) for m in re.findall(r'(\d+\.?\d*)s', reply)]
+    timestamp_refs = extract_timestamp_refs(reply)
 
     return JSONResponse(content={
         "reply": reply,
@@ -1033,14 +1007,12 @@ async def chat_stream(request: Request):
     """
     from fastapi.responses import StreamingResponse
 
-    content_type = (request.headers.get("content-type") or "").lower()
-    if not content_type.startswith("application/json"):
-        return _error_response(415, "INVALID_REQUEST", "JSON required")
+    if (err := require_json_content(request)) is not None:
+        return err
 
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     job_id = payload.get("job_id")
     user_message = (payload.get("message") or "").strip()
@@ -1051,13 +1023,12 @@ async def chat_stream(request: Request):
     if not user_message:
         return _error_response(400, "INVALID_REQUEST", "message required")
 
-    try:
-        job = get_job(job_id)
-    except JobNotFoundError:
-        return _error_response(404, "JOB_NOT_FOUND", "Job not found or expired")
+    job, err = get_job_or_404(job_id, "Job not found or expired")
+    if err is not None:
+        return err
 
-    if not job.summary:
-        return _error_response(400, "INVALID_REQUEST", "Analysis not complete yet — no summary available")
+    if (err := require_completed_summary(job)) is not None:
+        return err
 
     from core.chat_prompt import get_chat_prompt
     from core.config import GEMINI_MODEL, CHAT_GEMINI_TIMEOUT_S
@@ -1068,18 +1039,11 @@ async def chat_stream(request: Request):
         user_message=user_message,
     )
 
-    if _gemini_client is None:
-        return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+    if (err := require_gemini(_gemini_client)) is not None:
+        return err
 
     def _stream_error_event(exc: BaseException) -> str:
-        status_code = getattr(exc, "status_code", None)
-        msg = str(exc)
-        is_quota = (
-            status_code == 429
-            or "RESOURCE_EXHAUSTED" in msg
-            or "quota" in msg.lower()
-        )
-        if is_quota:
+        if is_quota_error(exc):
             return f"data: {json.dumps({'type': 'error', 'message': 'AI quota exceeded. Please try again later.'})}\n\n"
         logging.error(f"Chat stream Gemini error: {exc}")
         return f"data: {json.dumps({'type': 'error', 'message': 'AI service error. Please try again.'})}\n\n"
@@ -1138,8 +1102,7 @@ async def chat_stream(request: Request):
             if not pump_task.done():
                 pump_task.cancel()
 
-        import re
-        timestamp_refs = sorted(set(float(m) for m in re.findall(r'(\d+\.?\d*)s', full_text)))
+        timestamp_refs = extract_timestamp_refs(full_text)
         yield f"data: {json.dumps({'type': 'done', 'text': full_text, 'timestamp_refs': timestamp_refs, 'event_refs': []})}\n\n"
 
     return StreamingResponse(
@@ -1233,14 +1196,12 @@ async def report(request: Request) -> JSONResponse:
     a structured JSON report plus the raw Gemini text so the server can persist
     both and keep a source of truth for re-generation.
     """
-    content_type = (request.headers.get("content-type") or "").lower()
-    if not content_type.startswith("application/json"):
-        return _error_response(415, "INVALID_REQUEST", "JSON required")
+    if (err := require_json_content(request)) is not None:
+        return err
 
-    try:
-        payload = await request.json()
-    except Exception:
-        return _error_response(400, "INVALID_REQUEST", "Invalid JSON body")
+    payload = await require_json_body(request)
+    if isinstance(payload, JSONResponse):
+        return payload
 
     report_context = payload.get("report_context")
     report_type = (payload.get("report_type") or "").strip()
@@ -1261,8 +1222,8 @@ async def report(request: Request) -> JSONResponse:
         student_name=payload.get("student_name"),
     )
 
-    if _gemini_client is None:
-        return _error_response(500, "GEMINI_NOT_CONFIGURED", "AI service is not configured.")
+    if (err := require_gemini(_gemini_client)) is not None:
+        return err
 
     # Call Gemini in a thread to avoid blocking the event loop
     try:
@@ -1276,17 +1237,7 @@ async def report(request: Request) -> JSONResponse:
         response = await asyncio.to_thread(_call_gemini)
         raw_text = getattr(response, "text", None) or ""
     except Exception as exc:
-        status_code = getattr(exc, "status_code", None)
-        message = str(exc)
-        is_quota = (
-            status_code == 429
-            or "RESOURCE_EXHAUSTED" in message
-            or "quota" in message.lower()
-        )
-        if is_quota:
-            return _error_response(429, "GEMINI_QUOTA_EXCEEDED", "AI quota exceeded. Please try again later.")
-        logging.error(f"Report Gemini error: {exc}")
-        return _error_response(500, "GEMINI_ERROR", "AI service error. Please try again.")
+        return map_gemini_error(exc, "Report Gemini error")
 
     if not raw_text:
         return _error_response(500, "GEMINI_EMPTY_RESPONSE", "AI returned an empty response. Please try again.")
@@ -1306,10 +1257,9 @@ async def report(request: Request) -> JSONResponse:
 
 @app.get("/download/{job_id}")
 def download(job_id: str):
-    try:
-        job = get_job(job_id)
-    except JobNotFoundError:
-        return _error_response(404, "JOB_NOT_FOUND", "Job not found")
+    job, err = get_job_or_404(job_id)
+    if err is not None:
+        return err
 
     if job.state != "completed" or not job.video_key:
         return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
