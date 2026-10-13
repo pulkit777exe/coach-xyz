@@ -84,7 +84,10 @@ class TestDetectPoseCandidates:
         assert out[0].visibility == pytest.approx(0.7)
 
     def test_skip_dedup_keeps_strongest(self, monkeypatch, frame):
-        _stub_hog(monkeypatch, [(10, 10, 60, 90), (12, 12, 62, 92)])
+        # Near-duplicate proposals: identical crops give identical derived
+        # body boxes (IoU 1.0), above the tracking 0.6 skip threshold, so the
+        # stronger visibility wins and only one candidate survives.
+        _stub_hog(monkeypatch, [(10, 10, 60, 90), (10, 10, 60, 90)])
 
         seen = {"calls": 0}
 

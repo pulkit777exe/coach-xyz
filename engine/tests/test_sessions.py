@@ -95,8 +95,10 @@ class TestEviction:
         monkeypatch.setattr(sessions.storage, "delete_file", lambda _k: None)
         monkeypatch.setattr(sessions.time, "time", lambda: 10_000.0)
         monkeypatch.setattr(sessions, "MAX_SESSIONS", 2)
-        for i in range(3):
-            sessions._sessions[f"s{i}"] = {"video_key": f"k{i}", "created_at": float(i)}
+        # Fresh timestamps (inside SESSION_TTL of the mocked now) so only
+        # the max-sessions rule fires — not the TTL sweep.
+        for i, created in enumerate((9_996.0, 9_998.0, 10_000.0)):
+            sessions._sessions[f"s{i}"] = {"video_key": f"k{i}", "created_at": created}
 
         evict_old_sessions()
 
