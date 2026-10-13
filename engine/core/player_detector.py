@@ -85,6 +85,10 @@ def detect_players(video_path: str, sample_interval_s: float = 5.0) -> dict:
         scan_s  = min(total_s, 90.0)
         times   = list(np.arange(1.5, max(2.5, scan_s), sample_interval_s))
 
+        # Own HOG construction on purpose: default (64,128) window + explicit
+        # SVM detector. The shared detection_utils singleton is tuned
+        # differently (48,96 window) for the scan path — unifying changes
+        # CLI detection output with no golden footage to verify against.
         hog = cv2.HOGDescriptor()
         hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 

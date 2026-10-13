@@ -14,6 +14,7 @@ import numpy as np
 
 from core.detection_utils import (
     detect_hog_people,
+    landmark_angle,
     PoseCandidate,
 )
 from core.detector import TRACKING_DETECTION_OPTIONS, detect_players, detect_pose_candidates as _detect_pose_candidates
@@ -33,28 +34,9 @@ def compute_joint_angles(landmarks: list[dict[str, float]]) -> dict[str, float]:
     if not landmarks or len(landmarks) < 33:
         return {}
 
-    def angle_between(v1: np.ndarray, v2: np.ndarray) -> float:
-        """Calculate angle between two vectors in degrees."""
-        dot = np.dot(v1, v2)
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        cos_angle = dot / (norm_v1 * norm_v2 + 1e-6)
-        cos_angle = np.clip(cos_angle, -1.0, 1.0)
-        angle = np.degrees(np.arccos(cos_angle))
-        return angle
-
-    def vector(p1: dict, p2: dict) -> np.ndarray:
-        return np.array([p2["x"] - p1["x"], p2["y"] - p1["y"]])
-
     def calculate_angle(a: int, b: int, c: int) -> float:
-        """Calculate angle between points a-b-c (b is vertex)."""
-        a_landmark = landmarks[a]
-        b_landmark = landmarks[b]
-        c_landmark = landmarks[c]
-
-        v1 = vector(a_landmark, b_landmark)
-        v2 = vector(c_landmark, b_landmark)
-        return angle_between(v1, v2)
+        """Angle at vertex b — single-sourced in detection_utils.landmark_angle."""
+        return landmark_angle(landmarks[a], landmarks[b], landmarks[c])
 
     # Key joint angle calculations using standard anatomical landmarks
     # MediaPipe pose landmark indices:
