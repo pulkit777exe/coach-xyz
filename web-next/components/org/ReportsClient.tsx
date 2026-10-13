@@ -42,6 +42,7 @@ import {
 } from '@/lib/org'
 import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
 import type { AiReportJobPoll } from '@/lib/aiReports'
+import { startJobPolling } from '@/lib/jobPolling'
 import type { CoachAIError } from '@/types'
 
 const TYPE_BADGE: Record<string, string> = {
@@ -122,13 +123,18 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!aiPending) return
-    let cancelled = false
-
-    const poll = async () => {
-      try {
-        const res = await orgAiReportStatus(auth0Id, aiPending.report_job_id)
-        if (cancelled) return
-        setAiJob(res)
+    // AI-report polling crosses the shared job-polling core (fixed 2500ms
+    // cadence, give up on the first fetch error — same contract as the
+    // hand-rolled interval it replaces, plus an immediate first poll).
+    const controller = startJobPolling<AiReportJobPoll>({
+      jobId: aiPending.report_job_id,
+      fetchStatus: (jobId) => orgAiReportStatus(auth0Id, jobId),
+      isComplete: (status) => status.status === 'done' || status.status === 'failed',
+      intervalMs: 2500,
+      backoffFactor: 1,
+      giveUpOnFirstFailure: true,
+      onStatus: (res) => setAiJob(res),
+      onComplete: (res) => {
         if (res.status === 'done' && res.report) {
           setReports((prev) =>
             prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
@@ -141,18 +147,13 @@ export default function ReportsClient({
           setAiPending(null)
           setAiError('AI report generation failed. Please try again.')
         }
-      } catch (err) {
-        if (cancelled) return
+      },
+      onError: (failure) => {
         setAiPending(null)
-        setAiError((err as CoachAIError).message ?? 'Failed to check AI report status')
-      }
-    }
-
-    const interval = setInterval(poll, 2500)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
+        setAiError(failure.error.message ?? 'Failed to check AI report status')
+      },
+    })
+    return () => controller.stop()
   }, [auth0Id, aiPending])
 
   const generateAi = async () => {

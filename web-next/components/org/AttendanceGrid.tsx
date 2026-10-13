@@ -35,6 +35,7 @@ import {
   orgDeleteAttendance,
 } from '@/lib/org'
 import { toISODate } from '@/lib/date'
+import { useMonthNavigator } from '@/lib/useMonthNavigator'
 import type { CoachAIError } from '@/types'
 
 type GridRecord = {
@@ -71,32 +72,17 @@ export default function AttendanceGrid({
   initialRecords: GridRecord[]
 }) {
   const today = startOfLocalDay(new Date())
-  const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
-  const roster = students
-  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(() =>
-    makeMap(initialRecords),
-  )
-  const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
-  const [loading, setLoading] = useState(false)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [dayDialog, setDayDialog] = useState<Date | null>(null)
-  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
-  const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
-  const [notesSaving, setNotesSaving] = useState(false)
-  const [emailAttOpen, setEmailAttOpen] = useState(false)
-
-  const year = month.getFullYear()
-  const monthNum = month.getMonth()
-  const daysInMonth = new Date(year, monthNum + 1, 0).getDate()
-  const days = useMemo(
-    () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, monthNum, i + 1)),
-    [year, monthNum, daysInMonth],
-  )
-  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-
-  const fetchMonth = async (targetMonth: Date) => {
-    setLoading(true)
-    try {
+  const {
+    year,
+    monthNum,
+    monthLabel,
+    isLoading: loading,
+    setLoading,
+    setMonth,
+    fetchMonth,
+    nav,
+  } = useMonthNavigator({
+    onFetch: async (targetMonth) => {
       const y = targetMonth.getFullYear()
       const m = targetMonth.getMonth()
       const first = new Date(y, m, 1)
@@ -107,18 +93,26 @@ export default function AttendanceGrid({
       })
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
-    } catch (err) {
-      toast.error((err as CoachAIError).message ?? 'Failed to load attendance')
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    onError: (err) => toast.error((err as CoachAIError).message ?? 'Failed to load attendance'),
+  })
+  const roster = students
+  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(() =>
+    makeMap(initialRecords),
+  )
+  const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
+  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [dayDialog, setDayDialog] = useState<Date | null>(null)
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
+  const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
+  const [notesSaving, setNotesSaving] = useState(false)
+  const [emailAttOpen, setEmailAttOpen] = useState(false)
 
-  const nav = (delta: number) => {
-    const next = new Date(year, monthNum + delta, 1)
-    setMonth(next)
-    fetchMonth(next)
-  }
+  const daysInMonth = new Date(year, monthNum + 1, 0).getDate()
+  const days = useMemo(
+    () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, monthNum, i + 1)),
+    [year, monthNum, daysInMonth],
+  )
 
   const isToday = (d: Date) => toISODate(d) === toISODate(today)
 

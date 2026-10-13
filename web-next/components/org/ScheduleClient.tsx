@@ -40,6 +40,7 @@ import {
   EVENT_STATUS_LABELS,
 } from '@/lib/org'
 import { toISODate, scheduleMonthWindow } from '@/lib/date'
+import { useMonthNavigator } from '@/lib/useMonthNavigator'
 import { usePreferences } from '@/lib/preferences'
 import type { CoachAIError } from '@/types'
 
@@ -106,11 +107,28 @@ export default function ScheduleClient({
   initialEvents: ScheduleEvent[]
 }) {
   const today = new Date()
-  const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  const {
+    year,
+    monthNum,
+    monthLabel,
+    isLoading: loading,
+    setMonth,
+    fetchMonth,
+    nav,
+  } = useMonthNavigator({
+    onFetch: async (target) => {
+      // Widen by one day on each side so midnight (local) month-boundary
+      // events survive the UTC-truncated filter. byDay only places events on
+      // matching local-day cells, so out-of-month buffer rows are dropped.
+      const { from, to } = scheduleMonthWindow(target)
+      const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
+      setEvents(res.events)
+    },
+    onError: (err) => toast.error((err as CoachAIError).message ?? 'Failed to load schedule'),
+  })
   const { prefs } = usePreferences()
   const weekStartsMonday = prefs.weekStartsMonday
   const [events, setEvents] = useState<ScheduleEvent[]>(initialEvents)
-  const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null)
   const [initialDate, setInitialDate] = useState<string | undefined>(undefined)
@@ -118,10 +136,6 @@ export default function ScheduleClient({
   const [dayView, setDayView] = useState<Date | null>(null)
   const [confirmEvent, setConfirmEvent] = useState<ScheduleEvent | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
-
-  const year = month.getFullYear()
-  const monthNum = month.getMonth()
-  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const visibleEvents = useMemo(
     () => (statusFilter ? events.filter((e) => e.status === statusFilter) : events),
@@ -155,28 +169,6 @@ export default function ScheduleClient({
     for (const list of map.values()) list.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     return map
   }, [visibleEvents])
-
-  const fetchMonth = async (target: Date) => {
-    setLoading(true)
-    try {
-      // Widen by one day on each side so midnight (local) month-boundary
-      // events survive the UTC-truncated filter. byDay only places events on
-      // matching local-day cells, so out-of-month buffer rows are dropped.
-      const { from, to } = scheduleMonthWindow(target)
-      const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
-      setEvents(res.events)
-    } catch (err) {
-      toast.error((err as CoachAIError).message ?? 'Failed to load schedule')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const nav = (delta: number) => {
-    const next = new Date(year, monthNum + delta, 1)
-    setMonth(next)
-    fetchMonth(next)
-  }
 
   const openCreate = (date: Date) => {
     setEditingEvent(null)
