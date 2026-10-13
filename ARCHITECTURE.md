@@ -207,7 +207,7 @@ coach-xyz/
 │   │   ├── analyses.ts        # Analysis persistence (history rows, stages, stats, reads)
 │   │   ├── analysisPolicy.ts  # Org daily quota + tier + usage ledger + retention policy
 │   │   ├── findings.ts        # Findings store/query/CSV export/trends
-│   │   ├── clips.ts           # Clip bookmarks (validator + scoped CRUD)
+│   │   ├── clips.ts           # Clip bookmarks (scoped CRUD, single-tx create; rules in clipsPolicy)
 │   │   ├── registry.ts        # Organizations / videos / player_events registries
 │   │   ├── ratelimit.ts       # 8 buckets (scan/analysis/chat/download/scanprogress/clip/email/aireport)
 │   │   ├── attribution.ts     # Mint/verify signed attribution tokens (10-min HMAC)
@@ -217,8 +217,10 @@ coach-xyz/
 │   │   ├── userJob.ts         # Curatorial handler adapter (params→guard→store→audit→errors)
 │   │   ├── capability.ts      # Capability route kernel (rate gate→job access→engine error map)
 │   │   ├── playerScope.ts     # Self-scoped adapter (verified guard→linked scope→decision)
+│   │   ├── orgRoute.ts        # Org route kernel (validators, forbid, audit binder)
 │   │   ├── queueConnection.ts # Single IORedis builder (workerLifecycle + notification events)
 │   │   ├── findingsPolicy.ts / clipsPolicy.ts # Pure curation rules (gate/CSV/validators)
+│   │   ├── chatMessages.ts    # Single conversation home (both surfaces; anonymous sentinel)
 │   │   ├── notificationsStore.ts / notificationsEvents.ts # Persistence vs fan-out
 │   │   ├── caller.ts          # resolveCaller (role/teams/scope) + permissions.ts (14 perms)
 │   │   ├── orgEnums.ts        # Shared org vocab (contract w/ web lib/org.ts)
@@ -230,9 +232,8 @@ coach-xyz/
 │   │   ├── userRoles.ts       # coach/player role vocab (contract w/ web)
 │   │   ├── users.ts           # User sync/store
 │   │   ├── historyStore.ts    # All Postgres DDL (3 parallel levels) + pool
-│   │   ├── chatMessages.ts    # Chat message persistence
+│   │   ├── chatMessages.ts    # Chat message persistence (single home, both surfaces)
 │   │   ├── chatTurn.ts        # One-turn interactor (context + engine + fallback)
-│   │   ├── conversation.ts    # Redis-backed conversation storage
 │   │   ├── shareTokens.ts     # Time-limited share tokens
 │   │   ├── notifications.ts   # Notification store + SSE
 │   │   ├── aiReportData.ts    # AI-report job lifecycle
@@ -258,8 +259,8 @@ coach-xyz/
 │   │   ├── gemini_common.py   # Shared JSON helpers (gemini.py legacy video-file path deleted)
 │   │   ├── prompt.py / chat_prompt.py / report_prompt.py / prompt_guard.py
 │   │   │                      # Analysis/chat/report prompts + injection delimiters
-│   │   ├── validator.py       # Gemini output schema validation (6 sports)
-│   │   ├── stats.py           # Shot-event stat recount + correction
+│   │   ├── validator.py       # Gemini output schema validation (tables from sport packs)
+│   │   ├── stats.py           # Shot-event stat recount + correction (made/missed from packs)
 │   │   ├── findings.py        # Evidence-traceable Finding objects (evidence gate)
 │   │   ├── quality.py         # Pre-render non-blocking quality check
 │   │   ├── injury_risk.py     # Injury-risk indicator computation (medical-gated downstream)
@@ -275,7 +276,7 @@ coach-xyz/
 │   │   ├── logging_config.py  # JSON structured logging (job-id correlation)
 │   │   └── errors.py          # Error types hierarchy
 │   │   ├── cli/_legacy/       # Quarantined frame_selector + player_tracker (unwired; runnable standalone)
-│   ├── tests/                 # pytest suite (24 files, 259 tests)
+│   ├── tests/                 # pytest suite (25 files, 264 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -283,7 +284,7 @@ coach-xyz/
 ├── render.yaml                # Render blueprint (engine starter + server free)
 ├── .github/workflows/         # CI (tests) + deploy hooks + keepalive cron
 └── sports/                    # Sport configs: events, positions, camera_angles,
-                               #   form_criteria, stats, scoring (basketball v1, rest v2)
+                               #   form_criteria, stats, scoring (basketball v2, rest v3; neutral outcomes included)
 ```
 
 ---
@@ -887,4 +888,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-10-13 (deepening pass 4 built + verified green: engine route kernel, curation policy split + single-tx clips, notifications store/events split, profile data hook, month navigator + report polling, dead-code quarantine; baselines 386/202/259)*
+*Last verified: 2026-10-13 (deepening pass 5 built + verified green: pack-derived vocabularies, org route kernel, conversation merge to Postgres, tooling-hygiene note; baselines 393/202/264)*

@@ -37,3 +37,6 @@ depth, seam, adapter, leverage, locality).
 - **notifications split** — store (`notificationsStore.ts`) vs fan-out (`notificationsEvents.ts`) with the shared `queueConnection.ts` IORedis builder.
 - **profile data** — `web-next/lib/useStudentProfileData.ts` owning StudentProfile's server-data states + loaders.
 - **month navigator** — `web-next/lib/useMonthNavigator.ts` owning the calendar loop (AI-report polling crosses the shared `jobPolling` core).
+- **pack tables** — validator + stats vocabularies derived from `sports/*.json` via `sport_outcomes`/`sport_stat_keys` (`engine/core/sport_config.py`); neutral outcomes live in the packs.
+- **org kernel** — validators, forbid, and audit binder in `server/src/lib/orgRoute.ts` (guard topology untouched).
+- **conversation merge** — one Postgres home for both chat surfaces (`server/src/lib/chatMessages.ts`); Redis `conversation.ts` deleted.
