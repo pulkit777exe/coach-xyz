@@ -133,11 +133,15 @@ Set "sport" in your output to one of: basketball, football, cricket, tennis, bas
 ---
 """
 
-_EVENT_DETECTION_ALL = """\
+_EVENT_DETECTION_HEADER = """\
 ## EVENT DETECTION RULES
 
 Scan the entire video chronologically. For EVERY significant event:
 
+"""
+
+_EVENT_DETECTION_SECTIONS = {
+    "basketball": """\
 ### Basketball events to detect:
 - **Shot attempts**: jump shots, layups, floaters, dunks, free throws, three-pointers
 - **Shot type classification**: classify each shot as one of:
@@ -150,202 +154,75 @@ Scan the entire video chronologically. For EVERY significant event:
 - **Outcome**: "made" or "missed"
 - **Timestamp**: the moment the ball leaves the player's hands (release point)
 - **Outcome timestamp**: the moment the ball hits the rim/net or misses entirely
-
+""",
+    "football": """\
 ### Football (Soccer) events to detect:
 - **Shot attempts**: strikes, headers, volleys, free kicks, penalties
 - **Outcome**: "goal", "missed", "saved", "offside", "blocked"
 - **Timestamp**: the moment of contact with the ball
 - **Outcome timestamp**: the moment the ball crosses the line or is stopped
-
+""",
+    "cricket": """\
 ### Cricket events to detect:
 - **Batting shots**: drives, pulls, sweeps, cuts, hooks, defensive plays
 - **Outcome**: "four", "six", "boundary", "wicket", "dot_ball", "single", "two", "three"
 - **Specific dismissal type if wicket**: "bowled", "caught", "lbw", "run_out", "stumped"
 - **Timestamp**: the moment bat makes contact with ball (or misses)
 - **Outcome timestamp**: when the ball reaches the boundary, is fielded, or wicket falls
-
+""",
+    "tennis": """\
 ### Tennis events to detect:
 - **Shot attempts**: serves, forehands, backhands, volleys, overheads, drop shots
 - **Outcome**: "winner", "error", "in_play", "ace", "double_fault"
 - **Timestamp**: the moment of racket contact with the ball
 - **Outcome timestamp**: when the ball lands or point ends
-
+""",
+    "baseball": """\
 ### Baseball events to detect:
 - **Hit attempts**: singles, doubles, triples, home runs, fly outs, ground outs, strikeouts
 - **Outcome**: "hit", "out", "error", "walk", "strikeout", "home_run"
 - **Timestamp**: the moment bat makes contact with ball (or miss for strike)
 - **Outcome timestamp**: when the play is completed
-
+""",
+    "hockey": """\
 ### Hockey events to detect:
 - **Shot attempts**: wrist shots, slap shots, snap shots, backhands, one-timers
 - **Outcome**: "goal", "save", "missed", "blocked", "post"
 - **Timestamp**: the moment the stick contacts the puck
 - **Outcome timestamp**: when the puck is stopped, enters the net, or goes out of play
-
----
-"""
+""",
+}
 
 _EVENT_DETECTION_SPORTS = {
-    "basketball": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Basketball events to detect:
-- **Shot attempts**: jump shots, layups, floaters, dunks, free throws, three-pointers
-- **Shot type classification**: classify each shot as one of:
-  - "catch_and_shoot" — off a pass or rebound, no dribble
-  - "off_dribble" — pull-up jump shot or floater off the dribble
-  - "contested" — close defender pressure affecting form
-  - "layup" — close-range shot off the glass
-  - "free_throw" — uncontested shot from the line
-  - "three_pointer" — shot from beyond the three-point line
-- **Outcome**: "made" or "missed"
-- **Timestamp**: the moment the ball leaves the player's hands (release point)
-- **Outcome timestamp**: the moment the ball hits the rim/net or misses entirely
-""",
-    "football": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Football (Soccer) events to detect:
-- **Shot attempts**: strikes, headers, volleys, free kicks, penalties
-- **Outcome**: "goal", "missed", "saved", "offside", "blocked"
-- **Timestamp**: the moment of contact with the ball
-- **Outcome timestamp**: the moment the ball crosses the line or is stopped
-""",
-    "cricket": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Cricket events to detect:
-- **Batting shots**: drives, pulls, sweeps, cuts, hooks, defensive plays
-- **Outcome**: "four", "six", "boundary", "wicket", "dot_ball", "single", "two", "three"
-- **Specific dismissal type if wicket**: "bowled", "caught", "lbw", "run_out", "stumped"
-- **Timestamp**: the moment bat makes contact with ball (or misses)
-- **Outcome timestamp**: when the ball reaches the boundary, is fielded, or wicket falls
-""",
-    "tennis": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Tennis events to detect:
-- **Shot attempts**: serves, forehands, backhands, volleys, overheads, drop shots
-- **Outcome**: "winner", "error", "in_play", "ace", "double_fault"
-- **Timestamp**: the moment of racket contact with the ball
-- **Outcome timestamp**: when the ball lands or point ends
-""",
-    "baseball": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Baseball events to detect:
-- **Hit attempts**: singles, doubles, triples, home runs, fly outs, ground outs, strikeouts
-- **Outcome**: "hit", "out", "error", "walk", "strikeout", "home_run"
-- **Timestamp**: the moment bat makes contact with ball (or miss for strike)
-- **Outcome timestamp**: when the play is completed
-""",
-    "hockey": """\
-## EVENT DETECTION RULES
-
-Scan the entire video chronologically. For EVERY significant event:
-
-### Hockey events to detect:
-- **Shot attempts**: wrist shots, slap shots, snap shots, backhands, one-timers
-- **Outcome**: "goal", "save", "missed", "blocked", "post"
-- **Timestamp**: the moment the stick contacts the puck
-- **Outcome timestamp**: when the puck is stopped, enters the net, or goes out of play
-""",
+    sport: _EVENT_DETECTION_HEADER + section
+    for sport, section in _EVENT_DETECTION_SECTIONS.items()
 }
 
-_FORM_CHECKLIST_ALL = """\
+_EVENT_DETECTION_ALL = (
+    _EVENT_DETECTION_HEADER
+    + "\n".join(_EVENT_DETECTION_SECTIONS.values())
+    + "\n---\n"
+)
+
+_FORM_CHECKLIST_HEADER = """\
 ## FORM & BIOMECHANICS ANALYSIS
 
 For every event, analyze the player's body mechanics using these criteria.
 Provide quantitative measurements where possible (joint angles in degrees, pixel deviations, timing in ms).
 
-### Basketball — Form Checklist:
-- **Stance & base**: feet shoulder-width apart, weight balanced, knees bent
-- **Shot pocket**: ball held consistently at the same position before each shot
-- **Elbow alignment**: shooting elbow tucked under the ball, not flaring out
-- **Wrist & finger position**: ball resting on fingertips, not palm
-- **Release point**: ball released at the apex of the jump, arm fully extended
-- **Follow-through**: wrist snaps forward, fingers pointing down toward hoop ("goose neck")
-- **Body alignment**: shoulders square to the basket throughout
-- **Eyes**: focused on the back of the rim, not the ball
-- **Off-hand**: guide hand stays still on the side — does not push the ball
-- **Jump mechanics**: balanced vertical jump, no excessive fade or drift
-
-### Football (Soccer) — Form Checklist:
-- **Approach angle**: 30–45 degree run-up to the ball
-- **Plant foot position**: 6–12 inches beside the ball, pointing at the target
-- **Hip rotation**: hips rotate through the ball at point of contact
-- **Striking surface**: instep for power, inside for accuracy, laces for driven shots
-- **Ankle lock**: ankle firm and locked on contact
-- **Head position**: head over the ball (prevents ballooning), eyes on the ball through contact
-- **Follow-through**: kicking leg follows through fully toward the target
-- **Body lean**: slight forward lean prevents the ball going over the bar
-- **Arms**: spread for balance, not used as a lever
-
-### Cricket — Batting Form Checklist:
-- **Stance**: side-on, feet parallel to the crease, head level and still
-- **Grip**: top hand dominant for control (V's formed by thumb and index finger on the bat handle)
-- **Backlift**: straight back toward off stump or slightly toward gully
-- **Head position**: head still, eyes level, watching the ball from the bowler's hand
-- **Front foot movement**: decisive stride toward the pitch of the ball
-- **Weight transfer**: weight transfers fully onto the front foot for drives
-- **Bottom hand**: guides rather than dominates (prevents top-edging pull shots)
-- **Follow-through**: bat follows through high and toward the target area
-- **Wrist roll**: wrists roll over on the ball for ground shots (prevents catches)
-
-### Tennis — Form Checklist:
-- **Grip**: continental for serves/volleys, semi-western or eastern for forehands
-- **Stance**: open or semi-open for forehands, closed for backhands
-- **Backswing**: compact and early, racket head above wrist on forehands
-- **Contact point**: out in front of the body, waist to shoulder height
-- **Footwork**: split step before opponent's shot, weight transfer into the ball
-- **Follow-through**: racket finishes over the opposite shoulder or across the body
-- **Body rotation**: hips and shoulders rotate through the shot
-- **Racket head speed**: accelerating through contact point
-- **Balance**: weight on balls of feet, recovery to ready position
-
-### Baseball — Batting Form Checklist:
-- **Stance**: balanced, feet shoulder-width apart, knees slightly bent
-- **Grip**: knuckles aligned, hands together near the knob
-- **Load**: weight shifts back, hands move slightly back and up
-- **Stride**: short, controlled step toward the pitcher
-- **Hip rotation**: hips explode open before hands, generating torque
-- **Hand path**: hands stay inside the ball, barrel follows
-- **Contact point**: out in front of the plate, arms extended
-- **Extension**: arms fully extended through contact
-- **Follow-through**: bat finishes high, two-handed or one-handed release
-- **Head position**: eyes locked on the ball, head still at contact
-
-### Hockey — Shooting Form Checklist:
-- **Grip**: hands spaced appropriately (wider for slap shots, narrower for wrist shots)
-- **Weight transfer**: weight moves from back foot to front foot through the shot
-- **Puck position**: puck starts behind or beside the body for loading
-- **Stick flex**: stick flexes and loads energy before contact with puck
-- **Contact point**: puck contacts blade in the "sweet spot"
-- **Follow-through**: stick follows through toward the target, blade face open or closed as needed
-- **Body rotation**: shoulders and hips rotate through the shot
-- **Head position**: eyes on the puck through contact
-- **Balance**: stable base, not reaching or lunging
-
-For each criterion, include the measured value, the ideal range, and whether it falls within acceptable bounds.
 """
 
-_FORM_CHECKLIST_SPORTS = {
-    "basketball": """\
+_FORM_CHECKLIST_HEADER_SHORT = """\
 ## FORM & BIOMECHANICS ANALYSIS
 
-For every event, analyze the player's body mechanics using these criteria.
-Provide quantitative measurements where possible (joint angles in degrees, pixel deviations, timing in ms).
+For every event, analyze the player's body mechanics using these criteria:
 
+"""
+
+_FORM_CHECKLIST_CLOSER = 'For each criterion, include the measured value, the ideal range, and whether it falls within acceptable bounds.\n'
+
+_FORM_CHECKLIST_SECTIONS = {
+    "basketball": """\
 ### Basketball — Form Checklist:
 - **Stance & base**: feet shoulder-width apart, weight balanced, knees bent
 - **Shot pocket**: ball held consistently at the same position before each shot
@@ -356,15 +233,8 @@ Provide quantitative measurements where possible (joint angles in degrees, pixel
 - **Body alignment**: shoulders square to the basket throughout
 - **Eyes**: focused on the back of the rim, not the ball
 - **Off-hand**: guide hand stays still on the side — does not push the ball
-- **Jump mechanics**: balanced vertical jump, no excessive fade or drift
-
-For each criterion, include the measured value, the ideal range, and whether it falls within acceptable bounds.
-""",
+- **Jump mechanics**: balanced vertical jump, no excessive fade or drift""",
     "football": """\
-## FORM & BIOMECHANICS ANALYSIS
-
-For every event, analyze the player's body mechanics using these criteria:
-
 ### Football (Soccer) — Form Checklist:
 - **Approach angle**: 30–45 degree run-up to the ball
 - **Plant foot position**: 6–12 inches beside the ball, pointing at the target
@@ -374,13 +244,8 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Head position**: head over the ball (prevents ballooning), eyes on the ball through contact
 - **Follow-through**: kicking leg follows through fully toward the target
 - **Body lean**: slight forward lean prevents the ball going over the bar
-- **Arms**: spread for balance, not used as a lever
-""",
+- **Arms**: spread for balance, not used as a lever""",
     "cricket": """\
-## FORM & BIOMECHANICS ANALYSIS
-
-For every event, analyze the player's body mechanics using these criteria:
-
 ### Cricket — Batting Form Checklist:
 - **Stance**: side-on, feet parallel to the crease, head level and still
 - **Grip**: top hand dominant for control (V's formed by thumb and index finger on the bat handle)
@@ -390,13 +255,8 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Weight transfer**: weight transfers fully onto the front foot for drives
 - **Bottom hand**: guides rather than dominates (prevents top-edging pull shots)
 - **Follow-through**: bat follows through high and toward the target area
-- **Wrist roll**: wrists roll over on the ball for ground shots (prevents catches)
-""",
+- **Wrist roll**: wrists roll over on the ball for ground shots (prevents catches)""",
     "tennis": """\
-## FORM & BIOMECHANICS ANALYSIS
-
-For every event, analyze the player's body mechanics using these criteria:
-
 ### Tennis — Form Checklist:
 - **Grip**: continental for serves/volleys, semi-western or eastern for forehands
 - **Stance**: open or semi-open for forehands, closed for backhands
@@ -406,13 +266,8 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Follow-through**: racket finishes over the opposite shoulder or across the body
 - **Body rotation**: hips and shoulders rotate through the shot
 - **Racket head speed**: accelerating through contact point
-- **Balance**: weight on balls of feet, recovery to ready position
-""",
+- **Balance**: weight on balls of feet, recovery to ready position""",
     "baseball": """\
-## FORM & BIOMECHANICS ANALYSIS
-
-For every event, analyze the player's body mechanics using these criteria:
-
 ### Baseball — Batting Form Checklist:
 - **Stance**: balanced, feet shoulder-width apart, knees slightly bent
 - **Grip**: knuckles aligned, hands together near the knob
@@ -423,13 +278,8 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Contact point**: out in front of the plate, arms extended
 - **Extension**: arms fully extended through contact
 - **Follow-through**: bat finishes high, two-handed or one-handed release
-- **Head position**: eyes locked on the ball, head still at contact
-""",
+- **Head position**: eyes locked on the ball, head still at contact""",
     "hockey": """\
-## FORM & BIOMECHANICS ANALYSIS
-
-For every event, analyze the player's body mechanics using these criteria:
-
 ### Hockey — Shooting Form Checklist:
 - **Grip**: hands spaced appropriately (wider for slap shots, narrower for wrist shots)
 - **Weight transfer**: weight moves from back foot to front foot through the shot
@@ -439,9 +289,24 @@ For every event, analyze the player's body mechanics using these criteria:
 - **Follow-through**: stick follows through toward the target, blade face open or closed as needed
 - **Body rotation**: shoulders and hips rotate through the shot
 - **Head position**: eyes on the puck through contact
-- **Balance**: stable base, not reaching or lunging
-""",
+- **Balance**: stable base, not reaching or lunging""",
 }
+
+_FORM_CHECKLIST_SPORTS = {
+    sport: (
+        _FORM_CHECKLIST_HEADER if sport == "basketball" else _FORM_CHECKLIST_HEADER_SHORT
+    )
+    + section
+    + (("\n\n" + _FORM_CHECKLIST_CLOSER) if sport == "basketball" else "\n")
+    for sport, section in _FORM_CHECKLIST_SECTIONS.items()
+}
+
+_FORM_CHECKLIST_ALL = (
+    _FORM_CHECKLIST_HEADER
+    + "\n\n".join(_FORM_CHECKLIST_SECTIONS.values())
+    + "\n\n"
+    + _FORM_CHECKLIST_CLOSER
+)
 
 _FEEDBACK_RULES = """\
 ## FEEDBACK WRITING RULES
@@ -549,128 +414,66 @@ Return ONLY valid JSON. No preamble, no explanation, no markdown fences. The JSO
 ---
 """
 
-_SPORT_SPECIFIC_STATS_ALL = """\
+_SPORT_STATS_HEADER = """\
 ### Sport-specific stat keys to include:
 
-**Basketball:**
-- total_shots_made_so_far
-- total_shots_missed_so_far
-- total_three_pointers_made_so_far
-- total_layups_made_so_far
-- total_free_throws_made_so_far
-
-**Football:**
-- total_goals_so_far
-- total_shots_on_target_so_far
-- total_shots_missed_so_far
-- total_headers_so_far
-
-**Cricket:**
-- total_runs_so_far
-- total_fours_so_far
-- total_sixes_so_far
-- total_wickets_so_far
-- total_dot_balls_so_far
-- balls_faced_so_far
-
-**Tennis:**
-- total_aces_so_far
-- total_winners_so_far
-- total_errors_so_far
-- total_double_faults_so_far
-- points_played_so_far
-
-**Baseball:**
-- total_hits_so_far
-- total_outs_so_far
-- total_walks_so_far
-- total_strikeouts_so_far
-- at_bats_so_far
-
-**Hockey:**
-- total_goals_so_far
-- total_saves_so_far
-- total_shots_on_goal_so_far
-- total_blocks_so_far
-- shots_taken_so_far
-
----
 """
 
-_SPORT_SPECIFIC_STATS_SPORTS = {
+_SPORT_STATS_ENTRIES = {
     "basketball": """\
-### Sport-specific stat keys to include:
-
 **Basketball:**
 - total_shots_made_so_far
 - total_shots_missed_so_far
 - total_three_pointers_made_so_far
 - total_layups_made_so_far
-- total_free_throws_made_so_far
-
----
-""",
+- total_free_throws_made_so_far""",
     "football": """\
-### Sport-specific stat keys to include:
-
 **Football:**
 - total_goals_so_far
 - total_shots_on_target_so_far
 - total_shots_missed_so_far
-- total_headers_so_far
-
----
-""",
+- total_headers_so_far""",
     "cricket": """\
-### Sport-specific stat keys to include:
-
 **Cricket:**
 - total_runs_so_far
 - total_fours_so_far
 - total_sixes_so_far
 - total_wickets_so_far
 - total_dot_balls_so_far
-- balls_faced_so_far
-
----
-""",
+- balls_faced_so_far""",
     "tennis": """\
-### Sport-specific stat keys to include:
-
 **Tennis:**
 - total_aces_so_far
 - total_winners_so_far
 - total_errors_so_far
 - total_double_faults_so_far
-- points_played_so_far
-
----
-""",
+- points_played_so_far""",
     "baseball": """\
-### Sport-specific stat keys to include:
-
 **Baseball:**
 - total_hits_so_far
 - total_outs_so_far
 - total_walks_so_far
 - total_strikeouts_so_far
-- at_bats_so_far
-
----
-""",
+- at_bats_so_far""",
     "hockey": """\
-### Sport-specific stat keys to include:
-
 **Hockey:**
 - total_goals_so_far
 - total_saves_so_far
 - total_shots_on_goal_so_far
 - total_blocks_so_far
-- shots_taken_so_far
-
----
-""",
+- shots_taken_so_far""",
 }
+
+_SPORT_SPECIFIC_STATS_SPORTS = {
+    sport: _SPORT_STATS_HEADER + entry + "\n\n---\n"
+    for sport, entry in _SPORT_STATS_ENTRIES.items()
+}
+
+_SPORT_SPECIFIC_STATS_ALL = (
+    _SPORT_STATS_HEADER
+    + "\n\n".join(_SPORT_STATS_ENTRIES.values())
+    + "\n\n---\n"
+)
 
 # Set of valid sport names for lookup
 _SPORT_SECTIONS = set(_EVENT_DETECTION_SPORTS.keys())
