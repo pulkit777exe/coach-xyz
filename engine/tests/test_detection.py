@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 
-from core import detector
 from core.detector import (
     SCAN_DETECTION_OPTIONS,
     TRACKING_DETECTION_OPTIONS,

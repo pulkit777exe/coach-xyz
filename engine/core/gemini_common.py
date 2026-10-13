@@ -1,4 +1,4 @@
-"""Shared Gemini utilities used by both gemini.py and gemini_client.py."""
+"""Shared Gemini utilities used by gemini_client.py."""
 
 import json
 import re

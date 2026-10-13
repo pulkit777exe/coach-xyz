@@ -31,10 +31,11 @@ import sys
 
 import cv2
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "cli" / "_legacy"))
 
-from core.player_tracker import score_frames
+from player_tracker import score_frames
 
 
 def _frame_to_base64(video_path: str, frame_index: int) -> str:

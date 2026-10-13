@@ -39,7 +39,6 @@ from rich.align           import Align
 from rich.columns         import Columns
 from rich.console         import Console
 from rich.markup          import escape
-from rich.padding         import Padding
 from rich.panel           import Panel
 from rich.progress        import (BarColumn, Progress, SpinnerColumn,
                                   TaskProgressColumn, TextColumn,
