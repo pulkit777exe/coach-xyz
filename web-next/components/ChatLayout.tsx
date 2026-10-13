@@ -6,7 +6,7 @@ import ChatPanel from '@/components/ChatPanel'
 import ClipsSection from '@/components/ClipsSection'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import { VideoPlayer, type VideoPlayerHandle } from '@/components/VideoPlayer'
-import { reviewFinding } from '@/lib/api'
+import { reviewFinding } from '@/lib/library'
 import type { JobStatus } from '@/types'
 
 interface ChatLayoutProps {

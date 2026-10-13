@@ -10,7 +10,6 @@ import tempfile
 import time
 from datetime import datetime, timezone
 import traceback
-import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -43,12 +42,20 @@ setup_logging()
 # Import shared constants
 from core.config import CHUNK_SIZE, MAX_FILE_SIZE_BYTES
 
-# Session management constants (memory optimization)
-SESSION_TTL = 7200  # 2 hours (aligned with job TTL)
-MAX_SESSIONS = 10  # Max concurrent sessions
-SESSION_EVICTION_INTERVAL = 300  # Run eviction every 5 minutes
-SCAN_PROGRESS_TTL = SESSION_TTL  # scan-progress dict entries expire with the session
-COMPLETE_SCAN_PROGRESS_RETENTION = 300  # drop completed entries after 5 minutes
+# Session management constants live in core.sessions (the session lifecycle
+# module); imported here for the eviction loop below.
+from core.sessions import (
+    SESSION_EVICTION_INTERVAL,
+    complete_scan_progress,
+    evict_old_sessions,
+    fail_scan_progress,
+    get_session,
+    init_scan_progress,
+    read_scan_progress,
+    report_scan_progress,
+    resolve_session,
+    store_scan_result,
+)
 
 # ── Validate Required Environment Variables ──────────────────────────────────
 _required_env_vars = ["GEMINI_API_KEY"]
@@ -70,7 +77,7 @@ except ImportError:
     _default_response_class = JSONResponse
 
 from core import storage
-from core.multicam import angle_labels, append_angle, normalize_angle_label, scan_progress_key
+from core.multicam import normalize_angle_label
 from core.errors import (
     EngineError,
     JobNotFoundError,
@@ -89,12 +96,8 @@ except ImportError:
     genai_types = None
     _gemini_client = None
 
-sessions: Dict[str, Dict[str, Any]] = {}
-sessions_lock = threading.Lock()
-
-# Scan progress tracking (keyed by session_token)
-scan_progress: Dict[str, Dict[str, Any]] = {}
-scan_progress_lock = threading.Lock()
+# Scan-session state lives in core.sessions — endpoints cross its interface
+# instead of touching module dicts directly.
 
 # Bounded executor for async analysis (memory optimization)
 _analysis_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="analysis")
@@ -128,7 +131,7 @@ async def lifespan(app: FastAPI):
     async def session_eviction_loop():
         while True:
             await asyncio.sleep(SESSION_EVICTION_INTERVAL)
-            _evict_old_sessions()
+            evict_old_sessions()
 
     eviction_task = asyncio.create_task(session_eviction_loop())
     logger.info(f"Session eviction task started (interval: {SESSION_EVICTION_INTERVAL}s)")
@@ -275,72 +278,6 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
-def _delete_session_files(session: dict[str, Any]) -> None:
-    """Delete every upload backing an evicted session (all angles).
-
-    Sessions own their source files: the analyzer no longer deletes uploads
-    on completion so re-analysis works, which makes eviction the lifetime
-    boundary (plus the shutdown sweep as a backstop).
-    """
-    if not isinstance(session, dict):
-        return
-    keys: set[str] = set()
-    video_key = session.get("video_key")
-    if video_key:
-        keys.add(str(video_key))
-    angles = session.get("angles")
-    if isinstance(angles, dict):
-        for entry in angles.values():
-            if isinstance(entry, dict) and entry.get("video_key"):
-                keys.add(str(entry["video_key"]))
-    for key in keys:
-        try:
-            storage.delete_file(key)
-        except Exception:
-            pass
-
-
-def _evict_old_sessions_unlocked() -> None:
-    """Evict sessions older than SESSION_TTL and enforce MAX_SESSIONS limit.
-
-    Must be called with sessions_lock held.
-    """
-    now = time.time()
-    # Remove expired sessions
-    expired = [sid for sid, s in sessions.items()
-               if now - s.get("created_at", 0) > SESSION_TTL]
-    for sid in expired:
-        session = sessions.pop(sid, None)
-        _delete_session_files(session)
-
-    # Enforce max sessions limit (remove oldest first)
-    while len(sessions) > MAX_SESSIONS:
-        oldest_sid = min(sessions, key=lambda s: sessions[s].get("created_at", 0))
-        session = sessions.pop(oldest_sid, None)
-        _delete_session_files(session)
-
-
-def _evict_old_sessions() -> None:
-    """Thread-safe eviction of old sessions."""
-    with sessions_lock:
-        _evict_old_sessions_unlocked()
-    _evict_old_scan_progress()
-
-
-def _evict_old_scan_progress() -> None:
-    """Prune scan-progress dict so finished/stale scans do not accumulate in memory."""
-    now = time.time()
-    with scan_progress_lock:
-        stale = [
-            sid
-            for sid, p in scan_progress.items()
-            if now - p.get("started_at", 0) > SCAN_PROGRESS_TTL
-            or (p.get("complete") and now - p.get("started_at", 0) > COMPLETE_SCAN_PROGRESS_RETENTION)
-        ]
-        for sid in stale:
-            scan_progress.pop(sid, None)
-
-
 def _validate_video_upload(upload: Union[UploadFile, StarletteUploadFile, None]) -> Optional[JSONResponse]:
     if upload is None:
         return _error_response(400, "INVALID_REQUEST", "Missing video upload")
@@ -366,8 +303,7 @@ def _session_angle_video_path(
     """
     from core.multicam import normalize_angle_label, resolve_angle_video_key
 
-    with sessions_lock:
-        session = sessions.get(session_token)
+    session = get_session(session_token)
 
     if not session:
         return None, None, _error_response(
@@ -477,35 +413,16 @@ async def _scan_stored_file(
 
         # Set up scan progress tracking, keyed per angle so concurrent scans of
         # different perspectives on one session don't overwrite each other.
-        progress_key = scan_progress_key(session_token, angle_label)
-        with scan_progress_lock:
-            scan_progress[progress_key] = {
-                "session_token": session_token,
-                "current": 0,
-                "total": 0,
-                "complete": False,
-                "error": None,
-                "angle": angle_label,
-                "started_at": time.time(),
-            }
+        progress_key = init_scan_progress(session_token, angle_label)
 
         def _report_scan_progress(current: int, total: int) -> None:
-            with scan_progress_lock:
-                if progress_key in scan_progress:
-                    scan_progress[progress_key]["current"] = current
-                    scan_progress[progress_key]["total"] = total
+            report_scan_progress(progress_key, current, total)
 
         def _fail_scan_progress(message: str) -> None:
-            with scan_progress_lock:
-                if progress_key in scan_progress:
-                    scan_progress[progress_key]["complete"] = True
-                    scan_progress[progress_key]["error"] = message
+            fail_scan_progress(progress_key, message)
 
         def _complete_scan_progress() -> None:
-            with scan_progress_lock:
-                if progress_key in scan_progress:
-                    scan_progress[progress_key]["complete"] = True
-                    scan_progress[progress_key]["error"] = None
+            complete_scan_progress(progress_key)
 
         try:
             from core.detector import detect_players
@@ -536,28 +453,13 @@ async def _scan_stored_file(
         _complete_scan_progress()
 
         # Evict old sessions before creating new one (memory optimization)
-        with sessions_lock:
-            _evict_old_sessions_unlocked()
-            if not append_to_session:
-                sessions[session_token] = {
-                    "video_key": r2_key,
-                    "players": players,
-                    "created_at": time.time(),
-                }
-            session = sessions.get(session_token)
-            if session is None:
-                # Evicted between checks — recreate it.
-                session = {
-                    "video_key": r2_key,
-                    "players": players,
-                    "created_at": time.time(),
-                }
-                sessions[session_token] = session
-            append_angle(session, angle_label, r2_key, players)
-            labels = angle_labels(session)
-            # Re-uploading an angle replaces its file — delete the orphaned
-            # previous upload now (the session only references the latest).
-            previous = session.pop("_replaced_video_key", None)
+        session, labels, previous = store_scan_result(
+            session_token,
+            video_key=r2_key,
+            players=players,
+            angle_label=angle_label,
+            append_to_session=append_to_session,
+        )
         if previous and previous != r2_key:
             try:
                 storage.delete_file(previous)
@@ -575,7 +477,7 @@ async def _scan_stored_file(
         # Do NOT delete local_path here — storage.download_video_to_tmp now returns
         # the storage path directly (no copy), so local_path IS the stored file.
         # Source uploads live until their session is evicted (see
-        # _delete_session_files) so re-analysis keeps working.
+        # _delete_session_files in core.sessions) so re-analysis keeps working.
 
         response_players = [
             {
@@ -641,10 +543,7 @@ async def scan(
     # namespaced key (raw/{session}/{angle}/...). An unknown token starts a
     # new session; angle labels are sanitized by the session layer.
     angle_label = normalize_angle_label(angle)
-    with sessions_lock:
-        existing = sessions.get(session_token) if session_token else None
-    if existing is None:
-        session_token = str(uuid.uuid4())
+    session_token, existing = resolve_session(session_token)
 
     # Stream upload to storage (memory-efficient for large files)
     r2_key = storage.raw_upload_key(session_token, angle_label)
@@ -738,9 +637,7 @@ async def upload_intent(request: Request) -> JSONResponse:
 
 
     angle_label = normalize_angle_label(payload.get("angle"))
-    with sessions_lock:
-        existing = sessions.get(payload.get("session_token")) if payload.get("session_token") else None
-    session_token = payload.get("session_token") if existing is not None else str(uuid.uuid4())
+    session_token, existing = resolve_session(payload.get("session_token"))
 
     key = storage.raw_upload_key(session_token, angle_label)
     if storage.is_local_backend():
@@ -792,9 +689,7 @@ async def scan_from_key(request: Request) -> JSONResponse:
 
 
     angle_label = normalize_angle_label(payload.get("angle"))
-    with sessions_lock:
-        existing = sessions.get(payload.get("session_token")) if payload.get("session_token") else None
-    session_token = payload.get("session_token") if existing is not None else str(uuid.uuid4())
+    session_token, existing = resolve_session(payload.get("session_token"))
 
     try:
         local_path = storage.download_video_to_tmp(storage_key)
@@ -826,15 +721,9 @@ async def scan_progress_endpoint(session_token: str, angle: str | None = None):
     from fastapi.responses import StreamingResponse
 
     angle_label = normalize_angle_label(angle)
-    progress_key = scan_progress_key(session_token, angle_label)
 
     def _read_progress() -> dict[str, Any] | None:
-        with scan_progress_lock:
-            entry = scan_progress.get(progress_key)
-            if entry is None and angle_label == "primary":
-                # Back-compat: entries written before per-angle keys.
-                entry = scan_progress.get(session_token)
-            return dict(entry) if entry is not None else None
+        return read_scan_progress(session_token, angle_label)
 
     async def event_generator():
         try:

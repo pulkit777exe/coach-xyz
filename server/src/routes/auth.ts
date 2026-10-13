@@ -19,7 +19,8 @@ import {
   parseClipInput,
 } from '../lib/clips'
 import { saveChatMessage, getChatMessages } from '../lib/chatMessages'
-import { authorizeJob, failEngineJobForServerJob } from '../lib/jobGuard'
+import { failEngineJobForServerJob } from '../lib/jobGuard'
+import { withUserJob } from '../lib/userJob'
 import { answerChatTurn, keywordFallback } from '../lib/chatTurn'
 import { checkClipLimit, getIP } from '../lib/ratelimit'
 import { buildError } from '../lib/errors'
@@ -253,85 +254,89 @@ export default new Elysia()
   })
   .post('/api/auth/user/:auth0Id/analyses/:jobId/clips', async ({ params, body, request, set }) => {
     const { auth0Id, jobId } = params
-    if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
-    }
-    const guard = await authorizeJob(
-      auth0Id,
+    return withUserJob(
       request,
-      'Clip creation requires the finding.review permission',
+      set,
+      {
+        auth0Id,
+        resourceId: jobId,
+        permission: 'Clip creation requires the finding.review permission',
+      },
+      async (caller) => {
+        const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
+        if (!allowed) {
+          return {
+            status: 429,
+            body: {
+              ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
+              retry_after: Math.ceil((reset - Date.now()) / 1000),
+            },
+          }
+        }
+        const parsed = parseClipInput((body ?? {}) as Record<string, unknown>)
+        if (!parsed.ok) {
+          return { status: 400, body: buildError('INVALID_REQUEST', parsed.reason, false) }
+        }
+        const existing = await getUserAnalysisById(auth0Id, jobId)
+        if (!existing) {
+          return { status: 404, body: buildError('NOT_FOUND', 'Analysis not found', false) }
+        }
+        if ((await countClips(auth0Id, jobId)) >= MAX_CLIPS_PER_ANALYSIS) {
+          return {
+            status: 409,
+            body: buildError('INVALID_REQUEST', 'Clip limit reached for this analysis', false),
+          }
+        }
+        const clip = await createClip(auth0Id, jobId, parsed.cleaned, caller.verified)
+        if (!clip) {
+          return {
+            status: 400,
+            body: buildError('INVALID_REQUEST', 'Could not create clip (unknown finding?)', false),
+          }
+        }
+        return {
+          status: 201,
+          body: { clip },
+          audit: { action: 'clip.created', entity: 'clip', id: clip.id, meta: { jobId } },
+        }
+      },
     )
-    if (!guard.ok) {
-      set.status = guard.status
-      return guard.error
-    }
-    const caller = guard.caller
-    const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
-    if (!allowed) {
-      set.status = 429
-      return {
-        ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
-        retry_after: Math.ceil((reset - Date.now()) / 1000),
-      }
-    }
-    const parsed = parseClipInput((body ?? {}) as Record<string, unknown>)
-    if (!parsed.ok) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', parsed.reason, false)
-    }
-    const existing = await getUserAnalysisById(auth0Id, jobId)
-    if (!existing) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Analysis not found', false)
-    }
-    if ((await countClips(auth0Id, jobId)) >= MAX_CLIPS_PER_ANALYSIS) {
-      set.status = 409
-      return buildError('INVALID_REQUEST', 'Clip limit reached for this analysis', false)
-    }
-    const clip = await createClip(auth0Id, jobId, parsed.cleaned, caller.verified)
-    if (!clip) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Could not create clip (unknown finding?)', false)
-    }
-    auditRoute(request, auth0Id, 'clip.created', 'clip', clip.id, { jobId })
-    set.status = 201
-    return { clip }
   })
   .delete(
     '/api/auth/user/:auth0Id/analyses/:jobId/clips/:clipId',
     async ({ params, request, set }) => {
       const { auth0Id, jobId, clipId } = params
-      if (!auth0Id || !jobId || !clipId) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing required parameters', false)
-      }
-      const guard = await authorizeJob(
-        auth0Id,
+      return withUserJob(
         request,
-        'Clip deletion requires the finding.review permission',
+        set,
+        {
+          auth0Id,
+          resourceId: clipId,
+          jobId,
+          permission: 'Clip deletion requires the finding.review permission',
+        },
+        async (caller) => {
+          const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
+          if (!allowed) {
+            return {
+              status: 429,
+              body: {
+                ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
+                retry_after: Math.ceil((reset - Date.now()) / 1000),
+              },
+            }
+          }
+          const removed = await deleteClip(auth0Id, jobId, clipId)
+          if (!removed) {
+            return { status: 404, body: buildError('NOT_FOUND', 'Clip not found', false) }
+          }
+          return {
+            status: 200,
+            body: { deleted: true },
+            audit: { action: 'clip.deleted', entity: 'clip', id: clipId, meta: { jobId } },
+          }
+        },
       )
-      if (!guard.ok) {
-        set.status = guard.status
-        return guard.error
-      }
-      const caller = guard.caller
-      const { allowed, reset } = await checkClipLimit(caller.verified ?? getIP(request))
-      if (!allowed) {
-        set.status = 429
-        return {
-          ...buildError('RATE_LIMITED', 'Too many clip writes. Try again later.', true),
-          retry_after: Math.ceil((reset - Date.now()) / 1000),
-        }
-      }
-      const removed = await deleteClip(auth0Id, jobId, clipId)
-      if (!removed) {
-        set.status = 404
-        return buildError('NOT_FOUND', 'Clip not found', false)
-      }
-      auditRoute(request, auth0Id, 'clip.deleted', 'clip', clipId, { jobId })
-      set.status = 200
-      return { deleted: true }
     },
   )
   .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
@@ -382,31 +387,30 @@ export default new Elysia()
   // Coach review of a finding (approve/flag). Requires the finding.review  // permission: owner self-passes; members resolve via org role.
   .patch('/api/auth/user/:auth0Id/findings/:findingId', async ({ params, body, request, set }) => {
     const { auth0Id, findingId } = params
-    if (!auth0Id || !findingId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
-    }
     const { review_state } = (body ?? {}) as { review_state?: unknown }
     if (review_state !== 'approved' && review_state !== 'flagged') {
       set.status = 400
       return buildError('INVALID_REQUEST', 'review_state must be approved or flagged', false)
     }
-    const guard = await authorizeJob(
-      auth0Id,
+    return withUserJob(
       request,
-      'Finding review requires the finding.review permission',
+      set,
+      {
+        auth0Id,
+        resourceId: findingId,
+        permission: 'Finding review requires the finding.review permission',
+      },
+      async () => {
+        const updated = await reviewFinding(auth0Id, findingId, review_state)
+        if (!updated) {
+          return {
+            status: 404,
+            body: buildError('NOT_FOUND', 'Finding not found or already reviewed', false),
+          }
+        }
+        return { status: 200, body: { id: findingId, review_state } }
+      },
     )
-    if (!guard.ok) {
-      set.status = guard.status
-      return guard.error
-    }
-    const updated = await reviewFinding(auth0Id, findingId, review_state)
-    if (!updated) {
-      set.status = 404
-      return buildError('NOT_FOUND', 'Finding not found or already reviewed', false)
-    }
-    set.status = 200
-    return { id: findingId, review_state }
   })
   // Cancel a running analysis. Failing the engine job stops status polling
   // from ever completing it, and the cancel-guard in persistAnalysisStatus

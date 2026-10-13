@@ -8,7 +8,8 @@ Features
                         confidence scores, then pick who to analyse.
   • Multi-player or all-player analysis.
   • Rich terminal UI  — panels, progress bars, tables, live status.
-  • Auto-chunking     — videos > 4 min are split and processed via LangChain.
+  • Staged pipeline  — the CLI drives the same run_analysis stages as the
+                        server (tracking → reasoning → scoring → quality → render).
   • API mode          — pass --api-url to route through the FastAPI backend.
 
 Usage examples
@@ -127,29 +128,9 @@ def _env_truthy(name: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _estimate_chunk_count(duration_s: float) -> int:
-    from core.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S
-
-    step = max(1, CHUNK_DURATION_S - CHUNK_OVERLAP_S)
-    effective = max(duration_s, CHUNK_OVERLAP_S + 1)
-    return max(1, int((effective - CHUNK_OVERLAP_S) / step) + 1)
-
-
-def _estimate_analysis_eta_range(duration_s: float, should_chunk: bool) -> tuple[float, float]:
-    if should_chunk:
-        from core.chunker import CHUNK_DURATION_S, CHUNK_WORKERS
-
-        chunks = _estimate_chunk_count(duration_s)
-        workers = max(1, CHUNK_WORKERS)
-
-        per_chunk_min = max(150.0, CHUNK_DURATION_S * 2.2)
-        per_chunk_max = max(300.0, CHUNK_DURATION_S * 3.8)
-
-        min_s = (chunks * per_chunk_min) / workers
-        max_s = (chunks * per_chunk_max) / max(1.0, workers * 0.75)
-    else:
-        min_s = max(90.0, duration_s * 1.8 + 45.0)
-        max_s = max(180.0, duration_s * 3.2 + 75.0)
+def _estimate_analysis_eta_range(duration_s: float) -> tuple[float, float]:
+    min_s = max(90.0, duration_s * 1.8 + 45.0)
+    max_s = max(180.0, duration_s * 3.2 + 75.0)
 
     if _env_truthy("COACHAI_ANALYSIS_PROXY"):
         min_s *= 0.8
@@ -233,17 +214,11 @@ def _validate_video(video_path: pathlib.Path, events_only: bool = False):
     info.add_row("Duration",    _fmt_dur(dur))
     info.add_row("FPS",         f"{fps:.1f}")
 
-    from core.chunker import CHUNK_THRESHOLD_S
-    should_chunk = dur >= CHUNK_THRESHOLD_S
-    if should_chunk:
-        info.add_row(
-            "Mode",
-            "[warn]LangChain chunking[/] (video > 4 min)",
-        )
-    else:
-        info.add_row("Mode", "[good]Direct analysis[/]")
+    # The staged pipeline caps Gemini at a 20-frame budget, so long videos
+    # need no chunking — one driver, one progress display.
+    info.add_row("Mode", "[good]Staged pipeline[/]")
 
-    analysis_min_s, analysis_max_s = _estimate_analysis_eta_range(dur, should_chunk)
+    analysis_min_s, analysis_max_s = _estimate_analysis_eta_range(dur)
     info.add_row("Est. AI time", _fmt_eta_range(analysis_min_s, analysis_max_s))
 
     if not events_only:
@@ -391,193 +366,133 @@ def _detect_players_step(video_path: pathlib.Path) -> dict | None:
     }
 
 
-# ── Step 2: run analysis ───────────────────────────────────────────────────────
+# ── Step 2: run analysis (staged pipeline) ────────────────────────────────────
 
-def _run_analysis(
-    video_path:   pathlib.Path,
-    model:        str,
-    strict:       bool,
-    player_focus: dict | None,
-    duration_s:   float,
-) -> dict:
-    from core.chunker import needs_chunking
+_STAGE_TEXT = {
+    "prepare": "Preparing video…",
+    "tracking": "Detecting + tracking player…",
+    "reasoning": "Gemini AI analysis…",
+    "scoring": "Scoring technique…",
+    "quality_check": "Quality check…",
+    "render": "Rendering annotated video…",
+    "done": "Done!",
+}
 
-    console.print(Rule("[accent]Step 2 / 3  ·  Gemini AI Analysis[/]", style="bright_blue"))
+
+def _run_staged(
+    video_key: str,
+    player_index: int | None,
+    render: bool,
+    duration_s: float,
+) -> tuple[dict, str]:
+    """Drive the single analysis driver (core.analyzer.run_analysis).
+
+    The CLI is a progress adapter at the driver's seam: a worker thread runs
+    the staged pipeline while the spinner pumps stage names. Returns the
+    (committed job summary, job id).
+    """
+    import threading
+    import uuid
+
+    from core.analyzer import run_analysis
+    from core.jobs import create_job, get_job
+
+    job_id = uuid.uuid4().hex
+    create_job(job_id, initial_state="uploading", video_key=video_key)
+
+    console.print(Rule("[accent]Step 2 / 3  ·  Staged Analysis[/]", style="bright_blue"))
     console.print()
 
-    should_chunk, _ = needs_chunking(str(video_path))
-
-    if should_chunk:
-        _warn_long_video(duration_s)
-        result = _run_chunked(video_path, model, strict, player_focus, duration_s)
-    else:
-        result = _run_direct(video_path, model, strict, player_focus, duration_s)
-
-    return result
-
-
-def _warn_long_video(duration_s: float):
-    from core.chunker import CHUNK_DURATION_S, CHUNK_OVERLAP_S, CHUNK_WORKERS
-
-    n_chunks = max(1, int((duration_s - CHUNK_OVERLAP_S) /
-                           (CHUNK_DURATION_S - CHUNK_OVERLAP_S)) + 1)
-    eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=True)
-
-    info = Table.grid(padding=(0, 2))
-    info.add_column(style="dim")
-    info.add_column(style="white")
-    info.add_row("Video length",    _fmt_dur(duration_s))
-    info.add_row("Chunk size",      f"{CHUNK_DURATION_S // 60} min")
-    info.add_row("Overlap",         f"{CHUNK_OVERLAP_S} s")
-    info.add_row("Workers",         str(CHUNK_WORKERS))
-    info.add_row("Chunks estimate", str(n_chunks))
-    info.add_row("Est. AI time",    _fmt_eta_range(eta_min_s, eta_max_s))
-
-    console.print(
-        Panel(
-            f"[warn]⚡ Long video detected[/] ({_fmt_dur(duration_s)})\n\n"
-            "Your video will be [bold]split into overlapping analysis windows[/] and\n"
-            "each window sent to Gemini separately via the\n"
-            "[accent]LangChain Runnable pipeline[/].\n\n"
-            "Timestamps are automatically shifted & deduplicated at chunk boundaries.",
-            title="[accent]LangChain Chunking Mode[/]",
-            border_style="yellow",
-            padding=(0, 2),
-        )
-    )
-    console.print(Padding(info, (0, 4)))
-    console.print()
-
-
-def _run_chunked(video_path, model, strict, player_focus, duration_s: float):
-    from core.chunker import analyze_long_video
-
-    messages: list[tuple[str, int]] = []
-    eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=True)
+    messages: list[str] = []
     started_at = time.time()
 
-    def _cb(msg, pct):
-        messages.append((msg, pct))
+    def _on_stage(stage: str) -> None:
+        messages.append(stage)
+
+    result_box: list = [None]
+    error_box: list = [None]
+
+    def worker():
+        try:
+            run_analysis(job_id, video_key, player_index, "primary", on_stage=_on_stage, render=render)
+            result_box[0] = get_job(job_id).summary
+        except Exception as e:
+            error_box[0] = e
 
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
         TimeElapsedColumn(),
-        console   = console,
-        transient = False,
+        console=console,
+        transient=False,
     ) as prog:
         task = prog.add_task(
-            _with_eta("LangChain pipeline initialising…", started_at, eta_min_s, eta_max_s),
-            total=100,
+            _with_eta("Preparing video…", started_at, *_estimate_analysis_eta_range(duration_s)),
+            total=None,
         )
-
-        import threading
-        result_box: list = [None]
-        error_box:  list = [None]
-
-        def worker():
-            try:
-                result_box[0] = analyze_long_video(
-                    video_path   = str(video_path),
-                    model_name   = model,
-                    strict       = strict,
-                    player_focus = player_focus,
-                    progress_cb  = _cb,
-                )
-            except Exception as e:
-                error_box[0] = e
-
         t = threading.Thread(target=worker, daemon=True)
         t.start()
-
         last_len = 0
         while t.is_alive() or last_len < len(messages):
             if len(messages) > last_len:
-                msg, pct = messages[-1]
+                stage = messages[-1]
                 prog.update(
                     task,
-                    description=_with_eta(msg, started_at, eta_min_s, eta_max_s),
-                    completed=pct,
+                    description=_with_eta(
+                        _STAGE_TEXT.get(stage, stage),
+                        started_at,
+                        *_estimate_analysis_eta_range(duration_s),
+                    ),
                 )
                 last_len = len(messages)
             time.sleep(0.3)
-
-        t.join()
-        prog.update(task, completed=100, description="✅ LangChain analysis complete!")
-
-    if error_box[0]:
-        raise error_box[0]
-    return result_box[0]
-
-
-def _run_direct(video_path, model, strict, player_focus, duration_s: float):
-    from core.gemini import analyze_video
-
-    steps = [
-        "Uploading video to Gemini…",
-        "Processing video frames…",
-        "Running AI analysis…",
-        "Parsing AI response…",
-    ]
-    eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=False)
-    started_at = time.time()
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        TimeElapsedColumn(),
-        console   = console,
-        transient = False,
-    ) as prog:
-        task = prog.add_task(
-            _with_eta(steps[0], started_at, eta_min_s, eta_max_s),
-            total=None,
-        )
-
-        result_box: list = [None]
-        error_box:  list = [None]
-        step_idx: list   = [0]
-
-        def worker():
-            try:
-                result_box[0] = analyze_video(
-                    video_path   = str(video_path),
-                    model_name   = model,
-                    strict       = strict,
-                    player_focus = player_focus,
-                )
-            except Exception as e:
-                error_box[0] = e
-
-        import threading
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-
-        while t.is_alive():
-            time.sleep(4)
-            step_idx[0] = min(step_idx[0] + 1, len(steps) - 1)
-            prog.update(
-                task,
-                description=_with_eta(steps[step_idx[0]], started_at, eta_min_s, eta_max_s),
-            )
-
         t.join()
 
     if error_box[0]:
         console.print(f"\n[bad]✗  Analysis failed:[/] {error_box[0]}")
         raise error_box[0]
-
-    return result_box[0]
+    if not isinstance(result_box[0], dict):
+        raise RuntimeError("Analysis finished without a committed summary.")
+    return result_box[0], job_id
 
 
 # ── Results display ───────────────────────────────────────────────────────────
 
+def _display_view(result: dict) -> tuple[dict, list[dict]]:
+    """Adapt the staged summary shape to the results display.
+
+    The driver commits the frontend shape (shot_events + top-level scores);
+    the display renders the raw-Gemini view (shots + session_summary), so
+    translate once here instead of in every panel.
+    """
+    if isinstance(result.get("shots"), list) and isinstance(result.get("session_summary"), dict):
+        return result["session_summary"], result["shots"]
+    summary = {
+        "overall_rating": result.get("overall_rating", "N/A"),
+        "success_rate_percent": result.get("success_rate_percent", 0),
+        "average_form_score": result.get("average_form_score", 0),
+        "strengths": result.get("strengths", []),
+        "top_issues": result.get("top_tips", []),
+        "priority_drill": result.get("priority_drill"),
+    }
+    shots = [
+        {
+            "event_index": i + 1,
+            "timestamp_of_shot": e.get("timestamp", "?"),
+            "shot_type": e.get("event_type", "?"),
+            "result": e.get("result"),
+            "form_score": e.get("form_score"),
+            "feedback": e.get("feedback", ""),
+        }
+        for i, e in enumerate(result.get("shot_events", []))
+        if isinstance(e, dict)
+    ]
+    return summary, shots
+
+
 def _show_results(result: dict, events_path: pathlib.Path, video_out: pathlib.Path | None):
-    summary = result.get("session_summary", {})
-    shots   = result.get("shots", [])
-    sport   = result.get("sport", "?")
+    summary, shots = _display_view(result)
+    sport = result.get("sport", "?")
 
     EMOJIS = {"basketball": "🏀", "football": "⚽", "cricket": "🏏", "tennis": "🎾", "baseball": "⚾", "hockey": "🏒"}
     emoji  = EMOJIS.get(sport, "🎯")
@@ -744,26 +659,44 @@ def _run_local(args):
     base       = video_path.stem
 
     # ── Player detection ──────────────────────────────────────────────────
+    # ── Player detection (rich selection UI stays in the CLI) ─────────────
     player_focus = None
     if not args.skip_detection:
         player_focus = _detect_players_step(video_path)
+    player_index = player_focus["id"] if isinstance(player_focus, dict) else None
 
-    # ── Gemini analysis ───────────────────────────────────────────────────
-    result = _run_analysis(video_path, args.model, args.strict,
-                           player_focus, duration_s)
+    # ── Model override (the staged driver reads config; honor -m here) ─────
+    import core.gemini_client as _gemini_client
+
+    _gemini_client.GEMINI_MODEL = args.model
+
+    # ── Stage the upload, then drive the single pipeline ───────────────────
+    import shutil
+    import uuid
+
+    from core import storage as _storage
+
+    session_token = uuid.uuid4().hex
+    video_key = _storage.raw_upload_key(session_token, "primary")
+    with open(video_path, "rb") as vf:
+        _storage.upload_video_streaming(vf, video_key)
+
+    result, job_id = _run_staged(video_key, player_index, not args.events_only, duration_s)
 
     events_path = ROOT / "events" / f"{base}.json"
     _save_json(events_path, result)
 
-    if args.events_only:
-        console.print(Rule("[dim]--events-only: skipping render[/]", style="dim"))
-        _show_results(result, events_path, None)
-        return
-
-    # ── Render ────────────────────────────────────────────────────────────
+    # ── Rendered output (the driver already rendered; copy it out) ─────────
     video_out = None
+    if not args.events_only:
+        from core.storage import get_local_file_path, result_key
 
-    # ── Display results ───────────────────────────────────────────────────
+        rendered_path = get_local_file_path(result_key(job_id))
+        if rendered_path:
+            video_out = pathlib.Path(args.output) if args.output else _downloads_dir() / f"{base}_analyzed.mp4"
+            shutil.copy(rendered_path, video_out)
+            console.print(f"\n[dim]Rendered video → {video_out} …[/]")
+        # else: cache-hit completion without a render artifact — JSON only.
     _show_results(result, events_path, video_out)
 
 
@@ -780,9 +713,7 @@ def _run_api(args):
 
     video_path = pathlib.Path(args.video).resolve()
     duration_s = _validate_video(video_path, events_only=args.events_only)
-    from core.chunker import CHUNK_THRESHOLD_S
-    should_chunk = duration_s >= CHUNK_THRESHOLD_S
-    eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s, should_chunk=should_chunk)
+    eta_min_s, eta_max_s = _estimate_analysis_eta_range(duration_s)
 
     api = args.api_url.rstrip("/")
 
@@ -891,7 +822,7 @@ def main():
     p.add_argument("--skip-detection",  action="store_true",
                    help="Skip player detection and analyse all players together.")
     p.add_argument("--strict",          action="store_true",
-                   help="Abort on Gemini validation warnings (local mode only).")
+                   help="No-op: the staged pipeline always validates Gemini output.")
     p.set_defaults(func=lambda a: _run_api(a) if a.api_url else _run_local(a))
 
     args = parser.parse_args()

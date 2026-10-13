@@ -1,5 +1,5 @@
 import { getDashboardAnalysisDetail } from '@/lib/serverData'
-import type { DashboardAnalysis } from '@/lib/api'
+import type { DashboardAnalysis } from '@/lib/library'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import HistoryChat from '@/components/HistoryChat'

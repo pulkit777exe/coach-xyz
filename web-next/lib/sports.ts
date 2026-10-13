@@ -27,9 +27,10 @@ export async function getSportPositions(sport: string): Promise<SportPosition[]>
   const hit = positionsCache.get(key)
   if (hit) return hit
   try {
-    const { apiFetch, IDENTITY_BASE } = await import('./api')
-    const res = await apiFetch<{ positions: SportPosition[] }>(
-      `${IDENTITY_BASE}/api/sports/${encodeURIComponent(key)}/positions`,
+    const { queryJson } = await import('./data/client')
+    const { identityUrl } = await import('./data/transport')
+    const res = await queryJson<{ positions: SportPosition[] }>(
+      identityUrl(`/api/sports/${encodeURIComponent(key)}/positions`),
     )
     const positions = Array.isArray(res.positions) ? res.positions : []
     positionsCache.set(key, positions)

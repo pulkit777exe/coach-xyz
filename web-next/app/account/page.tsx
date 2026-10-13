@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSession } from '@/lib/session'
-import { syncUser } from '@/lib/api'
+import { syncUser } from '@/lib/user'
 import { redirect } from 'next/navigation'
 import UserAvatar from '@/components/UserAvatar'
 import PageHeader from '@/components/org/PageHeader'

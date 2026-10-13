@@ -9,7 +9,7 @@ import { Label } from '@/components/9ui/ui/label'
 import { Spinner } from '@/components/org/Spinner'
 
 import { updateMyProfile } from '@/lib/meApi'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 export default function ProfileForm({
   initialName,

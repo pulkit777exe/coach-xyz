@@ -18,13 +18,8 @@ import { resolveJobCaller } from './jobAccess'
 import { verifyAttributionToken } from './attribution'
 import { readRequestMeta, type RequestMeta } from './requestMeta'
 import { enqueueAnalysis, type AnalysisPayload } from './queue'
-import {
-  checkOrgDailyQuota,
-  getOrgTier,
-  persistAnalysisStart,
-  recordUsage,
-  type OrgTier,
-} from './analyses'
+import { persistAnalysisStart } from './analyses'
+import { checkOrgDailyQuota, getOrgTier, recordUsage, type OrgTier } from './analysisPolicy'
 import { listMembershipsForUser } from './orgMembers'
 
 // ── Entry, seams, outcome ───────────────────────────────────────────────────

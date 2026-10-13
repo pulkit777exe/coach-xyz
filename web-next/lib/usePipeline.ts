@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { startAnalysis, getJobStatus, type CoachAIError } from '@/lib/api'
+import { startAnalysis, getJobStatus } from '@/lib/scan'
+import { type CoachAIError } from '@/types'
 import { toCoachAIError } from '@/lib/errors'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import { mapEngineStateToPipeline } from '@/lib/pipelineState'

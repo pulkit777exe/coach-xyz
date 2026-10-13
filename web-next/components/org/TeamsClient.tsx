@@ -40,7 +40,7 @@ import {
   type Match,
   type Season,
 } from '@/lib/org'
-import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
+import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 import EmptyState from './EmptyState'
 import type { Student } from '@/lib/org'
 

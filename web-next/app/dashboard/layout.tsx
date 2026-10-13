@@ -1,5 +1,5 @@
 import { getSession } from '@/lib/session'
-import { getUserProfile } from '@/lib/api'
+import { getUserProfile } from '@/lib/user'
 import { getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'

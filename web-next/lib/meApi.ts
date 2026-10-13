@@ -1,4 +1,4 @@
-import type { UserRecord } from './api'
+import type { UserRecord } from './user'
 import { mutateJson, queryJson } from './data/client'
 import { meUrl } from './data/transport'
 import type {

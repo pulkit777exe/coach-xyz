@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getHistoryChatMessages, sendHistoryChatMessage } from '@/lib/api'
+import { getHistoryChatMessages, sendHistoryChatMessage } from '@/lib/chat'
 import type { ChatMessage } from '@/types'
 import { Button } from '@/components/9ui/ui/button'
 

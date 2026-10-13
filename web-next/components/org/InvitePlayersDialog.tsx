@@ -16,7 +16,7 @@ import {
 import { Spinner } from './Spinner'
 
 import { orgSendInvites } from '@/lib/org'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

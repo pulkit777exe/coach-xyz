@@ -38,7 +38,7 @@ import {
   type OrgMemberRole,
   type OrgMembersResponse,
 } from '@/lib/members'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 // role → label map for the base-ui Select `items` prop (renders the current
 // value's label inside the trigger).

@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import base64
 import logging
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Literal
 
 import cv2
 import numpy as np
 
 from core.detection_utils import (
     ALL_LANDMARK_INDICES,
+    BODY_LANDMARK_INDICES,
     detect_hog_people,
     iou,
     bbox_from_landmarks,
@@ -19,18 +21,51 @@ from core.errors import NoPlayersDetectedError, VideoDecodeError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 
 
-def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
-    """Detect pose candidates using HOG proposals + pose detection."""
+@dataclass(frozen=True)
+class PoseDetectionOptions:
+    """Tuning knobs for pose-candidate detection (one seam, two tunings).
+
+    The scan path wants wide boxes with merge-replace dedup; the tracking
+    stage wants tight body-only boxes with skip dedup plus a full-frame
+    fallback. Both cross `detect_pose_candidates` with their preset below.
+    """
+
+    landmark_indices: tuple[int, ...] | None = None
+    min_visibility: float = 0.0
+    padding_ratio: float = 0.0
+    iou_threshold: float = 0.35
+    dedup: Literal["merge", "skip"] = "merge"
+    fallback_full_frame: bool = False
+
+
+SCAN_DETECTION_OPTIONS = PoseDetectionOptions(
+    landmark_indices=tuple(ALL_LANDMARK_INDICES),
+    min_visibility=0.4,
+    padding_ratio=0.35,
+    iou_threshold=0.35,
+    dedup="merge",
+    fallback_full_frame=False,
+)
+
+TRACKING_DETECTION_OPTIONS = PoseDetectionOptions(
+    landmark_indices=tuple(BODY_LANDMARK_INDICES),
+    min_visibility=0.0,
+    padding_ratio=0.0,
+    iou_threshold=0.6,
+    dedup="skip",
+    fallback_full_frame=True,
+)
+
+
+def _candidates_from_proposals(
+    frame: np.ndarray,
+    proposals: list[tuple[int, int, int, int]],
+    pose_detector: StaticPoseDetector,
+    opts: PoseDetectionOptions,
+    candidates: list[PoseCandidate],
+) -> None:
+    """Run pose detection over HOG proposals, appending (dedup: merge) or collecting."""
     frame_h, frame_w = frame.shape[:2]
-
-    # Get HOG proposals
-    hog_detections = detect_hog_people(frame)
-    proposals = [bbox for bbox, _ in hog_detections]
-
-    if not proposals:
-        proposals = [(0, 0, frame_w - 1, frame_h - 1)]
-
-    candidates: list[PoseCandidate] = []
     for x1, y1, x2, y2 in proposals:
         crop = frame[y1:y2, x1:x2]
         if crop.size == 0:
@@ -41,7 +76,6 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
             continue
 
         for local_landmarks in detections:
-            avg_visibility = float(np.mean([lm["visibility"] for lm in local_landmarks]))
             global_landmarks = transform_landmarks_to_global(
                 local_landmarks,
                 crop_x1=x1,
@@ -51,27 +85,82 @@ def _detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector
                 frame_w=frame_w,
                 frame_h=frame_h,
             )
+            # transform_landmarks_to_global preserves visibility verbatim, so
+            # the global mean equals the old local mean on both paths.
+            visibility = float(np.mean([lm["visibility"] for lm in global_landmarks]))
 
             bbox = bbox_from_landmarks(
                 global_landmarks, frame_w, frame_h,
-                landmark_indices=ALL_LANDMARK_INDICES,
-                min_visibility=0.4,
-                padding_ratio=0.35,
+                landmark_indices=list(opts.landmark_indices) if opts.landmark_indices is not None else None,
+                min_visibility=opts.min_visibility,
+                padding_ratio=opts.padding_ratio,
             )
-            candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=avg_visibility)
+            candidate = PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=visibility)
 
-            # Dedup with IoU threshold 0.35 (detector uses wider boxes)
-            duplicate = False
-            for existing in candidates:
-                if iou(existing.bbox, candidate.bbox) > 0.35:
-                    duplicate = True
-                    if candidate.visibility > existing.visibility:
-                        existing.landmarks = candidate.landmarks
-                        existing.bbox = candidate.bbox
-                        existing.visibility = candidate.visibility
-                    break
-            if not duplicate:
+            if opts.dedup == "merge":
+                duplicate = False
+                for existing in candidates:
+                    if iou(existing.bbox, candidate.bbox) > opts.iou_threshold:
+                        duplicate = True
+                        if candidate.visibility > existing.visibility:
+                            existing.landmarks = candidate.landmarks
+                            existing.bbox = candidate.bbox
+                            existing.visibility = candidate.visibility
+                        break
+                if not duplicate:
+                    candidates.append(candidate)
+            else:
                 candidates.append(candidate)
+
+
+def detect_pose_candidates(
+    frame: np.ndarray,
+    pose_detector: StaticPoseDetector,
+    opts: PoseDetectionOptions | None = None,
+) -> list[PoseCandidate]:
+    """Detect pose candidates using HOG proposals + pose detection.
+
+    The single detection seam: scan and tracking cross it with their own
+    tuning (see SCAN_DETECTION_OPTIONS / TRACKING_DETECTION_OPTIONS).
+    """
+    options = opts or SCAN_DETECTION_OPTIONS
+    frame_h, frame_w = frame.shape[:2]
+
+    # Get HOG proposals
+    hog_detections = detect_hog_people(frame)
+    proposals = [bbox for bbox, _ in hog_detections]
+
+    if not proposals:
+        proposals = [(0, 0, frame_w - 1, frame_h - 1)]
+
+    candidates: list[PoseCandidate] = []
+    _candidates_from_proposals(frame, proposals, pose_detector, options, candidates)
+
+    # Fallback: try full frame if no HOG-crop candidates (tracking path).
+    if not candidates and options.fallback_full_frame:
+        detections = pose_detector.detect(frame)
+        for landmarks in detections:
+            visibility = float(np.mean([lm["visibility"] for lm in landmarks]))
+            bbox = bbox_from_landmarks(
+                landmarks, frame_w, frame_h,
+                landmark_indices=list(options.landmark_indices) if options.landmark_indices is not None else None,
+                min_visibility=options.min_visibility,
+                padding_ratio=options.padding_ratio,
+            )
+            candidates.append(PoseCandidate(landmarks=landmarks, bbox=bbox, visibility=visibility))
+
+    if options.dedup == "skip":
+        # Tighter dedup: visibility-ordered, first box wins.
+        deduped: list[PoseCandidate] = []
+        for cand in sorted(candidates, key=lambda c: c.visibility, reverse=True):
+            skip = False
+            for prev in deduped:
+                if iou(prev.bbox, cand.bbox) > options.iou_threshold:
+                    skip = True
+                    break
+            if not skip:
+                deduped.append(cand)
+        return deduped
 
     return candidates
 
@@ -139,7 +228,7 @@ def score_and_select_best_frame(
                     if not ok:
                         continue
 
-                    candidates = _detect_pose_candidates(frame, pose)
+                    candidates = detect_pose_candidates(frame, pose)
                     valid = [c for c in candidates if c.visibility > 0.5]
                     if not valid:
                         continue
@@ -249,7 +338,7 @@ def extract_players(frame: np.ndarray, frame_timestamp: float = 0.0) -> list[dic
             )
     else:
         with StaticPoseDetector(min_detection_confidence=0.5, num_poses=12) as pose:
-            candidates = _detect_pose_candidates(frame, pose)
+            candidates = detect_pose_candidates(frame, pose)
 
         for candidate in candidates:
             x_min, y_min, x_max, y_max = candidate.bbox

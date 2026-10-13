@@ -1,13 +1,13 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
-import { sendChatMessageStream } from '@/lib/api'
+import { sendChatMessageStream } from '@/lib/chat'
 import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTyping } from './ChatTyping'
 import { QuickActions } from './QuickActions'
-import { getConversation } from '@/lib/api'
+import { getConversation } from '@/lib/chat'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 

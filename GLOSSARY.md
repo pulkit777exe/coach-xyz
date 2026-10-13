@@ -8,6 +8,10 @@ depth, seam, adapter, leverage, locality).
 
 - **data core** — the one deep web data module owning transport, attribution, error shape, and cache identity (`web-next/lib`).
 - **entity facade** — thin per-entity file over the data core preserving direct-path imports (no barrels).
+- **scan facade** (`web-next/lib/scan.ts`) — scan → analyze → poll → download flow over the data core.
+- **chat facade** (`web-next/lib/chat.ts`) — live + persisted conversation over the data core.
+- **user library facade** (`web-next/lib/library.ts`) — dashboard analyses, stats, findings, clips, lifecycle over the data core.
+- **user identity facade** (`web-next/lib/user.ts`) — auth sync + profile reads over the data core.
 - **pipeline** (unified) — the single module owning upload → scan → analyze → poll → retry phases for coach and player surfaces.
 - **admission** — the single server module owning rate → validate → quota → tier → owner-bind → enqueue → persist for analyze entries.
 - **entry context** — the one data shape describing an analyze entry (identity, org scope, job payload).
@@ -16,3 +20,8 @@ depth, seam, adapter, leverage, locality).
 - **job-guard** — the server module owning analysis/finding ownership, review, and failed-mark checks.
 - **chat-turn** — the server module owning one assistant turn (context build, engine call, keyword fallback).
 - **page shell** — the single RSC helper owning session + gate + org context + fetchers + fallback for dashboard pages.
+- **detection seam** — the one pose-candidate module with tuning options (scan vs tracking presets) (`engine/core`).
+- **session registry** — the engine module owning scan-session resolve, scan-result store, progress, eviction, teardown (`engine/core`).
+- **analysis driver** — the single staged pipeline (`run_analysis`: tracking → reasoning → scoring → quality → render) crossed by server, CLI, and retries; job state behind a store seam (Redis in prod, local adapter otherwise).
+- **user-job adapter** — the server adapter owning the curatorial handler chain (params → guard → store → audit → errors) behind `withUserJob` (`server/src/lib/userJob.ts`).
+- **analysis policy** — the server module owning org quota/tier/usage + retention policy, split from the analyses persistence seam (`server/src/lib/analysisPolicy.ts`).

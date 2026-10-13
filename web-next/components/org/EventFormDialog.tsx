@@ -19,7 +19,7 @@ import { Spinner } from './Spinner'
 import type { ScheduleEvent } from '@/lib/org'
 import { orgCreateEvent, orgUpdateEvent, EVENT_STATUSES, EVENT_TYPES } from '@/lib/org'
 import { toISODate, toISOTime } from '@/lib/date'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 export type EventFormValues = {
   title: string

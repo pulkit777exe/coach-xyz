@@ -59,7 +59,7 @@ import {
   STUDENT_STATUS_LABELS,
 } from '@/lib/org'
 import { formatDateMed } from '@/lib/date'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'border-(--success-border) text-(--success) bg-(--success)',

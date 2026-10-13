@@ -9,7 +9,7 @@ import {
   useCallback,
   useMemo,
 } from 'react'
-import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
+import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
 interface VideoPlayerProps {

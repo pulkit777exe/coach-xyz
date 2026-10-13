@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 import cv2
-from typing import Any
+from typing import Any, Callable
 
 from core.cache import compute_video_hash, get_cached_analysis, set_cached_analysis
 from core.dedup import deduplicator
@@ -26,7 +26,7 @@ from core.gemini_client import call_gemini, normalize_gemini_result
 from core.multicam import normalize_angle_label
 from core.sport_config import load_sport_config, recommended_camera_angles
 from core.stats import validate_and_correct_stats
-from core.jobs import get_job, update_job, transition_job, fail_job, STATE_FLOW
+from core.jobs import get_job, update_job, transition_job, fail_job, STATE_FLOW, InvalidStateTransition
 from core.renderer import render_video
 from core import storage
 from core.tracking import build_active_player_tracks, compute_motion_scores
@@ -809,11 +809,18 @@ def run_analysis(
     video_key: str,
     player_index: int | None,
     angle: str | None = None,
+    on_stage: Callable[[str], None] | None = None,
+    render: bool = True,
 ) -> None:
     """Run the full analysis pipeline for a video.
 
     Idempotent: if the job is already completed, this function returns
     immediately. Failed jobs are retried from scanning.
+
+    on_stage (optional) reports stage boundaries to the caller — the CLI
+    progress adapter. Stage names: prepare, tracking, reasoning, scoring,
+    quality_check, render, done. render=False skips the render stage and
+    completes straight from analyzing (CLI --events-only).
     """
     # Idempotency guard: skip if job is already being processed or completed.
     # Only allow analysis from "uploading" (new) or "failed" (retry) states.
@@ -828,23 +835,46 @@ def run_analysis(
             }))
             return
     except (JobNotFoundError, Exception):
-        # Job doesn't exist yet or Redis error — proceed with analysis
+        # Job doesn't exist yet or store error — proceed with analysis
         pass
+
+    def _emit(stage: str) -> None:
+        if on_stage is not None:
+            on_stage(stage)
 
     ctx = AnalysisContext(job_id=job_id, video_key=video_key, player_index=player_index, angle=angle)
     try:
+        _emit("prepare")
         if _stage_prepare(ctx) == "done":
+            _emit("done")
             return
 
         resume = _stage_resume_check(ctx)
         if resume == "done":
+            _emit("done")
             return
 
+        _emit("tracking")
         _stage_tracking(ctx)
+        _emit("reasoning")
         _stage_reasoning(ctx, resumed=(resume == "render"))
+        _emit("scoring")
         _stage_scoring(ctx)
+        _emit("quality_check")
         _stage_quality_check(ctx)
-        _stage_render(ctx)
+        if render:
+            _emit("render")
+            _stage_render(ctx)
+        else:
+            # Events-only: the summary is already committed by the scoring
+            # stage — complete without rendering. The direct jump is valid
+            # from analyzing/rendering; anything earlier walks via analyzing.
+            try:
+                transition_job(ctx.job_id, "completed")
+            except InvalidStateTransition:
+                transition_job(ctx.job_id, "analyzing")
+                transition_job(ctx.job_id, "completed")
+        _emit("done")
 
     except EngineError as exc:
         logging.error(json.dumps({"type": "analysis_engine_error", "job_id": job_id, "code": exc.code, "message": exc.message}))
@@ -884,7 +914,7 @@ def run_analysis(
         # NOTE: the source upload is intentionally NOT deleted here. The same
         # upload backs re-analysis (another player, another angle, retry) and
         # the session owns its lifetime — files are deleted when the session
-        # is evicted (see _delete_session_files in main.py) or by the
+        # is evicted (see delete_session_files in core.sessions) or by the
         # shutdown sweep. Deleting here broke every second analyze on one
         # upload with VideoExpiredError.
         # Exception: on the S3 backend local_path is a throwaway tmp copy

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/9ui/ui/button'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 interface ErrorScreenProps {
   error: CoachAIError

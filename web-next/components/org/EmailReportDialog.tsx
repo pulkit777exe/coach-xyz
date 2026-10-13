@@ -18,7 +18,7 @@ import { Spinner } from './Spinner'
 
 import { orgEmailReport } from '@/lib/org'
 import type { ReportRecord } from '@/lib/org'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 export default function EmailReportDialog({
   auth0Id,

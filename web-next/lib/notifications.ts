@@ -1,5 +1,7 @@
-import { IDENTITY_BASE } from './api'
+import { identityBase } from './data/transport'
 import { parseEventStream } from './sse'
+
+const IDENTITY_BASE: string = identityBase()
 
 /** Notification row as stored server-side. */
 export type AppNotification = {

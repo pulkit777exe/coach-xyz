@@ -9,7 +9,7 @@ from typing import Optional
 
 from upstash_redis import Redis
 
-from core.errors import EngineError, JobNotFoundError, InvalidStateTransition, RedisUnavailableError
+from core.errors import EngineError, JobNotFoundError, InvalidStateTransition
 
 _redis_url = os.environ.get("UPSTASH_REDIS_REST_URL")
 _redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
@@ -18,6 +18,53 @@ redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token
 
 JOB_TTL = 7200  # 2 hours
 KEY = "coachai:job:"
+
+
+class JobStore:
+    """The seam job state lives behind: get-or-miss plus blind put.
+
+    Redis serves prod (shared across server/worker processes); the local
+    adapter serves the CLI and tests on machines without Redis.
+    """
+
+    def get(self, job_id: str) -> JobStatus | None:
+        raise NotImplementedError
+
+    def put(self, job: JobStatus) -> None:
+        raise NotImplementedError
+
+
+class RedisJobStore(JobStore):
+    def __init__(self, client: Redis) -> None:
+        self._client = client
+
+    def get(self, job_id: str) -> JobStatus | None:
+        raw = self._client.get(f"{KEY}{job_id}")
+        if not raw:
+            return None
+        return JobStatus.from_redis(raw)
+
+    def put(self, job: JobStatus) -> None:
+        self._client.set(f"{KEY}{job.job_id}", job.to_redis(), ex=JOB_TTL)
+
+
+class LocalJobStore(JobStore):
+    """In-process adapter: same semantics, no TTL, no cross-process share."""
+
+    def __init__(self) -> None:
+        self._jobs: dict[str, JobStatus] = {}
+        self._lock = threading.Lock()
+
+    def get(self, job_id: str) -> JobStatus | None:
+        with self._lock:
+            return self._jobs.get(job_id)
+
+    def put(self, job: JobStatus) -> None:
+        with self._lock:
+            self._jobs[job.job_id] = job
+
+
+store: JobStore = RedisJobStore(redis) if redis is not None else LocalJobStore()
 
 # ── Per-job Lock Management ──────────────────────────────────────────────────
 
@@ -102,14 +149,8 @@ class JobStatus:
         return cls(**filtered)
 
 
-def _require_redis():
-    if redis is None:
-        raise RedisUnavailableError()
-
-
 def create_job(job_id: str, initial_state: str = "uploading", video_key: str | None = None) -> JobStatus:
     """Create a new job with an explicit initial state."""
-    _require_redis()
     state_info = PIPELINE_STATES.get(initial_state, PIPELINE_STATES["uploading"])
     job = JobStatus(
         job_id=job_id,
@@ -119,7 +160,7 @@ def create_job(job_id: str, initial_state: str = "uploading", video_key: str | N
         progress=state_info["progress"],
         video_key=video_key,
     )
-    redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+    store.put(job)
     return job
 
 
@@ -129,16 +170,12 @@ def transition_job(job_id: str, new_state: str, **kwargs) -> None:
     Uses a per-job lock to prevent race conditions.
     Raises InvalidStateTransition if the transition is not allowed.
     """
-    _require_redis()
-
     job_lock = _get_job_lock(job_id)
 
     with job_lock:
-        raw = redis.get(f"{KEY}{job_id}")
-        if not raw:
+        job = store.get(job_id)
+        if job is None:
             raise JobNotFoundError()
-
-        job = JobStatus.from_redis(raw)
 
         # Validate transition
         allowed = VALID_TRANSITIONS.get(job.state, set())
@@ -169,7 +206,7 @@ def transition_job(job_id: str, new_state: str, **kwargs) -> None:
             job.error_code = None
             job.retryable = True
 
-        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        store.put(job)
 
 
 def update_job(job_id: str, **kwargs) -> None:
@@ -178,48 +215,42 @@ def update_job(job_id: str, **kwargs) -> None:
     Use transition_job() for state changes.
     Uses per-job lock to prevent race with transition_job/fail_job.
     """
-    _require_redis()
-
     job_lock = _get_job_lock(job_id)
 
     with job_lock:
-        raw = redis.get(f"{KEY}{job_id}")
-        if not raw:
+        job = store.get(job_id)
+        if job is None:
             raise JobNotFoundError()
-        job = JobStatus.from_redis(raw)
         for k, v in kwargs.items():
             if hasattr(job, k):
                 setattr(job, k, v)
         # Auto-set stage_name from stage number if stage is being updated
         if "stage" in kwargs:
             job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
-        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        store.put(job)
 
 
 def get_job(job_id: str) -> JobStatus:
-    _require_redis()
     job_lock = _get_job_lock(job_id)
     with job_lock:
-        raw = redis.get(f"{KEY}{job_id}")
-        if not raw:
+        job = store.get(job_id)
+        if job is None:
             raise JobNotFoundError()
-        return JobStatus.from_redis(raw)
+        return job
 
 
 def fail_job(job_id: str, error: EngineError) -> None:
     """Mark a job as failed with structured error info.
 
-    Raises the original exception if Redis operations fail,
+    Raises the original exception if store operations fail,
     so the caller can handle it appropriately.
     """
-    _require_redis()
     job_lock = _get_job_lock(job_id)
 
     with job_lock:
-        raw = redis.get(f"{KEY}{job_id}")
-        if not raw:
+        job = store.get(job_id)
+        if job is None:
             return
-        job = JobStatus.from_redis(raw)
         # Don't revert completed jobs
         if job.state == "completed":
             return
@@ -234,4 +265,4 @@ def fail_job(job_id: str, error: EngineError) -> None:
         # (or leak) the rendered/raw video via the download route.
         job.video_key = None
         job.video_path = None
-        redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+        store.put(job)

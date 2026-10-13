@@ -9,43 +9,27 @@ import pytest
 from core.errors import InvalidStateTransition
 from core import jobs
 from core.jobs import (
-    JOB_TTL,
-    KEY,
     VALID_TRANSITIONS,
     JobStatus,
+    LocalJobStore,
     transition_job,
     get_job,
 )
 from core.analyzer import _safe_transition_to_completed
 
 
-# ── Fake Redis ────────────────────────────────────────────────────────────────
-
-class FakeRedis:
-    """Minimal in-memory Redis stand-in for unit tests."""
-
-    def __init__(self) -> None:
-        self.store: dict[str, str] = {}
-
-    def get(self, key: str) -> str | None:
-        return self.store.get(key)
-
-    def set(self, key: str, value: str, ex: int | None = None) -> None:
-        self.store[key] = value
-
+# ── Isolated store ────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
 def _patch_redis(monkeypatch):
-    """Replace the module-level redis client with a FakeRedis for every test."""
-    fake = FakeRedis()
-    monkeypatch.setattr(jobs, "redis", fake)
-    return fake
+    """Replace the module-level job store with a fresh local adapter per test."""
+    monkeypatch.setattr(jobs, "store", LocalJobStore())
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _make_job(job_id: str = "test-job", state: str = "uploading") -> JobStatus:
-    """Create a job directly in the fake Redis store (bypasses transition validation)."""
+    """Create a job directly in the isolated store (bypasses transition validation)."""
     job = JobStatus(job_id=job_id, state=state)
     state_info = jobs.PIPELINE_STATES[state]
     job.stage = state_info["stage"]
@@ -53,7 +37,7 @@ def _make_job(job_id: str = "test-job", state: str = "uploading") -> JobStatus:
     job.progress = state_info["progress"]
     if state in ("completed", "failed"):
         job.complete = True
-    jobs.redis.set(f"{KEY}{job_id}", job.to_redis(), ex=JOB_TTL)
+    jobs.store.put(job)
     return job
 
 
@@ -93,7 +77,7 @@ def test_retry_transition_clears_failed_terminal_fields():
     job.error = "Previous failure"
     job.error_code = "INTERNAL_ERROR"
     job.retryable = False
-    jobs.redis.set(f"{KEY}job-retry", job.to_redis(), ex=JOB_TTL)
+    jobs.store.put(job)
 
     transition_job("job-retry", "scanning")
 

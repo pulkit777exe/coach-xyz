@@ -17,7 +17,7 @@ import {
 import { Spinner } from './Spinner'
 
 import { orgEmailAttendance } from '@/lib/org'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 export default function EmailAttendanceDialog({
   auth0Id,

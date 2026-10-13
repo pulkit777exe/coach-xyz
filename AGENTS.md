@@ -32,9 +32,9 @@ npm run smoke        # server live HTTP smoke (needs .env + running server + Neo
 
 Per-app: server uses `bun`, engine uses `pip`/`python`, web-next uses `npm` (CI also uses npm).
 
-Test baselines (keep green): server `bun test` = 354 pass / 30 files (10 env-skips without reachable infra; 9 DB-integration tests run live when `DATABASE_URL` reaches a DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 180 tests / 18 files; engine `pytest tests -q` = 207 tests; `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks. (Verified green 2026-10-11.)
+Test baselines (keep green): server `bun test` = 369 pass / 31 files locally (CI-kit 354 + 5 userJob adapter tests + 10 live-infra tests that skip without reachable infra; 9 DB-integration tests run live when `DATABASE_URL` reaches a DB — Bun autoloads `server/.env` locally, so they run against Neon there); web `vitest run` = 187 tests / 18 files; engine `pytest tests -q` = 218 tests / 20 files (verified statically here — bare python3, no pytest/numpy; AST-parse clean); `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks. (Verified green 2026-10-13.)
 
-Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (React.cache-wrapped) and the session via `lib/session.ts` (`getSession`, React.cache) — never call `lib/org`/`lib/api` fetchers or `auth0.getSession()` directly from pages. `lib/api`/`lib/org` stay for client components, middleware (`proxy.ts`), and route handlers. Heavy client visuals (recharts) load via `next/dynamic` with `ssr: false`.
+Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (React.cache-wrapped) and the session via `lib/session.ts` (`getSession`, React.cache) — never call entity-facade/`lib/org` fetchers or `auth0.getSession()` directly from pages. Facades/`lib/org` stay for client components, middleware (`proxy.ts`), and route handlers. Heavy client visuals (recharts) load via `next/dynamic` with `ssr: false`.
 
 ## Skills
 

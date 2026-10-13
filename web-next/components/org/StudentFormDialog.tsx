@@ -27,7 +27,7 @@ import { NativeSelect } from './EventFormDialog'
 import type { Student, StudentFormValues } from '@/lib/org'
 import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from '@/lib/org'
 import { getSportPositions, type SportPosition } from '@/lib/sports'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 const STATUSES = STUDENT_STATUSES
 const GENDERS = ['female', 'male', 'other'] as const

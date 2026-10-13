@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { renameAnalysis } from '@/lib/api'
+import { renameAnalysis } from '@/lib/library'
 
 export default function AnalysisTitle({
   auth0Id,

@@ -34,7 +34,7 @@ import {
   type StoredFinding,
   type TrainingObjective,
 } from '@/lib/org'
-import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/api'
+import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 
 interface ObjectivesSectionProps {
   auth0Id: string

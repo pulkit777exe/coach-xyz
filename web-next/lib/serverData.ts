@@ -9,12 +9,8 @@ import {
   getMySchedule as libGetMySchedule,
 } from './meApi'
 import { ORG_COOKIE } from './orgCookie'
-import {
-  getUserProfile as apiGetUserProfile,
-  getDashboardStats as apiGetDashboardStats,
-  getDashboardAnalyses as apiGetDashboardAnalyses,
-  getDashboardAnalysisDetail as apiGetDashboardAnalysisDetail,
-} from './api'
+import { getUserProfile as apiGetUserProfile } from './user'
+import { getDashboardStats as apiGetDashboardStats, getDashboardAnalyses as apiGetDashboardAnalyses, getDashboardAnalysisDetail as apiGetDashboardAnalysisDetail } from './library'
 import {
   orgOverview as libOrgOverview,
   orgSchedule as libOrgSchedule,

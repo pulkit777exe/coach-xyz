@@ -42,7 +42,7 @@ import {
 } from '@/lib/org'
 import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
 import type { AiReportJobPoll } from '@/lib/aiReports'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 const TYPE_BADGE: Record<string, string> = {
   progress: 'border-(--info-border) text-(--info)',

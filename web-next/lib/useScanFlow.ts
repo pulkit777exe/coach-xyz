@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { scanVideoWithProgress, streamScanProgress, type CoachAIError } from '@/lib/api'
+import { scanVideoWithProgress, streamScanProgress } from '@/lib/scan'
+import { type CoachAIError } from '@/types'
 import { toCoachAIError } from '@/lib/errors'
 import type { ScanResult, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'

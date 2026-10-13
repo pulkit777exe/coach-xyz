@@ -9,19 +9,14 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
-import {
-  getJobStatus,
-  getAuthorizedDownloadUrl,
-  getDownloadUrl,
-  deleteAnalysis,
-  cancelAnalysis,
-} from '@/lib/api'
-import type { CoachAIError } from '@/lib/api'
+import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
+import { deleteAnalysis, cancelAnalysis } from '@/lib/library'
+import type { CoachAIError } from '@/types'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
 import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
-import type { DashboardAnalysis } from '@/lib/api'
+import type { DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import { Button } from '@/components/9ui/ui/button'
 import { CopyButton } from '@/components/interior/copy-button'

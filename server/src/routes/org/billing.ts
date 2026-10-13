@@ -1,8 +1,4 @@
-import {
-  getOrgTier,
-  getTodayUsage,
-  orgDailyAnalysisLimit,
-} from '../../lib/analyses'
+import { getOrgTier, getTodayUsage, orgDailyAnalysisLimit } from '../../lib/analysisPolicy'
 import { resolveCaller } from '../../lib/caller'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'

@@ -13,14 +13,10 @@ import cv2
 import numpy as np
 
 from core.detection_utils import (
-    BODY_LANDMARK_INDICES,
     detect_hog_people,
-    iou,
-    bbox_from_landmarks,
-    transform_landmarks_to_global,
     PoseCandidate,
 )
-from core.detector import detect_players
+from core.detector import TRACKING_DETECTION_OPTIONS, detect_players, detect_pose_candidates as _detect_pose_candidates
 from core.errors import NoPlayersDetectedError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 from core.video_io import read_frame_by_index
@@ -152,65 +148,12 @@ def _candidate_centroid_x(candidate: PoseCandidate) -> float:
 
 
 def detect_pose_candidates(frame: np.ndarray, pose_detector: StaticPoseDetector) -> list[PoseCandidate]:
-    """Detect pose candidates using analyzer-specific strategy (tighter boxes, IoU=0.6)."""
-    frame_h, frame_w = frame.shape[:2]
+    """Detect pose candidates using analyzer-specific strategy (tighter boxes, IoU=0.6).
 
-    # Get HOG proposals
-    hog_detections = detect_hog_people(frame)
-    proposals = [bbox for bbox, _ in hog_detections]
-
-    if not proposals:
-        proposals = [(0, 0, frame_w - 1, frame_h - 1)]
-
-    candidates: list[PoseCandidate] = []
-    for x1, y1, x2, y2 in proposals:
-        crop = frame[y1:y2, x1:x2]
-        if crop.size == 0:
-            continue
-
-        detections = pose_detector.detect(crop)
-        if not detections:
-            continue
-
-        for local_landmarks in detections:
-            global_landmarks = transform_landmarks_to_global(
-                local_landmarks,
-                crop_x1=x1,
-                crop_y1=y1,
-                crop_w=max(1, x2 - x1),
-                crop_h=max(1, y2 - y1),
-                frame_w=frame_w,
-                frame_h=frame_h,
-            )
-
-            visibility = float(np.mean([lm["visibility"] for lm in global_landmarks]))
-            # Analyzer uses body-only landmarks, no padding (tighter tracking boxes)
-            bbox = bbox_from_landmarks(
-                global_landmarks, frame_w, frame_h,
-                landmark_indices=BODY_LANDMARK_INDICES,
-            )
-            candidates.append(PoseCandidate(landmarks=global_landmarks, bbox=bbox, visibility=visibility))
-
-    # Fallback: try full frame if no HOG-crop candidates
-    if not candidates:
-        detections = pose_detector.detect(frame)
-        for landmarks in detections:
-            visibility = float(np.mean([lm["visibility"] for lm in landmarks]))
-            bbox = bbox_from_landmarks(landmarks, frame_w, frame_h, landmark_indices=BODY_LANDMARK_INDICES)
-            candidates.append(PoseCandidate(landmarks=landmarks, bbox=bbox, visibility=visibility))
-
-    # Dedup: analyzer uses tighter IoU=0.6 (vs detector's 0.35)
-    deduped: list[PoseCandidate] = []
-    for cand in sorted(candidates, key=lambda c: c.visibility, reverse=True):
-        skip = False
-        for prev in deduped:
-            if iou(prev.bbox, cand.bbox) > 0.6:
-                skip = True
-                break
-        if not skip:
-            deduped.append(cand)
-
-    return deduped
+    Thin preset over the shared detection seam in core.detector — kept so the
+    tracking stage crosses a stable name with its own tuning.
+    """
+    return _detect_pose_candidates(frame, pose_detector, TRACKING_DETECTION_OPTIONS)
 
 
 def select_detection_by_index(

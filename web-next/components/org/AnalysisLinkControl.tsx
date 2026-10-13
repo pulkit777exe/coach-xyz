@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import type { Student } from '@/lib/org'
 import { orgStudents, linkAnalysisToStudent } from '@/lib/org'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 
 const UNLINKED_LABEL = 'Link to Student'
 

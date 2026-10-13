@@ -3,7 +3,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { ClockIcon, LinkIcon } from 'lucide-react'
 import { resolveShareToken } from '@/lib/aiReports'
 import type { SharedAnalysis } from '@/lib/aiReports'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/types'
 import { formatDateLong } from '@/lib/date'
 
 // Public share page for players/coaches who receive a share link. No login is

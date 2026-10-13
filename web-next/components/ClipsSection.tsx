@@ -8,7 +8,7 @@ import { Button } from '@/components/9ui/ui/button'
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import TimestampPill from '@/components/TimestampPill'
-import { createClip, deleteClip, listClips, type Clip } from '@/lib/api'
+import { createClip, deleteClip, listClips, type Clip } from '@/lib/library'
 import { Spinner } from '@/components/org/Spinner'
 
 interface ClipsSectionProps {

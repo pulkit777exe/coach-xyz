@@ -1,4 +1,4 @@
-import type { DashboardAnalysis } from './api'
+import type { DashboardAnalysis } from './library'
 import { mutateJson, pickDefined, queryJson } from './data/client'
 import { authUserUrl, emailUrl as coreEmailUrl, orgUrl as coreOrgUrl } from './data/transport'
 
