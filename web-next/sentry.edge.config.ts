@@ -5,8 +5,15 @@
 
 import * as Sentry from '@sentry/nextjs'
 
+import { scrubSentryBreadcrumb, scrubSentryEvent } from './lib/sentryScrub'
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+
+  // Bearer tokens travel in URLs by design (?attribution=, invite/share
+  // tokens) — strip query strings before events leave the edge runtime.
+  beforeSend: (event) => scrubSentryEvent(event),
+  beforeBreadcrumb: (crumb) => scrubSentryBreadcrumb(crumb),
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,

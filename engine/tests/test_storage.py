@@ -64,3 +64,13 @@ class TestBucketLayout:
 
     def test_angle_label_falls_back_to_primary(self):
         assert storage.raw_upload_key("s", "").split("/")[2] == "primary"
+
+
+class TestResultKeySanitization:
+    def test_traversal_job_id_stays_flat(self):
+        key = storage.result_key("a/b")
+        assert key == "results/ab.mp4"
+        assert ".." not in key
+
+    def test_empty_job_id_falls_back(self):
+        assert storage.result_key("") == "results/job.mp4"

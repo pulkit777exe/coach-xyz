@@ -10,7 +10,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+import re
+
 _CONFIG_CACHE: dict[str, dict[str, Any]] = {}
+
+# Config names are bare sport slugs. Anything else (dots, slashes, ..) is
+# rejected before touching the filesystem — /sports/{sport} takes user
+# input, and without this `sport=../../x` escapes the sports dir and reads
+# any local JSON file into the response.
+_SPORT_SLUG_RE = re.compile(r"^[a-z0-9_]+$")
 
 
 def _config_path(sport: str) -> Path:
@@ -22,6 +30,9 @@ def load_sport_config(sport: str | None) -> dict[str, Any]:
     key = (sport or "").lower()
     if key in _CONFIG_CACHE:
         return _CONFIG_CACHE[key]
+    if not _SPORT_SLUG_RE.match(key):
+        _CONFIG_CACHE[key] = {}
+        return {}
     try:
         with open(_config_path(key), "r") as f:
             config = json.load(f)

@@ -27,8 +27,11 @@ def raw_upload_key(session_token: str, angle: str) -> str:
 
 
 def result_key(job_id: str) -> str:
-    """Namespaced key for a rendered analysis video (one per job)."""
-    return f"{RESULTS_PREFIX}/{job_id}.mp4"
+    """Namespaced key for a rendered analysis video (one per job). The id is
+    sanitized so a crafted job_id (e.g. `a/b`) cannot create subdirectories
+    or escape the results prefix."""
+    safe_job_id = "".join(c for c in str(job_id) if c.isalnum() or c in "-_") or "job"
+    return f"{RESULTS_PREFIX}/{safe_job_id}.mp4"
 
 
 ENGINE_ROOT = Path(__file__).resolve().parent.parent

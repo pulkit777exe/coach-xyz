@@ -23,6 +23,20 @@ export function serviceGuardEnabled(): boolean {
   return Boolean(process.env.SERVICE_TOKEN)
 }
 
+/**
+ * Fail-closed boot check: with REQUIRE_SERVICE_TOKEN=1 (set it in every
+ * production deploy) the server refuses to boot without SERVICE_TOKEN.
+ * Without the secret every guard returns ok — a missing env var would
+ * silently open all org/email/auth/me routes. Local dev leaves both unset.
+ */
+export function assertServiceGuardConfigured(): void {
+  if (process.env.REQUIRE_SERVICE_TOKEN === '1' && !serviceGuardEnabled()) {
+    throw new Error(
+      'REQUIRE_SERVICE_TOKEN=1 but SERVICE_TOKEN is unset — refusing to boot with the identity boundary disabled.',
+    )
+  }
+}
+
 let warnedAboutDisabledGuard = false
 function maybeLogDisabled() {
   if (serviceGuardEnabled() || warnedAboutDisabledGuard) return

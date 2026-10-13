@@ -84,3 +84,14 @@ class TestSportPackVersion:
     def test_unknown_sport_returns_zero(self):
         assert sport_pack_version("quidditch") == 0
         assert sport_pack_version(None) == 0
+
+
+class TestSportSlugGuard:
+    def test_traversal_sport_returns_empty_dict(self):
+        assert load_sport_config("../../etc/passwd") == {}
+        assert load_sport_config("..\\windows\\x") == {}
+        assert load_sport_config("basketball.json") == {}
+
+    def test_empty_sport_returns_empty_dict(self):
+        assert load_sport_config("") == {}
+        assert load_sport_config(None) == {}

@@ -24,8 +24,12 @@ import { healthRoute } from './routes/health'
 import { sportPositionsRoute } from './routes/sports'
 import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
 import { globalErrorHandler } from './lib/httpErrors'
-import { orgRoleGuard } from './lib/serviceGuard'
+import { assertServiceGuardConfigured, orgRoleGuard } from './lib/serviceGuard'
 import { MAX_FILE_SIZE_BYTES } from './types'
+
+// Refuse to boot a production-configured instance without the identity
+// boundary (S6) — before wiring any routes.
+assertServiceGuardConfigured()
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {

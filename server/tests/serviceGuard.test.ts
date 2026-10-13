@@ -151,3 +151,24 @@ describe('verifyServiceIdentity', () => {
     expect(outcome.ok).toBe(false)
   })
 })
+
+describe('assertServiceGuardConfigured', () => {
+  test('refuses to boot when REQUIRED but unconfigured', async () => {
+    const { assertServiceGuardConfigured } = await import('../src/lib/serviceGuard')
+    process.env.REQUIRE_SERVICE_TOKEN = '1'
+    setToken(undefined)
+    expect(() => assertServiceGuardConfigured()).toThrow(/refusing to boot/)
+    delete process.env.REQUIRE_SERVICE_TOKEN
+  })
+
+  test('boots when the secret is set, or when not required', async () => {
+    const { assertServiceGuardConfigured } = await import('../src/lib/serviceGuard')
+    delete process.env.REQUIRE_SERVICE_TOKEN
+    setToken(undefined)
+    expect(() => assertServiceGuardConfigured()).not.toThrow()
+    process.env.REQUIRE_SERVICE_TOKEN = '1'
+    setToken(TOKEN)
+    expect(() => assertServiceGuardConfigured()).not.toThrow()
+    delete process.env.REQUIRE_SERVICE_TOKEN
+  })
+})
