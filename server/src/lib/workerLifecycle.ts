@@ -17,6 +17,7 @@
 import { Queue, Worker, QueueEvents, UnrecoverableError } from 'bullmq'
 import { randomUUID } from 'crypto'
 import type { Redis } from 'ioredis'
+import { buildQueueConnection } from './queueConnection'
 import { markEngineJobFailed, getEngineJobStatus, analyzeVideo } from './engine'
 import { saveJob, getJob } from './jobs'
 import { shutdownHistoryStore } from './historyStore'
@@ -65,57 +66,12 @@ export const getReportWorkerConcurrency = (): number =>
 
 // ── Connection + queues (eager: enqueue must work before boot) ──────────────
 
-// Derive Redis protocol URL from Upstash REST URL and token
-// REST URL format: https://<endpoint>.upstash.io
-// Redis protocol format: rediss://default:<token>@<endpoint>.upstash.io:6379
+// IORedis client shape lives in ./queueConnection (single home shared with
+// the notifications QueueEvents setup); this keeps the queue-disabled
+// degrade path.
 function getRedisConnection(): Redis | null {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
-
-  if (!restUrl || !token) return null
-
-  // Extract endpoint from REST URL
-  const urlObj = new URL(restUrl)
-  const host = urlObj.host // e.g., "neutral-urchin-104723.upstash.io"
-
-  // Construct Redis protocol URL with TLS
-  const redisUrl = `rediss://default:${token}@${host}:6379`
-
-  // Connect to Redis at module load time
   try {
-    const IORedis = require('ioredis') as typeof import('ioredis').default
-    const client = new IORedis(redisUrl, {
-      maxRetriesPerRequest: null,
-      tls: {},
-      // Upstash recommended settings for serverless
-      enableReadyCheck: false,
-      lazyConnect: true,
-      commandTimeout: 30000,
-      connectTimeout: 30000,
-      retryStrategy(times: number) {
-        if (times > 10) return null
-        return Math.min(times * 500, 5000)
-      },
-    })
-    client.on('error', (err: Error) => {
-      console.error(
-        JSON.stringify({
-          type: 'redis_error',
-          source: 'queue',
-          message: err.message,
-        }),
-      )
-    })
-    client.on('reconnecting', (delay: number) => {
-      console.warn(
-        JSON.stringify({
-          type: 'redis_reconnecting',
-          source: 'queue',
-          delay_ms: delay,
-        }),
-      )
-    })
-    return client
+    return buildQueueConnection('queue')
   } catch {
     console.error(
       JSON.stringify({

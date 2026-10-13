@@ -7,8 +7,8 @@ import {
   unreadCount,
   markNotificationRead,
   markAllRead,
-  onNotification,
-} from '../lib/notifications'
+} from '../lib/notificationsStore'
+import { onNotification } from '../lib/notificationsEvents'
 
 export default new Elysia()
   .use(serviceGuard)
