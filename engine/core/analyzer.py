@@ -24,280 +24,19 @@ from core.dedup import deduplicator
 from core.errors import EngineError, VideoExpiredError, JobNotFoundError
 from core.gemini_client import call_gemini, normalize_gemini_result
 from core.multicam import normalize_angle_label
-from core.sport_config import load_sport_config, recommended_camera_angles
+from core.sport_config import recommended_camera_angles
 from core.stats import validate_and_correct_stats
 from core.jobs import get_job, update_job, transition_job, fail_job, STATE_FLOW, InvalidStateTransition
 from core.renderer import render_video
 from core import storage
+from core.biomechanics import attach_biomechanical_metrics, compute_injury_risk
+from core.scoring import compute_weighted_scoring
 from core.tracking import build_active_player_tracks, compute_motion_scores
 from core.video_io import (
     tmp_dir,
     preprocess_video_ffmpeg,
     extract_keyframes,
 )
-
-
-def _attach_biomechanical_metrics(
-    shot_events: list[dict],
-    active_tracks: list[dict],
-) -> None:
-    """
-    Attach deterministic joint-angle metrics to each shot event by
-    looking up the nearest tracked frame for the event timestamp.
-
-    Mutates each event dict in-place, adding a `biomechanics` key with
-    per-joint measurements and confidence scores.
-    """
-    import bisect
-
-    # Build a sorted list of (timestamp, track) for binary search
-    sorted_tracks = sorted(
-        [t for t in active_tracks if t.get("landmarks")],
-        key=lambda t: t["timestamp"],
-    )
-    if not sorted_tracks:
-        return
-
-    timestamps = [t["timestamp"] for t in sorted_tracks]
-
-    for event in shot_events:
-        event_ts = event.get("timestamp")
-        if event_ts is None:
-            continue
-
-        # Find the nearest track by timestamp
-        idx = bisect.bisect_left(timestamps, event_ts)
-        if idx >= len(sorted_tracks):
-            idx = len(sorted_tracks) - 1
-        elif idx > 0 and abs(event_ts - timestamps[idx - 1]) < abs(event_ts - timestamps[idx]):
-            idx = idx - 1
-
-        track = sorted_tracks[idx]
-        time_delta = abs(event_ts - track["timestamp"])
-
-        # Only attach metrics if the track is within 2 seconds of the event
-        if time_delta > 2.0:
-            continue
-
-        biomechanics: dict = {}
-
-        # Joint angles from deterministic pose geometry
-        joint_angles = track.get("joint_angles", {})
-        if joint_angles:
-            biomechanics["joint_angles"] = joint_angles
-
-        # Elbow extension angle (key metric for shooting sports)
-        elbow_ext = track.get("elbow_extension_angle")
-        if elbow_ext is not None:
-            biomechanics["elbow_extension_angle"] = round(elbow_ext, 1)
-
-        # Visibility-based confidence (higher visibility = more reliable)
-        visibility = track.get("visibility", 0.5)
-        biomechanics["confidence"] = round(visibility, 2)
-
-        # Frame reference
-        biomechanics["measured_at_frame"] = track.get("frame_index")
-        biomechanics["measured_at_timestamp"] = track.get("timestamp")
-
-        if biomechanics:
-            event["biomechanics"] = biomechanics
-
-
-def _load_sport_config(sport: str) -> dict:
-    """Load sport configuration (single cached loader in sport_config)."""
-    return load_sport_config(sport)
-
-
-def _compute_criterion_score(
-    criterion: dict,
-    measured_value: float | None,
-) -> dict[str, Any]:
-    """
-    Score a single criterion against its ideal and acceptable ranges.
-
-    Returns dict with score (0.0-1.0), rationale, and whether it's in range.
-    """
-    ideal = criterion.get("ideal_range")
-    acceptable = criterion.get("acceptable_range")
-    metric_label = criterion.get("label", criterion.get("key", "unknown"))
-    unit = criterion.get("metric", "")
-
-    if measured_value is None:
-        return {
-            "criterion": criterion["key"],
-            "label": metric_label,
-            "measured_value": None,
-            "unit": unit,
-            "ideal_range": ideal,
-            "acceptable_range": acceptable,
-            "score": 0.0,
-            "weight": criterion.get("weight", 0.0),
-            "in_ideal": False,
-            "in_acceptable": False,
-            "rationale": "No measurement available",
-        }
-
-    if ideal and ideal[0] <= measured_value <= ideal[1]:
-        score = 1.0
-        rationale = f"Within ideal range ({ideal[0]}–{ideal[1]}{unit})"
-        in_ideal = True
-        in_acceptable = True
-    elif acceptable and acceptable[0] <= measured_value <= acceptable[1]:
-        score = 0.5
-        ideal_desc = f" ({ideal[0]}–{ideal[1]}{unit})" if ideal else ""
-        rationale = f"Acceptable but outside ideal{ideal_desc}"
-        in_ideal = False
-        in_acceptable = True
-    else:
-        score = 0.0
-        if ideal:
-            rationale = f"Outside acceptable range (ideal: {ideal[0]}–{ideal[1]}{unit}, measured: {measured_value}{unit})"
-        else:
-            rationale = f"Measured {measured_value}{unit} — no reference range configured"
-        in_ideal = False
-        in_acceptable = False
-
-    return {
-        "criterion": criterion["key"],
-        "label": metric_label,
-        "measured_value": round(measured_value, 1),
-        "unit": unit,
-        "ideal_range": ideal,
-        "acceptable_range": acceptable,
-        "score": score,
-        "weight": criterion.get("weight", 0.0),
-        "in_ideal": in_ideal,
-        "in_acceptable": in_acceptable,
-        "rationale": rationale,
-    }
-
-
-def _compute_weighted_scoring(
-    shot_events: list[dict],
-    sport: str,
-) -> None:
-    """
-    Compute weighted composite scores for each shot event.
-
-    Uses the sport's form_criteria config to score each criterion,
-    then aggregates into a weighted composite score (1.0–10.0 scale).
-    Also generates per-criterion rationales and a summary rationale.
-    """
-    config = _load_sport_config(sport)
-    criteria = config.get("form_criteria", [])
-
-    for event in shot_events:
-        breakdown = event.get("form_breakdown", {})
-        biomechanics = event.get("biomechanics", {})
-        joint_angles = biomechanics.get("joint_angles", {})
-        elbow_ext = biomechanics.get("elbow_extension_angle")
-
-        # Map form_breakdown criteria to measured values
-        criterion_scores = []
-        for criterion in criteria:
-            if not isinstance(criterion, dict):
-                continue
-
-            key = criterion["key"]
-            metric = criterion.get("metric")
-            measured_value = None
-
-            # Try to find the measured value from biomechanics
-            if metric == "elbow_extension_angle_deg" and elbow_ext is not None:
-                measured_value = elbow_ext
-            elif metric and metric in joint_angles:
-                measured_value = joint_angles[metric]
-
-            # If no biomechanical measurement, try to infer from form_breakdown
-            if measured_value is None and key in breakdown:
-                rating = breakdown[key]
-                # Use the midpoint of the ideal range as a proxy
-                ideal = criterion.get("ideal_range")
-                if ideal:
-                    measured_value = (ideal[0] + ideal[1]) / 2.0 * (0.8 if rating == "needs_work" else 1.0 if rating == "good" else 0.6)
-
-            score_result = _compute_criterion_score(criterion, measured_value)
-            criterion_scores.append(score_result)
-
-        # Compute weighted composite
-        total_weight = sum(cs["weight"] for cs in criterion_scores if cs["weight"] > 0)
-        if total_weight > 0:
-            weighted_sum = sum(cs["score"] * cs["weight"] for cs in criterion_scores)
-            composite = (weighted_sum / total_weight) * 10.0
-        else:
-            composite = event.get("form_score", 5.0)
-
-        # Generate weighted rationale
-        poor_criteria = [cs for cs in criterion_scores if cs["score"] == 0.0]
-        good_criteria = [cs for cs in criterion_scores if cs["score"] == 1.0]
-
-        if poor_criteria:
-            worst = poor_criteria[0]
-            weighted_rationale = f"Needs work on {worst['label']}: {worst['rationale']}"
-        elif good_criteria and len(good_criteria) == len(criterion_scores):
-            weighted_rationale = "All criteria within ideal ranges — textbook form"
-        elif good_criteria:
-            weighted_rationale = f"Strong on {', '.join(cs['label'] for cs in good_criteria)}"
-        else:
-            weighted_rationale = "Mixed results — review individual criteria"
-
-        event["weighted_scoring"] = {
-            "composite_score": round(composite, 1),
-            "criteria": criterion_scores,
-            "weighted_rationale": weighted_rationale,
-        }
-
-
-def _compute_injury_risk(
-    shot_events: list[dict],
-    active_tracks: list[dict],
-) -> None:
-    """
-    Compute injury-risk indicators for each shot event.
-
-    Flags biomechanical patterns associated with elevated injury risk:
-    - Knee valgus > 10° during landing (ACL risk)
-    - Spine flexion > 45° under load (lumbar disc risk)
-    - Arm slot drift (UCL stress in overhead athletes)
-    """
-    from core.injury_risk import compute_all_indicators
-
-    # Build sorted tracks by timestamp
-    sorted_tracks = sorted(
-        [t for t in active_tracks if t.get("landmarks")],
-        key=lambda t: t["timestamp"],
-    )
-    if not sorted_tracks:
-        return
-
-    timestamps = [t["timestamp"] for t in sorted_tracks]
-
-    for event in shot_events:
-        event_ts = event.get("timestamp")
-        if event_ts is None:
-            continue
-
-        # Find nearest track
-        import bisect as _bisect
-
-        idx = _bisect.bisect_left(timestamps, event_ts)
-        if idx >= len(sorted_tracks):
-            idx = len(sorted_tracks) - 1
-        elif idx > 0 and abs(event_ts - timestamps[idx - 1]) < abs(event_ts - timestamps[idx]):
-            idx = idx - 1
-
-        track = sorted_tracks[idx]
-        time_delta = abs(event_ts - track["timestamp"])
-        if time_delta > 2.0:
-            continue
-
-        landmarks = track.get("landmarks", [])
-        if not landmarks:
-            continue
-
-        indicators = compute_all_indicators(landmarks, event.get("event_type", "unknown"))
-        if indicators:
-            event["injury_risk"] = indicators
 
 
 def _stamp_angle(result: dict, angle: str | None) -> dict:
@@ -461,7 +200,6 @@ class AnalysisContext:
     angle: str | None = None
     # prepare stage
     local_path: str | None = None
-    local_is_temp: bool = False
     video_hash: str = ""
     dedup_key: str = ""
     # tracking stage
@@ -490,9 +228,6 @@ def _stage_prepare(ctx: AnalysisContext) -> str:
     """
     ctx.local_path = storage.download_video_to_tmp(ctx.video_key)
     ctx.preprocessed_path = ctx.local_path
-    # S3 backend returns a throwaway tmp copy (local backend returns the
-    # stored file itself) — only the copy may be unlinked on the way out.
-    ctx.local_is_temp = not storage.is_local_backend()
 
     # Check cache first
     ctx.video_hash = compute_video_hash(ctx.local_path)
@@ -705,13 +440,13 @@ def _stage_scoring(ctx: AnalysisContext) -> None:
     # by looking up the nearest tracked frame for each event timestamp
     shot_events = gemini_result.get("shot_events", [])
     if shot_events and ctx.active_tracks:
-        _attach_biomechanical_metrics(shot_events, ctx.active_tracks)
+        attach_biomechanical_metrics(shot_events, ctx.active_tracks)
 
     # Compute weighted composite scoring with per-criterion rationale
-    _compute_weighted_scoring(shot_events, sport)
+    compute_weighted_scoring(shot_events, sport)
 
     # Compute injury-risk indicators for each shot event
-    _compute_injury_risk(shot_events, ctx.active_tracks)
+    compute_injury_risk(shot_events, ctx.active_tracks)
 
     # Validate and correct stats from shot events
     corrected_stats = validate_and_correct_stats(gemini_result.get("shot_events", []))
@@ -800,7 +535,7 @@ def _stage_render(ctx: AnalysisContext) -> None:
         ctx.job_id,
         "completed",
         video_key=result_key,
-        video_path=storage.get_local_file_path(result_key) if storage.is_local_backend() else None,
+        video_path=storage.get_local_file_path_or_none(result_key),
     )
 
 
@@ -918,12 +653,9 @@ def run_analysis(
         # shutdown sweep. Deleting here broke every second analyze on one
         # upload with VideoExpiredError.
         # Exception: on the S3 backend local_path is a throwaway tmp copy
-        # (not the stored object), so unlink it to avoid filling /tmp.
-        if ctx.local_is_temp and ctx.local_path and os.path.exists(ctx.local_path):
-            try:
-                os.unlink(ctx.local_path)
-            except Exception:
-                pass
+        # (not the stored object), so the backend discards it to avoid
+        # filling /tmp. Locally this is a no-op (the stored file stays).
+        storage.discard_tmp_copy(ctx.local_path)
         if ctx.output_path and os.path.exists(ctx.output_path):
             try:
                 os.unlink(ctx.output_path)
