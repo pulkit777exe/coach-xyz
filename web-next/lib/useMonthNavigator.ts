@@ -8,8 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** First day of the calendar month containing `date` (local time). */
-export const firstOfMonth = (date: Date): Date =>
-  new Date(date.getFullYear(), date.getMonth(), 1)
+export const firstOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1)
 
 /** Shift a first-of-month date by `delta` months. */
 export const addCalendarMonths = (month: Date, delta: number): Date =>

@@ -49,12 +49,7 @@ import ObjectivesSection from './ObjectivesSection'
 import PlansSection from './PlansSection'
 import WellnessSection from './WellnessSection'
 
-import type {
-  Student,
-  PerformanceSeriesPoint,
-  AttendanceSummary,
-  ReportRecord,
-} from '@/lib/org'
+import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord } from '@/lib/org'
 import type { DashboardAnalysis } from '@/lib/library'
 import type { CoachAIError } from '@/types'
 import { orgDeleteStudent } from '@/lib/org'
@@ -786,10 +781,7 @@ export default function StudentProfile({
             Linked Analyses
           </p>
           {unlinked.length > 0 && (
-            <LinkAnalysisSelect
-              unlinked={unlinked}
-              onPick={(a) => linkAnalysis(a, student_.id)}
-            />
+            <LinkAnalysisSelect unlinked={unlinked} onPick={(a) => linkAnalysis(a, student_.id)} />
           )}
         </div>
 
