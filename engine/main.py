@@ -129,6 +129,14 @@ START_TIME = time.time()
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("CoachAI Engine running on :8001")
+    # Fail-closed boot check (mirrors the server's REQUIRE_SERVICE_TOKEN):
+    # without the secret the token middleware is inert and every route is
+    # open. Set REQUIRE_SERVICE_TOKEN=1 in every non-dev deploy.
+    if os.environ.get("REQUIRE_SERVICE_TOKEN") == "1" and not os.environ.get("SERVICE_TOKEN"):
+        raise RuntimeError(
+            "REQUIRE_SERVICE_TOKEN=1 but SERVICE_TOKEN is unset — refusing to boot "
+            "with engine auth disabled."
+        )
     backend = pose_backend_name()
     if not pose_backend_available():
         logger.warning(

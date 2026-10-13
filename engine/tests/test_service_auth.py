@@ -49,3 +49,18 @@ def test_health_exempt_even_when_token_set(monkeypatch, client):
     monkeypatch.setenv("SERVICE_TOKEN", "s3cret")
     res = client.get("/health")
     assert res.status_code == 200
+
+
+def test_lifespan_refuses_boot_when_required_but_unconfigured(monkeypatch):
+    monkeypatch.setenv("REQUIRE_SERVICE_TOKEN", "1")
+    monkeypatch.delenv("SERVICE_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="refusing to boot"):
+        with TestClient(main.app):
+            pass
+
+
+def test_lifespan_boots_when_required_and_configured(monkeypatch):
+    monkeypatch.setenv("REQUIRE_SERVICE_TOKEN", "1")
+    monkeypatch.setenv("SERVICE_TOKEN", "s3cret")
+    with TestClient(main.app):
+        pass
