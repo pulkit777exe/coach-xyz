@@ -58,7 +58,8 @@ export const gateRateLimit = async (
 }
 
 export type JobRoute =
-  { ok: true; serverJob: ServerJob } | { ok: false; status: number; body: unknown }
+  | { ok: true; serverJob: ServerJob; callerSub: string | null }
+  | { ok: false; status: number; body: unknown }
 
 export type JobRouteDeps = {
   getJob?: typeof getJob
@@ -85,7 +86,7 @@ export const resolveJobRoute = async (
     set.status = access.status
     return { ok: false, status: access.status, body: access.body }
   }
-  return { ok: true, serverJob }
+  return { ok: true, serverJob, callerSub: access.callerSub }
 }
 
 /** Scan-style engine error map: structured errors pass through by code. */

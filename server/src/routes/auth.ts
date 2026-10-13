@@ -20,7 +20,7 @@ import {
   listClips,
   parseClipInput,
 } from '../lib/clips'
-import { saveChatMessage, getChatMessages } from '../lib/chatMessages'
+import { saveChatMessage, getChatMessages, toChatMessage } from '../lib/chatMessages'
 import { failEngineJobForServerJob } from '../lib/jobGuard'
 import { withUserJob } from '../lib/userJob'
 import { answerChatTurn, keywordFallback } from '../lib/chatTurn'
@@ -440,15 +440,7 @@ export default new Elysia()
     }
 
     const messages = await getChatMessages(jobId, auth0Id)
-    const converted = messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      timestamp_refs: m.timestamp_refs ?? undefined,
-      event_refs: m.event_refs ?? undefined,
-      created_at:
-        typeof m.created_at === 'string' ? new Date(m.created_at).getTime() / 1000 : m.created_at,
-    }))
+    const converted = messages.map(toChatMessage)
     set.status = 200
     return { messages: converted }
   })

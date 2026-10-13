@@ -8,7 +8,12 @@ import {
   type CapabilitySet,
 } from '../lib/capability'
 import { checkChatLimit } from '../lib/ratelimit'
-import { getConversation, saveMessage } from '../lib/conversation'
+import {
+  ANONYMOUS_AUTH0_ID,
+  getChatMessages,
+  saveChatMessage,
+  toChatMessage,
+} from '../lib/chatMessages'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
 
 /**
@@ -24,12 +29,16 @@ async function resolveChatContext(
   const resolved = await resolveJobRoute(jobId, request, set)
   if (!resolved.ok) return { error: resolved.body as unknown, status: resolved.status }
 
-  const history = await getConversation(jobId)
+  // One conversation per (job, owner) in Postgres: the verified sub when
+  // present, the anonymous sentinel for bearer jobs. Signed-in owners share
+  // history with the library chat surface (same key as routes/auth.ts).
+  const ownerKey = resolved.callerSub ?? ANONYMOUS_AUTH0_ID
+  const history = await getChatMessages(jobId, ownerKey)
   const historyForEngine = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }))
 
-  return { engineJobId: resolved.serverJob.engine_job_id, historyForEngine }
+  return { engineJobId: resolved.serverJob.engine_job_id, historyForEngine, ownerKey }
 }
 
 /** Rate-limit gate: verified sub when present (per-account Gemini spend). */
@@ -68,7 +77,7 @@ export default new Elysia()
     if ('error' in ctx) {
       return ctx.error
     }
-    const { engineJobId, historyForEngine } = ctx
+    const { engineJobId, historyForEngine, ownerKey } = ctx
 
     try {
       const res = await withTimeout(
@@ -102,12 +111,19 @@ export default new Elysia()
         event_refs?: number[]
       }
 
-      await saveMessage(job_id, { role: 'user', content: message.trim() })
-      await saveMessage(job_id, {
+      await saveChatMessage({
+        serverJobId: job_id,
+        auth0Id: ownerKey,
+        role: 'user',
+        content: message.trim(),
+      })
+      await saveChatMessage({
+        serverJobId: job_id,
+        auth0Id: ownerKey,
         role: 'assistant',
         content: data.reply,
-        timestamp_refs: data.timestamp_refs,
-        event_refs: data.event_refs,
+        timestampRefs: data.timestamp_refs,
+        eventRefs: data.event_refs,
       })
 
       set.status = 200
@@ -161,7 +177,7 @@ export default new Elysia()
     if ('error' in ctx) {
       return ctx.error
     }
-    const { engineJobId, historyForEngine } = ctx
+    const { engineJobId, historyForEngine, ownerKey } = ctx
 
     try {
       const engineRes = await withTimeout(
@@ -238,14 +254,21 @@ export default new Elysia()
 
         try {
           // Always save the user message
-          await saveMessage(jobId, { role: 'user', content: userMsg })
+          await saveChatMessage({
+            serverJobId: jobId,
+            auth0Id: ownerKey,
+            role: 'user',
+            content: userMsg,
+          })
           // Save assistant reply only if we got a complete response
           if (fullText) {
-            await saveMessage(jobId, {
+            await saveChatMessage({
+              serverJobId: jobId,
+              auth0Id: ownerKey,
               role: 'assistant',
               content: fullText,
-              timestamp_refs: timestampRefs,
-              event_refs: eventRefs,
+              timestampRefs,
+              eventRefs,
             })
           }
         } catch (err) {
@@ -298,8 +321,9 @@ export default new Elysia()
     if (!resolved.ok) {
       return resolved.body
     }
-
-    const messages = await getConversation(params.jobId)
+    const messages = (
+      await getChatMessages(params.jobId, resolved.callerSub ?? ANONYMOUS_AUTH0_ID)
+    ).map(toChatMessage)
     set.status = 200
     return { messages }
   })
