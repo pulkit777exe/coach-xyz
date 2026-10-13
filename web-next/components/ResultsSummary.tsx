@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
-import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
+import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
@@ -51,21 +51,7 @@ export default function ResultsSummary({
 }: ResultsSummaryProps) {
   const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
-  const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
-  const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
-  if (downloadUrlJob !== jobId) {
-    setDownloadUrlJob(jobId)
-    setDownloadUrl(getDownloadUrl(jobId))
-  }
-  useEffect(() => {
-    let cancelled = false
-    void getAuthorizedDownloadUrl(jobId).then((url) => {
-      if (!cancelled) setDownloadUrl(url)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [jobId])
+  const downloadUrl = useAuthorizedMediaUrl(jobId)
 
   useGSAP(
     () => {
@@ -296,19 +282,25 @@ export default function ResultsSummary({
 
             <Button
               nativeButton={false}
-              render={<a href={downloadUrl} download="coachai_analysis.mp4" className="flex-1 block group" />}
+              render={
+                <a
+                  href={downloadUrl}
+                  download="coachai_analysis.mp4"
+                  className="flex-1 block group"
+                />
+              }
               className="w-full h-16 rounded-xl text-base font-bold transition-colors"
             >
-                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Download Video
-              </Button>
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              Download Video
+            </Button>
 
             <Button
               variant="outline"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AnalysisTitle from '@/components/AnalysisTitle'
@@ -9,13 +9,9 @@ import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ResultsSummary from '@/components/ResultsSummary'
 import HistoryChat from '@/components/HistoryChat'
-import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
+import { useAnalysisDetailState } from '@/lib/useAnalysisDetailState'
 import { deleteAnalysis, cancelAnalysis } from '@/lib/library'
-import type { CoachAIError } from '@/types'
-import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
-import { startJobPolling, type JobPollingController } from '@/lib/jobPolling'
-import type { JobStatus } from '@/types'
 import type { DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import { Button } from '@/components/9ui/ui/button'
@@ -34,10 +30,6 @@ import { PollResults } from '@/components/interior/poll-results'
 import { ShowMore } from '@/components/interior/show-more'
 import { Lightbox } from '@/components/interior/lightbox'
 
-const POLL_INTERVAL = 2000
-const MAX_POLL_RETRIES = 3
-const STUCK_WARNING_MS = 5 * 60 * 1000
-
 interface AnalysisDetailClientProps {
   auth0Id: string
   jobId: string
@@ -50,121 +42,29 @@ export default function AnalysisDetailClient({
   initialData,
 }: AnalysisDetailClientProps) {
   const router = useRouter()
-  const [status, setStatus] = useState<JobStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [expiredMessage, setExpiredMessage] = useState<string | null>(null)
-  const [pollError, setPollError] = useState<string | null>(null)
-  const [stuckWarning, setStuckWarning] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const {
+    status,
+    loading,
+    expiredMessage,
+    pollError,
+    stuckWarning,
+    dismissStuckWarning,
+    downloadUrl,
+    shareUrl,
+    shareLoading,
+    shareError,
+    shareExpires,
+    beginShare,
+  } = useAnalysisDetailState({ auth0Id, jobId, initialData, shareOpen: showShareModal })
   const [activeView, setActiveView] = useState('overview')
-  const pollControllerRef = useRef<JobPollingController | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const shotEvents = getShotEvents(initialData)
   const [showAllEvents, setShowAllEvents] = useState(false)
-  const [showShareModal, setShowShareModal] = useState(false)
   const [showMetadataDrawer, setShowMetadataDrawer] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
-  const [shareLoading, setShareLoading] = useState(false)
-  const [shareError, setShareError] = useState<string | null>(null)
-  const [shareExpires, setShareExpires] = useState<string | null>(null)
-  const shareLoadIdRef = useRef(0)
-  // Owned jobs need the signed token on the download URL (<a>/lightbox
-  // cannot send headers) — resolve per analysis, fall back to the base URL.
-  const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
-  const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
-  if (downloadUrlJob !== jobId) {
-    setDownloadUrlJob(jobId)
-    setDownloadUrl(getDownloadUrl(jobId))
-  }
-  useEffect(() => {
-    let cancelled = false
-    void getAuthorizedDownloadUrl(jobId).then((url) => {
-      if (!cancelled) setDownloadUrl(url)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [jobId])
   const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
-
-  useEffect(() => {
-    let cancelled = false
-
-    const controller = startJobPolling({
-      jobId,
-      fetchStatus: getJobStatus,
-      isComplete: (s) => s.complete,
-      intervalMs: POLL_INTERVAL,
-      // The detail page is driven by server-side data when available; a job
-      // that does not respond before ever succeeding is treated as expired.
-      giveUpOnFirstFailure: true,
-      maxFailures: MAX_POLL_RETRIES,
-      backoffFactor: 1,
-      warnAfterMs: STUCK_WARNING_MS,
-      onStatus: (s) => {
-        if (cancelled) return
-        setStatus(s)
-        setLoading(false)
-        setPollError(null)
-      },
-      onComplete: (s) => {
-        if (cancelled) return
-        setStatus(s)
-        setLoading(false)
-        if (s.error_code === 'JOB_NOT_FOUND' && !initialData) {
-          setExpiredMessage(s.error ?? 'Analysis not found or expired.')
-        }
-      },
-      onTransient: (failure) => {
-        if (cancelled) return
-        setLoading(false)
-        setPollError(`Connection issue. Retrying... (${failure.attempts}/${MAX_POLL_RETRIES})`)
-      },
-      onError: (failure) => {
-        if (cancelled) return
-        setLoading(false)
-        if (!failure.hadSucceeded) {
-          if (!initialData) {
-            setExpiredMessage('Analysis not found or expired.')
-          }
-        } else {
-          setPollError('Unable to update status. Please refresh the page.')
-        }
-      },
-      onWarn: () => {
-        if (cancelled) return
-        setStuckWarning(true)
-      },
-    })
-    pollControllerRef.current = controller
-
-    return () => {
-      cancelled = true
-      controller.stop()
-    }
-  }, [jobId, initialData])
-
-  // Create the share token once the share modal opens; the link is minted per
-  // analysis and expires after a fixed window (72h on the server).
-  useEffect(() => {
-    if (!showShareModal || !initialData) return
-    const loadId = ++shareLoadIdRef.current
-    createShareToken(auth0Id, initialData.server_job_id)
-      .then((res) => {
-        if (loadId !== shareLoadIdRef.current) return
-        const origin = typeof window !== 'undefined' ? window.location.origin : ''
-        setShareUrl(`${origin}${res.url}`)
-        setShareExpires(res.expires_at)
-      })
-      .catch((err) => {
-        if (loadId !== shareLoadIdRef.current) return
-        setShareError((err as CoachAIError).message ?? 'Failed to create share link')
-      })
-      .finally(() => {
-        if (loadId === shareLoadIdRef.current) setShareLoading(false)
-      })
-  }, [showShareModal, auth0Id, initialData])
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -234,8 +134,7 @@ export default function AnalysisDetailClient({
           </p>
           <button
             onClick={() => {
-              setStuckWarning(false)
-              pollControllerRef.current?.refresh()
+              dismissStuckWarning()
             }}
             className="px-4 py-2 border border-border text-muted-foreground text-[0.65rem] uppercase tracking-[0.15em] hover:text-foreground hover:border-foreground transition-colors"
           >
@@ -424,10 +323,7 @@ export default function AnalysisDetailClient({
           variant="outline"
           size="sm"
           onClick={() => {
-            setShareUrl(null)
-            setShareError(null)
-            setShareExpires(null)
-            setShareLoading(true)
+            beginShare()
             setShowShareModal(true)
           }}
         >
@@ -588,7 +484,9 @@ export default function AnalysisDetailClient({
             >
               {(event) => (
                 <div className="flex items-center gap-3 py-2">
-                  <TimestampPill seconds={typeof event.timestamp === 'number' ? event.timestamp : 0} />
+                  <TimestampPill
+                    seconds={typeof event.timestamp === 'number' ? event.timestamp : 0}
+                  />
                   <span className="text-sm text-foreground">
                     {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                   </span>
@@ -627,9 +525,7 @@ export default function AnalysisDetailClient({
                   i < shotEvents.length - 1 ? 'border-b border-border' : ''
                 }`}
               >
-                {typeof event.timestamp === 'number' && (
-                  <TimestampPill seconds={event.timestamp} />
-                )}
+                {typeof event.timestamp === 'number' && <TimestampPill seconds={event.timestamp} />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-foreground">

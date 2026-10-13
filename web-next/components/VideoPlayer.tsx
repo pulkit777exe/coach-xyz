@@ -9,7 +9,7 @@ import {
   useCallback,
   useMemo,
 } from 'react'
-import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
+import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
 interface VideoPlayerProps {
@@ -64,21 +64,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [hoverX, setHoverX] = useState(0)
   // Owned jobs require the signed attribution token, which a <video> tag
   // cannot send as a header — resolve the query-token URL per job.
-  const [videoSrc, setVideoSrc] = useState(() => getDownloadUrl(jobId))
-  const [videoSrcJob, setVideoSrcJob] = useState(jobId)
-  if (videoSrcJob !== jobId) {
-    setVideoSrcJob(jobId)
-    setVideoSrc(getDownloadUrl(jobId))
-  }
-  useEffect(() => {
-    let cancelled = false
-    void getAuthorizedDownloadUrl(jobId).then((url) => {
-      if (!cancelled) setVideoSrc(url)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [jobId])
+  const videoSrc = useAuthorizedMediaUrl(jobId)
   const activeCallouts = useRef<Array<{ event: ShotEvent; startMs: number; opacity: number }>>([])
   const lastCalloutIndex = useRef<number>(-1)
   const animFrameRef = useRef<number>(0)
