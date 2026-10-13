@@ -162,6 +162,8 @@ coach-xyz/
 │   │   ├── usePipeline.ts     # Unified pipeline machine (idle→…→chatting→error, both surfaces)
 │   │   ├── useScanFlow.ts     # Scan/upload seam (feeds usePipeline)
 │   │   ├── useOrgCrudList.ts  # Shared load→create→setStatus→remove hook (objectives/plans/wellness)
+│   │   ├── useStudentProfileData.ts # StudentProfile server-data states + loaders
+│   │   ├── useMonthNavigator.ts # Calendar loop (attendance/schedule month grids)
 │   │   ├── jobPolling.ts      # Job-status poll engine (clock/fetch/callbacks)
 │   │   ├── pipelineState.ts   # ENGINE_STATE_MAP + mapEngineStateToPipeline
 │   │   ├── errors.ts          # Client error normalization + transient check
@@ -169,7 +171,7 @@ coach-xyz/
 │   │   ├── notifications.ts   # Notification fetch/read/subscribe
 │   │   ├── preferences.tsx    # LocalStorage prefs (theme/week-start/motion)
 │   │   ├── utils.ts           # cn() class-name helper + capitalize
-│   │   └── __tests__/         # lib unit tests (19 files, 197 tests)
+│   │   └── __tests__/         # lib unit tests (21 files, 202 tests)
 │   ├── proxy.ts               # Next 16 Auth0 middleware (passthrough)
 │   ├── next.config.ts         # Security headers + /api/download rewrite
 │   └── types/index.ts         # Shared type definitions
@@ -215,6 +217,9 @@ coach-xyz/
 │   │   ├── userJob.ts         # Curatorial handler adapter (params→guard→store→audit→errors)
 │   │   ├── capability.ts      # Capability route kernel (rate gate→job access→engine error map)
 │   │   ├── playerScope.ts     # Self-scoped adapter (verified guard→linked scope→decision)
+│   │   ├── queueConnection.ts # Single IORedis builder (workerLifecycle + notification events)
+│   │   ├── findingsPolicy.ts / clipsPolicy.ts # Pure curation rules (gate/CSV/validators)
+│   │   ├── notificationsStore.ts / notificationsEvents.ts # Persistence vs fan-out
 │   │   ├── caller.ts          # resolveCaller (role/teams/scope) + permissions.ts (14 perms)
 │   │   ├── orgEnums.ts        # Shared org vocab (contract w/ web lib/org.ts)
 │   │   ├── orgData.ts         # Compat barrel over orgRoster/orgAttendance/orgReports/orgObjectives
@@ -239,11 +244,12 @@ coach-xyz/
 │   └── scripts/smokeOrgHttp.ts  # Live HTTP smoke (51 checks)
 │
 ├── engine/                    # Video analysis engine (Python + FastAPI)
-│   ├── main.py                # FastAPI app, routes, sessions, multicam, SSE
+│   ├── main.py                # FastAPI app, routes, sessions, multicam, SSE (preambles via core/http.py)
 │   ├── core/
 │   │   ├── analyzer.py        # Orchestrator (prepare/resume/tracking/reasoning/scoring/render)
 │   │   ├── scoring.py         # Criterion + weighted-composite form scoring
 │   │   ├── biomechanics.py    # Nearest-track metric attach + injury-risk delegation
+│   │   ├── http.py            # Route kernel (content guard, body parse, job lookup, Gemini map)
 │   │   ├── detector.py / tracking.py / pose_backend.py / detection_utils.py
 │   │   │                      # Unified pose-candidate seam (PoseDetectionOptions: SCAN/TRACKING presets) + MediaPipe abstraction, HOG/IoU
 │   │   ├── player_detector.py # Legacy OpenCV HOG+SVM path
@@ -268,8 +274,8 @@ coach-xyz/
 │   │   ├── config.py          # ENGINE_VERSION, model, timeouts, sizes
 │   │   ├── logging_config.py  # JSON structured logging (job-id correlation)
 │   │   └── errors.py          # Error types hierarchy
-│   ├── cli/                   # Local CLI (frame_selector; drives run_analysis)
-│   ├── tests/                 # pytest suite (23 files, 243 tests)
+│   │   ├── cli/_legacy/       # Quarantined frame_selector + player_tracker (unwired; runnable standalone)
+│   ├── tests/                 # pytest suite (24 files, 259 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -794,8 +800,10 @@ None. The last orphans — `engine/core/baseline.py` and `web-next/components/In
 video-upload path (`core/gemini.py::analyze_video`), the LangChain chunker
 (`core/chunker.py`), and the dead server-job bridge (`cli/analyze_session.py`,
 unreferenced) were deleted 2026-10-12; the staged 20-frame budget covers long
-videos without chunking. `engine/core/player_tracker.py` stays CLI-only (frame
-scoring + box↔skeleton matching, used by `engine/cli/frame_selector.py`).
+videos without chunking. `engine/cli/frame_selector.py` + `engine/core/player_tracker.py`
+were quarantined to `engine/cli/_legacy/` 2026-10-13 (unimported, uninvoked,
+unreferenced; the script stays runnable standalone). `core/player_detector.py`
+stays live (CLI analyze Step 1 via `_detect_players_step`).
 
 ### Removed Dead Code (since last verification)
 
@@ -855,12 +863,12 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 | Local or S3 storage | `engine/core/storage.py` (`STORAGE_BACKEND`, `raw/…` + `results/…` keys) |
 | Direct-upload intents | `POST /upload-intent` + `POST /scan-from-key` in `engine/main.py` |
 | Pipeline states | `engine/core/jobs.py` (`STATE_FLOW`, `PIPELINE_STATES`) |
-| Test suite: 218 tests | `cd engine && python -m pytest tests -q` (20 files) |
-| Test suite: 354 pass / 30 files | `cd server && bun test` (10 env-gated DB tests skip without reachable infra; verified green 2026-10-11) |
-| Test suite: 180 tests / 18 files | `cd web-next && npx vitest run` (verified green 2026-10-11) |
+| Test suite: 259 tests | `cd engine && python -m pytest tests -q` (24 files) |
+| Test suite: 386 pass / 34 files | `cd server && bun test` (10 env-gated DB tests skip without reachable infra; verified green 2026-10-13) |
+| Test suite: 202 tests / 21 files | `cd web-next && npx vitest run` (verified green 2026-10-13) |
 | Live smoke: 51 checks | `cd server && bun run smoke` (needs `.env` + running server + Neon DB) |
 | Dead code deleted: baseline.py, InlineRename.tsx, ui/* | `rg "baseline" engine/core engine/main.py`, `rg "InlineRename" web-next/`, `ls web-next/components/ui` — all empty |
-| player_tracker.py is CLI-only (kept) | imported by `engine/cli/frame_selector.py` only |
+| Quarantined: frame_selector + player_tracker | `ls engine/cli/_legacy/` (unwired; runnable standalone) |
 | scan_progress pruned | `engine/core/sessions.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, evicted alongside sessions |
 | HOG singleton | `engine/core/detection_utils.py` module-level descriptor used by `detector.py` + `analyzer.py` |
 | Redis is ioredis-only | `server/src/lib/redis.ts`; `rg "@upstash" server/package.json` returns nothing (engine Python still uses `upstash-redis`) |
@@ -879,4 +887,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-10-13 (deepening pass 3 built + verified green: org facade subdomains, capability kernel, player-scope adapter, scoring/biomechanics split, storage backend seam, shared CRUD hook; baselines 385/197/243)*
+*Last verified: 2026-10-13 (deepening pass 4 built + verified green: engine route kernel, curation policy split + single-tx clips, notifications store/events split, profile data hook, month navigator + report polling, dead-code quarantine; baselines 386/202/259)*

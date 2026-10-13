@@ -32,3 +32,8 @@ depth, seam, adapter, leverage, locality).
 - **biomechanics** — the engine module owning nearest-track metric attach + injury-risk delegation (`engine/core/biomechanics.py`).
 - **storage backend** — the engine seam with Local/S3 adapters behind capability methods (`engine/core/storage.py`).
 - **crud list** — the shared web hook owning the load → create → setStatus → remove loop (`web-next/lib/useOrgCrudList.ts`).
+- **route kernel (engine)** — shared JSON-route preambles in `engine/core/http.py` (content guard, body parse, job lookup, summary check, Gemini map, timestamp refs).
+- **curation policy** — pure findings/clips rules in `server/src/lib/findingsPolicy.ts` + `clipsPolicy.ts`, split from the persistence seam (single-transaction `createClip`).
+- **notifications split** — store (`notificationsStore.ts`) vs fan-out (`notificationsEvents.ts`) with the shared `queueConnection.ts` IORedis builder.
+- **profile data** — `web-next/lib/useStudentProfileData.ts` owning StudentProfile's server-data states + loaders.
+- **month navigator** — `web-next/lib/useMonthNavigator.ts` owning the calendar loop (AI-report polling crosses the shared `jobPolling` core).
