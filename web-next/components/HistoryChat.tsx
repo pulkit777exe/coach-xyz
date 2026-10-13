@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { getHistoryChatMessages, sendHistoryChatMessage } from '@/lib/chat'
-import type { ChatMessage } from '@/types'
+import { SPORT_EMOJI } from '@/lib/sports'
+import {
+  makeChatMessage,
+  makeErrorMessage,
+  makeUserMessage,
+  useChatThread,
+} from '@/lib/useChatThread'
 import { Button } from '@/components/9ui/ui/button'
 
 export default function HistoryChat({
@@ -14,69 +20,39 @@ export default function HistoryChat({
   jobId: string
   summary: Record<string, unknown> | null
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [historyError, setHistoryError] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    getHistoryChatMessages(auth0Id, jobId)
-      .then((res) => setMessages(res.messages || []))
-      .catch(() => setHistoryError(true))
-      .finally(() => setInitialLoading(false))
-  }, [auth0Id, jobId])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const {
+    messages,
+    setMessages,
+    isLoading: initialLoading,
+    hasError: historyError,
+    messagesEndRef,
+  } = useChatThread({
+    scopeKey: `${auth0Id}:${jobId}`,
+    load: () => getHistoryChatMessages(auth0Id, jobId).then((res) => res.messages || []),
+  })
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || loading) return
 
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: text,
-      created_at: Date.now() / 1000,
-    }
+    const userMsg = makeUserMessage(text)
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
     try {
       const res = await sendHistoryChatMessage(auth0Id, jobId, text)
-      const assistantMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: res.message,
-        created_at: Date.now() / 1000,
-      }
+      const assistantMsg = makeChatMessage('assistant', res.message)
       setMessages((prev) => [...prev, assistantMsg])
     } catch {
-      const errorMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'system',
-        content: 'Failed to get response. Please try again.',
-        created_at: Date.now() / 1000,
-      }
+      const errorMsg = makeErrorMessage('Failed to get response. Please try again.')
       setMessages((prev) => [...prev, errorMsg])
     } finally {
       setLoading(false)
     }
-  }, [input, loading, auth0Id, jobId])
-
-  const sportEmoji: Record<string, string> = {
-    basketball: '🏀',
-    football: '⚽',
-    cricket: '🏏',
-    tennis: '🎾',
-    baseball: '⚾',
-    hockey: '🏒',
-    unknown: '🎯',
-  }
+  }, [input, loading, auth0Id, jobId, setMessages])
 
   return (
     <div className="flex flex-col h-full">
@@ -84,7 +60,7 @@ export default function HistoryChat({
         <div className="border-b border-border p-4">
           <div className="flex items-center gap-3 mb-2">
             <span className="text-2xl">
-              {sportEmoji[(summary.sport as string) || 'unknown'] || '🎯'}
+              {SPORT_EMOJI[(summary.sport as string) || 'unknown'] ?? '🎯'}
             </span>
             <div>
               <p className="text-sm text-foreground capitalize">

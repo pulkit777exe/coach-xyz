@@ -1,6 +1,12 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+import {
+  makeChatMessage,
+  makeErrorMessage,
+  makeUserMessage,
+  useChatThread,
+} from '@/lib/useChatThread'
 import { sendChatMessageStream } from '@/lib/chat'
 import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
@@ -21,13 +27,20 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
-  const [historyError, setHistoryError] = useState(false)
   const [streamingText, setStreamingText] = useState('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const hasLoadedRef = useRef(false)
+  const {
+    messages,
+    setMessages,
+    isLoading: isLoadingHistory,
+    hasError: historyError,
+    messagesEndRef,
+  } = useChatThread({
+    scopeKey: jobId,
+    load: () => getConversation(jobId).then((res) => res.messages),
+    onError: (err) => console.error('Failed to load chat history:', err),
+    scrollKey: `${isTyping}:${streamingText}`,
+  })
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -35,34 +48,6 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       abortRef.current?.abort()
     }
   }, [])
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
-
-  useEffect(() => {
-    if (hasLoadedRef.current) return
-    hasLoadedRef.current = true
-
-    const loadHistory = async () => {
-      try {
-        const { messages: history } = await getConversation(jobId)
-        if (history.length > 0) {
-          setMessages(history)
-        }
-      } catch (err) {
-        console.error('Failed to load chat history:', err)
-        setHistoryError(true)
-      } finally {
-        setIsLoadingHistory(false)
-      }
-    }
-    loadHistory()
-  }, [jobId])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, isTyping, streamingText, scrollToBottom])
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -72,12 +57,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       const controller = new AbortController()
       abortRef.current = controller
 
-      const userMsg: ChatMessage = {
-        id: `temp-${Date.now()}`,
-        role: 'user',
-        content: text.trim(),
-        created_at: Date.now(),
-      }
+      const userMsg = makeUserMessage(text.trim())
       setMessages((prev) => [...prev, userMsg])
       setIsTyping(true)
       setStreamingText('')
@@ -96,12 +76,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
             finalTimestampRefs = event.timestamp_refs
             finalEventRefs = event.event_refs
           } else if (event.type === 'error') {
-            const errorMsg: ChatMessage = {
-              id: `err-${Date.now()}`,
-              role: 'system',
-              content: event.message,
-              created_at: Date.now(),
-            }
+            const errorMsg = makeErrorMessage(event.message)
             setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
             setStreamingText('')
             setIsTyping(false)
@@ -109,30 +84,21 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
           }
         }
 
-        const assistantMsg: ChatMessage = {
-          id: `resp-${Date.now()}`,
-          role: 'assistant',
-          content: finalText,
+        const assistantMsg = makeChatMessage('assistant', finalText, {
           timestamp_refs: finalTimestampRefs,
           event_refs: finalEventRefs,
-          created_at: Date.now(),
-        }
+        })
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
         setStreamingText('')
       } catch {
-        const errorMsg: ChatMessage = {
-          id: `err-${Date.now()}`,
-          role: 'system',
-          content: 'Failed to get response. Please try again.',
-          created_at: Date.now(),
-        }
+        const errorMsg = makeErrorMessage('Failed to get response. Please try again.')
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
         setStreamingText('')
       } finally {
         setIsTyping(false)
       }
     },
-    [jobId, isTyping],
+    [jobId, isTyping, setMessages],
   )
 
   const handleQuickAction = useCallback(
