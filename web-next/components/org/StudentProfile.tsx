@@ -54,24 +54,13 @@ import type {
   PerformanceSeriesPoint,
   AttendanceSummary,
   ReportRecord,
-  MetricTrend,
-  ComparisonStudent,
 } from '@/lib/org'
 import type { DashboardAnalysis } from '@/lib/library'
 import type { CoachAIError } from '@/types'
-import {
-  orgStudentPerformance,
-  orgAddPerformanceMetric,
-  orgDeletePerformanceMetric,
-  orgUpdatePerformanceMetric,
-  orgDeleteStudent,
-  orgDeleteReport,
-  linkAnalysisToStudent,
-  orgAttendanceSummary,
-  orgStudents,
-  orgStudentTrends,
-  orgCompareStudents,
-} from '@/lib/org'
+import { orgDeleteStudent } from '@/lib/org'
+import { orgDeletePerformanceMetric } from '@/lib/org'
+import { listTeams } from '@/lib/teams'
+import { partitionAnalyses, useStudentProfileData } from '@/lib/useStudentProfileData'
 import { formatDateLong, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
@@ -123,25 +112,43 @@ export default function StudentProfile({
 }) {
   const router = useRouter()
   const [student_, setStudent] = useState<Student>(student)
-  const [series, setSeries] = useState<PerformanceSeriesPoint[]>(initialSeries)
-  const [attendance, setAttendance] = useState<AttendanceSummary | null>(initialAttendance)
-  const [reports, setReports] = useState<ReportRecord[]>(initialReports)
-  const [analyses, setAnalyses] = useState<DashboardAnalysis[]>(allAnalyses)
+  const {
+    series,
+    attendance,
+    reports,
+    analyses,
+    trends,
+    roster,
+    compareIds,
+    comparison,
+    compareBusy,
+    refresh,
+    toggleCompare,
+    loadComparison,
+    saveMetric,
+    setAnalysisLink,
+    deleteReport,
+  } = useStudentProfileData({
+    auth0Id,
+    studentId: student_.id,
+    initialSeries,
+    initialAttendance,
+    initialReports,
+    initialAnalyses: allAnalyses,
+  })
   const [editOpen, setEditOpen] = useState(false)
   const [editTeams, setEditTeams] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     if (!editOpen) return
     let cancelled = false
-    void import('@/lib/teams').then(({ listTeams }) =>
-      listTeams(auth0Id)
-        .then((res) => {
-          if (!cancelled) setEditTeams(res.teams)
-        })
-        .catch(() => {
-          if (!cancelled) setEditTeams([])
-        }),
-    )
+    void listTeams(auth0Id)
+      .then((res) => {
+        if (!cancelled) setEditTeams(res.teams)
+      })
+      .catch(() => {
+        if (!cancelled) setEditTeams([])
+      })
     return () => {
       cancelled = true
     }
@@ -163,30 +170,7 @@ export default function StudentProfile({
     measured_at: '',
   })
 
-  const [trends, setTrends] = useState<MetricTrend[]>([])
-  const [roster, setRoster] = useState<Student[]>([])
-  const [compareIds, setCompareIds] = useState<string[]>([])
   const [compareMetric, setCompareMetric] = useState('form_score')
-  const [comparison, setComparison] = useState<ComparisonStudent[]>([])
-  const [compareBusy, setCompareBusy] = useState(false)
-
-  // Client-side fetches for the trends + comparison sections. Both are
-  // low-priority extras on top of the RSC streamed data, so failures fall
-  // back to empty state rather than blocking the profile.
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      orgStudentTrends(auth0Id, student_.id).catch(() => ({ trends: [] })),
-      orgStudents(auth0Id).catch(() => ({ students: [] })),
-    ]).then(([trendsRes, rosterRes]) => {
-      if (cancelled) return
-      setTrends(trendsRes.trends)
-      setRoster(rosterRes.students.filter((s) => s.id !== student_.id))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [auth0Id, student_.id])
 
   const keys = useMemo(() => [...new Set(series.map((s) => s.metric_key))].sort(), [series])
 
@@ -272,30 +256,16 @@ export default function StudentProfile({
     return config
   }, [comparison])
 
-  const linked = analyses.filter((a) => a.student_id === student_.id)
-  const unlinked = analyses.filter((a) => !a.student_id)
+  const { linked, unlinked } = useMemo(
+    () => partitionAnalyses(analyses, student_.id),
+    [analyses, student_.id],
+  )
 
-  const toggleCompare = (id: string) => {
-    setCompareIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id)
-      if (prev.length >= 9) return prev
-      return [...prev, id]
-    })
-  }
-
-  const loadComparison = async () => {
-    if (!compareIds.length) {
-      setComparison([])
-      return
-    }
-    setCompareBusy(true)
+  const runCompare = async () => {
     try {
-      const res = await orgCompareStudents(auth0Id, [student_.id, ...compareIds], compareMetric)
-      setComparison(res.comparison)
+      await loadComparison(compareMetric)
     } catch (err) {
       toast.error((err as CoachAIError).message ?? 'Failed to load comparison')
-    } finally {
-      setCompareBusy(false)
     }
   }
 
@@ -331,20 +301,12 @@ export default function StudentProfile({
 
     setMetricSubmitting(true)
     try {
-      if (editingMetric) {
-        const id = editingMetric.id
-        if (!id) return
-        await orgUpdatePerformanceMetric(auth0Id, id, {
-          metric_value: payload.metric_value,
-          unit: payload.unit ?? null,
-        })
-      } else {
-        await orgAddPerformanceMetric(auth0Id, student_.id, payload)
-      }
+      const id = editingMetric?.id ?? null
+      if (editingMetric && !id) return
+      await saveMetric(payload, id)
       toast.success(editingMetric ? 'Metric updated' : 'Metric logged')
       setEditingMetric(null)
       setMetricForm({ metric_key: '', metric_value: '', unit: '', measured_at: '' })
-      await refresh()
     } catch (err) {
       toast.error((err as CoachAIError).message ?? 'Failed to log metric')
     } finally {
@@ -362,29 +324,13 @@ export default function StudentProfile({
     })
   }
 
-  const setAnalysisLink = async (analysis: DashboardAnalysis, studentId: string | null) => {
+  const linkAnalysis = async (analysis: DashboardAnalysis, studentId: string | null) => {
     try {
-      const res = await linkAnalysisToStudent(auth0Id, analysis.server_job_id, studentId)
+      await setAnalysisLink(analysis, studentId)
       toast.success(studentId ? 'Analysis linked' : 'Analysis unlinked')
-      const updated: DashboardAnalysis = {
-        ...analysis,
-        student_id: res.analysis.student_id ?? null,
-      }
-      setAnalyses((prev) =>
-        prev.map((a) => (a.server_job_id === updated.server_job_id ? updated : a)),
-      )
     } catch (err) {
       toast.error((err as CoachAIError).message ?? 'Failed to update link')
     }
-  }
-
-  const refresh = async () => {
-    const [seriesRes, attRes] = await Promise.all([
-      orgStudentPerformance(auth0Id, student_.id),
-      orgAttendanceSummary(auth0Id, { studentId: student_.id }),
-    ])
-    setSeries(seriesRes.series)
-    setAttendance(attRes.summary)
   }
 
   const attStats = [
@@ -775,7 +721,7 @@ export default function StudentProfile({
             <Button
               variant="outline"
               size="sm"
-              onClick={loadComparison}
+              onClick={runCompare}
               disabled={compareBusy || compareIds.length === 0}
             >
               {compareBusy ? <Spinner /> : null} Compare
@@ -842,7 +788,7 @@ export default function StudentProfile({
           {unlinked.length > 0 && (
             <LinkAnalysisSelect
               unlinked={unlinked}
-              onPick={(a) => setAnalysisLink(a, student_.id)}
+              onPick={(a) => linkAnalysis(a, student_.id)}
             />
           )}
         </div>
@@ -904,7 +850,7 @@ export default function StudentProfile({
                         variant="ghost"
                         size="sm"
                         className="text-muted-foreground"
-                        onClick={() => setAnalysisLink(a, null)}
+                        onClick={() => linkAnalysis(a, null)}
                       >
                         <UnlinkIcon className="size-3.5" /> Unlink
                       </Button>
@@ -964,8 +910,7 @@ export default function StudentProfile({
                           description:
                             'This permanently removes the generated report. This cannot be undone.',
                           action: async () => {
-                            await orgDeleteReport(auth0Id, r.id)
-                            setReports((prev) => prev.filter((x) => x.id !== r.id))
+                            await deleteReport(r.id)
                             toast.success('Report deleted')
                           },
                         })
