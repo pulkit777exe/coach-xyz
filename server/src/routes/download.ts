@@ -2,37 +2,26 @@ import { Elysia } from 'elysia'
 
 import { getDownloadStream, requestIdFrom } from '../lib/engine'
 import { buildError, isCoachAIError } from '../lib/errors'
-import { getJob } from '../lib/jobs'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
-import { checkDownloadLimit, getIP } from '../lib/ratelimit'
-import {
-  markAnalysisDownloaded,
-  getAnalysisByServerJobId,
-} from '../lib/analyses'
+import { capabilityLimitKey, gateRateLimit, resolveJobRoute } from '../lib/capability'
+import { resolveJobCaller } from '../lib/jobAccess'
+import { checkDownloadLimit } from '../lib/ratelimit'
+import { markAnalysisDownloaded, getAnalysisByServerJobId } from '../lib/analyses'
 import { auditRoute } from '../lib/audit'
 
 export default new Elysia().get('/api/download/:jobId', async ({ params, request, set }) => {
-  const serverJob = await getJob(params.jobId)
-
-  if (!serverJob) {
-    set.status = 404
-    return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
+  const resolved = await resolveJobRoute(params.jobId, request, set)
+  if (!resolved.ok) {
+    return resolved.body
   }
+  const serverJob = resolved.serverJob
 
-  const access = verifyJobAccess(request, serverJob)
-  if (!access.ok) {
-    set.status = access.status
-    return access.body
-  }
-
-  const { allowed, reset } = await checkDownloadLimit(resolveJobCaller(request) ?? getIP(request))
-  if (!allowed) {
-    const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-    set.status = 429
-    return {
-      ...buildError('RATE_LIMITED', 'Too many download requests. Try again later.', true),
-      retry_after: retryAfter,
-    }
+  const gate = await gateRateLimit(request, set, {
+    check: () => checkDownloadLimit(capabilityLimitKey(request)),
+    deniedMessage: 'Too many download requests. Try again later.',
+  })
+  if (!gate.proceed) {
+    set.status = gate.status
+    return gate.body
   }
 
   try {

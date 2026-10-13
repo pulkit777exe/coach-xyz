@@ -9,12 +9,10 @@ import {
 } from '../lib/engine'
 import { buildError, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
-import { resolveJobCaller } from '../lib/jobAccess'
 import { checkScanLimit, checkScanProgressLimit, getIP } from '../lib/ratelimit'
+import { capabilityLimitKey, gateRateLimit, mapEngineError, readJsonBody } from '../lib/capability'
 import { verifyAttributionToken } from '../lib/attribution'
-import {
-  persistVideoConversation,
-} from '../lib/analyses'
+import { persistVideoConversation } from '../lib/analyses'
 import { registerVideo, updateVideoProbe } from '../lib/registry'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
@@ -57,43 +55,19 @@ const persistScanResult = async (
   }).catch(() => null)
 }
 
-const scanErrorStatus = (code: string): number => {
-  switch (code) {
-    case 'NO_PLAYERS_DETECTED':
-      return 422
-    case 'VIDEO_DECODE_FAILED':
-      return 422
-    case 'ENGINE_UNAVAILABLE':
-      return 503
-    case 'MEDIAPIPE_UNAVAILABLE':
-      return 503
-    case 'INVALID_REQUEST':
-      return 400
-    default:
-      return 500
-  }
-}
-
 export default new Elysia()
   .post('/api/scan-video', async ({ request, set }) => {
     // ── Rate Limiting ──────────────────────────────────────────────────────
     // Key by verified sub when the caller sent a signed attribution token —
     // unlike X-Forwarded-For, the sub cannot be spoofed, so logged-in callers
     // get a per-account bucket and cannot rotate IPs to evade the limit.
-    const ip = getIP(request)
-    const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
-    set.headers['X-RateLimit-Remaining'] = String(remaining)
-    if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+    const gate = await gateRateLimit(request, set, {
+      check: () => checkScanLimit(capabilityLimitKey(request)),
+      deniedMessage: 'Too many scan requests. Wait a minute before trying again.',
+    })
+    if (!gate.proceed) {
+      set.status = gate.status
+      return gate.body
     }
 
     // ── Reject oversized uploads before buffering into memory ─────────────
@@ -148,25 +122,10 @@ export default new Elysia()
       set.status = 200
       return result
     } catch (error) {
-      // If the engine returned a structured error, pass it through
-      if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
-      }
-
-      // Unknown error — normalize to a safe code (don't leak raw Bun/OS error codes or messages)
-      const routeError = error as { code?: string; message?: string }
-      const code = 'INTERNAL_ERROR'
-      console.error(
-        JSON.stringify({
-          type: 'scan_unknown_error',
-          code: String(routeError?.code ?? 'UNKNOWN'),
-          message: String(routeError?.message ?? 'unknown'),
-          timestamp: new Date().toISOString(),
-        }),
-      )
-      set.status = 500
-      return buildError(code, 'Video scan failed. Please try again.')
+      return mapEngineError(set, error, {
+        logType: 'scan_unknown_error',
+        unknownMessage: 'Video scan failed. Please try again.',
+      })
     }
   })
   // ── Direct-to-storage upload intents (§8) ──────────────────────────────
@@ -174,29 +133,21 @@ export default new Elysia()
   // The browser uploads straight to storage (presigned POST on S3, or the
   // local multipart /scan-video path) and finishes with /api/scan-from-key.
   .post('/api/scan-intent', async ({ request, set }) => {
-    const ip = getIP(request)
-    const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
-    set.headers['X-RateLimit-Remaining'] = String(remaining)
-    if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+    const gate = await gateRateLimit(request, set, {
+      check: () => checkScanLimit(capabilityLimitKey(request)),
+      deniedMessage: 'Too many scan requests. Wait a minute before trying again.',
+    })
+    if (!gate.proceed) {
+      set.status = gate.status
+      return gate.body
     }
 
-    let body: Record<string, unknown>
-    try {
-      body = (await request.json()) as Record<string, unknown>
-    } catch {
+    const parsed = await readJsonBody(request)
+    if (!parsed.ok) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid JSON request body.', false)
+      return parsed.body
     }
+    const body = parsed.body
 
     const filename = body.filename
     const mimeType = body.mime_type ?? body.mimeType
@@ -244,45 +195,31 @@ export default new Elysia()
       set.status = 200
       return intent
     } catch (error) {
-      if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
-      }
-      set.status = 500
-      return buildError(
-        'INTERNAL_ERROR',
-        'Could not create an upload slot. Please try again.',
-        true,
-      )
+      return mapEngineError(set, error, {
+        logType: 'scan_intent_error',
+        unknownMessage: 'Could not create an upload slot. Please try again.',
+      })
     }
   })
   // ── Scan an already-uploaded key (§8) ──────────────────────────────────
   // Completes the direct-upload flow: the key must match an intent-minted
   // shape (raw/…) so result keys and arbitrary paths are rejected.
   .post('/api/scan-from-key', async ({ request, set }) => {
-    const ip = getIP(request)
-    const { allowed, remaining, reset } = await checkScanLimit(resolveJobCaller(request) ?? ip)
-    set.headers['X-RateLimit-Remaining'] = String(remaining)
-    if (!allowed) {
-      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-      set.status = 429
-      return {
-        ...buildError(
-          'RATE_LIMITED',
-          'Too many scan requests. Wait a minute before trying again.',
-          true,
-        ),
-        retry_after: retryAfter,
-      }
+    const gate = await gateRateLimit(request, set, {
+      check: () => checkScanLimit(capabilityLimitKey(request)),
+      deniedMessage: 'Too many scan requests. Wait a minute before trying again.',
+    })
+    if (!gate.proceed) {
+      set.status = gate.status
+      return gate.body
     }
 
-    let body: Record<string, unknown>
-    try {
-      body = (await request.json()) as Record<string, unknown>
-    } catch {
+    const parsed = await readJsonBody(request)
+    if (!parsed.ok) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid JSON request body.', false)
+      return parsed.body
     }
+    const body = parsed.body
 
     const storageKey = body.storage_key
     if (
@@ -309,21 +246,10 @@ export default new Elysia()
       set.status = 200
       return result
     } catch (error) {
-      if (isCoachAIError(error)) {
-        set.status = scanErrorStatus(error.code)
-        return error
-      }
-      const routeError = error as { code?: string; message?: string }
-      console.error(
-        JSON.stringify({
-          type: 'scan_from_key_error',
-          code: String(routeError?.code ?? 'UNKNOWN'),
-          message: String(routeError?.message ?? 'unknown'),
-          timestamp: new Date().toISOString(),
-        }),
-      )
-      set.status = 500
-      return buildError('INTERNAL_ERROR', 'Video scan failed. Please try again.', true)
+      return mapEngineError(set, error, {
+        logType: 'scan_from_key_error',
+        unknownMessage: 'Video scan failed. Please try again.',
+      })
     }
   })
   .get('/api/scan-progress/:sessionToken', async ({ params, request, set }) => {

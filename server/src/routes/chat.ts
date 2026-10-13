@@ -1,52 +1,50 @@
 import { Elysia } from 'elysia'
 
 import { buildError } from '../lib/errors'
-import { getJob } from '../lib/jobs'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
-import { checkChatLimit, getIP } from '../lib/ratelimit'
+import {
+  capabilityLimitKey,
+  gateRateLimit,
+  resolveJobRoute,
+  type CapabilitySet,
+} from '../lib/capability'
+import { checkChatLimit } from '../lib/ratelimit'
 import { getConversation, saveMessage } from '../lib/conversation'
 import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '../lib/engine'
 
 /**
  * Resolve the engine job ID and conversation history for a given server job.
- * Shared between /api/chat and /api/chat/stream.
+ * Shared between /api/chat and /api/chat/stream: job lookup + access via the
+ * capability kernel, history shaped for the engine here.
  */
-async function resolveChatContext(jobId: string, request: Request) {
-  const serverJob = await getJob(jobId)
-  if (!serverJob)
-    return {
-      error: buildError('JOB_NOT_FOUND', 'Analysis session not found.', false) as unknown,
-    }
-
-  const access = verifyJobAccess(request, serverJob)
-  if (!access.ok) return { error: access.body as unknown, status: access.status }
+async function resolveChatContext(
+  jobId: string,
+  request: Request,
+  set: { status?: number | string },
+) {
+  const resolved = await resolveJobRoute(jobId, request, set)
+  if (!resolved.ok) return { error: resolved.body as unknown, status: resolved.status }
 
   const history = await getConversation(jobId)
   const historyForEngine = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role, content: m.content }))
 
-  return { engineJobId: serverJob.engine_job_id, historyForEngine }
+  return { engineJobId: resolved.serverJob.engine_job_id, historyForEngine }
 }
 
-/** Rate-limit key: verified sub when present (per-account Gemini spend),
- * otherwise the client IP. */
-function chatLimitKey(request: Request): string {
-  return resolveJobCaller(request) ?? getIP(request)
-}
-
+/** Rate-limit gate: verified sub when present (per-account Gemini spend). */
 async function checkChatRateLimit(
   request: Request,
-  set: { status?: number | string },
+  set: CapabilitySet,
 ): Promise<ReturnType<typeof buildError> | null> {
-  const { allowed, reset } = await checkChatLimit(chatLimitKey(request))
-  if (allowed) return null
-  const retryAfter = Math.ceil((reset - Date.now()) / 1000)
-  set.status = 429
-  return {
-    ...buildError('RATE_LIMITED', 'Too many chat requests. Try again later.', true),
-    retry_after: retryAfter,
-  } as ReturnType<typeof buildError>
+  const gate = await gateRateLimit(request, set, {
+    check: () => checkChatLimit(capabilityLimitKey(request)),
+    deniedMessage: 'Too many chat requests. Try again later.',
+    emitRemaining: false,
+  })
+  if (gate.proceed) return null
+  set.status = gate.status
+  return gate.body as ReturnType<typeof buildError>
 }
 
 export default new Elysia()
@@ -66,9 +64,8 @@ export default new Elysia()
     const limited = await checkChatRateLimit(request, set)
     if (limited) return limited
 
-    const ctx = await resolveChatContext(job_id, request)
+    const ctx = await resolveChatContext(job_id, request, set)
     if ('error' in ctx) {
-      set.status = ctx.status ?? 404
       return ctx.error
     }
     const { engineJobId, historyForEngine } = ctx
@@ -160,9 +157,8 @@ export default new Elysia()
     const limited = await checkChatRateLimit(request, set)
     if (limited) return limited
 
-    const ctx = await resolveChatContext(job_id, request)
+    const ctx = await resolveChatContext(job_id, request, set)
     if ('error' in ctx) {
-      set.status = ctx.status ?? 404
       return ctx.error
     }
     const { engineJobId, historyForEngine } = ctx
@@ -298,16 +294,9 @@ export default new Elysia()
 
   // Load conversation history for a job
   .get('/api/conversation/:jobId', async ({ params, request, set }) => {
-    const serverJob = await getJob(params.jobId)
-    if (!serverJob) {
-      set.status = 404
-      return buildError('JOB_NOT_FOUND', 'Analysis session not found.', false)
-    }
-
-    const access = verifyJobAccess(request, serverJob)
-    if (!access.ok) {
-      set.status = access.status
-      return access.body
+    const resolved = await resolveJobRoute(params.jobId, request, set)
+    if (!resolved.ok) {
+      return resolved.body
     }
 
     const messages = await getConversation(params.jobId)
