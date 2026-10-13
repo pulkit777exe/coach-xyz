@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { orgCreateWellness, orgWellness, type WellnessCheckin } from '@/lib/org'
+import { useOrgCrudList } from '@/lib/useOrgCrudList'
 
 interface WellnessSectionProps {
   auth0Id: string
@@ -16,51 +17,50 @@ interface WellnessSectionProps {
 const FATIGUE_LABELS = ['', 'Fresh', 'Good', 'Okay', 'Tired', 'Exhausted']
 
 export default function WellnessSection({ auth0Id, studentId }: WellnessSectionProps) {
-  const [checkins, setCheckins] = useState<WellnessCheckin[] | null>(null)
   const [denied, setDenied] = useState(false)
+  const {
+    items: checkins,
+    isLoading,
+    isBusy: busy,
+    error,
+    createItem,
+  } = useOrgCrudList<
+    WellnessCheckin,
+    {
+      sleep_hours: number | null
+      fatigue: number | null
+      availability: string | null
+      note: string | null
+    },
+    never
+  >({
+    scopeKey: `${auth0Id}:${studentId}`,
+    load: () => orgWellness(auth0Id, studentId).then((res) => res.checkins),
+    create: (input) => orgCreateWellness(auth0Id, studentId, input).then((res) => res.checkin),
+    onLoadError: (e) => {
+      if (e instanceof Error && /403|FORBIDDEN/i.test(e.message)) setDenied(true)
+    },
+  })
   const [sleep, setSleep] = useState('')
   const [fatigue, setFatigue] = useState('')
   const [availability, setAvailability] = useState('')
   const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void orgWellness(auth0Id, studentId)
-      .then((res) => {
-        if (!cancelled) setCheckins(res.checkins)
-      })
-      .catch((e) => {
-        if (cancelled) return
-        if (e instanceof Error && /403|FORBIDDEN/i.test(e.message)) setDenied(true)
-        else setCheckins([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [auth0Id, studentId])
 
   const submit = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await orgCreateWellness(auth0Id, studentId, {
+    const created = await createItem(
+      {
         sleep_hours: sleep === '' ? null : Number(sleep),
         fatigue: fatigue === '' ? null : Number(fatigue),
         availability: availability.trim() || null,
         note: note.trim() || null,
-      })
-      setCheckins((prev) => [res.checkin, ...(prev ?? [])])
-      setSleep('')
-      setFatigue('')
-      setAvailability('')
-      setNote('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not record check-in.')
-    } finally {
-      setBusy(false)
-    }
+      },
+      'Could not record check-in.',
+    )
+    if (!created) return
+    setSleep('')
+    setFatigue('')
+    setAvailability('')
+    setNote('')
   }
 
   return (
@@ -137,7 +137,7 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
               {busy ? 'Recording…' : 'Record check-in'}
             </Button>
             <div className="space-y-1.5 pt-1">
-              {(checkins ?? []).slice(0, 8).map((checkin) => (
+              {checkins.slice(0, 8).map((checkin) => (
                 <div
                   key={checkin.id}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-xs"
@@ -159,7 +159,7 @@ export default function WellnessSection({ auth0Id, studentId }: WellnessSectionP
                   </span>
                 </div>
               ))}
-              {checkins?.length === 0 && (
+              {!isLoading && checkins.length === 0 && (
                 <p className="text-xs text-muted-foreground">No check-ins yet.</p>
               )}
             </div>

@@ -25,15 +25,16 @@ import {
 import { Textarea } from '@/components/9ui/ui/textarea'
 import TimestampPill from '@/components/TimestampPill'
 import {
-  orgCreateObjective,
-  orgDeleteObjective,
-  orgObjectives,
-  orgSetObjectiveStatus,
   orgStudentFindings,
   downloadStudentFindingsCsv,
+  orgObjectives,
+  orgCreateObjective,
+  orgSetObjectiveStatus,
+  orgDeleteObjective,
   type StoredFinding,
   type TrainingObjective,
 } from '@/lib/org'
+import { useOrgCrudList } from '@/lib/useOrgCrudList'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 
 interface ObjectivesSectionProps {
@@ -42,7 +43,33 @@ interface ObjectivesSectionProps {
 }
 
 export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSectionProps) {
-  const [objectives, setObjectives] = useState<TrainingObjective[]>([])
+  const {
+    items: objectives,
+    isBusy: busy,
+    error,
+    setError,
+    createItem,
+    setItemStatus,
+    removeItem,
+  } = useOrgCrudList<
+    TrainingObjective,
+    {
+      student_id?: string | null
+      finding_id?: string | null
+      analysis_job_id?: string | null
+      title: string
+      description?: string | null
+      due_on?: string | null
+    },
+    'active' | 'done' | 'archived'
+  >({
+    scopeKey: `${auth0Id}:${studentId}`,
+    load: () => orgObjectives(auth0Id, { studentId }).then((res) => res.objectives),
+    create: (input) => orgCreateObjective(auth0Id, input).then((res) => res.objective),
+    setStatus: (id, status) =>
+      orgSetObjectiveStatus(auth0Id, id, status).then((res) => res.objective),
+    remove: (id) => orgDeleteObjective(auth0Id, id),
+  })
   const [findings, setFindings] = useState<StoredFinding[]>([])
   const [trends, setTrends] = useState<FindingsTrendPoint[]>([])
   const [open, setOpen] = useState(false)
@@ -50,20 +77,11 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
   const [description, setDescription] = useState('')
   const [dueOn, setDueOn] = useState('')
   const [findingId, setFindingId] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [view, setView] = useState<'list' | 'board'>('board')
 
   useEffect(() => {
     let cancelled = false
-    void orgObjectives(auth0Id, { studentId })
-      .then((res) => {
-        if (!cancelled) setObjectives(res.objectives)
-      })
-      .catch(() => {
-        if (!cancelled) setObjectives([])
-      })
     void orgStudentFindings(auth0Id, studentId, 10)
       .then((res) => {
         if (!cancelled) setFindings(res.findings)
@@ -116,49 +134,24 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
       setError('Title is required.')
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      const linked = findings.find((f) => f.id === findingId)
-      const res = await orgCreateObjective(auth0Id, {
+    const linked = findings.find((f) => f.id === findingId)
+    const created = await createItem(
+      {
         student_id: studentId,
         finding_id: findingId || null,
         analysis_job_id: linked?.server_job_id ?? null,
         title: title.trim(),
         description: description.trim() || null,
         due_on: dueOn || null,
-      })
-      setObjectives((prev) => [res.objective, ...prev])
-      setTitle('')
-      setDescription('')
-      setDueOn('')
-      setFindingId('')
-      setOpen(false)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create objective.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const setStatus = async (id: string, status: 'active' | 'done' | 'archived') => {
-    setBusy(true)
-    try {
-      const res = await orgSetObjectiveStatus(auth0Id, id, status)
-      setObjectives((prev) => prev.map((o) => (o.id === id ? res.objective : o)))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const removeObjective = async (id: string) => {
-    setBusy(true)
-    try {
-      await orgDeleteObjective(auth0Id, id)
-      setObjectives((prev) => prev.filter((o) => o.id !== id))
-    } finally {
-      setBusy(false)
-    }
+      },
+      'Could not create objective.',
+    )
+    if (!created) return
+    setTitle('')
+    setDescription('')
+    setDueOn('')
+    setFindingId('')
+    setOpen(false)
   }
 
   const openNewObjective = () => {
@@ -212,8 +205,8 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
           <ObjectiveBoard
             objectives={objectives}
             busy={busy}
-            onStatus={setStatus}
-            onDelete={removeObjective}
+            onStatus={setItemStatus}
+            onDelete={removeItem}
             onNew={openNewObjective}
           />
         ) : (
@@ -244,7 +237,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     size="sm"
                     variant="outline"
                     disabled={busy}
-                    onClick={() => setStatus(objective.id, 'done')}
+                    onClick={() => setItemStatus(objective.id, 'done')}
                   >
                     Done
                   </Button>
@@ -254,7 +247,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                     size="sm"
                     variant="outline"
                     disabled={busy}
-                    onClick={() => setStatus(objective.id, 'active')}
+                    onClick={() => setItemStatus(objective.id, 'active')}
                   >
                     Reopen
                   </Button>
@@ -264,7 +257,7 @@ export default function ObjectivesSection({ auth0Id, studentId }: ObjectivesSect
                   variant="ghost"
                   className="text-destructive"
                   disabled={busy}
-                  onClick={() => void removeObjective(objective.id)}
+                  onClick={() => void removeItem(objective.id)}
                 >
                   Delete
                 </Button>

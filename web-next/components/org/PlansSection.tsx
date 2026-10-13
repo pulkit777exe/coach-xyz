@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
@@ -22,6 +22,7 @@ import {
   orgSetPlanStatus,
   type TrainingPlan,
 } from '@/lib/org'
+import { useOrgCrudList } from '@/lib/useOrgCrudList'
 
 interface PlansSectionProps {
   auth0Id: string
@@ -29,59 +30,51 @@ interface PlansSectionProps {
 }
 
 export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) {
-  const [plans, setPlans] = useState<TrainingPlan[]>([])
+  const {
+    items: plans,
+    isBusy: busy,
+    error,
+    setError,
+    createItem,
+    setItemStatus,
+    removeItem,
+  } = useOrgCrudList<
+    TrainingPlan,
+    {
+      team_id?: string | null
+      student_id?: string | null
+      title: string
+      description?: string | null
+    },
+    'active' | 'done' | 'archived'
+  >({
+    scopeKey: `${auth0Id}:${studentId}`,
+    load: () => orgPlans(auth0Id, { studentId }).then((res) => res.plans),
+    create: (input) => orgCreatePlan(auth0Id, input).then((res) => res.plan),
+    setStatus: (id, status) => orgSetPlanStatus(auth0Id, id, status).then((res) => res.plan),
+    remove: (id) => orgDeletePlan(auth0Id, id),
+  })
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    void orgPlans(auth0Id, { studentId })
-      .then((res) => {
-        if (!cancelled) setPlans(res.plans)
-      })
-      .catch(() => {
-        if (!cancelled) setPlans([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [auth0Id, studentId])
 
   const create = async () => {
     if (!title.trim()) {
       setError('Title is required.')
       return
     }
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await orgCreatePlan(auth0Id, {
+    const created = await createItem(
+      {
         student_id: studentId,
         title: title.trim(),
         description: description.trim() || null,
-      })
-      setPlans((prev) => [res.plan, ...prev])
-      setTitle('')
-      setDescription('')
-      setOpen(false)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create plan.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const setStatus = async (id: string, status: 'active' | 'done' | 'archived') => {
-    setBusy(true)
-    try {
-      const res = await orgSetPlanStatus(auth0Id, id, status)
-      setPlans((prev) => prev.map((p) => (p.id === id ? res.plan : p)))
-    } finally {
-      setBusy(false)
-    }
+      },
+      'Could not create plan.',
+    )
+    if (!created) return
+    setTitle('')
+    setDescription('')
+    setOpen(false)
   }
 
   return (
@@ -128,7 +121,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => setStatus(plan.id, 'done')}
+                  onClick={() => setItemStatus(plan.id, 'done')}
                 >
                   Done
                 </Button>
@@ -138,7 +131,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => setStatus(plan.id, 'active')}
+                  onClick={() => setItemStatus(plan.id, 'active')}
                 >
                   Reopen
                 </Button>
@@ -148,15 +141,7 @@ export default function PlansSection({ auth0Id, studentId }: PlansSectionProps) 
                 variant="ghost"
                 className="text-destructive"
                 disabled={busy}
-                onClick={async () => {
-                  setBusy(true)
-                  try {
-                    await orgDeletePlan(auth0Id, plan.id)
-                    setPlans((prev) => prev.filter((p) => p.id !== plan.id))
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
+                onClick={() => void removeItem(plan.id)}
               >
                 Delete
               </Button>
