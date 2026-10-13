@@ -123,6 +123,125 @@ def upload_video(file_bytes: bytes, key: str) -> str:
 # ── Streaming Download (Memory-Efficient) ───────────────────────────────────
 
 
+# ── Backend seam ─────────────────────────────────────────────────────────────
+# Local-vs-S3 differences live behind StorageBackend so callers use
+# capability methods (download_to_tmp, discard_tmp_copy, mint_upload,
+# resolve_download) instead of branching on is_local_backend(). The
+# module-level functions below stay as thin delegates so existing import
+# sites (CLI, tests, sessions teardown) keep working.
+
+
+class LocalBackend:
+    """Filesystem backend: storage paths are used in place (never copied)."""
+
+    name = "local"
+
+    def download_to_tmp(self, key: str) -> str:
+        source = _key_to_local_path(key)
+        if not source.exists():
+            raise FileNotFoundError(f"Storage object not found: {key}")
+        return str(source)
+
+    def upload_result(self, local_path: str, job_id: str) -> str:
+        key = result_key(job_id)
+        dest = _key_to_local_path(key)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(local_path, dest)
+        return key
+
+    def delete(self, key: str) -> None:
+        _key_to_local_path(key).unlink(missing_ok=True)
+
+    def local_path_or_none(self, key: str) -> str | None:
+        return get_local_file_path(key)
+
+    def discard_tmp_copy(self, path: str | None) -> None:
+        # Local downloads ARE the stored file — never delete.
+        return None
+
+    def mint_upload(self, key: str, mime_type: str) -> dict[str, object]:
+        return {"mode": "multipart"}
+
+    def resolve_download(self, key: str) -> tuple[str, str]:
+        path = get_local_file_path(key)
+        if path is None:
+            raise FileNotFoundError(f"Storage object not found: {key}")
+        return ("file", path)
+
+
+class S3Backend:
+    """Object-store backend: downloads are throwaway tmp copies."""
+
+    name = "s3"
+
+    def download_to_tmp(self, key: str) -> str:
+        dest = TMP_ROOT / "s3" / Path(key).name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _s3_client().download_file(_s3_bucket(), key, str(dest))
+        return str(dest)
+
+    def upload_result(self, local_path: str, job_id: str) -> str:
+        key = result_key(job_id)
+        _s3_client().upload_file(local_path, _s3_bucket(), key)
+        try:
+            os.unlink(local_path)
+        except FileNotFoundError:
+            pass
+        return key
+
+    def delete(self, key: str) -> None:
+        _s3_client().delete_object(Bucket=_s3_bucket(), Key=key)
+
+    def local_path_or_none(self, key: str) -> str | None:
+        return None
+
+    def discard_tmp_copy(self, path: str | None) -> None:
+        if not path:
+            return None
+        # Only unlink copies we made (under the shared tmp dir) — never
+        # arbitrary paths.
+        try:
+            Path(path).resolve().relative_to(TMP_ROOT.resolve())
+        except ValueError:
+            return None
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return None
+
+    def mint_upload(self, key: str, mime_type: str) -> dict[str, object]:
+        post = presigned_upload(key, mime_type)
+        return {"mode": "presigned", "url": post["url"], "fields": post["fields"]}
+
+    def resolve_download(self, key: str) -> tuple[str, str]:
+        return ("url", presigned_download(key))
+
+
+def get_backend() -> LocalBackend | S3Backend:
+    """Active backend from STORAGE_BACKEND (read per call so tests can flip env)."""
+    return S3Backend() if _backend() == "s3" else LocalBackend()
+
+
+def discard_tmp_copy(path: str | None) -> None:
+    """Drop a path returned by download_video_to_tmp (no-op unless a copy)."""
+    get_backend().discard_tmp_copy(path)
+
+
+def mint_upload(key: str, mime_type: str) -> dict[str, object]:
+    """Upload descriptor for /upload-intent (multipart locally, presigned on S3)."""
+    return get_backend().mint_upload(key, mime_type)
+
+
+def resolve_download(key: str) -> tuple[str, str]:
+    """Resolve a result key to ("file", path) or ("url", presigned URL).
+
+    Raises FileNotFoundError when a local result is gone (S3 failures
+    surface as the client's own exception).
+    """
+    return get_backend().resolve_download(key)
+
+
 def download_video_to_tmp(key: str) -> str:
     """Return the local path for a stored video.
 
@@ -130,30 +249,11 @@ def download_video_to_tmp(key: str) -> str:
     so copying is wasteful — return the storage path directly (read-only).
     S3 backend: download the object into the shared tmp dir.
     """
-    if is_local_backend():
-        source = _key_to_local_path(key)
-        if not source.exists():
-            raise FileNotFoundError(f"Storage object not found: {key}")
-        return str(source)
-    dest = TMP_ROOT / "s3" / Path(key).name
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    _s3_client().download_file(_s3_bucket(), key, str(dest))
-    return str(dest)
+    return get_backend().download_to_tmp(key)
 
 
 def upload_result_video(local_path: str, job_id: str) -> str:
-    key = result_key(job_id)
-    if is_local_backend():
-        dest = _key_to_local_path(key)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(local_path, dest)
-        return key
-    _s3_client().upload_file(local_path, _s3_bucket(), key)
-    try:
-        os.unlink(local_path)
-    except FileNotFoundError:
-        pass
-    return key
+    return get_backend().upload_result(local_path, job_id)
 
 
 def get_download_url(key: str, expires_in: int = 3600) -> str:
@@ -162,18 +262,12 @@ def get_download_url(key: str, expires_in: int = 3600) -> str:
 
 
 def delete_file(key: str) -> None:
-    if is_local_backend():
-        path = _key_to_local_path(key)
-        path.unlink(missing_ok=True)
-        return
-    _s3_client().delete_object(Bucket=_s3_bucket(), Key=key)
+    get_backend().delete(key)
 
 
 def get_local_file_path_or_none(key: str) -> str | None:
     """Local path only when the backend is local and the file exists."""
-    if not is_local_backend():
-        return None
-    return get_local_file_path(key)
+    return get_backend().local_path_or_none(key)
 
 
 def presigned_upload(key: str, mime_type: str, expires_in: int = 3600) -> dict[str, object]:

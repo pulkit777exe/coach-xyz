@@ -508,11 +508,7 @@ async def _scan_stored_file(
             },
         )
     finally:
-        if not storage.is_local_backend():
-            try:
-                os.unlink(local_path)
-            except OSError:
-                pass
+        storage.discard_tmp_copy(local_path)
 
 
 @app.get("/sports/{sport}/positions")
@@ -640,30 +636,25 @@ async def upload_intent(request: Request) -> JSONResponse:
     session_token, existing = resolve_session(payload.get("session_token"))
 
     key = storage.raw_upload_key(session_token, angle_label)
-    if storage.is_local_backend():
-        return JSONResponse(
-            status_code=200,
-            content={
-                "key": key,
-                "session_token": session_token,
-                "angle": angle_label,
-                "upload": {"mode": "multipart", "scan_url": "/scan"},
-            },
-        )
     try:
-        presigned = storage.presigned_upload(key, mime_type)
+        upload = storage.mint_upload(key, mime_type)
     except Exception:
         logging.error(traceback.format_exc())
         return _error_response(500, "STORAGE_ERROR", "Could not mint an upload URL. Please try again.")
-    return JSONResponse(
-        status_code=200,
-        content={
-            "key": key,
-            "session_token": session_token,
-            "angle": angle_label,
-            "upload": {"mode": "presigned", "url": presigned["url"], "fields": presigned["fields"]},
-        },
-    )
+    content: dict[str, object] = {
+        "key": key,
+        "session_token": session_token,
+        "angle": angle_label,
+    }
+    if upload["mode"] == "multipart":
+        content["upload"] = {"mode": "multipart", "scan_url": "/scan"}
+    else:
+        content["upload"] = {
+            "mode": "presigned",
+            "url": upload["url"],
+            "fields": upload["fields"],
+        }
+    return JSONResponse(status_code=200, content=content)
 
 
 _STORAGE_KEY_RE = re.compile(r"^raw/[A-Za-z0-9_@.|-]+/[a-z0-9_-]+/[a-f0-9]{32}\.mp4$")
@@ -1323,23 +1314,21 @@ def download(job_id: str):
     if job.state != "completed" or not job.video_key:
         return _error_response(404, "VIDEO_NOT_FOUND", "Rendered video is not available")
 
-    if storage.is_local_backend():
-        local_video_path = storage.get_local_file_path(job.video_key)
-        if not local_video_path:
-            return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. The server may have restarted. Please upload your video again.")
+    try:
+        kind, target = storage.resolve_download(job.video_key)
+    except FileNotFoundError:
+        return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. The server may have restarted. Please upload your video again.")
+    except Exception:
+        return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. Please upload your video again.")
 
+    if kind == "file":
         return FileResponse(
-            path=local_video_path,
+            path=target,
             media_type="video/mp4",
             filename="coachai_analysis.mp4",
             headers={"Content-Disposition": 'inline; filename="coachai_analysis.mp4"'},
         )
-
-    try:
-        url = storage.presigned_download(job.video_key)
-    except Exception:
-        return _error_response(404, "VIDEO_EXPIRED", "This video is no longer available. Please upload your video again.")
-    return RedirectResponse(url=url, status_code=302)
+    return RedirectResponse(url=target, status_code=302)
 
 
 if __name__ == "__main__":
