@@ -50,6 +50,65 @@ const throwNonOk = async (res: Response): Promise<never> => {
   )
 }
 
+export type EngineRequestOpts<T> = {
+  method?: string
+  /** Plain objects serialize as JSON (plus content-type); FormData passes through. */
+  body?: Record<string, unknown> | FormData | string | null
+  requestId?: string | null
+  /** Omitted for held-open streams (scan-progress): plain fetch, no abort. */
+  timeoutMs?: number
+  accept?: string
+  /** Non-ok mapping (default: structured errors pass through). */
+  mapNotOk?: (res: Response) => Promise<T>
+  /** Connectivity mapping (default: throw ENGINE_UNAVAILABLE). */
+  mapConnectivity?: () => T
+  /** Success mapping (default: parse JSON). */
+  parse?: (res: Response) => Promise<T>
+}
+
+/**
+ * Single transport for every engine call: service headers + optional
+ * attribution id, timeout, non-ok mapping, connectivity mapping, parse.
+ * Endpoint wrappers keep only their path/method/body/timeout and any
+ * non-default mapping.
+ */
+export const engineRequest = async <T>(path: string, opts: EngineRequestOpts<T>): Promise<T> => {
+  const headers: Record<string, string> = { ...engineServiceHeaders(opts.requestId) }
+  let body: FormData | string | undefined
+  if (opts.body !== undefined && opts.body !== null) {
+    if (opts.body instanceof FormData) {
+      body = opts.body
+    } else if (typeof opts.body === 'object') {
+      headers['Content-Type'] = 'application/json'
+      body = JSON.stringify(opts.body)
+    } else {
+      body = opts.body
+    }
+  }
+  if (opts.accept) headers['Accept'] = opts.accept
+
+  try {
+    const init: RequestInit = { method: opts.method ?? 'GET', headers, body }
+    const res =
+      opts.timeoutMs === undefined
+        ? await fetch(`${ENGINE_URL}${path}`, init)
+        : await withTimeout(`${ENGINE_URL}${path}`, init, opts.timeoutMs)
+
+    if (!res.ok) {
+      return await (opts.mapNotOk ?? throwNonOk)(res)
+    }
+
+    return await (opts.parse ?? ((r: Response) => r.json() as Promise<T>))(res)
+  } catch (error) {
+    if (isConnectivityError(error)) {
+      if (opts.mapConnectivity) return opts.mapConnectivity()
+      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
+    }
+
+    throw error
+  }
+}
+
 export const isConnectivityError = (error: unknown): boolean =>
   error instanceof TypeError ||
   (error instanceof DOMException && error.name === 'AbortError') ||
@@ -76,29 +135,12 @@ export const scanVideo = async (
   if (opts.sessionToken) form.append('session_token', opts.sessionToken)
   if (opts.angle) form.append('angle', opts.angle)
 
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/scan`,
-      {
-        method: 'POST',
-        headers: engineServiceHeaders(requestId),
-        body: form,
-      },
-      180_000,
-    )
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return (await res.json()) as ScanResult
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-
-    throw error
-  }
+  return engineRequest<ScanResult>('/scan', {
+    method: 'POST',
+    body: form,
+    requestId,
+    timeoutMs: 180_000,
+  })
 }
 
 export type UploadIntent = {
@@ -120,86 +162,39 @@ export const requestUploadIntent = async (
   },
   requestId?: string | null,
 ): Promise<UploadIntent> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/upload-intent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...engineServiceHeaders(requestId) },
-        body: JSON.stringify(payload),
-      },
-      15_000,
-    )
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return (await res.json()) as UploadIntent
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-
-    throw error
-  }
+  return engineRequest<UploadIntent>('/upload-intent', {
+    method: 'POST',
+    body: payload,
+    requestId,
+    timeoutMs: 15_000,
+  })
 }
 
 export const scanFromKey = async (
   payload: { storage_key: string; session_token?: string | null; angle?: string | null },
   requestId?: string | null,
 ): Promise<ScanResult> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/scan-from-key`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...engineServiceHeaders(requestId) },
-        body: JSON.stringify(payload),
-      },
-      180_000,
-    )
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return (await res.json()) as ScanResult
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-
-    throw error
-  }
+  return engineRequest<ScanResult>('/scan-from-key', {
+    method: 'POST',
+    body: payload,
+    requestId,
+    timeoutMs: 180_000,
+  })
 }
 
 export const getDownloadStream = async (
   engineJobId: string,
   requestId?: string | null,
 ): Promise<Response> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/download/${engineJobId}`,
-      {
-        method: 'GET',
-        headers: engineServiceHeaders(requestId),
-      },
-      60_000,
-    )
-
-    if (!res.ok) {
+  return engineRequest<Response>(`/download/${engineJobId}`, {
+    method: 'GET',
+    requestId,
+    timeoutMs: 60_000,
+    mapNotOk: async () => {
       throw engineError('JOB_NOT_FOUND', 'Job not found or expired.')
-    }
-
-    return res
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-
-    throw error
-  }
+    },
+    parse: async (res) => res,
+  })
 }
 
 export type AnalyzePayload = {
@@ -214,30 +209,13 @@ export const analyzeVideo = async (
   payload: AnalyzePayload,
   requestId?: string | null,
 ): Promise<void> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/analyze`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...engineServiceHeaders(requestId),
-        },
-        body: JSON.stringify(payload),
-      },
-      12 * 60 * 1000,
-    ) // 12 min max — longest single analysis span
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-
-    throw error
-  }
+  await engineRequest<void>('/analyze', {
+    method: 'POST',
+    body: payload,
+    requestId,
+    timeoutMs: 12 * 60 * 1000, // 12 min max — longest single analysis span
+    parse: async () => undefined,
+  })
 }
 
 export type EngineStatusResult =
@@ -249,28 +227,18 @@ export const getEngineJobStatus = async (
   engineJobId: string,
   requestId?: string | null,
 ): Promise<EngineStatusResult> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/status/${engineJobId}`,
-      {
-        method: 'GET',
-        headers: engineServiceHeaders(requestId),
-      },
-      15_000,
-    ) // 15s — free-tier Render instances can take 10–30s to respond after spin-up
-
-    if (!res.ok) {
-      if (res.status === 404) return { status: 'not_found' }
-      await throwNonOk(res)
-    }
-
-    return { status: 'found', data: (await res.json()) as EngineJobStatus }
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      return { status: 'transient_error' }
-    }
-    throw error
-  }
+  return engineRequest<EngineStatusResult>(`/status/${engineJobId}`, {
+    method: 'GET',
+    requestId,
+    timeoutMs: 15_000, // 15s — free-tier Render instances can take 10–30s to respond after spin-up
+    mapNotOk: async (res): Promise<EngineStatusResult> => {
+      if (res.status === 404) return { status: 'not_found' } as const
+      return throwNonOk(res)
+    },
+    mapConnectivity: () => ({ status: 'transient_error' }) as const,
+    parse: async (res) =>
+      ({ status: 'found', data: (await res.json()) as EngineJobStatus }) as const,
+  })
 }
 
 export const markEngineJobFailed = async (
@@ -280,29 +248,18 @@ export const markEngineJobFailed = async (
   retryable: boolean,
   requestId?: string | null,
 ): Promise<void> => {
-  try {
-    const res = await withTimeout(
-      `${ENGINE_URL}/fail/${engineJobId}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...engineServiceHeaders(requestId),
-        },
-        body: JSON.stringify({ message, code, retryable }),
-      },
-      10_000,
-    )
-
-    if (!res.ok && res.status !== 404) {
+  await engineRequest<void>(`/fail/${engineJobId}`, {
+    method: 'POST',
+    body: { message, code, retryable },
+    requestId,
+    timeoutMs: 10_000,
+    mapNotOk: async (res) => {
+      if (res.status === 404) return undefined
       await throwNonOk(res)
-    }
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      return
-    }
-    throw error
-  }
+    },
+    mapConnectivity: () => undefined,
+    parse: async () => undefined,
+  })
 }
 
 export type ScanProgressEvent = {
@@ -318,26 +275,14 @@ export const getScanProgressStream = async (
   angle?: string | null,
   requestId?: string | null,
 ): Promise<Response> => {
-  try {
-    const url = angle
-      ? `${ENGINE_URL}/scan-progress/${sessionToken}?angle=${encodeURIComponent(angle)}`
-      : `${ENGINE_URL}/scan-progress/${sessionToken}`
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'text/event-stream',
-        ...engineServiceHeaders(requestId),
-      },
-    })
-
-    if (!res.ok) {
-      await throwNonOk(res)
-    }
-
-    return res
-  } catch (error) {
-    if (isConnectivityError(error)) {
-      throw engineError('ENGINE_UNAVAILABLE', 'Analysis engine is temporarily unavailable.')
-    }
-    throw error
-  }
+  const path = angle
+    ? `/scan-progress/${sessionToken}?angle=${encodeURIComponent(angle)}`
+    : `/scan-progress/${sessionToken}`
+  // Held-open SSE stream: no timeout (an abort would cut the stream mid-flow).
+  return engineRequest<Response>(path, {
+    method: 'GET',
+    requestId,
+    accept: 'text/event-stream',
+    parse: async (res) => res,
+  })
 }

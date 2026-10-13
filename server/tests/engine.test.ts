@@ -301,3 +301,86 @@ describe('markEngineJobFailed', () => {
     await mod.markEngineJobFailed('j1', 'boom', 'INTERNAL_ERROR', true)
   })
 })
+
+describe('engineRequest', () => {
+  test('serializes object bodies as JSON with content-type', async () => {
+    process.env.ENGINE_URL = 'http://engine.test'
+    const mod = await loadEngine()
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('{"a":1}', { status: 200 })),
+    ) as typeof fetch
+
+    const out = await mod.engineRequest<{ a: number }>('/ping', {
+      method: 'POST',
+      body: { a: 1 },
+      requestId: 'r1',
+      timeoutMs: 5_000,
+    })
+    expect(out).toEqual({ a: 1 })
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const [input, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(input).toBe('http://engine.test/ping')
+    expect(init.method).toBe('POST')
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect((init.headers as Record<string, string>)['x-request-id']).toBe('r1')
+    expect(JSON.parse(init.body as string)).toEqual({ a: 1 })
+  })
+
+  test('passes FormData through without a JSON content-type', async () => {
+    process.env.ENGINE_URL = 'http://engine.test'
+    const mod = await loadEngine()
+    const form = new FormData()
+    form.append('video', new File(['x'], 'v.mp4', { type: 'video/mp4' }))
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('{}', { status: 200 })),
+    ) as typeof fetch
+
+    await mod.engineRequest('/scan', { method: 'POST', body: form, timeoutMs: 5_000 })
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.body).toBe(form)
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  test('honors custom non-ok and connectivity maps', async () => {
+    process.env.ENGINE_URL = 'http://engine.test'
+    const mod = await loadEngine()
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response(null, { status: 404 })),
+    ) as typeof fetch
+
+    const mapped = await mod.engineRequest<string>('/thing', {
+      timeoutMs: 5_000,
+      mapNotOk: async () => 'missing',
+    })
+    expect(mapped).toBe('missing')
+
+    globalThis.fetch = mock(() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch
+    const fallback = await mod.engineRequest<string>('/thing', {
+      timeoutMs: 5_000,
+      mapConnectivity: () => 'offline',
+    })
+    expect(fallback).toBe('offline')
+  })
+
+  test('omitted timeouts use plain fetch (held-open streams)', async () => {
+    process.env.ENGINE_URL = 'http://engine.test'
+    const mod = await loadEngine()
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('x', { status: 200 })),
+    ) as typeof fetch
+
+    const res = await mod.engineRequest<Response>('/scan-progress/s1', {
+      accept: 'text/event-stream',
+      parse: async (r) => r,
+    })
+    expect(res.status).toBe(200)
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof mock>
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.signal).toBeUndefined()
+    expect((init.headers as Record<string, string>)['Accept']).toBe('text/event-stream')
+  })
+})
