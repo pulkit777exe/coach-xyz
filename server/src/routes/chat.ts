@@ -21,6 +21,27 @@ import { ENGINE_URL, engineServiceHeaders, requestIdFrom, withTimeout } from '..
  * Shared between /api/chat and /api/chat/stream: job lookup + access via the
  * capability kernel, history shaped for the engine here.
  */
+
+/** Max user message length — bounds stored rows and per-turn engine spend. */
+export const MAX_CHAT_MESSAGE_CHARS = 4000
+/** Recent messages replayed to the engine per turn (full history stays readable via GET). */
+export const MAX_ENGINE_HISTORY_MESSAGES = 40
+
+export type ValidChatMessage = { ok: true; text: string } | { ok: false; message: string }
+
+/** Pure validation for chat input: required, and capped against DB bloat. */
+export const validateChatMessage = (message: unknown): ValidChatMessage => {
+  if (typeof message !== 'string' || !message.trim()) {
+    return { ok: false, message: 'message is required.' }
+  }
+  if (message.trim().length > MAX_CHAT_MESSAGE_CHARS) {
+    return {
+      ok: false,
+      message: `message must be under ${MAX_CHAT_MESSAGE_CHARS} characters.`,
+    }
+  }
+  return { ok: true, text: message.trim() }
+}
 async function resolveChatContext(
   jobId: string,
   request: Request,
@@ -34,8 +55,11 @@ async function resolveChatContext(
   // history with the library chat surface (same key as routes/auth.ts).
   const ownerKey = resolved.callerSub ?? ANONYMOUS_AUTH0_ID
   const history = await getChatMessages(jobId, ownerKey)
+  // Window the engine replay: unbounded history re-sent every turn is a
+  // spend amplifier (paid Gemini input) and grows with the conversation.
   const historyForEngine = history
     .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-MAX_ENGINE_HISTORY_MESSAGES)
     .map((m) => ({ role: m.role, content: m.content }))
 
   return { engineJobId: resolved.serverJob.engine_job_id, historyForEngine, ownerKey }
@@ -65,10 +89,12 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'job_id is required.', false)
     }
-    if (!message?.trim()) {
+    const valid = validateChatMessage(message)
+    if (!valid.ok) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'message is required.', false)
+      return buildError('INVALID_REQUEST', valid.message, false)
     }
+    const chatMessage = valid.text
 
     const limited = await checkChatRateLimit(request, set)
     if (limited) return limited
@@ -90,7 +116,7 @@ export default new Elysia()
           },
           body: JSON.stringify({
             job_id: engineJobId,
-            message: message.trim(),
+            message: chatMessage,
             conversation_history: historyForEngine,
           }),
         },
@@ -115,7 +141,7 @@ export default new Elysia()
         serverJobId: job_id,
         auth0Id: ownerKey,
         role: 'user',
-        content: message.trim(),
+        content: chatMessage,
       })
       await saveChatMessage({
         serverJobId: job_id,
@@ -165,10 +191,12 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'job_id is required.', false)
     }
-    if (!message?.trim()) {
+    const valid = validateChatMessage(message)
+    if (!valid.ok) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'message is required.', false)
+      return buildError('INVALID_REQUEST', valid.message, false)
     }
+    const chatMessage = valid.text
 
     const limited = await checkChatRateLimit(request, set)
     if (limited) return limited
@@ -190,7 +218,7 @@ export default new Elysia()
           },
           body: JSON.stringify({
             job_id: engineJobId,
-            message: message.trim(),
+            message: chatMessage,
             conversation_history: historyForEngine,
           }),
         },
@@ -212,7 +240,7 @@ export default new Elysia()
       // Background: consume parseStream to save conversation on completion.
       // Always saves the user message; saves assistant message only if
       // the stream completed successfully with a "done" event.
-      const userMsg = message.trim()
+      const userMsg = chatMessage
       const jobId = job_id
       ;(async () => {
         const reader = parseStream.getReader()
