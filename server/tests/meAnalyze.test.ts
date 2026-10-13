@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decidePlayerAnalysis } from '../src/routes/me'
+import { decidePlayerAnalysis } from '../src/lib/playerScope'
 
 const VERIFIED = 'auth0|player-123'
 const COACH = 'auth0|coach-456'
