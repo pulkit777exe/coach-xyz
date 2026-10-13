@@ -25,6 +25,25 @@ def tmp_dir() -> Path:
     return Path(tempfile.gettempdir()).resolve()
 
 
+def looks_like_video_container(head: bytes) -> bool:
+    """Sniff the first bytes of an upload for a video container signature.
+
+    The client-declared MIME type is trivially spoofed, and the real ffprobe
+    check runs only after the full body is streamed to disk — without this,
+    random bytes with `Content-Type: video/mp4` burn 500 MB of disk per
+    session before failing. MP4/MOV carry `ftyp` near the start, AVI starts
+    with RIFF....AVI, MKV/WebM start with the EBML magic.
+    """
+    if not head:
+        return False
+    window = head[:64]
+    if b"ftyp" in window:
+        return True
+    if window.startswith(b"RIFF") and b"AVI" in window[:16]:
+        return True
+    return window.startswith(b"\x1a\x45\xdf\xa3")
+
+
 def probe_video(video_path: str) -> dict[str, Any]:
     """Validate an uploaded file is a decodable video (never trust client
     metadata). Returns duration/width/height/audio presence. Raises

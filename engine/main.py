@@ -550,11 +550,28 @@ async def scan(
     os.close(fd)
     try:
         total_bytes = 0
+        first_chunk = True
         with open(temp_path, "wb") as f:
             while True:
                 chunk = await video.read(CHUNK_SIZE)
                 if not chunk:
                     break
+                if first_chunk:
+                    first_chunk = False
+                    # Magic-byte sniff before committing disk: the MIME check
+                    # above trusts a client header, ffprobe runs only after
+                    # the full body lands. Random bytes die here, not after
+                    # 500 MB.
+                    from core.video_io import looks_like_video_container
+
+                    if not looks_like_video_container(chunk):
+                        await video.close()
+                        os.unlink(temp_path)
+                        return _error_response(
+                            422,
+                            "VIDEO_DECODE_FAILED",
+                            "Could not read this video file. Try MP4, MOV, or AVI format.",
+                        )
                 total_bytes += len(chunk)
                 if total_bytes > max_upload_size:
                     os.unlink(temp_path)
