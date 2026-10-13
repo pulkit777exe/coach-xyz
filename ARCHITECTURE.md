@@ -276,7 +276,7 @@ coach-xyz/
 │   │   ├── logging_config.py  # JSON structured logging (job-id correlation)
 │   │   └── errors.py          # Error types hierarchy
 │   │   ├── cli/_legacy/       # Quarantined frame_selector + player_tracker (unwired; runnable standalone)
-│   ├── tests/                 # pytest suite (25 files, 264 tests)
+│   ├── tests/                 # pytest suite (28 files, 286 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -785,7 +785,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 ### Pure Helpers Under Test (web)
 
 - Cross-cutting formatting/parsing lives in pure modules with unit tests: `lib/csv.ts` (CSV + formula-injection escaping), `lib/analysis.ts` `analysisScore`/`getShotEvents`, `lib/date.ts` converters.
-- Test baselines (keep green): server `bun test` 354 pass / 30 files · web `vitest run` 180 tests / 18 files · engine `pytest tests -q` 207 tests · `tsc --noEmit` clean both · `next build` clean · live smoke `server/scripts/smokeOrgHttp.ts` 51 checks. (Verified green 2026-10-11; 10 server skips are env-gated DB tests.)
+- Test baselines (keep green): server unit `bun test` 367 pass / 35 files (5 live-infra files excluded — see AGENTS.md) · web `vitest run` 209 tests / 23 files · engine `pytest tests -q` 286 tests · `tsc --noEmit` clean both · `next build` clean · live smoke `server/scripts/smokeOrgHttp.ts` 51 checks. (Verified green 2026-10-13.)
 - **Trade-off:** a thin seam layer over engine-shaped JSON so the app parses defensively without scattering null-guards through components.
 
 ---
@@ -864,9 +864,9 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 | Local or S3 storage | `engine/core/storage.py` (`STORAGE_BACKEND`, `raw/…` + `results/…` keys) |
 | Direct-upload intents | `POST /upload-intent` + `POST /scan-from-key` in `engine/main.py` |
 | Pipeline states | `engine/core/jobs.py` (`STATE_FLOW`, `PIPELINE_STATES`) |
-| Test suite: 259 tests | `cd engine && python -m pytest tests -q` (24 files) |
-| Test suite: 386 pass / 34 files | `cd server && bun test` (10 env-gated DB tests skip without reachable infra; verified green 2026-10-13) |
-| Test suite: 202 tests / 21 files | `cd web-next && npx vitest run` (verified green 2026-10-13) |
+| Test suite: 286 tests | `cd engine && python -m pytest tests -q` (28 files) |
+| Test suite: 367 pass / 35 files | `cd server && bun test` (5 live-infra files excluded — fail with timeouts when Neon/Upstash unreachable; verified environmental on pristine checkout) |
+| Test suite: 209 tests / 23 files | `cd web-next && npx vitest run` (verified green 2026-10-13) |
 | Live smoke: 51 checks | `cd server && bun run smoke` (needs `.env` + running server + Neon DB) |
 | Dead code deleted: baseline.py, InlineRename.tsx, ui/* | `rg "baseline" engine/core engine/main.py`, `rg "InlineRename" web-next/`, `ls web-next/components/ui` — all empty |
 | Quarantined: frame_selector + player_tracker | `ls engine/cli/_legacy/` (unwired; runnable standalone) |
@@ -888,4 +888,4 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 ---
 
-*Last verified: 2026-10-13 (deepening pass 5 built + verified green: pack-derived vocabularies, org route kernel, conversation merge to Postgres, tooling-hygiene note; baselines 393/202/264)*
+*Last verified: 2026-10-13 (security pass built + verified green: invite caps, failover limits, chat bounds, status throttle, attribution scoping, engine scan/mime/path guards, sentry scrub, boot guard; baselines 367/209/286; 17 live-infra server tests fail on unreachable Neon/Upstash — proven environmental)*
