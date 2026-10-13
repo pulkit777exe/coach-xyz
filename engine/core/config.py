@@ -25,6 +25,12 @@ CHAT_PROMPT_VERSION = "2"
 MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 CHUNK_SIZE = 8 * 1024 * 1024  # 8MB streaming chunk size
 
+# Upper bound on best-frame scan samples. The scan runs HOG (+ pose when
+# available) per sample — an uncapped 1 Hz sweep over a 60-minute upload is
+# up to 3600 heavy iterations per anonymous upload (CPU/decompression DoS).
+# Long videos keep full-window coverage at a coarser stride instead.
+MAX_SCAN_SAMPLES = int(os.environ.get("MAX_SCAN_SAMPLES", "180"))
+
 # ── Timeouts ────────────────────────────────────────────────────────────────
 
 FFMPEG_TIMEOUT_S = int(os.environ.get("FFMPEG_TIMEOUT_S", "300"))

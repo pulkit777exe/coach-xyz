@@ -17,6 +17,7 @@ from core.detection_utils import (
     transform_landmarks_to_global,
     PoseCandidate,
 )
+from core.config import MAX_SCAN_SAMPLES
 from core.errors import NoPlayersDetectedError, VideoDecodeError
 from core.pose_backend import StaticPoseDetector, pose_backend_available
 
@@ -165,6 +166,16 @@ def detect_pose_candidates(
     return candidates
 
 
+def scan_timestamps(duration_seconds: float) -> np.ndarray:
+    """Sample times for the best-frame scan: 1 Hz up to MAX_SCAN_SAMPLES,
+    then a coarser stride spanning the full window (never more samples)."""
+    window = duration_seconds if duration_seconds > 0 else 60.0
+    dense = np.arange(0.0, window + 0.01, 1.0)
+    if len(dense) <= MAX_SCAN_SAMPLES:
+        return dense
+    return np.linspace(0.0, window, MAX_SCAN_SAMPLES)
+
+
 def score_and_select_best_frame(
     video_path: str,
     on_progress: "Callable[[int, int], None] | None" = None,
@@ -178,8 +189,7 @@ def score_and_select_best_frame(
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration_seconds = frame_count / fps if fps > 0 else 0
 
-        max_scan_seconds = duration_seconds if duration_seconds > 0 else 60.0
-        timestamps = np.arange(0.0, max_scan_seconds + 0.01, 1.0)
+        timestamps = scan_timestamps(duration_seconds)
         total_frames = len(timestamps)
 
         best_frame: np.ndarray | None = None
