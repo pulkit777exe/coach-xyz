@@ -13,7 +13,8 @@
     "negative": [
       "wicket",
       "dot_ball"
-    ]
+    ],
+    "neutral": []
   },
   "stats": [
     {
@@ -266,5 +267,5 @@
       "description": "Gloves behind the stumps and supports the bowlers."
     }
   ],
-  "version": 2
+  "version": 3
 }

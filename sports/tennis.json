@@ -9,6 +9,9 @@
     "negative": [
       "error",
       "double_fault"
+    ],
+    "neutral": [
+      "in_play"
     ]
   },
   "stats": [
@@ -252,5 +255,5 @@
       "description": "Mixes baseline rallies with net approaches."
     }
   ],
-  "version": 2
+  "version": 3
 }

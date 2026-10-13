@@ -6,10 +6,12 @@
       "goal"
     ],
     "negative": [
-      "save",
       "missed",
       "blocked",
       "post"
+    ],
+    "neutral": [
+      "save"
     ]
   },
   "stats": [
@@ -258,5 +260,5 @@
       "description": "Attacks down the boards and finishes chances."
     }
   ],
-  "version": 2
+  "version": 3
 }

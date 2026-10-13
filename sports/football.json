@@ -10,7 +10,8 @@
       "saved",
       "blocked",
       "offside"
-    ]
+    ],
+    "neutral": []
   },
   "stats": [
     {
@@ -253,5 +254,5 @@
       "description": "Leads the attack and finishes chances."
     }
   ],
-  "version": 2
+  "version": 3
 }

@@ -65,7 +65,8 @@
           "follow_through"
         ]
       }
-    }
+    },
+    "neutral": []
   },
   "stats": [
     {
@@ -363,5 +364,5 @@
       "description": "Rim protector, rebounder, and paint scorer."
     }
   ],
-  "version": 1
+  "version": 2
 }

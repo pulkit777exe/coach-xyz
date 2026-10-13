@@ -10,6 +10,9 @@
       "out",
       "strikeout",
       "error"
+    ],
+    "neutral": [
+      "walk"
     ]
   },
   "stats": [
@@ -275,5 +278,5 @@
       "description": "Tracks fly balls and covers the gaps."
     }
   ],
-  "version": 2
+  "version": 3
 }

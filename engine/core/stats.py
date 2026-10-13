@@ -9,6 +9,24 @@ Gemini's cumulative counts.
 
 from __future__ import annotations
 
+from core.sport_config import sport_outcomes
+from core.validator import VALID_SPORTS
+
+# Made/missed outcome sets, derived from the sport packs (union of every
+# sport's positive/negative outcomes). Neutral outcomes (walk, in_play,
+# saves) count as neither. Membership-tested, so pack ordering is moot.
+
+
+def _outcome_union(kind: str) -> frozenset[str]:
+    united: set[str] = set()
+    for sport in VALID_SPORTS:
+        united.update(sport_outcomes(sport)[kind])
+    return frozenset(united)
+
+
+MADE_RESULTS = _outcome_union("positive")
+MISSED_RESULTS = _outcome_union("negative")
+
 
 def validate_and_correct_stats(shot_events: list[dict]) -> dict:
     """
@@ -38,12 +56,9 @@ def validate_and_correct_stats(shot_events: list[dict]) -> dict:
 
     for event in shot_events:
         result = event.get("result")
-        if result in ("made", "goal", "hit", "ace", "winner", "home_run",
-                       "four", "six", "boundary", "single", "two", "three"):
+        if result in MADE_RESULTS:
             total_made += 1
-        elif result in ("missed", "saved", "blocked", "offside", "error",
-                         "out", "strikeout", "double_fault", "wicket",
-                         "dot_ball", "post"):
+        elif result in MISSED_RESULTS:
             total_missed += 1
 
         form_score = event.get("form_score")

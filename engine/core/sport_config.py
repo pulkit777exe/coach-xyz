@@ -98,3 +98,43 @@ def sport_positions(sport: str | None) -> list[dict[str, str]]:
             "description": description.strip() if isinstance(description, str) else "",
         })
     return positions
+
+
+def _str_list(value: Any) -> list[str]:
+    """String list from a pack node (non-strings dropped, fail-open)."""
+    if not isinstance(value, list):
+        return []
+    return [v for v in value if isinstance(v, str) and v]
+
+
+def sport_outcomes(sport: str | None) -> dict[str, list[str]]:
+    """Outcome vocabulary for a sport from its pack.
+
+    Returns {positive, negative, neutral} outcome keys — each [] when the
+    pack lacks the section. Neutral outcomes (walk, in_play, saves) are
+    valid results that count as neither made nor missed.
+    """
+    config = load_sport_config(sport)
+    raw = config.get("events")
+    events = raw if isinstance(raw, dict) else {}
+    return {
+        "positive": _str_list(events.get("positive")),
+        "negative": _str_list(events.get("negative")),
+        "neutral": _str_list(events.get("neutral")),
+    }
+
+
+def sport_stat_keys(sport: str | None) -> list[str]:
+    """Stat keys for a sport from its pack (`stats[].key`, in pack order)."""
+    config = load_sport_config(sport)
+    raw = config.get("stats")
+    if not isinstance(raw, list):
+        return []
+    keys: list[str] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("key")
+        if isinstance(key, str) and key:
+            keys.append(key)
+    return keys
