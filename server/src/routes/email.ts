@@ -20,6 +20,34 @@ import { checkEmailLimit } from '../lib/ratelimit'
 
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:3000'
 
+/** Max recipients per invite request — bounds one POST's Resend spend. */
+export const MAX_INVITE_BATCH = 25
+
+export type InviteBatch =
+  | { ok: true; addresses: string[] }
+  | { ok: false; message: string }
+
+/** Pure validation for the invite batch (size cap + address shaping). */
+export const validateInviteBatch = (emails: unknown): InviteBatch => {
+  if (!Array.isArray(emails) || emails.length === 0) {
+    return { ok: false, message: 'Provide at least one email address.' }
+  }
+  // One budget check per request is not enough: without a batch cap a
+  // single POST with thousands of addresses burns one budget unit for
+  // the whole cannon (Resend bill + spam).
+  if (emails.length > MAX_INVITE_BATCH) {
+    return { ok: false, message: `Invite up to ${MAX_INVITE_BATCH} addresses per request.` }
+  }
+  const addresses = emails
+    .filter((e): e is string => typeof e === 'string')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => isEmail(e))
+  if (addresses.length === 0) {
+    return { ok: false, message: 'Provide at least one valid email address.' }
+  }
+  return { ok: true, addresses }
+}
+
 // Resend onboarding domain is forced for unverified accounts; the app domain
 // is used once a domain is verified in the dashboard (see src/lib/mailer.ts).
 const statusColor = (status: string): string => {
@@ -58,18 +86,12 @@ export default new Elysia()
       student_ids?: unknown
     }
 
-    if (!Array.isArray(emails) || emails.length === 0) {
+    const batch = validateInviteBatch(emails)
+    if (!batch.ok) {
       set.status = 400
-      return buildError('INVALID_REQUEST', 'Provide at least one email address.', false)
+      return buildError('INVALID_REQUEST', batch.message, false)
     }
-    const addresses = emails
-      .filter((e): e is string => typeof e === 'string')
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => isEmail(e))
-    if (addresses.length === 0) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Provide at least one valid email address.', false)
-    }
+    const addresses = batch.addresses
 
     const owner = await getUserByAuth0Id(auth0Id)
     const coachName = escapeHtml(owner?.name ?? 'Your coach')
@@ -100,17 +122,27 @@ export default new Elysia()
     const inviteUrl = `${FRONTEND_URL}/signup`
 
     const sent: { to: string; ok: boolean }[] = []
+    let budgetExhausted = false
     for (const email of addresses) {
+      // Consume one budget unit per recipient: the upfront check only gates
+      // an already-exhausted budget, so a batch must stop when the daily
+      // budget runs out mid-loop instead of overshooting it.
+      const { allowed: recipientOk } = await checkEmailLimit(auth0Id)
+      if (!recipientOk) {
+        budgetExhausted = true
+        sent.push({ to: email, ok: false })
+        continue
+      }
       try {
         const { subject, html, text } = inviteEmail(coachName, teamName, inviteUrl)
         await sendEmail({ to: email, subject, html, text })
         sent.push({ to: email, ok: true })
       } catch (err) {
         sent.push({ to: email, ok: false })
+        // No recipient address in logs — PII stays out of log aggregators.
         console.error(
           JSON.stringify({
             type: 'email_invite_failed',
-            to: email,
             error: err instanceof Error ? err.message : String(err),
           }),
         )
@@ -119,6 +151,15 @@ export default new Elysia()
 
     const okCount = sent.filter((s) => s.ok).length
     if (okCount === 0) {
+      // Budget exhaustion is a throttle signal, not a send failure.
+      if (budgetExhausted) {
+        set.status = 429
+        return buildError(
+          'RATE_LIMITED',
+          'Daily email limit reached for this organization. Try again tomorrow.',
+          true,
+        )
+      }
       set.status = 502
       return buildError(
         'EMAIL_SEND_FAILED',

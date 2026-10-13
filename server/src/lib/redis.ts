@@ -134,8 +134,11 @@ function createNoopClient() {
     async del() {
       return 0
     },
-    async rateLimitIncrement() {
-      return { allowed: true, current: 0, reset: Date.now() }
+    // Fail over to the in-memory limiter in checkLimit: never report
+    // "allowed" when there is no Redis behind us, or every rate limit
+    // silently vanishes on deploys without Upstash env configured.
+    async rateLimitIncrement(): Promise<never> {
+      throw new Error('redis_unavailable')
     },
     async eval(_script: string, _numKeys: number, ..._args: (string | number)[]): Promise<number> {
       return 0

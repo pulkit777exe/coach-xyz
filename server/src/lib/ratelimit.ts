@@ -51,11 +51,20 @@ interface RateLimitConfig {
   windowSec: number
 }
 
+/** Test seam: substitute the Redis client (e.g. a throwing stub for the no-Redis path). */
+let redisOverride: Pick<typeof redis, 'rateLimitIncrement'> | null = null
+export const __setRedisForTests = (
+  client: Pick<typeof redis, 'rateLimitIncrement'> | null,
+): void => {
+  redisOverride = client
+}
+
 export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResult> {
   const { key, limit, windowSec } = config
   try {
     // Atomic increment fails over to the in-memory limiter below when Redis is down
-    const result = await redis.rateLimitIncrement(key, limit, windowSec)
+    const client = redisOverride ?? redis
+    const result = await client.rateLimitIncrement(key, limit, windowSec)
     return {
       allowed: result.allowed,
       remaining: Math.max(0, limit - result.current),
