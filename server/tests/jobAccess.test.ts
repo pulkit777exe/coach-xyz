@@ -114,13 +114,23 @@ describe('resolveJobCaller', () => {
     expect(resolveJobCaller(requestWith(minted.token))).toBe(OWNER)
   })
 
-  test('accepts the token as an ?attribution= query param (headerless download)', () => {
+  test('ignores the ?attribution= query param by default (headerless download opts in)', () => {
     setToken(SECRET)
     const minted = mintAttributionToken(OWNER, SECRET)!
     const req = new Request(
       `http://localhost/api/download/srv-1?attribution=${encodeURIComponent(minted.token)}`,
     )
-    expect(resolveJobCaller(req)).toBe(OWNER)
-    expect(verifyJobAccess(req, ownedJob([OWNER])).ok).toBe(true)
+    expect(resolveJobCaller(req)).toBeNull()
+    expect(verifyJobAccess(req, ownedJob([OWNER])).ok).toBe(false)
+  })
+
+  test('accepts the token as ?attribution= only with allowQuery (headerless download)', () => {
+    setToken(SECRET)
+    const minted = mintAttributionToken(OWNER, SECRET)!
+    const req = new Request(
+      `http://localhost/api/download/srv-1?attribution=${encodeURIComponent(minted.token)}`,
+    )
+    expect(resolveJobCaller(req, { allowQuery: true })).toBe(OWNER)
+    expect(verifyJobAccess(req, ownedJob([OWNER]), null, { allowQuery: true }).ok).toBe(true)
   })
 })

@@ -7,7 +7,7 @@
 
 import { buildError, isCoachAIError, type CoachAIError } from './errors'
 import { getJob, type ServerJob } from './jobs'
-import { resolveJobCaller, verifyJobAccess } from './jobAccess'
+import { resolveJobCaller, verifyJobAccess, type CallerOpts } from './jobAccess'
 import { getIP } from './ratelimit'
 
 export type CapabilitySet = {
@@ -22,8 +22,8 @@ export type RateLimitVerdict = {
 }
 
 /** Verified-sub-first rate-limit key: per-account buckets, IP fallback. */
-export const capabilityLimitKey = (request: Request): string =>
-  resolveJobCaller(request) ?? getIP(request)
+export const capabilityLimitKey = (request: Request, opts?: CallerOpts): string =>
+  resolveJobCaller(request, opts) ?? getIP(request)
 
 export type RateLimitGate = { proceed: true } | { proceed: false; status: 429; body: unknown }
 
@@ -71,6 +71,7 @@ export const resolveJobRoute = async (
   request: Request,
   set: { status?: number | string },
   deps?: JobRouteDeps,
+  opts?: CallerOpts,
 ): Promise<JobRoute> => {
   const serverJob = await (deps?.getJob ?? getJob)(serverJobId)
   if (!serverJob) {
@@ -81,7 +82,7 @@ export const resolveJobRoute = async (
       body: buildError('JOB_NOT_FOUND', 'Analysis session not found.', false),
     }
   }
-  const access = verifyJobAccess(request, serverJob)
+  const access = verifyJobAccess(request, serverJob, null, opts)
   if (!access.ok) {
     set.status = access.status
     return { ok: false, status: access.status, body: access.body }

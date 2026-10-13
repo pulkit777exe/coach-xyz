@@ -9,14 +9,18 @@ import { markAnalysisDownloaded, getAnalysisByServerJobId } from '../lib/analyse
 import { auditRoute } from '../lib/audit'
 
 export default new Elysia().get('/api/download/:jobId', async ({ params, request, set }) => {
-  const resolved = await resolveJobRoute(params.jobId, request, set)
+  // Downloads are the one headerless consumer (<video>/<a> cannot send
+  // x-attribution), so this is the only capability route that honors
+  // ?attribution= — every other route is header-only (see jobAccess).
+  const queryCaller = { allowQuery: true } as const
+  const resolved = await resolveJobRoute(params.jobId, request, set, undefined, queryCaller)
   if (!resolved.ok) {
     return resolved.body
   }
   const serverJob = resolved.serverJob
 
   const gate = await gateRateLimit(request, set, {
-    check: () => checkDownloadLimit(capabilityLimitKey(request)),
+    check: () => checkDownloadLimit(capabilityLimitKey(request, queryCaller)),
     deniedMessage: 'Too many download requests. Try again later.',
   })
   if (!gate.proceed) {
@@ -50,7 +54,7 @@ export default new Elysia().get('/api/download/:jobId', async ({ params, request
       'analysis',
       serverJob.server_job_id,
       null,
-      resolveJobCaller(request),
+      resolveJobCaller(request, queryCaller),
     )
     return response
   } catch (error) {

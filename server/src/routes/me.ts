@@ -23,6 +23,7 @@ import { UUID_RE } from './org/shared'
 import { redactWellness } from '../lib/permissions'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { mintAttributionToken } from '../lib/attribution'
+import { checkLimit } from '../lib/ratelimit'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 
@@ -373,6 +374,18 @@ export default new Elysia()
   // attacker cannot mint tokens for a sub they are not signed in as.
   .get('/api/me/attribution/mint', async ({ request, set }) => {
     return withVerified(request, set, async (verified) => {
+      // Each mint is a fresh 10-minute bearer: cap mints per session sub so
+      // a compromised session cannot hold a persistent exfil channel open.
+      // The web caches until expiry, so legitimate use mints rarely.
+      const { allowed } = await checkLimit({
+        key: `rl:attribution-mint:${verified}`,
+        limit: parseInt(process.env.ATTRIBUTION_MINT_RATE_LIMIT ?? '60', 10),
+        windowSec: 3600,
+      })
+      if (!allowed) {
+        set.status = 429
+        return buildError('RATE_LIMITED', 'Too many token requests. Try again later.', true)
+      }
       const minted = mintAttributionToken(verified)
       if (!minted) {
         set.status = 503
