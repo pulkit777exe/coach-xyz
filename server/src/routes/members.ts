@@ -15,7 +15,8 @@ import {
 } from '../lib/orgMembers'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { listInvites, mintInvite, revokeInvite } from '../lib/invites'
-import { auditRoute, listAuditLogs } from '../lib/audit'
+import { listAuditLogs } from '../lib/audit'
+import { EMAIL_RE, UUID_RE, auditOrg } from '../lib/orgRoute'
 
 // Org-member management routes. The identity (service) guard applies globally;
 // role gates are applied per route group via orgRoleGuard on dedicated (sub-)
@@ -23,8 +24,6 @@ import { auditRoute, listAuditLogs } from '../lib/audit'
 
 const INVITE_ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_INVITE_ROLES)
 const ROLE_SET: ReadonlySet<string> = new Set(ORG_MEMBER_ROLES)
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default new Elysia()
   .use(serviceGuard)
@@ -56,6 +55,7 @@ export default new Elysia()
       .use(orgRoleGuard(['owner', 'admin']))
       .post('/api/org/:auth0Id/members', async ({ params, body, request, set }) => {
         const { auth0Id } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
@@ -85,11 +85,17 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Cannot invite the org owner', false)
         }
-        auditRoute(request, auth0Id, 'member.invited', 'org_member', member.id, {
-          email: member.member_email,
-          role: member.role,
-          direct: true,
-        }, inviterAuth0Id)
+        audit(
+          'member.invited',
+          'org_member',
+          member.id,
+          {
+            email: member.member_email,
+            role: member.role,
+            direct: true,
+          },
+          inviterAuth0Id,
+        )
         set.status = 201
         return { member }
       }),
@@ -145,6 +151,7 @@ export default new Elysia()
       })
       .post('/api/org/:auth0Id/invites/:id/revoke', async ({ params, request, set }) => {
         const { auth0Id, id } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id || !UUID_RE.test(id)) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid invite id', false)
@@ -154,7 +161,7 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Invitation not found or already used', false)
         }
-        auditRoute(request, auth0Id, 'member.invite_revoked', 'org_invite', id)
+        audit('member.invite_revoked', 'org_invite', id)
         set.status = 200
         return { revoked: true }
       })
@@ -176,6 +183,7 @@ export default new Elysia()
       .use(orgRoleGuard(['owner']))
       .patch('/api/org/:auth0Id/members/:id/role', async ({ params, body, request, set }) => {
         const { auth0Id, id } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id or member id', false)
@@ -207,7 +215,7 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Member not found', false)
         }
-        auditRoute(request, auth0Id, 'member.role_changed', 'org_member', id, {
+        audit('member.role_changed', 'org_member', id, {
           from: target.role,
           to: role,
         })
@@ -220,6 +228,7 @@ export default new Elysia()
       .use(orgRoleGuard(['owner']))
       .delete('/api/org/:auth0Id/members/:id', async ({ params, request, set }) => {
         const { auth0Id, id } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id or member id', false)
@@ -244,7 +253,7 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Member not found', false)
         }
-        auditRoute(request, auth0Id, 'member.removed', 'org_member', id, {
+        audit('member.removed', 'org_member', id, {
           email: target.member_email,
           role: target.role,
         })

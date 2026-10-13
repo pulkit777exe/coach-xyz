@@ -16,7 +16,8 @@ export const EVENT_STATUS_SET: ReadonlySet<string> = new Set(EVENT_STATUSES)
 export const STUDENT_STATUS_SET: ReadonlySet<string> = new Set(STUDENT_STATUSES)
 export const REPORT_TYPE_SET: ReadonlySet<string> = new Set(REPORT_TYPES)
 
-export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export { UUID_RE } from '../../lib/orgRoute'
+import { UUID_RE } from '../../lib/orgRoute'
 
 /**
  * Hierarchy scope for roster reads (§3: owner → coaches → players).

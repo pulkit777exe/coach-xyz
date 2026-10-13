@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 
 import { buildError } from '../lib/errors'
+import { isEmail } from '../lib/orgRoute'
 import {
   emailConfigured,
   sendEmail,
@@ -64,7 +65,7 @@ export default new Elysia()
     const addresses = emails
       .filter((e): e is string => typeof e === 'string')
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+      .filter((e) => isEmail(e))
     if (addresses.length === 0) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Provide at least one valid email address.', false)
@@ -172,7 +173,7 @@ export default new Elysia()
         if (!recipient && student.email) recipient = student.email
       }
     }
-    if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    if (!recipient || !isEmail(recipient)) {
       set.status = 400
       return buildError(
         'INVALID_REQUEST',
@@ -284,7 +285,7 @@ export default new Elysia()
       }
       if (!address && owner?.email) address = owner.email
     }
-    if (!address || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    if (!address || !isEmail(address)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'No valid recipient for this attendance sheet.', false)
     }

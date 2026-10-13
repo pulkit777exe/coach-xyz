@@ -12,26 +12,9 @@ import {
   renameTeam,
 } from '../lib/teams'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
+import { UUID_RE, auditOrg, forbidOrg } from '../lib/orgRoute'
 import { type Permission } from '../lib/permissions'
-import { auditRoute, type AuditAction } from '../lib/audit'
 import { resolveCaller, type Caller } from '../lib/caller'
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-const forbid = (set: { status?: number | string }) => {
-  set.status = 403
-  return buildError('FORBIDDEN', 'Insufficient role for this organization', false)
-}
-
-const logTeamAudit = (
-  request: Request,
-  orgAuth0Id: string,
-  action: AuditAction,
-  teamId: string,
-  meta?: Record<string, unknown>,
-) => {
-  auditRoute(request, orgAuth0Id, action, 'team', teamId, meta)
-}
 
 /** Guard: membership + permission + (for team-scoped routes) team scope. */
 const guard = async (
@@ -42,8 +25,8 @@ const guard = async (
   teamId?: string,
 ): Promise<{ caller: Caller } | ReturnType<typeof buildError>> => {
   const caller = await resolveCaller(orgAuth0Id, request)
-  if (!caller.role || !caller.can(permission)) return forbid(set)
-  if (teamId && !caller.canAccessTeam(teamId)) return forbid(set)
+  if (!caller.role || !caller.can(permission)) return forbidOrg(set)
+  if (teamId && !caller.canAccessTeam(teamId)) return forbidOrg(set)
   return { caller }
 }
 
@@ -53,7 +36,18 @@ export default new Elysia()
   .use(serviceGuard)
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical', 'player']))
+      .use(
+        orgRoleGuard([
+          'owner',
+          'admin',
+          'head_coach',
+          'assistant_coach',
+          'coach',
+          'analyst',
+          'medical',
+          'player',
+        ]),
+      )
       .get('/api/org/:auth0Id/teams', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
@@ -61,7 +55,7 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
         }
         const caller = await resolveCaller(auth0Id, request)
-        if (!caller.can('team.read')) return forbid(set)
+        if (!caller.can('team.read')) return forbidOrg(set)
         const all = await listTeams(auth0Id)
         if (caller.role === 'owner' || caller.role === 'admin') {
           set.status = 200
@@ -73,6 +67,7 @@ export default new Elysia()
       })
       .post('/api/org/:auth0Id/teams', async ({ params, request, body, set }) => {
         const { auth0Id } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
@@ -99,7 +94,7 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Could not create team', false)
         }
-        logTeamAudit(request, auth0Id, 'team.created', team.id, {
+        audit('team.created', 'team', team.id, {
           name: team.name,
         })
         set.status = 201
@@ -108,7 +103,17 @@ export default new Elysia()
   )
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach', 'analyst', 'medical']))
+      .use(
+        orgRoleGuard([
+          'owner',
+          'admin',
+          'head_coach',
+          'assistant_coach',
+          'coach',
+          'analyst',
+          'medical',
+        ]),
+      )
       .get('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
         const { auth0Id, teamId } = params
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
@@ -127,6 +132,7 @@ export default new Elysia()
       })
       .patch('/api/org/:auth0Id/teams/:teamId', async ({ params, request, body, set }) => {
         const { auth0Id, teamId } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
@@ -143,7 +149,7 @@ export default new Elysia()
           set.status = 404
           return buildError('NOT_FOUND', 'Team not found', false)
         }
-        logTeamAudit(request, auth0Id, 'team.renamed', team.id, {
+        audit('team.renamed', 'team', team.id, {
           name: team.name,
         })
         set.status = 200
@@ -151,6 +157,7 @@ export default new Elysia()
       })
       .delete('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
         const { auth0Id, teamId } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
@@ -158,13 +165,13 @@ export default new Elysia()
         // Deletion stays owner/admin-only even though coaches may rename
         // assigned teams: guard() enforces scope, this pins the role floor.
         const { role } = await resolveCaller(auth0Id, request)
-        if (role !== 'owner' && role !== 'admin') return forbid(set)
+        if (role !== 'owner' && role !== 'admin') return forbidOrg(set)
         const removed = await deleteTeam(auth0Id, teamId)
         if (!removed) {
           set.status = 404
           return buildError('NOT_FOUND', 'Team not found', false)
         }
-        logTeamAudit(request, auth0Id, 'team.deleted', teamId)
+        audit('team.deleted', 'team', teamId)
         set.status = 200
         return { deleted: true }
       })
@@ -185,6 +192,7 @@ export default new Elysia()
       })
       .post('/api/org/:auth0Id/teams/:teamId/members', async ({ params, request, body, set }) => {
         const { auth0Id, teamId } = params
+        const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
@@ -224,7 +232,7 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Could not add team member', false)
         }
-        logTeamAudit(request, auth0Id, 'team.member_added', teamId, {
+        audit('team.member_added', 'team', teamId, {
           membership: member.id,
         })
         set.status = 201
@@ -234,6 +242,7 @@ export default new Elysia()
         '/api/org/:auth0Id/teams/:teamId/members/:membershipId',
         async ({ params, request, set }) => {
           const { auth0Id, teamId, membershipId } = params
+          const audit = auditOrg(request, auth0Id)
           if (
             !auth0Id ||
             !teamId ||
@@ -251,7 +260,7 @@ export default new Elysia()
             set.status = 404
             return buildError('NOT_FOUND', 'Team member not found', false)
           }
-          logTeamAudit(request, auth0Id, 'team.member_removed', teamId, {
+          audit('team.member_removed', 'team', teamId, {
             membership: membershipId,
           })
           set.status = 200

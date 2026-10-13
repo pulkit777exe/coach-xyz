@@ -21,7 +21,7 @@ import {
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
 import { resolveCaller } from '../../lib/caller'
-import { auditRoute } from '../../lib/audit'
+import { auditOrg } from '../../lib/orgRoute'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -77,6 +77,7 @@ export default new Elysia()
   })
   .post('/api/org/:auth0Id/students', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const audit = auditOrg(request, auth0Id)
     const input = parseStudentInput(body as Record<string, unknown>)
 
     if (!input.full_name || typeof input.full_name !== 'string') {
@@ -130,7 +131,7 @@ export default new Elysia()
       set.status = 500
       return buildError('INTERNAL_ERROR', 'Failed to create student', true)
     }
-    auditRoute(request, auth0Id, 'player.created', 'student', student.id, {
+    audit('player.created', 'student', student.id, {
       full_name: student.full_name,
     })
     set.status = 201
@@ -138,6 +139,7 @@ export default new Elysia()
   })
   .put('/api/org/:auth0Id/students/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const audit = auditOrg(request, auth0Id)
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
@@ -202,7 +204,7 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'Student not found', false)
     }
     if (existing.status !== 'transferred' && student.status === 'transferred') {
-      auditRoute(request, auth0Id, 'player.transferred', 'student', id, {
+      audit('player.transferred', 'student', id, {
         from_team: existing.team_id,
         to_team: student.team_id,
       })
