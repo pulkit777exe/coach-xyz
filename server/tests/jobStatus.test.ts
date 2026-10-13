@@ -154,3 +154,25 @@ describe('resolveJobStatus', () => {
     expect(seams.persist).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('checkJobStatusRateLimit', () => {
+  test('allows normal polling and rejects floods', async () => {
+    const { __setRedisForTests } = await import('../src/lib/ratelimit')
+    const { checkJobStatusRateLimit } = await import('../src/routes/status')
+    __setRedisForTests({
+      rateLimitIncrement: async () => {
+        throw new Error('redis_unavailable')
+      },
+    })
+    try {
+      const req = () => new Request('http://localhost/api/job-status/srv-1')
+      // Default cap is 120/min: normal polls pass, a flood is rejected.
+      for (let i = 0; i < 120; i++) {
+        expect(await checkJobStatusRateLimit(req())).toBe(true)
+      }
+      expect(await checkJobStatusRateLimit(req())).toBe(false)
+    } finally {
+      __setRedisForTests(null)
+    }
+  })
+})
