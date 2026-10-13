@@ -5,7 +5,7 @@
 // drive every branch with fakes; the route maps outcomes to HTTP.
 
 import { buildError } from './errors'
-import { getJob, type ServerJob } from './jobs'
+import { getJob } from './jobs'
 import { verifyJobAccess } from './jobAccess'
 import { getEngineJobStatus, requestIdFrom } from './engine'
 import { redactWellness, resolveMedicalAccess } from './permissions'
