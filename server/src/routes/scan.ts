@@ -9,7 +9,7 @@ import {
 } from '../lib/engine'
 import { buildError, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
-import { checkScanLimit, checkScanProgressLimit, getIP } from '../lib/ratelimit'
+import { checkScanLimit, checkScanProgressLimit } from '../lib/ratelimit'
 import { capabilityLimitKey, gateRateLimit, mapEngineError, readJsonBody } from '../lib/capability'
 import { verifyAttributionToken } from '../lib/attribution'
 import { persistVideoConversation } from '../lib/analyses'
@@ -260,7 +260,8 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'sessionToken required.', false)
     }
 
-    const { allowed, reset } = await checkScanProgressLimit(getIP(request))
+    // Keyed on the session token, not the client IP (see checkScanProgressLimit).
+    const { allowed, reset } = await checkScanProgressLimit(sessionToken)
     if (!allowed) {
       const retryAfter = Math.ceil((reset - Date.now()) / 1000)
       set.status = 429

@@ -97,10 +97,12 @@ export async function checkDownloadLimit(key: string): Promise<RateLimitResult> 
   return checkLimit({ key: `rl:download:${key}`, limit, windowSec: 3600 })
 }
 
-/** Per-IP per-minute cap on scan-progress SSE opens. */
-export async function checkScanProgressLimit(ip: string): Promise<RateLimitResult> {
+/** Per-session per-minute cap on scan-progress SSE opens. Keyed on the
+ *  unguessable session token (not the IP): one session's progress stream
+ *  cannot be used to amplify, and header-rotated clients gain nothing. */
+export async function checkScanProgressLimit(sessionToken: string): Promise<RateLimitResult> {
   const limit = parseInt(process.env.SCAN_PROGRESS_RATE_LIMIT || '30')
-  return checkLimit({ key: `rl:scanprogress:${ip}`, limit, windowSec: 60 })
+  return checkLimit({ key: `rl:scanprogress:${sessionToken}`, limit, windowSec: 60 })
 }
 
 /** Per-org daily cap on outbound email (invites + reports + attendance). */
