@@ -18,6 +18,31 @@ import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
 import type { ScanResult } from '../types'
 
+/** Bound on simultaneous /scan-video uploads (see acquireUploadSlot). */
+export const MAX_CONCURRENT_UPLOADS = parseInt(process.env.SCAN_MAX_CONCURRENT_UPLOADS ?? '2', 10)
+let activeUploads = 0
+
+/**
+ * Bound simultaneous /scan-video uploads. request.formData() buffers each
+ * upload fully in server RAM, so unbounded concurrency × 500MB files = OOM
+ * (the per-IP rate limit is header-rotatable). When full, uploads fail fast
+ * with retryable 503 instead of piling up. Exported for tests.
+ */
+export const acquireUploadSlot = (): boolean => {
+  if (activeUploads >= MAX_CONCURRENT_UPLOADS) return false
+  activeUploads++
+  return true
+}
+
+export const releaseUploadSlot = (): void => {
+  activeUploads = Math.max(0, activeUploads - 1)
+}
+
+/** Test seam: reset the upload counter between tests. */
+export const __resetUploadSlotsForTests = (): void => {
+  activeUploads = 0
+}
+
 /** Best-effort org attribution for uploads (primary membership, else the sub). */
 const resolveUploadOrg = async (request: Request): Promise<string | null> => {
   const owner = verifyAttributionToken(request.headers.get('x-attribution'))
@@ -77,55 +102,72 @@ export default new Elysia()
       return buildError('FILE_TOO_LARGE', 'File must be under 500MB.', false)
     }
 
-    // ── Validate Request ───────────────────────────────────────────────────
-    const form = await request.formData()
-    const value = form.get('video')
-    const requestMeta = readRequestMeta(request)
-    // Multi-angle flow: the web appends these fields when adding another
-    // camera perspective to an existing session.
-    const appendSessionToken =
-      typeof form.get('session_token') === 'string' ? (form.get('session_token') as string) : null
-    const angleLabel = typeof form.get('angle') === 'string' ? (form.get('angle') as string) : null
-
-    if (!(value instanceof File)) {
-      set.status = 400
-      return buildError('NO_FILE', 'No video file provided.', false)
-    }
-
-    if (!value.type.startsWith('video/')) {
-      set.status = 400
-      return buildError('INVALID_FILE_TYPE', 'Please upload a video file.', false)
-    }
-
-    if (value.size > MAX_FILE_SIZE_BYTES) {
-      set.status = 413
-      return buildError('FILE_TOO_LARGE', 'File must be under 500MB.', false)
-    }
-
-    // ── Call Engine ────────────────────────────────────────────────────────
-    try {
-      const result = await scanVideo(
-        value,
-        {
-          sessionToken: appendSessionToken,
-          angle: angleLabel,
-        },
-        requestIdFrom(request),
+    // ── Concurrency cap ────────────────────────────────────────────────────
+    // formData() below buffers the whole upload in RAM: cap simultaneous
+    // uploads so parallel 500MB posts cannot OOM the server. Fail fast
+    // (retryable) instead of piling up.
+    if (!acquireUploadSlot()) {
+      set.status = 503
+      return buildError(
+        'QUEUE_UNAVAILABLE',
+        'Server is busy processing uploads. Try again shortly.',
+        true,
       )
+    }
+    try {
+      // ── Validate Request ─────────────────────────────────────────────────
+      const form = await request.formData()
+      const value = form.get('video')
+      const requestMeta = readRequestMeta(request)
+      // Multi-angle flow: the web appends these fields when adding another
+      // camera perspective to an existing session.
+      const appendSessionToken =
+        typeof form.get('session_token') === 'string' ? (form.get('session_token') as string) : null
+      const angleLabel =
+        typeof form.get('angle') === 'string' ? (form.get('angle') as string) : null
 
-      await persistScanResult(request, result, {
-        name: value.name || 'unknown',
-        type: value.type || 'application/octet-stream',
-        size: value.size,
-      })
+      if (!(value instanceof File)) {
+        set.status = 400
+        return buildError('NO_FILE', 'No video file provided.', false)
+      }
 
-      set.status = 200
-      return result
-    } catch (error) {
-      return mapEngineError(set, error, {
-        logType: 'scan_unknown_error',
-        unknownMessage: 'Video scan failed. Please try again.',
-      })
+      if (!value.type.startsWith('video/')) {
+        set.status = 400
+        return buildError('INVALID_FILE_TYPE', 'Please upload a video file.', false)
+      }
+
+      if (value.size > MAX_FILE_SIZE_BYTES) {
+        set.status = 413
+        return buildError('FILE_TOO_LARGE', 'File must be under 500MB.', false)
+      }
+
+      // ── Call Engine ──────────────────────────────────────────────────────
+      try {
+        const result = await scanVideo(
+          value,
+          {
+            sessionToken: appendSessionToken,
+            angle: angleLabel,
+          },
+          requestIdFrom(request),
+        )
+
+        await persistScanResult(request, result, {
+          name: value.name || 'unknown',
+          type: value.type || 'application/octet-stream',
+          size: value.size,
+        })
+
+        set.status = 200
+        return result
+      } catch (error) {
+        return mapEngineError(set, error, {
+          logType: 'scan_unknown_error',
+          unknownMessage: 'Video scan failed. Please try again.',
+        })
+      }
+    } finally {
+      releaseUploadSlot()
     }
   })
   // ── Direct-to-storage upload intents (§8) ──────────────────────────────
@@ -144,7 +186,7 @@ export default new Elysia()
 
     const parsed = await readJsonBody(request)
     if (!parsed.ok) {
-      set.status = 400
+      set.status = parsed.status
       return parsed.body
     }
     const body = parsed.body
@@ -216,7 +258,7 @@ export default new Elysia()
 
     const parsed = await readJsonBody(request)
     if (!parsed.ok) {
-      set.status = 400
+      set.status = parsed.status
       return parsed.body
     }
     const body = parsed.body

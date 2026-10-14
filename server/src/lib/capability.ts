@@ -136,10 +136,24 @@ export const mapEngineError = (
 }
 
 export type JsonBody =
-  { ok: true; body: Record<string, unknown> } | { ok: false; body: CoachAIError }
+  { ok: true; body: Record<string, unknown> } | { ok: false; status: number; body: CoachAIError }
 
 /** Lenient JSON body parse: non-objects (incl. literal `null`) are 400s. */
+export const MAX_JSON_BODY_BYTES = 1024 * 1024
+
 export const readJsonBody = async (request: Request): Promise<JsonBody> => {
+  // The global body limit is sized for multipart uploads (~510MB): reject
+  // absurd JSON up front so a 500MB blob posted to a JSON route never gets
+  // parsed into memory. All callers take small payloads (analyze/invite/
+  // intent metadata).
+  const declared = Number(request.headers.get('content-length') || 0)
+  if (declared > MAX_JSON_BODY_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      body: buildError('FILE_TOO_LARGE', 'Request body is too large.', false),
+    }
+  }
   try {
     const body = (await request.json()) as Record<string, unknown>
     if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -149,6 +163,7 @@ export const readJsonBody = async (request: Request): Promise<JsonBody> => {
   } catch {
     return {
       ok: false,
+      status: 400,
       body: buildError('INVALID_REQUEST', 'Invalid JSON request body.', false),
     }
   }

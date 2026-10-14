@@ -143,3 +143,21 @@ describe('readJsonBody', () => {
     }
   })
 })
+
+describe('readJsonBody size pre-check', () => {
+  test('rejects declared bodies over the cap with 413 before parsing', async () => {
+    const { MAX_JSON_BODY_BYTES } = await import('../src/lib/capability')
+    const parsed = await readJsonBody(
+      new Request('http://localhost/api/scan-intent', {
+        method: 'POST',
+        headers: { 'content-length': String(MAX_JSON_BODY_BYTES + 1) },
+        body: JSON.stringify({ filename: 'a.mp4' }),
+      }),
+    )
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) {
+      expect(parsed.status).toBe(413)
+      expect(parsed.body).toMatchObject({ code: 'FILE_TOO_LARGE' })
+    }
+  })
+})

@@ -236,7 +236,7 @@ export default new Elysia()
     return withVerified(request, set, async (verified) => {
       const parsed = await readJsonBody(request)
       if (!parsed.ok) {
-        set.status = 400
+        set.status = parsed.status
         return parsed.body
       }
       const body = parsed.body
@@ -338,7 +338,7 @@ export default new Elysia()
     return withVerified(request, set, async (verified) => {
       const parsed = await readJsonBody(request)
       if (!parsed.ok) {
-        set.status = 400
+        set.status = parsed.status
         return parsed.body
       }
       const token = parsed.body.token
