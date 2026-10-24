@@ -14,10 +14,9 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (role !== 'owner' && role !== 'admin') {
+    if (!caller.can('org.billing')) {
       set.status = 403
-      return buildError('FORBIDDEN', 'Subscription details are owner/admin only', false)
+      return buildError('FORBIDDEN', 'Subscription details are owner-only (or billing.view)', false)
     }
     set.status = 200
     return {

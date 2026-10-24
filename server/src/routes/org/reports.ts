@@ -12,6 +12,7 @@ import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
+import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
 
 export default new Elysia()
@@ -19,6 +20,11 @@ export default new Elysia()
   // ── Reports ────────────────────────────────────────────────────────────────
   .get('/api/org/:auth0Id/reports', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'report.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const reports = await listReports(auth0Id, {
       studentId: url.searchParams.get('studentId') ?? undefined,
@@ -26,8 +32,13 @@ export default new Elysia()
     set.status = 200
     return { reports }
   })
-  .get('/api/org/:auth0Id/reports/:id', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'report.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const report = await getReport(auth0Id, id)
     if (!report) {
       set.status = 404
@@ -36,8 +47,13 @@ export default new Elysia()
     set.status = 200
     return { report }
   })
-  .post('/api/org/:auth0Id/reports', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/reports', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'report.create')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { student_id, report_type, period_start, period_end, title } = body as Record<
       string,
       unknown
@@ -92,8 +108,13 @@ export default new Elysia()
     set.status = 201
     return { report }
   })
-  .put('/api/org/:auth0Id/reports/:id', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/reports/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'report.create')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const existing = await getReport(auth0Id, id)
     if (!existing) {
       set.status = 404
@@ -166,8 +187,13 @@ export default new Elysia()
     set.status = 200
     return { report }
   })
-  .delete('/api/org/:auth0Id/reports/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/reports/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'report.delete')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const deleted = await deleteReport(auth0Id, id)
     if (!deleted) {
       set.status = 404

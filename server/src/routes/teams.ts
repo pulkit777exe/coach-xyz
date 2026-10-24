@@ -12,6 +12,7 @@ import {
   renameTeam,
 } from '../lib/teams'
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
+import { ORG_MEMBER_ROLES } from '../lib/orgMembers'
 import { UUID_RE, auditOrg, forbidOrg } from '../lib/orgRoute'
 import { type Permission } from '../lib/permissions'
 import { resolveCaller, type Caller } from '../lib/caller'
@@ -25,8 +26,8 @@ const guard = async (
   teamId?: string,
 ): Promise<{ caller: Caller } | ReturnType<typeof buildError>> => {
   const caller = await resolveCaller(orgAuth0Id, request)
-  if (!caller.role || !caller.can(permission)) return forbidOrg(set)
-  if (teamId && !caller.canAccessTeam(teamId)) return forbidOrg(set)
+  const decision = caller.decide(permission, { teamId: teamId ?? null })
+  if (!decision.allow) return forbidOrg(set)
   return { caller }
 }
 
@@ -37,16 +38,7 @@ export default new Elysia()
   .use(
     new Elysia()
       .use(
-        orgRoleGuard([
-          'owner',
-          'admin',
-          'head_coach',
-          'assistant_coach',
-          'coach',
-          'analyst',
-          'medical',
-          'player',
-        ]),
+        orgRoleGuard(ORG_MEMBER_ROLES),
       )
       .get('/api/org/:auth0Id/teams', async ({ params, request, set }) => {
         const { auth0Id } = params
@@ -57,7 +49,7 @@ export default new Elysia()
         const caller = await resolveCaller(auth0Id, request)
         if (!caller.can('team.read')) return forbidOrg(set)
         const all = await listTeams(auth0Id)
-        if (caller.role === 'owner' || caller.role === 'admin') {
+        if (caller.role === 'owner') {
           set.status = 200
           return { teams: all }
         }
@@ -106,12 +98,9 @@ export default new Elysia()
       .use(
         orgRoleGuard([
           'owner',
-          'admin',
           'head_coach',
-          'assistant_coach',
-          'coach',
-          'analyst',
-          'medical',
+          'junior_coach',
+          'player',
         ]),
       )
       .get('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
@@ -162,10 +151,9 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Invalid team id', false)
         }
-        // Deletion stays owner/admin-only even though coaches may rename
-        // assigned teams: guard() enforces scope, this pins the role floor.
-        const { role } = await resolveCaller(auth0Id, request)
-        if (role !== 'owner' && role !== 'admin') return forbidOrg(set)
+        // Deletion is an owner action; head coaches manage (not destroy) teams.
+        const g = await guard(auth0Id, request, set, 'team.delete', teamId)
+        if (!('caller' in g)) return g
         const removed = await deleteTeam(auth0Id, teamId)
         if (!removed) {
           set.status = 404

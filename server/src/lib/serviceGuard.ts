@@ -270,17 +270,13 @@ export const orgRoleGuard = (requiredRoles: readonly OrgMemberRole[]) =>
   })
 
 /** Roles allowed cross-account access on /api/auth/user/* trees. The resource
- * id is the coach's own account (analyses carry full summary_json), so
- * player- and medical-role members must not read another account's dashboard
- * — players use self-scoped /api/me/* instead. Analysts are in: analysis is
- * their job. */
+ * id is the coach's own account (analyses carry full summary_json), so players
+ * must not read another account's dashboard — they use self-scoped /api/me/*
+ * instead. All staff roles are in: reviewing analyses is their job. */
 export const AUTH_USER_ALLOWED_MEMBER_ROLES: readonly OrgMemberRole[] = [
   'owner',
-  'admin',
   'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
+  'junior_coach',
 ]
 
 const isAuthUserPath = (url: string): boolean => {

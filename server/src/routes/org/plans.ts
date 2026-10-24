@@ -5,7 +5,6 @@ import {
   setTrainingPlanStatus,
 } from '../../lib/orgObjectives'
 import { resolveCaller } from '../../lib/caller'
-import { hasPermission } from '../../lib/permissions'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -22,6 +21,11 @@ export default new Elysia()
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.read')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Reading training plans requires player.read', false)
+    }
     set.status = 200
     return {
       plans: await listTrainingPlans(auth0Id, {
@@ -37,8 +41,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
     }
@@ -69,8 +72,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
     }
@@ -94,8 +96,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid plan id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training plans requires player.manage', false)
     }

@@ -1,15 +1,22 @@
-import { getMemberRole, type OrgMemberRole } from './orgMembers'
+import { getMemberAccess, type OrgMemberRole } from './orgMembers'
 
-// ── Permission vocabulary (§4) ───────────────────────────────────────────────
-// Roles grant membership; permissions grant actions; team scope narrows WHERE.
-// `hasPermission` is the pure decision point — route guards resolve the
-// caller's org role, then check the required permission here instead of
-// re-literalizing role lists per route.
+// getMemberAccess lives in orgMembers; this module must not be imported from
+// there (grants stay string[] on the row, parsed here).
+
+// ── Access resolver ──────────────────────────────────────────────────────────
+// Every request answers three questions here: who is acting, in which
+// organisation, with which role/scope/grants. Module routes ask `decide`
+// (or the Caller wrappers) — they never re-literalize role lists.
 
 export const PERMISSIONS = [
   'org.invite',
   'org.manage_members',
+  'org.audit',
+  'org.settings',
+  'org.billing',
+  'org.export',
   'team.create',
+  'team.delete',
   'team.manage',
   'team.manage_members',
   'team.read',
@@ -19,121 +26,177 @@ export const PERMISSIONS = [
   'player.manage',
   'report.read',
   'report.create',
+  'report.publish',
+  'report.delete',
+  'report.export',
   'finding.review',
   'medical.read',
+  'attendance.mark',
+  'schedule.manage',
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]
 
+export const GRANTS = ['medical.read', 'billing.view', 'analysis.upload_own'] as const
+export type Grant = (typeof GRANTS)[number]
+
 const ALL: readonly Permission[] = PERMISSIONS
 
-const COACH_PERMISSIONS: readonly Permission[] = [
-  'team.read',
+const HEAD_COACH_PERMISSIONS: readonly Permission[] = [
+  'org.invite',
   'team.manage',
   'team.manage_members',
+  'team.read',
   'analysis.create',
   'analysis.read',
   'player.read',
   'player.manage',
   'report.read',
   'report.create',
+  'report.publish',
+  'report.delete',
   'finding.review',
+  'attendance.mark',
+  'schedule.manage',
 ]
 
-const ANALYST_PERMISSIONS: readonly Permission[] = [
+const JUNIOR_COACH_PERMISSIONS: readonly Permission[] = [
   'team.read',
   'analysis.create',
   'analysis.read',
   'player.read',
   'report.read',
   'report.create',
-  'finding.review',
+  'attendance.mark',
 ]
 
-// Assistant coaches run sessions and review findings but cannot reshape teams
-// or manage the roster — head coaches (and the legacy `coach` alias) can.
-const ASSISTANT_COACH_PERMISSIONS: readonly Permission[] = [
+const PLAYER_PERMISSIONS: readonly Permission[] = [
   'team.read',
-  'analysis.create',
   'analysis.read',
-  'player.read',
   'report.read',
-  'report.create',
-  'finding.review',
 ]
 
 const ROLE_PERMISSIONS: Record<OrgMemberRole, readonly Permission[]> = {
   owner: ALL,
-  admin: ALL.filter((p) => p !== 'medical.read'),
-  head_coach: COACH_PERMISSIONS,
-  assistant_coach: ASSISTANT_COACH_PERMISSIONS,
-  coach: COACH_PERMISSIONS,
-  analyst: ANALYST_PERMISSIONS,
-  medical: ['team.read', 'player.read', 'report.read', 'medical.read'],
-  player: ['analysis.read', 'report.read'],
+  head_coach: HEAD_COACH_PERMISSIONS,
+  junior_coach: JUNIOR_COACH_PERMISSIONS,
+  player: PLAYER_PERMISSIONS,
 }
 
-/** Pure permission check: does this org role grant the permission? */
-export function hasPermission(role: OrgMemberRole | null, permission: Permission): boolean {
+/** Read-only view of the role table (matrix tests, access explanations). */
+export function permissionsForRole(role: OrgMemberRole | null): readonly Permission[] {
+  return role ? ROLE_PERMISSIONS[role] : []
+}
+
+export type AccessScope = 'org' | 'teams' | 'self' | 'none'
+
+export function accessScope(role: OrgMemberRole | null): AccessScope {
+  if (role === 'owner') return 'org'
+  if (role === 'head_coach' || role === 'junior_coach') return 'teams'
+  if (role === 'player') return 'self'
+  return 'none'
+}
+
+export type AccessSubject = {
+  actorId: string
+  orgId: string
+  role: OrgMemberRole | null
+  teamIds: readonly string[]
+  grants: readonly Grant[]
+}
+
+export type AccessResource = {
+  orgId: string
+  teamId?: string | null
+  ownerId?: string | null
+  inviteRole?: OrgMemberRole | null
+}
+
+export type AccessDecision = {
+  allow: boolean
+  scope: AccessScope
+  reasons: string[]
+}
+
+const GRANT_SET: ReadonlySet<string> = new Set(GRANTS)
+
+export function parseGrants(raw: unknown): Grant[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((g): g is Grant => typeof g === 'string' && GRANT_SET.has(g))
+}
+
+/** Role table plus owner-granted flags. This is the permission half of decide(). */
+export function hasPermission(
+  role: OrgMemberRole | null,
+  permission: Permission,
+  grants: readonly Grant[] = [],
+): boolean {
   if (!role) return false
-  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false
+  if (ROLE_PERMISSIONS[role]?.includes(permission)) return true
+  if (permission === 'medical.read' && grants.includes('medical.read')) return true
+  if (permission === 'org.billing' && grants.includes('billing.view')) return true
+  if (permission === 'analysis.create' && grants.includes('analysis.upload_own')) return true
+  return false
+}
+
+export function canAssignRole(
+  actorRole: OrgMemberRole | null,
+  targetRole: OrgMemberRole,
+): boolean {
+  if (actorRole === 'owner') {
+    return targetRole === 'head_coach' || targetRole === 'junior_coach' || targetRole === 'player'
+  }
+  if (actorRole === 'head_coach') {
+    return targetRole === 'junior_coach' || targetRole === 'player'
+  }
+  return false
 }
 
 /**
- * Pure team-scope check: is the caller allowed to act on this team?
- * Owners/admins bypass scope; coaches/analysts/medical must hold a team
- * membership; players never act on teams (self-scope only).
+ * Team-scope check: owners bypass; head/junior coaches must hold a membership;
+ * players never manage a team (self-scope only).
  */
 export function canAccessTeam(
   role: OrgMemberRole | null,
   memberTeamIds: readonly string[],
   teamId: string,
 ): boolean {
-  if (role === 'owner' || role === 'admin') return true
-  if (
-    role === 'head_coach' ||
-    role === 'assistant_coach' ||
-    role === 'coach' ||
-    role === 'analyst' ||
-    role === 'medical'
-  ) {
+  if (role === 'owner') return true
+  if (role === 'head_coach' || role === 'junior_coach') {
     return memberTeamIds.includes(teamId)
   }
   return false
 }
 
-// ── Health-data boundary (§5) ───────────────────────────────────────────────
-// injury_risk and other wellness signals ride inside analysis summaries but
-// must not behave like ordinary statistics: only the owning account and the
-// medical role may see them. Everyone else gets the summary with wellness
-// keys stripped (scores, feedback, and findings stay intact).
+/** Read visibility for a team, including a player looking at their own team. */
+export function canSeeTeam(
+  role: OrgMemberRole | null,
+  memberTeamIds: readonly string[],
+  teamId: string,
+): boolean {
+  if (canAccessTeam(role, memberTeamIds, teamId)) return true
+  if (role === 'player') return memberTeamIds.includes(teamId)
+  return false
+}
 
-/**
- * Pure student-visibility scope (§3 hierarchy: owner → coaches → players).
- * Owners/admins see the whole org roster; coaches, analysts, and medical
- * staff see only students on their assigned teams.
- */
 export function resolveStudentScope(
   role: OrgMemberRole | null,
   memberTeamIds: readonly string[],
 ): { all: true } | { all: false; teamIds: string[] } {
-  if (role === 'owner' || role === 'admin') return { all: true }
-  if (
-    role === 'head_coach' ||
-    role === 'assistant_coach' ||
-    role === 'coach' ||
-    role === 'analyst' ||
-    role === 'medical'
-  ) {
+  if (role === 'owner') return { all: true }
+  if (role === 'head_coach' || role === 'junior_coach') {
     return { all: false, teamIds: [...memberTeamIds] }
   }
   return { all: false, teamIds: [] }
 }
 
-/** Roles allowed to see wellness signals inside summaries. */
-export function maySeeMedical(role: OrgMemberRole | null, isOwner: boolean): boolean {
-  if (isOwner) return true
-  return role === 'medical'
+export function maySeeMedical(
+  role: OrgMemberRole | null,
+  isOwner: boolean,
+  grants: readonly Grant[] = [],
+): boolean {
+  if (isOwner || role === 'owner') return true
+  return hasPermission(role, 'medical.read', grants)
 }
 
 /** Resolve medical visibility for an analysis owned by `ownerAuth0Id`. */
@@ -144,8 +207,9 @@ export async function resolveMedicalAccess(
   if (!ownerAuth0Id || !callerSub) return false
   if (callerSub === ownerAuth0Id) return true
   try {
-    const role = await getMemberRole(ownerAuth0Id, callerSub)
-    return role === 'owner' || role === 'medical'
+    const access = await getMemberAccess(ownerAuth0Id, callerSub)
+    if (!access) return false
+    return maySeeMedical(access.role, access.role === 'owner', parseGrants(access.grants))
   } catch {
     return false
   }
@@ -164,4 +228,99 @@ export function redactWellness(summary: unknown): unknown {
     })
   }
   return copy
+}
+
+const TEAM_GATED: ReadonlySet<Permission> = new Set([
+  'team.manage',
+  'team.manage_members',
+  'team.delete',
+  'player.manage',
+  'analysis.create',
+  'finding.review',
+  'report.create',
+  'report.publish',
+  'report.delete',
+  'attendance.mark',
+  'schedule.manage',
+  'medical.read',
+])
+
+/**
+ * Single decision point: can this subject perform `action` on `resource`?
+ * Reasons are written for the owner “why can they see this?” view.
+ */
+export function decide(
+  subject: AccessSubject,
+  action: Permission,
+  resource: AccessResource,
+): AccessDecision {
+  const scope = accessScope(subject.role)
+  const reasons: string[] = []
+
+  if (!subject.role) {
+    return { allow: false, scope: 'none', reasons: ['Not a member of this organisation'] }
+  }
+  if (subject.orgId !== resource.orgId) {
+    return {
+      allow: false,
+      scope: 'none',
+      reasons: ['Actor belongs to a different organisation'],
+    }
+  }
+
+  reasons.push(`Role is ${subject.role.replace('_', ' ')}`)
+  if (subject.grants.length > 0) {
+    reasons.push(`Granted: ${subject.grants.join(', ')}`)
+  }
+
+  if (action === 'org.invite' && resource.inviteRole) {
+    if (!canAssignRole(subject.role, resource.inviteRole)) {
+      return {
+        allow: false,
+        scope,
+        reasons: [
+          ...reasons,
+          `${subject.role.replace('_', ' ')} cannot invite a ${resource.inviteRole.replace('_', ' ')}`,
+        ],
+      }
+    }
+    reasons.push(`May invite ${resource.inviteRole.replace('_', ' ')}`)
+  }
+
+  if (!hasPermission(subject.role, action, subject.grants)) {
+    return {
+      allow: false,
+      scope,
+      reasons: [...reasons, `Role does not grant ${action}`],
+    }
+  }
+
+  if (subject.role === 'player' && resource.ownerId && resource.ownerId !== subject.actorId) {
+    return {
+      allow: false,
+      scope: 'self',
+      reasons: [...reasons, 'Players may only act on their own record'],
+    }
+  }
+
+  if (resource.teamId) {
+    const see =
+      action === 'team.read' || action === 'analysis.read' || action === 'report.read'
+        ? canSeeTeam(subject.role, subject.teamIds, resource.teamId)
+        : canAccessTeam(subject.role, subject.teamIds, resource.teamId)
+    if (!see) {
+      return {
+        allow: false,
+        scope,
+        reasons: [...reasons, 'Not assigned to this team'],
+      }
+    }
+    if (subject.role !== 'owner') {
+      reasons.push('Assigned to the team in scope')
+    }
+  } else if (TEAM_GATED.has(action) && subject.role !== 'owner' && subject.role !== 'player') {
+    reasons.push('Allowed on assigned teams only')
+  }
+
+  return { allow: true, scope, reasons }
 }

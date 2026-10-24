@@ -33,7 +33,7 @@ export const orgShareRoute = (deps: ShareRouteDeps = {}) => {
 
   return new Elysia({ name: 'orgShare' })
     .use(serviceGuard)
-    .use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach']))
+    .use(orgRoleGuard(['owner', 'head_coach', 'junior_coach']))
     .post('/api/org/:auth0Id/analyses/:jobId/share-token', async ({ params, request, set }) => {
       const { auth0Id, jobId } = params as { auth0Id: string; jobId: string }
       if (!auth0Id || !jobId) {

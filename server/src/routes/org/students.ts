@@ -20,8 +20,7 @@ import {
   type ImportRow,
 } from '../../lib/orgValidate'
 import { linkAnalysisToStudent } from '../../lib/analyses'
-import { resolveCaller } from '../../lib/caller'
-import { auditOrg } from '../../lib/orgRoute'
+import { auditOrg, authorizeOrg } from '../../lib/orgRoute'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -36,6 +35,11 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const scope = await studentScope(auth0Id, request)
     const students = await listStudents(auth0Id, {
@@ -48,8 +52,13 @@ export default new Elysia()
     set.status = 200
     return { students }
   })
-  .get('/api/org/:auth0Id/students/sports', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/students/sports', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const sports = await listStudentSports(auth0Id)
     set.status = 200
     return { sports }
@@ -59,6 +68,11 @@ export default new Elysia()
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
     }
     const student = await getStudent(auth0Id, id)
     if (!student) {
@@ -78,6 +92,11 @@ export default new Elysia()
   .post('/api/org/:auth0Id/students', async ({ params, body, request, set }) => {
     const { auth0Id } = params
     const audit = auditOrg(request, auth0Id)
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const input = parseStudentInput(body as Record<string, unknown>)
 
     if (!input.full_name || typeof input.full_name !== 'string') {
@@ -110,19 +129,16 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', team.error, false)
     }
     if (team.teamId) {
+      if (!auth.caller.canAccessTeam(team.teamId)) {
+        set.status = 403
+        return buildError('FORBIDDEN', 'Cannot assign a team outside your scope', false)
+      }
       input.team_id = team.teamId
     } else {
       // Hierarchy convenience: a coach with exactly one team creates
       // players under that team unless another is chosen.
-      const auto = await resolveCaller(auth0Id, request)
-      if (
-        auto.role === 'head_coach' ||
-        auto.role === 'assistant_coach' ||
-        auto.role === 'coach' ||
-        auto.role === 'analyst' ||
-        auto.role === 'medical'
-      ) {
-        if (auto.teamIds.length === 1) input.team_id = auto.teamIds[0]
+      if (auth.caller.role !== 'owner' && auth.caller.teamIds.length === 1) {
+        input.team_id = auth.caller.teamIds[0]
       }
     }
 
@@ -148,6 +164,13 @@ export default new Elysia()
     if (!existing) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
+    }
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage', {
+      teamId: existing.team_id,
+    })
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
     }
 
     const input = parseStudentInput(body as Record<string, unknown>)
@@ -212,8 +235,20 @@ export default new Elysia()
     set.status = 200
     return { student }
   })
-  .delete('/api/org/:auth0Id/students/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const existing = await getStudent(auth0Id, id)
+    if (!existing) {
+      set.status = 404
+      return buildError('NOT_FOUND', 'Student not found', false)
+    }
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage', {
+      teamId: existing.team_id,
+    })
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const deleted = await deleteStudent(auth0Id, id)
     if (!deleted) {
       set.status = 404
@@ -222,8 +257,13 @@ export default new Elysia()
     set.status = 200
     return { deleted: true }
   })
-  .post('/api/org/:auth0Id/students/import', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/students/import', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { rows } = body as { rows?: unknown[] }
     if (!Array.isArray(rows) || rows.length === 0) {
       set.status = 400
@@ -266,6 +306,11 @@ export default new Elysia()
   // ── Student detail: attendance, performance, analyses ─────────────────────
   .get('/api/org/:auth0Id/students/:id/performance', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const series = await getStudentPerformanceSeries(auth0Id, id, {
       metricKey: url.searchParams.get('metricKey') ?? undefined,
@@ -275,8 +320,13 @@ export default new Elysia()
     set.status = 200
     return { series }
   })
-  .post('/api/org/:auth0Id/students/:id/performance', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/students/:id/performance', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { metric_key, metric_value, unit, measured_at } = body as Record<string, unknown>
     if (!metric_key || typeof metric_key !== 'string') {
       set.status = 400
@@ -313,21 +363,31 @@ export default new Elysia()
     set.status = 201
     return { metric }
   })
-  .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
     }
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const analyses = await getStudentAnalyses(auth0Id, id)
     set.status = 200
     return { analyses }
   })
-  .put('/api/org/:auth0Id/analyses/:jobId/student', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/analyses/:jobId/student', async ({ params, body, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+    }
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
     }
     const { student_id } = body as { student_id?: unknown }
     if (student_id !== undefined && student_id !== null && typeof student_id !== 'string') {

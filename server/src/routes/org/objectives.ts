@@ -6,7 +6,6 @@ import {
 } from '../../lib/orgObjectives'
 import { isDate } from '../../lib/orgValidate'
 import { resolveCaller } from '../../lib/caller'
-import { hasPermission } from '../../lib/permissions'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -23,6 +22,11 @@ export default new Elysia()
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('player.read')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Reading training objectives requires player.read', false)
+    }
     const objectives = await listObjectives(auth0Id, {
       studentId: pickId(url.searchParams.get('student_id')),
       teamId: pickId(url.searchParams.get('team_id')),
@@ -38,8 +42,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
     }
@@ -81,8 +84,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
     }
@@ -106,8 +108,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid objective id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'player.manage')) {
+    if (!caller.can('player.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing training objectives requires player.manage', false)
     }

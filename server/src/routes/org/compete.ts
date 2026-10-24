@@ -9,7 +9,6 @@ import {
 import { isDate } from '../../lib/orgValidate'
 import { getTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
-import { hasPermission } from '../../lib/permissions'
 import { UUID_RE } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
@@ -18,11 +17,16 @@ import { Elysia } from 'elysia'
 export default new Elysia()
   .use(serviceGuard)
   // ── Seasons & matches ────────────────────────────────────────────────
-  .get('/api/org/:auth0Id/seasons', async ({ params, set }) => {
+  .get('/api/org/:auth0Id/seasons', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+    }
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('team.read')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Reading seasons requires team.read', false)
     }
     set.status = 200
     return { seasons: await listSeasons(auth0Id) }
@@ -34,8 +38,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'team.manage')) {
+    if (!caller.can('team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
     }
@@ -67,8 +70,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid season id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'team.manage')) {
+    if (!caller.can('team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing seasons requires team.manage', false)
     }
@@ -88,6 +90,11 @@ export default new Elysia()
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
+    const caller = await resolveCaller(auth0Id, request)
+    if (!caller.can('team.read')) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Reading matches requires team.read', false)
+    }
     set.status = 200
     return {
       matches: await listMatches(auth0Id, {
@@ -103,8 +110,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'team.manage')) {
+    if (!caller.can('team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
     }
@@ -141,8 +147,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'Invalid match id', false)
     }
     const caller = await resolveCaller(auth0Id, request)
-    const role = caller.role
-    if (!hasPermission(role, 'team.manage')) {
+    if (!caller.can('team.manage')) {
       set.status = 403
       return buildError('FORBIDDEN', 'Managing matches requires team.manage', false)
     }

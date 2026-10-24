@@ -2,13 +2,16 @@ import { Elysia } from 'elysia'
 
 import { buildError } from '../lib/errors'
 import {
+  ORG_MANAGER_ROLES,
   ORG_MEMBER_INVITE_ROLES,
   ORG_MEMBER_ROLES,
+  ORG_STAFF_ROLES,
   ensureOrgOwner,
   getOrgMember,
   inviteOrgMember,
   listOrgMembers,
   removeOrgMember,
+  setOrgMemberGrants,
   setOrgMemberRole,
   type OrgMemberInviteRole,
   type OrgMemberRole,
@@ -16,7 +19,8 @@ import {
 import { orgRoleGuard, serviceGuard } from '../lib/serviceGuard'
 import { listInvites, mintInvite, revokeInvite } from '../lib/invites'
 import { listAuditLogs } from '../lib/audit'
-import { EMAIL_RE, UUID_RE, auditOrg } from '../lib/orgRoute'
+import { GRANTS, type Grant } from '../lib/permissions'
+import { EMAIL_RE, UUID_RE, auditOrg, authorizeOrg } from '../lib/orgRoute'
 
 // Org-member management routes. The identity (service) guard applies globally;
 // role gates are applied per route group via orgRoleGuard on dedicated (sub-)
@@ -29,7 +33,7 @@ export default new Elysia()
   .use(serviceGuard)
   .use(
     new Elysia()
-      .use(orgRoleGuard(ORG_MEMBER_ROLES))
+      .use(orgRoleGuard(ORG_STAFF_ROLES))
       .get('/api/org/:auth0Id/members', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
@@ -52,7 +56,7 @@ export default new Elysia()
   )
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin']))
+      .use(orgRoleGuard(ORG_MANAGER_ROLES))
       .post('/api/org/:auth0Id/members', async ({ params, body, request, set }) => {
         const { auth0Id } = params
         const audit = auditOrg(request, auth0Id)
@@ -75,6 +79,13 @@ export default new Elysia()
             `role must be one of ${[...INVITE_ROLE_SET].join(', ')}`,
             false,
           )
+        }
+        const auth = await authorizeOrg(request, auth0Id, 'org.invite', {
+          inviteRole: role as OrgMemberRole,
+        })
+        if (!auth.ok) {
+          set.status = auth.status
+          return auth.body
         }
         const inviterAuth0Id = request.headers.get('x-verified-auth0-id') ?? auth0Id
         const member = await inviteOrgMember(auth0Id, inviterAuth0Id, {
@@ -102,7 +113,7 @@ export default new Elysia()
   )
   .use(
     new Elysia()
-      .use(orgRoleGuard(['owner', 'admin']))
+      .use(orgRoleGuard(ORG_MANAGER_ROLES))
       // Token-based invites (§7): mint a single-use link instead of adding
       // the row directly. The raw token is returned once for the invite
       // email; only its hash is stored.
@@ -127,6 +138,13 @@ export default new Elysia()
             `role must be one of ${[...INVITE_ROLE_SET].join(', ')}`,
             false,
           )
+        }
+        const auth = await authorizeOrg(request, auth0Id, 'org.invite', {
+          inviteRole: role as OrgMemberRole,
+        })
+        if (!auth.ok) {
+          set.status = auth.status
+          return auth.body
         }
         const createdBy = request.headers.get('x-verified-auth0-id') ?? auth0Id
         const minted = await mintInvite(auth0Id, createdBy, {
@@ -171,6 +189,11 @@ export default new Elysia()
           set.status = 400
           return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
         }
+        const auth = await authorizeOrg(request, auth0Id, 'org.audit')
+        if (!auth.ok) {
+          set.status = auth.status
+          return auth.body
+        }
         const url = new URL(request.url)
         const limitRaw = Number(url.searchParams.get('limit') || 50)
         const limit = Number.isFinite(limitRaw) ? limitRaw : 50
@@ -193,11 +216,11 @@ export default new Elysia()
           return buildError('INVALID_REQUEST', 'Invalid member id', false)
         }
         const { role } = (body ?? {}) as { role?: unknown }
-        if (typeof role !== 'string' || !ROLE_SET.has(role)) {
+        if (typeof role !== 'string' || !ROLE_SET.has(role) || role === 'owner') {
           set.status = 400
           return buildError(
             'INVALID_REQUEST',
-            `role must be one of ${[...ROLE_SET].join(', ')}`,
+            `role must be one of ${[...ROLE_SET].filter((r) => r !== 'owner').join(', ')} (ownership transfer is a separate action)`,
             false,
           )
         }
@@ -218,6 +241,51 @@ export default new Elysia()
         audit('member.role_changed', 'org_member', id, {
           from: target.role,
           to: role,
+        })
+        set.status = 200
+        return { member: updated }
+      }),
+  )
+  .use(
+    new Elysia()
+      .use(orgRoleGuard(['owner']))
+      // Permission flags on a person (e.g. medical.read, billing.view) — the
+      // replacement for the old analyst/medical roles. Owner-granted, audited.
+      .patch('/api/org/:auth0Id/members/:id/grants', async ({ params, body, request, set }) => {
+        const { auth0Id, id } = params
+        const audit = auditOrg(request, auth0Id)
+        if (!auth0Id || !id || !UUID_RE.test(id)) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'Invalid member id', false)
+        }
+        const { grants } = (body ?? {}) as { grants?: unknown }
+        if (!Array.isArray(grants) || grants.some((g) => typeof g !== 'string')) {
+          set.status = 400
+          return buildError('INVALID_REQUEST', 'grants must be an array of strings', false)
+        }
+        const known: ReadonlySet<string> = new Set(GRANTS)
+        const unknown = grants.filter((g) => !known.has(g as string))
+        if (unknown.length > 0) {
+          set.status = 400
+          return buildError(
+            'INVALID_REQUEST',
+            `Unknown grant(s): ${unknown.join(', ')}. Allowed: ${GRANTS.join(', ')}`,
+            false,
+          )
+        }
+        const target = await getOrgMember(auth0Id, id)
+        if (!target) {
+          set.status = 404
+          return buildError('NOT_FOUND', 'Member not found', false)
+        }
+        const updated = await setOrgMemberGrants(auth0Id, id, grants as Grant[])
+        if (!updated) {
+          set.status = 404
+          return buildError('NOT_FOUND', 'Member not found', false)
+        }
+        audit('member.grants_changed', 'org_member', id, {
+          from: target.grants,
+          to: updated.grants,
         })
         set.status = 200
         return { member: updated }

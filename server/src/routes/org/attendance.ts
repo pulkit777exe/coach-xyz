@@ -11,6 +11,7 @@ import { isDate } from '../../lib/orgValidate'
 import { ATTENDANCE_STATUS_SET } from './shared'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
+import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
 
 export default new Elysia()
@@ -18,6 +19,11 @@ export default new Elysia()
   // ── Attendance ─────────────────────────────────────────────────────────────
   .get('/api/org/:auth0Id/attendance', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'team.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const records = await listAttendance(auth0Id, {
       from: url.searchParams.get('from') ?? undefined,
@@ -29,6 +35,11 @@ export default new Elysia()
   })
   .get('/api/org/:auth0Id/attendance/summary', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'team.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const summary = await attendanceSummary(auth0Id, {
       from: url.searchParams.get('from') ?? undefined,
@@ -38,8 +49,13 @@ export default new Elysia()
     set.status = 200
     return { summary }
   })
-  .put('/api/org/:auth0Id/attendance', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/attendance', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'attendance.mark')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { student_id, session_date, status, note } = body as Record<string, unknown>
     if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
       set.status = 400
@@ -64,8 +80,13 @@ export default new Elysia()
     set.status = 200
     return { record }
   })
-  .post('/api/org/:auth0Id/attendance/batch', async ({ params, body, set }) => {
+  .post('/api/org/:auth0Id/attendance/batch', async ({ params, body, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'attendance.mark')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { entries } = body as { entries?: unknown[] }
     if (!Array.isArray(entries) || entries.length === 0) {
       set.status = 400
@@ -121,6 +142,11 @@ export default new Elysia()
   })
   .delete('/api/org/:auth0Id/attendance', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'attendance.mark')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const studentId = url.searchParams.get('studentId')
     const sessionDate = url.searchParams.get('date')

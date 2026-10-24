@@ -9,7 +9,9 @@ import { Elysia } from 'elysia'
 export default new Elysia()
   .use(serviceGuard)
   // ── Wellness check-ins (health data, §5) ─────────────────────────────────
-  // Reads require the medical permission; writes require player.manage.
+  // Reads and writes require the medical permission (owner, or an explicit
+  // medical.read grant). Players record their own check-ins through the
+  // self-scoped /api/me routes, never the org tree.
   // The AI layer reports wellness observations verbatim — never diagnoses.
   .get('/api/org/:auth0Id/students/:id/wellness', async ({ params, request, set }) => {
     const { auth0Id, id: studentId } = params
@@ -34,9 +36,9 @@ export default new Elysia()
     }
     const caller = await resolveCaller(auth0Id, request)
     const verified = caller.verified
-    if (!caller.can('player.manage')) {
+    if (!caller.can('medical.read')) {
       set.status = 403
-      return buildError('FORBIDDEN', 'Recording wellness data requires player.manage', false)
+      return buildError('FORBIDDEN', 'Recording wellness data requires the medical permission', false)
     }
     const raw = (body ?? {}) as Record<string, unknown>
     const checkin = await createWellnessCheckin(auth0Id, verified, {

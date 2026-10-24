@@ -5,75 +5,74 @@ import {
   ensureInitialized,
 } from './historyStore'
 
-// ── Org-member role vocabulary ──────────────────────────────────────────────
-// Single source of truth for org membership roles. Mirrored on the web
-// (web-next/lib/members.ts) with values AND order pinned contractually by the
-// orgMembers *Contract tests on both sides. This is a SEPARATE vocabulary from
-// the users.role enum (coach/player in server/src/lib/userRoles.ts) — org
-// membership grants access to an org's data, user.role describes the account.
-export const ORG_MEMBER_ROLES = [
-  'owner',
-  'admin',
-  'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
-  'medical',
-  'player',
-] as const
+export const ORG_MEMBER_ROLES = ['owner', 'head_coach', 'junior_coach', 'player'] as const
 export type OrgMemberRole = (typeof ORG_MEMBER_ROLES)[number]
+
+export const ORG_STAFF_ROLES = ['owner', 'head_coach', 'junior_coach'] as const
+export type OrgStaffRole = (typeof ORG_STAFF_ROLES)[number]
+
+/** Roles that may manage/invite people (owner + head coach). */
+export const ORG_MANAGER_ROLES = ['owner', 'head_coach'] as const
 
 export const ORG_MEMBER_ROLE_LABELS: Record<OrgMemberRole, string> = {
   owner: 'Owner',
-  admin: 'Admin',
   head_coach: 'Head Coach',
-  assistant_coach: 'Assistant Coach',
-  coach: 'Coach',
-  analyst: 'Analyst',
-  medical: 'Medical',
+  junior_coach: 'Junior Coach',
   player: 'Player',
 }
 
-// Roles an inviter may assign when adding a member. The owner role is never
-// assigned via invite — it exists only on the seeded owner row. `coach` is
-// kept as a legacy alias of the head-coach track.
-export const ORG_MEMBER_INVITE_ROLES = [
-  'admin',
-  'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
-  'medical',
-  'player',
-] as const
+export const ORG_MEMBER_INVITE_ROLES = ['head_coach', 'junior_coach', 'player'] as const
 export type OrgMemberInviteRole = (typeof ORG_MEMBER_INVITE_ROLES)[number]
+
+const LEGACY_ORG_ROLE_MAP: Record<string, OrgMemberRole> = {
+  admin: 'head_coach',
+  coach: 'head_coach',
+  assistant_coach: 'junior_coach',
+  analyst: 'junior_coach',
+  medical: 'junior_coach',
+}
+
+export function canonicalizeOrgRole(role: string | null | undefined): OrgMemberRole | null {
+  if (!role) return null
+  if ((ORG_MEMBER_ROLES as readonly string[]).includes(role)) return role as OrgMemberRole
+  return LEGACY_ORG_ROLE_MAP[role] ?? null
+}
 
 export type OrgMember = {
   id: string
   member_auth0_id: string | null
   member_email: string | null
   role: OrgMemberRole
+  grants: string[]
   status: string
   display_name: string | null
   picture: string | null
   created_at: string
 }
 
-// Shared select for org_members joined with users (display name/picture).
-// Written as a SQL fragment used via db.unsafe inside a select, mirroring
-// ANALYSES_SELECT_COLUMNS in analyses.ts.
 const MEMBER_SELECT_COLUMNS = `
   m.id,
   m.member_auth0_id,
   coalesce(m.member_email, u.email) as member_email,
   m.role,
+  coalesce(m.grants, '{}') as grants,
   m.status,
   coalesce(u.name, u.nickname, m.member_email, u.email) as display_name,
   u.picture,
   m.created_at
 `
 
-/** Creates the org_members table if it does not exist (idempotent). */
+type MemberRow = Omit<OrgMember, 'role' | 'grants'> & {
+  role: string
+  grants: unknown
+}
+
+const hydrateMember = (row: MemberRow): OrgMember => ({
+  ...row,
+  role: canonicalizeOrgRole(row.role) ?? 'player',
+  grants: Array.isArray(row.grants) ? row.grants.filter((g): g is string => typeof g === 'string') : [],
+})
+
 const ensureSchema = async (db: SQL) => {
   await ensureInitialized()
   await db`
@@ -82,7 +81,8 @@ const ensureSchema = async (db: SQL) => {
       org_auth0_id text not null,
       member_auth0_id text,
       member_email text,
-      role text not null check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player')),
+      role text not null check (role in ('owner','head_coach','junior_coach','player')),
+      grants text[] not null default '{}',
       status text not null default 'active',
       invited_by text,
       created_at timestamptz not null default now(),
@@ -90,32 +90,41 @@ const ensureSchema = async (db: SQL) => {
       constraint org_members_unique unique (org_auth0_id, member_auth0_id)
     );
   `
-  // Migrate pre-existing tables whose CHECK still lists only the four
-  // original roles: drop the old role check (name discovered dynamically)
-  // and re-add the six-role version. Idempotent.
+  await db`alter table org_members add column if not exists grants text[] not null default '{}';`
   await db`
     do $$
-    declare _conname text;
+    declare r record;
     begin
-      select conname into _conname
-      from pg_constraint
-      where conrelid = 'org_members'::regclass
-        and contype = 'c'
-        and pg_get_constraintdef(oid) like '%role in%';
-      if _conname is not null and _conname <> 'org_members_role_check' then
-        execute format('alter table org_members drop constraint %I', _conname);
-      end if;
+      for r in
+        select conname
+        from pg_constraint
+        where conrelid = 'org_members'::regclass
+          and contype = 'c'
+          and pg_get_constraintdef(oid) ilike '%role%'
+      loop
+        execute format('alter table org_members drop constraint %I', r.conname);
+      end loop;
     end
     $$;
   `
   await db`
-    alter table org_members
-      drop constraint if exists org_members_role_check;
+    update org_members
+    set grants = array_append(coalesce(grants, '{}'), 'medical.read')
+    where role = 'medical'
+      and not ('medical.read' = any(coalesce(grants, '{}')));
+  `
+  await db`
+    update org_members set role = 'head_coach' where role in ('admin', 'coach');
+  `
+  await db`
+    update org_members
+    set role = 'junior_coach'
+    where role in ('assistant_coach', 'analyst', 'medical');
   `
   await db`
     alter table org_members
       add constraint org_members_role_check
-      check (role in ('owner','admin','head_coach','assistant_coach','coach','analyst','medical','player'));
+      check (role in ('owner','head_coach','junior_coach','player'));
   `
   await db`
     create index if not exists idx_org_members_org_auth0_id
@@ -127,15 +136,10 @@ const ensureSchema = async (db: SQL) => {
   `
 }
 
-/** Bootstraps the org_members schema inside the shared history-store setup. */
 export const ensureOrgMembersInitialized = async (): Promise<void> => {
   await withHistoryStore((db) => ensureSchema(db))
 }
 
-/**
- * Idempotently seeds the owner row for a coach's org. Each org gets exactly one
- * owner: the coach who created it (org_auth0_id === member_auth0_id).
- */
 export const ensureOrgOwner = async (auth0Id: string): Promise<void> => {
   await withHistoryStore(async (db) => {
     await ensureSchema(db)
@@ -154,21 +158,16 @@ const loadMemberById = async (
   orgAuth0Id: string,
   id: string,
 ): Promise<OrgMember | null> => {
-  const rows = await db<OrgMember[]>`
+  const rows = await db<MemberRow[]>`
     select ${db.unsafe(MEMBER_SELECT_COLUMNS)}
     from org_members m
     left join users u on u.auth0_id = m.member_auth0_id
     where m.org_auth0_id = ${orgAuth0Id} and m.id = ${id}
     limit 1;
   `
-  return rows?.[0] ?? null
+  return rows?.[0] ? hydrateMember(rows[0]) : null
 }
 
-/**
- * Lists an org's members (joined with users for display). Lazily seeds the
- * owner row first so existing coaches get an owner membership on first read —
- * no migration needed.
- */
 export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> => {
   return (
     (await withHistoryStore(async (db) => {
@@ -180,7 +179,7 @@ export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> =
       left join users u on u.auth0_id = ${orgAuth0Id}
       on conflict (org_auth0_id, member_auth0_id) do nothing;
     `
-      const rows = await db<OrgMember[]>`
+      const rows = await db<MemberRow[]>`
       select ${db.unsafe(MEMBER_SELECT_COLUMNS)}
       from org_members m
       left join users u on u.auth0_id = m.member_auth0_id
@@ -188,17 +187,13 @@ export const listOrgMembers = async (orgAuth0Id: string): Promise<OrgMember[]> =
       order by
         case m.role
           when 'owner' then 0
-          when 'admin' then 1
-          when 'head_coach' then 2
-          when 'assistant_coach' then 3
-          when 'coach' then 4
-          when 'analyst' then 5
-          when 'medical' then 6
-          else 7
+          when 'head_coach' then 1
+          when 'junior_coach' then 2
+          else 3
         end,
         coalesce(u.name, m.member_email) asc nulls last;
     `
-      return rows ?? []
+      return (rows ?? []).map(hydrateMember)
     })) ?? []
   )
 }
@@ -209,18 +204,10 @@ export type OrgMembership = {
   display_name: string | null
 }
 
-/**
- * Lists the orgs a member belongs to (active rows only), for org-context
- * resolution on the self-scoped /api/me/orgs route. Owner rows are ordered
- * first so a caller who owns an org resolves it as their primary context.
- */
 export const listMembershipsForUser = async (memberAuth0Id: string): Promise<OrgMembership[]> => {
   return (
     (await withHistoryStore(async (db) => {
       await ensureSchema(db)
-      // Lazily seed owner-of-self so fresh solo coaches always see their own
-      // org in the switcher (mirrors listOrgMembers seeding). Only for real
-      // users — avoids creating phantom orgs for arbitrary ids.
       await db`
       insert into org_members (org_auth0_id, member_auth0_id, member_email, role, status)
       select ${memberAuth0Id}, ${memberAuth0Id}, u.email, 'owner', 'active'
@@ -240,7 +227,12 @@ export const listMembershipsForUser = async (memberAuth0Id: string): Promise<Org
         case m.role when 'owner' then 0 else 1 end,
         m.created_at asc;
     `
-      return rows ?? []
+      return (rows ?? [])
+        .map((row) => {
+          const role = canonicalizeOrgRole(row.role)
+          return role ? { ...row, role } : null
+        })
+        .filter((row): row is OrgMembership => row !== null)
     })) ?? []
   )
 }
@@ -254,40 +246,48 @@ export const getOrgMember = async (orgAuth0Id: string, id: string): Promise<OrgM
   )
 }
 
-/**
- * Resolves a caller's role within an org, used by the service guard to authorize
- * non-owner members (multi-coach data access). Owner fast-path: when the caller
- * IS the org (auth0Id === orgAuth0Id) they are the seeded owner — no DB hit.
- * Otherwise only ACTIVE rows whose member_auth0_id matches grant access, so an
- * invited-but-unlinked or removed member is denied. Returns null when the caller
- * has no active membership.
- */
 export const getMemberRole = async (
   orgAuth0Id: string,
   memberAuth0Id: string,
 ): Promise<OrgMemberRole | null> => {
-  if (memberAuth0Id === orgAuth0Id) return 'owner'
+  const access = await getMemberAccess(orgAuth0Id, memberAuth0Id)
+  return access?.role ?? null
+}
+
+export type MemberAccess = {
+  role: OrgMemberRole
+  grants: string[]
+}
+
+export const getMemberAccess = async (
+  orgAuth0Id: string,
+  memberAuth0Id: string,
+): Promise<MemberAccess | null> => {
+  if (memberAuth0Id === orgAuth0Id) return { role: 'owner', grants: [] }
   return (
     (await withHistoryStore(async (db) => {
       await ensureSchema(db)
-      const rows = await db<{ role: OrgMemberRole }[]>`
-      select role from org_members
+      const rows = await db<{ role: string; grants: unknown }[]>`
+      select role, coalesce(grants, '{}') as grants from org_members
       where org_auth0_id = ${orgAuth0Id}
         and member_auth0_id = ${memberAuth0Id}
         and status = 'active'
       limit 1;
     `
-      return rows?.[0]?.role ?? null
+      const row = rows?.[0]
+      if (!row) return null
+      const role = canonicalizeOrgRole(row.role)
+      if (!role) return null
+      return {
+        role,
+        grants: Array.isArray(row.grants)
+          ? row.grants.filter((g): g is string => typeof g === 'string')
+          : [],
+      }
     })) ?? null
   )
 }
 
-/**
- * Invites a staff member by email. If a `users` row already exists with that
- * email, the row is linked immediately (member_auth0_id captures the account).
- * Re-inviting an existing email updates its role; the owner can never be
- * invited/overwritten.
- */
 export const inviteOrgMember = async (
   orgAuth0Id: string,
   inviterAuth0Id: string,
@@ -336,9 +336,6 @@ export const inviteOrgMember = async (
   })
 }
 
-/**
- * Updates a member's role. Owner rows are immutable — returns null.
- */
 export const setOrgMemberRole = async (
   orgAuth0Id: string,
   memberId: string,
@@ -351,7 +348,15 @@ export const setOrgMemberRole = async (
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
       limit 1;
     `
-    if (!target?.[0] || target[0].role === 'owner') return null
+    if (!target?.[0]) return null
+    const current = canonicalizeOrgRole(target[0].role)
+    if (current === 'owner' && role !== 'owner') {
+      const owners = await db<{ n: number }[]>`
+        select count(*)::int as n from org_members
+        where org_auth0_id = ${orgAuth0Id} and role = 'owner' and status = 'active';
+      `
+      if ((owners?.[0]?.n ?? 0) <= 1) return null
+    }
     const rows = await db<{ id: string }[]>`
       update org_members set role = ${role}, updated_at = now()
       where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
@@ -362,7 +367,24 @@ export const setOrgMemberRole = async (
   })
 }
 
-/** Removes a member row. Returns false if it did not exist. */
+export const setOrgMemberGrants = async (
+  orgAuth0Id: string,
+  memberId: string,
+  grants: readonly string[],
+): Promise<OrgMember | null> => {
+  const unique = [...new Set(grants)]
+  return withHistoryStore(async (db) => {
+    await ensureSchema(db)
+    const rows = await db<{ id: string }[]>`
+      update org_members set grants = ${unique}::text[], updated_at = now()
+      where org_auth0_id = ${orgAuth0Id} and id = ${memberId}
+      returning id;
+    `
+    if (!rows?.[0]) return null
+    return loadMemberById(db, orgAuth0Id, memberId)
+  })
+}
+
 export const removeOrgMember = async (orgAuth0Id: string, memberId: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {

@@ -25,6 +25,7 @@ import { sportPositionsRoute } from './routes/sports'
 import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
 import { globalErrorHandler } from './lib/httpErrors'
 import { assertServiceGuardConfigured, orgRoleGuard } from './lib/serviceGuard'
+import { ORG_MEMBER_ROLES } from './lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from './types'
 
 // Refuse to boot a production-configured instance without the identity
@@ -142,27 +143,13 @@ const app = new Elysia({
   .use(downloadRoute)
   .use(chatRoute)
   .use(authRoute)
-  .use(
-    orgRoute.use(
-      orgRoleGuard([
-        'owner',
-        'admin',
-        'head_coach',
-        'assistant_coach',
-        'coach',
-        'analyst',
-        'medical',
-      ]),
-    ),
-  )
+  .use(orgRoute.use(orgRoleGuard(ORG_MEMBER_ROLES)))
   .use(meRoute)
-  .use(emailRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])))
+  .use(emailRoute)
   .use(membersRoute)
   .use(teamsRoute)
   .use(notificationsRoute)
-  .use(
-    aiReportsRoute.use(orgRoleGuard(['owner', 'admin', 'head_coach', 'assistant_coach', 'coach'])),
-  )
+  .use(aiReportsRoute)
   .use(shareRoute)
 
   // ── Global Error Handler ─────────────────────────────────────────────────

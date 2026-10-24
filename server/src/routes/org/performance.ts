@@ -9,6 +9,7 @@ import { getStudent } from '../../lib/orgRoster'
 import { DEFAULT_COMPARISON_METRIC_KEY } from '../../lib/orgValidate'
 import { buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
+import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
 
 export default new Elysia()
@@ -16,6 +17,11 @@ export default new Elysia()
   // ── Performance metrics (cross-student) ────────────────────────────────────
   .get('/api/org/:auth0Id/performance', async ({ params, request, set }) => {
     const { auth0Id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const url = new URL(request.url)
     const studentId = url.searchParams.get('studentId')
     if (!studentId) {
@@ -30,8 +36,13 @@ export default new Elysia()
     set.status = 200
     return { metrics }
   })
-  .delete('/api/org/:auth0Id/performance/:id', async ({ params, set }) => {
+  .delete('/api/org/:auth0Id/performance/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const deleted = await deletePerformanceMetric(auth0Id, id)
     if (!deleted) {
       set.status = 404
@@ -40,8 +51,13 @@ export default new Elysia()
     set.status = 200
     return { deleted: true }
   })
-  .put('/api/org/:auth0Id/performance/:id', async ({ params, body, set }) => {
+  .put('/api/org/:auth0Id/performance/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
+    const auth = await authorizeOrg(request, auth0Id, 'player.manage')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const { metric_value, unit } = body as Record<string, unknown>
     if (typeof metric_value !== 'number' || !Number.isFinite(metric_value)) {
       set.status = 400
@@ -65,6 +81,11 @@ export default new Elysia()
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing required parameters', false)
     }
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
+    }
     const student = await getStudent(auth0Id, id)
     if (!student) {
       set.status = 404
@@ -85,6 +106,11 @@ export default new Elysia()
     if (!auth0Id) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'Missing auth0Id', false)
+    }
+    const auth = await authorizeOrg(request, auth0Id, 'player.read')
+    if (!auth.ok) {
+      set.status = auth.status
+      return auth.body
     }
     const url = new URL(request.url)
     const idsParam = url.searchParams.get('ids')

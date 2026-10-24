@@ -188,6 +188,23 @@ export const listMemberTeamIds = async (memberAuth0Id: string): Promise<string[]
   return rows.map((r) => r.team_id)
 }
 
+/**
+ * Team ids a player account belongs to. Players are linked to a student row
+ * through `students.account_auth0_id`; the student's `team_id` is their team.
+ */
+export const listPlayerTeamIds = async (accountAuth0Id: string): Promise<string[]> => {
+  const rows =
+    (await withHistoryStore(async (db) => {
+      await ensureSchema(db)
+      const ids = await db<{ team_id: string }[]>`
+      select team_id from students
+      where account_auth0_id = ${accountAuth0Id} and team_id is not null;
+    `
+      return ids ?? []
+    })) ?? []
+  return rows.map((r) => r.team_id)
+}
+
 export const addTeamMember = async (
   teamId: string,
   input: {
