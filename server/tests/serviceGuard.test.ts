@@ -90,7 +90,7 @@ describe('verifyServiceIdentity', () => {
     setToken(TOKEN)
     expect(
       verifyServiceIdentity(TOKEN, 'auth0|member-1', 'auth0|owner-1', {
-        memberRole: 'coach',
+        memberRole: 'junior_coach',
       }),
     ).toEqual({ ok: true })
   })
@@ -99,7 +99,7 @@ describe('verifyServiceIdentity', () => {
     setToken(TOKEN)
     const outcome = verifyServiceIdentity(TOKEN, 'auth0|member-1', 'auth0|owner-1', {
       memberRole: 'player',
-      allowedMemberRoles: ['owner', 'admin', 'coach', 'analyst'],
+      allowedMemberRoles: ['owner', 'head_coach', 'junior_coach'],
     })
     expect(outcome.ok).toBe(false)
     if (outcome.ok) throw new Error('unreachable')
@@ -110,8 +110,8 @@ describe('verifyServiceIdentity', () => {
     setToken(TOKEN)
     expect(
       verifyServiceIdentity(TOKEN, 'auth0|member-1', 'auth0|owner-1', {
-        memberRole: 'coach',
-        allowedMemberRoles: ['owner', 'admin', 'coach', 'analyst'],
+        memberRole: 'junior_coach',
+        allowedMemberRoles: ['owner', 'head_coach', 'junior_coach'],
       }),
     ).toEqual({ ok: true })
   })
@@ -138,7 +138,7 @@ describe('verifyServiceIdentity', () => {
   test('still requires valid token even when memberRole is provided', () => {
     setToken(TOKEN)
     const outcome = verifyServiceIdentity('wrong-token', 'auth0|member-1', 'auth0|owner-1', {
-      memberRole: 'coach',
+      memberRole: 'junior_coach',
     })
     expect(outcome.ok).toBe(false)
   })
@@ -146,7 +146,7 @@ describe('verifyServiceIdentity', () => {
   test('still requires a verified id even when memberRole is provided', () => {
     setToken(TOKEN)
     const outcome = verifyServiceIdentity(TOKEN, null, 'auth0|owner-1', {
-      memberRole: 'coach',
+      memberRole: 'junior_coach',
     })
     expect(outcome.ok).toBe(false)
   })

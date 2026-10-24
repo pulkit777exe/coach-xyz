@@ -17,62 +17,38 @@ describe('hasPermission', () => {
     }
   })
 
-  test('admin holds everything except medical.read', () => {
-    expect(hasPermission('admin', 'medical.read')).toBe(false)
-    expect(hasPermission('admin', 'org.manage_members')).toBe(true)
-    expect(hasPermission('admin', 'analysis.create')).toBe(true)
-  })
-
-  test('coach can manage players and analyses but not members or medical', () => {
-    expect(hasPermission('coach', 'analysis.create')).toBe(true)
-    expect(hasPermission('coach', 'player.manage')).toBe(true)
-    expect(hasPermission('coach', 'finding.review')).toBe(true)
-    expect(hasPermission('coach', 'team.manage')).toBe(true)
-    expect(hasPermission('coach', 'team.create')).toBe(false)
-    expect(hasPermission('coach', 'org.manage_members')).toBe(false)
-    expect(hasPermission('coach', 'org.invite')).toBe(false)
-    expect(hasPermission('coach', 'medical.read')).toBe(false)
-  })
-
-  test('head coach matches the legacy coach track; assistant is scoped', () => {
-    for (const p of [
-      'analysis.create',
-      'player.manage',
-      'team.manage',
-      'finding.review',
-    ] as const) {
-      expect(hasPermission('head_coach', p)).toBe(hasPermission('coach', p))
-    }
-    expect(hasPermission('head_coach', 'team.manage')).toBe(true)
+  test('head coach manages players and analyses but not medical by default', () => {
+    expect(hasPermission('head_coach', 'analysis.create')).toBe(true)
     expect(hasPermission('head_coach', 'player.manage')).toBe(true)
-    expect(hasPermission('assistant_coach', 'analysis.create')).toBe(true)
-    expect(hasPermission('assistant_coach', 'finding.review')).toBe(true)
-    expect(hasPermission('assistant_coach', 'team.manage')).toBe(false)
-    expect(hasPermission('assistant_coach', 'player.manage')).toBe(false)
-    expect(hasPermission('assistant_coach', 'org.manage_members')).toBe(false)
-    expect(hasPermission('assistant_coach', 'medical.read')).toBe(false)
+    expect(hasPermission('head_coach', 'finding.review')).toBe(true)
+    expect(hasPermission('head_coach', 'team.manage')).toBe(true)
+    expect(hasPermission('head_coach', 'team.create')).toBe(false)
+    expect(hasPermission('head_coach', 'org.manage_members')).toBe(false)
+    expect(hasPermission('head_coach', 'org.invite')).toBe(true)
+    expect(hasPermission('head_coach', 'medical.read')).toBe(false)
   })
 
-  test('analyst analyzes and reports without membership management', () => {
-    expect(hasPermission('analyst', 'analysis.create')).toBe(true)
-    expect(hasPermission('analyst', 'report.create')).toBe(true)
-    expect(hasPermission('analyst', 'finding.review')).toBe(true)
-    expect(hasPermission('analyst', 'player.manage')).toBe(false)
-    expect(hasPermission('analyst', 'team.manage')).toBe(false)
+  test('junior coach is scoped to analysis and roster reads', () => {
+    expect(hasPermission('junior_coach', 'analysis.create')).toBe(true)
+    expect(hasPermission('junior_coach', 'analysis.read')).toBe(true)
+    expect(hasPermission('junior_coach', 'player.read')).toBe(true)
+    expect(hasPermission('junior_coach', 'report.read')).toBe(true)
+    expect(hasPermission('junior_coach', 'team.read')).toBe(true)
+    expect(hasPermission('junior_coach', 'player.manage')).toBe(false)
+    expect(hasPermission('junior_coach', 'team.manage')).toBe(false)
+    expect(hasPermission('junior_coach', 'org.invite')).toBe(false)
+    expect(hasPermission('junior_coach', 'medical.read')).toBe(false)
   })
 
-  test('medical reads team/player/report + medical only', () => {
-    expect(hasPermission('medical', 'medical.read')).toBe(true)
-    expect(hasPermission('medical', 'player.read')).toBe(true)
-    expect(hasPermission('medical', 'analysis.create')).toBe(false)
-    expect(hasPermission('medical', 'player.manage')).toBe(false)
+  test('junior coach gains medical.read via grant', () => {
+    expect(hasPermission('junior_coach', 'medical.read', ['medical.read'])).toBe(true)
   })
 
   test('player is read-only on own scope', () => {
     expect(hasPermission('player', 'analysis.read')).toBe(true)
     expect(hasPermission('player', 'report.read')).toBe(true)
     expect(hasPermission('player', 'analysis.create')).toBe(false)
-    expect(hasPermission('player', 'team.read')).toBe(false)
+    expect(hasPermission('player', 'team.read')).toBe(true)
   })
 
   test('null role holds nothing', () => {
@@ -85,24 +61,15 @@ describe('hasPermission', () => {
 })
 
 describe('canAccessTeam', () => {
-  test('owner and admin bypass team scope', () => {
+  test('owner bypasses team scope', () => {
     expect(canAccessTeam('owner', [], 'team-1')).toBe(true)
-    expect(canAccessTeam('admin', [], 'team-1')).toBe(true)
   })
 
-  test('coach/analyst/medical need a membership on that team', () => {
-    expect(canAccessTeam('coach', ['team-1'], 'team-1')).toBe(true)
-    expect(canAccessTeam('coach', ['team-2'], 'team-1')).toBe(false)
-    expect(canAccessTeam('analyst', ['team-1'], 'team-1')).toBe(true)
-    expect(canAccessTeam('medical', ['team-1'], 'team-1')).toBe(true)
-    expect(canAccessTeam('medical', [], 'team-1')).toBe(false)
-  })
-
-  test('head/assistant coaches need a membership on that team', () => {
+  test('head/junior coaches need a membership on that team', () => {
     expect(canAccessTeam('head_coach', ['team-1'], 'team-1')).toBe(true)
     expect(canAccessTeam('head_coach', ['team-2'], 'team-1')).toBe(false)
-    expect(canAccessTeam('assistant_coach', ['team-1'], 'team-1')).toBe(true)
-    expect(canAccessTeam('assistant_coach', [], 'team-1')).toBe(false)
+    expect(canAccessTeam('junior_coach', ['team-1'], 'team-1')).toBe(true)
+    expect(canAccessTeam('junior_coach', [], 'team-1')).toBe(false)
   })
 
   test('player never passes team scope (self-scope only)', () => {
@@ -116,14 +83,14 @@ describe('canAccessTeam', () => {
 
 describe('medical boundary', () => {
   test('owner always sees wellness signals', () => {
-    expect(maySeeMedical('coach', true)).toBe(true)
+    expect(maySeeMedical('owner', false)).toBe(true)
     expect(maySeeMedical(null, true)).toBe(true)
   })
 
-  test('only the medical role sees them otherwise', () => {
-    expect(maySeeMedical('medical', false)).toBe(true)
-    expect(maySeeMedical('coach', false)).toBe(false)
-    expect(maySeeMedical('analyst', false)).toBe(false)
+  test('granted junior coach sees wellness; others do not', () => {
+    expect(maySeeMedical('junior_coach', false, ['medical.read'])).toBe(true)
+    expect(maySeeMedical('junior_coach', false)).toBe(false)
+    expect(maySeeMedical('head_coach', false)).toBe(false)
     expect(maySeeMedical('player', false)).toBe(false)
     expect(maySeeMedical(null, false)).toBe(false)
   })
@@ -162,34 +129,18 @@ describe('medical boundary', () => {
 })
 
 describe('resolveStudentScope', () => {
-  test('owner and admin see the whole roster', () => {
+  test('owner sees the whole roster', () => {
     expect(resolveStudentScope('owner', ['t1'])).toEqual({ all: true })
-    expect(resolveStudentScope('admin', [])).toEqual({ all: true })
   })
 
   test('staff see only their teams', () => {
-    expect(resolveStudentScope('coach', ['t1', 't2'])).toEqual({
+    expect(resolveStudentScope('head_coach', ['t1', 't2'])).toEqual({
       all: false,
       teamIds: ['t1', 't2'],
     })
-    expect(resolveStudentScope('analyst', [])).toEqual({
+    expect(resolveStudentScope('junior_coach', [])).toEqual({
       all: false,
       teamIds: [],
-    })
-    expect(resolveStudentScope('medical', ['t9'])).toEqual({
-      all: false,
-      teamIds: ['t9'],
-    })
-  })
-
-  test('coaching tracks see only their teams', () => {
-    expect(resolveStudentScope('head_coach', ['t1'])).toEqual({
-      all: false,
-      teamIds: ['t1'],
-    })
-    expect(resolveStudentScope('assistant_coach', ['t2'])).toEqual({
-      all: false,
-      teamIds: ['t2'],
     })
   })
 

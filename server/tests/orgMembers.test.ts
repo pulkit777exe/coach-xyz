@@ -35,21 +35,13 @@ afterEach(() => {
 const CANONICAL = {
   orgMemberRoles: [
     'owner',
-    'admin',
     'head_coach',
-    'assistant_coach',
-    'coach',
-    'analyst',
-    'medical',
+    'junior_coach',
     'player',
   ],
   inviteRoles: [
-    'admin',
     'head_coach',
-    'assistant_coach',
-    'coach',
-    'analyst',
-    'medical',
+    'junior_coach',
     'player',
   ],
 } as const
@@ -84,7 +76,7 @@ describe('verifyOrgRole decision table', () => {
     role,
   })
 
-  const members = () => [member(OWNER, 'owner'), member(ADMIN, 'admin'), member(COACH, 'coach')]
+  const members = () => [member(OWNER, 'owner'), member(ADMIN, 'head_coach'), member(COACH, 'junior_coach')]
 
   test('allows when the guard is disabled (no SERVICE_TOKEN), even for a stranger', () => {
     setToken(undefined)
@@ -144,7 +136,7 @@ describe('verifyOrgRole decision table', () => {
       verifyOrgRole({
         verifiedAuth0Id: ADMIN,
         orgAuth0Id: OWNER,
-        requiredRoles: ['admin', 'coach'],
+        requiredRoles: ['head_coach', 'junior_coach'],
         members: members(),
       }),
     ).toEqual(OK)
@@ -167,7 +159,7 @@ describe('verifyOrgRole decision table', () => {
     const outcome = verifyOrgRole({
       verifiedAuth0Id: OWNER,
       orgAuth0Id: OWNER,
-      requiredRoles: ['admin'],
+      requiredRoles: ['head_coach'],
       members: [],
     })
     expect(outcome.ok).toBe(false)
@@ -182,7 +174,7 @@ describe('verifyOrgRole decision table', () => {
         verifiedAuth0Id: OWNER,
         orgAuth0Id: OWNER,
         requiredRoles: ['owner'],
-        members: [member(ADMIN, 'admin')],
+        members: [member(ADMIN, 'head_coach')],
       }),
     ).toEqual(OK)
   })
@@ -192,7 +184,7 @@ describe('verifyOrgRole decision table', () => {
     const outcome = verifyOrgRole({
       verifiedAuth0Id: COACH,
       orgAuth0Id: OWNER,
-      requiredRoles: ['coach'],
+      requiredRoles: ['junior_coach'],
       members: null,
     })
     expect(outcome.ok).toBe(false)
@@ -244,10 +236,10 @@ describe('verifyOrgRole decision table', () => {
       })
       const invited = await inviteOrgMember(ORG, ORG, {
         email: EMAIL,
-        role: 'coach',
+        role: 'junior_coach',
       })
       expect(invited?.member_auth0_id).toBe(MEMBER)
-      expect(await getMemberRole(ORG, MEMBER)).toBe('coach')
+      expect(await getMemberRole(ORG, MEMBER)).toBe('junior_coach')
       await removeOrgMember(ORG, invited!.id)
     },
     { timeout: 20000 },
@@ -323,11 +315,11 @@ describe('verifyOrgRole decision table', () => {
       })
       await inviteOrgMember(ORG_B, ORG_B, {
         email: MEMBER_EMAIL,
-        role: 'coach',
+        role: 'junior_coach',
       })
       const orgs = await listMembershipsForUser(MEMBER)
       const joined = orgs.find((o) => o.org_auth0_id === ORG_B)
-      expect(joined?.role).toBe('coach')
+      expect(joined?.role).toBe('junior_coach')
     },
     { timeout: 20000 },
   )
