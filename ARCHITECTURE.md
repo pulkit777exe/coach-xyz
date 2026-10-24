@@ -368,7 +368,7 @@ Level 1 — pipeline + org core:
 - Purpose: the coach's roster. A player's account is linked to their student row by email on first player login (`account_auth0_id` set, user `role` → 'player').
 
 **org_members** / **teams** / **team_memberships** / **invites**
-- `org_members`: role per org (owner/admin/head_coach/assistant_coach/coach/analyst/medical/player); single-use hashed invite tokens (7-day TTL, revocable)
+- `org_members`: role per org (owner/head_coach/junior_coach/player); single-use hashed invite tokens (7-day TTL, revocable)
 
 **attendance** / **schedule_events** / **reports** / **performance_metrics** (org)
 - All scoped by owning coach `auth0_id`; attendance/performance also reference `student_id`. Player read-only views query these with the coach scope + the linked student. (CHECK constraints pin the shared vocab in `server/src/lib/orgEnums.ts`, mirrored contractually in `web-next/lib/org.ts`.)
@@ -576,9 +576,9 @@ The backend never trusts a client-supplied auth0Id. The Next app is the identity
 ### Roles (account + org)
 
 - **Account vocabulary:** `server/src/lib/userRoles.ts` ↔ `web-next/lib/userRoles.ts` (`['coach','player']`); values/order pinned by the `userRolesContract` tests on both sides.
-- **Org roles:** owner/admin/head_coach/assistant_coach/coach/analyst/medical/player (`org_members.ts`); `permissions.ts` layers a 14-permission vocabulary over them (owner full; admin all but `medical.read`; scoped coach tracks; analyst read/create; medical team/player/report + medical.read; read-only player) with team scope (`canAccessTeam`) and student scope (owners/admins see the full roster; staff see only their teams' students).
+- **Org roles:** owner/head_coach/junior_coach/player (`org_members.ts`); `permissions.ts` layers a permission vocabulary over them (owner full; head coach org-wide except medical/billing unless granted; junior coach scoped team/player/report with grantable flags; read-only player) with team scope (`canAccessTeam`) and student scope (owners see the full roster; staff see only their teams' students).
 - **Enforcement server-side:** `users.role` CHECK `('coach','player')`; sync logic flips to `player` on email-linked first login; org routes sit behind `orgRoleGuard`; wellness (`injury_risk`) is stripped unless the caller is the owning account or holds the medical role.
-- **Enforcement client-side:** `app/dashboard/layout.tsx` redirects `role === 'player'` → `/player` (dashboard home renders `PlayerHome` for org-role players); `app/player/page.tsx` redirects coaches → `/dashboard`; `lib/nav.ts` hides Members (owner/admin/head_coach/coach) and Audit (owner/admin). Pure enforcement lives in the server guard; the UI gates are UX layer only.
+- **Enforcement client-side:** `app/dashboard/layout.tsx` redirects `role === 'player'` → `/player` (dashboard home renders `PlayerHome` for org-role players); `app/player/page.tsx` redirects coaches → `/dashboard`; `lib/nav.ts` hides Members (owner/head_coach) and Audit (owner). Pure enforcement lives in the server guard; the UI gates are UX layer only.
 
 ### Player (read-only Hub) Routes (CONFIRMED — `server/src/routes/me.ts`)
 
