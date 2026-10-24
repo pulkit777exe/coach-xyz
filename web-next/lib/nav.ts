@@ -1,18 +1,12 @@
 export type NavRole =
   | 'owner'
-  | 'admin'
   | 'head_coach'
-  | 'assistant_coach'
-  | 'coach'
-  | 'analyst'
-  | 'medical'
+  | 'junior_coach'
   | 'player'
 
 /** Roles that may open the Members page (invite + role management). */
-export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_coach', 'coach']
-
-/** Roles that may open the Audit Log page. */
-export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner', 'admin']
+export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'head_coach']
+export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner']
 
 export type GatedNavItem = {
   roles?: readonly NavRole[]

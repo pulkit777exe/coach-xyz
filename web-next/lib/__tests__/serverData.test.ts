@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { resolveOrgContext } from '../serverData'
 
-type Org = { org_auth0_id: string; role: 'owner' | 'admin' | 'coach' | 'player' }
+type Org = { org_auth0_id: string; role: 'owner' | 'head_coach' | 'junior_coach' | 'player' }
 
 describe('resolveOrgContext', () => {
   const OWNER = 'auth0|owner-1'
@@ -9,7 +9,7 @@ describe('resolveOrgContext', () => {
 
   test('owner-of-self wins even when also a member elsewhere', () => {
     const orgs: Org[] = [
-      { org_auth0_id: 'auth0|other-org', role: 'coach' },
+      { org_auth0_id: 'auth0|other-org', role: 'head_coach' },
       { org_auth0_id: OWNER, role: 'owner' },
     ]
     expect(resolveOrgContext(OWNER, orgs)).toEqual({ auth0Id: OWNER, role: 'owner' })
@@ -17,10 +17,10 @@ describe('resolveOrgContext', () => {
 
   test('an invited member resolves to their first active membership', () => {
     const orgs: Org[] = [
-      { org_auth0_id: OWNER, role: 'coach' },
+      { org_auth0_id: OWNER, role: 'head_coach' },
       { org_auth0_id: 'auth0|second-org', role: 'player' },
     ]
-    expect(resolveOrgContext(MEMBER, orgs)).toEqual({ auth0Id: OWNER, role: 'coach' })
+    expect(resolveOrgContext(MEMBER, orgs)).toEqual({ auth0Id: OWNER, role: 'head_coach' })
   })
 
   test('empty memberships fall back to owner-of-self (fresh coach)', () => {
@@ -34,20 +34,20 @@ describe('resolveOrgContext', () => {
   test('cookie preference wins when it names a real membership', () => {
     const orgs: Org[] = [
       { org_auth0_id: OWNER, role: 'owner' },
-      { org_auth0_id: 'auth0|other-org', role: 'coach' },
+      { org_auth0_id: 'auth0|other-org', role: 'head_coach' },
     ]
     // Owner's default is own org, but cookie points at other-org.
     expect(resolveOrgContext(OWNER, orgs, 'auth0|other-org')).toEqual({
       auth0Id: 'auth0|other-org',
-      role: 'coach',
+      role: 'head_coach',
     })
   })
 
   test('cookie preference is ignored when it does not name a membership', () => {
-    const orgs: Org[] = [{ org_auth0_id: OWNER, role: 'coach' }]
+    const orgs: Org[] = [{ org_auth0_id: OWNER, role: 'head_coach' }]
     expect(resolveOrgContext(MEMBER, orgs, 'auth0|unknown')).toEqual({
       auth0Id: OWNER,
-      role: 'coach',
+      role: 'head_coach',
     })
   })
 
@@ -56,9 +56,9 @@ describe('resolveOrgContext', () => {
     const B = 'auth0|org-b'
     const orgs: Org[] = [
       { org_auth0_id: A, role: 'owner' },
-      { org_auth0_id: B, role: 'admin' },
+      { org_auth0_id: B, role: 'head_coach' },
     ]
-    expect(resolveOrgContext(A, orgs, B)).toEqual({ auth0Id: B, role: 'admin' })
+    expect(resolveOrgContext(A, orgs, B)).toEqual({ auth0Id: B, role: 'head_coach' })
   })
 
   test('null/empty cookie falls back to owner-of-self', () => {

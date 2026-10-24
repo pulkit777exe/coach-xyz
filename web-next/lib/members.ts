@@ -10,36 +10,24 @@ const org = (auth0Id: string, path: string) => coreOrgUrl(auth0Id, path)
 // access to an org's data, userRoles describes the account.
 export const ORG_MEMBER_ROLES = [
   'owner',
-  'admin',
   'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
-  'medical',
+  'junior_coach',
   'player',
 ] as const
 export type OrgMemberRole = (typeof ORG_MEMBER_ROLES)[number]
 
 export const ORG_MEMBER_ROLE_LABELS: Record<OrgMemberRole, string> = {
   owner: 'Owner',
-  admin: 'Admin',
   head_coach: 'Head Coach',
-  assistant_coach: 'Assistant Coach',
-  coach: 'Coach',
-  analyst: 'Analyst',
-  medical: 'Medical',
+  junior_coach: 'Junior Coach',
   player: 'Player',
 }
 
 // Roles assignable via invite. The owner role is never assigned — it exists
 // only on the seeded owner row.
 export const ORG_MEMBER_INVITE_ROLES = [
-  'admin',
   'head_coach',
-  'assistant_coach',
-  'coach',
-  'analyst',
-  'medical',
+  'junior_coach',
   'player',
 ] as const
 export type OrgMemberInviteRole = (typeof ORG_MEMBER_INVITE_ROLES)[number]

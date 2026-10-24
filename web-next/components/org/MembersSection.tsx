@@ -51,12 +51,8 @@ const INVITE_ROLE_ITEMS: Record<string, string> = Object.fromEntries(
 
 const ROLE_BADGE_VARIANT: Record<OrgMemberRole, 'default' | 'secondary' | 'success' | 'info'> = {
   owner: 'default',
-  admin: 'info',
   head_coach: 'success',
-  assistant_coach: 'success',
-  coach: 'success',
-  analyst: 'info',
-  medical: 'secondary',
+  junior_coach: 'info',
   player: 'secondary',
 }
 
@@ -122,7 +118,7 @@ export default function MembersSection({
   }, [refresh])
 
   const currentUserRole = data?.current_user_role ?? null
-  const canInvite = currentUserRole === 'owner' || currentUserRole === 'admin'
+  const canInvite = currentUserRole === 'owner' || currentUserRole === 'head_coach'
   const canManageRoles = currentUserRole === 'owner'
   const members = data?.members ?? []
   const owner = members.find((m) => m.role === 'owner')

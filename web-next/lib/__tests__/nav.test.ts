@@ -32,33 +32,25 @@ const hrefs = (role: NavRole | null): string[] =>
   visibleNavGroups(groups, role).flatMap((g) => g.items.map((i) => i.href))
 
 describe('visibleNavGroups', () => {
-  test('owner and admin see members and audit', () => {
-    for (const role of ['owner', 'admin'] as const) {
-      const seen = hrefs(role)
-      expect(seen).toContain('/dashboard/members')
-      expect(seen).toContain('/dashboard/audit')
-    }
+  test('owner sees members and audit', () => {
+    const seen = hrefs('owner')
+    expect(seen).toContain('/dashboard/members')
+    expect(seen).toContain('/dashboard/audit')
   })
 
-  test('head coach and legacy coach see members but not audit', () => {
-    for (const role of ['head_coach', 'coach'] as const) {
-      const seen = hrefs(role)
-      expect(seen).toContain('/dashboard/members')
-      expect(seen).not.toContain('/dashboard/audit')
-    }
+  test('head coach sees members but not audit', () => {
+    const seen = hrefs('head_coach')
+    expect(seen).toContain('/dashboard/members')
+    expect(seen).not.toContain('/dashboard/audit')
   })
 
-  test('assistant coach, analyst, medical, and player see neither', () => {
-    for (const role of ['assistant_coach', 'analyst', 'medical', 'player'] as const) {
+  test('junior coach and player see neither', () => {
+    for (const role of ['junior_coach', 'player'] as const) {
       const seen = hrefs(role)
       expect(seen).not.toContain('/dashboard/members')
       expect(seen).not.toContain('/dashboard/audit')
       expect(seen).toContain('/dashboard/students')
     }
-  })
-
-  test('assistant coach keeps the coaching workflow pages', () => {
-    expect(hrefs('assistant_coach')).toContain('/dashboard')
   })
 
   test('null role sees everything (unresolved-context fallback)', () => {

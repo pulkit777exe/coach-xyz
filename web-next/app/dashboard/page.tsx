@@ -65,11 +65,10 @@ export default async function DashboardPage() {
     return <PlayerHome />
   }
 
-  const canInvite = role === 'owner' || role === 'admin'
-  // Scoped staff (assistant/analyst/medical) get the coaching workspace
-  // without org-admin surfaces (invites, organization counts).
+  const canInvite = role === 'owner' || role === 'head_coach'
+  // All staff roles get the coaching workspace; players get the personal view.
   const showOrgSection =
-    role === 'owner' || role === 'admin' || role === 'head_coach' || role === 'coach'
+    role === 'owner' || role === 'head_coach' || role === 'junior_coach'
 
   let stats = null
   let analyses = null
