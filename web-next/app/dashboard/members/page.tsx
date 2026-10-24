@@ -24,7 +24,7 @@ export default async function MembersPage() {
   const invitesRes = data.invites
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
       <PageHeader
         trail={['Home', 'Members']}
         title="Members"

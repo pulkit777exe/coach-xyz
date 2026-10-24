@@ -148,7 +148,7 @@ export default async function SettingsPage() {
     : []
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
       <PageHeader
         trail={['Home', 'Settings']}
         title="Settings"
@@ -156,16 +156,16 @@ export default async function SettingsPage() {
       />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mt-4 rounded-lg border border-danger/30 bg-white/5 px-4 py-3 text-sm text-danger">
           Failed to load some settings data. Try refreshing the page.
         </div>
       )}
 
       <PreferencesSection />
 
-      <div className="mt-6 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <div className="mt-6 rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+        <div className="border-b border-[var(--marketing-white)]/10 px-6 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--marketing-white)]/60">
             Profile
           </p>
         </div>
@@ -178,10 +178,10 @@ export default async function SettingsPage() {
               size="lg"
             />
             <div>
-              <p className="text-lg font-semibold text-foreground">
+              <p className="text-lg font-semibold text-[var(--marketing-white)]">
                 {profile?.name ?? session.user.name ?? 'No name'}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-[var(--marketing-white)]/60">
                 {profile?.email ?? session.user.email}
               </p>
             </div>
@@ -196,15 +196,15 @@ export default async function SettingsPage() {
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <div className="mt-4 rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+        <div className="border-b border-[var(--marketing-white)]/10 px-6 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--marketing-white)]/60">
             Security
           </p>
         </div>
         <div className="divide-y divide-border">
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
               Email Verified
             </span>
             {emailVerified ? (
@@ -213,11 +213,11 @@ export default async function SettingsPage() {
                 Verified
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground">No</span>
+              <span className="text-sm text-[var(--marketing-white)]/60">No</span>
             )}
           </div>
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
               Password
             </span>
             {passwordUrl ? (
@@ -231,13 +231,13 @@ export default async function SettingsPage() {
                 Change Password
               </Button>
             ) : (
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-[var(--marketing-white)]/60">
                 Ask your administrator to reset your password.
               </span>
             )}
           </div>
           <div className="flex items-center justify-between gap-4 px-6 py-3.5">
-            <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <span className="text-xs font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
               Session
             </span>
             <Button
@@ -256,39 +256,39 @@ export default async function SettingsPage() {
       <MembersSection auth0Id={auth0Id} initialData={membersData} />
 
       {subscription && (
-        <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="mt-4 rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+          <div className="border-b border-[var(--marketing-white)]/10 px-6 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--marketing-white)]/60">
               Plan & Usage
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-6 px-6 py-4">
             <div>
-              <p className="text-lg font-bold capitalize tracking-tight text-foreground">
+              <p className="text-lg font-bold capitalize tracking-tight text-[var(--marketing-white)]">
                 {subscription.tier}
               </p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                 Plan
               </p>
             </div>
             <div>
-              <p className="text-lg font-bold tracking-tight text-foreground">
+              <p className="text-lg font-bold tracking-tight text-[var(--marketing-white)]">
                 {subscription.usage_today['analysis'] ?? 0} / {subscription.daily_analysis_limit}
               </p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                 Analyses today
               </p>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-[var(--marketing-white)]/60">
               Usage is metered per analysis for future billing tiers.
             </p>
           </div>
         </div>
       )}
 
-      <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-        <div className="border-b border-border px-6 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+      <div className="mt-4 rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+        <div className="border-b border-[var(--marketing-white)]/10 px-6 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--marketing-white)]/60">
             Members
           </p>
         </div>
@@ -298,13 +298,13 @@ export default async function SettingsPage() {
               const linked = Boolean(s.account_auth0_id)
               const contact = s.email || s.phone || 'No contact on file'
               return (
-                <li key={s.id} className="flex items-center gap-4 bg-card px-6 py-3.5">
-                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
+                <li key={s.id} className="flex items-center gap-4 glass-panel px-6 py-3.5">
+                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-xs font-medium text-[var(--marketing-white)]/70">
                     {initials(s.full_name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{s.full_name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <p className="truncate text-sm font-medium text-[var(--marketing-white)]">{s.full_name}</p>
+                    <p className="mt-0.5 truncate text-xs text-[var(--marketing-white)]/60">
                       {contact}
                       {s.sport ? ` · ${s.sport}` : ''}
                     </p>
@@ -314,23 +314,23 @@ export default async function SettingsPage() {
                       Player account linked
                     </span>
                   ) : (
-                    <span className="shrink-0 text-xs text-muted-foreground">Not linked yet</span>
+                    <span className="shrink-0 text-xs text-[var(--marketing-white)]/60">Not linked yet</span>
                   )}
                 </li>
               )
             })}
           </ul>
         ) : (
-          <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+          <p className="px-6 py-8 text-center text-sm text-[var(--marketing-white)]/60">
             {students === null ? 'Members failed to load.' : 'No players on the roster yet.'}
           </p>
         )}
       </div>
 
       {tiles.length > 0 && (
-        <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-          <div className="border-b border-border px-6 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className="mt-4 rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+          <div className="border-b border-[var(--marketing-white)]/10 px-6 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--marketing-white)]/60">
               Records
             </p>
           </div>
@@ -339,11 +339,11 @@ export default async function SettingsPage() {
               <Link
                 key={t.label}
                 href={t.href}
-                className="rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted"
+                className="rounded-lg border border-[var(--marketing-white)]/10 glass-panel p-4 transition-colors hover:bg-white/10"
               >
-                <t.icon className="size-5 text-muted-foreground" />
-                <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{t.value}</p>
-                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                <t.icon className="size-5 text-[var(--marketing-white)]/60" />
+                <p className="mt-2 text-2xl font-bold tracking-tight text-[var(--marketing-white)]">{t.value}</p>
+                <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                   {t.label}
                 </p>
               </Link>

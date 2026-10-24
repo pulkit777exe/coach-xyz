@@ -25,7 +25,7 @@ export default async function AuditPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
       <PageHeader
         trail={['Home', 'Audit Log']}
         title="Audit Log"
@@ -34,7 +34,7 @@ export default async function AuditPage() {
 
       <div className="mt-6">
         {logs === null ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-[var(--marketing-white)]/60">
             Audit log unavailable — you may not have permission, or the history store is not
             configured.
           </p>

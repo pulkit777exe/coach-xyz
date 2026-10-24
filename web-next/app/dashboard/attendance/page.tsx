@@ -27,7 +27,7 @@ export default async function AttendancePage() {
   const active = studentsRes.students.filter((s) => s.status === 'active')
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
       <PageHeader
         trail={['Home', 'Attendance']}
         title="Attendance"
@@ -35,7 +35,7 @@ export default async function AttendancePage() {
       />
       <div className="mt-6">
         {active.length === 0 && studentsRes.students.length > 0 && (
-          <p className="mt-4 rounded-lg border border-warning-border bg-warning/10 px-4 py-3 text-sm text-foreground">
+          <p className="mt-4 rounded-lg border border-warning-border bg-warning/10 px-4 py-3 text-sm text-[var(--marketing-white)]">
             No active students — check the roster.
           </p>
         )}

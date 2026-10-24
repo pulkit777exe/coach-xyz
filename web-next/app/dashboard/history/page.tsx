@@ -40,7 +40,7 @@ export default async function HistoryPage({
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
       <PageHeader
         trail={['Home', 'History']}
         title="All Analyses"
@@ -48,14 +48,14 @@ export default async function HistoryPage({
       />
 
       {error && (
-        <div className="mt-6 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mt-6 rounded-lg border border-danger/30 bg-white/5 px-4 py-3 text-sm text-danger">
           Failed to load history. Please try again later.
         </div>
       )}
 
       {analyses.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center shadow-sm">
-          <p className="text-muted-foreground mb-4 text-sm">No analyses found</p>
+        <div className="mt-6 rounded-xl border border-[var(--marketing-white)]/10 glass-panel p-12 text-center shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+          <p className="text-[var(--marketing-white)]/60 mb-4 text-sm">No analyses found</p>
           <Link
             href="/"
             className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
@@ -65,19 +65,19 @@ export default async function HistoryPage({
         </div>
       ) : (
         <>
-          <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm divide-y divide-border">
+          <div className="mt-6 overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel shadow-[0_0_20px_rgba(0,0,0,0.3)] divide-y divide-border">
             {analyses.map((a) => (
               <Link
                 key={a.server_job_id}
                 href={`/dashboard/analysis/${a.server_job_id}`}
-                className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
+                className="flex items-center justify-between p-4 transition-colors hover:bg-white/10/50 [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground truncate">
+                  <p className="text-sm font-medium text-[var(--marketing-white)] truncate">
                     {a.display_name || a.file_name || 'Untitled'}
                     {a.player_index !== null && ` — Player ${a.player_index}`}
                   </p>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="mt-1 flex items-center gap-3 text-xs text-[var(--marketing-white)]/60">
                     <span>
                       {new Date(a.requested_at).toLocaleDateString('en-US', {
                         month: 'short',
@@ -101,10 +101,10 @@ export default async function HistoryPage({
                   typeof a.summary_json === 'object' &&
                   'form_score' in a.summary_json ? (
                     <div className="text-right">
-                      <p className="text-xl font-bold text-foreground">
+                      <p className="text-xl font-bold text-[var(--marketing-white)]">
                         {(a.summary_json as { form_score: number }).form_score}
                       </p>
-                      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                      <p className="text-[10px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                         Score
                       </p>
                     </div>
@@ -125,7 +125,7 @@ export default async function HistoryPage({
               {page > 1 && (
                 <Link
                   href={`/dashboard/history?page=${page - 1}`}
-                  className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+                  className="inline-flex h-9 items-center rounded-md border border-[var(--marketing-white)]/10 glass-panel px-4 text-sm font-medium hover:bg-white/10"
                 >
                   Previous
                 </Link>
@@ -133,7 +133,7 @@ export default async function HistoryPage({
               {hasNextPage && (
                 <Link
                   href={`/dashboard/history?page=${page + 1}`}
-                  className="inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+                  className="inline-flex h-9 items-center rounded-md border border-[var(--marketing-white)]/10 glass-panel px-4 text-sm font-medium hover:bg-white/10"
                 >
                   Next
                 </Link>

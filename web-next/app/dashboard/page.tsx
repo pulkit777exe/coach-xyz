@@ -120,21 +120,21 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-[760px] px-6 py-8">
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">Home</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Your coaching organization at a glance.</p>
+      <h1 className="text-[28px] font-bold tracking-tight text-[var(--marketing-white)]">Home</h1>
+      <p className="mt-1 text-sm text-[var(--marketing-white)]/60">Your coaching organization at a glance.</p>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="mt-4 rounded-lg border border-danger/20 bg-white/5 px-4 py-3 text-sm text-danger">
           Failed to load dashboard data. Please try again later.
         </div>
       )}
 
       {statCards.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-x">
+        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-[var(--marketing-white)]/10 glass-panel sm:grid-cols-4 sm:divide-x">
           {statCards.map((stat) => (
             <div key={stat.label} className="px-5 py-4">
-              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--marketing-white)]">{stat.value}</p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                 {stat.label}
               </p>
             </div>
@@ -145,52 +145,52 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Link
           href="/#analyze"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex items-center gap-2.5 rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-3 transition-colors hover:bg-white/10"
         >
-          <Plus className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">New analysis</span>
+          <Plus className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+          <span className="text-[13px] font-medium text-[var(--marketing-white)]">New analysis</span>
         </Link>
         <Link
           href="/dashboard/students"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex items-center gap-2.5 rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-3 transition-colors hover:bg-white/10"
         >
-          <Users className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Add student</span>
+          <Users className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+          <span className="text-[13px] font-medium text-[var(--marketing-white)]">Add student</span>
         </Link>
         <Link
           href="/dashboard/schedule"
-          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+          className="flex items-center gap-2.5 rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-3 transition-colors hover:bg-white/10"
         >
-          <CalendarDays className="size-4 shrink-0 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Schedule event</span>
+          <CalendarDays className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+          <span className="text-[13px] font-medium text-[var(--marketing-white)]">Schedule event</span>
         </Link>
         {canInvite && (
           <Link
             href="/dashboard/members"
-            className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted"
+            className="flex items-center gap-2.5 rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-3 transition-colors hover:bg-white/10"
           >
-            <UserPlus className="size-4 shrink-0 text-muted-foreground" />
-            <span className="text-[13px] font-medium text-foreground">Invite member</span>
+            <UserPlus className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+            <span className="text-[13px] font-medium text-[var(--marketing-white)]">Invite member</span>
           </Link>
         )}
       </div>
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Recents</h2>
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Recents</h2>
           <Link
             href="/dashboard/history"
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]"
           >
             View all
           </Link>
         </div>
         {!analyses || analyses.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             No analyses yet — run your first one above.
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {analyses.slice(0, 5).map((a) => {
               const score =
                 a.summary_json &&
@@ -199,22 +199,22 @@ export default async function DashboardPage() {
                   ? (a.summary_json as { form_score: number }).form_score
                   : null
               return (
-                <li key={a.server_job_id} className="border-b border-border last:border-0">
+                <li key={a.server_job_id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                   <Link
                     href={`/dashboard/analysis/${a.server_job_id}`}
-                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                   >
-                    <Video className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    <Video className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                       {a.display_name || a.file_name || 'Untitled video'}
                       {a.player_index !== null && (
-                        <span className="font-normal text-muted-foreground">
+                        <span className="font-normal text-[var(--marketing-white)]/60">
                           {` — Player ${a.player_index}`}
                         </span>
                       )}
                     </span>
                     {score !== null && (
-                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                      <span className="shrink-0 text-[13px] font-semibold text-[var(--marketing-white)]">
                         {score}
                       </span>
                     )}
@@ -231,33 +231,33 @@ export default async function DashboardPage() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Upcoming events</h2>
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Upcoming events</h2>
           <Link
             href="/dashboard/schedule"
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]"
           >
             Schedule
           </Link>
         </div>
         {!upcomingEvents || upcomingEvents.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             {upcomingEvents === null
               ? 'Events failed to load.'
               : 'No upcoming events in the next 30 days.'}
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {upcomingEvents.map((e) => (
-              <li key={e.id} className="border-b border-border last:border-0">
+              <li key={e.id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href="/dashboard/schedule"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <CalendarIcon className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {e.title}
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--marketing-white)]/60">
                     <ClockIcon className="size-3" />
                     {new Date(e.starts_at).toLocaleDateString('en-US', {
                       weekday: 'short',
@@ -274,31 +274,31 @@ export default async function DashboardPage() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Recent reports</h2>
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Recent reports</h2>
           <Link
             href="/dashboard/reports"
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]"
           >
             All reports
           </Link>
         </div>
         {!recentReports || recentReports.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             No reports generated yet.
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {recentReports.map((r) => (
-              <li key={r.id} className="border-b border-border last:border-0">
+              <li key={r.id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href={`/dashboard/reports/${r.id}`}
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <FileTextIcon className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {r.title}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs text-[var(--marketing-white)]/60">
                     {r.full_name || 'Organization'}
                   </span>
                 </Link>
@@ -310,19 +310,19 @@ export default async function DashboardPage() {
 
       {showOrgSection && tiles.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-1 text-[13px] font-semibold text-foreground">Organization</h2>
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <h2 className="mb-1 text-[13px] font-semibold text-[var(--marketing-white)]">Organization</h2>
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {tiles.map((t) => (
-              <li key={t.label} className="border-b border-border last:border-0">
+              <li key={t.label} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href={t.href}
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <t.icon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <t.icon className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {t.label}
                   </span>
-                  <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                  <span className="shrink-0 text-[13px] font-semibold text-[var(--marketing-white)]">
                     {t.value}
                   </span>
                 </Link>
@@ -332,7 +332,7 @@ export default async function DashboardPage() {
         </section>
       )}
       {!overview && !error && (
-        <p className="mt-6 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-6 rounded-xl border border-[var(--marketing-white)]/10 glass-panel p-6 text-center text-sm text-[var(--marketing-white)]/60">
           No organization data yet — add students to get started.
         </p>
       )}
@@ -396,15 +396,15 @@ async function PlayerHome() {
 
   return (
     <div className="mx-auto max-w-[760px] px-6 py-8">
-      <h1 className="text-[28px] font-bold tracking-tight text-foreground">My training</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Your analyses, schedule, and objectives.</p>
+      <h1 className="text-[28px] font-bold tracking-tight text-[var(--marketing-white)]">My training</h1>
+      <p className="mt-1 text-sm text-[var(--marketing-white)]/60">Your analyses, schedule, and objectives.</p>
 
       {statCards.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-border bg-card sm:grid-cols-3 sm:divide-x">
+        <div className="mt-6 grid grid-cols-2 divide-border rounded-xl border border-[var(--marketing-white)]/10 glass-panel sm:grid-cols-3 sm:divide-x">
           {statCards.map((stat) => (
             <div key={stat.label} className="px-5 py-4">
-              <p className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</p>
-              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+              <p className="text-2xl font-bold tracking-tight text-[var(--marketing-white)]">{stat.value}</p>
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-[var(--marketing-white)]/60">
                 {stat.label}
               </p>
             </div>
@@ -414,17 +414,17 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">My analyses</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">My analyses</h2>
+          <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
         </div>
         {!analyses || analyses.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             {analyses === null ? 'Analyses failed to load.' : 'No analyses yet.'}
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {analyses.slice(0, 5).map((a) => {
               const score =
                 a.summary_json &&
@@ -433,17 +433,17 @@ async function PlayerHome() {
                   ? (a.summary_json as { form_score: number }).form_score
                   : null
               return (
-                <li key={a.server_job_id} className="border-b border-border last:border-0">
+                <li key={a.server_job_id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                   <Link
                     href="/player"
-                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                    className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                   >
-                    <Video className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                    <Video className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                       {a.display_name || a.file_name || 'Untitled video'}
                     </span>
                     {score !== null && (
-                      <span className="shrink-0 text-[13px] font-semibold text-foreground">
+                      <span className="shrink-0 text-[13px] font-semibold text-[var(--marketing-white)]">
                         {score}
                       </span>
                     )}
@@ -460,28 +460,28 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Up next</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Up next</h2>
+          <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
         </div>
         {!upcoming || upcoming.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             {upcoming === null ? 'Schedule failed to load.' : 'Nothing scheduled.'}
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {upcoming.map((e) => (
-              <li key={e.id} className="border-b border-border last:border-0">
+              <li key={e.id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <CalendarIcon className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {e.title}
                   </span>
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  <span className="flex shrink-0 items-center gap-1 text-xs text-[var(--marketing-white)]/60">
                     <ClockIcon className="size-3" />
                     {new Date(e.starts_at).toLocaleDateString('en-US', {
                       weekday: 'short',
@@ -498,28 +498,28 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Objectives</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Objectives</h2>
+          <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
         </div>
         {!objectives || objectives.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             {objectives === null ? 'Objectives failed to load.' : 'No active objectives.'}
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {objectives.slice(0, 5).map((o) => (
-              <li key={o.id} className="border-b border-border last:border-0">
+              <li key={o.id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <ClipboardCheck className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <ClipboardCheck className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {o.title}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs text-[var(--marketing-white)]/60">
                     {formatDueOn(o.due_on)}
                   </span>
                 </Link>
@@ -531,28 +531,28 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-foreground">Reports</h2>
-          <Link href="/player" className="text-xs text-muted-foreground hover:text-foreground">
+          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Reports</h2>
+          <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
         </div>
         {!reports || reports.length === 0 ? (
-          <p className="rounded-xl border border-border bg-card px-4 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-6 text-center text-[13px] text-[var(--marketing-white)]/60">
             {reports === null ? 'Reports failed to load.' : 'No reports yet.'}
           </p>
         ) : (
-          <ul className="overflow-hidden rounded-xl border border-border bg-card">
+          <ul className="overflow-hidden rounded-xl border border-[var(--marketing-white)]/10 glass-panel">
             {reports.map((r) => (
-              <li key={r.id} className="border-b border-border last:border-0">
+              <li key={r.id} className="border-b border-[var(--marketing-white)]/10 last:border-0">
                 <Link
                   href="/player"
-                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-muted"
+                  className="flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-white/10"
                 >
-                  <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+                  <FileTextIcon className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--marketing-white)]">
                     {r.title}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-xs text-[var(--marketing-white)]/60">
                     {new Date(r.created_at).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
