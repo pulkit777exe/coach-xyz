@@ -119,7 +119,7 @@ export default async function DashboardPage() {
   const tiles = overview ? overviewTiles(overview) : []
 
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-8">
+    <div className="dashboard-hero-glow mx-auto max-w-[760px] px-6 py-8 relative z-10">
       <h1 className="text-[28px] font-bold tracking-tight text-[var(--marketing-white)]">Home</h1>
       <p className="mt-1 text-sm text-[var(--marketing-white)]/60">Your coaching organization at a glance.</p>
 
@@ -145,10 +145,10 @@ export default async function DashboardPage() {
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <Link
           href="/#analyze"
-          className="flex items-center gap-2.5 rounded-xl border border-[var(--marketing-white)]/10 glass-panel px-4 py-3 transition-colors hover:bg-white/10"
+          className="cline-btn-primary"
         >
-          <Plus className="size-4 shrink-0 text-[var(--marketing-white)]/60" />
-          <span className="text-[13px] font-medium text-[var(--marketing-white)]">New analysis</span>
+          <Plus className="size-4 shrink-0" />
+          <span>New analysis</span>
         </Link>
         <Link
           href="/dashboard/students"
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Recents</h2>
+          <div className="cline-section-header desktop">Recents</div>
           <Link
             href="/dashboard/history"
             className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]"
@@ -231,7 +231,7 @@ export default async function DashboardPage() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Upcoming events</h2>
+          <div className="cline-section-header desktop">Upcoming events</div>
           <Link
             href="/dashboard/schedule"
             className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]"
@@ -498,7 +498,7 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Objectives</h2>
+          <div className="cline-section-header desktop">Objectives</div>
           <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
@@ -531,7 +531,7 @@ async function PlayerHome() {
 
       <section className="mt-8">
         <div className="mb-1 flex items-baseline justify-between">
-          <h2 className="text-[13px] font-semibold text-[var(--marketing-white)]">Reports</h2>
+          <div className="cline-section-header desktop">Reports</div>
           <Link href="/player" className="text-xs text-[var(--marketing-white)]/60 hover:text-[var(--marketing-white)]">
             Player hub
           </Link>
