@@ -7,19 +7,16 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-0 data-disabled:pointer-events-none data-disabled:opacity-50 active:scale-[0.98] [transition:background-color_150ms_var(--ease-out),color_150ms,border-color_150ms,transform_120ms,scale_120ms] [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/80 shadow-xs',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-xs',
-        ghost:
-          'text-foreground hover:bg-accent dark:hover:bg-accent/50 hover:text-accent-foreground',
-        outline:
-          'border bg-transparent text-foreground hover:bg-accent dark:hover:bg-accent/50 hover:text-accent-foreground shadow-xs',
+        default: 'bg-primary text-primary-foreground hover:bg-[var(--primary-hover)]',
+        secondary: 'bg-popover text-foreground border border-[var(--border)] hover:bg-accent',
+        ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
+        outline: 'bg-card text-primary border border-[var(--border)] hover:bg-accent',
         link: 'text-foreground hover:underline',
-        destructive:
-          'bg-destructive hover:bg-destructive/80 dark:bg-destructive/80 text-destructive-foreground dark:hover:bg-destructive/60 dark:focus-visible:ring-destructive/40 focus-visible:ring-destructive/50 shadow-xs',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
       },
       size: {
         sm: 'h-8 px-3 gap-1',

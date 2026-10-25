@@ -38,7 +38,7 @@ function Input({
         type={type}
         data-slot="input"
         className={cn(
-          'placeholder:text-muted-foreground selection:bg-primary group-hover:border-ring/70 selection:text-primary-foreground bg-input file:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/50 aria-invalid:border-destructive flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow,border-color] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-[3px] md:text-sm',
+          'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground group-hover:border-ring/70 bg-[var(--input-fill)] file:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:ring-destructive/40 aria-invalid:border-destructive flex h-9 w-full min-w-0 rounded-md border border-[var(--input)] px-3 py-1 text-base transition-[color,box-shadow,border-color] duration-150 ease-[var(--ease-out)] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-offset-0 md:text-sm',
           leadingIcon && 'pl-10',
           trailingIcon && 'pr-10',
           className,

@@ -1,12 +1,49 @@
-export type NavRole =
-  | 'owner'
-  | 'head_coach'
-  | 'junior_coach'
-  | 'player'
+import { ORG_MEMBER_ROLES, type OrgMemberRole } from './members'
+
+// Nav visibility roles — an alias of the single membership vocabulary
+// (ORG_MEMBER_ROLES in lib/members.ts), not a second list to keep in sync.
+// A server-side role addition flows here automatically; nav.test.ts pins the
+// page-gating subsets below, not the vocabulary itself.
+export type NavRole = OrgMemberRole
 
 /** Roles that may open the Members page (invite + role management). */
-export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'head_coach']
-export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner']
+export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_coach', 'coach']
+
+/** Roles that may open the Audit Log page. */
+export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner', 'admin']
+
+/** Every org-role vocabulary value — sourced from the canonical membership set. */
+const ALL_NAV_ROLES: readonly NavRole[] = ORG_MEMBER_ROLES
+
+/**
+ * Roles that may open the org roster, planning, and history pages. Players are
+ * self-service only (Home, New Analysis, Account, Settings) — the server
+ * blocks org players from every /api/org/* route, so those links would 403.
+ */
+export const ALL_NON_PLAYER_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
+  (navRole) => navRole !== 'player',
+)
+
+/**
+ * Roles that may open the analysis History page: every staff role holding
+ * analysis.read (permission matrix in lib/permissions.ts). Medical is
+ * read-scoped without analysis.read; players browse their own hub instead.
+ */
+export const HISTORY_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
+  (navRole) => navRole !== 'player' && navRole !== 'medical',
+)
+
+/**
+ * Roles offered the "New Analysis" link (sidebar + ⌘K palette): every staff
+ * role holding `analysis.create` in the permission matrix — all org roles
+ * except `medical` — plus players, whose self-service upload flow starts at
+ * Home. Medical can neither create analyses nor read results (no
+ * `analysis.read`), so the link would dead-end; the dashboard's New analysis
+ * tile derives the same floor via `dashboardQuickActions`.
+ */
+export const ANALYZE_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
+  (navRole) => navRole !== 'medical',
+)
 
 export type GatedNavItem = {
   roles?: readonly NavRole[]

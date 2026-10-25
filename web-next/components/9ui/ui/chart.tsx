@@ -210,7 +210,12 @@ function ChartTooltipContent({ ...props }: any) {
                         {itemConfig?.label || item.name}
                       </span>
                     </div>
-                    {item.value && (
+                    {/* Ternary, not `{item.value && …}`: a metric of exactly 0 is
+                        falsy, so the guard rendered a bare unstyled `0` where
+                        every other row shows a right-aligned tabular figure.
+                        StudentProfile only checks Number.isFinite, and its input
+                        is type="number" step="any" with no lower bound. */}
+                    {item.value === undefined || item.value === null ? null : (
                       <span className="text-foreground ml-4 font-mono font-medium tabular-nums">
                         {item.value.toLocaleString()}
                       </span>

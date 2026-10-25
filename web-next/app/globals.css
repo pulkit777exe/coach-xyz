@@ -2,15 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── CoachXYZ Palette ────────────────────────────────────────────────────
-   #CC5728 rust      → destructive / accent
-   var(--ring) deep green → success / ring
-   #BCF56C lime      → PRIMARY (button bg)  — lime → black text
-   var(--success) mid green → muted-foreground / secondary accent
-   #433B34 dark brown→ foreground / primary-foreground (button text)
-   #CECBCA warm beige→ border / muted / card tint
+/* ── CoachXYZ Palette → Notion ───────────────────────────────────────────
+   Pixel-matched to Notion's UI in BOTH light and dark mode.
+   Light canvas #ffffff / ink #37352f / hairline rgba(55,53,47,0.09)
+   Blue #2383e2 is the only primary (buttons, ring, score, chart-1).
+   Dark canvas #191919 / ink #d4d4d4 — lives on low-opacity white borders
+   (shadows don't read on dark).
+   CRITICAL: light values are declared on `:root` ONLY — never on `.root`
+   (div.root wraps all page content and would beat inherited `.dark`
+   values from html). Motion vars also declared once, on `:root`.
    Inter + JetBrains Mono
-─────────────────────────────────────────────────────────────────────────── */
+────────────────────────────────────────────────────────────────────────── */
 
 @layer theme {
   :root {
@@ -27,11 +29,24 @@
 }
 
 @layer base {
-  body {
-    font-family: var(--font-sans);
+  html {
+    /* Smoothing declared once on the root (the body's Tailwind `antialiased`
+       class re-states the same two declarations — same values, no conflict). */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    font-family: var(--font-sans);
     overflow-x: hidden;
+    text-wrap: pretty;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap: balance;
   }
   .font-serif {
     font-family: var(--font-sans);
@@ -40,164 +55,179 @@
     font-family: var(--font-mono);
   }
   ::selection {
-    background: rgba(188, 245, 108, 0.35);
+    background: rgba(35, 131, 226, 0.22);
   }
 }
 
-/* ── Light — warm off-white paper, brown ink, lime CTAs ─────────────── */
-:root,
-.root {
-  --background: #faf8f4;
-  --foreground: #433b34;
+/* ── Light — Notion white, brown-black ink, blue CTA, hairline borders ──
+   Single declaration site: `:root` only (see header comment). */
+:root {
+  /* shared motion tokens (all < 300ms) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+
+  /* type scale — semantic role names for the documented sizes
+     (docs/DESIGN_FOUNDATIONS.md §Typography). font-size only: line-height,
+     weight and tracking stay per the typography rules at the call site. */
+  --text-label: 11px;
+  --text-caption: 12px;
+  --text-meta: 13px;
+  --text-body: 14px;
+  --text-title: 15px;
+  --text-lead: 16px;
+
+  --background: #ffffff;
+  --foreground: #37352f;
   --card: #ffffff;
-  --card-foreground: #433b34;
+  --card-foreground: #37352f;
   --popover: #ffffff;
-  --popover-foreground: #433b34;
-  --primary: #bcf56c;
-  --primary-foreground: #1a1c18; /* near-black for AA on lime (~15.8:1) */
-  --secondary: #cecbca;
-  --secondary-foreground: #433b34;
-  --muted: #f2ede6;
-  --muted-foreground: #7a6e62;
-  --accent: #eef6d8;
-  --accent-foreground: #2b3a12;
-  --destructive: #cc5728;
+  --popover-foreground: #37352f;
+  --primary: #2383e2;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1a73c9;
+  --secondary: #efefef;
+  --secondary-foreground: #37352f;
+  --muted: #f7f7f5;
+  --muted-foreground: #787774;
+  --accent: #efefef;
+  --accent-foreground: #37352f;
+  --destructive: #e03e3e;
   --destructive-foreground: #ffffff;
-  --border: #e8e0d5;
-  --input: #e8e0d5;
-  --ring: #046c0c;
+  --border: rgba(55, 53, 47, 0.09);
+  --input: rgba(55, 53, 47, 0.15);
+  --input-fill: #ffffff;
+  --ring: #2383e2;
 
-  --sidebar: #ffffff;
-  --sidebar-foreground: #433b34;
-  --sidebar-border: #e8e0d5;
+  /* Modal / drawer scrim. It dims a THEMED surface, so the alpha is the
+     theme-varying part — which is why a bare `bg-black/45` utility is not an
+     equivalent: only a token can flip per theme. The value is byte-for-byte what
+     `bg-black/45` compiled to, so this changes no rendered pixel today. */
+  --overlay: rgb(0 0 0 / 0.45);
+
+  --switch-off: rgba(55, 53, 47, 0.16);
+  --switch-thumb: #ffffff;
+
+  --sidebar: #f7f7f5;
+  --sidebar-foreground: #37352f;
+  --sidebar-border: rgba(55, 53, 47, 0.09);
   --topbar: #ffffff;
-  --topbar-foreground: #433b34;
-  --topbar-border: #e8e0d5;
+  --topbar-foreground: #37352f;
+  --topbar-border: rgba(55, 53, 47, 0.09);
 
-  --chart-1: var(--ring);
-  --chart-2: var(--success);
-  --chart-3: #cc5728;
-  --chart-4: #433b34;
-  --chart-5: #cecbca;
+  --chart-1: #2383e2;
+  --chart-2: #0f7b6c;
+  --chart-3: #d9730d;
+  --chart-4: #37352f;
+  --chart-5: #787774;
 
-  --danger: #cc5728;
+  --danger: #e03e3e;
   --danger-foreground: #ffffff;
-  --danger-border: rgba(204, 87, 40, 0.25);
-  --warning: #c49a2b;
-  --warning-foreground: #433b34;
-  --warning-border: rgba(196, 154, 43, 0.25);
-  --info: #4a6fa5;
+  --danger-border: rgba(224, 62, 62, 0.25);
+  --warning: #d9730d;
+  --warning-foreground: #ffffff;
+  --warning-border: rgba(217, 115, 13, 0.25);
+  --info: #337ea9;
   --info-foreground: #ffffff;
-  --info-border: rgba(74, 111, 165, 0.2);
-  --success: var(--ring);
+  --info-border: rgba(51, 126, 169, 0.25);
+  --success: #0f7b6c;
   --success-foreground: #ffffff;
-  --success-border: rgba(4, 108, 12, 0.2);
-  --score: var(--ring);
+  --success-border: rgba(15, 123, 108, 0.25);
+  /* static check-mark green — theme-invariant so icons read identically */
+  --check: #0f7b6c;
+  --score: #2383e2;
 
-  --bg: var(--background);
-  --fg: var(--foreground);
-  --cream-40: var(--muted-foreground);
-  --cream-20: var(--border);
-  --cream-10: var(--border);
-  --cream-05: var(--muted);
-  --cream-03: #fdfcfa;
-  --red: var(--destructive);
+  /* brand text + emphasis ink — exact values call sites hand-wrote as
+     light/dark hex pairs (the link blue brightens in dark; marketing ink
+     runs one step hotter than body ink). See docs/DESIGN_FOUNDATIONS.md. */
+  --link: #2383e2;
+  --foreground-strong: #37352f;
+  --surface-hover: #fafafa;
+  --border-hover: rgba(55, 53, 47, 0.18);
+  --fill-quiet: rgba(55, 53, 47, 0.06);
+  --fill-quiet-hover: rgba(55, 53, 47, 0.09);
 
-  /* marketing — fixed purple Auth0-style, not theme-dependent */
-  --marketing-dark: #0f0a1f;
-  --marketing-dark-card: rgba(255, 255, 255, 0.06);
-  --marketing-light: #faf8f4;
-  --marketing-beige: #e4e4e7;
-  --marketing-brown: #0a0a0f;
-  --marketing-lime: #bcf56c;
-  --marketing-green: #4ade80;
-  --marketing-rust: #cc5728;
-  --marketing-hero: radial-gradient(
-    1200px 600px at 50% -15%,
-    #7c3aed 0%,
-    #5b21b6 30%,
-    #2e1065 55%,
-    #0f0a1f 78%
-  );
-  --marketing-glow-lime: rgba(188, 245, 108, 0.15);
-  --marketing-glow-purple: rgba(124, 58, 237, 0.18);
-  --marketing-white: #ffffff;
-  --marketing-purple: #7c3aed;
-  --marketing-purple-light: #a78bfa;
-  --marketing-orange: #f97316;
-  --marketing-violet: #a855f7;
+  /* stacked dialogs scale back; default 0 so var() always resolves */
+  --nested-dialogs: 0;
 }
 
-/* ── Dark — Auth0-inspired near-black, glass cards, lime CTA ──────────── */
+/* ── Dark — Notion night mode: #191919 canvas, #202020 surfaces,
+   low-opacity white hairlines (borders, not shadows) ──────────────────── */
 .dark {
-  --background: #0a0a0f;
-  --foreground: #fafafa;
-  --card: #14141c;
-  --card-foreground: #fafafa;
-  --popover: #1a1a22;
-  --popover-foreground: #fafafa;
-  --primary: #bcf56c;
-  --primary-foreground: #0a0a0f;
-  --secondary: #1e1e28;
-  --secondary-foreground: #e4e4e7;
-  --muted: #1a1a22;
-  --muted-foreground: #a1a1aa;
-  --accent: #1e1e28;
-  --accent-foreground: #fafafa;
-  --destructive: #cc5728;
-  --destructive-foreground: #fff7ed;
-  --border: #23232e;
-  --input: #23232e;
-  --ring: #4ade80;
+  --background: #191919;
+  --foreground: #d4d4d4;
+  --card: #202020;
+  --card-foreground: #d4d4d4;
+  --popover: #252525;
+  --popover-foreground: #d4d4d4;
+  --primary: #2383e2;
+  --primary-foreground: #ffffff;
+  --primary-hover: #4a94e0;
+  --secondary: #2f2f2f;
+  --secondary-foreground: #d4d4d4;
+  --muted: #202020;
+  --muted-foreground: #9b9b9b;
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #ececec;
+  --destructive: #e03e3e;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --input-fill: rgba(255, 255, 255, 0.04);
+  --ring: #2383e2;
 
-  --sidebar: #0f0f14;
-  --sidebar-foreground: #e4e4e7;
-  --sidebar-border: #1e1e28;
-  --topbar: #0f0f14;
-  --topbar-foreground: #e4e4e7;
-  --topbar-border: #1e1e28;
+  --overlay: rgb(0 0 0 / 0.65);
 
-  --chart-1: #bcf56c;
-  --chart-2: var(--success);
-  --chart-3: #cc5728;
-  --chart-4: #cecbca;
-  --chart-5: var(--ring);
+  --switch-off: rgba(255, 255, 255, 0.16);
 
-  --danger: #cc5728;
-  --danger-foreground: #fff7ed;
-  --danger-border: rgba(204, 87, 40, 0.35);
-  --warning: #c49a2b;
-  --warning-foreground: #1a1611;
-  --warning-border: rgba(196, 154, 43, 0.3);
-  --info: #7aa0c9;
-  --info-foreground: #0f1720;
-  --info-border: rgba(122, 160, 201, 0.25);
-  --success: #4ade80;
-  --success-foreground: #13160f;
-  --success-border: rgba(74, 222, 128, 0.3);
-  --score: #bcf56c;
+  /* sidebar == canvas per Notion; separation comes from the hairline */
+  --sidebar: #191919;
+  --sidebar-foreground: #d4d4d4;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --topbar: #191919;
+  --topbar-foreground: #d4d4d4;
+  --topbar-border: rgba(255, 255, 255, 0.08);
 
-  --marketing-dark: #0f0a1f;
-  --marketing-dark-card: rgba(255, 255, 255, 0.06);
-  --marketing-light: #faf8f4;
-  --marketing-beige: #e4e4e7;
-  --marketing-brown: #0a0a0f;
-  --marketing-lime: #bcf56c;
-  --marketing-green: #4ade80;
-  --marketing-rust: #cc5728;
-  --marketing-hero: radial-gradient(
-    1200px 600px at 50% -15%,
-    #7c3aed 0%,
-    #5b21b6 30%,
-    #2e1065 55%,
-    #0f0a1f 78%
-  );
-  --marketing-white: #ffffff;
-  --marketing-purple: #7c3aed;
-  --marketing-purple-light: #a78bfa;
-  --marketing-orange: #f97316;
-  --marketing-violet: #a855f7;
+  --chart-1: #2383e2;
+  --chart-2: #4d9078;
+  --chart-3: #d9730d;
+  --chart-4: #9b9b9b;
+  --chart-5: #529cca;
+
+  --danger: #e03e3e;
+  --danger-foreground: #ffffff;
+  --danger-border: rgba(224, 62, 62, 0.35);
+  --warning: #d9730d;
+  --warning-foreground: #ffffff;
+  --warning-border: rgba(217, 115, 13, 0.35);
+  --info: #529cca;
+  --info-foreground: #ffffff;
+  --info-border: rgba(82, 156, 202, 0.35);
+  --success: #4d9078;
+  --success-foreground: #ffffff;
+  --success-border: rgba(77, 144, 120, 0.35);
+  --check: #0f7b6c;
+  --score: #2383e2;
+
+  --link: #4da3ec;
+  --foreground-strong: #ececec;
+  --surface-hover: #1e1e1e;
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --fill-quiet: rgba(255, 255, 255, 0.06);
+  --fill-quiet-hover: rgba(255, 255, 255, 0.09);
 }
+
+/* Disabled is a STATE, and it had no token: 19 first-party sites picked one of four
+     different opacities (30 x4, 40 x1, 50 x13, 60 x1), so the value could not move from one
+     place — which is the entire reason the type-scale tokens exist. 0.5 is the plurality and
+     is what most of the app already renders, so normalising onto it changes 6 sites' opacity
+     and nothing else. Declared in `:root` and mapped in `@theme inline` for the same reason
+     `--overlay` is: `inline` is what makes the utility re-resolve against `.dark` at the
+     element rather than baking the light value into the class. */
+--opacity-disabled: 0.5;
 
 @theme inline {
   --color-background: var(--background);
@@ -236,6 +266,7 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-border: var(--success-border);
+  --color-check: var(--check);
   --color-score: var(--score);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -243,55 +274,98 @@
   --color-topbar: var(--topbar);
   --color-topbar-foreground: var(--topbar-foreground);
   --color-topbar-border: var(--topbar-border);
+  --color-link: var(--link);
+  --color-foreground-strong: var(--foreground-strong);
+  --color-surface-hover: var(--surface-hover);
+  --color-border-hover: var(--border-hover);
+  --color-fill-quiet: var(--fill-quiet);
+  --color-fill-quiet-hover: var(--fill-quiet-hover);
+  /* hover ladder for bg-primary — 9ui buttons reference --primary-hover via
+     arbitrary var(); the utility class needs the color mapping too */
+  --color-primary-hover: var(--primary-hover);
+  --color-overlay: var(--overlay);
 }
 
-.auth0-card {
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+/* ── Type-scale utilities — semantic names for the documented scale ──────
+   Font-size ONLY (line-height keeps inheriting): `text-meta` ≡ `text-[13px]`
+   pixel-for-pixel, while the scale itself moves from one place (--text-*
+   above). Adoption is opt-in; the px sizes stay in globals, never in tsx. */
+@utility text-label {
+  font-size: var(--text-label);
 }
-.auth0-card-hover:hover {
-  border-color: color-mix(in srgb, var(--border), transparent 20%);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+@utility text-caption {
+  font-size: var(--text-caption);
 }
-.dark .auth0-card-hover:hover {
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+@utility text-meta {
+  font-size: var(--text-meta);
+}
+@utility text-body {
+  font-size: var(--text-body);
+}
+@utility text-title {
+  font-size: var(--text-title);
+}
+@utility text-lead {
+  font-size: var(--text-lead);
 }
 
-/* Auth0-modern: purple hero + glass cards */
-.marketing-hero {
-  background: var(--marketing-hero);
-}
-.glass-card {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-.glass-card-strong {
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
+/* ── Shared surfaces — neutral Notion panels (no glass, no purple) ──────
+   Light: hairline + whisper shadow. Dark: border does all the work. */
+.auth0-card,
+.glass-card,
+.glass-card-strong,
 .dark-card {
   background: var(--card);
   border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.04);
 }
+.dark .auth0-card,
+.dark .glass-card,
+.dark .glass-card-strong,
+.dark .dark-card {
+  box-shadow: none;
+}
+
+.auth0-card-hover:hover {
+  border-color: color-mix(in srgb, var(--border), var(--foreground) 8%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.dark .auth0-card-hover:hover {
+  box-shadow: none;
+}
+
 .dark-card-hover:hover {
-  background: color-mix(in srgb, var(--card), white 4%);
-  border-color: color-mix(in srgb, var(--border), white 8%);
+  background: color-mix(in srgb, var(--card), var(--foreground) 4%);
+  border-color: color-mix(in srgb, var(--border), var(--foreground) 8%);
+}
+
+/* Hero band: the page surface itself — light plain white, dark #191919
+   (no radial gradients; it resolves to the canvas token). */
+.marketing-hero {
+  background: var(--background);
 }
 
 .button-accent {
   background: var(--primary);
   color: var(--primary-foreground);
-  font-weight: 600;
-  transition: all 0.15s ease;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out),
+    transform 120ms var(--ease-out);
 }
 .button-accent:hover {
-  background: color-mix(in srgb, var(--primary), white 12%);
+  background: var(--primary-hover);
+}
+.button-accent:active {
+  transform: scale(0.98);
 }
 .button-accent:disabled {
   opacity: 0.45;
@@ -309,7 +383,7 @@
 .marquee-track {
   display: flex;
   width: max-content;
-  animation: marqueeScroll 40s linear infinite;
+  animation: marqueeScroll 300ms linear infinite;
 }
 .marquee-track:hover {
   animation-play-state: paused;
@@ -350,18 +424,16 @@
   filter: blur(var(--icon-swap-blur));
   transform: scale(var(--icon-swap-start-scale));
 }
-@media (prefers-reduced-motion: reduce) {
-  .t-icon-swap .t-icon {
-    transition: none !important;
-  }
-  .marquee-track {
-    animation: none;
-  }
-  [class*='animate-[fadeIn'],
-  [class*='animate-[fadeOut'],
-  [class*='animate-[slideUp'] {
-    animation: none !important;
-  }
+
+/* ── Entrance animations ───────────────────────────────────────────────
+   Unlayered: caps any call-site `animate-[fadeIn…/slideUp…]` duration at
+   --dur-slow (240ms ≤ 300ms) and forces the Notion ease-out, whatever
+   shorthand the call site wrote. Delays (staggering) are preserved. */
+[class*='animate-[fadeIn'],
+[class*='animate-[fadeOut'],
+[class*='animate-[slideUp'] {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
 }
 
 @keyframes slideUp {
@@ -403,145 +475,68 @@
   }
 }
 
-/* User preference: kill motion without waiting on OS settings. */
+/* ── Reduced motion ────────────────────────────────────────────────────
+   Keep opacity/color transitions; drop movement (transform-driven
+   entrances swap to the opacity-only fadeIn, marquees stop). */
+@media (prefers-reduced-motion: reduce) {
+  .t-icon-swap .t-icon {
+    transition: none !important;
+  }
+  .marquee-track {
+    animation: none;
+  }
+  [class*='animate-[fadeIn'],
+  [class*='animate-[fadeOut'],
+  [class*='animate-[fadeInDown'],
+  [class*='animate-[fadeInUp'],
+  [class*='animate-[slideUp'] {
+    animation-name: fadeIn !important;
+    animation-duration: var(--dur-fast) !important;
+    animation-delay: 0s !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-property:
+      opacity, color, background-color, border-color, outline-color, text-decoration-color, fill,
+      stroke, box-shadow !important;
+    transition-duration: var(--dur-fast) !important;
+  }
+}
+
+/* User preference: kill movement without waiting on OS settings —
+   opacity/color transitions keep a fast 120ms fade. */
+.reduce-motion .t-icon-swap .t-icon {
+  transition: none !important;
+}
+.reduce-motion .marquee-track {
+  animation: none !important;
+}
+.reduce-motion [class*='animate-[fadeIn'],
+.reduce-motion [class*='animate-[fadeOut'],
+.reduce-motion [class*='animate-[fadeInDown'],
+.reduce-motion [class*='animate-[fadeInUp'],
+.reduce-motion [class*='animate-[slideUp'] {
+  animation-name: fadeIn !important;
+  animation-duration: var(--dur-fast) !important;
+  animation-delay: 0s !important;
+}
 .reduce-motion *,
 .reduce-motion *::before,
 .reduce-motion *::after {
-  animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
+  animation-duration: var(--dur-fast) !important;
+  transition-property:
+    opacity, color, background-color, border-color, outline-color, text-decoration-color, fill,
+    stroke, box-shadow !important;
+  transition-duration: var(--dur-fast) !important;
 }
 
-/* ── Cline-style grid background pattern ── */
-.bg-grid {
-  background-size: 40px 40px;
-  background-image: linear-gradient(to right, rgba(99, 102, 241, 0.15) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.15) 1px, transparent 1px);
-}
-.dark .bg-grid {
-  background-image: linear-gradient(to right, rgba(99, 102, 241, 0.25) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.25) 1px, transparent 1px);
-}
-.bg-grid-fine {
-  background-size: 20px 20px;
-  background-image: linear-gradient(to right, rgba(99, 102, 241, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.08) 1px, transparent 1px);
-}
-.dark .bg-grid-fine {
-  background-image: linear-gradient(to right, rgba(99, 102, 241, 0.15) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.15) 1px, transparent 1px);
-}
-
-/* ── Glass panel variant tuned for dark dashboard surfaces ── */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-.dark .glass-panel {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-/* ── Dashboard page container with grid + dark marketing bg ── */
-.dashboard-shell {
-  background: var(--marketing-dark);
-  min-height: 100vh;
-}
-
-/* ── Section divider (subtle rule between sections) ── */
-.section-divider {
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.12), transparent);
-  margin: 2rem 0;
-  border: none;
-}
-
-/* ── Hero glow (purple radial) for dashboard hero areas ── */
-.dashboard-hero-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.dashboard-hero-glow::before,
-.dashboard-hero-glow::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.35;
-}
-.dashboard-hero-glow::before {
-  top: -20%;
-  left: 10%;
-  width: 600px;
-  height: 600px;
-  background: var(--marketing-purple);
-}
-.dashboard-hero-glow::after {
-  bottom: -10%;
-  right: 10%;
-  width: 450px;
-  height: 450px;
-  background: var(--marketing-violet);
-}
-
-.cline-section-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border: 1px solid;
-}
-.cline-section-header.desktop {
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
-  border-color: rgba(99, 102, 241, 0.3);
-}
-.cline-section-header.ide {
-  background: rgba(192, 38, 38, 0.15);
-  color: #fca5a5;
-  border-color: rgba(192, 38, 38, 0.3);
-}
-.cline-section-header.cli {
-  background: rgba(236, 72, 153, 0.15);
-  color: #f472b6;
-  border-color: rgba(236, 72, 153, 0.3);
-}
-.cline-section-header.sdk {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-/* ── Cline primary button (purple/violet) ── */
-.cline-btn-primary {
-  @apply inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold transition-colors;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  color: #ffffff;
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
-}
-.cline-btn-primary:hover {
-  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
-}
-
-/* ── Cline secondary button (outline) ── */
-.cline-btn-secondary {
-  @apply inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold transition-colors;
-  background: transparent;
-  color: #e4e4e7;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-.cline-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.25);
+/* `opacity-50` hardcoded in a className is a value the design system does not own, which is
+   how one state ended up with four different treatments. This is the same shape as
+   `text-caption` and friends: a named utility over a named token, so a disabled control is
+   restyled by editing one line. `disabled:` is a VARIANT, and variants do apply to
+   `@utility` — verified in the built CSS, not assumed. */
+@utility opacity-disabled {
+  opacity: var(--opacity-disabled);
 }
