@@ -192,7 +192,7 @@ export default async function FeaturesPage() {
   const collaborate = visible(COLLABORATE, role)
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="bg-grid relative mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['Home', 'Features']}
         title="Features"

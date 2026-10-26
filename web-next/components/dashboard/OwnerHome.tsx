@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 
 import StatusPill from '@/components/org/StatusPill'
-import type { DashboardAnalysis, DashboardStats } from '@/lib/api'
+import type { DashboardAnalysis, DashboardStats } from '@/lib/library'
 import { cn } from '@/lib/utils'
 import { ORG_MEMBER_ROLE_LABELS, type OrgMembersResponse } from '@/lib/members'
 import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
@@ -20,12 +20,12 @@ import type { DashboardQuickActions } from '@/lib/permissions'
 import { initials } from '@/lib/initials'
 import { formatDayWeekday } from '@/lib/date'
 
-export const shellClass = 'mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
+export const shellClass = 'bg-grid relative mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
 const rowLinkClass =
   'flex h-9 items-center gap-2.5 rounded-[4px] px-2 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 
-const cardClass = 'rounded-[6px] border border-border bg-card p-5'
+const cardClass = 'rounded-[6px] border border-border bg-card glass-panel p-5'
 
 const metricLabelClass =
   'text-label font-medium uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground'

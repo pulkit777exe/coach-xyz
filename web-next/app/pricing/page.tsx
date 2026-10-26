@@ -69,7 +69,7 @@ function CompareCell({ value }: { value: string }) {
 
 export default function PricingPage() {
   return (
-    <main id="main" tabIndex={-1} className="bg-background text-foreground-strong antialiased">
+    <main id="main" tabIndex={-1} className="dark bg-[var(--marketing-dark)] text-foreground-strong antialiased bg-grid relative">
       {/* ── Hero + plan cards ───────────────────────────────────────────── */}
       <section className="border-b border-border px-6 py-16 lg:px-8">
         <div className="mx-auto max-w-[1120px] text-center">

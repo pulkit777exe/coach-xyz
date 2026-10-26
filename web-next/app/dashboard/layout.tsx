@@ -106,7 +106,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   )
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="dashboard-shell flex min-h-screen bg-background dark:bg-[var(--marketing-dark)]">
       {/* Sidebar — Notion chrome: 240px, hairline border on bg-sidebar,
           internal scroll region with a bottom-pinned footer block. Sits
           strictly below the fixed topbar (top-14) so the footer never hangs
@@ -121,7 +121,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <MobileNavDrawer label={drawerLabel} footer={sidebarFooter}>
           {sidebarTop}
         </MobileNavDrawer>
-        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background dark:bg-[var(--marketing-dark)]">
           {children}
         </main>
       </div>

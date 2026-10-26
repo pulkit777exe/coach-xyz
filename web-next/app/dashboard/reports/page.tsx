@@ -21,7 +21,7 @@ export default async function ReportsPage() {
   const [reportsRes, studentsRes] = await Promise.all([orgReports(auth0Id), orgStudents(auth0Id)])
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="bg-grid relative mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['Home', 'Reports']}
         title="Reports"
@@ -32,7 +32,7 @@ export default async function ReportsPage() {
           auth0Id={auth0Id}
           initialReports={reportsRes.reports}
           students={studentsRes.students}
-          canCreate={hasPermission(role, 'report.create')}
+          canWrite={hasPermission(role, 'report.create')}
           canSend={REPORT_SEND_ROLES.includes(role)}
         />
       </div>
