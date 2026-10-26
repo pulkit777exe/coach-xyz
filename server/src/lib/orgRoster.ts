@@ -1,7 +1,3 @@
-// ── Org roster slice (vertical slice: who is in the org) ─────────────────────
-// Students (+ bulk import / linked-player resolution) plus the org-structure
-// companions seasons & matches. Pure move from lib/orgData.ts — all names and
-// signatures are unchanged. Route/lib code imports from here directly.
 import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './orgStore'
 import { STUDENT_STATUSES } from './orgEnums'
 
@@ -39,6 +35,7 @@ export const listStudents = async (
     status?: string
     teamId?: string
     teamIds?: string[]
+    includeArchived?: boolean
   } = {},
 ): Promise<Student[]> => {
   return (
@@ -64,6 +61,7 @@ export const listStudents = async (
           and (${opts.status ?? ''} = '' or status = ${opts.status ?? null})
           and (${teamId} = '' or team_id = ${teamId === '' ? null : teamId}::uuid)
           and (not ${scoped} or team_id = any(${scopeParam}::uuid[]))
+          and (${opts.includeArchived === true || opts.status === 'archived'} or status is distinct from 'archived')
         order by full_name asc;
       `
       return rows ?? []

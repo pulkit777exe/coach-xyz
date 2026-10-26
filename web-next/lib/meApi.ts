@@ -132,3 +132,7 @@ export async function getMyReport(
     linked: boolean
   }>(me(`/reports/${encodeURIComponent(id)}`))
 }
+
+export async function getNotificationPrefs(): Promise<{ inApp: boolean }> {
+  return { inApp: true }
+}

@@ -111,8 +111,10 @@ const loadLinkControl = async (
   orgStudents: () => Promise<{ students: unknown[] }>,
   link: (studentId: string | null) => Promise<unknown>,
 ) => {
-  vi.doMock('@/lib/org', () => ({
+  vi.doMock('@/lib/org/students', () => ({
     orgStudents: async () => orgStudents(),
+  }))
+  vi.doMock('@/lib/org/email', () => ({
     linkAnalysisToStudent: async (_org: string, _job: string, studentId: string | null) =>
       link(studentId),
   }))

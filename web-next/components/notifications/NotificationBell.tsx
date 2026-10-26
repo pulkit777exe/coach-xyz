@@ -22,6 +22,7 @@ import {
   subscribeNotifications,
 } from '@/lib/notifications'
 import type { AppNotification, NotificationsState } from '@/lib/notifications'
+import { getNotificationPrefs } from '@/lib/meApi'
 import { formatTimeShort } from '@/lib/date'
 import { errorMessageOf } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -48,6 +49,7 @@ export default function NotificationBell() {
   // The snapshot read has its own failure flag: a caught error must not leave
   // `notifications` at `[]`, which would assert "No notifications yet".
   const [loadFailed, setLoadFailed] = useState(false)
+const [inAppEnabled, setInAppEnabled] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)
   const notificationsLoadedRef = useRef(false)
   const liveNotificationIdsRef = useRef<Set<string>>(new Set())
@@ -58,66 +60,78 @@ export default function NotificationBell() {
     if (notificationsLoadedRef.current) return
     notificationsLoadedRef.current = true
 
+    let cancelled = false
     let unsubscribe: (() => void) | null = null
     const controller = new AbortController()
 
-    const mergeSnapshot = (state: NotificationsState, revisionAtStart: number) => {
-      const hasLocalChanges = localRevisionRef.current !== revisionAtStart
-      setNotifications((prev) => {
-        const byId = new Map(state.notifications.map((item) => [item.id, item]))
-        for (const item of prev) {
-          // Keep a row that arrived by SSE after this snapshot began.
-          if (liveNotificationIdsRef.current.has(item.id)) byId.set(item.id, item)
-        }
-        return [...byId.values()]
-      })
-      // A snapshot that predates a local event/read must not erase it. The
-      // post-connect callback below is authoritative for the subscription gap.
-      setUnreadCount((prev) =>
-        hasLocalChanges ? Math.max(prev, state.unread_count) : state.unread_count,
-      )
-    }
-    const fetchSnapshot = () => {
-      const revisionAtStart = localRevisionRef.current
-      return fetchNotificationsWithRetry(controller.signal)
-        .then((state) => {
-          mergeSnapshot(state, revisionAtStart)
-          setLoadFailed(false)
-        })
-        .catch((err: unknown) => {
-          // Carried, not swallowed: the bell stays usable, but an empty list now
-          // reads as "this could not be read" rather than "you have none". An abort is
-          // the unmount/teardown path, not a failed read, so it sets nothing.
-          if (!controller.signal.aborted) setLoadFailed(true)
-          throw err
-        })
-    }
+    const run = async () => {
+      let enabled = true
+      try {
+        const prefs = await getNotificationPrefs()
+        enabled = prefs.inApp
+      } catch {
+        enabled = true
+      }
+      if (cancelled) return
+      setInAppEnabled(enabled)
+      if (!enabled) {
+        setIsLoading(false)
+        return
+      }
 
-    unsubscribe = subscribeNotifications(
-      (n) => {
-        const wasLocallyRead = locallyReadIdsRef.current.has(n.id)
-        liveNotificationIdsRef.current.add(n.id)
-        if (n.read) locallyReadIdsRef.current.add(n.id)
-        localRevisionRef.current += 1
+      const mergeSnapshot = (state: NotificationsState, revisionAtStart: number) => {
+        const hasLocalChanges = localRevisionRef.current !== revisionAtStart
         setNotifications((prev) => {
-          if (prev.some((existing) => existing.id === n.id)) return prev
-          return [n, ...prev]
+          const byId = new Map(state.notifications.map((item) => [item.id, item]))
+          for (const item of prev) {
+            if (liveNotificationIdsRef.current.has(item.id)) byId.set(item.id, item)
+          }
+          return [...byId.values()]
         })
-        setUnreadCount((prev) => (n.read || wasLocallyRead ? prev : prev + 1))
-      },
-      controller.signal,
-      () => {
-        void fetchSnapshot().catch(() => {})
-      },
-    )
+        setUnreadCount((prev) =>
+          hasLocalChanges ? Math.max(prev, state.unread_count) : state.unread_count,
+        )
+      }
+      const fetchSnapshot = () => {
+        const revisionAtStart = localRevisionRef.current
+        return fetchNotificationsWithRetry(controller.signal)
+          .then((state) => {
+            mergeSnapshot(state, revisionAtStart)
+            setLoadFailed(false)
+          })
+          .catch((err: unknown) => {
+            if (!controller.signal.aborted) setLoadFailed(true)
+            throw err
+          })
+      }
 
-    void fetchSnapshot()
-      .catch(() => {
-        // Non-fatal — empty bell still works
-      })
-      .finally(() => setIsLoading(false))
+      unsubscribe = subscribeNotifications(
+        (n) => {
+          const wasLocallyRead = locallyReadIdsRef.current.has(n.id)
+          liveNotificationIdsRef.current.add(n.id)
+          if (n.read) locallyReadIdsRef.current.add(n.id)
+          localRevisionRef.current += 1
+          setNotifications((prev) => {
+            if (prev.some((existing) => existing.id === n.id)) return prev
+            return [n, ...prev]
+          })
+          setUnreadCount((prev) => (n.read || wasLocallyRead ? prev : prev + 1))
+        },
+        controller.signal,
+        () => {
+          void fetchSnapshot().catch(() => {})
+        },
+      )
+
+      void fetchSnapshot()
+        .catch(() => {})
+        .finally(() => setIsLoading(false))
+    }
+
+    void run()
 
     return () => {
+      cancelled = true
       unsubscribe?.()
       controller.abort()
     }
@@ -185,6 +199,8 @@ export default function NotificationBell() {
     })
     setOpen(false)
   }
+
+if (inAppEnabled !== true) return null
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

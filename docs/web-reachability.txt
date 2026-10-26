@@ -1,0 +1,70 @@
+web-next source reachability from tests
+========================================================================
+source files                     226
+test files                       72
+
+statically imported by a test     166
+loaded only by a generic sweep    3    (readdirSync enumeration, no import edge)
+touched by nothing at all         57
+  static import edge              73.5% of files
+  any loader at all (edge+sweep)  74.8% of files
+
+lines in source                  32700
+lines in untouched files         4629  (14.2%)
+
+touched by nothing, by top-level directory
+  app            51 files    4414 lines
+  lib             6 files     215 lines
+
+components with NO test written for them (sweep-rendered only)
+    455  components/MarketingLanding.tsx
+    164  components/org/SettingsClient.tsx
+    133  components/org/OrgSwitcher.tsx
+
+the 25 largest untouched files
+    347  app/dashboard/org/page.tsx
+    269  app/share/[token]/page.tsx
+    249  app/pricing/page.tsx
+    234  app/dashboard/features/page.tsx
+    184  app/account/page.tsx
+    177  app/dashboard/support/page.tsx
+    165  app/about/page.tsx
+    164  app/dashboard/history/page.tsx
+    149  app/dashboard/help/page.tsx
+    147  lib/useAnalysisDetailState.ts
+    142  app/dashboard/page.tsx
+    132  app/privacy/page.tsx
+    132  app/terms/page.tsx
+    131  app/dashboard/layout.tsx
+    126  app/features/page.tsx
+    103  app/contact/page.tsx
+     91  app/dashboard/_shell.ts
+     83  app/dashboard/students/[id]/page.tsx
+     71  app/player/layout.tsx
+     69  app/layout.tsx
+     68  app/login/page.tsx
+     65  app/dashboard/attendance/page.tsx
+     62  app/dashboard/history/error.tsx
+     62  app/signup/page.tsx
+     61  app/player/reports/[id]/page.tsx
+
+LIMITS, stated so this number is not over-read:
+  * Reachability is a graph fact, not an execution fact. A reachable file
+    may have none of its branches run — the render sweep proves markup,
+    not values.
+  * "Loaded only by a generic sweep" is the bucket that READS as covered and
+    is not: the render sweep proves markup and accessible names, never a
+    value. A component in that bucket has no test written for its behaviour.
+  * That bucket is an UPPER BOUND, and measurably so: it is keyed on "some
+    test calls readdirSync", not on "this file was enumerated". Mutating the
+    sweep so it walks NOTHING leaves the numbers unchanged, because the
+    detection cannot see it. It is right for this repo only because the
+    sweep walks from the components directory itself, so enumerating means
+    every component — revisit this line if the sweep's roots ever change.
+  * Barrel imports make this an OVER-count in the covered direction — a file
+    reached through `@/components` counts as reachable while its own code
+    never executes. Same trap server/scripts/coverage.ts documents for Bun
+    and its child-process probes.
+  * Line counts are whole-file, so a 3-line helper weighs the same as a
+    400-line component. Sorted by lines to make that visible, not to
+    pretend it is a priority score.

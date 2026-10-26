@@ -91,7 +91,7 @@ const load = async () => {
   }))
   // The WRITES, in their real homes: three in `@/lib/org`, and the CSV export is
   // `downloadStudentFindingsCsv` (not `exportFindingsCsv`, which is not a thing).
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/objectives', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgObjectives: async () => {
       if (!calls.objectives.ok) throw new Error('objectives boom')

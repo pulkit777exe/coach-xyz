@@ -2271,6 +2271,8 @@ const PORTAL_ONLY = new Set([
   // AnalysisLinkControl holds `students` at null until its fetch resolves, and
   // returns early while it is null.
   'components/org/AnalysisLinkControl.tsx',
+  // NotificationBell holds `inAppEnabled` at null until its preference fetch resolves.
+  'components/notifications/NotificationBell.tsx',
 ])
 
 const EXPECTED_SKIPS: string[] = [

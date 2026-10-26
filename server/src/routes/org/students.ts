@@ -47,6 +47,7 @@ export default new Elysia()
       sport: url.searchParams.get('sport') ?? '',
       status: url.searchParams.get('status') ?? '',
       teamId: url.searchParams.get('team_id') ?? '',
+      includeArchived: url.searchParams.get('include_archived') === 'true',
       ...(scope.all ? {} : { teamIds: scope.teamIds }),
     })
     set.status = 200

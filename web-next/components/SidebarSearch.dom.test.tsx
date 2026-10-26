@@ -76,7 +76,7 @@ const load = async () => {
   vi.doMock('next/navigation', () => ({
     useRouter: () => ({ push: vi.fn() }),
   }))
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/students', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgStudents: (_auth0Id: string, opts: { search?: string }) =>
       new Promise((resolve, reject) => {

@@ -67,7 +67,7 @@ const load = async () => {
     toast: { success: vi.fn(), error: vi.fn() },
     Toaster: () => null,
   }))
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/students', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgStudents: (_auth0Id: string, opts: { includeArchived?: boolean }) =>
       new Promise((resolve, reject) => {

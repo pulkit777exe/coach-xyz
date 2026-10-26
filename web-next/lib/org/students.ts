@@ -17,12 +17,13 @@ import type {
 
 export const orgStudents = async (
   auth0Id: string,
-  opts: { search?: string; sport?: string; status?: string } = {},
+  opts: { search?: string; sport?: string; status?: string; includeArchived?: boolean } = {},
 ): Promise<{ students: Student[] }> => {
   const params = new URLSearchParams()
   if (opts.search) params.set('search', opts.search)
   if (opts.sport) params.set('sport', opts.sport)
   if (opts.status) params.set('status', opts.status)
+  if (opts.includeArchived) params.set('include_archived', 'true')
   const qs = params.toString()
   return queryJson<{ students: Student[] }>(orgUrl(auth0Id, `/students${qs ? `?${qs}` : ''}`))
 }

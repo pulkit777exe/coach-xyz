@@ -66,7 +66,7 @@ const load = async () => {
     toast: { success: vi.fn(), error: vi.fn() },
     Toaster: () => null,
   }))
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/attendance', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgAttendance: (_auth0Id: string, opts: { from?: string; to?: string }) =>
       new Promise((resolve, reject) => {

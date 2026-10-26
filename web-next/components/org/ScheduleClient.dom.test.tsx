@@ -78,7 +78,7 @@ const load = async () => {
       setReduceMotion: vi.fn(),
     }),
   }))
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/schedule', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgSchedule: (_auth0Id: string, opts: { from?: string; to?: string }) =>
       new Promise((resolve, reject) => {

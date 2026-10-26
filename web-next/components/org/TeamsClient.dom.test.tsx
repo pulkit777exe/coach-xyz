@@ -96,7 +96,7 @@ const load = async () => {
     createTeam: async () => ({}),
     deleteTeam: async () => ({}),
   }))
-  vi.doMock('@/lib/org', async (importOriginal) => ({
+  vi.doMock('@/lib/org/compete', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     orgMatches: deferred(matchCalls, byTeamOption),
     orgCreateMatch: async () => ({}),

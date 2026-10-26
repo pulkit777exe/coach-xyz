@@ -467,6 +467,7 @@ export default function StudentsClient({
   // each other, so an earlier response could land last. Same rule as the debounced
   // searches: only the newest roster read may answer.
   const rosterSeq = useRef(0)
+const [showArchived, setShowArchived] = useState(false)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForBulk, setInviteForBulk] = useState(false)
@@ -645,10 +646,25 @@ export default function StudentsClient({
 
   const refreshStudents = async () => {
     const my = ++rosterSeq.current
-    const res = await orgStudents(auth0Id)
+    const res = await orgStudents(auth0Id, { includeArchived: showArchived })
     if (rosterSeq.current !== my) return
     setStudents(res.students)
     setRosterReadFailed(false)
+  }
+
+  const toggleArchived = async () => {
+    const next = !showArchived
+    setShowArchived(next)
+    const my = ++rosterSeq.current
+    try {
+      const res = await orgStudents(auth0Id, { includeArchived: next })
+      if (rosterSeq.current !== my) return
+      setStudents(res.students)
+      setRosterReadFailed(false)
+    } catch {
+      if (rosterSeq.current !== my) return
+      setShowArchived(!next)
+    }
   }
 
   const confirmDelete = async () => {
@@ -743,9 +759,14 @@ export default function StudentsClient({
 
         <div className="flex items-center gap-2">
           {filtered.length > 0 && (
-            <Button variant="outline" size="sm" onClick={exportCSV}>
-              <DownloadIcon /> Export
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={toggleArchived}>
+                {showArchived ? 'Hide archived' : 'Show archived'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportCSV}>
+                <DownloadIcon /> Export
+              </Button>
+            </>
           )}
           {canInvite && (
             <Button variant="outline" size="sm" onClick={() => openInvite(false)}>

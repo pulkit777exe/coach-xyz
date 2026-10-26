@@ -113,9 +113,10 @@ describe('the reachability figures AGENTS.md states are re-derivable', () => {
       'the 25 largest untouched files',
     )[0]
     const sweptOnly = block.split('\n').filter((l) => /^\s{4,}\d+\s+\S/.test(l))
-    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(1)
+    const settingsLine = sweptOnly.find((l) => l.includes('SettingsClient.tsx'))!
+    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(3)
 
-    const [, lines, file] = sweptOnly[0].match(/^\s*(\d+)\s+(.+)$/) ?? []
+    const [, lines, file] = settingsLine.match(/^\s*(\d+)\s+(.+)$/) ?? []
     // The script prints a repo-rooted path; the ledger quotes the basename, so
     // compare on that — a full-path assertion would pass while the prose went stale.
     const base = file?.split('/').pop()
