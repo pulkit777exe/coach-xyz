@@ -107,6 +107,7 @@
      equivalent: only a token can flip per theme. The value is byte-for-byte what
      `bg-black/45` compiled to, so this changes no rendered pixel today. */
   --overlay: rgb(0 0 0 / 0.45);
+  --opacity-disabled: 0.5;
 
   --switch-off: rgba(55, 53, 47, 0.16);
   --switch-thumb: #ffffff;
@@ -220,15 +221,6 @@
   --fill-quiet-hover: rgba(255, 255, 255, 0.09);
 }
 
-/* Disabled is a STATE, and it had no token: 19 first-party sites picked one of four
-     different opacities (30 x4, 40 x1, 50 x13, 60 x1), so the value could not move from one
-     place — which is the entire reason the type-scale tokens exist. 0.5 is the plurality and
-     is what most of the app already renders, so normalising onto it changes 6 sites' opacity
-     and nothing else. Declared in `:root` and mapped in `@theme inline` for the same reason
-     `--overlay` is: `inline` is what makes the utility re-resolve against `.dark` at the
-     element rather than baking the light value into the class. */
---opacity-disabled: 0.5;
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -284,6 +276,7 @@
      arbitrary var(); the utility class needs the color mapping too */
   --color-primary-hover: var(--primary-hover);
   --color-overlay: var(--overlay);
+  --opacity-disabled: var(--opacity-disabled);
 }
 
 /* ── Type-scale utilities — semantic names for the documented scale ──────
