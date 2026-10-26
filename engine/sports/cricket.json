@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "label": "Cricket",
+  "action": {
+    "signal": "wrist_speed",
+    "min_gap_s": 1.5,
+    "floor": 4.0
+  },
+  "event_types": [
+    "drive",
+    "pull",
+    "sweep",
+    "cut",
+    "hook",
+    "defensive",
+    "other"
+  ],
+  "results": {
+    "positive": [
+      "four",
+      "six",
+      "boundary"
+    ],
+    "negative": [
+      "wicket"
+    ],
+    "neutral": [
+      "dot_ball",
+      "single",
+      "two",
+      "three",
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "arm_extension",
+      "label": "Arm extension through contact",
+      "metric": "elbow_angle",
+      "ideal": [
+        150,
+        180
+      ],
+      "acceptable": [
+        130,
+        180
+      ],
+      "weight": 0.3,
+      "look_for": "arms extend through the ball, bat face under control",
+      "drill": "Shadow drives to a cone, finish with the bat high and extended."
+    },
+    {
+      "key": "base",
+      "label": "Base and knee bend",
+      "metric": "knee_angle",
+      "ideal": [
+        120,
+        170
+      ],
+      "acceptable": [
+        100,
+        175
+      ],
+      "weight": 0.25,
+      "look_for": "stable base, front knee bending into the shot",
+      "drill": "Front-foot drives with a pause at contact."
+    },
+    {
+      "key": "head_position",
+      "label": "Head over the ball",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        5,
+        25
+      ],
+      "acceptable": [
+        0,
+        35
+      ],
+      "weight": 0.25,
+      "look_for": "head still and over the ball, body leaning into the shot",
+      "drill": "Throwdowns with the head held still until after contact."
+    },
+    {
+      "key": "hips",
+      "label": "Hip position",
+      "metric": "hip_angle",
+      "ideal": [
+        110,
+        170
+      ],
+      "acceptable": [
+        90,
+        180
+      ],
+      "weight": 0.2,
+      "look_for": "hips rotating through, weight transferring forward",
+      "drill": "Weight-transfer drills stepping into the shot."
+    }
+  ],
+  "positions": [
+    {
+      "id": "batter",
+      "label": "Batter",
+      "description": ""
+    },
+    {
+      "id": "bowler",
+      "label": "Bowler",
+      "description": ""
+    },
+    {
+      "id": "wicketkeeper",
+      "label": "Wicketkeeper",
+      "description": ""
+    },
+    {
+      "id": "all-rounder",
+      "label": "All-rounder",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge the batting shot: stance, head position, weight transfer, follow-through."
+}

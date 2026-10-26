@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "label": "Hockey",
+  "action": {
+    "signal": "wrist_speed",
+    "min_gap_s": 1.5,
+    "floor": 4.0
+  },
+  "event_types": [
+    "wrist_shot",
+    "slap_shot",
+    "snap_shot",
+    "backhand",
+    "one_timer"
+  ],
+  "results": {
+    "positive": [
+      "goal"
+    ],
+    "negative": [
+      "missed",
+      "saved",
+      "blocked",
+      "post"
+    ],
+    "neutral": [
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "arm_flex",
+      "label": "Arm and stick loading",
+      "metric": "elbow_angle",
+      "ideal": [
+        100,
+        165
+      ],
+      "acceptable": [
+        80,
+        180
+      ],
+      "weight": 0.25,
+      "look_for": "stick loaded and released with the lower hand driving",
+      "drill": "Stickhandle-and-shoot reps focusing on a clean load."
+    },
+    {
+      "key": "posture",
+      "label": "Posture",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        10,
+        35
+      ],
+      "acceptable": [
+        0,
+        45
+      ],
+      "weight": 0.25,
+      "look_for": "chest over the puck, stable shoulders",
+      "drill": "Wall shots keeping the chest over the puck."
+    },
+    {
+      "key": "low_base",
+      "label": "Low base",
+      "metric": "knee_angle",
+      "ideal": [
+        100,
+        150
+      ],
+      "acceptable": [
+        85,
+        165
+      ],
+      "weight": 0.3,
+      "look_for": "knees bent, weight through the front foot",
+      "drill": "Squat-and-shoot: hold the low base through the follow-through."
+    },
+    {
+      "key": "hips",
+      "label": "Hip rotation",
+      "metric": "hip_angle",
+      "ideal": [
+        90,
+        150
+      ],
+      "acceptable": [
+        70,
+        170
+      ],
+      "weight": 0.2,
+      "look_for": "hips and shoulders rotating through the shot",
+      "drill": "Rotational throws with a med ball."
+    }
+  ],
+  "positions": [
+    {
+      "id": "goalie",
+      "label": "Goalie",
+      "description": ""
+    },
+    {
+      "id": "defense",
+      "label": "Defense",
+      "description": ""
+    },
+    {
+      "id": "wing",
+      "label": "Wing",
+      "description": ""
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge the shot: weight transfer, stick load, release, follow-through."
+}

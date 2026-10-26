@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "label": "Tennis",
+  "action": {
+    "signal": "wrist_speed",
+    "min_gap_s": 1.2,
+    "floor": 4.0
+  },
+  "event_types": [
+    "serve",
+    "forehand",
+    "backhand",
+    "volley",
+    "overhead",
+    "drop_shot"
+  ],
+  "results": {
+    "positive": [
+      "winner",
+      "ace"
+    ],
+    "negative": [
+      "error",
+      "double_fault"
+    ],
+    "neutral": [
+      "in_play",
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "arm_extension",
+      "label": "Arm extension at contact",
+      "metric": "elbow_angle",
+      "ideal": [
+        150,
+        180
+      ],
+      "acceptable": [
+        130,
+        180
+      ],
+      "weight": 0.3,
+      "look_for": "arm extended out in front at contact",
+      "drill": "Hit at a target with a full extension, freeze at contact."
+    },
+    {
+      "key": "balance",
+      "label": "Balance",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        0,
+        20
+      ],
+      "acceptable": [
+        0,
+        30
+      ],
+      "weight": 0.25,
+      "look_for": "balanced body, no falling away from the shot",
+      "drill": "Shadow swings and hold the finish for two seconds."
+    },
+    {
+      "key": "legs",
+      "label": "Leg drive",
+      "metric": "knee_angle",
+      "ideal": [
+        120,
+        170
+      ],
+      "acceptable": [
+        100,
+        175
+      ],
+      "weight": 0.25,
+      "look_for": "knees loaded and driving into the ball",
+      "drill": "Split-step then load: ten forehands with a deliberate knee bend."
+    },
+    {
+      "key": "contact_height",
+      "label": "Contact height",
+      "metric": "shoulder_angle",
+      "ideal": [
+        90,
+        170
+      ],
+      "acceptable": [
+        70,
+        180
+      ],
+      "weight": 0.2,
+      "look_for": "contact at a comfortable height, arm not cramped",
+      "drill": "Ball-feed drills at varying heights."
+    }
+  ],
+  "positions": [
+    {
+      "id": "singles",
+      "label": "Singles",
+      "description": ""
+    },
+    {
+      "id": "doubles",
+      "label": "Doubles",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge the stroke: preparation, contact point, balance, finish."
+}

@@ -1,59 +1,103 @@
-"""
-core/config.py — Shared configuration constants and utilities.
-
-All environment-driven configuration lives here. Other modules import from here
-instead of reading os.environ directly.
-"""
+"""Settings, read once from the environment. Tests mutate the shared object."""
 
 import os
+from dataclasses import dataclass
+from pathlib import Path
 
-# ── Gemini Configuration ────────────────────────────────────────────────────
+try:
+    from dotenv import load_dotenv
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
 
-# ── Version Registry (§22 precursor) ─────────────────────────────────────────
-# Stamped into every analysis summary as `provenance` so a report stays
-# explainable after upgrades. Bump the prompt versions when prompt text
-# changes; bump sport-pack versions in sports/*.json alongside criteria edits.
+ENGINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "1"
+PROMPT_VERSION = "1"
+ROOT = Path(__file__).resolve().parent.parent
 
-ENGINE_VERSION = "0.2.0"
-ANALYSIS_PROMPT_VERSION = "1"
-CHAT_PROMPT_VERSION = "2"
 
-# ── File Limits ─────────────────────────────────────────────────────────────
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default).strip()
 
-MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
-CHUNK_SIZE = 8 * 1024 * 1024  # 8MB streaming chunk size
 
-# Upper bound on best-frame scan samples. The scan runs HOG (+ pose when
-# available) per sample — an uncapped 1 Hz sweep over a 60-minute upload is
-# up to 3600 heavy iterations per anonymous upload (CPU/decompression DoS).
-# Long videos keep full-window coverage at a coarser stride instead.
-MAX_SCAN_SAMPLES = int(os.environ.get("MAX_SCAN_SAMPLES", "180"))
-
-# ── Timeouts ────────────────────────────────────────────────────────────────
-
-FFMPEG_TIMEOUT_S = int(os.environ.get("FFMPEG_TIMEOUT_S", "300"))
-
-# Upper bound for one conversational Gemini round-trip. The server gives /chat
-# 60s and /chat/stream 120s; the engine deadline sits inside both so a hung
-# model call surfaces as a structured error instead of a hung SSE stream.
-CHAT_GEMINI_TIMEOUT_S = int(os.environ.get("CHAT_GEMINI_TIMEOUT_S", "100"))
-
-# Upper bound for the analysis Gemini call (multimodal, up to 20 frames). The
-# server gives /analyze 12 minutes; this deadline sits inside it so a hung
-# model call fails the job with a retryable error instead of wedging the
-# worker until BullMQ's stuck-job recovery fires.
-GEMINI_ANALYSIS_TIMEOUT_S = int(os.environ.get("GEMINI_ANALYSIS_TIMEOUT_S", "600"))
-
-# ── Shared Utilities ────────────────────────────────────────────────────────
-
-def parse_timestamp(ts: str) -> float:
-    """Convert 'M:SS.s' timestamp string to seconds."""
+def _num(name: str, default: float) -> float:
     try:
-        parts = ts.split(":")
-        if len(parts) == 2:
-            return float(parts[0]) * 60 + float(parts[1])
-        return float(ts)
-    except (ValueError, IndexError):
-        return 0.0
+        return float(_env(name) or default)
+    except ValueError:
+        return default
+
+
+def _list(name: str, default: str) -> tuple[str, ...]:
+    return tuple(x.strip() for x in (_env(name) or default).split(",") if x.strip())
+
+
+@dataclass
+class Settings:
+    env: str
+    service_token: str
+    log_level: str
+    sentry_dsn: str
+    cors_origins: tuple[str, ...]
+
+    data_dir: Path
+    storage_backend: str
+    s3_bucket: str
+    s3_region: str
+    s3_endpoint: str
+    max_upload_bytes: int
+
+    workers: int
+    analysis_fps: float
+    pose_model: str
+    pose_model_path: str
+
+    gemini_key: str
+    gemini_models: tuple[str, ...]
+    gemini_timeout_s: float
+    gemini_min_interval_s: float
+    gemini_thinking_budget: int
+    proxy_max_s: float
+    proxy_fps: float
+
+    session_ttl_s: float
+    result_ttl_s: float
+
+    @property
+    def production(self) -> bool:
+        return self.env == "production"
+
+
+def load() -> Settings:
+    data_dir = Path(_env("DATA_DIR", "./data"))
+    if not data_dir.is_absolute():
+        data_dir = ROOT / data_dir
+    return Settings(
+        env=_env("ENVIRONMENT", "development").lower(),
+        service_token=_env("SERVICE_TOKEN"),
+        log_level=_env("LOG_LEVEL", "INFO").upper(),
+        sentry_dsn=_env("SENTRY_DSN"),
+        cors_origins=_list("SERVER_URL", "http://localhost:8000"),
+        data_dir=data_dir.resolve(),
+        storage_backend=_env("STORAGE_BACKEND", "local").lower(),
+        s3_bucket=_env("S3_BUCKET"),
+        s3_region=_env("S3_REGION"),
+        s3_endpoint=_env("S3_ENDPOINT_URL"),
+        max_upload_bytes=int(_num("MAX_UPLOAD_MB", 500)) * 1024 * 1024,
+        workers=max(1, int(_num("ENGINE_WORKERS", 1))),
+        analysis_fps=_num("ANALYSIS_FPS", 12),
+        pose_model=_env("POSE_MODEL", "lite"),
+        pose_model_path=_env("POSE_MODEL_PATH"),
+        gemini_key=_env("GEMINI_API_KEY"),
+        gemini_models=_list("GEMINI_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite"),
+        gemini_timeout_s=_num("GEMINI_TIMEOUT_S", 240),
+        gemini_min_interval_s=_num("GEMINI_MIN_INTERVAL_S", 2),
+        gemini_thinking_budget=int(_num("GEMINI_THINKING_BUDGET", 0)),
+        proxy_max_s=_num("PROXY_MAX_SECONDS", 150),
+        proxy_fps=_num("PROXY_FPS", 5),
+        session_ttl_s=_num("SESSION_TTL_S", 6 * 3600),
+        result_ttl_s=_num("RESULT_TTL_S", 7 * 86400),
+    )
+
+
+settings = load()

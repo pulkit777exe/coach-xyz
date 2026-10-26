@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "label": "Basketball",
+  "action": {
+    "signal": "wrist_rise",
+    "min_gap_s": 1.5,
+    "floor": 0.45
+  },
+  "event_types": [
+    "catch_and_shoot",
+    "off_dribble",
+    "contested",
+    "layup",
+    "free_throw",
+    "three_pointer",
+    "dunk",
+    "other"
+  ],
+  "results": {
+    "positive": [
+      "made"
+    ],
+    "negative": [
+      "missed"
+    ],
+    "neutral": [
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "arm_extension",
+      "label": "Shooting arm extension",
+      "metric": "elbow_angle",
+      "ideal": [
+        155,
+        180
+      ],
+      "acceptable": [
+        135,
+        180
+      ],
+      "weight": 0.3,
+      "look_for": "arm fully extended at release, elbow under the ball, not flaring out",
+      "drill": "Form shooting from 1 m: hold the follow-through until the ball lands."
+    },
+    {
+      "key": "arm_elevation",
+      "label": "Arm elevation",
+      "metric": "shoulder_angle",
+      "ideal": [
+        135,
+        180
+      ],
+      "acceptable": [
+        110,
+        180
+      ],
+      "weight": 0.25,
+      "look_for": "ball released high, above the forehead, shooting arm driving up",
+      "drill": "Wall shots: release the ball at the highest point you can reach."
+    },
+    {
+      "key": "balance",
+      "label": "Upright balance",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        0,
+        10
+      ],
+      "acceptable": [
+        0,
+        18
+      ],
+      "weight": 0.2,
+      "look_for": "shoulders over hips, no fade, drift or lean at release",
+      "drill": "Land on the spot you jumped from, 10 reps, mark the floor."
+    },
+    {
+      "key": "leg_drive",
+      "label": "Leg extension",
+      "metric": "knee_angle",
+      "ideal": [
+        150,
+        180
+      ],
+      "acceptable": [
+        130,
+        180
+      ],
+      "weight": 0.25,
+      "look_for": "legs extending through the jump, power coming from the base",
+      "drill": "Pause-dip shots: sit into the knees, then drive up through the release."
+    }
+  ],
+  "positions": [
+    {
+      "id": "point_guard",
+      "label": "Point Guard",
+      "description": ""
+    },
+    {
+      "id": "shooting_guard",
+      "label": "Shooting Guard",
+      "description": ""
+    },
+    {
+      "id": "small_forward",
+      "label": "Small Forward",
+      "description": ""
+    },
+    {
+      "id": "power_forward",
+      "label": "Power Forward",
+      "description": ""
+    },
+    {
+      "id": "center",
+      "label": "Center",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge only the shot motion of the target: base, shot pocket, release, follow-through."
+}

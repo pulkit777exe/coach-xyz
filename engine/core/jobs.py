@@ -1,268 +1,175 @@
-from __future__ import annotations
+"""Jobs: queued -> running -> completed | failed | cancelled.
+
+State lives in SQLite, so a restart picks up where it left off. Every change
+is announced as an event (see events.py); the server never has to poll.
+"""
 
 import json
-import os
-import threading
+import logging
+import shutil
 import time
-from dataclasses import asdict, dataclass, field
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
-from upstash_redis import Redis
+from . import config, db, events, storage
+from .errors import Cancelled, EngineError, not_found
 
-from core.errors import EngineError, JobNotFoundError, InvalidStateTransition
-
-_redis_url = os.environ.get("UPSTASH_REDIS_REST_URL")
-_redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
-
-redis = Redis(url=_redis_url, token=_redis_token) if _redis_url and _redis_token else None
-
-JOB_TTL = 7200  # 2 hours
-KEY = "coachai:job:"
+log = logging.getLogger("engine.jobs")
+_pool: ThreadPoolExecutor | None = None
+ACTIVE = ("queued", "running")
 
 
-class JobStore:
-    """The seam job state lives behind: get-or-miss plus blind put.
-
-    Redis serves prod (shared across server/worker processes); the local
-    adapter serves the CLI and tests on machines without Redis.
-    """
-
-    def get(self, job_id: str) -> JobStatus | None:
-        raise NotImplementedError
-
-    def put(self, job: JobStatus) -> None:
-        raise NotImplementedError
+def pool() -> ThreadPoolExecutor:
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(max_workers=config.settings.workers, thread_name_prefix="job")
+    return _pool
 
 
-class RedisJobStore(JobStore):
-    def __init__(self, client: Redis) -> None:
-        self._client = client
-
-    def get(self, job_id: str) -> JobStatus | None:
-        raw = self._client.get(f"{KEY}{job_id}")
-        if not raw:
-            return None
-        return JobStatus.from_redis(raw)
-
-    def put(self, job: JobStatus) -> None:
-        self._client.set(f"{KEY}{job.job_id}", job.to_redis(), ex=JOB_TTL)
+def shutdown() -> None:
+    global _pool
+    if _pool is not None:
+        _pool.shutdown(wait=False, cancel_futures=True)
+        _pool = None
 
 
-class LocalJobStore(JobStore):
-    """In-process adapter: same semantics, no TTL, no cross-process share."""
-
-    def __init__(self) -> None:
-        self._jobs: dict[str, JobStatus] = {}
-        self._lock = threading.Lock()
-
-    def get(self, job_id: str) -> JobStatus | None:
-        with self._lock:
-            return self._jobs.get(job_id)
-
-    def put(self, job: JobStatus) -> None:
-        with self._lock:
-            self._jobs[job.job_id] = job
+def get(job_id: str) -> dict | None:
+    row = db.one("SELECT * FROM jobs WHERE id=?", (job_id,))
+    if not row:
+        return None
+    row["params"] = json.loads(row["params"])
+    row["degraded"] = json.loads(row["degraded"])
+    row["error"] = json.loads(row["error"]) if row["error"] else None
+    return row
 
 
-store: JobStore = RedisJobStore(redis) if redis is not None else LocalJobStore()
-
-# ── Per-job Lock Management ──────────────────────────────────────────────────
-
-_locks: dict[str, threading.Lock] = {}
-_locks_lock = threading.Lock()  # Protects _locks dict itself
-
-def _get_job_lock(job_id: str) -> threading.Lock:
-    """Get or create a per-job lock. Thread-safe."""
-    with _locks_lock:
-        # Evict old locks if dict grows too large (cap at 1000)
-        if len(_locks) > 1000:
-            # Keep only the requested lock and clear the rest
-            lock = _locks.get(job_id)
-            _locks.clear()
-            if lock is not None:
-                _locks[job_id] = lock
-        if job_id not in _locks:
-            _locks[job_id] = threading.Lock()
-        return _locks[job_id]
-
-# ── Explicit Pipeline States ──────────────────────────────────────────────────
-# Each state maps to a stage number and progress percentage.
-# States flow: uploading → scanning → player_selection → analyzing → rendering → completed
-# On error: any state can transition to "failed"
-
-# Single source of the forward pipeline order. Callers that need to walk a job
-# toward completion import STATE_FLOW instead of re-literalizing the order.
-# NOTE: this order is a wire contract shared with the server and web layers
-# (see their ENGINE_PIPELINE_STATES constants + the pipeline contract tests).
-STATE_FLOW = ("uploading", "scanning", "player_selection", "analyzing", "rendering", "completed")
-
-PIPELINE_STATES = {
-    "uploading": {"stage": 0, "progress": 0, "stage_name": "Uploading"},
-    "scanning": {"stage": 1, "progress": 15, "stage_name": "Detecting Players"},
-    "player_selection": {"stage": 2, "progress": 25, "stage_name": "Waiting for Selection"},
-    "analyzing": {"stage": 3, "progress": 45, "stage_name": "Analyzing Technique"},
-    "rendering": {"stage": 5, "progress": 80, "stage_name": "Rendering Video"},
-    "completed": {"stage": 6, "progress": 100, "stage_name": "Complete"},
-    "failed": {"stage": -1, "progress": 0, "stage_name": "Failed"},
-}
-
-# Valid state transitions: from_state → set of allowed next states
-VALID_TRANSITIONS = {
-    "uploading": {"scanning", "failed"},
-    "scanning": {"player_selection", "analyzing", "failed"},  # analyzing if single player
-    "player_selection": {"analyzing", "failed"},
-    "analyzing": {"rendering", "completed", "failed"},  # completed if no render needed
-    "rendering": {"completed", "failed"},
-    "completed": set(),  # terminal state
-    "failed": {"scanning"},  # retry resets to scanning
-}
-
-# Keep STAGES alias for backward compat in analyzer.py
-STAGES = {v["stage"]: v["stage_name"] for k, v in PIPELINE_STATES.items() if v["stage"] >= 0}
-
-
-@dataclass
-class JobStatus:
-    job_id: str
-    state: str = "uploading"
-    stage: int = 0
-    stage_name: str = "Uploading"
-    progress: int = 0
-    complete: bool = False
-    error: Optional[str] = None
-    error_code: Optional[str] = None
-    retryable: bool = True
-    summary: Optional[dict] = None
-    video_key: Optional[str] = None
-    video_path: Optional[str] = None
-    created_at: float = field(default_factory=time.time)
-
-    def to_redis(self) -> str:
-        return json.dumps(asdict(self))
-
-    @classmethod
-    def from_redis(cls, data: str) -> "JobStatus":
-        parsed = json.loads(data) if isinstance(data, str) else data
-        # Filter out any unexpected keys
-        valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
-        filtered = {k: v for k, v in parsed.items() if k in valid_fields}
-        return cls(**filtered)
-
-
-def create_job(job_id: str, initial_state: str = "uploading", video_key: str | None = None) -> JobStatus:
-    """Create a new job with an explicit initial state."""
-    state_info = PIPELINE_STATES.get(initial_state, PIPELINE_STATES["uploading"])
-    job = JobStatus(
-        job_id=job_id,
-        state=initial_state,
-        stage=state_info["stage"],
-        stage_name=state_info["stage_name"],
-        progress=state_info["progress"],
-        video_key=video_key,
-    )
-    store.put(job)
+def require(job_id: str) -> dict:
+    job = get(job_id)
+    if job is None:
+        raise not_found("JOB_NOT_FOUND", "Job not found.")
     return job
 
 
-def transition_job(job_id: str, new_state: str, **kwargs) -> None:
-    """
-    Validate and apply a state transition.
-    Uses a per-job lock to prevent race conditions.
-    Raises InvalidStateTransition if the transition is not allowed.
-    """
-    job_lock = _get_job_lock(job_id)
-
-    with job_lock:
-        job = store.get(job_id)
-        if job is None:
-            raise JobNotFoundError()
-
-        # Validate transition
-        allowed = VALID_TRANSITIONS.get(job.state, set())
-        if new_state not in allowed:
-            raise InvalidStateTransition(job.state, new_state)
-
-        # Apply state
-        state_info = PIPELINE_STATES[new_state]
-        job.state = new_state
-        job.stage = state_info["stage"]
-        job.stage_name = state_info["stage_name"]
-        job.progress = state_info["progress"]
-
-        # Apply any additional kwargs
-        for k, v in kwargs.items():
-            if hasattr(job, k):
-                setattr(job, k, v)
-
-        # Terminal states mark the job complete. Retrying from failed must clear
-        # stale terminal/error fields so clients keep polling the live retry.
-        if new_state == "completed":
-            job.complete = True
-        elif new_state == "failed":
-            job.complete = True
-        else:
-            job.complete = False
-            job.error = None
-            job.error_code = None
-            job.retryable = True
-
-        store.put(job)
+def view(job: dict) -> dict:
+    keys = ("id", "state", "stage", "progress", "error", "degraded", "attempts", "created_at", "started_at", "finished_at")
+    out = {k: job[k] for k in keys}
+    out["meta"] = job["params"].get("meta", {})
+    return out
 
 
-def update_job(job_id: str, **kwargs) -> None:
-    """
-    Update job fields directly without state transition validation.
-    Use transition_job() for state changes.
-    Uses per-job lock to prevent race with transition_job/fail_job.
-    """
-    job_lock = _get_job_lock(job_id)
-
-    with job_lock:
-        job = store.get(job_id)
-        if job is None:
-            raise JobNotFoundError()
-        for k, v in kwargs.items():
-            if hasattr(job, k):
-                setattr(job, k, v)
-        # Auto-set stage_name from stage number if stage is being updated
-        if "stage" in kwargs:
-            job.stage_name = STAGES.get(kwargs["stage"], job.stage_name)
-        store.put(job)
+def create(job_id: str, params: dict, callback_url: str = "") -> dict:
+    """Idempotent: creating an existing id returns the existing job."""
+    existing = get(job_id)
+    if existing:
+        return existing
+    db.run("INSERT INTO jobs(id, state, params, callback_url, created_at) VALUES (?,?,?,?,?)",
+           (job_id, "queued", db.dumps(params), callback_url, time.time()))
+    events.emit(job_id, "job.queued", {"meta": params.get("meta", {})})
+    submit(job_id)
+    return get(job_id)
 
 
-def get_job(job_id: str) -> JobStatus:
-    job_lock = _get_job_lock(job_id)
-    with job_lock:
-        job = store.get(job_id)
-        if job is None:
-            raise JobNotFoundError()
+def submit(job_id: str) -> None:
+    pool().submit(_run, job_id)
+
+
+def set_stage(job_id: str, stage: str, progress: int) -> None:
+    db.run("UPDATE jobs SET stage=?, progress=? WHERE id=?", (stage, progress, job_id))
+
+
+def degrade(job_id: str, component: str, reason: str) -> None:
+    job = get(job_id)
+    if job and component not in job["degraded"]:
+        db.run("UPDATE jobs SET degraded=? WHERE id=?", (db.dumps([*job["degraded"], component]), job_id))
+        events.emit(job_id, "job.degraded", {"component": component, "reason": reason})
+
+
+def is_cancelled(job_id: str) -> bool:
+    row = db.one("SELECT cancel FROM jobs WHERE id=?", (job_id,))
+    return bool(row and row["cancel"])
+
+
+def cancel(job_id: str) -> dict:
+    job = require(job_id)
+    if job["state"] == "queued":
+        _finish(job_id, "cancelled", event=("job.cancelled", {}))
+    elif job["state"] == "running":
+        db.run("UPDATE jobs SET cancel=1 WHERE id=?", (job_id,))
+    return require(job_id)
+
+
+def retry(job_id: str) -> dict:
+    job = require(job_id)
+    if job["state"] not in ("failed", "cancelled"):
         return job
+    db.run("UPDATE jobs SET state='queued', error=NULL, cancel=0, progress=0, stage='', finished_at=NULL, "
+           "degraded='[]' WHERE id=?", (job_id,))
+    events.emit(job_id, "job.queued", {"retry": True})
+    submit(job_id)
+    return require(job_id)
 
 
-def fail_job(job_id: str, error: EngineError) -> None:
-    """Mark a job as failed with structured error info.
+def _finish(job_id: str, state: str, error: dict | None = None, event: tuple[str, dict] | None = None) -> None:
+    """Set the final state and announce it in one transaction, so a reader never sees one without the other."""
+    with db.transaction():
+        db.run("UPDATE jobs SET state=?, error=?, finished_at=? WHERE id=?",
+               (state, db.dumps(error) if error else None, time.time(), job_id))
+        if event:
+            events.emit(job_id, *event)
 
-    Raises the original exception if store operations fail,
-    so the caller can handle it appropriately.
-    """
-    job_lock = _get_job_lock(job_id)
 
-    with job_lock:
-        job = store.get(job_id)
-        if job is None:
-            return
-        # Don't revert completed jobs
-        if job.state == "completed":
-            return
-        job.state = "failed"
-        job.stage = -1
-        job.stage_name = "Failed"
-        job.complete = True
-        job.error = error.message
-        job.error_code = error.code
-        job.retryable = error.retryable
-        # Clear the video reference so a failed job can no longer serve
-        # (or leak) the rendered/raw video via the download route.
-        job.video_key = None
-        job.video_path = None
-        store.put(job)
+def _run(job_id: str) -> None:
+    from . import pipeline
+
+    job = get(job_id)
+    if not job or job["state"] != "queued":
+        return
+    started = time.time()
+    db.run("UPDATE jobs SET state='running', started_at=?, attempts=attempts+1 WHERE id=?", (started, job_id))
+    events.emit(job_id, "job.started", {"attempt": job["attempts"] + 1})
+    try:
+        headline = pipeline.run(job_id, job["params"])
+        db.run("UPDATE jobs SET progress=100 WHERE id=?", (job_id,))
+        done = {"duration_ms": int((time.time() - started) * 1000), "degraded": get(job_id)["degraded"],
+                "summary": headline}
+        _finish(job_id, "completed", event=("job.completed", done))
+    except Cancelled:
+        _finish(job_id, "cancelled", event=("job.cancelled", {}))
+    except EngineError as exc:
+        log.warning("job %s failed: %s %s", job_id, exc.code, exc.message)
+        _finish(job_id, "failed", exc.to_dict(), ("job.failed", exc.to_dict()))
+    except Exception:
+        log.exception("job %s crashed", job_id)
+        err = EngineError("INTERNAL_ERROR", "Unexpected analysis error.", retryable=True, status=500).to_dict()
+        _finish(job_id, "failed", err, ("job.failed", err))
+    finally:
+        shutil.rmtree(config.settings.data_dir / "work" / job_id, ignore_errors=True)
+
+
+def recover() -> int:
+    """Re-queue jobs a previous process left unfinished."""
+    stale = db.rows("SELECT id FROM jobs WHERE state IN ('queued','running') ORDER BY created_at")
+    for row in stale:
+        db.run("UPDATE jobs SET state='queued' WHERE id=?", (row["id"],))
+        submit(row["id"])
+    return len(stale)
+
+
+def purge() -> int:
+    """Delete finished jobs, their events and stored results once past the retention window."""
+    cutoff = time.time() - config.settings.result_ttl_s
+    store = storage.backend()
+    old = db.rows("SELECT id FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ?", (cutoff,))
+    for row in old:
+        store.delete_prefix(f"results/{row['id']}")
+        db.run("DELETE FROM events WHERE stream=?", (row["id"],))
+        db.run("DELETE FROM jobs WHERE id=?", (row["id"],))
+    db.run("DELETE FROM events WHERE stream LIKE 'scan:%' AND ts < ?", (cutoff,))
+    return len(old)
+
+
+def load_result(job_id: str) -> dict:
+    try:
+        with storage.backend().local_copy(storage.result_key(job_id, "result.json")) as path:
+            return json.loads(open(path, encoding="utf-8").read())
+    except FileNotFoundError as exc:
+        raise not_found("RESULT_NOT_FOUND", "No result available for this job.") from exc

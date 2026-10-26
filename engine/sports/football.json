@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "label": "Football",
+  "action": {
+    "signal": "ankle_speed",
+    "min_gap_s": 1.5,
+    "floor": 4.0
+  },
+  "event_types": [
+    "shot",
+    "header",
+    "free_kick",
+    "penalty",
+    "pass",
+    "other"
+  ],
+  "results": {
+    "positive": [
+      "goal"
+    ],
+    "negative": [
+      "missed",
+      "saved",
+      "blocked"
+    ],
+    "neutral": [
+      "offside",
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "kick_extension",
+      "label": "Kicking leg extension",
+      "metric": "active_knee_angle",
+      "ideal": [
+        140,
+        178
+      ],
+      "acceptable": [
+        120,
+        180
+      ],
+      "weight": 0.4,
+      "look_for": "kicking leg extends through the ball, ankle locked",
+      "drill": "Slow-motion strikes against a wall: lock the ankle, finish toward the target."
+    },
+    {
+      "key": "lean",
+      "label": "Body lean over the ball",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        3,
+        25
+      ],
+      "acceptable": [
+        0,
+        35
+      ],
+      "weight": 0.35,
+      "look_for": "slight forward lean, head over the ball",
+      "drill": "Strike low driven balls and keep the chest over the ball."
+    },
+    {
+      "key": "hip_position",
+      "label": "Hip position",
+      "metric": "hip_angle",
+      "ideal": [
+        110,
+        170
+      ],
+      "acceptable": [
+        90,
+        180
+      ],
+      "weight": 0.25,
+      "look_for": "hips open through contact, not collapsing",
+      "drill": "Hip rotation drills with a band before striking."
+    }
+  ],
+  "positions": [
+    {
+      "id": "goalkeeper",
+      "label": "Goalkeeper",
+      "description": ""
+    },
+    {
+      "id": "defender",
+      "label": "Defender",
+      "description": ""
+    },
+    {
+      "id": "midfielder",
+      "label": "Midfielder",
+      "description": ""
+    },
+    {
+      "id": "forward",
+      "label": "Forward",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge the strike: approach, plant foot, contact, follow-through."
+}

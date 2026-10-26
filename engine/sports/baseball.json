@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "label": "Baseball",
+  "action": {
+    "signal": "wrist_speed",
+    "min_gap_s": 1.5,
+    "floor": 4.0
+  },
+  "event_types": [
+    "swing",
+    "bunt",
+    "other"
+  ],
+  "results": {
+    "positive": [
+      "hit",
+      "home_run"
+    ],
+    "negative": [
+      "out",
+      "strikeout"
+    ],
+    "neutral": [
+      "walk",
+      "error",
+      "foul",
+      "unknown"
+    ]
+  },
+  "criteria": [
+    {
+      "key": "arm_extension",
+      "label": "Arm extension",
+      "metric": "elbow_angle",
+      "ideal": [
+        140,
+        175
+      ],
+      "acceptable": [
+        120,
+        180
+      ],
+      "weight": 0.3,
+      "look_for": "arms extending through the zone, hands inside the ball",
+      "drill": "Tee work: finish with both arms extended toward the pitcher."
+    },
+    {
+      "key": "posture",
+      "label": "Posture",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        10,
+        30
+      ],
+      "acceptable": [
+        0,
+        40
+      ],
+      "weight": 0.25,
+      "look_for": "athletic tilt, head still, no lunging",
+      "drill": "Mirror swings, check the tilt stays constant."
+    },
+    {
+      "key": "base",
+      "label": "Base",
+      "metric": "knee_angle",
+      "ideal": [
+        120,
+        165
+      ],
+      "acceptable": [
+        100,
+        175
+      ],
+      "weight": 0.25,
+      "look_for": "stable flexed base, weight moving to the front side",
+      "drill": "Stride-and-stop drill: land balanced before swinging."
+    },
+    {
+      "key": "hips",
+      "label": "Hip rotation",
+      "metric": "hip_angle",
+      "ideal": [
+        120,
+        175
+      ],
+      "acceptable": [
+        100,
+        180
+      ],
+      "weight": 0.2,
+      "look_for": "hips opening ahead of the hands",
+      "drill": "Hip-lead drill with a med ball."
+    }
+  ],
+  "positions": [
+    {
+      "id": "pitcher",
+      "label": "Pitcher",
+      "description": ""
+    },
+    {
+      "id": "catcher",
+      "label": "Catcher",
+      "description": ""
+    },
+    {
+      "id": "infielder",
+      "label": "Infielder",
+      "description": ""
+    },
+    {
+      "id": "outfielder",
+      "label": "Outfielder",
+      "description": ""
+    },
+    {
+      "id": "hitter",
+      "label": "Hitter",
+      "description": ""
+    }
+  ],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Judge the swing: stance, load, stride, contact, finish."
+}
