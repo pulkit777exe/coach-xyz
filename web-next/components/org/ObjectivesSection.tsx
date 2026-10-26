@@ -27,7 +27,8 @@ import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import EmptyState from '@/components/org/EmptyState'
 import { orgCreateObjective, orgDeleteObjective, orgObjectives, orgSetObjectiveStatus } from '@/lib/org/objectives'
 import { orgStudentFindings, downloadStudentFindingsCsv } from '@/lib/org/findings'
-import { type StoredFinding, type TrainingObjective } from '@/lib/org/types'
+import { type StoredFinding } from '@/lib/org/findings'
+import { type TrainingObjective } from '@/lib/org/objectives'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 
 interface ObjectivesSectionProps {

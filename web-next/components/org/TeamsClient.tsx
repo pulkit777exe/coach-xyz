@@ -30,7 +30,7 @@ import {
   type TeamMember,
 } from '@/lib/teams'
 import { orgCreateMatch, orgCreateSeason, orgDeleteMatch, orgDeleteSeason, orgMatches } from '@/lib/org/compete'
-import { type Match, type Season } from '@/lib/org/types'
+import { type Match, type Season } from '@/lib/org/compete'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 import EmptyState from './EmptyState'
 import Section from './Section'

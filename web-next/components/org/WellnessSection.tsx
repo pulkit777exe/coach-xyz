@@ -6,7 +6,7 @@ import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { orgCreateWellness, orgWellness } from '@/lib/org/wellness'
-import { type WellnessCheckin } from '@/lib/org/types'
+import { type WellnessCheckin } from '@/lib/org/wellness'
 import Section from './Section'
 import { formatDateNumeric } from '@/lib/date'
 
