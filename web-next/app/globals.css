@@ -555,17 +555,18 @@
     --marketing-purple: #8b5cf6;
     --marketing-violet: #7c3aed;
   }
-  .dark {
-    /* Same palette in dark mode (Cline theme is dark-first) */
-    --marketing-dark: #0a0a0a;
-    --marketing-dark-card: #111111;
-    --marketing-white: #ffffff;
-    --marketing-white-60: rgba(255, 255, 255, 0.6);
-    --marketing-white-10: rgba(255, 255, 255, 0.1);
-    --marketing-white-5: rgba(255, 255, 255, 0.05);
-    --marketing-purple: #8b5cf6;
-    --marketing-violet: #7c3aed;
-  }
+}
+
+.dark {
+  /* Same palette in dark mode (Cline theme is dark-first) */
+  --marketing-dark: #0a0a0a;
+  --marketing-dark-card: #111111;
+  --marketing-white: #ffffff;
+  --marketing-white-60: rgba(255, 255, 255, 0.6);
+  --marketing-white-10: rgba(255, 255, 255, 0.1);
+  --marketing-white-5: rgba(255, 255, 255, 0.05);
+  --marketing-purple: #8b5cf6;
+  --marketing-violet: #7c3aed;
 }
 
 /* Grid background patterns — coarse and fine */
@@ -645,3 +646,4 @@
   height: 450px;
   background: var(--marketing-violet);
 }
+
