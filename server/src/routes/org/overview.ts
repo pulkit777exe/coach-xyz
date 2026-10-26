@@ -1,7 +1,6 @@
 import { getOrgOverview, searchOrg } from '../../lib/orgReports'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { authorizeOrg } from '../../lib/orgRoute'
-import { buildError } from '../../lib/errors'
 import { Elysia } from 'elysia'
 
 export default new Elysia()

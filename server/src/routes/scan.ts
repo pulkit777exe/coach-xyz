@@ -118,7 +118,6 @@ export default new Elysia()
       // ── Validate Request ─────────────────────────────────────────────────
       const form = await request.formData()
       const value = form.get('video')
-      const requestMeta = readRequestMeta(request)
       // Multi-angle flow: the web appends these fields when adding another
       // camera perspective to an existing session.
       const appendSessionToken =
@@ -274,7 +273,6 @@ export default new Elysia()
     const sessionToken = typeof body.session_token === 'string' ? body.session_token : null
     const angle = typeof body.angle === 'string' ? body.angle : null
 
-    const requestMeta = readRequestMeta(request)
     try {
       const result = await scanFromKey(
         { storage_key: storageKey, session_token: sessionToken, angle },

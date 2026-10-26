@@ -19,7 +19,13 @@ function getRedisConnectionUrl(): string | null {
   }
 }
 
-function createRedisClient() {
+let _rawClient: IORedis | null = null
+let _rawClientError: Error | null = null
+
+export function getRawRedisClient(): IORedis | null {
+  if (_rawClient) return _rawClient
+  if (_rawClientError) return null
+
   const url = getRedisConnectionUrl()
   if (!url) {
     console.error(
@@ -28,18 +34,18 @@ function createRedisClient() {
         message: 'UPSTASH_REDIS_REST_URL unset, using noop client',
       }),
     )
-    return createNoopClient()
+    return null
   }
 
   try {
     const IORedis = require('ioredis') as typeof import('ioredis').default
-    const client: IORedis = new IORedis(url, {
+    _rawClient = new IORedis(url, {
       maxRetriesPerRequest: null,
-      commandTimeout: 5000,
-      connectTimeout: 5000,
+      commandTimeout: 10000,
+      connectTimeout: 10000,
       ...(isLocalRedis ? {} : { tls: {}, lazyConnect: false }),
     })
-    client.on('error', (err: Error) => {
+    _rawClient.on('error', (err: Error) => {
       console.error(
         JSON.stringify({
           type: 'redis_error',
@@ -48,7 +54,7 @@ function createRedisClient() {
         }),
       )
     })
-    client.on('reconnecting', (delay: number) => {
+    _rawClient.on('reconnecting', (delay: number) => {
       console.warn(
         JSON.stringify({
           type: 'redis_reconnecting',
@@ -57,68 +63,78 @@ function createRedisClient() {
         }),
       )
     })
-
-    return {
-      async get(key: string) {
-        const val = await client.get(key)
-        if (!val) return null
-        try {
-          return JSON.parse(val)
-        } catch {
-          return val
-        }
-      },
-      async set(
-        key: string,
-        value: string | number | Record<string, unknown>,
-        opts?: { ex?: number },
-      ) {
-        const str = typeof value === 'string' ? value : JSON.stringify(value)
-        if (opts?.ex) {
-          await client.setex(key, opts.ex, str)
-        } else {
-          await client.set(key, str)
-        }
-      },
-      async ping() {
-        return await client.ping()
-      },
-      async del(key: string) {
-        return await client.del(key)
-      },
-      async rateLimitIncrement(key: string, limit: number, windowSec: number) {
-        const now = Math.floor(Date.now() / 1000)
-        const resetAt = now + windowSec
-
-        const current = await client.incr(key)
-        if (current === 1) {
-          await client.expire(key, windowSec)
-          return { allowed: true, current: 1, reset: resetAt * 1000 }
-        } else if (current > limit) {
-          const ttl = await client.ttl(key)
-          return { allowed: false, current, reset: (now + ttl) * 1000 }
-        } else {
-          const ttl = await client.ttl(key)
-          return { allowed: true, current, reset: (now + ttl) * 1000 }
-        }
-      },
-      async eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<number> {
-        try {
-          const result = await client.eval(script, numKeys, ...args)
-          return typeof result === 'number' ? result : parseInt(String(result), 10) || 0
-        } catch {
-          return 0
-        }
-      },
-    }
-  } catch {
+    return _rawClient
+  } catch (err) {
+    _rawClientError = err as Error
     console.error(
       JSON.stringify({
         type: 'redis_unavailable',
         message: 'ioredis module not available, using noop client',
+        error: (err as Error).message,
       }),
     )
+    return null
+  }
+}
+
+function createRedisClient() {
+  const client = getRawRedisClient()
+  if (!client) {
     return createNoopClient()
+  }
+
+  return {
+    async get(key: string) {
+      const val = await client.get(key)
+      if (!val) return null
+      try {
+        return JSON.parse(val)
+      } catch {
+        return val
+      }
+    },
+    async set(
+      key: string,
+      value: string | number | Record<string, unknown>,
+      opts?: { ex?: number },
+    ) {
+      const str = typeof value === 'string' ? value : JSON.stringify(value)
+      if (opts?.ex) {
+        await client.setex(key, opts.ex, str)
+      } else {
+        await client.set(key, str)
+      }
+    },
+    async ping() {
+      return await client.ping()
+    },
+    async del(key: string) {
+      return await client.del(key)
+    },
+    async rateLimitIncrement(key: string, limit: number, windowSec: number) {
+      const now = Math.floor(Date.now() / 1000)
+      const resetAt = now + windowSec
+
+      const current = await client.incr(key)
+      if (current === 1) {
+        await client.expire(key, windowSec)
+        return { allowed: true, current: 1, reset: resetAt * 1000 }
+      } else if (current > limit) {
+        const ttl = await client.ttl(key)
+        return { allowed: false, current, reset: (now + ttl) * 1000 }
+      } else {
+        const ttl = await client.ttl(key)
+        return { allowed: true, current, reset: (now + ttl) * 1000 }
+      }
+    },
+    async eval(script: string, numKeys: number, ...args: (string | number)[]): Promise<number> {
+      try {
+        const result = await client.eval(script, numKeys, ...args)
+        return typeof result === 'number' ? result : parseInt(String(result), 10) || 0
+      } catch {
+        return 0
+      }
+    },
   }
 }
 
@@ -134,9 +150,6 @@ function createNoopClient() {
     async del() {
       return 0
     },
-    // Fail over to the in-memory limiter in checkLimit: never report
-    // "allowed" when there is no Redis behind us, or every rate limit
-    // silently vanishes on deploys without Upstash env configured.
     async rateLimitIncrement(): Promise<never> {
       throw new Error('redis_unavailable')
     },

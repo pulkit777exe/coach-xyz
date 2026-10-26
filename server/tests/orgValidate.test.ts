@@ -76,7 +76,10 @@ describe('defaultReportTitle', () => {
 
 describe('REPORT_TYPE_LABELS', () => {
   test('covers every supported report type', () => {
-    expect(REPORT_TYPE_LABELS).toMatchObject({
+    // Assert on a copy: bun's `toMatchObject` rewrites the received object's
+    // values into matcher instances, and this const is shared with the route
+    // that builds report titles from it.
+    expect({ ...REPORT_TYPE_LABELS }).toMatchObject({
       progress: expect.any(String),
       attendance: expect.any(String),
       performance: expect.any(String),
