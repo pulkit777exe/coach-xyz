@@ -25,8 +25,8 @@ const SERVER_FILE = join(
   '..',
   'server',
   'src',
-  'routes',
-  'members.ts',
+  'lib',
+  'orgRoute.ts',
 )
 
 describe('the email rule matches the server', () => {
@@ -45,7 +45,7 @@ describe('the email rule matches the server', () => {
     // parity assertion above would pass vacuously against whatever it found there. So the
     // read is asserted to be of a file that really does declare the rule.
     const server = readFileSync(SERVER_FILE, 'utf8')
-    expect(server).toContain('EMAIL_RE.test(email.trim())')
+    expect(server).toContain('export const EMAIL_RE')
   })
 
   test('accepts ordinary addresses', () => {

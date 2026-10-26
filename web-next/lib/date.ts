@@ -170,3 +170,7 @@ export function formatTimeShort(iso: string): string {
   if (Number.isNaN(instant.getTime())) return ''
   return instant.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
+
+export function formatMonthLong(date: Date): string {
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}

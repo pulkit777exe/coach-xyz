@@ -25,15 +25,9 @@ import { Spinner } from './Spinner'
 import { downloadCSV } from '@/lib/csv'
 import EmailAttendanceDialog from './EmailAttendanceDialog'
 
-import type { AttendanceStatus, Student } from '@/lib/org'
-import {
-  ATTENDANCE_STATUSES,
-  ATTENDANCE_STATUS_LABELS,
-  orgAttendance,
-  orgUpsertAttendance,
-  orgBatchAttendance,
-  orgDeleteAttendance,
-} from '@/lib/org'
+import type { AttendanceStatus, Student } from '@/lib/org/types'
+import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS } from '@/lib/org/types'
+import { orgAttendance, orgUpsertAttendance, orgBatchAttendance, orgDeleteAttendance } from '@/lib/org/attendance'
 import { toISODate } from '@/lib/date'
 import type { CoachAIError } from '@/lib/data/errors'
 

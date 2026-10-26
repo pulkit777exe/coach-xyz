@@ -16,7 +16,7 @@ import {
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
 
-import { orgEmailAttendance } from '@/lib/org'
+import { orgEmailAttendance } from '@/lib/org/email'
 import type { CoachAIError } from '@/types'
 
 export default function EmailAttendanceDialog({

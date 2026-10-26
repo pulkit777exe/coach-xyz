@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
-import type { Student } from '@/lib/org'
-import { orgStudents, linkAnalysisToStudent } from '@/lib/org'
+import type { Student } from '@/lib/org/types'
+import { orgStudents } from '@/lib/org/students'
+import { linkAnalysisToStudent } from '@/lib/org/email'
 import type { CoachAIError } from '@/types'
 
 const UNLINKED_LABEL = 'Link to Student'

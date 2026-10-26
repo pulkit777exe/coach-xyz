@@ -16,8 +16,9 @@ import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { Spinner } from './Spinner'
 
-import type { ScheduleEvent } from '@/lib/org'
-import { orgCreateEvent, orgUpdateEvent, EVENT_STATUSES, EVENT_TYPES } from '@/lib/org'
+import type { ScheduleEvent } from '@/lib/org/types'
+import { orgCreateEvent, orgUpdateEvent } from '@/lib/org/schedule'
+import { EVENT_STATUSES, EVENT_TYPES } from '@/lib/org/types'
 import { toISODate, toISOTime } from '@/lib/date'
 import type { CoachAIError } from '@/types'
 

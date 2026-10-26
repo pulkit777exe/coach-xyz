@@ -33,14 +33,9 @@ import StatusPill from './StatusPill'
 import { downloadCSV } from '@/lib/csv'
 import { cn } from '@/lib/utils'
 
-import type { EventStatus, ScheduleEvent } from '@/lib/org'
-import {
-  orgSchedule,
-  orgDeleteEvent,
-  EVENT_STATUSES,
-  EVENT_TYPE_LABELS,
-  EVENT_STATUS_LABELS,
-} from '@/lib/org'
+import type { EventStatus, ScheduleEvent } from '@/lib/org/types'
+import { orgSchedule, orgDeleteEvent } from '@/lib/org/schedule'
+import { EVENT_STATUSES, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from '@/lib/org/types'
 import { toISODate, scheduleMonthWindow } from '@/lib/date'
 import { usePreferences } from '@/lib/preferences'
 import type { CoachAIError } from '@/lib/data/errors'

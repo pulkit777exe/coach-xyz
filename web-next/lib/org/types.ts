@@ -3,7 +3,7 @@
 // Org vocabulary — single source of truth for the web app. The server mirrors
 // these (same values AND order: order is contractual — see server/src/lib/orgEnums.ts
 // and the org *Contract tests on both sides). Add a value there and here.
-export const STUDENT_STATUSES = ['active', 'inactive', 'transferred'] as const
+export const STUDENT_STATUSES = ['active', 'inactive', 'transferred', 'archived'] as const
 export type StudentStatus = (typeof STUDENT_STATUSES)[number]
 
 export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const
@@ -23,6 +23,7 @@ export const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
   active: 'Active',
   inactive: 'Inactive',
   transferred: 'Transferred',
+  archived: 'Archived',
 }
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {

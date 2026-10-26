@@ -27,12 +27,12 @@ export default function MarketingLanding() {
       <header className="sticky top-0 z-50 border-b border-[var(--marketing-white)]/5 bg-[var(--marketing-dark)]/80 backdrop-blur supports-[backdrop-filter]:bg-[var(--marketing-dark)]/70">
         <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between gap-4 px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-md bg-primary text-[var(--marketing-brown)] text-xs font-bold">
+            <span className="grid size-7 place-items-center rounded-md bg-primary text-[var(--marketing-brown)] text-caption font-bold">
               C
             </span>
-            <span className="text-sm font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
+            <span className="text-body font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
           </Link>
-          <div className="hidden items-center gap-6 text-sm md:flex">
+          <div className="hidden items-center gap-6 text-body md:flex">
             {MARKETING_LINKS.map((l) => (
               <Link
                 key={l.href}
@@ -46,13 +46,13 @@ export default function MarketingLanding() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="hidden h-8 items-center rounded-full px-4 text-sm font-medium text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] sm:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)]"
+              className="hidden h-8 items-center rounded-full px-4 text-body font-medium text-[var(--marketing-beige)]/70 hover:text-[var(--marketing-beige)] sm:inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--marketing-purple-light)]"
             >
               Sign in
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-8 items-center rounded-full bg-primary px-4 text-sm font-semibold text-[var(--marketing-brown)] hover:bg-primary/90"
+              className="inline-flex h-8 items-center rounded-full bg-primary px-4 text-body font-semibold text-[var(--marketing-brown)] hover:bg-primary/90"
             >
               Get started
             </Link>
@@ -84,20 +84,20 @@ export default function MarketingLanding() {
                 athlete&apos;s journey
               </span>
             </h1>
-            <p className="mx-auto mt-6 max-w-[640px] text-[16px] leading-7 text-[var(--marketing-white)]/60">
+            <p className="mx-auto mt-6 max-w-[640px] text-lead leading-7 text-[var(--marketing-white)]/60">
               CoachXYZ makes high-performance video analysis effortless — from upload to annotated
               video and shareable reports. Six sports, one pipeline, under 60 seconds.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Button
                 nativeButton={false} render={<Link href="/dashboard" />}
-                className="h-11 rounded-full bg-[var(--marketing-white)] px-7 text-sm font-semibold text-[var(--marketing-dark)] shadow-lg"
+                className="h-11 rounded-full bg-[var(--marketing-white)] px-7 text-body font-semibold text-[var(--marketing-dark)] shadow-lg dark:shadow-none"
               >
                 Start analyzing →
               </Button>
               <Button
                 variant="outline"
-                className="h-11 rounded-full border-[var(--marketing-white)]/15 px-7 text-sm font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]/5"
+                className="h-11 rounded-full border-[var(--marketing-white)]/15 px-7 text-body font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]/5"
               >
                 <a href="/features">Explore features</a>
               </Button>
@@ -113,7 +113,7 @@ export default function MarketingLanding() {
             {[
               {
                 tag: 'Desktop',
-                tagColor: 'bg-blue-500/10 text-blue-400',
+                tagColor: 'bg-[var(--marketing-blue)]/10 text-[var(--marketing-blue)]',
                 title: 'Coach Desktop',
                 desc: 'The video analysis agent as a native desktop app. No editor required.',
                 cta: 'Download for Mac',
@@ -121,7 +121,7 @@ export default function MarketingLanding() {
               },
               {
                 tag: 'IDE',
-                tagColor: 'bg-red-500/10 text-red-400',
+                tagColor: 'bg-[var(--marketing-red)]/10 text-[var(--marketing-red)]',
                 title: 'Coach IDE Extension',
                 desc: 'Install the Coach extension in your editor of choice.',
                 cta: 'Install extension',
@@ -129,7 +129,7 @@ export default function MarketingLanding() {
               },
               {
                 tag: 'CLI',
-                tagColor: 'bg-purple-500/10 text-purple-400',
+                tagColor: 'bg-[var(--marketing-purple)]/10 text-[var(--marketing-purple)]',
                 title: 'Coach CLI',
                 desc: 'From prompt to production, right inside your terminal.',
                 cta: 'View docs',
@@ -137,7 +137,7 @@ export default function MarketingLanding() {
               },
               {
                 tag: 'SDK',
-                tagColor: 'bg-green-500/10 text-green-400',
+                tagColor: 'bg-[var(--marketing-green)]/10 text-[var(--marketing-green)]',
                 title: 'Coach SDK',
                 desc: 'Embed the analysis runtime that powers Coach in your own apps.',
                 cta: 'View docs',
@@ -153,8 +153,8 @@ export default function MarketingLanding() {
                     {p.tag[0]}
                   </span>
                 </div>
-                <h3 className="text-sm font-semibold text-[var(--marketing-white)] mb-2">{p.title}</h3>
-                <p className="text-xs text-[var(--marketing-white)]/50 mb-6">{p.desc}</p>
+                <h3 className="text-body font-semibold text-[var(--marketing-white)] mb-2">{p.title}</h3>
+                <p className="text-caption text-[var(--marketing-white)]/50 mb-6">{p.desc}</p>
                 <Button
                   size="sm"
                   className="h-8 rounded-full bg-[var(--marketing-white)] px-4 text-[10px] font-bold text-[var(--marketing-dark)] tracking-wider"
@@ -171,13 +171,13 @@ export default function MarketingLanding() {
       {/* ── Trusted by ── */}
       <section className="border-y border-[var(--marketing-white)]/5 bg-[var(--marketing-dark)]/40 py-12 px-6">
         <div className="mx-auto max-w-[1120px]">
-          <p className="text-center text-xs font-semibold uppercase tracking-widest text-[var(--marketing-white)]/40 mb-8">
+          <p className="text-center text-caption font-semibold uppercase tracking-widest text-[var(--marketing-white)]/40 mb-8">
             Trusted by coaches and academies at
           </p>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 opacity-50 grayscale hover:grayscale-0 transition-all">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
               <div key={i} className="flex items-center justify-center h-12 opacity-60">
-                <div className="flex items-center gap-1 text-xs font-bold text-[var(--marketing-white)]/40 uppercase tracking-wider">
+                <div className="flex items-center gap-1 text-caption font-bold text-[var(--marketing-white)]/40 uppercase tracking-wider">
                   <div className="h-4 w-8 rounded border border-[var(--marketing-white)]/20" />
                   <span className="hidden sm:block">ACADEMY</span>
                 </div>
@@ -200,22 +200,22 @@ export default function MarketingLanding() {
               </p>
               <Button
                 size="sm"
-                className="mt-6 h-9 rounded-full bg-[var(--marketing-white)] px-5 text-[11px] font-bold text-[var(--marketing-dark)] tracking-wider"
+                className="mt-6 h-9 rounded-full bg-[var(--marketing-white)] px-5 text-label font-bold text-[var(--marketing-dark)] tracking-wider"
                
               >
                 <a href="/features">Read the full docs</a>
               </Button>
             </div>
             <div className="lg:w-1/2 relative">
-              <div className="rounded-xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-1 backdrop-blur-xl shadow-2xl overflow-hidden">
+              <div className="rounded-xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-1 backdrop-blur-xl shadow-2xl dark:shadow-none overflow-hidden">
                 <div className="relative h-[420px] bg-gradient-to-b from-[var(--marketing-dark)]/80 to-[var(--marketing-dark)]">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-[var(--marketing-dark)]">
                         <Monitor className="size-5" />
                       </div>
-                      <p className="text-sm font-semibold text-[var(--marketing-white)]">Video Analysis</p>
-                      <p className="text-xs text-[var(--marketing-white)]/40">Upload → Detect → Analyze → Report</p>
+                      <p className="text-body font-semibold text-[var(--marketing-white)]">Video Analysis</p>
+                      <p className="text-caption text-[var(--marketing-white)]/40">Upload → Detect → Analyze → Report</p>
                     </div>
                   </div>
                 </div>
@@ -292,8 +292,8 @@ export default function MarketingLanding() {
                 <div className="flex size-9 items-center justify-center rounded-full bg-[var(--marketing-white)]/5 mb-4">
                   <f.icon className="size-5 text-[var(--marketing-purple-light)]" />
                 </div>
-                <h3 className="text-sm font-semibold text-[var(--marketing-white)] mb-2">{f.title}</h3>
-                <p className="text-xs text-[var(--marketing-white)]/50 leading-relaxed">{f.desc}</p>
+                <h3 className="text-body font-semibold text-[var(--marketing-white)] mb-2">{f.title}</h3>
+                <p className="text-caption text-[var(--marketing-white)]/50 leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -304,7 +304,7 @@ export default function MarketingLanding() {
         <div className="mx-auto max-w-[1120px] text-center">
           <Button
             size="sm"
-            className="h-9 rounded-full bg-[var(--marketing-white)] px-6 text-[11px] font-bold text-[var(--marketing-dark)] tracking-wider shadow-lg"
+            className="h-9 rounded-full bg-[var(--marketing-white)] px-6 text-label font-bold text-[var(--marketing-dark)] tracking-wider shadow-lg dark:shadow-none"
            
           >
             <a href="/docs">Read the full docs →</a>
@@ -351,22 +351,22 @@ export default function MarketingLanding() {
             </h3>
             <Button
               nativeButton={false} render={<Link href="/signup" />}
-              className="mt-6 h-10 rounded-full bg-[var(--marketing-dark)] px-5 text-xs font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]"
+              className="mt-6 h-10 rounded-full bg-[var(--marketing-dark)] px-5 text-caption font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]"
             >
               Start for free
             </Button>
           </div>
           <div className="flex flex-col items-center justify-center rounded-2xl bg-[var(--marketing-dark)] p-8 text-center border border-[var(--marketing-white)]/5">
-            <p className="text-sm font-semibold text-[var(--marketing-white)] mb-2">
+            <p className="text-body font-semibold text-[var(--marketing-white)] mb-2">
               Not ready to buy yet?
             </p>
-            <p className="text-xs text-[var(--marketing-white)]/50 mb-4">
+            <p className="text-caption text-[var(--marketing-white)]/50 mb-4">
               Book a call with our coaching specialist
             </p>
             <Button
               variant="outline"
               nativeButton={false} render={<Link href="/contact" />}
-              className="h-9 rounded-full border-[var(--marketing-white)]/15 px-5 text-xs font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]/5"
+              className="h-9 rounded-full border-[var(--marketing-white)]/15 px-5 text-caption font-semibold text-[var(--marketing-white)] hover:bg-[var(--marketing-white)]/5"
             >
               Book a call
             </Button>
@@ -383,17 +383,17 @@ export default function MarketingLanding() {
                 <span className="grid size-6 place-items-center rounded-md bg-primary text-[var(--marketing-brown)] text-[10px] font-bold">
                   C
                 </span>
-                <span className="text-sm font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
+                <span className="text-body font-bold tracking-tight text-[var(--marketing-beige)]">CoachXYZ</span>
               </div>
-              <p className="text-xs text-[var(--marketing-white)]/40 max-w-[280px] leading-relaxed">
+              <p className="text-caption text-[var(--marketing-white)]/40 max-w-[280px] leading-relaxed">
                 AI-powered sports video analysis for coaches who want faster feedback.
               </p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
+              <p className="text-caption font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
                 Platform
               </p>
-              <div className="space-y-2 text-xs text-[var(--marketing-white)]/50">
+              <div className="space-y-2 text-caption text-[var(--marketing-white)]/50">
                 {MARKETING_LINKS.map((l) => (
                   <Link key={l.href} href={l.href} className="hover:text-[var(--marketing-white)]">
                     {l.label}
@@ -402,10 +402,10 @@ export default function MarketingLanding() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
+              <p className="text-caption font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
                 Company
               </p>
-              <div className="space-y-2 text-xs text-[var(--marketing-white)]/50">
+              <div className="space-y-2 text-caption text-[var(--marketing-white)]/50">
                 <Link href="/about" className="hover:text-[var(--marketing-white)]">About</Link>
                 <Link href="/blog" className="hover:text-[var(--marketing-white)]">Blog</Link>
                 <Link href="/contact" className="hover:text-[var(--marketing-white)]">Contact</Link>
@@ -414,7 +414,7 @@ export default function MarketingLanding() {
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
+              <p className="text-caption font-semibold uppercase tracking-widest text-[var(--marketing-white)] mb-4">
                 Get updates
               </p>
               <form onSubmit={subscribe} className="flex gap-2">
@@ -424,7 +424,7 @@ export default function MarketingLanding() {
                   type="email"
                   required
                   placeholder="you@academy.com"
-                  className="h-9 flex-1 rounded-full border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] px-3 text-[11px] text-[var(--marketing-white)] placeholder:text-[var(--marketing-white)]/20 focus:outline-none focus:ring-1 focus:ring-[var(--marketing-purple-light)]"
+                  className="h-9 flex-1 rounded-full border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] px-3 text-label text-[var(--marketing-white)] placeholder:text-[var(--marketing-white)]/20 focus:outline-none focus:ring-1 focus:ring-[var(--marketing-purple-light)]"
                 />
                 <Button type="submit" size="sm" className="h-9 rounded-full bg-primary px-4 text-[10px] font-bold text-[var(--marketing-dark)] tracking-wider">
                   Subscribe

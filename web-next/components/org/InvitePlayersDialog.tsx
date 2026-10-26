@@ -15,7 +15,7 @@ import {
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
 
-import { orgSendInvites } from '@/lib/org'
+import { orgSendInvites } from '@/lib/org/email'
 import type { CoachAIError } from '@/lib/data/errors'
 import { EMAIL_RE } from '@/lib/email'
 

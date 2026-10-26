@@ -42,13 +42,7 @@ import {
   type MyReports,
   type MyObjectives,
 } from '@/lib/meApi'
-import {
-  ATTENDANCE_STATUS_LABELS,
-  EVENT_STATUS_LABELS,
-  EVENT_TYPE_LABELS,
-  REPORT_TYPE_LABELS,
-  STUDENT_STATUS_LABELS,
-} from '@/lib/org'
+import { ATTENDANCE_STATUS_LABELS, EVENT_STATUS_LABELS, EVENT_TYPE_LABELS, REPORT_TYPE_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org/types'
 import { formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
 

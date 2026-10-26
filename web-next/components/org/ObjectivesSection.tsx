@@ -25,16 +25,9 @@ import TimestampPill from '@/components/TimestampPill'
 import Section from '@/components/org/Section'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import EmptyState from '@/components/org/EmptyState'
-import {
-  orgCreateObjective,
-  orgDeleteObjective,
-  orgObjectives,
-  orgSetObjectiveStatus,
-  orgStudentFindings,
-  downloadStudentFindingsCsv,
-  type StoredFinding,
-  type TrainingObjective,
-} from '@/lib/org'
+import { orgCreateObjective, orgDeleteObjective, orgObjectives, orgSetObjectiveStatus } from '@/lib/org/objectives'
+import { orgStudentFindings, downloadStudentFindingsCsv } from '@/lib/org/findings'
+import { type StoredFinding, type TrainingObjective } from '@/lib/org/types'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 
 interface ObjectivesSectionProps {

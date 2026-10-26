@@ -38,7 +38,7 @@ describe('org enum constants', () => {
   })
 
   it('define the expected vocabulary', () => {
-    expect(STUDENT_STATUSES).toEqual(['active', 'inactive', 'transferred'])
+    expect(STUDENT_STATUSES).toEqual(['active', 'inactive', 'transferred', 'archived'])
     expect(ATTENDANCE_STATUSES).toEqual(['present', 'late', 'absent', 'excused'])
     expect(EVENT_TYPES).toEqual(['practice', 'match', 'tournament', 'meeting', 'other'])
     expect(EVENT_STATUSES).toEqual(['scheduled', 'completed', 'cancelled'])

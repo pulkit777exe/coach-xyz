@@ -15,13 +15,8 @@ import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import Section from './Section'
 import StatusPill, { type StatusTone } from './StatusPill'
-import {
-  orgCreatePlan,
-  orgDeletePlan,
-  orgPlans,
-  orgSetPlanStatus,
-  type TrainingPlan,
-} from '@/lib/org'
+import { orgCreatePlan, orgDeletePlan, orgPlans, orgSetPlanStatus } from '@/lib/org/plans'
+import { type TrainingPlan } from '@/lib/org/types'
 
 interface PlansSectionProps {
   auth0Id: string

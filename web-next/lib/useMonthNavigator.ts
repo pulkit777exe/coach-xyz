@@ -2,6 +2,7 @@
 // One home for the month-grid loop repeated by the attendance + schedule
 // calendars: current-month state, loading shape, fetch-then-render, and
 // month navigation. Callers pass what a month load does (onFetch) and how
+import { formatMonthLong } from '@/lib/date'
 // failures surface (onError); the hook owns the in-flight race guard so a
 // slow earlier month never clobbers a later one.
 
@@ -14,8 +15,7 @@ export const firstOfMonth = (date: Date): Date => new Date(date.getFullYear(), d
 export const addCalendarMonths = (month: Date, delta: number): Date =>
   new Date(month.getFullYear(), month.getMonth() + delta, 1)
 
-export const monthLabelFor = (month: Date): string =>
-  month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+export const monthLabelFor = (month: Date): string => formatMonthLong(month)
 
 export function useMonthNavigator(opts: {
   onFetch: (month: Date) => Promise<void>

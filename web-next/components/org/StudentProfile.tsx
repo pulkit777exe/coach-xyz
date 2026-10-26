@@ -49,32 +49,18 @@ import ObjectivesSection from './ObjectivesSection'
 import PlansSection from './PlansSection'
 import WellnessSection from './WellnessSection'
 
-import type {
-  Student,
-  PerformanceSeriesPoint,
-  AttendanceSummary,
-  ReportRecord,
-  MetricTrend,
-  ComparisonStudent,
-} from '@/lib/org'
+import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord, MetricTrend, ComparisonStudent } from '@/lib/org/types'
 import type { DashboardAnalysis } from '@/lib/library'
 import type { CoachAIError } from '@/lib/data/errors'
-import {
-  orgStudentPerformance,
-  orgAddPerformanceMetric,
-  orgDeletePerformanceMetric,
-  orgUpdatePerformanceMetric,
-  orgDeleteStudent,
-  orgDeleteReport,
-  linkAnalysisToStudent,
-  orgAttendanceSummary,
-  orgStudents,
-  orgStudentTrends,
-  orgCompareStudents,
-} from '@/lib/org'
+import { orgStudentPerformance, orgAddPerformanceMetric } from '@/lib/org/student'
+import { orgDeletePerformanceMetric, orgUpdatePerformanceMetric } from '@/lib/org/performance'
+import { orgDeleteStudent, orgStudents, orgStudentTrends, orgCompareStudents } from '@/lib/org/students'
+import { orgDeleteReport } from '@/lib/org/reports'
+import { linkAnalysisToStudent } from '@/lib/org/email'
+import { orgAttendanceSummary } from '@/lib/org/attendance'
 import { formatDateLong, formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
-import { ATTENDANCE_STATUS_LABELS } from '@/lib/org'
+import { ATTENDANCE_STATUS_LABELS } from '@/lib/org/types'
 import { capitalize } from '@/lib/utils'
 import { initials } from '@/lib/initials'
 

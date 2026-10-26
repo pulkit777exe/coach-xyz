@@ -3,7 +3,7 @@ re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/co
 
 scope
   roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
-  first-party files: 162 (app 50, components 76, lib 36)
+  first-party files: 190 (app 52, components 74, lib 64)
   vendored path exemption: components/9ui/, components/interior/ — 31 files
   colour utilities resolvable from @theme (--color-*): 52
 
@@ -18,7 +18,8 @@ rule 2 — dark: colour pairs, first-party (classified)
   A literal hue over token (remitted to darkVariantTokens): 4
   C token → token / transparent: 2
   D same token, alpha shifted: 9
-  S sanctioned non-colour (none): 4
+  S sanctioned non-colour (none): 7
+  V var()-backed arbitrary value: 2
   violations: 0
   vendored (path-exempt, rule 2): 8 pairs
     B literal over literal (scrim pair; vendored registry exempt, first-party = violation): 3
@@ -32,7 +33,7 @@ boundary — recorded, NOT guarded (outside the three rules)
   hex outside className/inline-style (first-party): 
     components/VideoPlayer.tsx ×7
     (VideoPlayer paints to canvas, which cannot take var(): theme-invariant overlay scrims + getComputedStyle-resolved token fallbacks — components/VideoPlayer.colors.test.ts pins them)
-  rgba() in className: components/HeaderClient.tsx:109 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  rgba() in className: components/HeaderClient.tsx:108 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/org/SettingsPanel.tsx:146 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none

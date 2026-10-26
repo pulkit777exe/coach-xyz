@@ -8,23 +8,13 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { DashboardAnalysis } from './library'
-import {
-  linkAnalysisToStudent,
-  orgAddPerformanceMetric,
-  orgAttendanceSummary,
-  orgCompareStudents,
-  orgDeleteReport,
-  orgStudentPerformance,
-  orgStudentTrends,
-  orgStudents,
-  orgUpdatePerformanceMetric,
-  type AttendanceSummary,
-  type ComparisonStudent,
-  type MetricTrend,
-  type PerformanceSeriesPoint,
-  type ReportRecord,
-  type Student,
-} from './org'
+import { linkAnalysisToStudent } from './org/email'
+import { orgAddPerformanceMetric, orgStudentPerformance } from './org/student'
+import { orgAttendanceSummary } from './org/attendance'
+import { orgCompareStudents, orgStudentTrends, orgStudents } from './org/students'
+import { orgDeleteReport } from './org/reports'
+import { orgUpdatePerformanceMetric } from './org/performance'
+import { type AttendanceSummary, type ComparisonStudent, type MetricTrend, type PerformanceSeriesPoint, type ReportRecord, type Student } from './org/types'
 
 export type MetricInput = {
   metric_key: string

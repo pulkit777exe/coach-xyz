@@ -547,10 +547,9 @@
     --marketing-white-5: rgba(255, 255, 255, 0.05);
     --marketing-purple: #8b5cf6;
     --marketing-violet: #7c3aed;
-  }
-}
-
-.dark {
+    --marketing-blue: #3b82f6;
+    --marketing-red: #ef4444;
+    --marketing-green: #22c55e;
   /* Same palette in dark mode (Cline theme is dark-first) */
   --marketing-dark: #0a0a0a;
   --marketing-dark-card: #111111;
@@ -560,6 +559,9 @@
   --marketing-white-5: rgba(255, 255, 255, 0.05);
   --marketing-purple: #8b5cf6;
   --marketing-violet: #7c3aed;
+  --marketing-blue: #3b82f6;
+  --marketing-red: #ef4444;
+  --marketing-green: #22c55e;
 }
 
 /* Grid background patterns — coarse and fine */

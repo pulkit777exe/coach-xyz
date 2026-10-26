@@ -33,14 +33,9 @@ import EmailReportDialog from './EmailReportDialog'
 import { downloadCSV } from '@/lib/csv'
 import { formatDateMed, formatDayWeekdayYear, toISODate } from '@/lib/date'
 
-import type { ReportRecord, Student, ReportType } from '@/lib/org'
-import {
-  orgCreateReport,
-  orgUpdateReport,
-  orgDeleteReport,
-  REPORT_TYPES,
-  REPORT_TYPE_LABELS,
-} from '@/lib/org'
+import type { ReportRecord, Student, ReportType } from '@/lib/org/types'
+import { orgCreateReport, orgUpdateReport, orgDeleteReport } from '@/lib/org/reports'
+import { REPORT_TYPES, REPORT_TYPE_LABELS } from '@/lib/org/types'
 import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
 import { startJobPolling } from '@/lib/jobPolling'
 import type { AiReportJobPoll } from '@/lib/aiReports'

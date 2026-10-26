@@ -16,8 +16,8 @@ import {
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
 
-import { orgEmailReport } from '@/lib/org'
-import type { ReportRecord } from '@/lib/org'
+import { orgEmailReport } from '@/lib/org/email'
+import type { ReportRecord } from '@/lib/org/types'
 import type { CoachAIError } from '@/types'
 
 export default function EmailReportDialog({

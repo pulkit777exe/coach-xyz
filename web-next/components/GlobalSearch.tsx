@@ -17,7 +17,8 @@ import {
 import { Input } from '@/components/9ui/ui/input'
 import { Dialog, DialogContent, DialogTitle } from '@/components/9ui/ui/dialog'
 import { Spinner } from '@/components/org/Spinner'
-import { orgSearch, type OrgSearchResult } from '@/lib/org'
+import { orgSearch } from '@/lib/org/overview'
+import { type OrgSearchResult } from '@/lib/org/types'
 
 type Category = {
   key: keyof OrgSearchResult

@@ -1,18 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import {
-  ATTENDANCE_STATUSES,
-  ATTENDANCE_STATUS_LABELS,
-  EVENT_STATUSES,
-  EVENT_STATUS_LABELS,
-  EVENT_TYPES,
-  EVENT_TYPE_LABELS,
-  REPORT_TYPES,
-  REPORT_TYPE_LABELS,
-  STUDENT_STATUSES,
-  STUDENT_STATUS_LABELS,
-  orgCompareStudents,
-  orgStudentTrends,
-} from '@/lib/org'
+import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS, EVENT_STATUSES, EVENT_STATUS_LABELS, EVENT_TYPES, EVENT_TYPE_LABELS, REPORT_TYPES, REPORT_TYPE_LABELS, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '@/lib/org/types'
+import { orgCompareStudents, orgStudentTrends } from '@/lib/org/students'
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

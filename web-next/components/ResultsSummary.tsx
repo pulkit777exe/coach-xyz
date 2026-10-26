@@ -54,7 +54,7 @@ export default function ResultsSummary({
         y: 24,
         opacity: 0,
         duration: 0.3,
-        stagger: 0.08,
+        stagger: 0.05,
         ease: 'power3.out',
       })
     },
@@ -76,11 +76,13 @@ export default function ResultsSummary({
   const sport = summary.sport || 'General'
 
   const scoreTone =
-    score !== null && score >= 8
-      ? 'text-success'
-      : score !== null && score >= 5
-        ? 'text-warning'
-        : 'text-destructive'
+    formScore === null
+      ? 'text-muted-foreground'
+      : formScore >= 8
+        ? 'text-success'
+        : formScore >= 5
+          ? 'text-warning'
+          : 'text-destructive'
 
   return (
     <>

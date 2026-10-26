@@ -8,8 +8,10 @@ import buildSettingsSections, {
   type SubscriptionInfo,
 } from '@/components/org/settings/buildSettingsSections'
 import { getMyOrgs, getMyProfile } from '@/lib/meApi'
-import { orgOverview, orgStudents, orgSubscription } from '@/lib/org'
-import type { OrgOverview, Student } from '@/lib/org'
+import { orgOverview } from '@/lib/org/overview'
+import { orgStudents } from '@/lib/org/students'
+import { orgSubscription } from '@/lib/org/subscription'
+import type { OrgOverview, Student } from '@/lib/org/types'
 import type { UserRecord } from '@/lib/user'
 import { preferredOrgCookie, resolveOrgContext } from '@/lib/orgContext'
 import type { OrgMemberRole } from '@/lib/members'

@@ -29,19 +29,12 @@ import {
   type Team,
   type TeamMember,
 } from '@/lib/teams'
-import {
-  orgCreateMatch,
-  orgCreateSeason,
-  orgDeleteMatch,
-  orgDeleteSeason,
-  orgMatches,
-  type Match,
-  type Season,
-} from '@/lib/org'
+import { orgCreateMatch, orgCreateSeason, orgDeleteMatch, orgDeleteSeason, orgMatches } from '@/lib/org/compete'
+import { type Match, type Season } from '@/lib/org/types'
 import { getFindingsTrends, type FindingsTrendPoint } from '@/lib/library'
 import EmptyState from './EmptyState'
 import Section from './Section'
-import type { Student } from '@/lib/org'
+import type { Student } from '@/lib/org/types'
 
 interface TeamsClientProps {
   auth0Id: string

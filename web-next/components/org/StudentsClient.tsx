@@ -50,15 +50,9 @@ import EmptyState from './EmptyState'
 import StudentFormDialog from './StudentFormDialog'
 import InvitePlayersDialog from './InvitePlayersDialog'
 
-import type { Student, StudentImportResult, StudentImportRow } from '@/lib/org'
-import {
-  orgDeleteStudent,
-  orgUpdateStudent,
-  orgStudents,
-  orgImportStudents,
-  STUDENT_STATUSES,
-  STUDENT_STATUS_LABELS,
-} from '@/lib/org'
+import type { Student, StudentImportResult, StudentImportRow } from '@/lib/org/types'
+import { orgDeleteStudent, orgUpdateStudent, orgStudents, orgImportStudents } from '@/lib/org/students'
+import { STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '@/lib/org/types'
 import { formatDateMed, toISODate } from '@/lib/date'
 import type { CoachAIError } from '@/lib/data/errors'
 import { initials } from '@/lib/initials'

@@ -17,7 +17,7 @@ import {
 } from '@/components/dashboard/OwnerHome'
 import type { DashboardAnalysis, DashboardStats } from '@/lib/library'
 import type { DashboardQuickActions } from '@/lib/permissions'
-import type { OrgOverview, ReportRecord, ScheduleEvent } from '@/lib/org'
+import type { OrgOverview, ReportRecord, ScheduleEvent } from '@/lib/org/types'
 import type { OrgRole } from '@/lib/serverData'
 import type { Team } from '@/lib/teams'
 

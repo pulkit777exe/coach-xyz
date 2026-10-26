@@ -7,7 +7,8 @@ import OwnerHome from '@/components/dashboard/OwnerHome'
 import PlayerHome from '@/components/dashboard/PlayerHome'
 import type { DashboardAnalysis, DashboardStats } from '@/lib/library'
 import type { OrgMembersResponse } from '@/lib/members'
-import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
+import type { OrgOverview, ReportRecord, ScheduleEvent } from '@/lib/org/types'
+import type { OrgSubscription } from '@/lib/org/subscription'
 import {
   getDashboardAnalyses,
   getDashboardStats,

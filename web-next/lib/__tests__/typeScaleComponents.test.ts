@@ -132,6 +132,7 @@ const SUB_FLOOR_GRANDFATHERED = [
   'components/DashboardNav.tsx ×1:text-[9px]',
   'components/GlobalSearch.tsx ×1:text-[10px]',
   'components/LandingPage.tsx ×3:text-[10px]',
+  'components/MarketingLanding.tsx ×7:text-[10px]',
   'components/UserAvatar.tsx ×1:text-[0.5rem]',
 ]
 

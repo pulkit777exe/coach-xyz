@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactElement } from 'react'
-import type { ScheduleEvent } from '@/lib/org'
+import type { ScheduleEvent } from '@/lib/org/types'
 
 // ── ScheduleClient: two month reads in flight, no token ──────────────────────
 //

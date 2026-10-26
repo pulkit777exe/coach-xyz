@@ -2,14 +2,7 @@ import type { UserRecord } from './user'
 import type { OrgMemberRole } from './members'
 import { mutateJson, queryJson } from './data/client'
 import { meUrl } from './data/transport'
-import type {
-  AttendanceWithStudent,
-  AttendanceSummary,
-  PerformanceSeriesPoint,
-  ReportRecord,
-  ScheduleEvent,
-  Student,
-} from './org'
+import type { AttendanceWithStudent, AttendanceSummary, PerformanceSeriesPoint, ReportRecord, ScheduleEvent, Student } from './org/types'
 
 // ── Player Hub API ──────────────────────────────────────────────────────────
 // Self-scoped ("/api/me/*") read-only endpoints for the player/student face.

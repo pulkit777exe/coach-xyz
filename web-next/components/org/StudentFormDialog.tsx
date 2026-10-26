@@ -24,8 +24,9 @@ import { Textarea } from '@/components/9ui/ui/textarea'
 import { Spinner } from './Spinner'
 import { NativeSelect } from './EventFormDialog'
 
-import type { Student, StudentFormValues } from '@/lib/org'
-import { orgCreateStudent, orgUpdateStudent, STUDENT_STATUSES } from '@/lib/org'
+import type { Student, StudentFormValues } from '@/lib/org/types'
+import { orgCreateStudent, orgUpdateStudent } from '@/lib/org/students'
+import { STUDENT_STATUSES } from '@/lib/org/types'
 import { getSportPositions, type SportPosition } from '@/lib/sports'
 import type { CoachAIError } from '@/types'
 

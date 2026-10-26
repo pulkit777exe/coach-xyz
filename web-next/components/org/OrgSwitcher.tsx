@@ -55,8 +55,8 @@ export default function OrgSwitcher({
             <Building2 className="size-3.5 text-muted-foreground" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-none text-foreground">{label}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] capitalize leading-none text-muted-foreground">
+            <p className="truncate text-body font-medium leading-none text-foreground">{label}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-label capitalize leading-none text-muted-foreground">
               <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[role])} />
               {role}
             </p>
@@ -88,10 +88,10 @@ export default function OrgSwitcher({
             <Building2 className="size-3.5 text-muted-foreground" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium leading-none text-foreground">
+            <span className="block truncate text-body font-medium leading-none text-foreground">
               {label}
             </span>
-            <span className="mt-0.5 flex items-center gap-1.5 text-[11px] capitalize leading-none text-muted-foreground">
+            <span className="mt-0.5 flex items-center gap-1.5 text-label capitalize leading-none text-muted-foreground">
               <span className={cn('inline-block size-1.5 rounded-full', ROLE_DOT[role])} />
               {role}
             </span>
@@ -99,7 +99,7 @@ export default function OrgSwitcher({
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="bottom" className="w-64">
-          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <DropdownMenuLabel className="text-label font-semibold uppercase tracking-widest text-muted-foreground">
             Organizations
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -116,8 +116,8 @@ export default function OrgSwitcher({
                   className={cn('inline-block size-1.5 shrink-0 rounded-full', ROLE_DOT[org.role])}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm leading-none">{name}</span>
-                  <span className="block text-xs capitalize leading-none text-muted-foreground">
+                  <span className="block truncate text-body leading-none">{name}</span>
+                  <span className="block text-caption capitalize leading-none text-muted-foreground">
                     {org.role}
                   </span>
                 </span>

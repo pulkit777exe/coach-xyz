@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { ReactElement } from 'react'
-import type { Student } from '@/lib/org'
+import type { Student } from '@/lib/org/types'
 
 // ── StudentsClient: two roster reads with no token could both apply ──────────
 //

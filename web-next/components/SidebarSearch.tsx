@@ -15,7 +15,7 @@ import {
   MEMBERS_NAV_ROLES,
   type NavRole,
 } from '@/lib/nav'
-import { orgStudents } from '@/lib/org'
+import { orgStudents } from '@/lib/org/students'
 import { cn } from '@/lib/utils'
 
 type PageEntry = {

@@ -1,5 +1,5 @@
-import type { ReportContent, ReportRecord } from '@/lib/org'
-import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org'
+import type { ReportContent, ReportRecord } from '@/lib/org/types'
+import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org/types'
 import { formatDateMed, formatDateTimeShort } from '@/lib/date'
 
 const TYPE_ORDER: Record<string, string[]> = {
