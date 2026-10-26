@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useMemo, useState } from 'react'
+import { ProgressBar } from '@/components/interior/progress-bar'
 import type { JobStatus } from '@/types'
 
 interface AnalysisProgressProps {
@@ -73,81 +74,66 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
     <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center pt-20">
       <div className="w-full max-w-3xl">
         <div className="mb-9 text-center">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Analysis in progress
           </p>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground">
             Reading the athlete&apos;s movement
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+          <p className="mx-auto mt-3 max-w-xl text-body leading-6 text-muted-foreground">
             Detecting body position, scoring key events, and preparing the annotated video.
           </p>
         </div>
 
         {currentStageIndex === 0 && (
-          <div className="mb-5 border border-border bg-muted p-4 rounded-2xl">
-            <p className="text-sm text-muted-foreground">
+          <div className="mb-5 border border-border bg-muted rounded-[6px] p-4">
+            <p className="text-body leading-5 text-muted-foreground">
               Queued and waiting for analysis capacity.
             </p>
           </div>
         )}
 
         {isWaitingForQuota && (
-          <div className="mb-5 border border-danger/30 bg-danger/10 p-4 rounded-2xl">
-            <p className="text-sm text-foreground">AI capacity is busy. Retrying automatically.</p>
+          <div className="mb-5 border border-destructive/20 bg-destructive/10 rounded-[6px] p-4">
+            <p className="text-body text-destructive">
+              AI capacity is busy. Retrying automatically.
+            </p>
           </div>
         )}
 
-        <div className="flex flex-col gap-8 border border-border bg-card p-6 sm:p-8 rounded-2xl shadow-sm">
-          <div className="flex flex-col gap-5 border border-border bg-muted p-5 sm:p-6 rounded-2xl">
-            <div
-              className="flex min-h-10 flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"
-              aria-live="polite"
-            >
-              {boundedProgress === 100 ? (
-                <span className="inline-flex items-center gap-2 text-foreground">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="size-6"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span>Analysis complete</span>
-                </span>
-              ) : (
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Current stage
-                </span>
-              )}
-              <span className="font-semibold text-3xl tabular-nums text-foreground">
-                {Math.trunc(boundedProgress)}%
-              </span>
-            </div>
+        <div className="flex flex-col gap-8 border border-border bg-card rounded-[6px] p-6 sm:p-8">
+          <div className="flex flex-col gap-5 border border-border bg-muted rounded-[6px] p-5 sm:p-6">
+            {boundedProgress === 100 && (
+              <div className="flex items-center gap-2 text-foreground" aria-live="polite">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="size-6 shrink-0"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>Analysis complete</span>
+              </div>
+            )}
 
-            <div className="flex h-2 w-full items-center overflow-hidden bg-muted rounded-full">
-              <div
-                role="progressbar"
-                className="flex items-center justify-center self-stretch bg-primary transition-[width] duration-500 ease-out"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={boundedProgress}
-                style={{ width: `${boundedProgress}%` }}
-              ></div>
-            </div>
+            <ProgressBar
+              value={boundedProgress}
+              label={stageName}
+              completeLabel="Analysis complete"
+            />
 
-            <div
-              className="flex flex-col gap-2 text-xs uppercase text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
-              aria-live="polite"
-            >
-              <span>{stageName}</span>
-              <span>
-                {estimatedSeconds > 0 ? `ETA ${estimatedSeconds}s` : 'Timing estimate pending'}
+            <div className="flex justify-end text-meta text-muted-foreground" aria-live="polite">
+              <span className="tabular-nums">
+                {boundedProgress >= 100
+                  ? 'Finished'
+                  : estimatedSeconds > 0
+                    ? `ETA ${estimatedSeconds}s`
+                    : 'Timing estimate pending'}
               </span>
             </div>
           </div>
@@ -160,27 +146,27 @@ export default function AnalysisProgress({ status }: AnalysisProgressProps) {
               return (
                 <div
                   key={index}
-                  className={`flex min-h-16 items-center gap-4 border p-3 rounded-xl transition-colors ${
+                  className={`flex min-h-16 items-center gap-4 rounded-[6px] border p-3 transition-colors ${
                     isActive
-                      ? 'bg-muted border-2 border-foreground'
+                      ? 'bg-primary/10 border-primary'
                       : isCompleted
                         ? 'bg-muted border border-border'
                         : 'bg-transparent border border-border opacity-60'
                   }`}
                 >
                   <div
-                    className={`shrink-0 w-10 h-10 flex items-center justify-center border rounded-lg text-xs tabular-nums transition-colors ${
+                    className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-[6px] border text-caption leading-4 font-medium tabular-nums transition-colors ${
                       isActive
-                        ? 'bg-foreground text-background border-foreground'
+                        ? 'bg-primary text-primary-foreground border-primary'
                         : isCompleted
-                          ? 'bg-muted text-foreground border-border'
+                          ? 'bg-accent text-foreground border-border'
                           : 'bg-transparent text-muted-foreground border-border'
                     }`}
                   >
                     {isCompleted ? 'OK' : stage.label}
                   </div>
                   <span
-                    className={`text-sm tracking-wide ${
+                    className={`text-body ${
                       isActive
                         ? 'text-foreground font-semibold'
                         : isCompleted

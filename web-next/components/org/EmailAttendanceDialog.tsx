@@ -82,7 +82,7 @@ export default function EmailAttendanceDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="email_att_recipient">Recipient email</Label>
             <Input
               id="email_att_recipient"
@@ -95,7 +95,7 @@ export default function EmailAttendanceDialog({
           {(from || to) && (
             <div className="grid gap-1.5">
               <Label>Date range</Label>
-              <p className="text-muted-foreground bg-muted rounded-md border border-border px-3 py-2 text-sm">
+              <p className="text-muted-foreground bg-muted rounded-[6px] border border-border px-3 py-2 text-meta tabular-nums">
                 {from ?? '—'} → {to ?? '—'}
               </p>
             </div>

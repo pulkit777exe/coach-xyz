@@ -66,6 +66,47 @@ describe('startJobPolling', () => {
     c.stop()
   })
 
+  it('enforces a total request budget even when responses stay nonterminal', async () => {
+    fetchStatus.mockResolvedValue(mkStatus(false))
+    const onError = vi.fn()
+    const c = startJobPolling({
+      jobId: 'j1',
+      fetchStatus,
+      isComplete: (s) => s.complete,
+      intervalMs: 1000,
+      maxRequests: 2,
+      onError,
+    })
+    await flush()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(fetchStatus).toHaveBeenCalledTimes(2)
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: 'STATUS_RECONCILIATION_EXHAUSTED' }),
+      }),
+    )
+    c.stop()
+  })
+
+  it('cancels a scheduled poll when refresh starts a new generation', async () => {
+    fetchStatus.mockResolvedValue(mkStatus(false))
+    const controller = startJobPolling({
+      jobId: 'j1',
+      fetchStatus,
+      isComplete: (s) => s.complete,
+      intervalMs: 1000,
+    })
+    await flush()
+    controller.refresh()
+    await flush()
+    expect(fetchStatus).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1000)
+    // One poll from the refreshed generation is expected; the pre-refresh
+    // timer must not create a second overlapping poll at the same deadline.
+    expect(fetchStatus).toHaveBeenCalledTimes(3)
+    controller.stop()
+  })
+
   it('completes once isComplete becomes true and stops polling', async () => {
     fetchStatus.mockResolvedValueOnce(mkStatus(false)).mockResolvedValueOnce(mkStatus(true))
     const onStatus = vi.fn()

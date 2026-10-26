@@ -3,13 +3,15 @@
 import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
-import { Badge } from '@/components/9ui/ui/badge'
+import { useReducedMotion } from 'motion/react'
 import { Button } from '@/components/9ui/ui/button'
+import StatusPill from '@/components/org/StatusPill'
 import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
+import { summaryNumber } from '@/lib/analysis'
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP)
@@ -51,16 +53,30 @@ export default function ResultsSummary({
 }: ResultsSummaryProps) {
   const summary = status.summary
   const containerRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = useReducedMotion()
   const downloadUrl = useAuthorizedMediaUrl(jobId)
 
   useGSAP(
     () => {
-      if (!summary) return
+      // Respect the OS "reduce motion" setting. This is the ONLY animation on the
+      // results view, and it moved six sections 24px while fading them in — which a
+      // user with vestibular sensitivity cannot opt out of, because nothing here
+      // consulted their preference. Three files in this app honour the setting
+      // (`interior/progress-bar`, `TypewriterHighlight`, the `globals.css` block);
+      // this was the one conspicuous place that did not.
+      //
+      // Skipping rather than shortening: `components/interior/progress-bar.tsx`
+      // reduces to `duration: 0`, and a 0s tween still lands the elements in their
+      // final state, which is the correct outcome for a reveal that exists only to
+      // decorate. `dependencies` is deliberately left off so the animation still
+      // runs exactly once on mount — adding `reduced` there would replay the whole
+      // reveal every time `summary` changed.
+      if (!summary || reducedMotion) return
       gsap.from('.gsap-item', {
-        y: 30,
+        y: 24,
         opacity: 0,
-        duration: 0.8,
-        stagger: 0.15,
+        duration: 0.5,
+        stagger: 0.08,
         ease: 'power3.out',
       })
     },
@@ -69,206 +85,56 @@ export default function ResultsSummary({
 
   if (!summary) {
     return (
-      <>
-        <div className="min-h-screen bg-transparent p-6 flex flex-col items-center justify-center pt-20">
-          <p className="text-foreground">No analysis summary available.</p>
-          <Button onClick={onReset} className="mt-4">
-            Try again
-          </Button>
-        </div>
-      </>
+      <div className="rounded-[6px] border border-border bg-card p-8 text-center text-muted-foreground">
+        No summary data available.
+      </div>
     )
   }
 
-  const formScoreColor =
-    summary.form_score >= 8
-      ? 'text-foreground'
-      : summary.form_score >= 5
+  const score = summaryNumber(summary.form_score)
+  const scorePercent = score !== null ? Math.min(100, Math.max(0, score * 10)) : null
+  const rating = summary.overall_rating || 'Good'
+  const sport = summary.sport || 'General'
+
+  const scoreTone =
+    score !== null && score >= 8
+      ? 'text-success'
+      : score !== null && score >= 5
         ? 'text-warning'
         : 'text-destructive'
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-20"
-      >
-        <div className="max-w-4xl w-full">
-          <div className="gsap-item mb-8 rounded-2xl border border-border bg-card p-6 shadow-sm relative overflow-hidden">
-            <div className="border-b border-border pb-6 pt-2">
-              <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
-                <span className="text-4xl">
-                  {SPORT_EMOJI[summary.sport] || SPORT_EMOJI.unknown}
-                </span>
-                <span className="text-foreground capitalize">
-                  {summary.sport} Analysis Complete
-                </span>
-              </h2>
-              {summary.angle && summary.angle !== 'primary' && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Analyzed perspective:{' '}
-                  <span className="font-semibold text-foreground capitalize">{summary.angle}</span>
+      <div ref={containerRef} className="max-w-4xl mx-auto space-y-6 pt-2 pb-16">
+        {/* Top Header Section */}
+        <div className="gsap-item flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{SPORT_EMOJI[sport.toLowerCase()] || '🎯'}</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-title font-semibold tracking-[-0.02em] text-foreground capitalize">
+                    {sport} Analysis
+                  </h1>
+                  <span className="rounded-[4px] border border-border bg-accent/50 px-2 py-0.5 text-meta font-medium capitalize text-muted-foreground">
+                    {rating}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-body">
+                  AI-powered form feedback & biomechanics assessment
                 </p>
-              )}
-            </div>
-            <div className="space-y-8 pt-8">
-              <div className="grid md:grid-cols-2 gap-8 items-center bg-muted rounded-2xl p-8 border border-border">
-                <div className="text-center md:text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                    Total Form Score
-                  </p>
-                  <div className="flex items-baseline justify-center md:justify-start gap-2">
-                    <div className={`text-7xl font-bold ${formScoreColor}`}>
-                      {summary.form_score}
-                    </div>
-                    <span className="text-xl text-muted-foreground font-medium">/ 10</span>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="mt-4 border-border text-foreground bg-muted px-4 py-1.5 text-sm uppercase tracking-wide"
-                  >
-                    {summary.overall_rating} Level
-                  </Badge>
-                  {summary.needs_review && (
-                    <Badge
-                      variant="outline"
-                      className="mt-4 ml-2 border-warning/40 text-warning bg-warning/10 px-4 py-1.5 text-sm uppercase tracking-wide"
-                    >
-                      Needs review
-                    </Badge>
-                  )}
-                  {summary.quality && !summary.quality.passed && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Quality check: {summary.quality.issues.map(humanizeQualityIssue).join(' · ')}
-                    </p>
-                  )}
-                </div>
-                <div className="text-center md:text-left border-l-0 md:border-l border-border md:pl-8">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                    Overall Assessment
-                  </p>
-                  <p className="text-muted-foreground text-lg leading-relaxed">{summary.summary}</p>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-8">
-                <div className="bg-muted rounded-2xl p-6 border border-border">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <svg
-                      className="w-5 h-5 text-amber-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                    Priority Focus
-                  </h3>
-                  <ol className="space-y-3">
-                    {summary.top_tips?.map((tip, index) => (
-                      <li key={index} className="flex gap-3 text-muted-foreground">
-                        <span className="shrink-0 size-8 rounded-full bg-muted border border-border flex items-center justify-center text-xs font-bold text-muted-foreground">
-                          {index + 1}
-                        </span>
-                        <span className="leading-relaxed">{tip}</span>
-                      </li>
-                    ))}
-                  </ol>
-                  {summary.priority_drill && (
-                    <div className="mt-6 p-4 rounded-2xl border border-border bg-muted">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                        Recommended Drill
-                      </p>
-                      <p className="text-sm text-muted-foreground">{summary.priority_drill}</p>
-                    </div>
-                  )}
-                </div>
-
-                {summary.strengths && summary.strengths.length > 0 && (
-                  <div className="bg-muted rounded-2xl p-6 border border-border flex flex-col justify-start">
-                    <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <svg
-                        className="w-5 h-5 text-foreground"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                      Strengths
-                    </h3>
-                    <ul className="space-y-3">
-                      {summary.strengths.map((strength, index) => (
-                        <li key={index} className="flex gap-3 text-muted-foreground items-start">
-                          <span className="text-primary mt-1 shrink-0">•</span>
-                          <span className="leading-relaxed">{strength}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             </div>
           </div>
-
-          {summary.recommended_angles && summary.recommended_angles.length > 0 && (
-            <div className="gsap-item mb-8 rounded-2xl border border-border bg-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
-                <svg
-                  className="w-5 h-5 text-muted-foreground"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                  />
-                </svg>
-                Film next for a fuller picture
-              </h3>
-              <ul className="space-y-3 mt-4">
-                {summary.recommended_angles.map((angle) => (
-                  <li key={angle.id} className="flex gap-3 text-sm">
-                    <span className="shrink-0 rounded-full bg-muted border border-border px-3 py-1 font-semibold text-foreground capitalize h-fit">
-                      {angle.label}
-                    </span>
-                    <span className="leading-relaxed text-muted-foreground">
-                      {angle.description}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {summary.findings && summary.findings.length > 0 && (
-            <div className="gsap-item mb-8">
-              <FindingsTimeline findings={summary.findings} />
-            </div>
-          )}
-
-          <div
-            className={`gsap-item gap-4 mb-8 ${onStartChat ? 'grid sm:grid-cols-3' : 'grid sm:grid-cols-2'}`}
-          >
+          <div className="flex items-center gap-3">
             {onStartChat && (
-              <Button
-                className="h-16 rounded-xl text-base font-bold transition-colors"
-                onClick={onStartChat}
-              >
-                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <Button onClick={onStartChat}>
+                <svg
+                  className="w-4 h-4 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -276,92 +142,202 @@ export default function ResultsSummary({
                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                   />
                 </svg>
-                Chat with AI
+                Ask AI Coach
               </Button>
             )}
-
-            <Button
-              nativeButton={false}
-              render={
-                <a
-                  href={downloadUrl}
-                  download="coachai_analysis.mp4"
-                  className="flex-1 block group"
-                />
-              }
-              className="w-full h-16 rounded-xl text-base font-bold transition-colors"
-            >
-              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              Download Video
-            </Button>
-
-            <Button
-              variant="outline"
-              className="h-16 rounded-xl bg-muted border-border text-foreground font-semibold hover:bg-accent transition-all"
-              onClick={onReset}
-            >
-              <svg
-                className="w-5 h-5 mr-3 text-muted-foreground"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              </svg>
-              New Analysis
+            <Button variant="outline" onClick={onReset}>
+              Analyze Another
             </Button>
           </div>
+        </div>
 
-          {summary.shot_events && summary.shot_events.length > 0 && (
-            <div className="gsap-item mb-12">
-              <details
-                className="group rounded-2xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden transition-all open:bg-muted"
-                open
+        {/* Quality issues banner (derived by the engine quality policy) */}
+        {status.quality_issues && status.quality_issues.length > 0 && (
+          <div className="gsap-item rounded-[6px] border border-warning/30 bg-warning/10 p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-lg">⚠️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-medium text-foreground">
+                  Quality checks flagged this analysis
+                </p>
+                <p className="text-muted-foreground text-meta mt-0.5">
+                  Some metrics or timestamps may be approximate:
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {status.quality_issues.map((issue) => (
+                    <StatusPill key={issue} tone="amber">
+                      {humanizeQualityIssue(issue)}
+                    </StatusPill>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Grid: Score Card + Key Insights */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Form Score Card */}
+          <div className="gsap-item md:col-span-1 rounded-[6px] border border-border bg-card p-6 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <p className="text-muted-foreground text-meta font-medium uppercase tracking-[0.08em]">
+                Overall Form Score
+              </p>
+              <div className="flex items-baseline gap-2 mt-4">
+                <span
+                  className={`text-6xl font-bold tracking-tight ${scoreTone} font-mono tabular-nums`}
+                >
+                  {score !== null ? score : '—'}
+                </span>
+                <span className="text-muted-foreground text-body font-mono">/10</span>
+              </div>
+            </div>
+
+            {/* Score Visual Bar */}
+            <div className="my-6">
+              <div className="h-2 w-full bg-accent rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${
+                    score !== null && score >= 8
+                      ? 'bg-success'
+                      : score !== null && score >= 5
+                        ? 'bg-warning'
+                        : 'bg-destructive'
+                  }`}
+                  style={{ width: `${scorePercent !== null ? scorePercent : 0}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-label text-muted-foreground mt-2 font-mono tabular-nums">
+                <span>0</span>
+                <span>5</span>
+                <span>10</span>
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <p className="text-muted-foreground text-meta">Performance Rating</p>
+              <p className="text-body font-semibold text-foreground capitalize mt-0.5">
+                {rating} Execution
+              </p>
+            </div>
+          </div>
+
+          {/* Key Insights / Quick Summary */}
+          <div className="gsap-item md:col-span-2 rounded-[6px] border border-border bg-card p-6 flex flex-col justify-between">
+            <div>
+              <h2 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-4">
+                Key Strengths & Focus Areas
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Strengths */}
+                <div className="rounded-[6px] border border-success/20 bg-success/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-success text-body">✓</span>
+                    <h3 className="text-body font-semibold text-foreground">Top Strengths</h3>
+                  </div>
+                  {summary.strengths && summary.strengths.length > 0 ? (
+                    <ul className="text-body text-muted-foreground space-y-1.5 list-disc list-inside">
+                      {summary.strengths.slice(0, 3).map((s, idx) => (
+                        <li key={idx} className="leading-snug">
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-body text-muted-foreground">Solid baseline mechanics.</p>
+                  )}
+                </div>
+
+                {/* Areas for Improvement */}
+                <div className="rounded-[6px] border border-warning/20 bg-warning/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-warning text-body">!</span>
+                    <h3 className="text-body font-semibold text-foreground">Areas to Improve</h3>
+                  </div>
+                  {summary.improvements && summary.improvements.length > 0 ? (
+                    <ul className="text-body text-muted-foreground space-y-1.5 list-disc list-inside">
+                      {summary.improvements.slice(0, 3).map((imp, idx) => (
+                        <li key={idx} className="leading-snug">
+                          {imp}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-body text-muted-foreground">No critical flaws detected.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions Row */}
+            <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
+              <span className="text-meta text-muted-foreground">
+                <span className="tabular-nums">{summary.shot_events?.length || 0}</span> events
+                captured
+              </span>
+              <a
+                href={downloadUrl}
+                download={`coachxyz-${jobId}.mp4`}
+                className="text-body font-medium text-primary hover:text-primary-hover flex items-center gap-1.5"
               >
-                <summary className="cursor-pointer p-6 flex flex-wrap items-center justify-between gap-4 select-none">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-muted border border-border text-foreground">
-                      <svg
-                        className="w-6 h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                        />
-                      </svg>
-                    </div>
+                <span>Download Annotated Video</span>
+                <span>↓</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Cues / Corrections */}
+        {summary.corrections && summary.corrections.length > 0 && (
+          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
+            <h2 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-4">
+              Recommended Corrections
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {summary.corrections.map((corr, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 p-3.5 rounded-[6px] border border-border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-meta font-bold shrink-0 mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <p className="text-body text-foreground leading-[1.55]">{corr}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Detailed Findings Timeline Component */}
+        <div className="gsap-item">
+          <FindingsTimeline findings={summary.findings || []} shotEvents={summary.shot_events} />
+        </div>
+
+        {/* Event Breakdown - Collapsible */}
+        <div className="gsap-item">
+          {summary.shot_events && summary.shot_events.length > 0 && (
+            <div className="rounded-[6px] border border-border bg-card overflow-hidden">
+              <details className="group">
+                <summary className="flex items-center justify-between p-6 cursor-pointer hover:bg-accent/50 transition-colors list-none">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📊</span>
                     <div>
-                      <h3 className="text-xl font-bold text-foreground leading-none">
+                      <h3 className="text-lead font-semibold tracking-[-0.01em] text-foreground leading-none">
                         Event Timeline
                       </h3>
-                      <p className="text-muted-foreground font-medium text-sm mt-1">
-                        {summary.shot_events.length} events analyzed
+                      <p className="text-muted-foreground text-meta mt-1.5">
+                        <span className="tabular-nums">{summary.shot_events.length}</span> events
+                        analyzed
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-muted-foreground group-open:hidden">
+                    <span className="text-meta font-medium text-muted-foreground group-open:hidden">
                       Tap to view breakdown
                     </span>
                     <svg
-                      className="w-6 h-6 text-muted-foreground group-open:rotate-180 transition-transform"
+                      className="w-5 h-5 text-muted-foreground group-open:rotate-180 transition-transform duration-200"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -377,17 +353,17 @@ export default function ResultsSummary({
                 </summary>
                 <div className="px-6 pb-6 pt-2 space-y-4 border-t border-border mt-2">
                   {summary.shot_events.map((event, index) => {
-                    const colorClass =
+                    const toneClass =
                       event.form_score >= 8
-                        ? 'text-foreground bg-muted border-border'
+                        ? 'bg-success/15 text-success'
                         : event.form_score >= 5
-                          ? 'text-warning bg-warning/10 border-warning/20'
-                          : 'text-destructive bg-destructive/10 border-destructive/20'
+                          ? 'bg-warning/15 text-warning'
+                          : 'bg-destructive/10 text-destructive'
 
                     return (
                       <div
                         key={index}
-                        className="flex gap-5 p-5 rounded-2xl border border-border bg-muted hover:bg-accent transition-colors"
+                        className="flex gap-5 p-5 rounded-[6px] border border-border bg-card hover:bg-accent/50 transition-colors"
                       >
                         <div className="shrink-0 flex flex-col items-center">
                           <TimestampPill seconds={event.timestamp ?? 0} />
@@ -396,26 +372,22 @@ export default function ResultsSummary({
                           )}
                         </div>
                         <div className="flex-1 pb-1">
-                          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                            <Badge
-                              variant="secondary"
-                              className="bg-muted text-muted-foreground border border-border capitalize px-3 py-1 text-xs tracking-wide"
-                            >
+                          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <span className="rounded-full bg-accent px-2 py-0.5 text-label font-medium capitalize text-muted-foreground">
                               {event.event_type?.replace('_', ' ') || 'Action'}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={`font-mono text-xs shadow-sm px-3 py-1 uppercase tracking-widest font-bold ${colorClass}`}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-label font-medium ${toneClass}`}
                             >
-                              Score: {event.form_score}/10
-                            </Badge>
+                              Score: <span className="tabular-nums">{event.form_score}/10</span>
+                            </span>
                           </div>
                           {event.key_observation && (
-                            <p className="text-sm font-bold text-muted-foreground mb-2 border-l-2 border-border pl-3">
+                            <p className="text-body font-medium text-foreground mb-2 border-l-2 border-border pl-3">
                               {event.key_observation}
                             </p>
                           )}
-                          <p className="text-muted-foreground text-sm leading-relaxed pl-3">
+                          <p className="text-muted-foreground text-body leading-[1.55] pl-3">
                             {event.feedback}
                           </p>
                         </div>

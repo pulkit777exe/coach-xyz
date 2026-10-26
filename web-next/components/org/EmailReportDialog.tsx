@@ -75,7 +75,7 @@ export default function EmailReportDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="email_report_to">Recipient email</Label>
             <Input
               id="email_report_to"
@@ -87,7 +87,7 @@ export default function EmailReportDialog({
           </div>
           <div className="grid gap-1.5">
             <Label>Subject preview</Label>
-            <p className="text-muted-foreground bg-muted rounded-md border border-border px-3 py-2 text-sm">
+            <p className="text-muted-foreground bg-muted rounded-[6px] border border-border px-3 py-2 text-meta">
               {report.title}
             </p>
           </div>

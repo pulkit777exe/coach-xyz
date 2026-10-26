@@ -6,6 +6,7 @@ import SkipLink from '@/components/SkipLink'
 import { PreferencesProvider } from '@/lib/preferences'
 import { Toaster } from '@/components/9ui/ui/sonner'
 import './globals.css'
+import { Analytics } from '@vercel/analytics/next'
 
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body className="min-h-screen antialiased bg-background text-foreground">
+        <Analytics />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PreferencesProvider>
             <AuthHeader />

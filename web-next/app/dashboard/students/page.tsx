@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
-import { orgStudents, orgStudentsSports, orgTeams } from '@/lib/serverData'
+import { getSession } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import { getOrgContext, orgStudents, orgStudentsSports, orgTeams } from '@/lib/serverData'
 import StudentsClient from '@/components/org/StudentsClient'
 import PageHeader from '@/components/org/PageHeader'
-import { loadPage } from '../_shell'
+import { hasPermission, REPORT_SEND_ROLES } from '@/lib/permissions'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
   title: 'Students | CoachXYZ',
@@ -10,18 +13,21 @@ export const metadata: Metadata = {
 }
 
 export default async function StudentsPage() {
-  const { auth0Id, data } = await loadPage(
-    'org',
-    {
-      students: ({ auth0Id }) => orgStudents(auth0Id),
-      sports: ({ auth0Id }) => orgStudentsSports(auth0Id),
-      teams: ({ auth0Id }) => orgTeams(auth0Id),
-    },
-    { students: { students: [] }, sports: { sports: [] }, teams: { teams: [] } },
-  )
-  const studentsRes = data.students
-  const sportsRes = data.sports
-  const teamsRes = data.teams
+  noStore()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
+  if (!session) redirect('/auth/login')
+  const { auth0Id, role } = orgCtx
+
+  const [studentsRes, sportsRes, teamsRes] = await Promise.all([
+    // `null` rather than `{ students: [] }`. The roster read and the "there is no
+    // roster" answer are different facts, and collapsing them here made a coach with
+    // thirty players read "No students yet" — with a live Add button — on a failed
+    // fetch. `sports`/`teams` only populate the filter dropdowns, so an empty list
+    // there costs a filter, not a claim about the org.
+    orgStudents(auth0Id).catch(() => null),
+    orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
+    orgTeams(auth0Id).catch(() => ({ teams: [] })),
+  ])
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -34,9 +40,12 @@ export default async function StudentsPage() {
       <div className="mt-6">
         <StudentsClient
           auth0Id={auth0Id}
-          initialStudents={studentsRes.students}
+          initialStudents={studentsRes?.students ?? []}
+          rosterFailed={studentsRes === null}
           sports={sportsRes.sports}
           teams={teamsRes.teams}
+          canManage={hasPermission(role, 'player.manage')}
+          canInvite={REPORT_SEND_ROLES.includes(role)}
         />
       </div>
     </div>

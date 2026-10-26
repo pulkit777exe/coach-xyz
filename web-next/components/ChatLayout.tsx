@@ -11,6 +11,7 @@ import type { JobStatus } from '@/types'
 
 interface ChatLayoutProps {
   auth0Id: string | null
+  orgAuth0Id?: string | null
   jobId: string
   jobStatus: JobStatus | null
   onBackToResults: () => void
@@ -18,11 +19,15 @@ interface ChatLayoutProps {
 
 export default function ChatLayout({
   auth0Id,
+  orgAuth0Id = null,
   jobId,
   jobStatus,
   onBackToResults,
 }: ChatLayoutProps) {
   const videoRef = useRef<VideoPlayerHandle>(null)
+  // Org-scoped reads (findings review, clips) go through the org that owns
+  // the analysis; job-keyed calls (chat, video, download) stay as they are.
+  const scopeId = orgAuth0Id ?? auth0Id
 
   const handleSeekTo = (timestamp: number) => {
     videoRef.current?.seekTo(timestamp)
@@ -31,21 +36,19 @@ export default function ChatLayout({
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Header */}
-      <header className="shrink-0 border-b border-border bg-background/80 backdrop-blur-md z-50">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 lg:px-6">
-          <Link href="/" className="font-semibold text-lg text-foreground">
-            coach.xyz
-          </Link>
+      <header className="shrink-0 border-b border-border bg-background z-50">
+        {/* No brand here — the global topbar owns the app name (one place). */}
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-end px-4 lg:px-6">
           <div className="flex items-center gap-4">
             <button
               onClick={onBackToResults}
-              className="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+              className="text-meta font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
             >
               ← Results
             </button>
             <Link
               href="/"
-              className="text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+              className="text-meta font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               New Analysis
             </Link>
@@ -65,24 +68,30 @@ export default function ChatLayout({
           {/* Stats Bar */}
           {jobStatus?.summary && (
             <div className="shrink-0 border-t border-border px-6 py-3">
-              <div className="flex items-center gap-6 text-xs">
+              <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground uppercase tracking-wider">Score</span>
-                  <span className="font-semibold text-lg text-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Score
+                  </span>
+                  <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
                     {jobStatus.summary.form_score}/10
                   </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground uppercase tracking-wider">Events</span>
-                  <span className="font-semibold text-lg text-foreground">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Events
+                  </span>
+                  <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
                     {jobStatus.summary.total_events}
                   </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground uppercase tracking-wider">Rating</span>
-                  <span className="font-semibold text-lg text-foreground capitalize">
+                  <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Rating
+                  </span>
+                  <span className="font-semibold text-[20px] leading-none text-foreground capitalize">
                     {jobStatus.summary.overall_rating}
                   </span>
                 </div>
@@ -97,8 +106,8 @@ export default function ChatLayout({
                 findings={jobStatus.summary.findings}
                 onSeek={handleSeekTo}
                 onReview={
-                  auth0Id
-                    ? (findingId, state) => reviewFinding(auth0Id, findingId, state).then(() => {})
+                  scopeId
+                    ? (findingId, state) => reviewFinding(scopeId, findingId, state).then(() => {})
                     : undefined
                 }
               />
@@ -107,7 +116,7 @@ export default function ChatLayout({
 
           {/* Clips (coach-curated subclip bookmarks, click to seek) */}
           <div className="shrink-0 border-t border-border max-h-72 overflow-y-auto">
-            <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+            <ClipsSection auth0Id={scopeId} jobId={jobId} onSeek={handleSeekTo} />
           </div>
         </div>
 
@@ -120,17 +129,18 @@ export default function ChatLayout({
             </div>
             {jobStatus?.summary?.findings && jobStatus.summary.findings.length > 0 && (
               <details className="border-t border-border px-4 py-2">
-                <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground py-1">
-                  Key findings ({jobStatus.summary.findings.length})
+                <summary className="cursor-pointer text-meta font-medium text-muted-foreground py-1">
+                  Key findings (
+                  <span className="tabular-nums">{jobStatus.summary.findings.length}</span>)
                 </summary>
                 <div className="py-2 max-h-64 overflow-y-auto">
                   <FindingsTimeline
                     findings={jobStatus.summary.findings}
                     onSeek={handleSeekTo}
                     onReview={
-                      auth0Id
+                      scopeId
                         ? (findingId, state) =>
-                            reviewFinding(auth0Id, findingId, state).then(() => {})
+                            reviewFinding(scopeId, findingId, state).then(() => {})
                         : undefined
                     }
                   />
@@ -138,11 +148,11 @@ export default function ChatLayout({
               </details>
             )}
             <details className="border-t border-border px-4 py-2">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground py-1">
+              <summary className="cursor-pointer text-meta font-medium text-muted-foreground py-1">
                 Clips
               </summary>
               <div className="py-2 max-h-64 overflow-y-auto">
-                <ClipsSection auth0Id={auth0Id} jobId={jobId} onSeek={handleSeekTo} />
+                <ClipsSection auth0Id={scopeId} jobId={jobId} onSeek={handleSeekTo} />
               </div>
             </details>
           </div>

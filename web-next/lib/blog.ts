@@ -58,6 +58,12 @@ export const posts: BlogPost[] = [
   },
 ]
 
-export const postsBySlug: Record<string, BlogPost> = Object.fromEntries(
-  posts.map((p) => [p.slug, p]),
-)
+/**
+ * A Map, not a Record: `Object.fromEntries` produces an object that inherits from
+ * `Object.prototype`, so `postsBySlug[slug]` on a hand-typed URL like
+ * `/blog/toString` returned a function — truthy, so the page's `if (!p) notFound()`
+ * did not fire and the render then hit `p.body.map` on a non-post and threw. That
+ * is a 500 plus a Sentry event from a URL anyone can type, where the answer
+ * should be a 404. `Map.get` has no prototype to hit.
+ */
+export const postsBySlug: ReadonlyMap<string, BlogPost> = new Map(posts.map((p) => [p.slug, p]))

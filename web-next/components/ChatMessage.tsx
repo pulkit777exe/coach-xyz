@@ -15,7 +15,7 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
   if (isSystem) {
     return (
       <div className="text-center animate-[fadeIn_0.3s_ease-out]">
-        <span className="inline-block rounded-2xl border border-border bg-muted px-4 py-2 text-sm text-muted-foreground">
+        <span className="inline-block rounded-[8px] border border-border bg-muted px-4 py-3 text-meta text-muted-foreground">
           {message.content}
         </span>
       </div>
@@ -27,36 +27,29 @@ export function ChatMessageBubble({ message, onSeekTo }: ChatMessageBubbleProps)
       className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-[slideUp_0.3s_ease-out]`}
     >
       <div
-        className={`max-w-[85%] rounded-2xl px-5 py-4 ${
+        className={`max-w-[85%] rounded-[8px] px-4 py-3 ${
           isUser
             ? 'bg-primary text-primary-foreground'
-            : 'border border-border bg-card text-foreground shadow-sm'
+            : 'border border-border bg-card text-foreground'
         }`}
       >
         {!isUser && (
           <div className="mb-2 flex items-center gap-2">
-            <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[0.65rem] font-semibold text-muted-foreground">
+            <span className="flex size-6 items-center justify-center rounded-full bg-muted text-label font-semibold text-muted-foreground">
               C
             </span>
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Coach
-            </span>
+            <span className="text-caption font-medium text-muted-foreground">Coach</span>
           </div>
         )}
 
-        <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+        <div className="text-body leading-[1.55] whitespace-pre-wrap">
           {renderContent(message.content, onSeekTo, message.timestamp_refs)}
         </div>
 
         {message.timestamp_refs && message.timestamp_refs.length > 0 && onSeekTo && (
           <div className="mt-3 flex flex-wrap gap-2">
             {message.timestamp_refs.slice(0, 5).map((ts) => (
-              <TimestampPill
-                key={ts}
-                seconds={ts}
-                format="clock"
-                onSeek={onSeekTo}
-              />
+              <TimestampPill key={ts} seconds={ts} format="clock" onSeek={onSeekTo} />
             ))}
           </div>
         )}
@@ -100,7 +93,7 @@ function renderContent(
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+        <code key={i} className="rounded-[4px] bg-muted px-1.5 py-0.5 font-mono text-meta">
           {part.slice(1, -1)}
         </code>
       )
@@ -113,7 +106,7 @@ function renderContent(
           <button
             key={i}
             onClick={() => onSeekTo(ts)}
-            className="font-mono text-muted-foreground underline decoration-primary/50 underline-offset-2 hover:text-foreground"
+            className="font-mono text-meta tabular-nums underline decoration-primary/50 underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
           >
             {formatTimestamp(ts)}
           </button>

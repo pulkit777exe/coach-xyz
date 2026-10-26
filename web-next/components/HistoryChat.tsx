@@ -13,6 +13,25 @@ import { Button } from '@/components/9ui/ui/button'
 
 export default function HistoryChat({
   auth0Id,
+  initialAnalysis,
+}: {
+  auth0Id: string
+  initialAnalysis: {
+    server_job_id: string
+    summary_json: Record<string, unknown> | null
+  }
+}) {
+  return (
+    <HistoryChatPanel
+      auth0Id={auth0Id}
+      jobId={initialAnalysis.server_job_id}
+      summary={initialAnalysis.summary_json}
+    />
+  )
+}
+
+function HistoryChatPanel({
+  auth0Id,
   jobId,
   summary,
 }: {
@@ -63,10 +82,10 @@ export default function HistoryChat({
               {SPORT_EMOJI[(summary.sport as string) || 'unknown'] ?? '🎯'}
             </span>
             <div>
-              <p className="text-sm text-foreground capitalize">
+              <p className="text-body font-medium text-foreground capitalize">
                 {(summary.sport as string) || 'Sport'} Analysis
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-meta text-muted-foreground tabular-nums">
                 Score: {(summary.form_score as number) ?? '—'}/10 ·{' '}
                 {(summary.overall_rating as string) || ''}
               </p>
@@ -76,84 +95,59 @@ export default function HistoryChat({
       )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {initialLoading ? (
-          <div className="text-center text-muted-foreground text-sm py-8">
-            Loading conversation...
+        {initialLoading && (
+          <div className="text-center text-muted-foreground py-8">Loading chat history...</div>
+        )}
+
+        {historyError && (
+          <div className="text-center text-destructive py-8">Failed to load chat history.</div>
+        )}
+
+        {!initialLoading && !historyError && messages.length === 0 && (
+          <div className="text-center text-muted-foreground py-8">
+            <p>No messages yet. Ask questions about this analysis!</p>
           </div>
-        ) : historyError ? (
-          <div className="text-center py-8">
-            <p className="text-destructive text-sm mb-2">Failed to load conversation history</p>
-            <p className="text-muted-foreground text-xs">You can still send new messages.</p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-foreground font-bold text-lg mb-2">Ask about your analysis</p>
-            <p className="text-muted-foreground text-sm">
-              Get insights on technique, tips, strengths, or specific events.
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {[
-                'What are my main areas to improve?',
-                'Show my strengths',
-                'What drill should I practice?',
-              ].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => {
-                    setInput(q)
-                  }}
-                  className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((msg) => (
+        )}
+
+        {messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
             <div
-              key={msg.id}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`max-w-[80%] rounded-[6px] p-3 ${
+                msg.role === 'user'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card border border-border text-foreground'
+              }`}
             >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm text-foreground ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : msg.role === 'system'
-                      ? 'bg-muted text-muted-foreground border border-border'
-                      : 'border border-border bg-card shadow-sm'
-                }`}
-              >
-                {msg.content}
-              </div>
-            </div>
-          ))
-        )}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl border border-border bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
-              Thinking...
+              <p className="text-body whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
-        )}
+        ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-border p-4">
-        <div className="flex gap-2">
+      <div className="p-4 border-t border-border">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSend()
+          }}
+          className="flex gap-2"
+        >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Ask about your analysis..."
-            className="flex-1 rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 disabled:opacity-50"
+            placeholder="Ask about this analysis..."
             disabled={loading}
+            className="flex-1 rounded-[6px] border border-input bg-background px-3 py-2 text-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           />
-          <Button onClick={handleSend} disabled={loading || !input.trim()} className="px-4">
-            Send
+          <Button type="submit" disabled={loading || !input.trim()}>
+            {loading ? 'Sending...' : 'Send'}
           </Button>
-        </div>
+        </form>
       </div>
     </div>
   )

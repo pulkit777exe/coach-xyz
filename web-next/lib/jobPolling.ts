@@ -2,11 +2,12 @@ import { isTransientError, toCoachAIError } from '@/lib/errors'
 import type { CoachAIError } from '@/types'
 
 // ── Job Polling Engine ──────────────────────────────────────────────────────
-// The single poll loop used by every job-status consumer (the live analysis
-// pipeline and the dashboard detail page). One implementation drives interval,
-// exponential backoff, an optional hard timeout, and an optional "stuck"
-// warning — with the clock, fetcher, and completion predicate injected so the
-// loop is deterministic and testable.
+// The bounded fallback loop used when a live job-event stream is unavailable.
+// The normal analysis path subscribes to /api/job-events/:jobId and never
+// enters this loop. One implementation drives interval, exponential backoff,
+// an optional hard timeout/request budget, and an optional "stuck" warning —
+// with the clock, fetcher, and completion predicate injected so the loop is
+// deterministic and testable.
 //
 // Callers stay declarative: they describe what the poll should do and react to
 // onStatus / onComplete / onTransient / onError / onWarn instead of
@@ -32,6 +33,8 @@ export interface JobPollingConfig<S> {
   warnAfterMs?: number
   /** Consecutive failures allowed before giving up (default 5). */
   maxFailures?: number
+  /** Hard total request budget, including successful nonterminal responses. */
+  maxRequests?: number
   /** Interval multiplier per consecutive failure (default 2). Pass 1 for fixed-interval retries. */
   backoffFactor?: number
   maxBackoffMs?: number
@@ -59,6 +62,13 @@ const TIMEOUT_ERROR: CoachAIError = {
   retryable: false,
 }
 
+const REQUEST_BUDGET_ERROR: CoachAIError = {
+  code: 'STATUS_RECONCILIATION_EXHAUSTED',
+  message: 'Live status updates are unavailable. Refresh to try again.',
+  layer: 'client',
+  retryable: false,
+}
+
 export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingController {
   const {
     jobId,
@@ -68,6 +78,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
     timeoutMs,
     warnAfterMs,
     maxFailures = 5,
+    maxRequests,
     backoffFactor = 2,
     maxBackoffMs = 30_000,
     giveUpOnFirstFailure = false,
@@ -83,6 +94,8 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   let timer: ReturnType<typeof setTimeout> | null = null
   let startedAt = now()
   let failures = 0
+  let requests = 0
+  let generation = 0
   let hadSucceeded = false
   let warned = false
 
@@ -99,7 +112,12 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       failureCount === 0
         ? intervalMs
         : Math.min(intervalMs * Math.pow(backoffFactor, failureCount - 1), maxBackoffMs)
-    timer = setTimeout(run, delay)
+    const scheduledGeneration = generation
+    timer = setTimeout(() => {
+      if (scheduledGeneration !== generation) return
+      timer = null
+      void run()
+    }, delay)
   }
 
   function fail(kind: 'permanent' | 'timeout', error: CoachAIError) {
@@ -110,6 +128,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
 
   async function run() {
     if (stopped) return
+    const runGeneration = generation
 
     const elapsed = now() - startedAt
     if (timeoutMs !== undefined && elapsed > timeoutMs) {
@@ -117,11 +136,17 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       return
     }
 
+    if (maxRequests !== undefined && requests >= maxRequests) {
+      fail('timeout', REQUEST_BUDGET_ERROR)
+      return
+    }
+    requests += 1
+
     let status: S
     try {
       status = await fetchStatus(jobId)
     } catch (err) {
-      if (stopped) return
+      if (stopped || runGeneration !== generation) return
       failures++
       const error = toCoachAIError(err)
 
@@ -135,7 +160,7 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       return
     }
 
-    if (stopped) return
+    if (stopped || runGeneration !== generation) return
     hadSucceeded = true
     failures = 0
     onStatus?.(status)
@@ -144,6 +169,11 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
       // Terminal — end the loop. Completion is a success, not an error.
       stop()
       onComplete?.(status)
+      return
+    }
+
+    if (maxRequests !== undefined && requests >= maxRequests) {
+      fail('timeout', REQUEST_BUDGET_ERROR)
       return
     }
 
@@ -161,8 +191,11 @@ export function startJobPolling<S>(config: JobPollingConfig<S>): JobPollingContr
   }
 
   function refresh() {
+    clearTimer()
+    generation += 1
     startedAt = now()
     failures = 0
+    requests = 0
     warned = false
     void run()
   }

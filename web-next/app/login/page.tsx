@@ -5,42 +5,58 @@ export const metadata = { title: 'Log in | CoachXYZ' }
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-[calc(100vh-56px)] place-items-center bg-[var(--marketing-dark)] px-6 py-10">
-      <div className="w-full max-w-[420px] rounded-2xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-6">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="grid min-h-[calc(100vh-56px)] place-items-center bg-background px-6 py-10"
+    >
+      <div className="w-full max-w-[400px] rounded-[8px] border border-border bg-background p-6 text-body leading-5 text-foreground-strong">
         <div className="flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-md bg-primary text-xs font-bold text-[var(--marketing-brown)]">
+          <span className="grid size-7 place-items-center rounded-[6px] bg-primary text-caption leading-4 font-bold text-primary-foreground">
             C
           </span>
-          <span className="text-sm font-bold text-[var(--marketing-beige)]">CoachXYZ</span>
+          <span className="text-body leading-5 font-semibold">CoachXYZ</span>
         </div>
-        <h1 className="mt-6 text-2xl font-bold tracking-tight text-[var(--marketing-beige)]">
-          Welcome back
-        </h1>
-        <p className="mt-1 text-sm text-[var(--marketing-beige)]/60">
+        <h1 className="mt-6 text-[24px] font-bold tracking-[-0.01em]">Welcome back</h1>
+        <p className="mt-1.5 text-body leading-5 text-muted-foreground">
           Log in with your team account. We use secure Auth0.
         </p>
-        <div className="mt-6 space-y-3">
+        <div className="mt-6">
           <Button
-            nativeButton={false} render={<a href="/auth/login" />}
-            className="h-10 w-full rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90"
+            nativeButton={false}
+            render={<a href="/auth/login" />}
+            className="h-10 w-full rounded-[6px] bg-primary text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Continue with Auth0
           </Button>
+          {/* hairline "or" divider */}
+          <div className="my-4 flex items-center gap-3 text-caption leading-4 text-muted-foreground">
+            <span className="h-px flex-1 bg-border " />
+            or
+            <span className="h-px flex-1 bg-border " />
+          </div>
           <Button
-            nativeButton={false} render={<a href="/signup" />}
+            nativeButton={false}
+            render={<a href="/signup" />}
             variant="outline"
-            className="h-10 w-full rounded-full border-[var(--marketing-white)]/15 text-[var(--marketing-beige)] hover:bg-[var(--marketing-white)]/5"
+            className="h-10 w-full rounded-[6px] border-input bg-transparent text-body leading-5 font-medium text-link hover:bg-muted"
           >
             Create an account →
           </Button>
         </div>
-        <p className="mt-4 text-center text-xs text-[var(--marketing-beige)]/50">
+        <p className="mt-5 text-center text-caption leading-5 text-muted-foreground">
           By continuing you agree to our{' '}
-          <Link href="/terms" className="underline decoration-white/20">
+          <Link
+            href="/terms"
+            className="rounded-[4px] text-link transition-colors duration-[var(--dur-fast)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
             Terms
           </Link>{' '}
           and{' '}
-          <Link href="/privacy" className="underline decoration-white/20">
+          <Link
+            href="/privacy"
+            className="rounded-[4px] text-link transition-colors duration-[var(--dur-fast)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
             Privacy
           </Link>
           .

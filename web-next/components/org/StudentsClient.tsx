@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/9ui/ui/button'
-import { Badge } from '@/components/9ui/ui/badge'
+import StatusPill from '@/components/org/StatusPill'
 import { Checkbox } from '@/components/9ui/ui/checkbox'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Spinner } from './Spinner'
+import EmptyState from './EmptyState'
 import StudentFormDialog from './StudentFormDialog'
 import InvitePlayersDialog from './InvitePlayersDialog'
 
@@ -58,21 +59,68 @@ import {
   STUDENT_STATUSES,
   STUDENT_STATUS_LABELS,
 } from '@/lib/org'
-import { formatDateMed } from '@/lib/date'
-import type { CoachAIError } from '@/types'
+import { formatDateMed, toISODate } from '@/lib/date'
+import type { CoachAIError } from '@/lib/api'
+import { initials } from '@/lib/initials'
 
 const STATUS_STYLE: Record<string, string> = {
-  active: 'border-(--success-border) text-(--success) bg-(--success)',
-  inactive: 'border-(--warning-border) text-(--warning)',
-  transferred: 'border-border text-muted-foreground',
+  active: 'bg-success/15 text-success',
+  inactive: 'bg-warning/15 text-warning',
+  transferred: 'bg-muted text-muted-foreground',
+  archived: 'bg-muted text-muted-foreground',
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('')
+/**
+ * Apply a bulk status change, honouring what the server actually accepted.
+ *
+ * Extracted as a pure function because the invariant is the whole point and it was
+ * untestable inside a 973-line component: `setStudents` runs inside `act`, `selected` is
+ * component state, and the fetch is `Promise.allSettled` over injected props. So the
+ * rule — *only a fulfilled write may change local state* — had no test and the version
+ * that broke it shipped.
+ *
+ * The bug this encodes: the old code rewrote every selected row regardless of outcome,
+ * so a partial failure left the roster claiming a change the server rejected while the
+ * toast, built from the success count, reported "Updated 17".
+ *
+ * `results` must be positionally aligned with `ids` — both come from the same
+ * `Promise.allSettled` over the same array, which is what pairs a result with its id.
+ */
+export function applyBulkStatusResult<T extends { id: string; status: Student['status'] }>(
+  rows: T[],
+  ids: string[],
+  results: PromiseSettledResult<unknown>[],
+  nextStatus: Student['status'],
+): { rows: T[]; succeeded: string[]; failed: string[] } {
+  const succeeded = new Set(ids.filter((_, i) => results[i]?.status === 'fulfilled'))
+  return {
+    rows: rows.map((r) => (succeeded.has(r.id) ? { ...r, status: nextStatus } : r)),
+    succeeded: ids.filter((id) => succeeded.has(id)),
+    failed: ids.filter((id) => !succeeded.has(id)),
+  }
+}
+
+/**
+ * Remove bulk-deleted rows, honouring what the server actually accepted.
+ *
+ * Same invariant as above, and the same bug in a worse place: the old code filtered on
+ * the component's `selected` Set, which SURVIVES a filter change, while the request was
+ * built from `selectedIds` — derived from the filtered list. So it also removed rows that
+ * were never part of the request. The failed subset then vanished from the roster while
+ * still holding their attendance, objectives and plans, with the selection cleared so
+ * they could not be re-selected.
+ */
+export function applyBulkDeleteResult<T extends { id: string }>(
+  rows: T[],
+  ids: string[],
+  results: PromiseSettledResult<unknown>[],
+): { rows: T[]; succeeded: string[]; failed: string[] } {
+  const succeeded = new Set(ids.filter((_, i) => results[i]?.status === 'fulfilled'))
+  return {
+    rows: rows.filter((r) => !succeeded.has(r.id)),
+    succeeded: ids.filter((id) => succeeded.has(id)),
+    failed: ids.filter((id) => !succeeded.has(id)),
+  }
 }
 
 const IMPORT_COLUMN_FIELDS = [
@@ -120,14 +168,56 @@ const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, ' 
 const toJerseyNumber = (value: string): string | number =>
   /^\d+(\.\d+)?$/.test(value) ? Number(value) : value
 
+/**
+ * Does the first row read as a HEADER row rather than as the first player's data?
+ *
+ * The naive test — "does any cell match a known column name" — is one word away from
+ * silently DELETING a player. `IMPORT_COLUMN_ALIASES` contains bare `status`, `email`,
+ * `sport`, `notes` and `gender`, so a genuinely headerless export whose first data row
+ * carries that word in any column (a sport of "status"? a note reading "email"? a name
+ * like "Gender, Amara"?) was treated as a header, `body` dropped that row, and the
+ * player's details vanished with no error anywhere — the import simply reported one row
+ * fewer. A wrong guess here is not a parse error, it is data loss.
+ *
+ * So two conditions, and BOTH must hold:
+ *
+ *  1. At least two cells resolve to a known column. A real header names every column; a
+ *     coincidence matches one. Two is the floor that survives an accidental hit without
+ *     requiring an exact multi-column match.
+ *  2. No cell in the row looks like DATA for the column it names. An address in the
+ *     `email` column, or a date in a `date of birth` column, means this row is a player.
+ *
+ * Condition 2 is what catches the realistic case: a roster whose first player's row
+ * happens to begin with a name the aliases recognise, or contains an email address in a
+ * notes column. Positional parsing then applies, which is the documented fallback.
+ */
+function looksLikeHeaderRow(cells: string[], normalized: string[]): boolean {
+  const resolved = normalized.filter((h) => IMPORT_COLUMN_ALIASES[h])
+  if (resolved.length < 2) return false
+
+  // Data-shaped content ANYWHERE in the row means this is a player's row, not a header.
+  //
+  // Deliberately NOT restricted to the cells whose column name resolved: the realistic
+  // false-header case is a row whose *values* happen to be words like `email` and
+  // `status` — `email,status,ada@x.co,active` — where the alias words ARE the data. A
+  // per-column check reads that row as "two recognised columns, neither data-shaped" and
+  // accepts it as a header, deleting the player. That bug shipped in the first version of
+  // this function and was caught by a test written to exercise the check and quietly
+  // not: the earlier fixture resolved zero aliases, so it never reached the condition it
+  // named.
+  const DATA_SHAPED =
+    /@|\d{2,}[-/.]\d{1,2}[-/.]\d{2,}|\b\d{3}[- .]?\d{3}[- .]?\d{4}\b|^\+?[0-9][0-9 ()/-]{6,}$/
+  return !cells.some((raw) => DATA_SHAPED.test(raw.trim()))
+}
+
 /** Maps raw CSV cells to import rows: header-aware when the first row contains
  *  known column names, otherwise positional in roster-export order. */
-function csvToImportRows(csv: string): StudentImportRow[] {
+export function csvToImportRows(csv: string): StudentImportRow[] {
   const records = parseCSV(csv)
   if (!records.length) return []
 
   const header = records[0].map(normalizeHeader)
-  const hasHeader = header.some((h) => IMPORT_COLUMN_ALIASES[h])
+  const hasHeader = looksLikeHeaderRow(records[0], header)
   const mapping: (string | null)[] = hasHeader
     ? header.map((h) => IMPORT_COLUMN_ALIASES[h] ?? null)
     : []
@@ -158,7 +248,7 @@ function StudentImportDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
   auth0Id: string
-  onImported: () => void
+  onImported: () => void | Promise<void>
 }) {
   const [text, setText] = useState('')
   const [fileName, setFileName] = useState<string | null>(null)
@@ -198,7 +288,10 @@ function StudentImportDialog({
     try {
       const res = await orgImportStudents(auth0Id, rows)
       setResult(res)
-      if (res.imported > 0) onImported()
+      // Awaited: this is the other end of the same unhandled-rejection path. Even with
+      // the handler fixed, a bare call here discards its promise, so a rejection inside
+      // the refresh would escape the dialog entirely.
+      if (res.imported > 0) await onImported()
       if (res.imported === 0 && res.failed.length > 0) {
         toast.error('No rows imported — review the errors below')
       }
@@ -231,7 +324,7 @@ function StudentImportDialog({
           <div className="flex items-center gap-2">
             <Label
               htmlFor="import-file"
-              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-md border px-3 text-sm"
+              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-[6px] border px-3 text-body"
             >
               <UploadIcon className="size-4" />
               Choose CSV file
@@ -244,12 +337,14 @@ function StudentImportDialog({
               />
             </Label>
             {fileName ? (
-              <span className="text-muted-foreground truncate text-xs">{fileName}</span>
+              <span className="text-muted-foreground truncate text-caption leading-4">
+                {fileName}
+              </span>
             ) : null}
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="import-paste" className="text-xs">
+            <Label htmlFor="import-paste" className="text-body font-medium">
               …or paste CSV
             </Label>
             <Textarea
@@ -257,24 +352,24 @@ function StudentImportDialog({
               value={text}
               onChange={(e) => applyText(e.target.value)}
               rows={6}
-              className="font-mono text-xs"
+              className="font-mono text-caption leading-4"
               placeholder={'full_name,email,status\nAlex Rivera,a@x.com,active'}
             />
           </div>
 
           {rows.length > 0 && (
             <div>
-              <p className="text-muted-foreground mb-2 text-xs">
+              <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {rows.length} row(s) parsed — first {Math.min(rows.length, 8)} shown
               </p>
-              <div className="border-border max-h-48 overflow-auto rounded-md border">
-                <table className="w-full text-xs">
+              <div className="border-border max-h-48 overflow-auto rounded-[6px] border">
+                <table className="w-full text-meta">
                   <thead>
-                    <tr className="bg-muted/50 text-muted-foreground border-b border-border uppercase">
-                      <th className="px-3 py-2 text-left font-normal">Name</th>
-                      <th className="px-3 py-2 text-left font-normal">Email</th>
-                      <th className="px-3 py-2 text-left font-normal">Sport</th>
-                      <th className="px-3 py-2 text-left font-normal">Status</th>
+                    <tr className="border-b border-border text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                      <th className="px-3 py-2 text-left">Name</th>
+                      <th className="px-3 py-2 text-left">Email</th>
+                      <th className="px-3 py-2 text-left">Sport</th>
+                      <th className="px-3 py-2 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -292,10 +387,10 @@ function StudentImportDialog({
             </div>
           )}
 
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          {error ? <p className="text-meta text-destructive">{error}</p> : null}
 
           {result ? (
-            <div className="border-border bg-muted/40 space-y-1 rounded-md border p-3 text-sm">
+            <div className="border-border bg-muted/40 space-y-1 rounded-[6px] border p-3 text-meta">
               <p className="text-foreground font-medium">{result.imported} imported</p>
               {result.duplicates_skipped > 0 ? (
                 <p className="text-muted-foreground">
@@ -340,13 +435,32 @@ export default function StudentsClient({
   initialStudents,
   sports,
   teams,
+  canManage,
+  canInvite,
+  rosterFailed = false,
 }: {
   auth0Id: string
   initialStudents: Student[]
   sports: string[]
   teams: { id: string; name: string }[]
+  /** Roster writes (create/edit/delete/import/bulk status) — player.manage. */
+  canManage: boolean
+  /** Player-signup invites — pinned to the email-route floor. */
+  canInvite: boolean
+  /**
+   * The server's roster read rejected, so `initialStudents` is empty because nothing
+   * arrived — not because the club has no players. Without this the empty state below
+   * told a coach with thirty players to "Add your first student", which is a false
+   * claim AND invites a duplicate row. Defaults false so every other caller (and the
+   * a11y render sweep, which has no server read) keeps the plain empty semantics.
+   */
+  rosterFailed?: boolean
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
+  // Seeded from the prop, then owned locally: `refreshStudents`/`toggleArchived` re-run
+  // the same roster read, so a success has to clear the flag or the failure banner would
+  // keep sitting over a roster that has since loaded.
+  const [rosterReadFailed, setRosterReadFailed] = useState(rosterFailed)
   const [search, setSearch] = useState('')
   const [sport, setSport] = useState('')
   const [status, setStatus] = useState('')
@@ -356,6 +470,14 @@ export default function StudentsClient({
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [showArchived, setShowArchived] = useState(false)
+  // `refreshStudents` and `toggleArchived` both re-read the roster, and neither the
+  // "Show archived" button nor the import dialog disables itself while the other's read
+  // is in flight. Without this token the earlier response can land last — a
+  // double-toggled roster would end up holding the `includeArchived: true` rows under a
+  // toggle that says they are hidden. Same rule as the debounced searches: only the
+  // newest roster read may answer.
+  const rosterSeq = useRef(0)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForBulk, setInviteForBulk] = useState(false)
@@ -401,12 +523,37 @@ export default function StudentsClient({
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgUpdateStudent(auth0Id, id, { status: nextStatus })),
       )
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      setStudents((prev) =>
-        prev.map((p) => (selected.has(p.id) ? { ...p, status: nextStatus } : p)),
+      // Only the ids whose write FULFILLED may change locally.
+      //
+      // This rewrote EVERY selected row regardless of outcome, so a partial failure made
+      // the roster claim a change the server rejected — and the toast, built from the
+      // `ok` count, said "Updated 17" beside twenty rows all reading `archived`. On
+      // reload the seventeen reappeared, which is the tell that the view had been lying.
+      //
+      // `succeeded` is a Set, so membership is O(1) and the row identity does not matter.
+      // Note the set is built from `results` in the SAME order as `selectedIds`, which is
+      // what pairs a result with its id; deriving both from one array is the whole fix.
+      const { rows, succeeded, failed } = applyBulkStatusResult(
+        students,
+        selectedIds,
+        results,
+        nextStatus,
       )
-      toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
-      setSelected(new Set())
+      const ok = succeeded.length
+      setStudents(rows)
+      if (ok > 0) toast.success(`Updated ${ok} student(s) to ${nextStatus}`)
+      if (ok < selectedIds.length)
+        toast.error(
+          `${selectedIds.length - ok} student(s) could not be updated — still showing their previous status`,
+        )
+      // Prune rather than clear: a row whose write failed stays selected, so the coach can
+      // retry it. Clearing was part of the same lie — the failed subset became
+      // unrecoverable without re-selecting by hand.
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of failed) next.add(id)
+        return next
+      })
     } finally {
       setBulkBusy(false)
     }
@@ -419,19 +566,43 @@ export default function StudentsClient({
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgDeleteStudent(auth0Id, id)),
       )
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      setStudents((prev) => prev.filter((p) => !selected.has(p.id)))
+      // Only the ids whose delete FULFILLED leave the roster.
+      //
+      // This filtered out `selected.has(p.id)` wholesale, so a partial failure made every
+      // row vanish from the view while the toast — which used the `ok` count — reported
+      // "Removed 18 · 2 could not be removed". The two that survived still had their
+      // attendance, objectives and plans, and because the selection was then cleared they
+      // were unrecoverable from the UI: the coach could not see them, select them, or
+      // retry. In a product with erasure and data-rights surfaces, a false "removed" is a
+      // wrong belief about persisted data, not a cosmetic one.
+      //
+      // `selected.has(p.id)` was also the wrong SET: `selected` survives a filter change,
+      // while `selectedIds` is derived from the filtered list — so this rewrote rows that
+      // were never part of the request at all.
+      const { rows, succeeded, failed } = applyBulkDeleteResult(students, selectedIds, results)
+      const ok = succeeded.length
+      setStudents(rows)
       if (ok > 0) toast.success(`Removed ${ok} student(s)`)
       if (ok < selectedIds.length)
-        toast.error(`${selectedIds.length - ok} student(s) could not be removed`)
-      setSelected(new Set())
+        toast.error(
+          `${selectedIds.length - ok} student(s) could not be removed — still on the roster`,
+        )
+      // As above: a row that survived stays selected so the retry is one click.
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of failed) next.add(id)
+        return next
+      })
     } finally {
       setBulkBusy(false)
     }
   }
 
   const exportCSV = () => {
-    downloadCSV(`roster-${new Date().toISOString().slice(0, 10)}.csv`, [
+    // The LOCAL day, not `toISOString()`'s UTC day: east of UTC just after midnight the
+    // export would otherwise be named for YESTERDAY, west of UTC in the evening for
+    // TOMORROW. Same rule as every other day in this app — the day the viewer is on.
+    downloadCSV(`roster-${toISODate(new Date())}.csv`, [
       [
         'Full name',
         'Email',
@@ -489,9 +660,48 @@ export default function StudentsClient({
     setStudents((prev) => prev.map((p) => (p.id === s.id ? s : p)))
   }
 
-  const refreshStudents = async () => {
-    const res = await orgStudents(auth0Id)
+  const refreshStudents = async (includeArchived = showArchived) => {
+    const my = ++rosterSeq.current
+    const res = await orgStudents(auth0Id, { includeArchived })
+    if (rosterSeq.current !== my) return
     setStudents(res.students)
+    setRosterReadFailed(false)
+  }
+
+  const toggleArchived = async () => {
+    const next = !showArchived
+    setShowArchived(next)
+    const my = ++rosterSeq.current
+    try {
+      const res = await orgStudents(auth0Id, { includeArchived: next })
+      if (rosterSeq.current !== my) return
+      setStudents(res.students)
+      setRosterReadFailed(false)
+    } catch (err) {
+      // The rollback belongs to THIS attempt only. A superseded attempt that failed
+      // must not flip a toggle a later attempt has already settled — that would undo
+      // the newer read on the strength of an older request's error.
+      if (rosterSeq.current !== my) return
+      setShowArchived(!next)
+      toast.error((err as CoachAIError).message ?? 'Failed to load roster')
+    }
+  }
+
+  // Archive is an explicit status change, never a side effect: archived
+  // players leave the default roster but keep history, scope and by-id reads.
+  const setArchivedStatus = async (s: Student, archived: boolean) => {
+    const nextStatus = (archived ? 'archived' : 'active') as Student['status']
+    try {
+      const res = await orgUpdateStudent(auth0Id, s.id, { status: nextStatus })
+      setStudents((prev) =>
+        showArchived || !archived
+          ? prev.map((p) => (p.id === s.id ? res.student : p))
+          : prev.filter((p) => p.id !== s.id),
+      )
+      toast.success(archived ? `${s.full_name} archived` : `${s.full_name} restored`)
+    } catch (err) {
+      toast.error((err as CoachAIError).message ?? 'Failed to update student')
+    }
   }
 
   const confirmDelete = async () => {
@@ -524,6 +734,7 @@ export default function StudentsClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name, email, sport…"
+              aria-label="Search students"
               className="pl-9"
             />
           </div>
@@ -589,74 +800,106 @@ export default function StudentsClient({
               <DownloadIcon /> Export
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
-            <UserPlusIcon />
-            Invite
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void toggleArchived()}
+            aria-pressed={showArchived}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-            <UploadIcon />
-            Import
-          </Button>
-          <Button size="sm" onClick={openCreate}>
-            <PlusIcon />
-            Add student
-          </Button>
+          {canInvite && (
+            <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
+              <UserPlusIcon />
+              Invite
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <UploadIcon />
+              Import
+            </Button>
+          )}
+          {canManage && (
+            <Button size="sm" onClick={openCreate}>
+              <PlusIcon />
+              Add student
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
-        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
-          <span className="text-muted-foreground text-sm">{selectedIds.length} selected</span>
+        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-[6px] border px-3 py-2">
+          <span className="text-meta tabular-nums text-muted-foreground">
+            {selectedIds.length} selected
+          </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('active')}
-            >
-              Mark active
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('inactive')}
-            >
-              Mark inactive
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => applyBulkStatus('transferred')}
-            >
-              Mark transferred
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => openInvite(true)}
-            >
-              <MailIcon /> Invite
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
-                  )
-                ) {
-                  confirmBulkDelete()
-                }
-              }}
-            >
-              <TrashIcon /> Delete
-            </Button>
+            {canManage && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('active')}
+                >
+                  Mark active
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('inactive')}
+                >
+                  Mark inactive
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('archived')}
+                >
+                  Archive
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulkStatus('transferred')}
+                >
+                  Mark transferred
+                </Button>
+              </>
+            )}
+            {canInvite && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => openInvite(true)}
+              >
+                <MailIcon /> Invite
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
+                    )
+                  ) {
+                    confirmBulkDelete()
+                  }
+                }}
+              >
+                <TrashIcon /> Delete
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -670,18 +913,39 @@ export default function StudentsClient({
       )}
 
       {/* Table */}
-      <div className="border-border overflow-hidden rounded-lg border">
-        {filtered.length === 0 ? (
-          <div className="text-muted-foreground bg-card p-16 text-center text-sm">
-            {students.length === 0
-              ? 'No students yet. Add your first student to get started.'
-              : 'No students match your filters.'}
-          </div>
+      <div className="overflow-hidden rounded-[6px] border border-border bg-card">
+        {rosterReadFailed ? (
+          // Checked BEFORE `filtered.length === 0`: a failed read also leaves `students`
+          // empty, so the "No students yet" branch would otherwise match and send a coach
+          // with a full roster to create a duplicate. The Add action is withheld for the
+          // same reason — there is nothing here to add "the first" of. Reloading is the
+          // honest next step, and saying so beats a claim the data cannot support.
+          <EmptyState
+            title="Roster failed to load."
+            description="This is a loading problem, not an empty roster — reload the page to try again."
+          />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            title={students.length === 0 ? 'No students yet' : 'No matching students'}
+            description={
+              students.length === 0
+                ? 'Add your first student to get started.'
+                : 'Try clearing your search or filters.'
+            }
+            action={
+              students.length === 0 && canManage ? (
+                <Button size="sm" onClick={openCreate}>
+                  <PlusIcon />
+                  Add student
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-body">
             <thead>
-              <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
-                <th className="px-4 py-3">
+              <tr className="border-b border-border">
+                <th className="px-4 py-2.5">
                   <Checkbox
                     checked={allFilteredSelected}
                     indeterminate={selectedIds.length > 0 && !allFilteredSelected}
@@ -689,134 +953,136 @@ export default function StudentsClient({
                     aria-label="Select all students"
                   />
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Student
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Sport
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Team
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Position
                 </th>
-                <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                   Joined
                 </th>
-                <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Status
                 </th>
-                <th className="px-4 py-3 text-right font-normal text-[0.65rem] tracking-[0.15em]">
+                <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-card">
+            <tbody>
               {filtered.map((s) => (
                 <tr
                   key={s.id}
-                  className="hover:bg-accent/50 border-b border-border last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                  className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <Checkbox
                       checked={selected.has(s.id)}
                       onCheckedChange={() => toggleSelect(s.id)}
                       aria-label={`Select ${s.full_name}`}
                     />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
                       <Avatar className="border-border size-9 border">
                         <AvatarImage src={undefined} alt="" />
-                        <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                        <AvatarFallback className="bg-muted text-muted-foreground text-caption">
                           {initials(s.full_name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="text-foreground truncate font-medium">{s.full_name}</p>
-                        <p className="text-muted-foreground truncate text-xs">
+                        <p className="truncate font-medium text-foreground">{s.full_name}</p>
+                        <p className="truncate text-meta text-muted-foreground">
                           {s.email || s.phone || '—'}
                         </p>
                         {s.account_auth0_id && (
-                          <p className="text-muted-foreground mt-0.5 text-[0.6rem] uppercase tracking-[0.15em]">
+                          <p className="mt-0.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
                             • linked to player account
                           </p>
                         )}
                       </div>
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     {s.sport ? (
-                      <Badge variant="outline" className="border-border text-muted-foreground">
-                        {s.sport}
-                      </Badge>
+                      <StatusPill tone="gray">{s.sport}</StatusPill>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                     {s.jersey_number ? (
-                      <span className="text-muted-foreground ml-1 text-xs">#{s.jersey_number}</span>
+                      <span className="ml-1 text-meta tabular-nums text-muted-foreground">
+                        #{s.jersey_number}
+                      </span>
                     ) : null}
                   </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 md:table-cell">
                     {(() => {
                       const team = teams.find((t) => t.id === s.team_id)
                       return team ? (
-                        <Badge variant="outline" className="border-border text-muted-foreground">
-                          {team.name}
-                        </Badge>
+                        <StatusPill tone="gray">{team.name}</StatusPill>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )
                     })()}
                   </td>
-                  <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">
                     {s.position || '—'}
                   </td>
-                  <td className="text-muted-foreground hidden px-4 py-3 md:table-cell">
+                  <td className="hidden px-4 py-2.5 text-muted-foreground tabular-nums md:table-cell">
                     {s.joined_on ? formatDateMed(s.joined_on) : '—'}
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      className={
-                        (STATUS_STYLE[s.status] ?? 'border-border text-muted-foreground') +
-                        ' border'
-                      }
+                  <td className="px-4 py-2.5">
+                    <span
+                      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${STATUS_STYLE[s.status] ?? 'bg-muted text-muted-foreground'}`}
                     >
                       {s.status}
-                    </Badge>
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon-sm" aria-label="Actions">
-                            <MoreHorizontalIcon />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
+                  <td className="px-4 py-2.5 text-right">
+                    {canManage && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
                           render={
-                            <Link href={`/dashboard/students/${s.id}`}>
-                              <span className="flex items-center gap-2">
-                                <MoreHorizontalIcon className="size-3.5" />
-                                View profile
-                              </span>
-                            </Link>
+                            <Button variant="ghost" size="icon-sm" aria-label="Actions">
+                              <MoreHorizontalIcon />
+                            </Button>
                           }
                         />
-                        <DropdownMenuItem onClick={() => openEdit(s)}>
-                          <PencilIcon className="size-3.5" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>
-                          <TrashIcon className="size-3.5" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/dashboard/students/${s.id}`}>
+                                <span className="flex items-center gap-2">
+                                  <MoreHorizontalIcon className="size-3.5" />
+                                  View profile
+                                </span>
+                              </Link>
+                            }
+                          />
+                          <DropdownMenuItem onClick={() => openEdit(s)}>
+                            <PencilIcon className="size-3.5" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void setArchivedStatus(s, s.status !== 'archived')}
+                          >
+                            {s.status === 'archived' ? 'Restore' : 'Archive'}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>
+                            <TrashIcon className="size-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -877,9 +1143,24 @@ export default function StudentsClient({
         open={importOpen}
         onOpenChange={setImportOpen}
         auth0Id={auth0Id}
-        onImported={() => {
-          refreshStudents()
-          toast.success('Roster updated')
+        onImported={async () => {
+          // Awaited, and the toast fires AFTER. This called `refreshStudents()` bare —
+          // no `await`, no `.catch`, promise discarded — and then reported success. So a
+          // failed roster refresh was an unhandled rejection with a success toast already
+          // on screen: the coach was told the import landed while the imported players
+          // never appeared, and nothing said otherwise. The message now describes work
+          // that has actually completed.
+          try {
+            await refreshStudents()
+            toast.success('Roster updated')
+          } catch {
+            // The import DID land server-side; only the list refresh failed. Saying so is
+            // the honest outcome — a bare "failed" would wrongly suggest the upload was
+            // lost, and re-uploading would duplicate rows.
+            toast.error(
+              'Players were imported, but the roster could not be refreshed. Reload to see them.',
+            )
+          }
         }}
       />
     </div>

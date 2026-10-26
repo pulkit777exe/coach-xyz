@@ -1,75 +1,74 @@
-# web-next — CoachXYZ Frontend
+# CoachXYZ — Web (Next.js 16)
 
-Next.js 16 (App Router) + React 19 + TypeScript frontend for CoachXYZ, a multi-sport AI video analyzer.
+Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 frontend.
 
 ## Scripts
 
 ```bash
-npm install       # install dependencies (web uses npm, not bun)
-npm run dev       # start dev server on :3000
-npm run build     # production build
-npm run start     # serve production build
-npm run lint      # eslint
-npm test          # vitest run (180 tests / 18 files)
+bun install       # install dependencies (CI runs `bun install --frozen-lockfile`)
+bun run dev       # start dev server on :3000
+bun run build     # production build
+bun run start     # serve production build
+bun run lint      # eslint
+bun test          # vitest run
 ```
+
+> **Package manager.** Bun, like the server — `bun.lock` is the only lockfile
+> here. The npm scripts below still work (`npm run dev` just executes a
+> `package.json` script), but `bun install` is what CI uses, so install with bun
+> to keep your tree matching it. There is no `package-lock.json`: the two lockfiles
+> it sat beside could resolve different trees, and the divergence only appeared
+> when CI disagreed.
 
 ## Environment
 
 Copy `.env.example` → `.env.local` and set:
 
-- `NEXT_PUBLIC_API_URL` — base URL of the Elysia server (default `http://localhost:8000`)
-- `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_AUTH_TOKEN` — Sentry (optional; auth token is build-time only)
-- `SERVICE_TOKEN` — must match the server's value; authenticates the identity proxy below
-- Auth0: `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_SECRET` (64-hex), `APP_BASE_URL`
+```ini
+AUTH0_SECRET=...
+AUTH0_BASE_URL=http://localhost:3000
+AUTH0_ISSUER_BASE_URL=https://...
+AUTH0_CLIENT_ID=...
+AUTH0_CLIENT_SECRET=...
+NEXT_PUBLIC_API_URL=http://localhost:8000
+SERVICE_TOKEN=...
+```
 
-Auth0 is required for `/dashboard/*`, `/player`, `/account`, and attributed uploads.
-Auth is handled by `@auth0/nextjs-auth0` through `lib/auth0.ts`; `proxy.ts` is the
-Next 16 middleware (Auth0 passthrough, not a reverse proxy).
+Next 16 middleware (Auth0 passthrough, not proxying): `proxy.ts`.
 
 ## Structure
 
 ```
 app/
   page.tsx                     Home — pipeline SPA (idle → … → chatting/error)
-  dashboard/                   Coach area: overview, students, teams, members,
-                               audit, attendance, schedule, reports (+[id]),
-                               history, analysis/[id] (+/chat), settings
-  player/                      Player hub shell + role gate → PlayerHub
-  invite/                      Token-invite accept flow (AcceptInviteClient)
-  share/[token]/               Public shared-analysis view
+  (marketing/)                 about, features, pricing, blog, contact …
+  dashboard/                   Authenticated area (overview, history, analysis detail, chat, org)
+  player/                      Player hub (role-gated away from /dashboard)
   account/                     Auth0 profile + DB record
-  api/service/[[...path]]/     Identity proxy → server (allowlist only)
+  api/                         Route handlers; /api/* is proxied to the server
 lib/
-  api.ts                       API client: capability routes (direct) + identity
-                               routes (via /api/service); attribution tokens
+  api.ts                       API client (all fetch + SSE helpers)
+  serverData.ts                React.cache-wrapped fetchers for RSC pages
+  permissions.ts               role→permission mirror of the server matrix (UX only)
+  nav.ts                       Nav role floors + visibleNavGroups
   usePipeline.ts               Upload→analyze→chat pipeline state machine
-  useScanFlow.ts               Scan/upload state machine (coach + player hub)
-  serverData.ts                React.cache RSC fetchers (pages import these)
-  session.ts                   React.cache getSession (RSC only)
-  org.ts / teams.ts / members.ts / meApi.ts / aiReports.ts
-                               Org, teams, members, player-hub, AI-report clients
-  serviceProxy.ts              Proxy allowlist (identity vs static-vocab paths)
-  sports.ts / analysis.ts / csv.ts / date.ts / errors.ts / sse.ts / jobPolling.ts
-                               Pure helpers (unit-tested)
+  auth0.ts                     Auth0Client singleton
+  sports.ts / utils.ts         Helpers
 components/
-  AppClient / AnalysisDetailClient / ResultsSummary / AnalysisProgress /
-  PlayerSelector / VideoPlayer / FindingsTimeline / ClipsSection / ChatLayout /
-  ChatPanel / HistoryChat / QuickActions / ErrorScreen / LandingPage / …
-  org/                         Coach dashboard clients (roster, attendance grid,
-                               schedule, reports, objectives kanban, …)
-  player/PlayerHub.tsx         Read-only player self view
-  notifications/               Notification bell (SSE)
-  interior/                    Generic UI primitives (modal, drawer, …)
-  marketing/                   Marketing-site islands (contact form, …)
-  9ui/ui/                      shadcn-style primitives (button, badge, card, …)
+  9ui/ui/                      Structural primitives (avatar, button, card, dialog, …)
+  interior/                    Vendored micro-interaction components
+  marketing/ dashboard/ org/ player/ notifications/
+types/index.ts                 Shared API types
 ```
 
-RSC pages fetch via `lib/serverData.ts` (React.cache) with `unstable_noStore()`
-on authenticated pages; client components fetch via `lib/api.ts` / `lib/org.ts`.
-Capability routes (upload/scan/analyze/status/download/chat SSE) go browser→server
-directly with a signed `x-attribution` token minted at `/api/me/attribution/mint`;
-everything user-scoped transits the `/api/service` proxy with service headers.
-Video downloads go through the `next.config.ts` `/api/download/:path*` rewrite.
-Heavy visuals (recharts `PerformanceChart`) load via `next/dynamic` (`ssr: false`).
+Import primitives from `@/components/9ui/ui/*`; there are no barrel imports.
 
-See [../ARCHITECTURE.md](../ARCHITECTURE.md) for the full architecture and [../setup.md](../setup.md) for setup.
+The pipeline subscribes to `GET /api/job-events/:jobId` for live analysis state (with a
+strictly bounded status reconciliation only when the stream is unavailable), streams
+scan/chat/report/notification progress over SSE, and proxies video downloads through
+`next.config.ts` `/api/download/:path*` rewrite.
+
+`lib/permissions.ts` mirrors the server matrix purely to hide affordances the server
+would reject — the server is the enforcement point. See
+[../docs/CODEBASE_MAP.md](../docs/CODEBASE_MAP.md) for the full module map and
+[../setup.md](../setup.md) for setup.

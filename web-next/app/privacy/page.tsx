@@ -33,8 +33,8 @@ const sections = [
   {
     title: 'Retention',
     body: [
-      'We keep your videos and analyses for as long as your account is active. When you delete a video, a report or your account, the associated content is removed from active storage and purged from backups within 30 days.',
-      'Attendance, roster and report history is retained as part of your coaching record and is deletable in full by removing your account.',
+      'We keep your videos and analyses for as long as your account is active. When you delete a video or a report, the associated content is removed from active storage and purged from backups within 30 days.',
+      'Attendance, roster and report history is retained as part of your coaching record. Removing your account deletes it in full — but only after a person has reviewed your deletion request, as described below.',
     ],
   },
   {
@@ -46,7 +46,10 @@ const sections = [
   {
     title: 'Your rights',
     body: [
-      'You can access, correct or delete the personal information we hold by contacting help@coachxyz.app or by using the controls in your dashboard. Where local law applies, you may also request a copy of your data in a portable format and object to or restrict certain processing.',
+      'Access and correction: your profile, player record, attendance, schedule, performance, analyses, reports, objectives, notifications and consent choices are all readable or editable from the Privacy section of your settings — or by writing to help@coachxyz.app.',
+      'Consent: you choose, per purpose, whether your training data, health information and optional product emails may be used, and each choice is recorded against the policy version shown on screen. You can withdraw or change any of them yourself, and a withdrawal applies immediately.',
+      'Portability: “Download my data” in that same section gives you every one of those records as one JSON file, immediately, with no request and no waiting period.',
+      'Deletion: “Request account deletion” records a request that a person on our team reviews. It is not an instant deletion — nothing is removed until we have confirmed it to you by email. Where local law applies, you may also object to or restrict certain processing by writing to us.',
     ],
   },
   {
@@ -63,52 +66,62 @@ const sections = [
   },
 ]
 
+const hairline = 'border-border'
+
 export default function PrivacyPage() {
   return (
-    <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
-      <section className="border-b border-[var(--marketing-white)]/5 px-6 py-10 lg:px-8">
+    <main id="main" tabIndex={-1} className="bg-background text-foreground-strong antialiased">
+      <section className={`border-b px-6 py-14 lg:px-8 ${hairline}`}>
         <div className="mx-auto max-w-[720px]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
+          <p className="text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase">
             Legal
           </p>
-          <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-tight">
+          <h1 className="mt-3 text-balance text-[32px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[40px]">
             Privacy Policy
           </h1>
-          <p className="mt-2 text-sm text-[var(--marketing-beige)]/50">
-            Last updated: September 15, 2026
+          <p className="mt-3 text-body leading-5 text-muted-foreground tabular-nums">
+            Last updated: September 26, 2026
           </p>
         </div>
       </section>
-      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
+      <section className="px-6 py-12 lg:px-8">
         <div className="mx-auto max-w-[720px]">
-          <p className="text-sm leading-6 text-[var(--marketing-brown)]/70">
+          <p className="text-lead leading-[1.6] text-foreground-strong/80">
             CoachXYZ (&ldquo;we,&rdquo; &ldquo;us&rdquo;) provides AI-powered sports video analysis
             for coaches and their teams. This policy explains what we collect, why, and the choices
             you have. By using CoachXYZ you agree to the practices below.
           </p>
-          <div className="mt-10 space-y-8">
-            {sections.map((s) => (
-              <section key={s.title}>
-                <h2 className="text-base font-bold">{s.title}</h2>
-                <div className="mt-2 space-y-3">
-                  {s.body.map((p) => (
-                    <p
-                      key={p.slice(0, 32)}
-                      className="text-sm leading-6 text-[var(--marketing-brown)]/70"
-                    >
-                      {p}
-                    </p>
-                  ))}
+          <div className={`mt-10 border-t ${hairline}`}>
+            {sections.map((s, i) => (
+              <section
+                key={s.title}
+                className={`grid gap-4 py-8 sm:grid-cols-[56px_1fr] ${hairline} border-b`}
+              >
+                <span className="text-meta font-medium text-muted-foreground/60 tabular-nums">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div>
+                  <h2 className="text-lead font-semibold">{s.title}</h2>
+                  <div className="mt-2.5 space-y-3">
+                    {s.body.map((p) => (
+                      <p
+                        key={p.slice(0, 32)}
+                        className="text-title leading-[1.6] text-foreground-strong/80"
+                      >
+                        {p}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </section>
             ))}
           </div>
-          <div className="mt-12 rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)] p-6">
-            <h2 className="text-base font-bold">Questions?</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--marketing-brown)]/70">
+          <div className={`mt-10 rounded-[8px] border bg-muted p-6 ${hairline}`}>
+            <h2 className="text-lead font-semibold">Questions?</h2>
+            <p className="mt-2 text-title leading-[1.6] text-foreground-strong/80">
               Email our Data Protection contact at{' '}
-              <span className="font-medium text-[var(--marketing-brown)]">help@coachxyz.app</span> —
-              we typically answer within one business day.
+              <span className="font-medium text-foreground-strong">help@coachxyz.app</span> — we
+              typically answer within one business day.
             </p>
           </div>
         </div>

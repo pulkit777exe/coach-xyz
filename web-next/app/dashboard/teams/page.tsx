@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
-import { orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
+import { getSession } from '@/lib/session'
+import { redirect } from 'next/navigation'
+import { getOrgContext, orgSeasons, orgStudents, orgTeams } from '@/lib/serverData'
 import TeamsClient from '@/components/org/TeamsClient'
 import PageHeader from '@/components/org/PageHeader'
-import { loadPage } from '../_shell'
+import { hasPermission, TEAM_DELETE_ROLES } from '@/lib/permissions'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export const metadata: Metadata = {
   title: 'Teams | CoachXYZ',
@@ -10,21 +13,24 @@ export const metadata: Metadata = {
 }
 
 export default async function TeamsPage() {
-  const { auth0Id, data } = await loadPage(
-    'org',
-    {
-      teams: ({ auth0Id }) => orgTeams(auth0Id),
-      students: ({ auth0Id }) => orgStudents(auth0Id),
-      seasons: ({ auth0Id }) => orgSeasons(auth0Id),
-    },
-    { teams: { teams: [] }, students: { students: [] }, seasons: { seasons: [] } },
-  )
-  const teamsRes = data.teams
-  const studentsRes = data.students
-  const seasonsRes = data.seasons
+  noStore()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
+  if (!session) redirect('/auth/login')
+  const { auth0Id, role } = orgCtx
+
+  const [teamsRes, studentsRes, seasonsRes] = await Promise.all([
+    // `null` rather than an empty list, for both lists that back a rendered claim.
+    // `teams` drives "No teams yet"; `students` populates the Teams→Players picker,
+    // where an empty list silently removes every player from the add-member control.
+    orgTeams(auth0Id).catch(() => null),
+    orgStudents(auth0Id).catch(() => null),
+    // Seasons only back the inline "No seasons yet." label rather than an EmptyState,
+    // but a rejected read is still not the same fact as an org with no seasons.
+    orgSeasons(auth0Id).catch(() => null),
+  ])
 
   return (
-    <div className="mx-auto max-w-\[1080px\] px-6 py-6 lg:px-8 bg-grid relative z-10">
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['Home', 'Teams']}
         title="Teams"
@@ -34,9 +40,14 @@ export default async function TeamsPage() {
       <div className="mt-6">
         <TeamsClient
           auth0Id={auth0Id}
-          initialTeams={teamsRes.teams}
-          initialSeasons={seasonsRes.seasons}
-          students={studentsRes.students}
+          initialTeams={teamsRes?.teams ?? []}
+          teamsFailed={teamsRes === null}
+          initialSeasons={seasonsRes?.seasons ?? []}
+          seasonsFailed={seasonsRes === null}
+          students={studentsRes?.students ?? []}
+          studentsFailed={studentsRes === null}
+          canManage={hasPermission(role, 'team.manage')}
+          canDeleteTeam={TEAM_DELETE_ROLES.includes(role)}
         />
       </div>
     </div>

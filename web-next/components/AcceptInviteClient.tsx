@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/9ui/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/9ui/ui/card'
 import { acceptInvite } from '@/lib/meApi'
+import { setOrgCookie } from '@/lib/orgCookie'
 
 export default function AcceptInviteClient() {
   const searchParams = useSearchParams()
@@ -22,6 +23,8 @@ export default function AcceptInviteClient() {
     acceptInvite(token)
       .then((res) => {
         if (cancelled) return
+        // The club just joined becomes the active org everywhere.
+        setOrgCookie(res.org_auth0_id)
         setRole(res.role)
         setState('done')
       })
@@ -39,7 +42,7 @@ export default function AcceptInviteClient() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Organization invitation</CardTitle>
+          <CardTitle className="text-lead">Organization invitation</CardTitle>
           <CardDescription>
             {state === 'done'
               ? `Accepted — you joined as ${role}.`
@@ -48,15 +51,19 @@ export default function AcceptInviteClient() {
         </CardHeader>
         <CardContent className="space-y-4">
           {!token && (
-            <p className="text-sm text-destructive">
+            <p className="text-meta text-destructive">
               Missing invitation token. Ask your coach for a fresh link.
             </p>
           )}
           {state === 'working' && (
-            <p className="text-sm text-muted-foreground">Accepting invitation…</p>
+            <p className="text-body text-muted-foreground">Accepting invitation…</p>
           )}
-          {state === 'error' && <p className="text-sm text-destructive">{message}</p>}
-          {state === 'done' && <Button nativeButton={false} render={<Link href="/dashboard" />}>Open dashboard</Button>}
+          {state === 'error' && <p className="text-meta text-destructive">{message}</p>}
+          {state === 'done' && (
+            <Button nativeButton={false} render={<Link href="/dashboard" />}>
+              Open dashboard
+            </Button>
+          )}
           {state === 'error' && token && (
             <Button onClick={() => setState('working')}>Try again</Button>
           )}

@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/9ui/ui/button'
-import { Badge } from '@/components/9ui/ui/badge'
+import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import { Input } from '@/components/9ui/ui/input'
 import { Label } from '@/components/9ui/ui/label'
 import {
@@ -27,10 +27,11 @@ import {
   DialogFooter,
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
+import EmptyState from './EmptyState'
 import ReportBody from './ReportBody'
 import EmailReportDialog from './EmailReportDialog'
 import { downloadCSV } from '@/lib/csv'
-import { formatDateMed } from '@/lib/date'
+import { formatDateMed, formatDayWeekdayYear, toISODate } from '@/lib/date'
 
 import type { ReportRecord, Student, ReportType } from '@/lib/org'
 import {
@@ -40,16 +41,15 @@ import {
   REPORT_TYPES,
   REPORT_TYPE_LABELS,
 } from '@/lib/org'
-import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
+import { orgGenerateAiReport, orgAiReportStatus, subscribeAiReportEvents } from '@/lib/aiReports'
 import type { AiReportJobPoll } from '@/lib/aiReports'
-import { startJobPolling } from '@/lib/jobPolling'
-import type { CoachAIError } from '@/types'
+import type { CoachAIError } from '@/lib/api'
 
-const TYPE_BADGE: Record<string, string> = {
-  progress: 'border-(--info-border) text-(--info)',
-  attendance: 'border-(--warning-border) text-(--warning)',
-  performance: 'border-(--success-border) text-(--success)',
-  monthly: 'border-(--danger-border) text-destructive',
+const TYPE_TONE: Record<string, StatusTone> = {
+  progress: 'blue',
+  attendance: 'amber',
+  performance: 'green',
+  monthly: 'red',
 }
 
 function typeLabel(t: string) {
@@ -60,10 +60,16 @@ export default function ReportsClient({
   auth0Id,
   initialReports,
   students,
+  canWrite,
+  canSend,
 }: {
   auth0Id: string
   initialReports: ReportRecord[]
   students: Student[]
+  /** Report draft writes (create/edit/delete) — report.create. */
+  canWrite: boolean
+  /** Emailing + AI generation — pinned to the server's email/aiReports floor. */
+  canSend: boolean
 }) {
   const [reports, setReports] = useState<ReportRecord[]>(initialReports)
   const [generateOpen, setGenerateOpen] = useState(false)
@@ -103,16 +109,6 @@ export default function ReportsClient({
     title: '',
   })
 
-  const resetAiForm = () => {
-    setAiForm({
-      student_id: 'all',
-      report_type: 'progress',
-      period_start: '',
-      period_end: '',
-      title: '',
-    })
-  }
-
   const closeAi = () => {
     setAiOpen(false)
     setAiPending(null)
@@ -123,37 +119,75 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!aiPending) return
-    // AI-report polling crosses the shared job-polling core (fixed 2500ms
-    // cadence, give up on the first fetch error — same contract as the
-    // hand-rolled interval it replaces, plus an immediate first poll).
-    const controller = startJobPolling<AiReportJobPoll>({
-      jobId: aiPending.report_job_id,
-      fetchStatus: (jobId) => orgAiReportStatus(auth0Id, jobId),
-      isComplete: (status) => status.status === 'done' || status.status === 'failed',
-      intervalMs: 2500,
-      backoffFactor: 1,
-      giveUpOnFirstFailure: true,
-      onStatus: (res) => setAiJob(res),
-      onComplete: (res) => {
-        if (res.status === 'done' && res.report) {
+    const controller = new AbortController()
+    let finished = false
+
+    const applyStatus = (res: AiReportJobPoll) => {
+      if (finished) return
+      setAiJob(res)
+      if (res.status === 'done') {
+        if (res.report) {
           setReports((prev) =>
             prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
           )
-          toast.success('AI report generated')
-          setAiPending(null)
-          setAiOpen(false)
-          resetAiForm()
-        } else if (res.status === 'failed') {
-          setAiPending(null)
-          setAiError('AI report generation failed. Please try again.')
         }
-      },
-      onError: (failure) => {
+        toast.success('AI report generated')
+        finished = true
         setAiPending(null)
-        setAiError(failure.error.message ?? 'Failed to check AI report status')
+        setAiOpen(false)
+        setAiForm({
+          student_id: 'all',
+          report_type: 'progress',
+          period_start: '',
+          period_end: '',
+          title: '',
+        })
+      } else if (res.status === 'failed') {
+        finished = true
+        setAiPending(null)
+        setAiError('AI report generation failed. Please try again.')
+      }
+    }
+
+    const stop = subscribeAiReportEvents(
+      auth0Id,
+      aiPending.report_job_id,
+      applyStatus,
+      (error) => {
+        if (finished) return
+        // One bounded reconciliation replaces the old 2.5s interval. If the
+        // job is still running, stop rather than creating a polling loop.
+        void orgAiReportStatus(auth0Id, aiPending.report_job_id)
+          .then((res) => {
+            if (finished) return
+            if (res.status === 'done' || res.status === 'failed') {
+              applyStatus(res)
+            } else {
+              finished = true
+              setAiPending(null)
+              setAiError(
+                (error as CoachAIError).message ??
+                  'Live report updates are unavailable. Please try again.',
+              )
+            }
+          })
+          .catch((statusError: unknown) => {
+            if (finished) return
+            finished = true
+            setAiPending(null)
+            setAiError(
+              (statusError as CoachAIError).message ??
+                'Failed to check AI report status. Please try again.',
+            )
+          })
       },
-    })
-    return () => controller.stop()
+      controller.signal,
+    )
+
+    return () => {
+      finished = true
+      stop()
+    }
   }, [auth0Id, aiPending])
 
   const generateAi = async () => {
@@ -176,7 +210,10 @@ export default function ReportsClient({
   }
 
   const exportCSV = () => {
-    downloadCSV(`reports-${new Date().toISOString().slice(0, 10)}.csv`, [
+    // The LOCAL day, not `toISOString()`'s UTC day: east of UTC just after midnight the
+    // export would otherwise be named for YESTERDAY, west of UTC in the evening for
+    // TOMORROW. Same rule as every other day in this app — the day the viewer is on.
+    downloadCSV(`reports-${toISODate(new Date())}.csv`, [
       ['Title', 'Type', 'Student', 'Period start', 'Period end', 'Generated'],
       ...reports.map((r) => [
         r.title,
@@ -274,8 +311,9 @@ export default function ReportsClient({
     <div>
       {/* Toolbar */}
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-muted-foreground text-sm">
-          {reports.length} generated {reports.length === 1 ? 'report' : 'reports'}
+        <p className="text-body text-muted-foreground">
+          <span className="tabular-nums">{reports.length}</span> generated{' '}
+          {reports.length === 1 ? 'report' : 'reports'}
         </p>
         <div className="flex items-center gap-2">
           {reports.length > 0 && (
@@ -283,62 +321,67 @@ export default function ReportsClient({
               <DownloadIcon /> Export
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setAiOpen(true)}
-            disabled={Boolean(aiPending)}
-          >
-            <SparklesIcon /> Generate with AI
-          </Button>
-          <Button size="sm" onClick={() => setGenerateOpen(true)}>
-            <PlusIcon /> Generate report
-          </Button>
+          {canSend && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAiOpen(true)}
+              disabled={Boolean(aiPending)}
+            >
+              <SparklesIcon /> Generate with AI
+            </Button>
+          )}
+          {canWrite && (
+            <Button size="sm" onClick={() => setGenerateOpen(true)}>
+              <PlusIcon /> Generate report
+            </Button>
+          )}
         </div>
       </div>
 
       {/* List */}
       {reports.length === 0 ? (
-        <div className="border-border bg-card rounded-lg border p-16 text-center">
-          <FileTextIcon className="text-muted-foreground mx-auto mb-4 size-8" />
-          <p className="text-muted-foreground text-sm">No reports yet.</p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            Generate progress, attendance, or performance reports for your students.
-          </p>
+        <div className="border-border bg-card rounded-[6px] border">
+          <EmptyState
+            icon={<FileTextIcon className="size-5" aria-hidden="true" />}
+            title="No reports yet"
+            description="Generate progress, attendance, or performance reports for your students."
+            action={
+              canWrite ? (
+                <Button size="sm" onClick={() => setGenerateOpen(true)}>
+                  <PlusIcon /> Generate report
+                </Button>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         <>
           {/* Mobile cards (md and up use the table below) */}
           <ul className="space-y-3 md:hidden">
             {reports.map((r) => (
-              <li key={r.id} className="rounded-xl border border-border bg-card p-4">
+              <li key={r.id} className="rounded-[6px] border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link
                       href={`/dashboard/reports/${r.id}`}
-                      className="text-sm font-medium text-foreground hover:underline"
+                      className="text-body font-medium text-foreground hover:underline"
                     >
                       {r.title}
                     </Link>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-meta text-muted-foreground">
                       {r.full_name || 'Organization'} ·{' '}
                       {r.period_start
                         ? `${formatDateMed(r.period_start)} → ${formatDateMed(r.period_end ?? r.period_start)}`
                         : 'All time'}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {new Date(r.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                    <p className="mt-0.5 text-meta text-muted-foreground">
+                      {formatDateMed(r.created_at)}
                     </p>
                   </div>
-                  <Badge
-                    className={(TYPE_BADGE[r.report_type] ?? 'border-border') + ' shrink-0 border'}
-                  >
+                  <StatusPill tone={TYPE_TONE[r.report_type] ?? 'gray'} className="shrink-0">
                     {typeLabel(r.report_type)}
-                  </Badge>
+                  </StatusPill>
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1">
                   <Button
@@ -349,58 +392,64 @@ export default function ReportsClient({
                   >
                     <EyeIcon />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    onClick={() => openEmail(r)}
-                    aria-label="Email report"
-                  >
-                    <MailIcon className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                    onClick={() => openEdit(r)}
-                    aria-label="Edit report"
-                  >
-                    <PencilIcon className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleting(r)}
-                    aria-label="Delete report"
-                  >
-                    <TrashIcon className="size-3.5" />
-                  </Button>
+                  {canSend && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => openEmail(r)}
+                      aria-label="Email report"
+                    >
+                      <MailIcon className="size-3.5" />
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                      onClick={() => openEdit(r)}
+                      aria-label="Edit report"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                  )}
+                  {canWrite && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleting(r)}
+                      aria-label="Delete report"
+                    >
+                      <TrashIcon className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
 
-          <div className="hidden border-border overflow-hidden rounded-lg border md:block">
-            <table className="w-full text-sm">
+          <div className="hidden border-border overflow-hidden rounded-[6px] border md:block">
+            <table className="w-full text-body">
               <thead>
-                <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase">
-                  <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                <tr className="border-b border-border">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Report
                   </th>
-                  <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Type
                   </th>
-                  <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] md:table-cell">
+                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] md:table-cell">
                     Student
                   </th>
-                  <th className="hidden px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em] lg:table-cell">
+                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] lg:table-cell">
                     Period
                   </th>
-                  <th className="px-4 py-3 text-left font-normal text-[0.65rem] tracking-[0.15em]">
+                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Generated
                   </th>
-                  <th className="px-4 py-3 text-right font-normal text-[0.65rem] tracking-[0.15em]">
+                  <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em]">
                     Actions
                   </th>
                 </tr>
@@ -409,34 +458,30 @@ export default function ReportsClient({
                 {reports.map((r) => (
                   <tr
                     key={r.id}
-                    className="hover:bg-accent/50 border-border border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                    className="hover:bg-accent/50 border-border border-b transition-colors duration-150 last:border-b-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
                   >
-                    <td className="px-4 py-3 font-medium text-foreground">
+                    <td className="px-4 py-2.5 font-medium text-foreground">
                       <Link href={`/dashboard/reports/${r.id}`} className="hover:underline">
                         {r.title}
                       </Link>
                     </td>
-                    <td className="px-4 py-3">
-                      <Badge className={(TYPE_BADGE[r.report_type] ?? 'border-border') + ' border'}>
+                    <td className="px-4 py-2.5">
+                      <StatusPill tone={TYPE_TONE[r.report_type] ?? 'gray'}>
                         {typeLabel(r.report_type)}
-                      </Badge>
+                      </StatusPill>
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
+                    <td className="hidden px-4 py-2.5 md:table-cell">
                       {r.full_name || 'Organization'}
                     </td>
-                    <td className="text-muted-foreground hidden px-4 py-3 lg:table-cell">
+                    <td className="text-muted-foreground hidden px-4 py-2.5 lg:table-cell">
                       {r.period_start
                         ? `${formatDateMed(r.period_start)} → ${formatDateMed(r.period_end ?? r.period_start)}`
                         : 'All time'}
                     </td>
-                    <td className="text-muted-foreground px-4 py-3">
-                      {new Date(r.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                    <td className="text-muted-foreground px-4 py-2.5 tabular-nums">
+                      {formatDateMed(r.created_at)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
@@ -446,33 +491,39 @@ export default function ReportsClient({
                         >
                           <EyeIcon />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground"
-                          onClick={() => openEmail(r)}
-                          aria-label="Email report"
-                        >
-                          <MailIcon className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground"
-                          onClick={() => openEdit(r)}
-                          aria-label="Edit report"
-                        >
-                          <PencilIcon className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleting(r)}
-                          aria-label="Delete report"
-                        >
-                          <TrashIcon className="size-3.5" />
-                        </Button>
+                        {canSend && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground"
+                            onClick={() => openEmail(r)}
+                            aria-label="Email report"
+                          >
+                            <MailIcon className="size-3.5" />
+                          </Button>
+                        )}
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground"
+                            onClick={() => openEdit(r)}
+                            aria-label="Edit report"
+                          >
+                            <PencilIcon className="size-3.5" />
+                          </Button>
+                        )}
+                        {canWrite && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleting(r)}
+                            aria-label="Delete report"
+                          >
+                            <TrashIcon className="size-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -499,7 +550,7 @@ export default function ReportsClient({
               <div className="border-border bg-muted/30 flex items-center gap-3 rounded-md border px-4 py-3">
                 <Spinner className="text-primary" />
                 <div className="min-w-0">
-                  <p className="text-sm text-foreground">
+                  <p className="text-body leading-5 text-foreground">
                     Generating{' '}
                     {aiForm.title
                       ? `“${aiForm.title}”`
@@ -508,7 +559,7 @@ export default function ReportsClient({
                         : 'organization report'}
                     …
                   </p>
-                  <p className="text-muted-foreground text-xs">
+                  <p className="text-muted-foreground text-meta">
                     {aiJob?.status === 'running'
                       ? 'Writing the report'
                       : aiJob?.status === 'queued'
@@ -517,10 +568,10 @@ export default function ReportsClient({
                   </p>
                 </div>
               </div>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-meta">
                 Keep this dialog open — the finished report lands in your list automatically.
               </p>
-              {aiError && <p className="text-sm text-destructive">{aiError}</p>}
+              {aiError && <p className="text-meta text-destructive">{aiError}</p>}
             </div>
           ) : (
             <div className="grid gap-4">
@@ -530,7 +581,7 @@ export default function ReportsClient({
                   id="ai_report_student"
                   value={aiForm.student_id}
                   onChange={(e) => setAiForm((f) => ({ ...f, student_id: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-2"
                 >
                   <option value="all">Entire organization</option>
                   {students.map((s) => (
@@ -540,7 +591,7 @@ export default function ReportsClient({
                     </option>
                   ))}
                 </select>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-meta">
                   {aiForm.student_id === 'all'
                     ? 'Covers the whole organization.'
                     : 'Scoped to a single student.'}
@@ -552,7 +603,7 @@ export default function ReportsClient({
                   id="ai_report_type"
                   value={aiForm.report_type}
                   onChange={(e) => setAiForm((f) => ({ ...f, report_type: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-2"
                 >
                   {REPORT_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -590,7 +641,7 @@ export default function ReportsClient({
                   placeholder="e.g. Q3 Mid-season Review"
                 />
               </div>
-              {aiError && <p className="text-sm text-destructive">{aiError}</p>}
+              {aiError && <p className="text-meta text-destructive">{aiError}</p>}
             </div>
           )}
           <DialogFooter>
@@ -630,7 +681,7 @@ export default function ReportsClient({
                 id="report_student"
                 value={form.student_id}
                 onChange={(e) => setForm((f) => ({ ...f, student_id: e.target.value }))}
-                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-2"
               >
                 <option value="all">Entire organization</option>
                 {students.map((s) => (
@@ -640,7 +691,7 @@ export default function ReportsClient({
                   </option>
                 ))}
               </select>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-meta">
                 {form.student_id === 'all'
                   ? 'Covers the whole organization.'
                   : 'Scoped to a single student.'}
@@ -652,7 +703,7 @@ export default function ReportsClient({
                 id="report_type"
                 value={form.report_type}
                 onChange={(e) => setForm((f) => ({ ...f, report_type: e.target.value }))}
-                className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-2"
               >
                 {REPORT_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -690,7 +741,7 @@ export default function ReportsClient({
                 placeholder="e.g. Q3 Mid-season Review"
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-meta text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerateOpen(false)}>
@@ -712,12 +763,7 @@ export default function ReportsClient({
                 <DialogTitle>{viewing.title}</DialogTitle>
                 <DialogDescription>
                   {viewing.full_name || 'Organization'} · {typeLabel(viewing.report_type)} ·{' '}
-                  {new Date(viewing.created_at).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
+                  {formatDayWeekdayYear(viewing.created_at)}
                 </DialogDescription>
               </DialogHeader>
               <ReportBody report={viewing} />
@@ -751,7 +797,7 @@ export default function ReportsClient({
                   id="edit_report_type"
                   value={editForm.report_type}
                   onChange={(e) => setEditForm((f) => ({ ...f, report_type: e.target.value }))}
-                  className="bg-input text-foreground focus-visible:ring-ring/50 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-sm outline-none focus-visible:ring-[3px]"
+                  className="bg-[var(--input-fill)] text-foreground focus-visible:ring-ring/40 border-input focus-visible:border-ring h-9 w-full rounded-md border px-3 py-1.5 text-body leading-5 outline-none focus-visible:ring-2"
                 >
                   {REPORT_TYPES.map((t) => (
                     <option key={t} value={t}>
@@ -780,7 +826,7 @@ export default function ReportsClient({
                   />
                 </div>
               </div>
-              {editError && <p className="text-sm text-destructive">{editError}</p>}
+              {editError && <p className="text-meta text-destructive">{editError}</p>}
             </div>
           )}
           <DialogFooter>

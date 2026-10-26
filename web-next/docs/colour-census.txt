@@ -1,0 +1,45 @@
+web-next colour census
+re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/colourTokens.test.ts)
+
+scope
+  roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
+  first-party files: 162 (app 50, components 76, lib 36)
+  vendored path exemption: components/9ui/, components/interior/ — 31 files
+  colour utilities resolvable from @theme (--color-*): 52
+
+rule 1 — raw hex literals in className / inline style
+  first-party sites: 0
+  exempt sites: 5
+    components/9ui/ui/chart.tsx ×3 #ccc — recharts attribute-selector match key (vendored shadcn chart; the rendered value is a token)
+    components/9ui/ui/chart.tsx ×2 #fff — recharts attribute-selector match key (vendored shadcn chart; the rendered value is a token)
+  unexempted sites (violations): 0
+
+rule 2 — dark: colour pairs, first-party (classified)
+  A literal hue over token (remitted to darkVariantTokens): 4
+  C token → token / transparent: 2
+  D same token, alpha shifted: 9
+  S sanctioned non-colour (none): 4
+  violations: 0
+  vendored (path-exempt, rule 2): 8 pairs
+    B literal over literal (scrim pair; vendored registry exempt, first-party = violation): 3
+    S sanctioned non-colour (none): 5
+
+rule 3 — Tailwind stock palette classes
+  first-party sites: 0
+  vendored sites: 0 (path exemption present; unexercised for this rule unless shown above)
+
+boundary — recorded, NOT guarded (outside the three rules)
+  hex outside className/inline-style (first-party): 
+    components/VideoPlayer.tsx ×7
+    (VideoPlayer paints to canvas, which cannot take var(): theme-invariant overlay scrims + getComputedStyle-resolved token fallbacks — components/VideoPlayer.colors.test.ts pins them)
+  rgba() in className: components/HeaderClient.tsx:109 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  rgba() in className: components/org/SettingsPanel.tsx:146 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  rgba() in className: components/interior/progress-bar.tsx:81 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
+  literal white/black colour classes, non-dark, first-party: 3 — theme-invariant chrome (video overlays render on a black video surface in both themes)
+    components/VideoPlayer.tsx:385 bg-black
+    components/VideoPlayer.tsx:397 text-white/70
+    components/VideoPlayer.tsx:402 text-white/85
+  literal white/black colour classes, non-dark, vendored: 4 (registry scrim/chrome patterns)
+

@@ -15,5 +15,5 @@ export default defineConfig([
       'react-hooks/preserve-manual-memoization': 'off',
     },
   },
-  globalIgnores(['.next/**', 'node_modules/**', 'out/**', 'build/**', 'next-env.d.ts']),
+  globalIgnores(['**/.next/**', 'node_modules/**', 'out/**', 'build/**', 'next-env.d.ts']),
 ])

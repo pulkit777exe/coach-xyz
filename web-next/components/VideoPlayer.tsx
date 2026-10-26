@@ -9,7 +9,8 @@ import {
   useCallback,
   useMemo,
 } from 'react'
-import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
+import { Slide } from 'loading-dev'
+import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
 interface VideoPlayerProps {
@@ -26,10 +27,40 @@ const CALLOUT_FADE_MS = 400
 const TIMELINE_H = 32
 const MARKER_W = 3
 
-function _scoreColor(score: number): string {
-  if (score >= 8) return '#3cdc5a'
-  if (score >= 5) return '#fbbf24'
-  return '#ef4444'
+/**
+ * Resolve a design token to a literal colour, for canvas.
+ *
+ * `ctx.fillStyle` cannot take `var(--x)`, so a canvas that follows the theme has to
+ * read the token at paint time — which is also the only way to be correct here,
+ * because `--success` is NOT the same in both themes (`#0f7b6c` light,
+ * `#4d9078` dark). A hardcoded literal picks one theme and is wrong in the other.
+ *
+ * Fallbacks are the light-theme values, used only with no DOM (an SSR pass) or if
+ * the token is somehow absent.
+ */
+export const themeColor = (token: string, fallback: string): string => {
+  if (typeof window === 'undefined' || typeof getComputedStyle !== 'function') return fallback
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+  return value || fallback
+}
+
+/** `#rrggbb` + alpha -> `rgba(...)`, so a token can carry transparency. */
+export const withAlpha = (hex: string, alpha: number): string => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+export function scoreColor(score: number): string {
+  // Previously Tailwind's STOCK green-400 / amber-400 / red-500, which are not this
+  // app's colours at all — so every timeline marker and every callout bar was a
+  // different hue from the `--success` / `--warning` / `--danger` used everywhere
+  // else. It also read as dead code because of the leading underscore, which is how
+  // it survived an earlier full hex-to-token migration that touched this very file.
+  if (score >= 8) return themeColor('--success', '#0f7b6c')
+  if (score >= 5) return themeColor('--warning', '#d9730d')
+  return themeColor('--danger', '#e03e3e')
 }
 
 function _eventTypeLabel(eventType: string): string {
@@ -64,7 +95,32 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const [hoverX, setHoverX] = useState(0)
   // Owned jobs require the signed attribution token, which a <video> tag
   // cannot send as a header — resolve the query-token URL per job.
-  const videoSrc = useAuthorizedMediaUrl(jobId)
+  const [videoSrc, setVideoSrc] = useState(() => getDownloadUrl(jobId))
+  const [videoSrcJob, setVideoSrcJob] = useState(jobId)
+  if (videoSrcJob !== jobId) {
+    setVideoSrcJob(jobId)
+    setVideoSrc(getDownloadUrl(jobId))
+    // Resetting the error HERE rather than in an effect, because this is the same render
+    // pass that already swaps the source. An effect keyed on `[jobId]` was the one place
+    // in the app that called `setState` synchronously as an effect's first statement —
+    // the antipattern AGENTS.md names — and it was also redundant: `<video onLoadStart>`
+    // below already sets `isLoading` when the new source begins loading, so the effect
+    // ran one commit later than the event it duplicated.
+    //
+    // Deriving during render for a component's OWN state is sanctioned by React, and this
+    // is the documented alternative the rule points at. `setHasError(false)` belongs to
+    // the same transition: the previous job's error must not survive into the new one.
+    setHasError(false)
+  }
+  useEffect(() => {
+    let cancelled = false
+    void getAuthorizedDownloadUrl(jobId).then((url) => {
+      if (!cancelled) setVideoSrc(url)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [jobId])
   const activeCallouts = useRef<Array<{ event: ShotEvent; startMs: number; opacity: number }>>([])
   const lastCalloutIndex = useRef<number>(-1)
   const animFrameRef = useRef<number>(0)
@@ -79,11 +135,6 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       }
     },
   }))
-
-  useEffect(() => {
-    setIsLoading(true)
-    setHasError(false)
-  }, [jobId])
 
   // Resize canvas to match container
   useEffect(() => {
@@ -145,7 +196,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     const progress = Math.max(0, Math.min(1, now / dur))
     const fillW = barWidth * progress
     if (fillW > 0) {
-      ctx.fillStyle = 'rgba(0,165,255,0.9)'
+      ctx.fillStyle = withAlpha(themeColor('--primary', '#2383e2'), 0.9)
       ctx.beginPath()
       ctx.roundRect(barLeft, barY + 10, fillW, 6, 3)
       ctx.fill()
@@ -157,7 +208,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         const t = evt.timestamp
         if (t < 0 || t > dur) continue
         const x = barLeft + (t / dur) * barWidth
-        ctx.fillStyle = _scoreColor(evt.form_score)
+        ctx.fillStyle = scoreColor(evt.form_score)
         ctx.beginPath()
         ctx.roundRect(x - MARKER_W / 2, barY + 6, MARKER_W, 14, 1)
         ctx.fill()
@@ -234,7 +285,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       ctx.roundRect(pillX, pillY, pillW, pillH, 6)
       ctx.fill()
 
-      ctx.fillStyle = _scoreColor(callout.event.form_score)
+      ctx.fillStyle = scoreColor(callout.event.form_score)
       ctx.beginPath()
       ctx.roundRect(pillX, pillY, 4, pillH, 2)
       ctx.fill()
@@ -331,7 +382,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   return (
     <div
       ref={containerRef}
-      className="relative flex h-full w-full items-center justify-center bg-[var(--marketing-dark)]"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-border bg-black"
     >
       {hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -343,12 +394,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z"
             />
           </svg>
-          <span className="text-xs">Video unavailable</span>
+          <span className="text-meta text-white/70">Video unavailable</span>
         </div>
       )}
       {isLoading && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-transparent" />
+          <Slide size={24} className="text-white/85" />
         </div>
       )}
       <video

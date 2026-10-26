@@ -1,7 +1,9 @@
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import UserAvatar from '@/components/UserAvatar'
+import { House } from 'lucide-react'
+import SidebarProfileMenu from '@/components/SidebarProfileMenu'
+import MobileNavDrawer from '@/components/MobileNavDrawer'
 
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
   let session
@@ -16,49 +18,53 @@ export default async function PlayerLayout({ children }: { children: React.React
     redirect('/auth/login')
   }
 
+  // Sidebar body — one source rendered twice: desktop aside + mobile drawer.
+  // Nav-only: the app brand lives in the topbar; the mobile bar shows the
+  // player's own name (personal workspace), never an app name.
+  const sidebarTop = (
+    <>
+      <nav className="flex flex-col">
+        <Link
+          href="/player"
+          aria-current="page"
+          className="flex h-7 items-center gap-2 rounded-[4px] bg-accent px-2 text-body leading-5 font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98]"
+        >
+          <House className="size-4 shrink-0 text-foreground" />
+          <span className="min-w-0 flex-1 truncate">My Hub</span>
+        </Link>
+      </nav>
+    </>
+  )
+
+  // Footer block — account menu (Notion opens it upward from here)
+  const sidebarFooter = (
+    <SidebarProfileMenu
+      name={session.user.name}
+      email={session.user.email}
+      picture={session.user.picture}
+      settingsHref="/player/settings"
+      variant="player"
+    />
+  )
+
   return (
-    <div className="min-h-screen flex bg-[var(--background)]">
-      <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <Link href="/player" className="mb-6 flex items-center gap-2 px-2">
-            <span className="inline-flex size-6 items-center justify-center rounded bg-foreground text-background text-xs font-bold dark:bg-background dark:text-foreground">
-              P
-            </span>
-            <span className="text-sm font-semibold tracking-tight text-foreground">player.xyz</span>
-          </Link>
-          <nav className="flex flex-col gap-1">
-            <Link
-              href="/player"
-              className="flex items-center gap-2.5 rounded-md bg-primary/10 px-2.5 py-2 text-sm font-medium text-primary dark:bg-primary/20 dark:text-primary"
-            >
-              My Hub
-            </Link>
-          </nav>
-        </div>
-        <div className="border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-            <UserAvatar
-              picture={session.user.picture}
-              name={session.user.name}
-              email={session.user.email}
-              size="sm"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium leading-none text-foreground">
-                {session.user.name || session.user.email}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
-            </div>
-          </div>
-          <a
-            href="/auth/logout"
-            className="mt-2 flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            Log Out
-          </a>
-        </div>
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar — same Notion chrome as the dashboard shell; strictly below
+          the fixed topbar so the footer stays on screen (see dashboard). */}
+      <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">{sidebarTop}</div>
+        <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">{sidebarFooter}</div>
       </aside>
-      <main className="flex-1 min-w-0 overflow-auto bg-[var(--background)]">{children}</main>
+
+      {/* Main column — below md the sidebar collapses into the drawer bar. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <MobileNavDrawer label={session.user.name ?? 'My hub'} footer={sidebarFooter}>
+          {sidebarTop}
+        </MobileNavDrawer>
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 overflow-auto bg-background">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

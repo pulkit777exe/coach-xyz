@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface HoldToConfirmProps {
@@ -20,6 +20,10 @@ export function HoldToConfirm({
 }: HoldToConfirmProps) {
   const [armed, setArmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // useId, not a literal: the analysis page renders a Cancel AND a Delete
+  // hold-to-confirm side by side, and two elements sharing one id made the
+  // second button's aria-describedby point at the first button's hint.
+  const hintId = useId()
 
   const start = () => {
     setArmed(true)
@@ -57,16 +61,16 @@ export function HoldToConfirm({
         cancel()
       }}
       onBlur={cancel}
-      aria-describedby="hold-to-confirm-hint"
+      aria-describedby={hintId}
       className={cn(
-        'inline-flex cursor-pointer select-none items-center gap-2 border border-danger/30 bg-transparent text-[0.65rem] uppercase tracking-[0.15em] text-destructive transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-        armed && 'bg-danger text-danger-foreground',
+        'inline-flex cursor-pointer select-none items-center gap-2 rounded-[6px] border border-destructive/20 bg-transparent px-3 py-1.5 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+        armed && 'border-destructive bg-destructive text-destructive-foreground',
         className,
       )}
     >
       {children}
       {armed && <span className="animate-pulse">{confirmLabel}</span>}
-      <span id="hold-to-confirm-hint" className="sr-only">
+      <span id={hintId} className="sr-only">
         Press and hold to confirm
       </span>
     </button>

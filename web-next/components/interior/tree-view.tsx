@@ -26,7 +26,7 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         type="button"
         onClick={() => hasChildren && setOpen((v) => !v)}
         className={cn(
-          'flex w-full items-start gap-2 py-1 text-left text-sm text-foreground',
+          'flex w-full items-start gap-2 rounded-[4px] py-1 text-left text-[14px] text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
           hasChildren ? 'cursor-pointer' : 'cursor-default',
         )}
       >

@@ -9,8 +9,10 @@ export const metadata: Metadata = {
 
 export default function InvitePage() {
   return (
-    <Suspense>
-      <AcceptInviteClient />
-    </Suspense>
+    <main id="main" tabIndex={-1}>
+      <Suspense>
+        <AcceptInviteClient />
+      </Suspense>
+    </main>
   )
 }

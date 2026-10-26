@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 
-import { Badge } from '@/components/9ui/ui/badge'
 import { Button } from '@/components/9ui/ui/button'
 import {
   Dialog,
@@ -24,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/9ui/ui/select'
 import { Spinner } from './Spinner'
+import StatusPill, { type StatusTone } from './StatusPill'
 
 import {
   ORG_MEMBER_INVITE_ROLES,
@@ -38,7 +38,9 @@ import {
   type OrgMemberRole,
   type OrgMembersResponse,
 } from '@/lib/members'
-import type { CoachAIError } from '@/types'
+import { initials } from '@/lib/initials'
+import { errorMessageOf } from '@/lib/errors'
+import { EMAIL_RE } from '@/lib/email'
 
 // role → label map for the base-ui Select `items` prop (renders the current
 // value's label inside the trigger).
@@ -49,33 +51,11 @@ const INVITE_ROLE_ITEMS: Record<string, string> = Object.fromEntries(
   ORG_MEMBER_INVITE_ROLES.map((r) => [r, ORG_MEMBER_ROLE_LABELS[r]]),
 )
 
-const ROLE_BADGE_VARIANT: Record<OrgMemberRole, 'default' | 'secondary' | 'success' | 'info'> = {
-  owner: 'default',
-  head_coach: 'success',
-  junior_coach: 'info',
-  player: 'secondary',
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length >= 2) {
-    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-  }
-  return parts[0].substring(0, 2).toUpperCase()
-}
-
-function messageOf(err: unknown, fallback: string): string {
-  if (
-    err &&
-    typeof err === 'object' &&
-    'message' in err &&
-    typeof (err as CoachAIError).message === 'string'
-  ) {
-    return (err as CoachAIError).message
-  }
-  return fallback
+const ROLE_TONE: Record<OrgMemberRole, StatusTone> = {
+  owner: 'primary',
+  head_coach: 'green',
+  junior_coach: 'blue',
+  player: 'gray',
 }
 
 export default function MembersSection({
@@ -91,6 +71,7 @@ export default function MembersSection({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [pendingRemove, setPendingRemove] = useState<OrgMember | null>(null)
+  const [pendingSuccessor, setPendingSuccessor] = useState<string>('custodian')
   const requestSeq = useRef(0)
   const mountedRef = useRef(initialData !== null)
 
@@ -104,7 +85,7 @@ export default function MembersSection({
       }
     } catch (err) {
       if (requestSeq.current === seq) {
-        setError(messageOf(err, 'Failed to load staff'))
+        setError(errorMessageOf(err, 'Failed to load staff'))
       }
     } finally {
       if (requestSeq.current === seq) setLoading(false)
@@ -137,7 +118,7 @@ export default function MembersSection({
         }
       })
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to update role'))
+      toast.error(errorMessageOf(err, 'Failed to update role'))
     } finally {
       setBusyId(null)
     }
@@ -147,31 +128,52 @@ export default function MembersSection({
     if (!pendingRemove) return
     setBusyId(pendingRemove.id)
     try {
-      await orgRemoveMember(auth0Id, pendingRemove.id)
+      const res = await orgRemoveMember(
+        auth0Id,
+        pendingRemove.id,
+        pendingSuccessor === 'custodian' ? undefined : pendingSuccessor,
+      )
       setData((prev) => {
         if (!prev) return prev
         return { ...prev, members: prev.members.filter((m) => m.id !== pendingRemove.id) }
       })
       toast.success(
-        `${pendingRemove.display_name ?? pendingRemove.member_email ?? 'Member'} removed`,
+        `${pendingRemove.display_name ?? pendingRemove.member_email ?? 'Member'} removed${
+          res.successor ? ' — teams transferred' : ''
+        }`,
       )
       setPendingRemove(null)
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to remove member'))
+      toast.error(errorMessageOf(err, 'Failed to remove member'))
     } finally {
       setBusyId(null)
     }
   }
 
+  const openRemove = (member: OrgMember) => {
+    setPendingSuccessor('custodian')
+    setPendingRemove(member)
+  }
+
+  // Successor candidates: roles holding team.manage_members, minus the leaver.
+  // Anything else is refused server-side (422); the custodian default keeps
+  // the common case one click.
+  const successorCandidates = members.filter(
+    (m) =>
+      pendingRemove !== null &&
+      m.id !== pendingRemove.id &&
+      (m.role === 'owner' || m.role === 'admin' || m.role === 'head_coach' || m.role === 'coach'),
+  )
+
   const ownerRowCannotBeRemoved = (member: OrgMember): boolean =>
     member.role === 'owner' && ownerCount <= 1
 
   return (
-    <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <div className="mt-8">
+      <div className="flex items-center justify-between gap-4 border-b border-border pb-2.5">
+        <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
           Staff
-        </p>
+        </h2>
         {canInvite && (
           <Button variant="outline" size="sm" onClick={() => setInviteOpen(true)}>
             <PlusIcon />
@@ -181,36 +183,41 @@ export default function MembersSection({
       </div>
 
       {error ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">{error}</p>
+        <p className="py-8 text-center text-body text-muted-foreground">{error}</p>
       ) : loading ? (
-        <div className="flex items-center justify-center px-6 py-10">
+        <div className="flex items-center justify-center py-10">
           <Spinner className="text-muted-foreground" />
         </div>
       ) : members.length === 0 ? (
-        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
+        <p className="py-8 text-center text-body text-muted-foreground">
           No staff on the team yet.
         </p>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul>
           {members.map((member) => {
             const name = member.display_name ?? member.member_email ?? 'No name'
             const isOwner = member.role === 'owner'
             return (
-              <li key={member.id} className="flex items-center gap-4 px-6 py-3.5">
-                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground">
+              <li
+                key={member.id}
+                className="flex items-center gap-4 border-b border-border py-3.5 last:border-b-0"
+              >
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium text-muted-foreground">
                   {name === 'No name' ? '?' : initials(name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{name}</p>
+                  <p className="truncate text-body font-medium leading-[1.4] text-foreground">
+                    {name}
+                  </p>
                   {member.member_email && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <p className="mt-0.5 truncate text-meta text-muted-foreground">
                       {member.member_email}
                     </p>
                   )}
                 </div>
-                <Badge variant={ROLE_BADGE_VARIANT[member.role]}>
+                <StatusPill tone={ROLE_TONE[member.role]}>
                   {ORG_MEMBER_ROLE_LABELS[member.role]}
-                </Badge>
+                </StatusPill>
                 {busyId === member.id ? (
                   <Spinner className="shrink-0 text-muted-foreground" />
                 ) : (
@@ -241,7 +248,7 @@ export default function MembersSection({
                         size="icon-sm"
                         aria-label={`Remove ${name}`}
                         disabled={ownerRowCannotBeRemoved(member)}
-                        onClick={() => setPendingRemove(member)}
+                        onClick={() => openRemove(member)}
                       >
                         <Trash2Icon />
                       </Button>
@@ -255,7 +262,7 @@ export default function MembersSection({
       )}
 
       {owner && (
-        <p className="border-t border-border px-6 py-3 text-xs text-muted-foreground">
+        <p className="border-t border-border pt-3 text-meta text-muted-foreground">
           Staff with a Coach or Admin role gain access to this organization when they sign in with
           their email. {canManageRoles ? 'Only the owner' : 'The owner'} can change roles or remove
           staff.
@@ -282,9 +289,39 @@ export default function MembersSection({
               Remove {pendingRemove?.display_name ?? pendingRemove?.member_email ?? 'member'}?
             </DialogTitle>
             <DialogDescription>
-              This revokes their access to this organization&apos;s data. This cannot be undone.
+              This revokes their access to this organization&apos;s data. Their teams go to the
+              successor below, or back to the owner when no successor is named. This cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="remove_successor">Successor for their teams</Label>
+            <Select
+              id="remove_successor"
+              items={{
+                custodian: 'Owner (custodian)',
+                ...Object.fromEntries(
+                  successorCandidates.map((m) => [m.id, m.display_name ?? m.member_email ?? m.id]),
+                ),
+              }}
+              value={pendingSuccessor}
+              onValueChange={(value) => {
+                if (typeof value === 'string' && value) setPendingSuccessor(value)
+              }}
+            >
+              <SelectTrigger aria-label="Successor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custodian">Owner (custodian)</SelectItem>
+                {successorCandidates.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.display_name ?? m.member_email ?? m.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingRemove(null)}>
               Cancel
@@ -324,7 +361,7 @@ function InviteMemberForm({
       setEmail('')
       onClose()
     } catch (err) {
-      toast.error(messageOf(err, 'Failed to invite member'))
+      toast.error(errorMessageOf(err, 'Failed to invite member'))
     } finally {
       setBusy(false)
     }

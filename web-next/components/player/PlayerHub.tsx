@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   CalendarIcon,
   TrendingUpIcon,
@@ -12,12 +13,19 @@ import {
 import { toast } from 'sonner'
 
 import { Spinner } from '@/components/org/Spinner'
+import { Skeleton } from '@/components/9ui/ui/skeleton'
+import { ProgressBar } from '@/components/interior/progress-bar'
 import PageHeader from '@/components/org/PageHeader'
+import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
-import type { CoachAIError } from '@/types'
+import type { CoachAIError } from '@/lib/api'
+import { getJobStatus } from '@/lib/api'
 import { meStartAnalysis } from '@/lib/playerUpload'
-import { usePipeline } from '@/lib/usePipeline'
-import { type ScanResult } from '@/types'
+import { useScanFlow } from '@/lib/useScanFlow'
+import { startAnalysisStatus } from '@/lib/analysisEvents'
+import type { JobPollingController } from '@/lib/jobPolling'
+import { toCoachAIError } from '@/lib/errors'
+import type { ScanResult } from '@/types'
 import {
   getMyProfile,
   getMyAttendance,
@@ -106,8 +114,34 @@ export default function PlayerHub() {
 
   if (state.status === 'loading') {
     return (
-      <div className="flex items-center gap-3 p-8 text-muted-foreground">
-        <Spinner /> Loading your hub…
+      <div className="p-8" aria-busy="true">
+        <div className="mx-auto max-w-[1080px]">
+          <div className="mb-8 space-y-3">
+            <Skeleton className="h-8 w-48 max-w-full" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </div>
+
+          <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} className="h-28 w-full rounded-[6px]" />
+            ))}
+          </div>
+
+          <div className="space-y-8">
+            <div>
+              <Skeleton className="mb-3 h-4 w-32" />
+              <Skeleton className="h-24 w-full rounded-[6px]" />
+            </div>
+            <div>
+              <Skeleton className="mb-3 h-4 w-40" />
+              <Skeleton className="h-32 w-full rounded-[6px]" />
+            </div>
+            <div>
+              <Skeleton className="mb-3 h-4 w-36" />
+              <Skeleton className="h-40 w-full rounded-[6px]" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -115,7 +149,7 @@ export default function PlayerHub() {
   if (state.status === 'error') {
     return (
       <div className="p-8">
-        <p className="text-sm text-destructive">{state.message}</p>
+        <p className="text-body leading-5 text-destructive">{state.message}</p>
       </div>
     )
   }
@@ -124,13 +158,13 @@ export default function PlayerHub() {
 
   if (!profile.student) {
     return (
-      <div className="mx-auto max-w-2xl p-8">
+      <div className="mx-auto max-w-[720px] px-6 py-6 lg:px-8">
         <PageHeader
           trail={['My Hub']}
           title={`Welcome${profile.user?.name ? `, ${profile.user.name.split(' ')[0]}` : ''}`}
         />
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <p className="text-sm leading-6 text-muted-foreground">
+        <div className="rounded-[6px] border border-border bg-card p-6">
+          <p className="text-body leading-6 text-muted-foreground">
             Your coach hasn&apos;t linked you to a team yet. Ask your coach to add your email (
             <span className="font-mono text-foreground">{profile.user?.email ?? 'your email'}</span>
             ) to your student profile and log in again.
@@ -193,21 +227,23 @@ export default function PlayerHub() {
   const hubDescription = hubMeta.length > 0 ? hubMeta.join(' · ') : undefined
 
   return (
-    <div className="max-w-5xl p-8 lg:p-12">
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       <PageHeader
         trail={['My Hub', student.full_name || 'Details']}
         title={student.full_name || 'My Hub'}
         description={hubDescription}
       />
-      {/* KPI cards */}
+      {/* KPI stat tiles */}
       <div className="mt-8 mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <div key={kpi.label} className="rounded-[6px] border border-border bg-card p-5">
+            <p className="mb-3 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {kpi.label}
             </p>
-            <p className="mb-1 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
-            <p className="text-xs text-muted-foreground">{kpi.detail}</p>
+            <p className="mb-1.5 truncate text-[28px] font-semibold leading-none tabular-nums text-foreground">
+              {kpi.value}
+            </p>
+            <p className="truncate text-caption text-muted-foreground">{kpi.detail}</p>
           </div>
         ))}
       </div>
@@ -226,15 +262,15 @@ export default function PlayerHub() {
             {schedule.events.slice(0, 8).map((event) => (
               <li key={event.id} className="flex items-start justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{event.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="text-body font-medium text-foreground">{event.title}</p>
+                  <p className="mt-0.5 text-meta text-muted-foreground tabular-nums">
                     {formatDateMed(event.starts_at)} · {EVENT_TYPE_LABELS[event.event_type]}
                     {event.location ? ` · ${event.location}` : ''}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                <StatusPill tone={eventTone(event.status)}>
                   {EVENT_STATUS_LABELS[event.status]}
-                </span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -250,16 +286,16 @@ export default function PlayerHub() {
             {attendance.records.slice(0, 8).map((record) => (
               <li key={record.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-body font-medium text-foreground">
                     {formatDateMed(record.session_date)}
                   </p>
                   {record.note && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{record.note}</p>
+                    <p className="mt-0.5 text-meta text-muted-foreground">{record.note}</p>
                   )}
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs">
+                <StatusPill tone={attendanceTone(record.status)}>
                   {ATTENDANCE_STATUS_LABELS[record.status] ?? record.status}
-                </span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -281,18 +317,18 @@ export default function PlayerHub() {
                   className="flex items-center justify-between gap-4 py-4"
                 >
                   <div>
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-body font-medium text-foreground">
                       {formatDateShort(point.measured_at)}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-meta text-muted-foreground">
                       {point.metric_key} ·{' '}
                       {point.source === 'analysis' ? 'from analysis' : 'manual'}
                     </p>
                   </div>
-                  <span className="text-lg font-bold tracking-tight text-foreground">
+                  <span className="text-[17px] font-semibold tabular-nums text-foreground">
                     {point.metric_value}
                     {point.unit ? (
-                      <span className="text-sm font-normal text-muted-foreground">
+                      <span className="text-meta font-normal text-muted-foreground">
                         {' '}
                         {point.unit}
                       </span>
@@ -318,28 +354,22 @@ export default function PlayerHub() {
                 className="flex items-center justify-between gap-4 py-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">
+                  <p className="truncate text-body font-medium text-foreground">
                     {analysis.display_name || 'Untitled video'}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-meta text-muted-foreground tabular-nums">
                     {formatDateShort(analysis.requested_at)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   {analysisScore(analysis) !== null && (
-                    <span className="text-lg font-bold tracking-tight text-foreground">
+                    <span className="text-[17px] font-semibold tabular-nums text-foreground">
                       {analysisScore(analysis)}
                     </span>
                   )}
-                  <span
-                    className={`shrink-0 rounded-full border px-2.5 py-1 text-xs ${
-                      analysis.complete
-                        ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                        : 'border-border text-muted-foreground'
-                    }`}
-                  >
+                  <StatusPill tone={analysis.complete ? 'green' : 'gray'}>
                     {analysis.complete ? 'Done' : 'Processing'}
-                  </span>
+                  </StatusPill>
                 </div>
               </li>
             ))}
@@ -356,20 +386,16 @@ export default function PlayerHub() {
             {objectives.objectives.slice(0, 8).map((objective) => (
               <li key={objective.id} className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{objective.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="truncate text-body font-medium text-foreground">
+                    {objective.title}
+                  </p>
+                  <p className="mt-0.5 text-meta text-muted-foreground tabular-nums">
                     {objective.due_on ? `Due ${objective.due_on}` : 'No due date'}
                   </p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs capitalize ${
-                    objective.status === 'done'
-                      ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                      : 'border-border text-muted-foreground'
-                  }`}
-                >
-                  {objective.status}
-                </span>
+                <StatusPill tone={objective.status === 'done' ? 'green' : 'gray'}>
+                  <span className="capitalize">{objective.status}</span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -385,15 +411,20 @@ export default function PlayerHub() {
             {reports.reports.slice(0, 8).map((report) => (
               <li key={report.id} className="flex items-center justify-between gap-4 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{report.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <Link
+                    href={`/player/reports/${report.id}`}
+                    className="text-body font-medium text-foreground hover:underline"
+                  >
+                    {report.title}
+                  </Link>
+                  <p className="mt-0.5 text-meta text-muted-foreground tabular-nums">
                     {REPORT_TYPE_LABELS[report.report_type] ?? report.report_type} ·{' '}
                     {formatDateShort(report.created_at)}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                <StatusPill tone="gray">
                   {periodLabel(report.period_start, report.period_end)}
-                </span>
+                </StatusPill>
               </li>
             ))}
           </ul>
@@ -413,12 +444,10 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <section className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center gap-2">
+    <section className="mb-8">
+      <div className="mb-2 flex items-center gap-2 border-b border-border pb-3">
         <span className="text-muted-foreground">{icon}</span>
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-foreground">
-          {title}
-        </h2>
+        <h2 className="text-lead font-semibold text-foreground">{title}</h2>
       </div>
       {children}
     </section>
@@ -426,22 +455,33 @@ function Section({
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
+  return <p className="py-3 text-body text-muted-foreground">{children}</p>
+}
+
+function eventTone(status: string): StatusTone {
+  if (status === 'completed') return 'green'
+  if (status === 'cancelled' || status === 'canceled') return 'red'
+  return 'gray'
+}
+
+function attendanceTone(status: string): StatusTone {
+  if (status === 'present') return 'green'
+  if (status === 'absent') return 'red'
+  if (status === 'late') return 'amber'
+  return 'gray'
 }
 
 const STAGE_LABELS: Partial<Record<string, string>> = {
   uploading: 'Uploading video…',
   scanning: 'Scanning for players…',
   analyzing: 'Analyzing your video…',
-  rendering: 'Rendering your video…',
 }
 
 /**
- * Player-side upload + analysis kickoff. Renders from the unified pipeline
- * (usePipeline: validate → upload → SSE → select → poll) but kicks off
- * through /api/me/analyze so the server attributes it to this player
+ * Player-side upload + analysis kickoff. Shares the coach flow's scan-phase
+ * module (useScanFlow: validate → upload → SSE → select → angles) but kicks
+ * off through /api/me/analyze so the server attributes it to this player
  * (requested_by) while keeping it visible to the coach in their history.
- * No navigation: completion stays on the card (toast + refresh).
  */
 function AnalyzeVideoCard({
   auth0Id,
@@ -451,94 +491,159 @@ function AnalyzeVideoCard({
   onCompleted: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const pollRef = useRef<JobPollingController | null>(null)
+  const liveRef = useRef(true)
+
+  const [finished, setFinished] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [percent, setPercent] = useState(0)
+  const [localError, setLocalError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  // Injected differences vs the coach flow: player kickoff attributes the job
-  // to this player; no navigation (stay on the card); toasts + refresh on
-  // completion. Polling, 99-cap, and retry all live in the shared module.
-  const startAnalysisImpl = useCallback((scan: ScanResult, playerIndex: number) => {
-    return meStartAnalysis({
-      session_token: scan.session_token,
-      player_index: playerIndex,
-      video_key: scan.video_key,
-      angle: scan.angle ?? null,
-    })
+  useEffect(() => {
+    return () => {
+      liveRef.current = false
+      pollRef.current?.stop()
+    }
   }, [])
 
-  const notify = useMemo(
-    () => ({
-      success: (message: string) => {
-        toast.success(message)
-      },
-      error: (_code: string, message: string) => {
-        toast.error(message)
-      },
-    }),
-    [],
+  const flowResetRef = useRef(() => {})
+  const lastToastKey = useRef<string | null>(null)
+
+  const toastOnce = useCallback((code: string, message: string) => {
+    const key = `${code}:${message}`
+    if (lastToastKey.current === key) return
+    lastToastKey.current = key
+    toast.error(message)
+  }, [])
+
+  const runAnalysis = useCallback(
+    async (scan: ScanResult, playerIndex: number, signal: AbortSignal) => {
+      setFinished(false)
+      setLocalError(null)
+      setPercent(0)
+
+      const kickoff = async () => {
+        try {
+          const { job_id } = await meStartAnalysis({
+            session_token: scan.session_token,
+            player_index: playerIndex,
+            video_key: scan.video_key,
+            angle: scan.angle ?? null,
+            signal,
+          })
+          if (!liveRef.current || signal.aborted) return
+          pollRef.current?.stop()
+          pollRef.current = startAnalysisStatus({
+            jobId: job_id,
+            fetchStatus: getJobStatus,
+            isComplete: (status) => status.complete,
+            timeoutMs: 12 * 60 * 1000,
+            signal,
+            onStatus: (status) => {
+              if (!liveRef.current || signal.aborted) return
+              setPercent(Math.min(status.progress, 99))
+            },
+            onComplete: (status) => {
+              if (!liveRef.current || signal.aborted) return
+              if (status.error) {
+                setLocalError(status.error)
+                flowResetRef.current()
+                toastOnce('ANALYSIS_FAILED', status.error)
+              } else {
+                setFinished(true)
+                toast.success('Analysis complete — check your analyses below.')
+                onCompleted()
+              }
+            },
+            onError: (failure) => {
+              if (!liveRef.current || signal.aborted) return
+              setLocalError(failure.error.message)
+              flowResetRef.current()
+              toastOnce(failure.error.code, failure.error.message)
+            },
+          })
+        } catch (e: unknown) {
+          const err = toCoachAIError(e)
+          if (!liveRef.current || signal.aborted) return
+          setLocalError(err.message)
+          flowResetRef.current()
+          toastOnce(err.code, err.message)
+        }
+      }
+      await kickoff()
+    },
+    [onCompleted, toastOnce],
   )
 
-  const {
-    pipelineState,
-    scanResult,
-    angleScans,
-    activeAngle,
-    errorStatus,
-    snapshot,
-    handleFileSelected,
-    handlePlayerSelected,
-    handleReset,
-  } = usePipeline(auth0Id ?? null, null, { startAnalysisImpl, notify, onCompleted })
+  const flow = useScanFlow({ auth0Id: auth0Id ?? null, onAnalyze: runAnalysis })
 
-  // Card-local reset also clears the picked file name.
+  // Keep a stable reset that also clears card-local state.
   const reset = useCallback(() => {
-    handleReset()
+    pollRef.current?.stop()
+    pollRef.current = null
+    flow.reset()
+    setFinished(false)
     setFileName(null)
-  }, [handleReset])
+    setPercent(0)
+    setLocalError(null)
+    lastToastKey.current = null
+  }, [flow])
 
-  const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult
+  useEffect(() => {
+    flowResetRef.current = reset
+  }, [reset])
+
+  // Surface flow errors inline; toast everything except client-side
+  // validation (which stays inline-only, as before — no toast spam for a
+  // wrong file pick). toastOnce dedupes against the analyze-path toasts.
+  const flowError = flow.errorStatus
+  useEffect(() => {
+    if (!flowError || !liveRef.current) return
+    setLocalError(flowError.message)
+    if (flowError.layer !== 'client') toastOnce(flowError.code, flowError.message)
+  }, [flowError, toastOnce])
+
+  const activeScan =
+    flow.angleScans.find((s) => (s.angle ?? 'primary') === flow.activeAngle) ?? flow.scanResult
 
   const pick = useCallback(
     (file?: File) => {
       if (!file) return
+      setFinished(false)
+      setLocalError(null)
+      lastToastKey.current = null
       setFileName(file.name)
-      handleFileSelected(file)
+      flow.handleFileSelected(file)
     },
-    [handleFileSelected],
+    [flow],
   )
 
   const open = useCallback(() => fileInputRef.current?.click(), [])
 
-  const stage = pipelineState === 'completed' ? 'finished' : pipelineState
-  const error = errorStatus?.message ?? null
+  const stage = finished ? 'finished' : flow.phase
+  const error = localError ?? flow.errorStatus?.message ?? null
   const scanPlayers = activeScan?.players ?? []
-  // Snapshot progress is already capped at 99 in the shared module.
-  const displayPercent = snapshot.progress
+  // Upload/scan percent comes from the flow; analyzing percent from polling.
+  const displayPercent = stage === 'analyzing' ? percent : (flow.uploadProgress?.percent ?? percent)
 
-  if (
-    stage === 'uploading' ||
-    stage === 'scanning' ||
-    stage === 'analyzing' ||
-    stage === 'rendering'
-  ) {
-    const labelStage = stage === 'rendering' ? 'rendering' : stage
-    const isAnalyzing = stage === 'analyzing' || stage === 'rendering'
+  if (stage === 'uploading' || stage === 'scanning' || stage === 'analyzing') {
     return (
       <div className="flex items-center gap-3">
         <Spinner />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">{STAGE_LABELS[labelStage]}</p>
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary/20">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${Math.max(2, displayPercent)}%` }}
-            />
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isAnalyzing
-              ? 'This usually takes under a minute. The result will appear under Analyses.'
-              : `${Math.round(displayPercent)}%`}
-          </p>
+          <ProgressBar
+            value={displayPercent > 0 ? Math.min(displayPercent, 99) : null}
+            label={STAGE_LABELS[stage] ?? 'Working'}
+            pendingLabel="Starting"
+            completeLabel="Analysis complete"
+            className="min-w-0 flex-1"
+          />
+          {stage === 'analyzing' && (
+            <p className="mt-2 text-meta text-muted-foreground">
+              This usually takes under a minute. The result will appear under Analyses.
+            </p>
+          )}
         </div>
       </div>
     )
@@ -547,7 +652,7 @@ function AnalyzeVideoCard({
   if (stage === 'selecting') {
     return (
       <div>
-        <p className="mb-3 text-sm font-medium text-foreground">
+        <p className="mb-3 text-body font-medium text-foreground">
           Multiple players detected — who should we analyze?
         </p>
         <div className="flex flex-wrap gap-2">
@@ -556,7 +661,7 @@ function AnalyzeVideoCard({
               key={player.player_index}
               variant="outline"
               size="sm"
-              onClick={() => handlePlayerSelected(player.player_index)}
+              onClick={() => flow.handlePlayerSelected(player.player_index)}
             >
               Player {player.player_index} · {Math.round(player.confidence * 100)}%
             </Button>
@@ -574,12 +679,12 @@ function AnalyzeVideoCard({
   return (
     <div>
       {stage === 'finished' && (
-        <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
+        <p className="mb-3 text-body text-success">
           Analysis complete — it&apos;s in your Analyses list below and in your coach&apos;s
           history.
         </p>
       )}
-      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      {error && <p className="mb-3 text-meta text-destructive">{error}</p>}
       <div
         role="button"
         tabIndex={0}
@@ -603,7 +708,7 @@ function AnalyzeVideoCard({
           setIsDragging(false)
           pick(e.dataTransfer.files[0])
         }}
-        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-5 text-center transition-colors ${
+        className={`flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-[6px] border-2 border-dashed p-5 text-center transition-colors ${
           isDragging
             ? 'border-primary bg-primary/10'
             : 'border-border bg-background hover:border-primary/40'
@@ -619,10 +724,10 @@ function AnalyzeVideoCard({
         <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
           <VideoIcon className="size-5" />
         </div>
-        <p className="mt-3 text-sm font-medium text-foreground">
+        <p className="mt-3 text-body font-medium text-foreground">
           {fileName || 'Drop video or click to browse'}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
+        <p className="mt-1 text-meta text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
         <Button
           size="sm"
           className="mt-3"
@@ -634,7 +739,7 @@ function AnalyzeVideoCard({
           Choose video
         </Button>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-meta text-muted-foreground">
         Your coach will see the result in their dashboard history, attributed to you.
       </p>
     </div>

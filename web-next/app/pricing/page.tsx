@@ -50,55 +50,88 @@ const plans = [
   },
 ]
 
+const COMPARE_ROWS: [string, string, string, string][] = [
+  ['Analyses / mo', '10', '500', 'Unlimited'],
+  ['Sports', '1', '6', '6'],
+  ['Team members', '1', '10', 'Unlimited'],
+  ['SSO / SCIM', '—', '—', '✓'],
+]
+
+function CompareCell({ value }: { value: string }) {
+  if (value === '✓') {
+    return <Check aria-label="Included" className="inline-block size-4 text-check" />
+  }
+  if (value === '—') {
+    return <span className="text-muted-foreground">—</span>
+  }
+  return <span className="tabular-nums">{value}</span>
+}
+
 export default function PricingPage() {
   return (
-    <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
-      <section className="border-b border-[var(--marketing-white)]/5 px-6 py-10 lg:px-8">
+    <main id="main" tabIndex={-1} className="bg-background text-foreground-strong antialiased">
+      {/* ── Hero + plan cards ───────────────────────────────────────────── */}
+      <section className="border-b border-border px-6 py-16 lg:px-8">
         <div className="mx-auto max-w-[1120px] text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
+          <p className="text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase">
             Pricing
           </p>
-          <h1 className="mx-auto mt-2 max-w-[720px] text-[32px] font-bold leading-tight tracking-tight sm:text-[36px]">
-            Simple pricing that scales
-            <br />
-            with your team
+          <h1 className="mx-auto mt-4 max-w-[720px] text-balance text-[36px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[44px]">
+            Simple pricing that scales with your team
           </h1>
-          <p className="mx-auto mt-3 max-w-[560px] text-sm leading-6 text-[var(--marketing-beige)]/60">
+          <p className="mx-auto mt-4 max-w-[560px] text-balance text-[18px] leading-7 text-muted-foreground">
             Start free, upgrade when you need more analyses. No seat fees — pay for what you use.
           </p>
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="mt-12 grid gap-4 text-left lg:grid-cols-3">
             {plans.map((p) => (
               <div
                 key={p.name}
-                className={`relative flex flex-col rounded-2xl border p-6 text-left ${p.highlight ? 'border-primary bg-primary text-[var(--marketing-brown)]' : 'border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] text-[var(--marketing-beige)]'}`}
+                className={`relative flex flex-col rounded-[8px] border bg-background p-6 transition-colors duration-150 ${
+                  p.highlight ? 'border-primary/40' : 'border-border hover:border-border-hover'
+                }`}
               >
-                {p.highlight && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-[var(--marketing-brown)] px-3 py-1 text-xs font-bold text-primary">
-                    Most popular
-                  </span>
-                )}
-                <p className="text-sm font-semibold">{p.name}</p>
-                <p className="mt-2 text-3xl font-bold tracking-tight">
+                <div
+                  className={`-mx-6 -mt-6 mb-6 rounded-t-[7px] px-6 py-4 ${
+                    p.highlight
+                      ? 'border-b border-primary/20 bg-primary/[0.06] dark:bg-primary/[0.09]'
+                      : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-body leading-5 font-semibold">{p.name}</p>
+                    {p.highlight && (
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-label font-semibold text-link">
+                        Most popular
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[40px] font-bold leading-none tracking-[-0.02em] tabular-nums">
                   {p.price}
-                  <span className="text-sm font-normal opacity-60">
-                    {' '}
-                    {p.name !== 'Free' && p.name !== 'Custom' ? '/ mo' : ''}
-                  </span>
+                  {p.name === 'Pro' && (
+                    <span className="ml-1 text-body leading-5 font-normal text-muted-foreground">
+                      / mo
+                    </span>
+                  )}
                 </p>
-                <p className="text-xs opacity-60">{p.note}</p>
-                <ul className="mt-5 space-y-2 text-sm">
+                <p className="mt-2 text-meta text-muted-foreground">{p.note}</p>
+                <ul className="mt-6 space-y-2.5 text-body leading-5">
                   {p.features.map((f) => (
                     <li key={f} className="flex gap-2">
-                      <Check
-                        className={`mt-0.5 size-4 ${p.highlight ? 'text-[var(--marketing-brown)]' : 'text-success'}`}
-                      />{' '}
+                      <Check className="mt-0.5 size-4 shrink-0 text-check" />
                       {f}
                     </li>
                   ))}
                 </ul>
                 <Button
-                  nativeButton={false} render={<Link href={p.href} />}
-                  className={`mt-6 h-10 rounded-full font-semibold ${p.highlight ? 'bg-[var(--marketing-brown)] text-primary hover:bg-foreground' : 'bg-primary text-[var(--marketing-brown)] hover:bg-primary/90'}`}
+                  nativeButton={false}
+                  render={<Link href={p.href} />}
+                  className={
+                    p.highlight
+                      ? 'mt-7 h-10 w-full rounded-[6px] bg-primary text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover'
+                      : 'mt-7 h-10 w-full rounded-[6px] border-input bg-transparent text-body leading-5 font-medium text-foreground-strong hover:bg-muted'
+                  }
+                  variant={p.highlight ? 'default' : 'outline'}
                 >
                   {p.cta}
                 </Button>
@@ -108,57 +141,76 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
+      {/* ── Compare plans — horizontal hairlines only ───────────────────── */}
+      <section className="bg-muted px-6 py-14 lg:px-8">
         <div className="mx-auto max-w-[900px]">
-          <h2 className="text-center text-lg font-bold">Compare plans</h2>
-          <div className="mt-6 overflow-x-auto rounded-2xl border border-[var(--marketing-beige)] bg-[var(--marketing-white)]">
-            <table className="w-full min-w-[520px] text-sm">
+          <h2 className="text-center text-[28px] font-bold tracking-[-0.01em] text-balance sm:text-[34px]">
+            Compare plans
+          </h2>
+          <p className="text-caption text-muted-foreground sm:hidden">
+            Swipe to compare all plans →
+          </p>
+          <div className="mt-8 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-body leading-5">
               <thead>
-                <tr className="bg-[var(--marketing-white)]">
-                  <th scope="col" className="p-4 text-left font-semibold">
+                <tr className="border-b border-border">
+                  <th
+                    scope="col"
+                    className="py-3 pr-4 text-left text-label font-medium tracking-[0.06em] text-muted-foreground uppercase"
+                  >
                     Capability
                   </th>
-                  <th scope="col" className="p-4 text-center font-semibold">
+                  <th
+                    scope="col"
+                    className="py-3 text-center text-label font-medium tracking-[0.06em] text-muted-foreground uppercase"
+                  >
                     Starter
                   </th>
-                  <th scope="col" className="bg-primary p-4 text-center font-bold">
+                  <th
+                    scope="col"
+                    className="py-3 text-center text-label font-medium tracking-[0.06em] text-link uppercase"
+                  >
                     Pro
                   </th>
-                  <th scope="col" className="p-4 text-center font-semibold">
+                  <th
+                    scope="col"
+                    className="py-3 text-center text-label font-medium tracking-[0.06em] text-muted-foreground uppercase"
+                  >
                     Enterprise
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {[
-                  ['Analyses / mo', '10', '500', 'Unlimited'],
-                  ['Sports', '1', '6', '6'],
-                  ['Team members', '1', '10', 'Unlimited'],
-                  ['SSO / SCIM', '—', '—', '✓'],
-                ].map((row) => (
-                  <tr key={row[0]} className="border-t border-[var(--marketing-beige)]">
-                    <th
-                      scope="row"
-                      className="bg-[var(--marketing-white)] p-3 text-left font-normal"
-                    >
+              <tbody className="divide-y divide-border ">
+                {COMPARE_ROWS.map((row) => (
+                  <tr key={row[0]}>
+                    <th scope="row" className="py-3.5 pr-4 text-left font-normal">
                       {row[0]}
                     </th>
-                    <td className="bg-[var(--marketing-white)] p-3 text-center">{row[1]}</td>
-                    <td className="bg-primary/15 p-3 text-center font-semibold">{row[2]}</td>
-                    <td className="bg-[var(--marketing-white)] p-3 text-center">{row[3]}</td>
+                    <td className="py-3.5 text-center">
+                      <CompareCell value={row[1]} />
+                    </td>
+                    <td className="py-3.5 text-center font-semibold">
+                      <CompareCell value={row[2]} />
+                    </td>
+                    <td className="py-3.5 text-center">
+                      <CompareCell value={row[3]} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-8 rounded-2xl bg-primary p-6 text-center">
-            <p className="font-bold text-[var(--marketing-brown)]">Need a custom plan?</p>
-            <p className="text-sm text-[var(--marketing-brown)]/70">
-              We’ll tailor Pro for your academy.
+
+          <div className="mt-10 rounded-[8px] border border-border bg-background p-6 text-center">
+            <p className="text-[17px] font-semibold">Need a custom plan?</p>
+            <p className="mt-1 text-body leading-5 text-muted-foreground">
+              We&rsquo;ll tailor Pro for your academy.
             </p>
             <Button
-              nativeButton={false} render={<Link href="/contact" />}
-              className="mt-3 rounded-full bg-[var(--marketing-brown)] text-[var(--marketing-beige)] hover:bg-foreground"
+              nativeButton={false}
+              render={<Link href="/contact" />}
+              variant="outline"
+              className="mt-4 h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Talk to sales
             </Button>
@@ -166,20 +218,25 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--marketing-dark)] px-6 py-12 lg:px-8">
+      {/* ── Final CTA ───────────────────────────────────────────────────── */}
+      <section className="bg-background px-6 py-16 lg:px-8">
         <div className="mx-auto max-w-[1120px] text-center">
-          <h2 className="text-xl font-bold">Ready to ship faster?</h2>
-          <div className="mt-4 flex justify-center gap-3">
+          <h2 className="text-balance text-[28px] font-bold tracking-[-0.01em] sm:text-[34px]">
+            Ready to ship faster?
+          </h2>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button
-              nativeButton={false} render={<Link href="/signup" />}
-              className="rounded-full bg-primary text-[var(--marketing-brown)] hover:bg-primary/90"
+              nativeButton={false}
+              render={<Link href="/signup" />}
+              className="h-10 rounded-[6px] bg-primary px-5 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
             >
               Start for free
             </Button>
             <Button
-              nativeButton={false} render={<Link href="/contact" />}
+              nativeButton={false}
+              render={<Link href="/contact" />}
               variant="outline"
-              className="rounded-full border-[var(--marketing-white)]/15 text-[var(--marketing-beige)] hover:bg-[var(--marketing-white)]/5"
+              className="h-10 rounded-[6px] border-input bg-transparent px-5 text-body leading-5 font-medium text-link hover:bg-muted"
             >
               Get a demo
             </Button>

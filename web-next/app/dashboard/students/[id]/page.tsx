@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
-import { getDashboardAnalyses, getOrgContext } from '@/lib/serverData'
+import { redirect, notFound } from 'next/navigation'
+import { getOrgContext, getDashboardAnalyses } from '@/lib/serverData'
 import {
   orgStudent,
   orgStudentPerformance,
@@ -12,8 +12,9 @@ import {
   orgStudentAnalyses,
 } from '@/lib/serverData'
 import StudentProfile from '@/components/org/StudentProfile'
+import { hasPermission } from '@/lib/permissions'
 import PageHeader from '@/components/org/PageHeader'
-import { loadPage } from '../../_shell'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function generateMetadata({
   params,
@@ -21,10 +22,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>
 }): Promise<Metadata> {
   const { id } = await params
-  const session = await getSession()
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) return { title: 'Student | CoachXYZ' }
+
   try {
-    const { auth0Id } = await getOrgContext()
+    const { auth0Id } = orgCtx
     const res = await orgStudent(auth0Id, id)
     return { title: `${res.student.full_name} | CoachXYZ` }
   } catch {
@@ -33,43 +35,24 @@ export async function generateMetadata({
 }
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  noStore()
   const { id } = await params
+  const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
+  if (!session) redirect('/auth/login')
+  const { auth0Id, role } = orgCtx
 
-  // Critical fetch first: missing student → notFound before the fan-out.
-  const { auth0Id, data: header } = await loadPage(
-    'org',
-    { student: ({ auth0Id }) => orgStudent(auth0Id, id) },
-    { student: null },
-  )
-  const studentRes = header.student
+  const studentRes = await orgStudent(auth0Id, id).catch(() => null)
   if (!studentRes) notFound()
   const student = studentRes.student
 
-  const { data } = await loadPage(
-    'org',
-    {
-      series: ({ auth0Id }) => orgStudentPerformance(auth0Id, id),
-      attendance: ({ auth0Id }) => orgAttendanceSummary(auth0Id, { studentId: id }),
-      linked: ({ auth0Id }) => orgStudentAnalyses(auth0Id, id),
-      unlinked: ({ auth0Id }) => getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }),
-      sports: ({ auth0Id }) => orgStudentsSports(auth0Id),
-      reports: ({ auth0Id }) => orgReports(auth0Id, { studentId: id }),
-    },
-    {
-      series: { series: [] },
-      attendance: null,
-      linked: { analyses: [] },
-      unlinked: { analyses: [] },
-      sports: { sports: [] },
-      reports: { reports: [] },
-    },
-  )
-  const seriesRes = data.series
-  const attRes = data.attendance
-  const linkedRes = data.linked
-  const unlinkedRes = data.unlinked
-  const sportsRes = data.sports
-  const reportsRes = data.reports
+  const [seriesRes, attRes, linkedRes, unlinkedRes, sportsRes, reportsRes] = await Promise.all([
+    orgStudentPerformance(auth0Id, id).catch(() => ({ series: [] })),
+    orgAttendanceSummary(auth0Id, { studentId: id }).catch(() => null),
+    orgStudentAnalyses(auth0Id, id).catch(() => ({ analyses: [] })),
+    getDashboardAnalyses(auth0Id, 100, 0, { unlinked: true }).catch(() => ({ analyses: [] })),
+    orgStudentsSports(auth0Id).catch(() => ({ sports: [] })),
+    orgReports(auth0Id, { studentId: id }).catch(() => ({ reports: [] })),
+  ])
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
@@ -79,7 +62,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       />
       <Link
         href="/dashboard/students"
-        className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="mt-4 inline-flex items-center gap-1 text-meta text-muted-foreground transition-colors hover:text-foreground hover:underline"
       >
         ← Back to roster
       </Link>
@@ -92,6 +75,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         initialReports={reportsRes.reports}
         allAnalyses={[...unlinkedRes.analyses, ...linkedRes.analyses]}
         sports={sportsRes.sports}
+        canWrite={hasPermission(role, 'player.manage')}
       />
     </div>
   )

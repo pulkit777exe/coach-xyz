@@ -6,6 +6,13 @@ import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/9ui/ui/button'
 
+/** Blue text-button primary action (important overrides the ghost variant deterministically). */
+const ACTION_PRIMARY =
+  'h-auto! px-1 text-body leading-5 font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
+/** Muted secondary text-button. */
+const ACTION_SECONDARY =
+  'h-auto! px-1 text-body leading-5 font-medium text-muted-foreground! transition-colors hover:bg-transparent! hover:text-foreground!'
+
 export default function AnalysisError({
   error,
   reset,
@@ -18,21 +25,31 @@ export default function AnalysisError({
   }, [error])
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-6">
-      <div className="text-center">
-        <div className="mx-auto grid size-14 place-items-center rounded-xl bg-danger/10 text-destructive">
-          <TriangleAlert className="size-7" />
-        </div>
-        <h1 className="mt-4 text-2xl font-bold text-foreground">Analysis failed</h1>
-        <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">
+    <div className="flex min-h-[70vh] items-center justify-center bg-background px-6">
+      <div className="w-full max-w-sm rounded-[8px] border border-border bg-card p-8 text-center">
+        <TriangleAlert className="mx-auto size-10 text-muted-foreground" aria-hidden />
+        <p className="mt-3 text-label font-medium tracking-wider text-destructive uppercase">
+          Error
+        </p>
+        <h1 className="mt-2 text-lead leading-6 font-medium text-foreground">Analysis failed</h1>
+        <p className="mt-1.5 text-body leading-5 text-muted-foreground">
           {error?.message || 'Failed to load analysis. Please try again.'}
         </p>
         {error?.digest && (
-          <p className="mt-2 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>
+          <p className="mt-2 text-caption leading-4 text-muted-foreground/60">
+            Error ID: {error.digest}
+          </p>
         )}
-        <div className="mt-6 flex justify-center gap-3">
-          <Button onClick={reset}>Try again</Button>
-          <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/history" />}>
+        <div className="mt-5 flex flex-col items-center gap-2">
+          <Button variant="ghost" onClick={reset} className={ACTION_PRIMARY}>
+            Try again
+          </Button>
+          <Button
+            variant="ghost"
+            nativeButton={false}
+            render={<Link href="/dashboard/history" />}
+            className={ACTION_SECONDARY}
+          >
             Back to history
           </Button>
         </div>

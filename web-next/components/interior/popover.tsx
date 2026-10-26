@@ -19,7 +19,15 @@ export function Popover({
   side = 'top',
 }: PopoverProps) {
   const [open, setOpen] = useState(false)
+  // Once shown, the tooltip stays mounted so closing can fade it out
+  // (enter is instant; exit-only fade — per the interior-widget contract).
+  const [everOpen, setEverOpen] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
+
+  const show = () => {
+    setEverOpen(true)
+    setOpen(true)
+  }
 
   useEffect(() => {
     if (trigger !== 'click') return
@@ -34,17 +42,21 @@ export function Popover({
     <span
       ref={ref}
       className={cn('relative inline-flex', className)}
-      onMouseEnter={trigger === 'hover' ? () => setOpen(true) : undefined}
+      onMouseEnter={trigger === 'hover' ? show : undefined}
       onMouseLeave={trigger === 'hover' ? () => setOpen(false) : undefined}
       onClick={trigger === 'click' ? () => setOpen((v) => !v) : undefined}
     >
       {children}
-      {open && (
+      {everOpen && (
         <span
           role="tooltip"
+          aria-hidden={!open}
           className={cn(
-            'absolute left-1/2 z-50 w-56 -translate-x-1/2 rounded-2xl border border-border bg-background p-3 text-xs leading-relaxed text-muted-foreground shadow-lg',
+            'absolute left-1/2 z-50 w-56 -translate-x-1/2 rounded-[6px] border border-border bg-popover p-3 text-[13px] leading-relaxed text-muted-foreground shadow-lg',
             side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+            open
+              ? 'opacity-100'
+              : 'pointer-events-none opacity-0 transition-opacity duration-150 ease-in',
           )}
         >
           {label}

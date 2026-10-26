@@ -31,7 +31,7 @@ export function ShowMore({ lines, children, className }: ShowMoreProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="cursor-pointer text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+        className="cursor-pointer rounded-[4px] text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >
         {expanded ? 'Show less' : 'Show more'}
       </button>

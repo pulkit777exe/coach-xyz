@@ -14,6 +14,17 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL
 
+/**
+ * Proxy-own failures (misconfiguration, non-identity paths, missing
+ * session, unreachable backend) in the canonical CoachAIError shape so
+ * apiFetch preserves their messages instead of falling back to
+ * `Request failed (<status>)`. Backend error bodies stream through
+ * untouched below — only these four are synthesized here.
+ */
+function proxyError(code: string, message: string, status: number, retryable: boolean) {
+  return NextResponse.json({ code, message, layer: 'server', retryable }, { status })
+}
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -29,24 +40,24 @@ type RouteContext = { params: Promise<{ path?: string[] }> }
 
 async function proxy(request: NextRequest, ctx: RouteContext) {
   if (!BACKEND) {
-    return NextResponse.json({ message: 'Backend not configured.' }, { status: 500 })
+    return proxyError('BACKEND_NOT_CONFIGURED', 'Backend not configured.', 500, false)
   }
 
   const path = (await ctx.params).path ?? []
   if (!isIdentityPath(path)) {
-    return NextResponse.json({ message: 'Not found.' }, { status: 404 })
+    return proxyError('NOT_FOUND', 'Not found.', 404, false)
   }
 
   // Reject traversal: decoded segments must be plain names, no ../ or slashes.
   const safePath = sanitizeServicePath(path)
   if (!safePath) {
-    return NextResponse.json({ message: 'Not found.' }, { status: 404 })
+    return proxyError('NOT_FOUND', 'Not found.', 404, false)
   }
 
   const session = await auth0.getSession()
   const verifiedSub = session?.user?.sub
   if (!verifiedSub) {
-    return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 })
+    return proxyError('UNAUTHORIZED', 'Unauthorized.', 401, false)
   }
 
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
@@ -62,6 +73,10 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   const headers = new Headers()
   const contentType = request.headers.get('content-type')
   if (contentType) headers.set('content-type', contentType)
+  // End-to-end trace correlation: the client stamps every call, and the
+  // backend forwards it to the engine — don't drop it at the proxy hop.
+  const requestId = request.headers.get('x-request-id')
+  if (requestId) headers.set('x-request-id', requestId)
   if (process.env.SERVICE_TOKEN) headers.set('x-service-token', process.env.SERVICE_TOKEN)
   headers.set('x-verified-auth0-id', verifiedSub)
 
@@ -76,10 +91,7 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
       redirect: 'manual',
     })
   } catch {
-    return NextResponse.json(
-      { message: 'Backend service is temporarily unavailable.' },
-      { status: 502 },
-    )
+    return proxyError('BAD_GATEWAY', 'Backend service is temporarily unavailable.', 502, true)
   }
 
   const responseHeaders = new Headers(backendRes.headers)

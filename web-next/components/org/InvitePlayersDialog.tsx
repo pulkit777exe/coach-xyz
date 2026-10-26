@@ -16,9 +16,8 @@ import {
 import { Spinner } from './Spinner'
 
 import { orgSendInvites } from '@/lib/org'
-import type { CoachAIError } from '@/types'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import type { CoachAIError } from '@/lib/api'
+import { EMAIL_RE } from '@/lib/email'
 
 function parseEmails(raw: string): string[] {
   const parts = raw
@@ -96,7 +95,7 @@ export default function InvitePlayersDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label htmlFor="invite_emails">Email addresses</Label>
             <textarea
               id="invite_emails"
@@ -104,10 +103,10 @@ export default function InvitePlayersDialog({
               onChange={(e) => setRaw(e.target.value)}
               placeholder={'one@email.com\ntwo@email.com'}
               rows={5}
-              className="border-input bg-muted text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/50 focus-visible:border-ring rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
+              className="border-input bg-[var(--input-fill)] text-foreground placeholder:text-muted-foreground focus-visible:ring-ring/40 focus-visible:border-ring rounded-[6px] border px-3 py-2 text-body outline-none focus-visible:ring-2"
             />
             {emails.length > 0 && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-meta tabular-nums">
                 {emails.length} valid email{emails.length !== 1 && 's'} detected
               </p>
             )}

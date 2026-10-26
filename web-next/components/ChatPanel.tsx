@@ -7,7 +7,8 @@ import {
   makeUserMessage,
   useChatThread,
 } from '@/lib/useChatThread'
-import { sendChatMessageStream } from '@/lib/chat'
+import { sendChatMessageStream } from '@/lib/api'
+import { toCoachAIError } from '@/lib/errors'
 import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
@@ -17,13 +18,10 @@ import { getConversation } from '@/lib/chat'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 
-const WELCOME_MESSAGE_AT = Date.now()
-const STREAMING_MESSAGE_AT = Date.now()
-
 interface ChatPanelProps {
   jobId: string
-  jobStatus: JobStatus | null
-  onSeekTo?: (timestamp: number) => void
+  jobStatus: JobStatus
+  onSeekTo?: (seconds: number) => void
 }
 
 export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps) {
@@ -65,14 +63,14 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       try {
         let finalText = ''
         let finalTimestampRefs: number[] = []
-        let finalEventRefs: number[] = []
+        let finalEventRefs: string[] = []
 
-        for await (const event of sendChatMessageStream(jobId, text, controller.signal)) {
-          if (event.type === 'token') {
-            finalText += event.text
+        for await (const event of sendChatMessageStream(jobId, text.trim(), controller.signal)) {
+          if (event.type === 'delta') {
+            finalText += event.content
             setStreamingText(finalText)
-          } else if (event.type === 'done') {
-            finalText = event.text
+          } else if (event.type === 'final') {
+            finalText = event.content
             finalTimestampRefs = event.timestamp_refs
             finalEventRefs = event.event_refs
           } else if (event.type === 'error') {
@@ -90,8 +88,13 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
         })
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, assistantMsg))
         setStreamingText('')
-      } catch {
-        const errorMsg = makeErrorMessage('Failed to get response. Please try again.')
+      } catch (error: unknown) {
+        // A user-cancelled request has no UI error to show. For transport
+        // failures, preserve the canonical message produced by apiFetch /
+        // errorFromResponse (quota, quota/timeout details, etc.) instead of
+        // replacing it with an unrelated generic sentence.
+        if (controller.signal.aborted) return
+        const errorMsg = makeErrorMessage(toCoachAIError(error).message)
         setMessages((prev) => prev.filter((m) => m.id !== userMsg.id).concat(userMsg, errorMsg))
         setStreamingText('')
       } finally {
@@ -108,113 +111,67 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     [handleSend],
   )
 
-  const summary = jobStatus?.summary
+  const sport = jobStatus.summary?.sport as string | undefined
 
-  const welcomeMessage = useMemo<ChatMessage>(
-    () => ({
-      id: 'welcome',
-      role: 'assistant',
-      content: `Analysis complete! I found **${summary?.total_events ?? 0} events** in your ${summary?.sport ?? 'sports'} video with an overall form score of **${summary?.form_score ?? 0}/10**.\n\nAsk me anything about your technique — I can break down specific events, suggest drills, or compare your best and worst moments.`,
-      created_at: WELCOME_MESSAGE_AT,
-    }),
-    [summary],
-  )
+  const sportEmoji = useMemo(() => {
+    return (sport && SPORT_EMOJI[sport]) || '🎯'
+  }, [sport])
 
   return (
-    <div className="flex h-full flex-col bg-transparent">
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          {isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-sm py-8">
-              Loading conversation...
-            </div>
-          )}
-
-          {historyError && !isLoadingHistory && (
-            <div className="text-center text-muted-foreground text-xs py-4 opacity-60">
-              Could not load previous messages
-            </div>
-          )}
-
-          {!isLoadingHistory && messages.length === 0 && summary && (
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-2xl">{SPORT_EMOJI[summary.sport ?? ''] ?? '🎯'}</span>
-                  <div>
-                    <h3 className="text-2xl font-bold tracking-tight text-foreground capitalize">
-                      {summary.sport} Analysis Complete
-                    </h3>
-                    <p className="text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
-                      {summary.total_events ?? 0} events detected
-                    </p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="font-bold text-3xl text-foreground">{summary.form_score}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
-                      Form Score
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-bold text-lg text-foreground">{summary.overall_rating}</p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
-                      Rating
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-bold text-lg text-foreground">
-                      {summary.success_rate_percent ?? 0}%
-                    </p>
-                    <p className="text-[0.6rem] uppercase tracking-[0.15em] text-muted-foreground">
-                      Success Rate
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <ChatMessageBubble message={welcomeMessage} onSeekTo={onSeekTo} />
-
-              <QuickActions
-                onAction={handleQuickAction}
-                disabled={isTyping}
-                hasSummary={!!summary}
-              />
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <ChatMessageBubble key={msg.id} message={msg} onSeekTo={onSeekTo} />
-          ))}
-
-          {streamingText && (
-            <ChatMessageBubble
-              message={{
-                id: 'streaming',
-                role: 'assistant',
-                content: streamingText,
-                created_at: STREAMING_MESSAGE_AT,
-              }}
-              onSeekTo={onSeekTo}
-            />
-          )}
-
-          {isTyping && !streamingText && <ChatTyping />}
-
-          <div ref={messagesEndRef} />
+    <div className="flex h-full flex-col bg-background">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <span className="text-xl">{sportEmoji}</span>
+        <div>
+          <h3 className="text-body font-semibold text-foreground">AI Coach Chat</h3>
+          <p className="text-meta text-muted-foreground">
+            Ask questions about your {sport || 'form'} analysis
+          </p>
         </div>
       </div>
 
-      <div className="border-t border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto max-w-3xl px-4 py-4">
-          <ChatInput
-            onSend={handleSend}
-            disabled={isTyping || isLoadingHistory}
-            placeholder={isLoadingHistory ? 'Loading...' : 'Ask about your analysis...'}
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {isLoadingHistory && (
+          <div className="flex items-center justify-center py-8 text-meta text-muted-foreground">
+            Loading chat history...
+          </div>
+        )}
+
+        {historyError && (
+          <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 p-3 text-meta text-destructive">
+            Failed to load previous messages
+          </div>
+        )}
+
+        {messages.map((message) => (
+          <ChatMessageBubble key={message.id} message={message} onSeekTo={onSeekTo} />
+        ))}
+
+        {isTyping && streamingText && (
+          <ChatMessageBubble
+            message={{
+              id: 'streaming',
+              role: 'assistant',
+              content: streamingText,
+              created_at: Math.floor(Date.now() / 1000),
+            }}
+            onSeekTo={onSeekTo}
           />
-        </div>
+        )}
+
+        {isTyping && !streamingText && <ChatTyping />}
+
+        <div ref={messagesEndRef} />
       </div>
+
+      {/* Quick Actions (only show when not typing and have summary) */}
+      {!isTyping && jobStatus.summary && (
+        <QuickActions summary={jobStatus.summary} onSelect={handleQuickAction} />
+      )}
+
+      {/* Input */}
+      <ChatInput onSend={handleSend} disabled={isTyping} />
     </div>
   )
 }

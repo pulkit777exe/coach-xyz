@@ -7,10 +7,10 @@ import { ORG_MEMBER_ROLES, type OrgMemberRole } from './members'
 export type NavRole = OrgMemberRole
 
 /** Roles that may open the Members page (invite + role management). */
-export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'admin', 'head_coach', 'coach']
+export const MEMBERS_NAV_ROLES: readonly NavRole[] = ['owner', 'head_coach']
 
 /** Roles that may open the Audit Log page. */
-export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner', 'admin']
+export const AUDIT_NAV_ROLES: readonly NavRole[] = ['owner']
 
 /** Every org-role vocabulary value — sourced from the canonical membership set. */
 const ALL_NAV_ROLES: readonly NavRole[] = ORG_MEMBER_ROLES
@@ -25,25 +25,23 @@ export const ALL_NON_PLAYER_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
 )
 
 /**
- * Roles that may open the analysis History page: every staff role holding
- * analysis.read (permission matrix in lib/permissions.ts). Medical is
- * read-scoped without analysis.read; players browse their own hub instead.
+ * Roles that may open the analysis History page: every staff role
+ * (owner / head_coach / junior_coach all hold `analysis.read` in the permission
+ * matrix in lib/permissions.ts). Players browse their own hub instead — the
+ * server scopes every /api/org/* history read away from them.
  */
 export const HISTORY_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
-  (navRole) => navRole !== 'player' && navRole !== 'medical',
+  (navRole) => navRole !== 'player',
 )
 
 /**
- * Roles offered the "New Analysis" link (sidebar + ⌘K palette): every staff
- * role holding `analysis.create` in the permission matrix — all org roles
- * except `medical` — plus players, whose self-service upload flow starts at
- * Home. Medical can neither create analyses nor read results (no
- * `analysis.read`), so the link would dead-end; the dashboard's New analysis
- * tile derives the same floor via `dashboardQuickActions`.
+ * Roles offered the "New Analysis" link (sidebar + ⌘K palette): every role
+ * holding `analysis.create` — staff through the org routes, players through
+ * their self-service upload flow, which starts at Home. Every value in the
+ * four-role vocabulary qualifies, so this is the full set, kept as a named
+ * export so the nav's intent stays readable at the call sites.
  */
-export const ANALYZE_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES.filter(
-  (navRole) => navRole !== 'medical',
-)
+export const ANALYZE_NAV_ROLES: readonly NavRole[] = ALL_NAV_ROLES
 
 export type GatedNavItem = {
   roles?: readonly NavRole[]

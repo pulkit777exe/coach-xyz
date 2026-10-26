@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   PlusIcon,
@@ -29,7 +29,9 @@ import {
 } from '@/components/9ui/ui/dialog'
 import { Spinner } from './Spinner'
 import EventFormDialog from './EventFormDialog'
+import StatusPill from './StatusPill'
 import { downloadCSV } from '@/lib/csv'
+import { cn } from '@/lib/utils'
 
 import type { EventStatus, ScheduleEvent } from '@/lib/org'
 import {
@@ -40,45 +42,26 @@ import {
   EVENT_STATUS_LABELS,
 } from '@/lib/org'
 import { toISODate, scheduleMonthWindow } from '@/lib/date'
-import { useMonthNavigator } from '@/lib/useMonthNavigator'
 import { usePreferences } from '@/lib/preferences'
-import type { CoachAIError } from '@/types'
+import type { CoachAIError } from '@/lib/api'
 
-const TYPE_META: Record<
-  ScheduleEvent['event_type'],
-  { color: string; bg: string; border: string }
-> = {
-  practice: {
-    color: 'var(--info)',
-    bg: 'color-mix(in srgb, var(--info) 12%, transparent)',
-    border: 'var(--info-border)',
-  },
-  match: {
-    color: 'var(--destructive)',
-    bg: 'color-mix(in srgb, var(--destructive) 12%, transparent)',
-    border: 'var(--danger-border)',
-  },
-  tournament: {
-    color: 'var(--warning)',
-    bg: 'color-mix(in srgb, var(--warning) 12%, transparent)',
-    border: 'var(--warning-border)',
-  },
-  meeting: {
-    color: 'var(--success)',
-    bg: 'color-mix(in srgb, var(--success) 12%, transparent)',
-    border: 'var(--success-border)',
-  },
-  other: {
-    color: 'var(--muted-foreground)',
-    bg: 'color-mix(in srgb, var(--muted) 60%, transparent)',
-    border: 'var(--border)',
-  },
-}
+const TYPE_META: Record<ScheduleEvent['event_type'], { text: string; bg: string; border: string }> =
+  {
+    practice: { text: 'text-info', bg: 'bg-info/10', border: 'border-info-border' },
+    match: {
+      text: 'text-destructive',
+      bg: 'bg-destructive/10',
+      border: 'border-destructive-border',
+    },
+    tournament: { text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning-border' },
+    meeting: { text: 'text-success', bg: 'bg-success/10', border: 'border-success-border' },
+    other: { text: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
+  }
 
-const STATUS_META: Record<EventStatus, { className: string }> = {
-  scheduled: { className: 'border-info-border text-info' },
-  completed: { className: 'border-success-border text-success' },
-  cancelled: { className: 'border-danger-border text-danger' },
+const STATUS_TONE: Record<EventStatus, 'blue' | 'green' | 'red'> = {
+  scheduled: 'blue',
+  completed: 'green',
+  cancelled: 'red',
 }
 
 function localDateTimeKey(iso: string) {
@@ -102,33 +85,39 @@ export function weekStartOffset(date: Date, mondayFirst: boolean): number {
 export default function ScheduleClient({
   auth0Id,
   initialEvents,
+  canWrite = true,
 }: {
   auth0Id: string
   initialEvents: ScheduleEvent[]
+  /** attendance.write — false renders the calendar read-only (analyst/medical). */
+  canWrite?: boolean
 }) {
   const today = new Date()
-  const {
-    year,
-    monthNum,
-    monthLabel,
-    isLoading: loading,
-    setMonth,
-    fetchMonth,
-    nav,
-  } = useMonthNavigator({
-    onFetch: async (target) => {
-      // Widen by one day on each side so midnight (local) month-boundary
-      // events survive the UTC-truncated filter. byDay only places events on
-      // matching local-day cells, so out-of-month buffer rows are dropped.
-      const { from, to } = scheduleMonthWindow(target)
-      const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
-      setEvents(res.events)
-    },
-    onError: (err) => toast.error((err as CoachAIError).message ?? 'Failed to load schedule'),
-  })
+  const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
   const { prefs } = usePreferences()
   const weekStartsMonday = prefs.weekStartsMonday
   const [events, setEvents] = useState<ScheduleEvent[]>(initialEvents)
+  const [loading, setLoading] = useState(false)
+  /**
+   * Identity of the newest month read. `nav` and the "jump to today" control both fire
+   * `fetchMonth` without disabling the pager, so two month reads can be in flight at once
+   * over DIFFERENT months — and neither response says which month it belongs to. Without
+   * this, whichever landed LAST won, so an abandoned month's rows replaced the month the
+   * heading names. Only the newest read may answer.
+   */
+  const monthSeq = useRef(0)
+  /**
+   * Which month `events` ACTUALLY holds, not which month is displayed.
+   *
+   * `nav` calls `setMonth(next)` before the fetch, so a failed navigation kept the previous
+   * month's events under the new month's heading — and `exportCSV` names the file from the
+   * DISPLAYED month while writing the rows from `events`, producing `schedule-2026-11.csv`
+   * containing October's fixtures. Same defect as `AttendanceGrid`, same fix, same reason for
+   * keying on the month instead of holding a boolean: a bare flag cannot say which read it
+   * belongs to and survives the very navigation that made it wrong.
+   */
+  const [eventsMonth, setEventsMonth] = useState<string | null>(toISODate(month))
+  const [monthFailed, setMonthFailed] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null)
   const [initialDate, setInitialDate] = useState<string | undefined>(undefined)
@@ -136,6 +125,13 @@ export default function ScheduleClient({
   const [dayView, setDayView] = useState<Date | null>(null)
   const [confirmEvent, setConfirmEvent] = useState<ScheduleEvent | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
+
+  const year = month.getFullYear()
+  const monthNum = month.getMonth()
+  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const displayedMonth = toISODate(new Date(year, monthNum, 1))
+  const eventsAreStale = eventsMonth !== null && eventsMonth !== displayedMonth
+  const canExport = eventsMonth === displayedMonth && !loading
 
   const visibleEvents = useMemo(
     () => (statusFilter ? events.filter((e) => e.status === statusFilter) : events),
@@ -169,6 +165,37 @@ export default function ScheduleClient({
     for (const list of map.values()) list.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     return map
   }, [visibleEvents])
+
+  const fetchMonth = async (target: Date) => {
+    const my = ++monthSeq.current
+    setLoading(true)
+    try {
+      // Widen by one day on each side so midnight (local) month-boundary
+      // events survive the UTC-truncated filter. byDay only places events on
+      // matching local-day cells, so out-of-month buffer rows are dropped.
+      const { from, to } = scheduleMonthWindow(target)
+      const res = await orgSchedule(auth0Id, { from: from.toISOString(), to: to.toISOString() })
+      if (monthSeq.current !== my) return
+      setEvents(res.events)
+      setEventsMonth(toISODate(target))
+      setMonthFailed(false)
+    } catch (err) {
+      if (monthSeq.current !== my) return
+      // `eventsMonth` deliberately NOT advanced: that is what keeps the mismatch detectable.
+      setMonthFailed(true)
+      toast.error((err as CoachAIError).message ?? 'Failed to load schedule')
+    } finally {
+      // A superseded read must not drop the spinner while the read actually being
+      // displayed is still in flight.
+      if (monthSeq.current === my) setLoading(false)
+    }
+  }
+
+  const nav = (delta: number) => {
+    const next = new Date(year, monthNum + delta, 1)
+    setMonth(next)
+    fetchMonth(next)
+  }
 
   const openCreate = (date: Date) => {
     setEditingEvent(null)
@@ -211,6 +238,10 @@ export default function ScheduleClient({
   }
 
   const exportCSV = () => {
+    // Refuse rather than write a file whose contents contradict its name: the name comes from
+    // the DISPLAYED month and the rows from `events`, which after a failed navigation belong
+    // to the previous one.
+    if (!canExport) return
     downloadCSV(`schedule-${year}-${String(monthNum + 1).padStart(2, '0')}.csv`, [
       ['Date', 'Start', 'End', 'Title', 'Type', 'Status', 'Location', 'Description'],
       ...visibleEvents
@@ -234,6 +265,11 @@ export default function ScheduleClient({
 
   return (
     <div>
+      {!canWrite && (
+        <p className="text-muted-foreground mb-3 text-meta">
+          You have read-only access to this page.
+        </p>
+      )}
       {/* Toolbar */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -260,10 +296,12 @@ export default function ScheduleClient({
             Today
           </Button>
         </div>
-        <p className="font-semibold text-lg text-foreground">
+        {/* A `div`, not a `p`: `loading-dev`'s `Slide` renders a `<div>`, and a `<div>`
+            inside a `<p>` is invalid nesting React warns will cause a hydration error. */}
+        <div className="text-lead font-semibold tracking-[-0.01em] text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
-        </p>
+        </div>
         <div className="flex items-center gap-2">
           <Select
             value={statusFilter || 'all'}
@@ -281,22 +319,34 @@ export default function ScheduleClient({
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCSV}
+            disabled={!canExport}
+            title={
+              canExport
+                ? undefined
+                : 'Cannot export while the displayed month has not loaded — the file would be named for one month and contain another.'
+            }
+          >
             <DownloadIcon /> Export
           </Button>
-          <Button size="sm" onClick={() => openCreate(new Date())}>
-            <PlusIcon /> Add event
-          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={() => openCreate(new Date())}>
+              <PlusIcon /> Add event
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Calendar grid */}
-      <div className="border-border overflow-hidden rounded-lg border">
+      <div className="border-border overflow-hidden rounded-[6px] border">
         <div className="grid grid-cols-7 border-b border-border">
           {orderedWeekdays(weekStartsMonday).map((w) => (
             <div
               key={w}
-              className="text-muted-foreground bg-muted/50 py-2 text-center text-[0.6rem] font-normal uppercase tracking-[0.15em]"
+              className="py-2 text-center text-label font-medium uppercase tracking-[0.08em] text-muted-foreground"
             >
               {w}
             </div>
@@ -319,16 +369,15 @@ export default function ScheduleClient({
                 key={key}
                 type="button"
                 onClick={() => setDayView(date)}
-                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                  isToday ? 'bg-success/5 border-success-border' : ''
+                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                  isToday ? 'bg-accent/40' : ''
                 }`}
               >
                 <span
-                  className={`mb-1 inline-flex size-5 items-center justify-center rounded text-xs ${
-                    isToday
-                      ? 'bg-success font-bold text-primary-foreground'
-                      : 'text-muted-foreground'
-                  }`}
+                  className={cn(
+                    'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-caption tabular-nums',
+                    isToday ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
+                  )}
                 >
                   {date.getDate()}
                 </span>
@@ -338,24 +387,23 @@ export default function ScheduleClient({
                     return (
                       <div
                         key={ev.id}
-                        onClick={(e) => openEdit(ev, e)}
+                        onClick={canWrite ? (e) => openEdit(ev, e) : undefined}
                         title={ev.title}
-                        className={`truncate rounded px-1.5 py-0.5 text-[0.6rem] leading-tight ${
-                          ev.status === 'cancelled' ? 'line-through opacity-60' : ''
-                        }`}
-                        style={{
-                          color: meta.color,
-                          background: meta.bg,
-                          border: `1px solid ${meta.border}`,
-                        }}
+                        className={cn(
+                          'truncate rounded-[4px] border px-1.5 py-0.5 text-label font-medium leading-tight transition-colors',
+                          meta.text,
+                          meta.bg,
+                          meta.border,
+                          ev.status === 'cancelled' ? 'line-through opacity-60' : '',
+                        )}
                       >
-                        <span className="font-semibold">{ev.starts_at.slice(11, 16)}</span>{' '}
+                        <span className="tabular-nums">{ev.starts_at.slice(11, 16)}</span>{' '}
                         {ev.title}
                       </div>
                     )
                   })}
                   {dayEvents.length > 3 && (
-                    <span className="text-muted-foreground block px-1 text-[0.6rem]">
+                    <span className="text-muted-foreground block px-1 text-label tabular-nums">
                       +{dayEvents.length - 3} more
                     </span>
                   )}
@@ -366,10 +414,29 @@ export default function ScheduleClient({
         </div>
       </div>
 
-      {visibleEvents.length === 0 && (
-        <p className="text-muted-foreground mt-4 text-xs">
+      {/*
+        The stale-rows banner. After a failed navigation `events` holds the PREVIOUS month, so
+        the grid and the empty-state copy below both describe a month they are not showing —
+        and the CSV export, which names the file from the DISPLAYED month, would have written
+        October's fixtures into `schedule-2026-11.csv`. The toast had already gone.
+      */}
+      {eventsAreStale && (
+        <p
+          role="status"
+          className="mt-4 rounded-[6px] border border-border bg-muted px-3 py-2 text-meta text-muted-foreground"
+        >
+          {monthFailed
+            ? `${monthLabel} failed to load, so the events below are from a different month.`
+            : `Loading ${monthLabel}…`}
+        </p>
+      )}
+
+      {!eventsAreStale && visibleEvents.length === 0 && (
+        <p className="text-muted-foreground mt-4 text-meta">
           {events.length === 0
-            ? `No events in ${monthLabel}. Click any day to add one.`
+            ? canWrite
+              ? `No events in ${monthLabel}. Click any day to add one.`
+              : `No events in ${monthLabel}.`
             : 'No events match the selected status.'}
         </p>
       )}
@@ -395,26 +462,16 @@ export default function ScheduleClient({
 
           <div className="grid gap-2">
             {dayViewEvents.map((ev) => {
-              const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
-              return (
-                <button
-                  key={ev.id}
-                  type="button"
-                  onClick={() => openEdit(ev)}
-                  className="border-border hover:bg-accent/50 rounded-md border p-3 text-left"
-                >
+              const eventCard = (
+                <>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-foreground font-medium">{ev.title}</span>
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-[0.6rem] uppercase tracking-[0.1em] ${
-                        STATUS_META[ev.status]?.className ?? 'border-border'
-                      }`}
-                    >
+                    <span className="text-body font-medium text-foreground">{ev.title}</span>
+                    <StatusPill tone={STATUS_TONE[ev.status]}>
                       {EVENT_STATUS_LABELS[ev.status] ?? ev.status}
-                    </span>
+                    </StatusPill>
                   </div>
-                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1">
+                  <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-3 text-meta">
+                    <span className="flex items-center gap-1 tabular-nums">
                       <ClockIcon className="size-3" />
                       {ev.starts_at.slice(11, 16)}
                       {ev.ends_at ? `–${ev.ends_at.slice(11, 16)}` : ''}
@@ -424,10 +481,30 @@ export default function ScheduleClient({
                         <MapPinIcon className="size-3" /> {ev.location}
                       </span>
                     )}
-                    <span style={{ color: meta.color }}>
+                    <span className={cn(TYPE_META[ev.event_type]?.text ?? TYPE_META.other.text)}>
                       {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
                     </span>
                   </div>
+                </>
+              )
+              if (!canWrite) {
+                return (
+                  <div
+                    key={ev.id}
+                    className="border-border rounded-[6px] border p-3 text-left transition-colors"
+                  >
+                    {eventCard}
+                  </div>
+                )
+              }
+              return (
+                <button
+                  key={ev.id}
+                  type="button"
+                  onClick={() => openEdit(ev)}
+                  className="border-border hover:bg-accent/50 rounded-[6px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  {eventCard}
                 </button>
               )
             })}
@@ -437,16 +514,18 @@ export default function ScheduleClient({
             <Button variant="outline" onClick={() => setDayView(null)}>
               Close
             </Button>
-            <Button
-              onClick={() => {
-                if (dayView) {
-                  setDayView(null)
-                  openCreate(dayView)
-                }
-              }}
-            >
-              <PlusIcon /> Add event
-            </Button>
+            {canWrite && (
+              <Button
+                onClick={() => {
+                  if (dayView) {
+                    setDayView(null)
+                    openCreate(dayView)
+                  }
+                }}
+              >
+                <PlusIcon /> Add event
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -471,16 +550,19 @@ export default function ScheduleClient({
         </DialogContent>
       </Dialog>
 
-      <EventFormDialog
-        key={editingEvent?.id ?? `new-${initialDate ?? 'none'}`}
-        auth0Id={auth0Id}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        event={editingEvent}
-        initialDate={initialDate}
-        onSaved={onSaved}
-        onDelete={(ev) => setConfirmEvent(ev)}
-      />
+      {/* Create/edit form — also carries the delete affordance, so it never mounts read-only */}
+      {canWrite && (
+        <EventFormDialog
+          key={editingEvent?.id ?? `new-${initialDate ?? 'none'}`}
+          auth0Id={auth0Id}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          event={editingEvent}
+          initialDate={initialDate}
+          onSaved={onSaved}
+          onDelete={(ev) => setConfirmEvent(ev)}
+        />
+      )}
     </div>
   )
 }

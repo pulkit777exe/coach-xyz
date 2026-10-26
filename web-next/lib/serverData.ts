@@ -1,11 +1,14 @@
 import { cache } from 'react'
 
 import { getSession } from './session'
+import { syncUser as apiSyncUser, type UserRecord } from './user'
+import { resolveOrgContext, type OrgContext } from './orgContext'
 import {
   getMyOrgs,
   getMyAnalyses as libGetMyAnalyses,
   getMyObjectives as libGetMyObjectives,
   getMyReports as libGetMyReports,
+  getMyReport as libGetMyReport,
   getMySchedule as libGetMySchedule,
 } from './meApi'
 import { ORG_COOKIE } from './orgCookie'
@@ -30,7 +33,6 @@ import {
   orgSeasons as libOrgSeasons,
 } from './org'
 import { orgMembers as libOrgMembers } from './members'
-import type { OrgMemberRole } from './members'
 import { orgSubscription as libOrgSubscription } from './org'
 import { orgAuditLogs as libOrgAuditLogs, orgInvites as libOrgInvites } from './members'
 import { listTeams as libListTeams } from './teams'
@@ -111,39 +113,9 @@ export const orgTeams = cache((auth0Id: string) => libListTeams(auth0Id))
 
 export const orgSeasons = cache((auth0Id: string) => libOrgSeasons(auth0Id))
 
-export type OrgRole = OrgMemberRole
-
-export type OrgContext = {
-  /** The auth0Id to scope every org/email/auth-user call against. */
-  auth0Id: string
-  /** The caller's role within that org (owner fast-path default). */
-  role: OrgRole
-}
-
 export { ORG_COOKIE } from './orgCookie'
-
-/**
- * Pure org-context decision: given the caller's own sub and their memberships,
- * pick the primary org. An explicit cookie preference wins when it names an
- * org the caller actually belongs to; otherwise owner-of-self wins; otherwise
- * the first membership. Empty memberships → owner-of-self fallback (fresh
- * coach, or memberships unavailable). Never trusts the cookie blindly — the
- * caller's role always comes from the membership row.
- */
-export function resolveOrgContext(
-  ownSub: string | undefined,
-  orgs: Array<{ org_auth0_id: string; role: OrgRole }>,
-  preferredOrgId?: string | null,
-): OrgContext {
-  if (preferredOrgId) {
-    const preferred = orgs.find((o) => o.org_auth0_id === preferredOrgId)
-    if (preferred) return { auth0Id: preferred.org_auth0_id, role: preferred.role }
-  }
-  const owned = orgs.find((o) => o.org_auth0_id === ownSub && o.role === 'owner')
-  const primary = owned ?? orgs[0]
-  if (primary) return { auth0Id: primary.org_auth0_id, role: primary.role }
-  return { auth0Id: ownSub ?? '', role: 'owner' }
-}
+export type { OrgContext, OrgRole } from './orgContext'
+export { resolveOrgContext } from './orgContext'
 
 /** Per-request cached /api/me/orgs (used by both the switcher and getOrgContext). */
 export const getMyOrgsCached = cache(() => getMyOrgs())
@@ -153,6 +125,8 @@ export const getMySchedule = cache(() => libGetMySchedule())
 export const getMyAnalyses = cache(() => libGetMyAnalyses())
 
 export const getMyReports = cache(() => libGetMyReports())
+
+export const getMyReport = cache((id: string) => libGetMyReport(id))
 
 export const getMyObjectives = cache(() => libGetMyObjectives())
 
@@ -188,3 +162,21 @@ export const getOrgContext = cache(async (): Promise<OrgContext> => {
 
   return resolveOrgContext(ownSub, [], preferred)
 })
+
+/**
+ * Auth sync mutation for RSC pages. Deliberately NOT React.cache-wrapped:
+ * mutations must never be deduped. Lives here (rather than a direct
+ * `@/lib/user` import in pages) so the page layer has a single server import
+ * surface — cached reads above, uncached writes below.
+ */
+export async function syncUser(user: {
+  sub: string
+  email?: string
+  name?: string
+  nickname?: string
+  picture?: string
+  email_verified?: boolean
+}): Promise<{ user: UserRecord }> {
+  return apiSyncUser(user)
+}
+

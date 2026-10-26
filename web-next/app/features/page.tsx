@@ -37,69 +37,84 @@ const feats = [
   },
 ]
 
+const hairline = 'border-border'
+const card =
+  'rounded-[8px] border bg-background transition-colors duration-[var(--dur-base)] hover:bg-surface-hover border-border hover:border-border-hover'
+
 export default function FeaturesPage() {
   return (
-    <main className="bg-[var(--marketing-dark)] text-[var(--marketing-beige)]">
-      <section className="px-6 py-10 lg:px-8">
+    <main id="main" tabIndex={-1} className="bg-background text-foreground-strong antialiased">
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section className="border-b border-border px-6 py-16 lg:px-8">
         <div className="mx-auto max-w-[1120px] text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-success">
+          <p className="text-caption font-medium tracking-[0.08em] text-muted-foreground uppercase">
             Features
           </p>
-          <h1 className="mx-auto mt-2 max-w-[720px] text-[32px] font-bold leading-tight sm:text-[36px]">
+          <h1 className="mx-auto mt-4 max-w-[720px] text-balance text-[36px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[44px]">
             Everything you need to coach faster
           </h1>
-          <p className="mx-auto mt-3 max-w-[560px] text-sm text-[var(--marketing-beige)]/60">
+          <p className="mx-auto mt-4 max-w-[560px] text-balance text-[18px] leading-7 text-muted-foreground">
             A complete toolkit — from capture to feedback — without stitching tools together.
           </p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid gap-4 text-left sm:grid-cols-2 lg:grid-cols-3">
             {feats.map((f) => (
-              <div
-                key={f.title}
-                className="rounded-2xl border border-[var(--marketing-white)]/10 bg-[var(--marketing-dark-card)] p-6 text-left"
-              >
-                <div className="grid size-10 place-items-center rounded-xl bg-primary text-[var(--marketing-brown)]">
-                  <f.icon className="size-5" />
+              <div key={f.title} className={`p-6 ${card}`}>
+                <div className="grid size-9 place-items-center rounded-[6px] bg-primary/10 text-link">
+                  <f.icon className="size-[18px]" aria-hidden />
                 </div>
-                <h3 className="mt-3 text-sm font-semibold">{f.title}</h3>
-                <p className="mt-1 text-sm leading-6 text-[var(--marketing-beige)]/60">{f.desc}</p>
+                <h2 className="mt-4 text-title font-semibold">{f.title}</h2>
+                <p className="mt-1.5 text-body leading-6 text-muted-foreground">{f.desc}</p>
               </div>
             ))}
           </div>
           <Button
-            nativeButton={false} render={<Link href="/signup" />}
-            className="mt-8 rounded-full bg-primary px-6 text-[var(--marketing-brown)] hover:bg-primary/90"
+            nativeButton={false}
+            render={<Link href="/signup" />}
+            className="mt-10 h-10 rounded-[6px] bg-primary px-6 text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Start building
           </Button>
         </div>
       </section>
-      <section className="bg-[var(--marketing-light)] px-6 py-10 lg:px-8 text-[var(--marketing-brown)]">
-        <div className="mx-auto max-w-[1120px] grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl bg-[var(--marketing-white)] border border-[var(--marketing-beige)] p-6">
-            <h3 className="font-bold">For coaches</h3>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--marketing-brown)]/70">
+
+      {/* ── For coaches / For athletes ──────────────────────────────────── */}
+      <section className="bg-muted px-6 py-14 lg:px-8">
+        <div className="mx-auto grid max-w-[1120px] gap-4 lg:grid-cols-2">
+          <div className={`rounded-[8px] border p-6 ${hairline} bg-background`}>
+            <p className="text-label font-medium tracking-[0.08em] text-muted-foreground uppercase">
+              For coaches
+            </p>
+            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
+              One place to run it all
+            </h2>
+            <ul className="mt-4 space-y-2.5 text-body leading-5 text-muted-foreground">
               <li className="flex gap-2">
-                <Check className="size-4 text-success" /> Unlimited roster
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Unlimited roster
               </li>
               <li className="flex gap-2">
-                <Check className="size-4 text-success" /> Attendance & schedule
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Attendance &amp; schedule
               </li>
               <li className="flex gap-2">
-                <Check className="size-4 text-success" /> One-click reports
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> One-click reports
               </li>
             </ul>
           </div>
-          <div className="rounded-2xl bg-primary p-6 text-[var(--marketing-brown)]">
-            <h3 className="font-bold">For athletes</h3>
-            <ul className="mt-3 space-y-2 text-sm">
+          <div className="rounded-[8px] border border-primary/25 bg-primary/[0.06] p-6 dark:bg-primary/[0.09]">
+            <p className="text-label font-medium tracking-[0.08em] text-link uppercase">
+              For athletes
+            </p>
+            <h2 className="mt-2 text-[20px] font-bold tracking-[-0.01em]">
+              Your hub, your progress
+            </h2>
+            <ul className="mt-4 space-y-2.5 text-body leading-5 text-foreground-strong">
               <li className="flex gap-2">
-                <Check className="size-4" /> Personal hub
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Personal hub
               </li>
               <li className="flex gap-2">
-                <Check className="size-4" /> Video + scores
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Video + scores
               </li>
               <li className="flex gap-2">
-                <Check className="size-4" /> Progress tracking
+                <Check className="mt-0.5 size-4 shrink-0 text-check" /> Progress tracking
               </li>
             </ul>
           </div>

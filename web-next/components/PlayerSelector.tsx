@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Image from 'next/image'
-import { Badge } from '@/components/9ui/ui/badge'
+import { Slide } from 'loading-dev'
 import { Button } from '@/components/9ui/ui/button'
 import {
   Select,
@@ -46,7 +46,7 @@ function PlayerImage({ player }: { player: Player }) {
             d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
           />
         </svg>
-        <span className="text-xs">No preview</span>
+        <span className="text-meta">No preview</span>
       </div>
     )
   }
@@ -55,7 +55,7 @@ function PlayerImage({ player }: { player: Player }) {
     <>
       {!imgLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+          <Slide size={24} className="text-foreground" />
         </div>
       )}
       <Image
@@ -63,7 +63,7 @@ function PlayerImage({ player }: { player: Player }) {
         fill
         src={`data:image/jpeg;base64,${player.crop_base64.trim()}`}
         alt={`Subject ${player.player_index}`}
-        className={`w-full h-full object-cover transition-all duration-700 ease-in-out ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-cover transition-opacity duration-200 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setImgLoaded(true)}
         onError={() => {
           setImgError(true)
@@ -100,20 +100,19 @@ export default function PlayerSelector({
     <>
       <div className="min-h-screen bg-transparent p-6 flex flex-col items-center relative z-10 pt-24 pb-20">
         <div className="max-w-5xl w-full">
-          <div className="text-center mb-12 animate-[fadeInDown_0.8s_ease-out]">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-4 leading-tight">
-              Who do you want to <span className="text-foreground">analyze?</span>
+          <div className="text-center mb-10 animate-[fadeInDown_0.3s_var(--ease-out)]">
+            <h1 className="text-[26px] sm:text-[30px] font-bold tracking-[-0.015em] text-foreground mb-3 leading-tight">
+              Who do you want to analyze?
             </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-body text-muted-foreground max-w-2xl mx-auto leading-[1.55]">
               Our vision models detected{' '}
-              <span className="text-foreground font-bold">{players.length}</span> potential subjects
+              <span className="text-foreground font-medium tabular-nums">{players.length}</span>{' '}
+              potential subjects
               {angles.length > 1 ? (
                 <>
                   {' '}
-                  in the <span className="text-foreground font-bold capitalize">
-                    {activeAngle}
-                  </span>{' '}
-                  view
+                  in the{' '}
+                  <span className="text-foreground font-medium capitalize">{activeAngle}</span> view
                 </>
               ) : null}
               . Select the primary athlete to continue the pipeline.
@@ -121,26 +120,35 @@ export default function PlayerSelector({
           </div>
 
           {angles.length > 0 && (
+            // Toggle buttons, not tabs: each angle re-renders the ONE player
+            // grid below rather than owning a panel of its own, and there is no
+            // tabpanel to point aria-controls at. `role="tab"` on buttons that
+            // are not owned children of the tablist (the styled inner div sits
+            // between them) announced a broken tab set, and there was no arrow
+            // -key handling to match. aria-pressed states the same fact — this
+            // angle is the active one — and is operable by keyboard for free.
             <div
-              className="flex flex-wrap items-center justify-center gap-2 mb-8"
-              role="tablist"
+              className="flex flex-wrap items-center justify-center gap-1 mb-8"
+              role="group"
               aria-label="Camera angles"
             >
-              {angles.map((angle) => (
-                <button
-                  key={angle}
-                  role="tab"
-                  aria-selected={angle === activeAngle}
-                  onClick={() => switchAngle(angle)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${
-                    angle === activeAngle
-                      ? 'bg-foreground text-background'
-                      : 'bg-muted text-muted-foreground hover:text-foreground border border-border'
-                  }`}
-                >
-                  {angle}
-                </button>
-              ))}
+              <div className="inline-flex rounded-[6px] bg-accent p-1">
+                {angles.map((angle) => (
+                  <button
+                    key={angle}
+                    type="button"
+                    aria-pressed={angle === activeAngle}
+                    onClick={() => switchAngle(angle)}
+                    className={`rounded-[4px] px-3.5 py-1.5 text-body font-medium capitalize transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                      angle === activeAngle
+                        ? 'bg-card text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {angle}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -154,8 +162,8 @@ export default function PlayerSelector({
                   tabIndex={0}
                   aria-label={`Select Subject ${player.player_index}, confidence ${(player.confidence * 100).toFixed(0)}%`}
                   aria-pressed={isSelected}
-                  className={`animate-[fadeInUp_0.45s_ease-out_both] cursor-pointer group relative rounded-2xl p-[2px] overflow-hidden transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-foreground' : 'bg-muted hover:bg-border'}`}
-                  style={{ animationDelay: `${0.2 + i * 0.1}s` }}
+                  className={`animate-[fadeInUp_0.3s_var(--ease-out)_both] cursor-pointer group relative rounded-[6px] p-[2px] overflow-hidden transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${isSelected ? 'bg-primary' : 'bg-border hover:bg-muted-foreground/40'}`}
+                  style={{ animationDelay: `${Math.min(0.25, 0.05 * i)}s` }}
                   onClick={() => setSelectedIndex(player.player_index)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -165,15 +173,12 @@ export default function PlayerSelector({
                   }}
                 >
                   <div
-                    className={`relative h-full w-full rounded-2xl overflow-hidden transition-all border-0 p-5 flex flex-col items-center text-center bg-card ${isSelected ? 'bg-card' : ''}`}
+                    className={`relative h-full w-full rounded-[6px] overflow-hidden transition-colors border-0 p-5 flex flex-col items-center text-center bg-card`}
                   >
-                    <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-5 bg-muted border border-border shadow-inner">
+                    <div className="relative w-full aspect-square rounded-[6px] overflow-hidden mb-5 bg-muted border border-border">
                       <PlayerImage player={player} />
                       {isSelected && (
-                        <div className="absolute inset-0 bg-border mix-blend-overlay"></div>
-                      )}
-                      {isSelected && (
-                        <div className="absolute top-3 right-3 w-8 h-8 bg-foreground rounded-full flex items-center justify-center text-background">
+                        <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground">
                           <svg
                             className="w-5 h-5"
                             fill="none"
@@ -192,24 +197,26 @@ export default function PlayerSelector({
                     </div>
 
                     <h3
-                      className={`text-xl font-bold mb-3 transition-colors tracking-tight ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
+                      className={`text-title font-semibold mb-3 transition-colors ${isSelected ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}
                     >
                       Subject {player.player_index}
                     </h3>
 
                     <div className="w-full flex justify-center">
-                      <Badge
-                        variant="outline"
-                        className={`font-mono text-[0.65rem] uppercase tracking-widest px-3 py-1 rounded-xl transition-colors ${
+                      <span
+                        className={`text-label font-medium px-2 py-0.5 rounded-full transition-colors ${
                           player.confidence >= 0.8
-                            ? 'text-primary bg-primary/10 border border-primary/30'
+                            ? 'bg-primary/15 text-primary'
                             : player.confidence >= 0.6
-                              ? 'text-warning bg-warning/10 border border-warning/30'
-                              : 'text-destructive bg-danger/10 border border-danger/30'
+                              ? 'bg-warning/15 text-warning'
+                              : 'bg-destructive/10 text-destructive'
                         }`}
                       >
-                        Confidence: {(player.confidence * 100).toFixed(0)}%
-                      </Badge>
+                        Confidence:{' '}
+                        <span className="tabular-nums">
+                          {(player.confidence * 100).toFixed(0)}%
+                        </span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -217,21 +224,17 @@ export default function PlayerSelector({
             })}
           </div>
 
-          <div className="animate-[fadeInUp_0.45s_ease-out_0.6s_both] max-w-sm mx-auto">
+          <div className="animate-[fadeInUp_0.3s_var(--ease-out)_0.25s_both] max-w-sm mx-auto">
             <Button
-              className={`w-full h-16 rounded-2xl text-base font-bold transition-colors duration-200 ${
-                selectedIndex !== null
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted border border-border text-muted-foreground cursor-not-allowed shadow-none'
-              }`}
+              className="w-full h-12 rounded-[6px] text-body font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]"
               size="lg"
               disabled={selectedIndex === null}
               onClick={() => selectedIndex !== null && onSelect(selectedIndex)}
             >
               {selectedIndex !== null ? (
-                <span className="flex items-center gap-2 text-background">
+                <span className="flex items-center gap-2">
                   Confirm Selection
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -246,9 +249,11 @@ export default function PlayerSelector({
             </Button>
           </div>
 
-          <div className="max-w-sm mx-auto mt-8 rounded-2xl border border-border bg-card p-5">
-            <p className="text-sm font-semibold text-foreground mb-1">Add another camera angle</p>
-            <p className="text-xs text-muted-foreground mb-4">
+          <div className="max-w-sm mx-auto mt-8 rounded-[6px] border border-border bg-card p-5">
+            <p className="text-title font-semibold text-foreground mb-1">
+              Add another camera angle
+            </p>
+            <p className="text-meta text-muted-foreground mb-4 leading-[1.5]">
               Film the same drill from a second perspective (e.g. side + front) for a more complete
               read.
             </p>
@@ -276,7 +281,7 @@ export default function PlayerSelector({
               </Select>
               <Button
                 variant="outline"
-                className="h-10 rounded-xl font-semibold"
+                className="h-10 rounded-[6px] font-medium"
                 onClick={() => fileRef.current?.click()}
               >
                 Upload

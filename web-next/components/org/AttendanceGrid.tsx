@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -35,8 +35,7 @@ import {
   orgDeleteAttendance,
 } from '@/lib/org'
 import { toISODate } from '@/lib/date'
-import { useMonthNavigator } from '@/lib/useMonthNavigator'
-import type { CoachAIError } from '@/types'
+import type { CoachAIError } from '@/lib/api'
 
 type GridRecord = {
   student_id: string
@@ -66,23 +65,69 @@ export default function AttendanceGrid({
   auth0Id,
   students,
   initialRecords,
+  canWrite = true,
 }: {
   auth0Id: string
   students: Student[]
   initialRecords: GridRecord[]
+  /** attendance.write — false renders the grid read-only (analyst/medical). */
+  canWrite?: boolean
 }) {
   const today = startOfLocalDay(new Date())
-  const {
-    year,
-    monthNum,
-    monthLabel,
-    isLoading: loading,
-    setLoading,
-    setMonth,
-    fetchMonth,
-    nav,
-  } = useMonthNavigator({
-    onFetch: async (targetMonth) => {
+  const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+  const roster = students
+  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(() =>
+    makeMap(initialRecords),
+  )
+  const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
+  const [loading, setLoading] = useState(false)
+  /**
+   * Which month `records` ACTUALLY holds — not which month is displayed.
+   *
+   * `nav` calls `setMonth(next)` before `fetchMonth(next)`, so a failed navigation left the
+   * previous month's marks under the new month's heading, and the per-row total rendered as
+   * `oldMonthPresent / newMonthDays`: a ratio over two different months, which is not a
+   * number about anything. Worse, the CSV export names the file from the DISPLAYED month, so
+   * a coach exported `attendance-2026-11.csv` containing October's rows — a file that is wrong
+   * in the one way a spreadsheet cannot be argued about.
+   *
+   * Keyed on the month rather than a boolean for the reason `TeamsClient` does the same: a
+   * bare `loaded` flag cannot say WHICH read it belongs to, and survives a month change.
+   */
+  const [recordsMonth, setRecordsMonth] = useState<string | null>(null)
+  const [monthFailed, setMonthFailed] = useState(false)
+  // `nav` and the "jump to today" control both fire `fetchMonth` without disabling
+  // the pager, so two month reads can be in flight at once. The stale-banner
+  // (`recordsMonth`) can only say the rows are NOT the displayed month — it cannot
+  // stop the EARLIER response landing last and replacing the newer month's rows.
+  // Only the newest read may answer.
+  const monthSeq = useRef(0)
+  const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [dayDialog, setDayDialog] = useState<Date | null>(null)
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
+  const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
+  const [notesSaving, setNotesSaving] = useState(false)
+  const [emailAttOpen, setEmailAttOpen] = useState(false)
+
+  const year = month.getFullYear()
+  const monthNum = month.getMonth()
+  const daysInMonth = new Date(year, monthNum + 1, 0).getDate()
+  const days = useMemo(
+    () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, monthNum, i + 1)),
+    [year, monthNum, daysInMonth],
+  )
+  const monthLabel = month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  /** The displayed month's first-of-month key, for comparison against `recordsMonth`. */
+  const displayedMonth = toISODate(new Date(year, monthNum, 1))
+  /** True while the grid is showing records that are NOT the month in the heading. */
+  const recordsAreStale = recordsMonth !== null && recordsMonth !== displayedMonth
+  /** The export must refuse while the on-screen rows are not the displayed month. */
+  const canExport = recordsMonth === displayedMonth && !loading
+
+  const fetchMonth = async (targetMonth: Date) => {
+    const my = ++monthSeq.current
+    setLoading(true)
+    try {
       const y = targetMonth.getFullYear()
       const m = targetMonth.getMonth()
       const first = new Date(y, m, 1)
@@ -91,28 +136,31 @@ export default function AttendanceGrid({
         from: toISODate(first),
         to: toISODate(last),
       })
+      if (monthSeq.current !== my) return
       setRecords(makeMap(res.records))
       setNotes(makeNotes(res.records))
-    },
-    onError: (err) => toast.error((err as CoachAIError).message ?? 'Failed to load attendance'),
-  })
-  const roster = students
-  const [records, setRecords] = useState<Map<string, AttendanceStatus>>(() =>
-    makeMap(initialRecords),
-  )
-  const [notes, setNotes] = useState<Map<string, string>>(() => makeNotes(initialRecords))
-  const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [dayDialog, setDayDialog] = useState<Date | null>(null)
-  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
-  const [statusDraft, setStatusDraft] = useState<Record<string, AttendanceStatus>>({})
-  const [notesSaving, setNotesSaving] = useState(false)
-  const [emailAttOpen, setEmailAttOpen] = useState(false)
+      setRecordsMonth(toISODate(first))
+      setMonthFailed(false)
+    } catch (err) {
+      if (monthSeq.current !== my) return
+      // The records on screen belong to a DIFFERENT month, so they must not be presented as
+      // this one's. `recordsMonth` is deliberately NOT advanced — that is what makes the
+      // mismatch detectable below rather than something only the absence of a toast reveals.
+      setMonthFailed(true)
+      toast.error((err as CoachAIError).message ?? 'Failed to load attendance')
+    } finally {
+      // A superseded read must not clear `loading` while the read that is actually
+      // being displayed is still in flight — that would drop the spinner (and the
+      // export block) a beat early.
+      if (monthSeq.current === my) setLoading(false)
+    }
+  }
 
-  const daysInMonth = new Date(year, monthNum + 1, 0).getDate()
-  const days = useMemo(
-    () => Array.from({ length: daysInMonth }, (_, i) => new Date(year, monthNum, i + 1)),
-    [year, monthNum, daysInMonth],
-  )
+  const nav = (delta: number) => {
+    const next = new Date(year, monthNum + delta, 1)
+    setMonth(next)
+    fetchMonth(next)
+  }
 
   const isToday = (d: Date) => toISODate(d) === toISODate(today)
 
@@ -299,6 +347,11 @@ export default function AttendanceGrid({
         counts.excused,
       ]
     })
+    // Refuse rather than write a mislabelled file: the name comes from the DISPLAYED month
+    // and the rows come from `records`, so exporting during a failed or in-flight navigation
+    // produces a CSV whose contents contradict its filename. A missing file is recoverable;
+    // a spreadsheet that says November and holds October is not.
+    if (!canExport) return
     downloadCSV(`attendance-${year}-${String(monthNum + 1).padStart(2, '0')}.csv`, [
       header,
       ...rows,
@@ -338,13 +391,13 @@ export default function AttendanceGrid({
 
   if (roster.length === 0) {
     return (
-      <div className="border-border bg-card rounded-lg border p-16 text-center">
-        <p className="text-muted-foreground mb-2 text-sm">
+      <div className="border-border bg-card rounded-[6px] border p-16 text-center">
+        <p className="mb-2 text-body text-muted-foreground">
           Add students to your roster before marking attendance.
         </p>
         <Link
           href="/dashboard/students"
-          className="text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+          className="text-meta text-primary transition-colors hover:text-primary hover:underline"
         >
           Go to roster →
         </Link>
@@ -354,6 +407,26 @@ export default function AttendanceGrid({
 
   return (
     <div>
+      {!canWrite && (
+        <p className="text-muted-foreground mb-3 text-meta">
+          You have read-only access to this page.
+        </p>
+      )}
+      {/*
+        The stale-rows banner. Without it the grid is not merely unlabelled, it is WRONG: the
+        heading reads November, the per-row totals divide October's present-count by November's
+        day count, and nothing on screen says so. A toast already fired and has gone.
+      */}
+      {recordsAreStale && (
+        <p
+          role="status"
+          className="mb-3 rounded-[6px] border border-border bg-muted px-3 py-2 text-meta text-muted-foreground"
+        >
+          {monthFailed
+            ? `${monthLabel} failed to load, so the marks below are from a different month.`
+            : `Loading ${monthLabel}…`}
+        </p>
+      )}
       {/* Month header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -379,12 +452,14 @@ export default function AttendanceGrid({
             Today
           </Button>
         </div>
-        <p className="font-semibold text-lg text-foreground">
+        {/* A `div`, not a `p`: `loading-dev`'s `Slide` renders a `<div>`, and a `<div>`
+            inside a `<p>` is invalid nesting React warns will cause a hydration error. */}
+        <div className="text-lead font-semibold text-foreground">
           {monthLabel}
           {loading && <Spinner className="ml-3 inline text-muted-foreground" />}
-        </p>
+        </div>
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 text-xs sm:flex">
+          <div className="hidden items-center gap-3 text-meta sm:flex">
             {STATUSES.map((s) => (
               <span key={s} className="flex items-center gap-1.5 text-muted-foreground">
                 <span
@@ -395,20 +470,32 @@ export default function AttendanceGrid({
               </span>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setEmailAttOpen(true)}>
-            <MailIcon /> Email sheet
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
+          {canWrite && (
+            <Button variant="outline" size="sm" onClick={() => setEmailAttOpen(true)}>
+              <MailIcon /> Email sheet
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCSV}
+            disabled={!canExport}
+            title={
+              canExport
+                ? undefined
+                : 'Cannot export while the displayed month has not loaded — the file would be named for one month and contain another.'
+            }
+          >
             <DownloadIcon /> Export
           </Button>
         </div>
       </div>
 
-      <div className="border-border overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
+      <div className="border-border overflow-x-auto rounded-[6px] border">
+        <table className="w-full text-body">
           <thead>
-            <tr className="bg-muted/50 border-b border-border text-muted-foreground">
-              <th className="sticky left-0 z-10 bg-background/95 px-4 py-2 text-left text-[0.6rem] font-normal uppercase tracking-[0.15em]">
+            <tr className="border-b border-border">
+              <th className="sticky left-0 z-10 bg-background/95 px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Student
               </th>
               {days.map((d) => {
@@ -417,41 +504,57 @@ export default function AttendanceGrid({
                   const k = keyOf(s.id, toISODate(d))
                   return acc + (records.has(k) && notes.has(k) ? 1 : 0)
                 }, 0)
+                const dayHeaderClass = `relative flex h-9 w-8 flex-col items-center justify-center rounded-[4px] border border-transparent transition-colors duration-150 ${
+                  canWrite
+                    ? 'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 '
+                    : ''
+                }${
+                  isToday(d)
+                    ? 'border-transparent bg-accent font-medium text-foreground'
+                    : 'text-muted-foreground'
+                }`
+                const dayHeaderBody = (
+                  <>
+                    <span className="text-caption leading-none">{d.getDate()}</span>
+                    {counts.marked > 0 && (
+                      <span className="mt-0.5 flex gap-0.5 leading-none">
+                        {counts.present > 0 && (
+                          <span
+                            className="size-1 rounded-full"
+                            style={{ background: STATUS_META.present.color }}
+                          />
+                        )}
+                        {counts.late > 0 && (
+                          <span
+                            className="size-1 rounded-full"
+                            style={{ background: STATUS_META.late.color }}
+                          />
+                        )}
+                      </span>
+                    )}
+                    {noteCount > 0 && (
+                      <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-muted-foreground" />
+                    )}
+                  </>
+                )
                 return (
                   <th key={d.getTime()} className="px-0.5 py-2 text-center">
-                    <button
-                      type="button"
-                      onClick={() => openDayDialog(d)}
-                      title="Open day — mark present or add notes"
-                      className={`relative flex h-9 w-8 flex-col items-center justify-center rounded border border-transparent transition-colors hover:border-border ${
-                        isToday(d) ? 'bg-(--success) text-background' : 'text-muted-foreground'
-                      }`}
-                    >
-                      <span className="text-xs leading-none">{d.getDate()}</span>
-                      {counts.marked > 0 && (
-                        <span className="mt-0.5 flex gap-0.5 leading-none">
-                          {counts.present > 0 && (
-                            <span
-                              className="size-1 rounded-full"
-                              style={{ background: STATUS_META.present.color }}
-                            />
-                          )}
-                          {counts.late > 0 && (
-                            <span
-                              className="size-1 rounded-full"
-                              style={{ background: STATUS_META.late.color }}
-                            />
-                          )}
-                        </span>
-                      )}
-                      {noteCount > 0 && (
-                        <StickyNoteIcon className="absolute -top-1 -right-1 size-2.5 text-muted-foreground" />
-                      )}
-                    </button>
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        onClick={() => openDayDialog(d)}
+                        title="Open day — mark present or add notes"
+                        className={dayHeaderClass}
+                      >
+                        {dayHeaderBody}
+                      </button>
+                    ) : (
+                      <span className={dayHeaderClass}>{dayHeaderBody}</span>
+                    )}
                   </th>
                 )
               })}
-              <th className="px-3 py-2 text-right text-[0.6rem] font-normal uppercase tracking-[0.15em]">
+              <th className="px-3 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Month
               </th>
             </tr>
@@ -462,13 +565,13 @@ export default function AttendanceGrid({
               return (
                 <tr
                   key={s.id}
-                  className="border-border hover:bg-accent/40 border-b last:border-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+                  className="border-border hover:bg-accent/50 border-b transition-colors duration-150 last:border-b-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
                 >
                   <td className="sticky left-0 z-10 bg-background/95 max-w-44 px-4 py-1.5">
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
                       <span className="truncate font-medium text-foreground">{s.full_name}</span>
                       {s.sport ? (
-                        <span className="text-muted-foreground ml-1 truncate text-xs">
+                        <span className="text-muted-foreground ml-1 truncate text-meta">
                           {s.sport}
                         </span>
                       ) : null}
@@ -480,47 +583,65 @@ export default function AttendanceGrid({
                     const st = records.get(k)
                     const meta = st ? STATUS_META[st] : null
                     const hasNote = records.has(k) && notes.has(k)
+                    const cellStyle = meta
+                      ? {
+                          background: meta.color,
+                          color: 'var(--color-background)',
+                          borderColor: meta.color,
+                        }
+                      : isToday(d)
+                        ? {
+                            background: 'var(--color-muted)',
+                            color: 'var(--color-muted-foreground)',
+                          }
+                        : {
+                            background: 'transparent',
+                            color: 'var(--color-muted-foreground)',
+                          }
+                    const cellBody = (
+                      <>
+                        {meta ? meta.letter : isToday(d) ? '•' : ''}
+                        {hasNote && (
+                          <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
+                        )}
+                      </>
+                    )
                     return (
                       <td key={d.getTime()} className="px-0.5 py-1 text-center">
-                        <button
-                          type="button"
-                          onClick={() => cycle(s.id, d)}
-                          title={
-                            st
-                              ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ''}${hasNote ? ` · ${notes.get(k)}` : ''} — click to change`
-                              : 'Click to mark present'
-                          }
-                          disabled={savingKey === k}
-                          className="relative flex h-8 w-8 items-center justify-center rounded text-[0.65rem] font-semibold border border-border/60 transition-transform hover:scale-105 disabled:opacity-40"
-                          style={
-                            meta
-                              ? {
-                                  background: meta.color,
-                                  color: 'var(--color-background)',
-                                  borderColor: meta.color,
-                                }
-                              : isToday(d)
-                                ? {
-                                    background: 'var(--color-muted)',
-                                    color: 'var(--color-muted-foreground)',
-                                  }
-                                : {
-                                    background: 'transparent',
-                                    color: 'var(--color-muted-foreground)',
-                                  }
-                          }
-                        >
-                          {meta ? meta.letter : isToday(d) ? '•' : ''}
-                          {hasNote && (
-                            <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-foreground" />
-                          )}
-                        </button>
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            onClick={() => cycle(s.id, d)}
+                            title={
+                              st
+                                ? `${st ? ATTENDANCE_STATUS_LABELS[st] : ''}${hasNote ? ` · ${notes.get(k)}` : ''} — click to change`
+                                : 'Click to mark present'
+                            }
+                            disabled={savingKey === k}
+                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled"
+                            style={cellStyle}
+                          >
+                            {cellBody}
+                          </button>
+                        ) : (
+                          <span
+                            title={
+                              st
+                                ? `${ATTENDANCE_STATUS_LABELS[st]}${hasNote ? ` · ${notes.get(k)}` : ''}`
+                                : undefined
+                            }
+                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold"
+                            style={cellStyle}
+                          >
+                            {cellBody}
+                          </span>
+                        )}
                       </td>
                     )
                   })}
                   <td className="px-3 py-1.5 text-right">
                     <span
-                      className="text-xs text-muted-foreground"
+                      className="text-meta tabular-nums text-muted-foreground"
                       title={`Present ${counts.present} · Late ${counts.late} · Absent ${counts.absent} · Excused ${counts.excused}`}
                     >
                       {counts.present}/{daysInMonth}
@@ -532,117 +653,133 @@ export default function AttendanceGrid({
           </tbody>
         </table>
       </div>
-      <p className="text-muted-foreground mt-3 text-xs">
-        Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
-        mark the day or add per-student notes.
-      </p>
+      {canWrite && (
+        <p className="text-muted-foreground mt-3 text-meta">
+          Click a cell to cycle statuses: present → late → absent → excused → clear. Click a date to
+          mark the day or add per-student notes.
+        </p>
+      )}
 
-      {/* Day dialog: notes + batch mark */}
-      <Dialog open={Boolean(dayDialog)} onOpenChange={(open) => !open && setDayDialog(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {dayDialog?.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </DialogTitle>
-            <DialogDescription>
-              {dialogMarked.length} of {roster.length} marked
-              {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ''}.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Day dialog: notes + batch mark — a write surface, so it never mounts read-only */}
+      {canWrite && (
+        <Dialog open={Boolean(dayDialog)} onOpenChange={(open) => !open && setDayDialog(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {dayDialog?.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </DialogTitle>
+              <DialogDescription>
+                {dialogMarked.length} of {roster.length} marked
+                {dialogUnmarked > 0 ? ` · ${dialogUnmarked} without a status` : ''}.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4">
-            {dialogUnmarked > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading}
-                onClick={() => dayDialog && markRemainingPresent(dayDialog)}
-              >
-                {loading ? <Spinner /> : 'Mark remaining present'}
-              </Button>
-            )}
+            <div className="grid gap-4">
+              {dialogUnmarked > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => dayDialog && markRemainingPresent(dayDialog)}
+                >
+                  {loading ? <Spinner /> : 'Mark remaining present'}
+                </Button>
+              )}
 
-            <div className="grid gap-3">
-              {roster.map((s) => {
-                const k = keyOf(s.id, dialogDateStr)
-                const st = records.get(k)
-                return (
-                  <div key={s.id} className="grid gap-1.5">
-                    <div className="flex items-center gap-2 text-sm">
-                      <select
-                        value={statusDraft[s.id] ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value as AttendanceStatus
-                          setStatusDraft((prev) => {
-                            const next = { ...prev }
-                            if (v) next[s.id] = v
-                            else delete next[s.id]
-                            return next
-                          })
-                        }}
-                        className={`h-7 rounded border px-1 text-[0.65rem] font-semibold ${
-                          st
-                            ? 'text-background'
-                            : 'text-muted-foreground border-border/60 bg-transparent'
-                        }`}
-                        style={
-                          st
-                            ? {
-                                background: STATUS_META[st].color,
-                                borderColor: STATUS_META[st].color,
-                              }
-                            : undefined
+              <div className="grid gap-3">
+                {roster.map((s) => {
+                  const k = keyOf(s.id, dialogDateStr)
+                  const st = records.get(k)
+                  return (
+                    <div key={s.id} className="grid gap-1.5">
+                      <div className="flex items-center gap-2 text-body">
+                        <select
+                          value={statusDraft[s.id] ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value as AttendanceStatus
+                            setStatusDraft((prev) => {
+                              const next = { ...prev }
+                              if (v) next[s.id] = v
+                              else delete next[s.id]
+                              return next
+                            })
+                          }}
+                          className={`h-7 rounded-[6px] border px-1.5 text-label font-semibold ${
+                            st
+                              ? 'text-background'
+                              : 'text-muted-foreground border-border/60 bg-transparent'
+                          }`}
+                          style={
+                            st
+                              ? {
+                                  background: STATUS_META[st].color,
+                                  borderColor: STATUS_META[st].color,
+                                }
+                              : undefined
+                          }
+                          title="Status for this day"
+                        >
+                          <option value="">—</option>
+                          {STATUSES.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {ATTENDANCE_STATUS_LABELS[opt]}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-foreground">{s.full_name}</span>
+                        {!st && (
+                          <span className="text-muted-foreground text-meta">not yet marked</span>
+                        )}
+                      </div>
+                      <Input
+                        value={noteDraft[s.id] ?? ''}
+                        onChange={(e) =>
+                          setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
                         }
-                        title="Status for this day"
-                      >
-                        <option value="">—</option>
-                        {STATUSES.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {ATTENDANCE_STATUS_LABELS[opt]}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="text-foreground">{s.full_name}</span>
-                      {!st && <span className="text-muted-foreground text-xs">not yet marked</span>}
+                        placeholder="Add a note (e.g. injured, arrived late)…"
+                        // Named for the student it belongs to. A placeholder is an
+                        // EXAMPLE, not a label: it disappears the moment the coach
+                        // types, several students' fields look identical, and
+                        // placeholders are not announced reliably. This field is
+                        // inside a per-student loop, so without a name a screen
+                        // reader offers several identical unlabelled text boxes and
+                        // the coach cannot tell whose attendance they are editing.
+                        aria-label={`Attendance note for ${s.full_name}`}
+                        className="h-8 text-body"
+                      />
                     </div>
-                    <Input
-                      value={noteDraft[s.id] ?? ''}
-                      onChange={(e) =>
-                        setNoteDraft((prev) => ({ ...prev, [s.id]: e.target.value }))
-                      }
-                      placeholder="Add a note (e.g. injured, arrived late)…"
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDayDialog(null)}>
-              Cancel
-            </Button>
-            <Button onClick={saveNotes} disabled={notesSaving}>
-              {notesSaving ? <Spinner /> : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDayDialog(null)}>
+                Cancel
+              </Button>
+              <Button onClick={saveNotes} disabled={notesSaving}>
+                {notesSaving ? <Spinner /> : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Email attendance */}
-      <EmailAttendanceDialog
-        auth0Id={auth0Id}
-        open={emailAttOpen}
-        onOpenChange={setEmailAttOpen}
-        from={toISODate(new Date(year, monthNum, 1))}
-        to={toISODate(new Date(year, monthNum + 1, 0))}
-      />
+      {canWrite && (
+        <EmailAttendanceDialog
+          auth0Id={auth0Id}
+          open={emailAttOpen}
+          onOpenChange={setEmailAttOpen}
+          from={toISODate(new Date(year, monthNum, 1))}
+          to={toISODate(new Date(year, monthNum + 1, 0))}
+        />
+      )}
     </div>
   )
 }
