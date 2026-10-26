@@ -41,9 +41,10 @@ import {
   REPORT_TYPES,
   REPORT_TYPE_LABELS,
 } from '@/lib/org'
-import { orgGenerateAiReport, orgAiReportStatus, subscribeAiReportEvents } from '@/lib/aiReports'
+import { orgGenerateAiReport, orgAiReportStatus } from '@/lib/aiReports'
+import { startJobPolling } from '@/lib/jobPolling'
 import type { AiReportJobPoll } from '@/lib/aiReports'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
 
 const TYPE_TONE: Record<string, StatusTone> = {
   progress: 'blue',
@@ -119,75 +120,36 @@ export default function ReportsClient({
 
   useEffect(() => {
     if (!aiPending) return
-    const controller = new AbortController()
-    let finished = false
-
-    const applyStatus = (res: AiReportJobPoll) => {
-      if (finished) return
-      setAiJob(res)
-      if (res.status === 'done') {
-        if (res.report) {
+    // Poll the report job through the shared job-polling core: fixed 2500ms
+    // cadence, immediate first poll, give up on the first fetch error.
+    const controller = startJobPolling<AiReportJobPoll>({
+      jobId: aiPending.report_job_id,
+      fetchStatus: (jobId) => orgAiReportStatus(auth0Id, jobId),
+      isComplete: (status) => status.status === 'done' || status.status === 'failed',
+      intervalMs: 2500,
+      backoffFactor: 1,
+      giveUpOnFirstFailure: true,
+      onStatus: (res) => setAiJob(res),
+      onComplete: (res) => {
+        if (res.status === 'done' && res.report) {
           setReports((prev) =>
             prev.some((r) => r.id === res.report!.id) ? prev : [res.report!, ...prev],
           )
+          toast.success('AI report generated')
+          setAiPending(null)
+          setAiOpen(false)
+          setAiForm({ student_id: 'all', report_type: 'progress', period_start: '', period_end: '', title: '' })
+        } else if (res.status === 'failed') {
+          setAiPending(null)
+          setAiError('AI report generation failed. Please try again.')
         }
-        toast.success('AI report generated')
-        finished = true
-        setAiPending(null)
-        setAiOpen(false)
-        setAiForm({
-          student_id: 'all',
-          report_type: 'progress',
-          period_start: '',
-          period_end: '',
-          title: '',
-        })
-      } else if (res.status === 'failed') {
-        finished = true
-        setAiPending(null)
-        setAiError('AI report generation failed. Please try again.')
-      }
-    }
-
-    const stop = subscribeAiReportEvents(
-      auth0Id,
-      aiPending.report_job_id,
-      applyStatus,
-      (error) => {
-        if (finished) return
-        // One bounded reconciliation replaces the old 2.5s interval. If the
-        // job is still running, stop rather than creating a polling loop.
-        void orgAiReportStatus(auth0Id, aiPending.report_job_id)
-          .then((res) => {
-            if (finished) return
-            if (res.status === 'done' || res.status === 'failed') {
-              applyStatus(res)
-            } else {
-              finished = true
-              setAiPending(null)
-              setAiError(
-                (error as CoachAIError).message ??
-                  'Live report updates are unavailable. Please try again.',
-              )
-            }
-          })
-          .catch((statusError: unknown) => {
-            if (finished) return
-            finished = true
-            setAiPending(null)
-            setAiError(
-              (statusError as CoachAIError).message ??
-                'Failed to check AI report status. Please try again.',
-            )
-          })
       },
-      controller.signal,
-    )
-
-    return () => {
-      finished = true
-      stop()
-    }
+      onError: (failure) => {
+        setAiPending(null)
+        setAiError(failure.error.message ?? 'Failed to check AI report status')
+      },
+    })
+    return () => controller.stop()
   }, [auth0Id, aiPending])
 
   const generateAi = async () => {

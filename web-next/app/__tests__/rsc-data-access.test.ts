@@ -57,8 +57,9 @@ const APP_DIR = join(import.meta.dirname, '..', '..', 'app')
  * them would flag the wrapper module's own legitimate imports.
  */
 const FETCHER_MODULES = [
-  '@/lib/api',
   '@/lib/meApi',
+  '@/lib/user',
+  '@/lib/library',
   '@/lib/members',
   '@/lib/org',
   '@/lib/teams',

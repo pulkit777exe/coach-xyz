@@ -43,7 +43,7 @@ import {
 } from '@/lib/org'
 import { toISODate, scheduleMonthWindow } from '@/lib/date'
 import { usePreferences } from '@/lib/preferences'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
 
 const TYPE_META: Record<ScheduleEvent['event_type'], { text: string; bg: string; border: string }> =
   {

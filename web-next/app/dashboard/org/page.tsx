@@ -46,7 +46,7 @@ const FEATURE_LINKS = [
 
 function roleTone(role: OrgMemberRole): StatusTone {
   if (role === 'owner') return 'primary'
-  if (role === 'admin') return 'blue'
+  if (role === 'head_coach') return 'blue'
   return 'gray'
 }
 

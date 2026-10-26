@@ -161,7 +161,7 @@ export default async function AccountPage() {
           </div>
         )}
 
-        <OrganizationsCard initialOrgs={orgs} />
+        <OrganizationsCard orgs={orgs} />
 
         <div className="mt-6 flex gap-3">
           <Link

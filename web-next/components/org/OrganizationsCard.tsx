@@ -1,21 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-
-import LeaveOrganization from './LeaveOrganization'
 import { ORG_MEMBER_ROLE_LABELS, type OrgMemberRole } from '@/lib/members'
 import type { MyOrg } from '@/lib/meApi'
 
-// Organizations the caller belongs to, with self-service leave. Rendered on
-// the account page; a failed orgs fetch hides the card instead of breaking
-// the page.
-export default function OrganizationsCard({
-  initialOrgs,
-}: {
-  initialOrgs: MyOrg[] | null
-}) {
-  const [orgs, setOrgs] = useState<MyOrg[] | null>(initialOrgs)
-
+// Organizations the caller belongs to. Rendered on the account page; a failed
+// orgs fetch hides the card instead of breaking the page.
+export default function OrganizationsCard({ orgs }: { orgs: MyOrg[] | null }) {
   if (orgs === null) {
     return (
       <div className="mt-4 rounded-[6px] border border-border bg-card">
@@ -48,14 +38,6 @@ export default function OrganizationsCard({
                   {ORG_MEMBER_ROLE_LABELS[org.role as OrgMemberRole] ?? org.role}
                 </p>
               </div>
-              <LeaveOrganization
-                orgAuth0Id={org.org_auth0_id}
-                orgName={org.display_name}
-                role={org.role}
-                onLeft={(leftId) =>
-                  setOrgs((prev) => (prev ?? []).filter((o) => o.org_auth0_id !== leftId))
-                }
-              />
             </div>
           </li>
         ))}

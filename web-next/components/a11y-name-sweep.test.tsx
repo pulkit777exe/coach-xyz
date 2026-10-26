@@ -1227,25 +1227,10 @@ add(
     },
   },
   {
-    id: 'components/org/LeaveOrganization.tsx',
-    render: async () => {
-      const { default: LeaveOrganization } = await import('@/components/org/LeaveOrganization')
-      return h(LeaveOrganization, { orgName: 'Northside Hoops', role: 'coach' })
-    },
-  },
-  {
     id: 'components/org/MembersSection.tsx',
     render: async () => {
       const { default: MembersSection } = await import('@/components/org/MembersSection')
       return h(MembersSection, { initialData: membersResponse as never })
-    },
-  },
-  {
-    id: 'components/org/NotificationsSection.tsx',
-    render: async () => {
-      const { default: NotificationsSection } =
-        await import('@/components/org/NotificationsSection')
-      return h(NotificationsSection)
     },
   },
   {
@@ -1260,7 +1245,7 @@ add(
     render: async () => {
       const { default: OrganizationsCard } = await import('@/components/org/OrganizationsCard')
       return h(OrganizationsCard, {
-        initialOrgs: [
+        orgs: [
           {
             auth0_id: ORG,
             name: 'Northside Hoops',
@@ -1270,14 +1255,6 @@ add(
           },
         ] as never,
       })
-    },
-  },
-  {
-    id: 'components/org/OrganizationSettingsSection.tsx',
-    render: async () => {
-      const { default: OrganizationSettingsSection } =
-        await import('@/components/org/OrganizationSettingsSection')
-      return h(OrganizationSettingsSection, { auth0Id: ORG, role: 'owner' })
     },
   },
   {
@@ -1340,13 +1317,6 @@ add(
     render: async () => {
       const { default: PrintReportButton } = await import('@/components/org/PrintReportButton')
       return h(PrintReportButton)
-    },
-  },
-  {
-    id: 'components/org/PrivacySection.tsx',
-    render: async () => {
-      const { default: PrivacySection } = await import('@/components/org/PrivacySection')
-      return h(PrivacySection)
     },
   },
   {

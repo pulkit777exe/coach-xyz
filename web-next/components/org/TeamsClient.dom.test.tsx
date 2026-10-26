@@ -104,7 +104,7 @@ const load = async () => {
     orgCreateSeason: async () => ({}),
     orgDeleteSeason: async () => ({}),
   }))
-  vi.doMock('@/lib/api', async (importOriginal) => ({
+  vi.doMock('@/lib/library', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     getFindingsTrends: deferred(trendCalls, byTeamOption),
   }))

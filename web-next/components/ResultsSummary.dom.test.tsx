@@ -72,7 +72,7 @@ const load = async () => {
   // would make the test a change-detector for a third party. Mocking the hook also
   // makes the two cases independent of each other rather than of ambient state.
   vi.doMock('motion/react', () => ({ useReducedMotion: () => reduceMotion }))
-  vi.doMock('@/lib/api', () => ({
+  vi.doMock('@/lib/scan', () => ({
     getAuthorizedDownloadUrl: async () => '/signed/video.mp4',
     getDownloadUrl: (id: string) => `/api/download/${id}`,
   }))

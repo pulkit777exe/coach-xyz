@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/9ui/ui/button'
 
-/** Blue text-button action — important keeps the override deterministic vs the ghost variant. */
 const ACTION_PRIMARY =
   'h-auto! px-1 text-body leading-5 font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
 

@@ -26,9 +26,6 @@ vi.mock('@/lib/preferences', () => ({
 vi.mock('@/components/org/MembersSection', () => ({ default: () => null }))
 vi.mock('@/components/org/ProfileForm', () => ({ default: () => null }))
 vi.mock('@/components/org/PreferencesSection', () => ({ default: () => null }))
-vi.mock('@/components/org/NotificationsSection', () => ({ default: () => null }))
-vi.mock('@/components/org/OrganizationSettingsSection', () => ({ default: () => null }))
-vi.mock('@/components/org/PrivacySection', () => ({ default: () => null }))
 
 const baseProps = {
   isDashboard: true,

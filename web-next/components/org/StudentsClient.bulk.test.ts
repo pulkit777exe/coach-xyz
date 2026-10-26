@@ -12,7 +12,7 @@ import { describe, expect, test } from 'vitest'
 // data rather than a visual glitch:
 //
 //   - bulk archive with one failure → the toast says "Updated 17" beside twenty rows
-//     all reading `archived`, and the three that failed reappear on reload.
+//     all reading `inactive`, and the three that failed reappear on reload.
 //   - bulk delete with one failure → the toast says "Removed 18 · 2 could not be
 //     removed", but ALL twenty vanish from the roster. The two survivors still have
 //     their attendance, objectives and plans, and because the selection was cleared they
@@ -29,7 +29,7 @@ import { describe, expect, test } from 'vitest'
 
 import { applyBulkDeleteResult, applyBulkStatusResult } from '@/components/org/StudentsClient'
 
-type Row = { id: string; status: 'active' | 'inactive' | 'transferred' | 'archived' }
+type Row = { id: string; status: 'active' | 'inactive' | 'transferred' }
 
 const rows = (...ids: string[]): Row[] => ids.map((id) => ({ id, status: 'active' as const }))
 
@@ -41,27 +41,27 @@ const all = (n: number, f: () => PromiseSettledResult<unknown>) => Array.from({ 
 
 describe('applyBulkStatusResult — only a fulfilled write changes local state', () => {
   test('every success updates its row', () => {
-    const r = applyBulkStatusResult(rows('a', 'b', 'c'), ['a', 'b', 'c'], all(3, ok), 'archived')
-    expect(r.rows.map((x) => x.status)).toEqual(['archived', 'archived', 'archived'])
+    const r = applyBulkStatusResult(rows('a', 'b', 'c'), ['a', 'b', 'c'], all(3, ok), 'inactive')
+    expect(r.rows.map((x) => x.status)).toEqual(['inactive', 'inactive', 'inactive'])
     expect(r.failed).toEqual([])
   })
 
   test('a PARTIAL failure leaves the failed row alone', () => {
-    // THE case. Under the old behaviour all three rows became `archived` while the toast
+    // THE case. Under the old behaviour all three rows became `inactive` while the toast
     // reported two.
     const r = applyBulkStatusResult(
       rows('a', 'b', 'c'),
       ['a', 'b', 'c'],
       [ok(), boom(), ok()],
-      'archived',
+      'inactive',
     )
-    expect(r.rows.map((x) => x.status)).toEqual(['archived', 'active', 'archived'])
+    expect(r.rows.map((x) => x.status)).toEqual(['inactive', 'active', 'inactive'])
     expect(r.succeeded).toEqual(['a', 'c'])
     expect(r.failed).toEqual(['b'])
   })
 
   test('a TOTAL failure changes nothing at all', () => {
-    const r = applyBulkStatusResult(rows('a', 'b'), ['a', 'b'], all(2, boom), 'archived')
+    const r = applyBulkStatusResult(rows('a', 'b'), ['a', 'b'], all(2, boom), 'inactive')
     expect(r.rows.every((x) => x.status === 'active')).toBe(true)
     expect(r.succeeded).toEqual([])
     expect(r.failed).toEqual(['a', 'b'])
@@ -70,7 +70,7 @@ describe('applyBulkStatusResult — only a fulfilled write changes local state',
   test('rows that were never selected are untouched', () => {
     // The `selected` vs `selectedIds` confusion in reverse: a row outside the request
     // must not move even when it shares the new status.
-    const r = applyBulkStatusResult(rows('a', 'z'), ['a'], [ok()], 'archived')
+    const r = applyBulkStatusResult(rows('a', 'z'), ['a'], [ok()], 'inactive')
     expect(r.rows[1].status).toBe('active')
     expect(r.rows[1].id).toBe('z')
   })
@@ -79,7 +79,7 @@ describe('applyBulkStatusResult — only a fulfilled write changes local state',
     // `setStudents(rows)` replaces state with this array, so a shared reference would let
     // React see the same object and skip the re-render — the update would be invisible.
     const input = rows('a', 'b')
-    const r = applyBulkStatusResult(input, ['a', 'b'], all(2, ok), 'archived')
+    const r = applyBulkStatusResult(input, ['a', 'b'], all(2, ok), 'inactive')
     expect(input.every((x) => x.status === 'active')).toBe(true)
     expect(r.rows).not.toBe(input)
     expect(r.rows[0]).not.toBe(input[0])
@@ -88,14 +88,14 @@ describe('applyBulkStatusResult — only a fulfilled write changes local state',
   test('a short results array cannot silently drop rows', () => {
     // `results[i]` is optional-chained inside the reducer precisely so a length mismatch
     // reads as "not fulfilled" rather than throwing mid-render.
-    const r = applyBulkStatusResult(rows('a', 'b', 'c'), ['a', 'b', 'c'], [ok()], 'archived')
+    const r = applyBulkStatusResult(rows('a', 'b', 'c'), ['a', 'b', 'c'], [ok()], 'inactive')
     expect(r.succeeded).toEqual(['a'])
     expect(r.failed).toEqual(['b', 'c'])
-    expect(r.rows.map((x) => x.status)).toEqual(['archived', 'active', 'active'])
+    expect(r.rows.map((x) => x.status)).toEqual(['inactive', 'active', 'active'])
   })
 
   test('an empty selection is a no-op', () => {
-    const r = applyBulkStatusResult(rows('a'), [], [], 'archived')
+    const r = applyBulkStatusResult(rows('a'), [], [], 'inactive')
     expect(r.rows.map((x) => x.status)).toEqual(['active'])
     expect(r.succeeded).toEqual([])
   })

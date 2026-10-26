@@ -75,7 +75,7 @@ const load = async () => {
   }))
   // SPREAD the real module so a sibling import gaining a name cannot break this stub
   // (the enumerated-mock trap), and replace only the read this component performs.
-  vi.doMock('@/lib/api', async (importOriginal) => ({
+  vi.doMock('@/lib/library', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     listClips: async (auth0Id: string, jobId: string) => {
       listClips.calls.push({ auth0Id, jobId })

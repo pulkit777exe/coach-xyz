@@ -19,12 +19,8 @@ import { cn } from '@/lib/utils'
 
 const ROLE_DOT: Record<MyOrg['role'], string> = {
   owner: 'bg-success',
-  admin: 'bg-info',
   head_coach: 'bg-warning',
-  assistant_coach: 'bg-warning/70',
-  coach: 'bg-warning',
-  analyst: 'bg-info/70',
-  medical: 'bg-muted-foreground/60',
+  junior_coach: 'bg-warning/70',
   player: 'bg-muted-foreground/60',
 }
 

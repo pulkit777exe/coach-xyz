@@ -13,19 +13,31 @@ import { Button } from '@/components/9ui/ui/button'
 
 export default function HistoryChat({
   auth0Id,
+  jobId,
+  summary,
   initialAnalysis,
 }: {
   auth0Id: string
-  initialAnalysis: {
+  jobId?: string
+  summary?: Record<string, unknown> | null
+  initialAnalysis?: {
     server_job_id: string
-    summary_json: Record<string, unknown> | null
+    summary_json?: unknown
   }
 }) {
+  const actualJobId = jobId ?? initialAnalysis?.server_job_id ?? ''
+  const actualSummary =
+    summary !== undefined
+      ? summary
+      : initialAnalysis?.summary_json && typeof initialAnalysis.summary_json === 'object'
+        ? (initialAnalysis.summary_json as Record<string, unknown>)
+        : null
+
   return (
     <HistoryChatPanel
       auth0Id={auth0Id}
-      jobId={initialAnalysis.server_job_id}
-      summary={initialAnalysis.summary_json}
+      jobId={actualJobId}
+      summary={actualSummary}
     />
   )
 }
@@ -140,9 +152,10 @@ function HistoryChatPanel({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about this analysis..."
+            placeholder="Ask about your analysis..."
+            aria-label="Ask about your analysis"
             disabled={loading}
-            className="flex-1 rounded-[6px] border border-input bg-background px-3 py-2 text-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 rounded-[6px] border border-input bg-background px-3 py-2 text-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-disabled"
           />
           <Button type="submit" disabled={loading || !input.trim()}>
             {loading ? 'Sending...' : 'Send'}

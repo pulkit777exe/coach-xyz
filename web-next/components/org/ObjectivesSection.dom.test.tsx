@@ -83,7 +83,7 @@ const load = async () => {
   // "genuinely empty" and "real trend" assertions fail while the failure cases pass.
   // A test that mocks the wrong module looks like it is exercising the fix when it is
   // really exercising its own stub. Hence the split stated explicitly.
-  vi.doMock('@/lib/api', () => ({
+  vi.doMock('@/lib/library', () => ({
     getFindingsTrends: async () => {
       if (!calls.trends.ok) throw new Error('trends boom')
       return { trends: calls.trends.value }

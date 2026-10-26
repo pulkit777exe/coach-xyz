@@ -25,7 +25,10 @@ export default async function SchedulePage() {
   // Widen the window by one day on each side so month-boundary events are
   // captured regardless of the server timezone vs. the browser timezone.
   const { from, to } = scheduleMonthWindow(new Date())
-  const scheduleRes = await orgSchedule(auth0Id, { from, to })
+  const scheduleRes = await orgSchedule(auth0Id, {
+    from: from.toISOString(),
+    to: to.toISOString(),
+  })
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">

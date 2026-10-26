@@ -9,8 +9,8 @@ import { Label } from '@/components/9ui/ui/label'
 import { Spinner } from '@/components/org/Spinner'
 
 import { updateMyProfile } from '@/lib/meApi'
-import type { CoachAIError } from '@/lib/api'
-import type { UserRecord } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
+import type { UserRecord } from '@/lib/user'
 
 export default function ProfileForm({
   initialName,

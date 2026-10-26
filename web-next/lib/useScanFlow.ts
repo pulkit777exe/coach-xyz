@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { scanVideoWithProgress, streamScanProgress } from '@/lib/scan'
-import { type CoachAIError } from '@/types'
-import { toCoachAIError } from '@/lib/errors'
+import type { CoachAIError } from '@/types'
+import { clientError, engineError, toCoachAIError } from '@/lib/errors'
 import type { ScanResult, UploadProgress } from '@/types'
 import { MAX_FILE_SIZE_BYTES } from '@/types'
 
@@ -42,19 +42,11 @@ export interface ScanFlow {
   revive: () => void
 }
 
-const invalidTypeError = (): CoachAIError => ({
-  code: 'INVALID_TYPE',
-  message: 'Please select a valid video file.',
-  layer: 'client',
-  retryable: false,
-})
+const invalidTypeError = (): CoachAIError =>
+  clientError('INVALID_TYPE', 'Please select a valid video file.')
 
-const tooLargeError = (): CoachAIError => ({
-  code: 'FILE_TOO_LARGE',
-  message: 'File size must be less than 500MB.',
-  layer: 'client',
-  retryable: false,
-})
+const tooLargeError = (): CoachAIError =>
+  clientError('FILE_TOO_LARGE', 'File size must be less than 500MB.')
 
 export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
   const [phase, setPhase] = useState<ScanPhase>('idle')
@@ -122,12 +114,7 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
             }
             if (event.complete) {
               if (event.error) {
-                throw {
-                  code: 'SCAN_FAILED',
-                  message: event.error,
-                  layer: 'engine',
-                  retryable: true,
-                } as CoachAIError
+                throw engineError('SCAN_FAILED', event.error, true)
               }
               break
             }
@@ -135,12 +122,7 @@ export function useScanFlow({ auth0Id, onAnalyze }: ScanFlowOptions): ScanFlow {
         } catch (err: unknown) {
           // If aborted (e.g., unmount), don't throw
           if (err instanceof DOMException && err.name === 'AbortError') {
-            throw {
-              code: 'REQUEST_TIMEOUT',
-              message: 'Scan cancelled.',
-              layer: 'client',
-              retryable: false,
-            } as CoachAIError
+            throw clientError('REQUEST_TIMEOUT', 'Scan cancelled.')
           }
           throw err
         }

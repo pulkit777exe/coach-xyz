@@ -107,7 +107,7 @@ export default function AppClient({
     handleReset,
     handleStartChat,
     handleBackToResults,
-  } = usePipeline(auth0Id, null, orgAuth0Id)
+  } = usePipeline(auth0Id)
 
   const progressPercent = uploadProgress?.percent ?? 0
   const activeScan = angleScans.find((s) => (s.angle ?? 'primary') === activeAngle) ?? scanResult

@@ -1,8 +1,6 @@
-import { mutateJson, queryJson } from './data/client'
-import { identityBase, meUrl } from './data/transport'
+import { identityBase } from './data/transport'
+import { errorFromResponse, isCoachAIError } from './errors'
 import { parseEventStream } from './sse'
-
-const IDENTITY_BASE: string = identityBase()
 
 /** Notification row as stored server-side. */
 export type AppNotification = {
@@ -16,13 +14,35 @@ export type AppNotification = {
   created_at: string
 }
 
-type NotificationsState = {
+/**
+ * Resolve the destination for a notification without coupling routing to the
+ * bell UI. New server rows carry a recipient-correct href; older rows fall back
+ * to the analysis route that the bell used before hrefs were added.
+ */
+export function notificationHref(notification: Pick<AppNotification, 'data'>): string | null {
+  const href = notification.data.href
+  if (typeof href === 'string' && href.length > 0) return href
+
+  const serverJobId = notification.data.server_job_id
+  if (typeof serverJobId === 'string' && serverJobId.length > 0) {
+    return `/dashboard/analysis/${encodeURIComponent(serverJobId)}`
+  }
+
+  return null
+}
+
+export type NotificationsState = {
   notifications: AppNotification[]
   unread_count: number
 }
 
 type NotificationEvent = AppNotification
+type NotificationStreamEvent = NotificationEvent | { type: 'heartbeat' }
 
+// Delivery-dedup for the CLIENT notification stream (NotificationBell).
+// Module-scoped like the attribution cache: safe because subscription only
+// ever runs in the browser — a server-side subscriber would share dedup
+// state across requests. Never import this module's stream fns server-side.
 const dedupeSet = new Set<string>()
 
 const DEDUPE_CAP = 10_000
@@ -37,83 +57,231 @@ function rememberDelivered(id: string): boolean {
  * Fetch the current notification list + unread count from the self-scoped API.
  * No auth0Id needed — the proxy injects identity via the session.
  */
-export async function fetchNotifications(): Promise<NotificationsState> {
-  try {
-    return await queryJson<NotificationsState>(meUrl('/notifications?limit=20'))
-  } catch {
-    return { notifications: [], unread_count: 0 }
+export async function fetchNotifications(signal?: AbortSignal): Promise<NotificationsState> {
+  const res = await fetch(`${identityBase()}/api/me/notifications?limit=20`, {
+    credentials: 'include',
+    signal,
+  })
+  if (!res.ok) {
+    // Through the shared mapping, like markRead/markAllRead below: the status
+    // stays in the message (the snapshot retry log reads it) and the thrown
+    // value gains the `retryable` verdict fetchNotificationsWithRetry needs to
+    // stop spending its budget on a 401/403/404 that can never succeed.
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'NOTIFICATIONS_FETCH_FAILED',
+      message: `Failed to fetch notifications (${res.status})`,
+    })
   }
+  return res.json()
+}
+
+const SNAPSHOT_RETRY_DELAYS_MS = [500, 1_500, 3_000] as const
+
+function waitForSnapshotRetry(delayMs: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/** Fetch a notification snapshot with a short, bounded recovery budget. */
+export async function fetchNotificationsWithRetry(
+  signal?: AbortSignal,
+  maxAttempts = SNAPSHOT_RETRY_DELAYS_MS.length + 1,
+): Promise<NotificationsState> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await fetchNotifications(signal)
+    } catch (error) {
+      lastError = error
+      if (signal?.aborted || attempt >= maxAttempts - 1) throw error
+      // Retry a mapped failure only when the mapping called it retryable: a
+      // 401/403/404 (expired session, org the caller is not in, route gone)
+      // is identical on every attempt, so three tries just delay the same
+      // failure by five seconds. Anything unmapped — a fetch TypeError from a
+      // dropped connection — is still worth the budget.
+      if (isCoachAIError(error) && error.retryable === false) throw error
+      await waitForSnapshotRetry(SNAPSHOT_RETRY_DELAYS_MS[attempt]!, signal)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Failed to fetch notifications')
 }
 
 /**
  * Mark a single notification as read.
  */
 export async function markRead(id: string): Promise<void> {
-  await mutateJson(meUrl(`/notifications/${id}/read`), 'POST').catch(() => undefined)
+  // The response is checked because the caller has already decremented
+  // unreadCount and flipped the row locally by the time this settles: an
+  // unchecked fetch resolves on a 401 or a 502, the dot clears, the user is told
+  // nothing, and the row comes back unread on the next snapshot — which only
+  // floors the count, so the count silently drifts too. Also encode the id,
+  // which every other module in this file does and this one did not.
+  const res = await fetch(`${identityBase()}/api/me/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'REQUEST_FAILED',
+      message: 'Could not mark that notification as read.',
+    })
+  }
 }
 
 /**
  * Mark all notifications as read.
  */
 export async function markAllRead(): Promise<void> {
-  await mutateJson(meUrl('/notifications/read-all'), 'POST').catch(() => undefined)
+  const res = await fetch(`${identityBase()}/api/me/notifications/read-all`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    throw errorFromResponse(res.status, await res.json().catch(() => ({})), {
+      code: 'REQUEST_FAILED',
+      message: 'Could not mark notifications as read.',
+    })
+  }
 }
 
 /**
  * Subscribe to the SSE notification stream. Each event is a full
  * `AppNotification` object. The signal controls connection lifecycle — aborting
- * it closes the SSE connection. Stream errors and closes are both handled with
- * a 10-second backoff before reconnecting (never a tight loop).
+ * it closes the SSE connection. Stream errors and closes use bounded
+ * exponential backoff (10s, 20s, 40s, then 60s); after the outage budget the
+ * stream waits for connectivity/visibility instead of reconnecting forever.
+ *
+ * `onReconnect` is called after every successfully established response,
+ * including the initial connection, so consumers can reconcile without racing
+ * the server-side subscription.
  *
  * Returns an unsubscribe function that also aborts the stream.
  */
 export function subscribeNotifications(
   onEvent: (n: AppNotification) => void,
   signal: AbortSignal,
+  onReconnect?: () => void,
 ): () => void {
-  const controller = new AbortController()
   const outerSignal = signal
-
-  // Tie external abort to our controller
-  const onAbort = () => controller.abort()
-  outerSignal.addEventListener('abort', onAbort)
-
+  let attemptController: AbortController | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let connectionTimer: ReturnType<typeof setTimeout> | null = null
+  let idleTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectAttempt = 0
+  let isConnecting = false
+  let isStreaming = false
+  let timedOut = false
+  const maxReconnectAttempts = 6
+  const reconnectDelays = [10_000, 20_000, 40_000, 60_000]
+
+  const clearReconnect = () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  const clearConnectionTimers = () => {
+    if (connectionTimer) clearTimeout(connectionTimer)
+    if (idleTimer) clearTimeout(idleTimer)
+    connectionTimer = null
+    idleTimer = null
+  }
+  const armIdleTimer = (attempt: AbortController) => {
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      timedOut = true
+      attempt.abort()
+    }, 90_000)
+  }
 
   const scheduleReconnect = () => {
-    if (controller.signal.aborted) return
-    reconnectTimer = setTimeout(connect, 10_000)
+    if (outerSignal.aborted || reconnectAttempt >= maxReconnectAttempts) return
+    const delay = reconnectDelays[Math.min(reconnectAttempt, reconnectDelays.length - 1)]
+    reconnectAttempt += 1
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      void connect()
+    }, delay)
   }
 
   async function connect() {
+    if (outerSignal.aborted || isConnecting || isStreaming) return
+    const attempt = new AbortController()
+    attemptController = attempt
+    const forwardAbort = () => attempt.abort()
+    outerSignal.addEventListener('abort', forwardAbort, { once: true })
+    isConnecting = true
+    timedOut = false
+    connectionTimer = setTimeout(() => {
+      timedOut = true
+      attempt.abort()
+    }, 15_000)
+
     try {
-      const res = await fetch(`${IDENTITY_BASE}/api/me/notifications/sse`, {
-        signal: controller.signal,
+      const res = await fetch(`${identityBase()}/api/me/notifications/sse`, {
+        signal: attempt.signal,
         credentials: 'include',
       })
 
       if (!res.ok || !res.body) return
+      if (connectionTimer) clearTimeout(connectionTimer)
+      connectionTimer = null
+      isStreaming = true
+      // Reconcile only after the response body is established, so a snapshot
+      // cannot race ahead of the new stream subscription.
+      onReconnect?.()
+      armIdleTimer(attempt)
 
-      for await (const event of parseEventStream<NotificationEvent>(res)) {
-        // Skip connected handshake
-        if ('connected' in event && (event as { connected?: boolean }).connected) continue
+      for await (const event of parseEventStream<NotificationStreamEvent>(res)) {
+        if (timedOut) break
+        armIdleTimer(attempt)
+        // Skip connected handshake and transport heartbeat.
+        if ('type' in event && event.type === 'heartbeat') continue
         if (!('id' in event)) continue
 
         const n = event as AppNotification
+        reconnectAttempt = 0
         if (rememberDelivered(n.id)) continue
         onEvent(n)
       }
     } catch {
-      // Fall through — scheduleReconnect handles the reconnection backoff
+      // Fall through — scheduleReconnect handles the bounded reconnection policy.
+    } finally {
+      clearConnectionTimers()
+      outerSignal.removeEventListener('abort', forwardAbort)
+      attemptController = null
+      isConnecting = false
+      isStreaming = false
     }
-    scheduleReconnect()
+    if (!outerSignal.aborted && (!attempt.signal.aborted || timedOut)) scheduleReconnect()
   }
 
-  connect()
+  const onOnline = () => {
+    if (outerSignal.aborted || isConnecting || isStreaming) return
+    reconnectAttempt = 0
+    clearReconnect()
+    void connect()
+  }
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') onOnline()
+  }
+  window.addEventListener('online', onOnline)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void connect()
 
   return () => {
-    if (reconnectTimer) clearTimeout(reconnectTimer)
-    outerSignal.removeEventListener('abort', onAbort)
-    controller.abort()
+    clearReconnect()
+    clearConnectionTimers()
+    attemptController?.abort()
+    window.removeEventListener('online', onOnline)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 }

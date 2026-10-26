@@ -35,7 +35,7 @@ import {
   orgDeleteAttendance,
 } from '@/lib/org'
 import { toISODate } from '@/lib/date'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
 
 type GridRecord = {
   student_id: string

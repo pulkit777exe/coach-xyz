@@ -10,7 +10,6 @@ import GlobalSearch from './GlobalSearch'
 import NotificationBell from './notifications/NotificationBell'
 import OrgPill from '@/components/org/OrgPill'
 import { Button } from '@/components/9ui/ui/button'
-import { usePreferenceSync } from '@/lib/preferences'
 import type { MyOrg } from '@/lib/meApi'
 
 type HeaderUser = {
@@ -296,10 +295,6 @@ export default function HeaderClient({
   // dashboard to open (/dashboard redirects them to /player) — the sidebar's
   // My Hub is their nav.
   const isPlayer = playerFace
-
-  // Signed-in only: mirror theme/motion/week-start to the account so they
-  // follow the user across devices. Marketing visitors never hit the API.
-  usePreferenceSync(Boolean(user))
 
   // Marketing pages get their own theme-aware Notion nav
   if (isMarketing(pathname)) return <MarketingNav user={user} />

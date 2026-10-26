@@ -57,7 +57,8 @@ import type {
   MetricTrend,
   ComparisonStudent,
 } from '@/lib/org'
-import type { DashboardAnalysis, CoachAIError } from '@/lib/api'
+import type { DashboardAnalysis } from '@/lib/library'
+import type { CoachAIError } from '@/lib/data/errors'
 import {
   orgStudentPerformance,
   orgAddPerformanceMetric,

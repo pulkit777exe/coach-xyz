@@ -7,20 +7,21 @@ import {
   makeUserMessage,
   useChatThread,
 } from '@/lib/useChatThread'
-import { sendChatMessageStream } from '@/lib/api'
+import { sendChatMessageStream } from '@/lib/chat'
 import { toCoachAIError } from '@/lib/errors'
-import type { ChatMessage } from '@/types'
 import { ChatMessageBubble } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { ChatTyping } from './ChatTyping'
 import { QuickActions } from './QuickActions'
 import { getConversation } from '@/lib/chat'
 import type { JobStatus } from '@/types'
+
+const STREAMING_MESSAGE_AT = Math.floor(Date.now() / 1000)
 import { SPORT_EMOJI } from '@/lib/sports'
 
 interface ChatPanelProps {
   jobId: string
-  jobStatus: JobStatus
+  jobStatus: JobStatus | null
   onSeekTo?: (seconds: number) => void
 }
 
@@ -63,14 +64,14 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       try {
         let finalText = ''
         let finalTimestampRefs: number[] = []
-        let finalEventRefs: string[] = []
+        let finalEventRefs: number[] = []
 
         for await (const event of sendChatMessageStream(jobId, text.trim(), controller.signal)) {
-          if (event.type === 'delta') {
-            finalText += event.content
+          if (event.type === 'token') {
+            finalText += event.text
             setStreamingText(finalText)
-          } else if (event.type === 'final') {
-            finalText = event.content
+          } else if (event.type === 'done') {
+            finalText = event.text
             finalTimestampRefs = event.timestamp_refs
             finalEventRefs = event.event_refs
           } else if (event.type === 'error') {
@@ -111,7 +112,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
     [handleSend],
   )
 
-  const sport = jobStatus.summary?.sport as string | undefined
+  const sport = jobStatus?.summary?.sport as string | undefined
 
   const sportEmoji = useMemo(() => {
     return (sport && SPORT_EMOJI[sport]) || '🎯'
@@ -154,7 +155,7 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
               id: 'streaming',
               role: 'assistant',
               content: streamingText,
-              created_at: Math.floor(Date.now() / 1000),
+              created_at: STREAMING_MESSAGE_AT,
             }}
             onSeekTo={onSeekTo}
           />
@@ -166,8 +167,12 @@ export default function ChatPanel({ jobId, jobStatus, onSeekTo }: ChatPanelProps
       </div>
 
       {/* Quick Actions (only show when not typing and have summary) */}
-      {!isTyping && jobStatus.summary && (
-        <QuickActions summary={jobStatus.summary} onSelect={handleQuickAction} />
+      {!isTyping && jobStatus?.summary && (
+        <QuickActions
+          onAction={handleQuickAction}
+          disabled={isTyping}
+          hasSummary={Boolean(jobStatus?.summary)}
+        />
       )}
 
       {/* Input */}

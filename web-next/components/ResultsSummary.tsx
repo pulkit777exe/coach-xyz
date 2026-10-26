@@ -5,7 +5,6 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useReducedMotion } from 'motion/react'
 import { Button } from '@/components/9ui/ui/button'
-import StatusPill from '@/components/org/StatusPill'
 import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
 import FindingsTimeline from '@/components/FindingsTimeline'
 import TimestampPill from '@/components/TimestampPill'
@@ -15,27 +14,6 @@ import { summaryNumber } from '@/lib/analysis'
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP)
-}
-
-const QUALITY_ISSUE_LABELS: Record<string, string> = {
-  missing_summary: 'unreadable summary',
-  missing_sport: 'sport not detected',
-  missing_form_score: 'score missing',
-  form_score_out_of_range: 'score out of range',
-  invalid_overall_rating: 'rating invalid',
-  missing_shot_events: 'no events detected',
-  malformed_shot_event: 'event data malformed',
-  event_missing_timestamp: 'event timestamp missing',
-  event_timestamp_out_of_range: 'event outside video',
-  event_count_mismatch: 'event count mismatch',
-  missing_findings: 'no findings derived',
-  malformed_finding: 'finding data malformed',
-  unsupported_strong_claim: 'claim needs evidence',
-  invalid_review_state: 'review state invalid',
-}
-
-function humanizeQualityIssue(code: string): string {
-  return QUALITY_ISSUE_LABELS[code] ?? code.replace(/_/g, ' ')
 }
 
 interface ResultsSummaryProps {
@@ -75,7 +53,7 @@ export default function ResultsSummary({
       gsap.from('.gsap-item', {
         y: 24,
         opacity: 0,
-        duration: 0.5,
+        duration: 0.3,
         stagger: 0.08,
         ease: 'power3.out',
       })
@@ -86,13 +64,14 @@ export default function ResultsSummary({
   if (!summary) {
     return (
       <div className="rounded-[6px] border border-border bg-card p-8 text-center text-muted-foreground">
-        No summary data available.
+        No analysis summary available.
       </div>
     )
   }
 
-  const score = summaryNumber(summary.form_score)
-  const scorePercent = score !== null ? Math.min(100, Math.max(0, score * 10)) : null
+  const formScore = summaryNumber(summary, 'form_score')
+  const score = formScore
+  const scorePercent = formScore !== null ? Math.min(100, Math.max(0, formScore * 10)) : null
   const rating = summary.overall_rating || 'Good'
   const sport = summary.sport || 'General'
 
@@ -150,30 +129,6 @@ export default function ResultsSummary({
             </Button>
           </div>
         </div>
-
-        {/* Quality issues banner (derived by the engine quality policy) */}
-        {status.quality_issues && status.quality_issues.length > 0 && (
-          <div className="gsap-item rounded-[6px] border border-warning/30 bg-warning/10 p-4">
-            <div className="flex items-start gap-3">
-              <span className="text-lg">⚠️</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-body font-medium text-foreground">
-                  Quality checks flagged this analysis
-                </p>
-                <p className="text-muted-foreground text-meta mt-0.5">
-                  Some metrics or timestamps may be approximate:
-                </p>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {status.quality_issues.map((issue) => (
-                    <StatusPill key={issue} tone="amber">
-                      {humanizeQualityIssue(issue)}
-                    </StatusPill>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Main Grid: Score Card + Key Insights */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -248,24 +203,6 @@ export default function ResultsSummary({
                   )}
                 </div>
 
-                {/* Areas for Improvement */}
-                <div className="rounded-[6px] border border-warning/20 bg-warning/10 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-warning text-body">!</span>
-                    <h3 className="text-body font-semibold text-foreground">Areas to Improve</h3>
-                  </div>
-                  {summary.improvements && summary.improvements.length > 0 ? (
-                    <ul className="text-body text-muted-foreground space-y-1.5 list-disc list-inside">
-                      {summary.improvements.slice(0, 3).map((imp, idx) => (
-                        <li key={idx} className="leading-snug">
-                          {imp}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-body text-muted-foreground">No critical flaws detected.</p>
-                  )}
-                </div>
               </div>
             </div>
 
@@ -287,31 +224,9 @@ export default function ResultsSummary({
           </div>
         </div>
 
-        {/* Cues / Corrections */}
-        {summary.corrections && summary.corrections.length > 0 && (
-          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
-            <h2 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-4">
-              Recommended Corrections
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {summary.corrections.map((corr, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-3 p-3.5 rounded-[6px] border border-border bg-card hover:bg-accent/50 transition-colors"
-                >
-                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-meta font-bold shrink-0 mt-0.5">
-                    {idx + 1}
-                  </span>
-                  <p className="text-body text-foreground leading-[1.55]">{corr}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Detailed Findings Timeline Component */}
         <div className="gsap-item">
-          <FindingsTimeline findings={summary.findings || []} shotEvents={summary.shot_events} />
+          <FindingsTimeline findings={summary.findings || []} />
         </div>
 
         {/* Event Breakdown - Collapsible */}

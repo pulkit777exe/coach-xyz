@@ -60,14 +60,13 @@ import {
   STUDENT_STATUS_LABELS,
 } from '@/lib/org'
 import { formatDateMed, toISODate } from '@/lib/date'
-import type { CoachAIError } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
 import { initials } from '@/lib/initials'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-success/15 text-success',
   inactive: 'bg-warning/15 text-warning',
   transferred: 'bg-muted text-muted-foreground',
-  archived: 'bg-muted text-muted-foreground',
 }
 
 /**
@@ -457,9 +456,9 @@ export default function StudentsClient({
   rosterFailed?: boolean
 }) {
   const [students, setStudents] = useState<Student[]>(initialStudents)
-  // Seeded from the prop, then owned locally: `refreshStudents`/`toggleArchived` re-run
-  // the same roster read, so a success has to clear the flag or the failure banner would
-  // keep sitting over a roster that has since loaded.
+  // Seeded from the prop, then owned locally: `refreshStudents` re-runs the same
+  // roster read, so a success has to clear the flag or the failure banner would keep
+  // sitting over a roster that has since loaded.
   const [rosterReadFailed, setRosterReadFailed] = useState(rosterFailed)
   const [search, setSearch] = useState('')
   const [sport, setSport] = useState('')
@@ -470,13 +469,9 @@ export default function StudentsClient({
   const [deleting, setDeleting] = useState<Student | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [showArchived, setShowArchived] = useState(false)
-  // `refreshStudents` and `toggleArchived` both re-read the roster, and neither the
-  // "Show archived" button nor the import dialog disables itself while the other's read
-  // is in flight. Without this token the earlier response can land last — a
-  // double-toggled roster would end up holding the `includeArchived: true` rows under a
-  // toggle that says they are hidden. Same rule as the debounced searches: only the
-  // newest roster read may answer.
+  // `refreshStudents` and the import dialog both re-read the roster without disabling
+  // each other, so an earlier response could land last. Same rule as the debounced
+  // searches: only the newest roster read may answer.
   const rosterSeq = useRef(0)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -523,16 +518,10 @@ export default function StudentsClient({
       const results = await Promise.allSettled(
         selectedIds.map((id) => orgUpdateStudent(auth0Id, id, { status: nextStatus })),
       )
-      // Only the ids whose write FULFILLED may change locally.
-      //
-      // This rewrote EVERY selected row regardless of outcome, so a partial failure made
-      // the roster claim a change the server rejected — and the toast, built from the
-      // `ok` count, said "Updated 17" beside twenty rows all reading `archived`. On
-      // reload the seventeen reappeared, which is the tell that the view had been lying.
-      //
-      // `succeeded` is a Set, so membership is O(1) and the row identity does not matter.
-      // Note the set is built from `results` in the SAME order as `selectedIds`, which is
-      // what pairs a result with its id; deriving both from one array is the whole fix.
+      // Only the ids whose write FULFILLED may change locally: rewriting every selected
+      // row regardless of outcome made the roster claim a change the server rejected,
+      // while the toast reported the `ok` count. The set is built from `results` in the
+      // SAME order as `selectedIds`, which is what pairs a result with its id.
       const { rows, succeeded, failed } = applyBulkStatusResult(
         students,
         selectedIds,
@@ -660,48 +649,12 @@ export default function StudentsClient({
     setStudents((prev) => prev.map((p) => (p.id === s.id ? s : p)))
   }
 
-  const refreshStudents = async (includeArchived = showArchived) => {
+  const refreshStudents = async () => {
     const my = ++rosterSeq.current
-    const res = await orgStudents(auth0Id, { includeArchived })
+    const res = await orgStudents(auth0Id)
     if (rosterSeq.current !== my) return
     setStudents(res.students)
     setRosterReadFailed(false)
-  }
-
-  const toggleArchived = async () => {
-    const next = !showArchived
-    setShowArchived(next)
-    const my = ++rosterSeq.current
-    try {
-      const res = await orgStudents(auth0Id, { includeArchived: next })
-      if (rosterSeq.current !== my) return
-      setStudents(res.students)
-      setRosterReadFailed(false)
-    } catch (err) {
-      // The rollback belongs to THIS attempt only. A superseded attempt that failed
-      // must not flip a toggle a later attempt has already settled — that would undo
-      // the newer read on the strength of an older request's error.
-      if (rosterSeq.current !== my) return
-      setShowArchived(!next)
-      toast.error((err as CoachAIError).message ?? 'Failed to load roster')
-    }
-  }
-
-  // Archive is an explicit status change, never a side effect: archived
-  // players leave the default roster but keep history, scope and by-id reads.
-  const setArchivedStatus = async (s: Student, archived: boolean) => {
-    const nextStatus = (archived ? 'archived' : 'active') as Student['status']
-    try {
-      const res = await orgUpdateStudent(auth0Id, s.id, { status: nextStatus })
-      setStudents((prev) =>
-        showArchived || !archived
-          ? prev.map((p) => (p.id === s.id ? res.student : p))
-          : prev.filter((p) => p.id !== s.id),
-      )
-      toast.success(archived ? `${s.full_name} archived` : `${s.full_name} restored`)
-    } catch (err) {
-      toast.error((err as CoachAIError).message ?? 'Failed to update student')
-    }
   }
 
   const confirmDelete = async () => {
@@ -800,14 +753,6 @@ export default function StudentsClient({
               <DownloadIcon /> Export
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void toggleArchived()}
-            aria-pressed={showArchived}
-          >
-            {showArchived ? 'Hide archived' : 'Show archived'}
-          </Button>
           {canInvite && (
             <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
               <UserPlusIcon />
@@ -853,14 +798,6 @@ export default function StudentsClient({
                   onClick={() => applyBulkStatus('inactive')}
                 >
                   Mark inactive
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkBusy}
-                  onClick={() => applyBulkStatus('archived')}
-                >
-                  Archive
                 </Button>
                 <Button
                   variant="outline"
@@ -1069,11 +1006,6 @@ export default function StudentsClient({
                           <DropdownMenuItem onClick={() => openEdit(s)}>
                             <PencilIcon className="size-3.5" />
                             Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => void setArchivedStatus(s, s.status !== 'archived')}
-                          >
-                            {s.status === 'archived' ? 'Restore' : 'Archive'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>

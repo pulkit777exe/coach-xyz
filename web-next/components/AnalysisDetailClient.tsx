@@ -20,20 +20,14 @@ const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
   ),
 })
 import HistoryChat from '@/components/HistoryChat'
-import {
-  getJobStatus,
-  getAuthorizedDownloadUrl,
-  getDownloadUrl,
-  deleteAnalysis,
-  cancelAnalysis,
-} from '@/lib/api'
-import type { CoachAIError } from '@/lib/api'
+import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
+import type { CoachAIError } from '@/lib/data/errors'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
 import type { JobStatus } from '@/types'
-import type { DashboardAnalysis } from '@/lib/api'
+import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'

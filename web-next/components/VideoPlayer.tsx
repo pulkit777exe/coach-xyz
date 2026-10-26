@@ -10,7 +10,7 @@ import {
   useMemo,
 } from 'react'
 import { Slide } from 'loading-dev'
-import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/api'
+import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
 import type { AnalysisSummary, ShotEvent } from '@/types'
 
 interface VideoPlayerProps {

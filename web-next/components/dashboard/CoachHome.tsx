@@ -15,7 +15,7 @@ import {
   UpcomingList,
   shellClass,
 } from '@/components/dashboard/OwnerHome'
-import type { DashboardAnalysis, DashboardStats } from '@/lib/api'
+import type { DashboardAnalysis, DashboardStats } from '@/lib/library'
 import type { DashboardQuickActions } from '@/lib/permissions'
 import type { OrgOverview, ReportRecord, ScheduleEvent } from '@/lib/org'
 import type { OrgRole } from '@/lib/serverData'
@@ -23,7 +23,7 @@ import type { Team } from '@/lib/teams'
 
 /** Today's org-admin surfaces: organization counts stay with these four. */
 function showsOrgSection(role: OrgRole): boolean {
-  return role === 'owner' || role === 'admin' || role === 'head_coach' || role === 'coach'
+  return role === 'owner' || role === 'head_coach'
 }
 
 function overviewTiles(overview: OrgOverview) {
@@ -105,8 +105,6 @@ function TeamsCard({ teams }: { teams: Team[] | null }) {
     </section>
   )
 }
-
-// ── Coach/staff home — training operations focus ────────────────────────────
 
 export default function CoachHome({
   firstName,

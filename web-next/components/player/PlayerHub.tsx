@@ -18,8 +18,8 @@ import { ProgressBar } from '@/components/interior/progress-bar'
 import PageHeader from '@/components/org/PageHeader'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
-import type { CoachAIError } from '@/lib/api'
-import { getJobStatus } from '@/lib/api'
+import type { CoachAIError } from '@/lib/data/errors'
+import { getJobStatus } from '@/lib/scan'
 import { meStartAnalysis } from '@/lib/playerUpload'
 import { useScanFlow } from '@/lib/useScanFlow'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
@@ -518,7 +518,7 @@ function AnalyzeVideoCard({
   }, [])
 
   const runAnalysis = useCallback(
-    async (scan: ScanResult, playerIndex: number, signal: AbortSignal) => {
+    async (scan: ScanResult, playerIndex: number) => {
       setFinished(false)
       setLocalError(null)
       setPercent(0)
@@ -530,22 +530,20 @@ function AnalyzeVideoCard({
             player_index: playerIndex,
             video_key: scan.video_key,
             angle: scan.angle ?? null,
-            signal,
           })
-          if (!liveRef.current || signal.aborted) return
+          if (!liveRef.current) return
           pollRef.current?.stop()
           pollRef.current = startAnalysisStatus({
             jobId: job_id,
             fetchStatus: getJobStatus,
             isComplete: (status) => status.complete,
             timeoutMs: 12 * 60 * 1000,
-            signal,
             onStatus: (status) => {
-              if (!liveRef.current || signal.aborted) return
+              if (!liveRef.current) return
               setPercent(Math.min(status.progress, 99))
             },
             onComplete: (status) => {
-              if (!liveRef.current || signal.aborted) return
+              if (!liveRef.current) return
               if (status.error) {
                 setLocalError(status.error)
                 flowResetRef.current()
@@ -557,7 +555,7 @@ function AnalyzeVideoCard({
               }
             },
             onError: (failure) => {
-              if (!liveRef.current || signal.aborted) return
+              if (!liveRef.current) return
               setLocalError(failure.error.message)
               flowResetRef.current()
               toastOnce(failure.error.code, failure.error.message)
@@ -565,7 +563,7 @@ function AnalyzeVideoCard({
           })
         } catch (e: unknown) {
           const err = toCoachAIError(e)
-          if (!liveRef.current || signal.aborted) return
+          if (!liveRef.current) return
           setLocalError(err.message)
           flowResetRef.current()
           toastOnce(err.code, err.message)

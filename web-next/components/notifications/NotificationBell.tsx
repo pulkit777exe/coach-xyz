@@ -22,7 +22,6 @@ import {
   subscribeNotifications,
 } from '@/lib/notifications'
 import type { AppNotification, NotificationsState } from '@/lib/notifications'
-import { getNotificationPrefs } from '@/lib/meApi'
 import { formatTimeShort } from '@/lib/date'
 import { errorMessageOf } from '@/lib/errors'
 import { cn } from '@/lib/utils'
@@ -46,44 +45,17 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
-  // The snapshot read has its own failure flag. It used to catch and drop the error,
-  // leaving `notifications` at `[]` — which rendered the confident sentence "No
-  // notifications yet" and an unread badge of 0. A coach reading that concludes no
-  // report finished, no analysis completed, no membership changed. `inAppEnabled`
-  // still fails OPEN below (a prefs outage must not hide the bell); that decision is
-  // about whether the bell exists, not about what an empty bell asserts.
+  // The snapshot read has its own failure flag: a caught error must not leave
+  // `notifications` at `[]`, which would assert "No notifications yet".
   const [loadFailed, setLoadFailed] = useState(false)
   const [open, setOpen] = useState(false)
-  const [inAppEnabled, setInAppEnabled] = useState<boolean | null>(null)
-  const prefsRequestRef = useRef<Promise<boolean> | null>(null)
   const notificationsLoadedRef = useRef(false)
   const liveNotificationIdsRef = useRef<Set<string>>(new Set())
   const locallyReadIdsRef = useRef<Set<string>>(new Set())
   const localRevisionRef = useRef(0)
 
   useEffect(() => {
-    let active = true
-
-    // Reuse the in-flight request across a Strict Mode effect replay, while
-    // ensuring preferences are fetched only once for this bell instance.
-    const request =
-      prefsRequestRef.current ??
-      getNotificationPrefs()
-        .then((prefs) => prefs.inApp)
-        .catch(() => true) // Fail open: a prefs outage must not hide the bell.
-    prefsRequestRef.current = request
-
-    void request.then((enabled) => {
-      if (active) setInAppEnabled(enabled)
-    })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (inAppEnabled !== true || notificationsLoadedRef.current) return
+    if (notificationsLoadedRef.current) return
     notificationsLoadedRef.current = true
 
     let unsubscribe: (() => void) | null = null
@@ -149,7 +121,7 @@ export default function NotificationBell() {
       unsubscribe?.()
       controller.abort()
     }
-  }, [inAppEnabled])
+  }, [])
 
   const sorted = useMemo(() => {
     return [...notifications].sort(
@@ -213,8 +185,6 @@ export default function NotificationBell() {
     })
     setOpen(false)
   }
-
-  if (inAppEnabled !== true) return null
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

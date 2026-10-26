@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import CoachHome from '@/components/dashboard/CoachHome'
 import OwnerHome from '@/components/dashboard/OwnerHome'
 import PlayerHome from '@/components/dashboard/PlayerHome'
-import type { DashboardAnalysis, DashboardStats } from '@/lib/api'
+import type { DashboardAnalysis, DashboardStats } from '@/lib/library'
 import type { OrgMembersResponse } from '@/lib/members'
 import type { OrgOverview, OrgSubscription, ReportRecord, ScheduleEvent } from '@/lib/org'
 import {
@@ -29,42 +29,19 @@ export const metadata: Metadata = {
   description: 'Overview of your organization, analyses, and activity.',
 }
 
-/**
- * Role-branched home. The ORG role (not the account role — that only steers
- * the /dashboard vs /player layout redirect) decides which dashboard renders:
- * owner → org health + plan + staff preview; every other staff role →
- * training operations (teams, org ops, feeds); org players → the real
- * self-scoped PlayerHub. This page owns the session gate, `noStore()` and all
- * fetching; the three components are pure server-rendered views.
- */
 export default async function DashboardPage() {
   noStore()
-  // Session + org context resolve in parallel (getOrgContext reads the
-  // session through its own cached call). Unauthenticated requests pay one
-  // wasted org fetch before the redirect below — negligible against the
-  // round trip saved on every authenticated load.
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id, role } = orgCtx
 
-  // ── Personal view for players (org role) ───────────────────────────────
-  // Players see only their own data via the self-scoped /api/me/* APIs —
-  // never the org roster, stats, or admin surfaces.
   if (role === 'player') {
     return <PlayerHome />
   }
 
   const isOwner = role === 'owner' || (role as string) === 'admin'
-  // Recents "View all" links to History — only for roles that may open it.
   const showHistoryLink = HISTORY_NAV_ROLES.includes(role)
-  // Action tiles mirror each destination's write floors (lib/permissions).
   const quickActions = dashboardQuickActions(role)
-  // Stats + analyses live under the self-scoped /api/auth/user/:id/* tree; the
-  // server floors cross-account reads to AUTH_USER_ALLOWED_MEMBER_ROLES
-  // (server/src/lib/serviceGuard.ts) — medical is excluded by design, and its
-  // permission matrix already denies analysis.read (lib/permissions.ts). Skip
-  // both fetches outside the floor: a single 403 would reject the Promise.all
-  // and null every widget on the landing.
   const canReadAccountData = AUTH_USER_ALLOWED_MEMBER_ROLES.includes(role)
   const displayName = session.user.name ?? session.user.email ?? ''
   const firstName = displayName.split('@')[0].split(' ')[0] || 'there'
@@ -77,10 +54,6 @@ export default async function DashboardPage() {
   let teams: Team[] | null = null
   let members: OrgMembersResponse | null = null
   let subscription: OrgSubscription | null = null
-  // `subscription === null` is ambiguous on its own — the server answers 403 for a
-  // role that may not read the plan, and the fetch below rejects for everything else.
-  // The card has to say different things for the two, so the page (the only place
-  // that sees the rejection) carries the flag down with it.
   let subscriptionFailed = false
   let error: string | null = null
 
@@ -105,10 +78,6 @@ export default async function DashboardPage() {
       orgSchedule(auth0Id, { from: now.toISOString(), to: inThirtyDays.toISOString() }),
       orgReports(auth0Id),
       orgOverview(auth0Id),
-      // Teams/members/subscription degrade to null rather than failing the page —
-      // members + subscription are owner-only server-side. The subscription
-      // rejection is recorded rather than swallowed, because "your role cannot see
-      // the plan" and "the plan read failed" are different answers for the reader.
       orgTeams(auth0Id).catch(() => null),
       isOwner ? orgMembers(auth0Id).catch(() => null) : Promise.resolve(null),
       isOwner

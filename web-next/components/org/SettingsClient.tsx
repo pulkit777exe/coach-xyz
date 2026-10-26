@@ -10,7 +10,7 @@ import buildSettingsSections, {
 import { getMyOrgs, getMyProfile } from '@/lib/meApi'
 import { orgOverview, orgStudents, orgSubscription } from '@/lib/org'
 import type { OrgOverview, Student } from '@/lib/org'
-import type { UserRecord } from '@/lib/api'
+import type { UserRecord } from '@/lib/user'
 import { preferredOrgCookie, resolveOrgContext } from '@/lib/orgContext'
 import type { OrgMemberRole } from '@/lib/members'
 

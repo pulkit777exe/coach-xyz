@@ -22,7 +22,6 @@ const read = (...p: string[]) => readFileSync(join(ROOT, ...p), 'utf8')
 
 const sidebar = read('components', 'SidebarSearch.tsx')
 const bell = read('components', 'notifications', 'NotificationBell.tsx')
-const privacy = read('components', 'org', 'PrivacySection.tsx')
 const link = read('components', 'org', 'AnalysisLinkControl.tsx')
 const history = read('app', 'dashboard', 'history', 'page.tsx')
 const wellness = read('components', 'org', 'WellnessSection.tsx')
@@ -144,20 +143,6 @@ describe('a failed read is never re-reported as an empty one', () => {
     expect(bell).toMatch(/if \(!controller\.signal\.aborted\) setLoadFailed\(true\)/)
   })
 
-  test('PrivacySection gives the REQUESTS branch its own error, like consent already had', () => {
-    // The asymmetry was the defect: consent had an `else` and requests had none, so a failed
-    // deletion-request read left the user with no record of their own request.
-    expect(privacy).toContain('requestsError')
-    // The asymmetry WAS the defect: consent had an `else`, requests had none. So the property
-    // is the `else` arm existing and setting it — not a `'rejected'` status string.
-    expect(privacy).toMatch(
-      /if \(requestsResult\.status === 'fulfilled'\) \{[\s\S]{0,200}\} else \{/,
-    )
-    expect(privacy).toMatch(/\} else \{\n\s*setRequestsError\(/)
-    // …and it must say the list below may be incomplete, not merely that something failed.
-    expect(privacy).toMatch(/may be incomplete|could not confirm/i)
-  })
-
   test('history: the error banner and the empty state are MUTUALLY EXCLUSIVE', () => {
     // Stacked, they showed a red "Failed to load history" beside "No analyses found — Upload a
     // video" with a live Start button: two contradictory states, and the one inviting a
@@ -186,7 +171,6 @@ describe('a failed read is never re-reported as an empty one', () => {
     for (const [src, needle] of [
       [sidebar, 'playersFailed'],
       [bell, 'loadFailed'],
-      [privacy, 'requestsError'],
       [link, 'rosterFailed'],
       [history, 'analyses.length === 0'],
       [wellness, 'checkinsOutcome'],

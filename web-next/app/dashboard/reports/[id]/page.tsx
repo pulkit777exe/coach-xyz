@@ -1,16 +1,17 @@
 import type { Metadata } from 'next'
+import { notFound, redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
-import { redirect, notFound } from 'next/navigation'
 import { getOrgContext, orgReport } from '@/lib/serverData'
-import ReportDetailClient from '@/components/org/ReportDetailClient'
-import PageHeader from '@/components/org/PageHeader'
 import { unstable_noStore as noStore } from 'next/cache'
+import { REPORT_TYPE_LABELS } from '@/lib/org'
+import type { ReportType } from '@/lib/org'
+import { formatDateMed } from '@/lib/date'
+import ReportBody from '@/components/org/ReportBody'
+import PrintReportButton from '@/components/org/PrintReportButton'
+import PageHeader from '@/components/org/PageHeader'
 
 export function generateMetadata(): Metadata {
-  return {
-    title: 'Report Detail | CoachXYZ',
-    description: 'Player evaluation report.',
-  }
+  return { title: 'Report | CoachXYZ', description: 'Generated coach report.' }
 }
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,15 +25,25 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   if (!report) notFound()
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+    <div className="mx-auto max-w-[800px] px-6 py-6 lg:px-8">
       <PageHeader
-        trail={['Home', 'Reports', report.title]}
-        title={report.title}
-        description={`Created ${new Date(report.created_at).toLocaleDateString()}`}
+        trail={['Reports', report.title || 'Untitled']}
+        title={report.title || 'Untitled'}
+        description={`${report.full_name || 'Organization'} · ${
+          REPORT_TYPE_LABELS[report.report_type as ReportType] ?? report.report_type
+        } · ${
+          report.period_start
+            ? `${formatDateMed(report.period_start)} → ${formatDateMed(report.period_end ?? report.period_start)}`
+            : 'All time'
+        }`}
+        actions={<PrintReportButton />}
       />
+
       <div className="mt-6">
-        <ReportDetailClient auth0Id={auth0Id} initialReport={report} />
+        <ReportBody report={report} showGenerated />
       </div>
+
+      <style>{`@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`}</style>
     </div>
   )
 }

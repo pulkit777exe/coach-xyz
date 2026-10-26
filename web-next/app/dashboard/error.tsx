@@ -5,11 +5,8 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/9ui/ui/button'
-
-/** Blue text-button primary action (important overrides the ghost variant deterministically). */
 const ACTION_PRIMARY =
   'h-auto! px-1 text-body leading-5 font-medium text-primary! transition-colors hover:bg-transparent! hover:text-primary/80!'
-/** Muted secondary text-button. */
 const ACTION_SECONDARY =
   'h-auto! px-1 text-body leading-5 font-medium text-muted-foreground! transition-colors hover:bg-transparent! hover:text-foreground!'
 
