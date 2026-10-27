@@ -2,6 +2,8 @@ name: coachai-prod
 
 services:
   engine:
+    networks:
+      - coachai_net
     build:
       context: ./engine
       dockerfile: Dockerfile
@@ -52,6 +54,8 @@ services:
       - coachai_net
 
   server:
+    networks:
+      - coachai_net
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -62,11 +66,13 @@ services:
       NODE_ENV: production
       UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
       UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
-      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL?DATABASE_URL is required}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:
       engine:
         condition: service_healthy
+    networks:
+      - coachai_net
     ports:
       - "${PORT:-8000}:8000"
     read_only: true
@@ -105,10 +111,35 @@ services:
     networks:
       - coachai_net
 
-volumes:
-  engine_tmp:
-    driver: local
+  web-next:
+    build:
+      context: ./web-next
+      dockerfile: Dockerfile
+    container_name: coachai-web
+    environment:
+      NEXT_PUBLIC_API_URL: ${FRONTEND_URL:-https://coachxyz.com}
+      NEXT_PUBLIC_UPSTASH_REDIS_REST_URL: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_URL:-}
+      NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN:-}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      NODE_ENV: production
+      APP_BASE_URL: ${FRONTEND_URL:-https://coachxyz.com}
+      NEXTAUTH_URL: ${FRONTEND_URL:-https://coachxyz.com}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - coachai_net
+    init: true
+    restart: unless-stopped
+    networks:
+      - coachai_net
 
 networks:
   coachai_net:
     driver: bridge
+
+volumes:
+  engine_tmp:
+    driver: local

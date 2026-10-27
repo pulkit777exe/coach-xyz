@@ -1,13 +1,15 @@
 services:
   engine:
+    networks:
+      - coachai_net
     build:
       context: ./engine
       dockerfile: Dockerfile
     container_name: coachai-engine
     environment:
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
     ports:
       - "8001:8001"
     volumes:
@@ -23,13 +25,15 @@ services:
     tmpfs:
       - /tmp:size=512m,mode=1777
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test: ["CMD", "python", "-c", "import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 10s
       start_period: 60s
       retries: 3
 
   server:
+    networks:
+      - coachai_net
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -37,9 +41,16 @@ services:
     environment:
       ENGINE_URL: http://engine:8001
       PORT: "8000"
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+      UPSTASH_REDIS_IOREDIS_URL: redis://redis:6379
+      DATABASE_URL: "postgresql://coachai:coachai@database:5432/coachai?sslmode=disable"
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:3000
     depends_on:
+      redis:
+        condition: service_healthy
+      database:
+        condition: service_healthy
       engine:
         condition: service_healthy
     ports:
@@ -51,5 +62,71 @@ services:
     pids_limit: 64
     mem_limit: 1g
 
+  redis:
+    networks:
+      - coachai_net
+    image: redis:7-alpine
+    container_name: coachai-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  database:
+    networks:
+      - coachai_net
+    image: postgres:16-alpine
+    container_name: coachai-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-coachai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coachai}
+      POSTGRES_DB: ${POSTGRES_DB:-coachai}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "coachai", "-d", "coachai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web-next:
+    networks:
+      - coachai_net
+    build:
+      context: ./web-next
+      dockerfile: Dockerfile
+    container_name: coachai-web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_UPSTASH_REDIS_REST_URL: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_URL:-}
+      NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN:-}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      NODE_ENV: development
+      APP_BASE_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+    command: ["bun", "run", "dev"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+
+
+networks:
+  coachai_net:
+    driver: bridge
+
 volumes:
   engine_tmp:
+    driver: local
+  pgdata:
+    driver: local
