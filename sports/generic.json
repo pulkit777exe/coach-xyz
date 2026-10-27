@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "label": "General",
+  "action": {
+    "signal": "wrist_speed",
+    "min_gap_s": 1.5,
+    "floor": 4.0
+  },
+  "event_types": ["action"],
+  "results": {
+    "positive": [],
+    "negative": [],
+    "neutral": ["unknown"]
+  },
+  "criteria": [],
+  "positions": [],
+  "camera_angles": [
+    {
+      "id": "side",
+      "label": "Side view",
+      "description": "Camera at 90 degrees to the action. Best for arm extension and lean."
+    },
+    {
+      "id": "front",
+      "label": "Front view",
+      "description": "Camera facing the athlete. Best for balance and knee alignment."
+    }
+  ],
+  "display_s": 2.5,
+  "coaching_note": "Describe the athletic action shown and judge technique conservatively."
+}

@@ -1,0 +1,46 @@
+environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+    ports:
+      - "8001:8001"
+    volumes:
+      - engine_tmp:/app/tmp
+    init: true
+    restart: unless-stopped
+    # §9 media-worker policy: no new privileges, capped processes, memory
+    # ceiling (tune mem_limit to the host; engine holds video + frames).
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 2g
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;batch.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: coachai-server
+    environment:
+      ENGINE_URL: http://engine:8001
+      PORT: "8000"
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:-}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-}
+    depends_on:
+      engine:
+        condition: service_health
+    ports:
+      - "8000:8000"
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 1g
