@@ -7,6 +7,12 @@ const isLocalRedis = REST_URL.includes('localhost') || REST_URL.includes('127.0.
 // REST URL format: https://<endpoint>.upstash.io
 // Redis protocol format: rediss://default:<token>@<endpoint>.upstash.io:6379
 function getRedisConnectionUrl(): string | null {
+  // Prioritize explicit local Redis URL if configured (e.g., docker Redis container)
+  // This prevents reconnect loops against unreachable Upstash Redis REST
+  const explicitLocalUrl = process.env.UPSTASH_REDIS_IOREDIS_URL
+  if (explicitLocalUrl) return explicitLocalUrl
+
+  // Fall back to original logic: derive from Upstash REST URL and token
   if (!REST_URL) return null
   if (isLocalRedis) return process.env.UPSTASH_REDIS_IOREDIS_URL || 'redis://localhost:6379'
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
@@ -39,11 +45,13 @@ export function getRawRedisClient(): IORedis | null {
 
   try {
     const IORedis = require('ioredis') as typeof import('ioredis').default
+    // TLS: false = plain TCP for non-TLS URLs (redis://); TLS enabled only for rediss://
     _rawClient = new IORedis(url, {
       maxRetriesPerRequest: null,
       commandTimeout: 10000,
       connectTimeout: 10000,
-      ...(isLocalRedis ? {} : { tls: {}, lazyConnect: false }),
+      tls: url.startsWith('rediss://') ? {} : false,
+      lazyConnect: false,
     })
     _rawClient.on('error', (err: Error) => {
       console.error(
