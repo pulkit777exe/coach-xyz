@@ -45,12 +45,13 @@ export function getRawRedisClient(): IORedis | null {
 
   try {
     const IORedis = require('ioredis') as typeof import('ioredis').default
-    // TLS: false = plain TCP for non-TLS URLs (redis://); TLS enabled only for rediss://
+    // ioredis v5: omit tls entirely for redis:// (plain TCP). Only include tls: {} for rediss:// URLs.
+    const tlsOpts = url.startsWith('rediss://') ? {} : undefined
     _rawClient = new IORedis(url, {
       maxRetriesPerRequest: null,
       commandTimeout: 10000,
       connectTimeout: 10000,
-      tls: url.startsWith('rediss://') ? {} : false,
+      tls: tlsOpts,
       lazyConnect: false,
     })
     _rawClient.on('error', (err: Error) => {

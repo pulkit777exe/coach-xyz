@@ -79,7 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Analysis',
     items: [
       { href: '/dashboard/history', label: 'History', icon: History, roles: HISTORY_NAV_ROLES },
-      { href: '/', label: 'New Analysis', icon: Sparkles, exact: true, roles: ANALYZE_NAV_ROLES },
+      { href: '/dashboard/new-analysis', label: 'New Analysis', icon: Sparkles, exact: true, roles: ANALYZE_NAV_ROLES },
     ],
   },
   {
