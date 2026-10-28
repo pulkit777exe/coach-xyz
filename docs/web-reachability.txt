@@ -1,19 +1,19 @@
 web-next source reachability from tests
 ========================================================================
-source files                     233
+source files                     237
 test files                       72
 
 statically imported by a test     169
 loaded only by a generic sweep    4    (readdirSync enumeration, no import edge)
-touched by nothing at all         60
-  static import edge              72.5% of files
-  any loader at all (edge+sweep)  74.2% of files
+touched by nothing at all         64
+  static import edge              71.3% of files
+  any loader at all (edge+sweep)  73.0% of files
 
-lines in source                  33287
-lines in untouched files         4701  (14.1%)
+lines in source                  33406
+lines in untouched files         4796  (14.4%)
 
 touched by nothing, by top-level directory
-  app            54 files    4486 lines
+  app            58 files    4581 lines
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
@@ -24,29 +24,29 @@ components with NO test written for them (sweep-rendered only)
 
 the 25 largest untouched files
     347  app/dashboard/org/page.tsx
-    269  app/share/[token]/page.tsx
-    249  app/pricing/page.tsx
+    273  app/share/[token]/page.tsx
+    249  app/(site)/pricing/page.tsx
     234  app/dashboard/features/page.tsx
     184  app/account/page.tsx
     177  app/dashboard/support/page.tsx
-    165  app/about/page.tsx
+    165  app/(site)/about/page.tsx
     164  app/dashboard/history/page.tsx
     149  app/dashboard/help/page.tsx
     147  lib/useAnalysisDetailState.ts
+    146  app/dashboard/layout.tsx
     142  app/dashboard/page.tsx
-    139  app/dashboard/layout.tsx
-    132  app/privacy/page.tsx
-    132  app/terms/page.tsx
-    126  app/features/page.tsx
-    103  app/contact/page.tsx
+    132  app/(site)/privacy/page.tsx
+    132  app/(site)/terms/page.tsx
+    126  app/(site)/features/page.tsx
+    103  app/(site)/contact/page.tsx
      91  app/dashboard/_shell.ts
+     84  app/player/layout.tsx
      83  app/dashboard/students/[id]/page.tsx
-     77  app/player/layout.tsx
-     71  app/layout.tsx
-     68  app/login/page.tsx
+     74  app/layout.tsx
+     68  app/(site)/login/page.tsx
      65  app/dashboard/attendance/page.tsx
+     62  app/(site)/signup/page.tsx
      62  app/dashboard/history/error.tsx
-     62  app/signup/page.tsx
      61  app/player/reports/[id]/page.tsx
 
 LIMITS, stated so this number is not over-read:

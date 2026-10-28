@@ -3,7 +3,7 @@ re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/co
 
 scope
   roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
-  first-party files: 197 (app 55, components 78, lib 64)
+  first-party files: 201 (app 59, components 78, lib 64)
   vendored path exemption: components/9ui/, components/interior/ — 31 files
   colour utilities resolvable from @theme (--color-*): 52
 

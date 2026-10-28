@@ -209,7 +209,9 @@ describe('no barrel imports — statically analyzable paths only', () => {
     expect(resolves('@/components/NoSuchModule', 'app/layout.tsx')).toBe(false)
     expect(resolves('./NoSuchFile', 'app/layout.tsx')).toBe(false)
     // And a real one still resolves, so the check is not simply always-false.
-    expect(resolves('@/components/AuthHeader', 'app/layout.tsx')).toBe(true)
+    // The root layout is the static shell now; the session header is imported by
+    // the dynamic segment layouts that render it.
+    expect(resolves('@/components/AuthHeader', 'app/dashboard/layout.tsx')).toBe(true)
     expect(resolves('./globals.css', 'app/layout.tsx')).toBe(true)
   })
 

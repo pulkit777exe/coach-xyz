@@ -1,10 +1,14 @@
 import { connection } from 'next/server'
+import AuthHeader from '@/components/AuthHeader'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { House } from 'lucide-react'
 import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
+
+// Per-request by design: the player hub is always rendered from the live session.
+export const dynamic = 'force-dynamic'
 
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
   // Same reason as the dashboard layout: opt out of static prerendering before
@@ -54,7 +58,9 @@ export default async function PlayerLayout({ children }: { children: React.React
   )
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <>
+      <AuthHeader />
+      <div className="flex min-h-screen bg-background">
       {/* Sidebar — same Notion chrome as the dashboard shell; strictly below
           the fixed topbar so the footer stays on screen (see dashboard). */}
       <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-[240px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
@@ -72,5 +78,6 @@ export default async function PlayerLayout({ children }: { children: React.React
         </main>
       </div>
     </div>
+    </>
   )
 }

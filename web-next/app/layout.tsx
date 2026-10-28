@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
-import AuthHeader from '@/components/AuthHeader'
 import SkipLink from '@/components/SkipLink'
 import { PreferencesProvider } from '@/lib/preferences'
 import { Toaster } from '@/components/9ui/ui/sonner'
@@ -42,6 +41,11 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
+// The root layout is the STATIC shell: fonts, providers and toasts only, no
+// session read, so routes that do not opt into dynamic rendering are
+// prerendered at build time. The header lives in the segment that owns it —
+// `app/(site)` for static marketing pages, `AuthHeader` for dynamic app routes
+// (dashboard, player, account, analyze, invite).
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -58,7 +62,6 @@ export default function RootLayout({
         <Analytics />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <PreferencesProvider>
-            <AuthHeader />
             <SkipLink />
             <div className="root">{children}</div>
             <Toaster position="bottom-right" richColors />

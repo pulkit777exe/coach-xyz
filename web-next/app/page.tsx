@@ -1,6 +1,11 @@
 import { getSession } from '@/lib/session'
 import { getOrgContext } from '@/lib/serverData'
 import AppClient from '@/components/AppClient'
+import AuthHeader from '@/components/AuthHeader'
+
+// Dynamic: the landing page reads the session to attribute an anonymous upload
+// to the signed-in org. The static marketing pages live in `app/(site)`.
+export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'CoachXYZ | AI Sports Form Analysis',
@@ -25,5 +30,10 @@ export default async function Home() {
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext().catch(() => null)])
   const auth0Id = session?.user?.sub ?? null
 
-  return <AppClient auth0Id={auth0Id} orgAuth0Id={orgCtx?.auth0Id ?? null} />
+  return (
+    <>
+      <AuthHeader />
+      <AppClient auth0Id={auth0Id} orgAuth0Id={orgCtx?.auth0Id ?? null} />
+    </>
+  )
 }

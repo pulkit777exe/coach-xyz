@@ -11,6 +11,10 @@ import { formatDateLong } from '@/lib/date'
 // slice of the analysis. Lives under /share/<token> (outside the coach-only
 // dashboard layout).
 
+// Dynamic: the token is resolved against the server on every request, and an
+// expired link must never be cached.
+export const dynamic = 'force-dynamic'
+
 export async function generateMetadata({
   params,
 }: {

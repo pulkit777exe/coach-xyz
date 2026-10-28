@@ -296,8 +296,27 @@ export default function HeaderClient({
   // My Hub is their nav.
   const isPlayer = playerFace
 
+  // Static pages prerender signed out so they stay cacheable; this fills the
+  // real session in from the browser. Server-rendered shells (dashboard, home,
+  // account) pass a user, which always wins over the fetched one.
+  const [clientUser, setClientUser] = useState<HeaderUser>(null)
+  useEffect(() => {
+    if (user) return
+    let alive = true
+    fetch('/auth/profile', { headers: { accept: 'application/json' } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((sessionUser: HeaderUser) => {
+        if (alive && sessionUser?.sub) setClientUser(sessionUser)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [user])
+  const activeUser = user ?? clientUser
+
   // Marketing pages get their own theme-aware Notion nav
-  if (isMarketing(pathname)) return <MarketingNav user={user} />
+  if (isMarketing(pathname)) return <MarketingNav user={activeUser} />
 
   // Dashboard / app — theme-aware (light/dark) with spacer so body doesn't need pt
   return (
@@ -325,11 +344,11 @@ export default function HeaderClient({
           {!isPlayer && <OrgPill orgs={orgs} currentAuth0Id={currentOrgId} />}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <GlobalSearch sub={user?.sub ?? null} />
+          <GlobalSearch sub={activeUser?.sub ?? null} />
           <div className="hidden sm:flex items-center text-muted-foreground">
             <ThemeToggle />
           </div>
-          {user ? (
+          {activeUser ? (
             <div className="flex items-center gap-2">
               <NotificationBell />
               {!isPlayer && (
@@ -344,7 +363,12 @@ export default function HeaderClient({
                 href="/account"
                 className="rounded-[6px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
-                <UserAvatar picture={user.picture} name={user.name} email={user.email} size="sm" />
+                <UserAvatar
+                  picture={activeUser.picture}
+                  name={activeUser.name}
+                  email={activeUser.email}
+                  size="sm"
+                />
               </Link>
             </div>
           ) : (

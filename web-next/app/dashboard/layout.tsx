@@ -1,4 +1,5 @@
 import { connection } from 'next/server'
+import AuthHeader from '@/components/AuthHeader'
 import { getSession } from '@/lib/session'
 import { getUserProfile, getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { appFace } from '@/lib/appFace'
@@ -7,6 +8,9 @@ import DashboardNav from '@/components/DashboardNav'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
 import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import SidebarSearch from '@/components/SidebarSearch'
+
+// Per-request by design: the dashboard is always rendered from the live session.
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Opt the whole segment into dynamic rendering BEFORE any session read. Without
@@ -114,7 +118,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   )
 
   return (
-    <div className="dashboard-shell flex min-h-screen bg-background dark:bg-[var(--marketing-dark)]">
+    <>
+      <AuthHeader />
+      <div className="dashboard-shell flex min-h-screen bg-background dark:bg-[var(--marketing-dark)]">
       {/* Sidebar — Notion chrome: 240px, hairline border on bg-sidebar,
           internal scroll region with a bottom-pinned footer block. Sits
           strictly below the fixed topbar (top-14) so the footer never hangs
@@ -133,6 +139,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
