@@ -9,11 +9,11 @@ touched by nothing at all         60
   static import edge              72.5% of files
   any loader at all (edge+sweep)  74.2% of files
 
-lines in source                  33273
-lines in untouched files         4687  (14.1%)
+lines in source                  33287
+lines in untouched files         4701  (14.1%)
 
 touched by nothing, by top-level directory
-  app            54 files    4472 lines
+  app            54 files    4486 lines
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
@@ -34,15 +34,15 @@ the 25 largest untouched files
     149  app/dashboard/help/page.tsx
     147  lib/useAnalysisDetailState.ts
     142  app/dashboard/page.tsx
+    139  app/dashboard/layout.tsx
     132  app/privacy/page.tsx
     132  app/terms/page.tsx
-    131  app/dashboard/layout.tsx
     126  app/features/page.tsx
     103  app/contact/page.tsx
      91  app/dashboard/_shell.ts
      83  app/dashboard/students/[id]/page.tsx
+     77  app/player/layout.tsx
      71  app/layout.tsx
-     71  app/player/layout.tsx
      68  app/login/page.tsx
      65  app/dashboard/attendance/page.tsx
      62  app/dashboard/history/error.tsx

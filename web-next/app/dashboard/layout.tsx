@@ -1,3 +1,4 @@
+import { connection } from 'next/server'
 import { getSession } from '@/lib/session'
 import { getUserProfile, getMyOrgsCached, getOrgContext } from '@/lib/serverData'
 import { appFace } from '@/lib/appFace'
@@ -8,6 +9,13 @@ import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import SidebarSearch from '@/components/SidebarSearch'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Opt the whole segment into dynamic rendering BEFORE any session read. Without
+  // this, `next build` attempts a static prerender, `headers()` throws Next's
+  // dynamic-usage bailout, and the catch below logs it as an auth failure — 19
+  // "Failed to get auth session" errors on every build. `connection()` is the
+  // documented Next 16 opt-out and is already the convention in this app's pages.
+  await connection()
+
   let session
   try {
     session = await getSession()

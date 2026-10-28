@@ -1,3 +1,4 @@
+import { connection } from 'next/server'
 import { getSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -6,6 +7,11 @@ import SidebarProfileMenu from '@/components/SidebarProfileMenu'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
 
 export default async function PlayerLayout({ children }: { children: React.ReactNode }) {
+  // Same reason as the dashboard layout: opt out of static prerendering before
+  // reading the session, so `next build` does not report the dynamic-rendering
+  // bailout as an auth failure.
+  await connection()
+
   let session
   try {
     session = await getSession()
