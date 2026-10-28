@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from . import config, llm, measure, prompts, video
+from . import config, llm, measure, prompts, sports, video
 from .errors import Cancelled
 from .motion import Candidate
 from .sports import KNOWN, Pack
@@ -133,8 +133,14 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
         if os.path.exists(proxy):
             os.unlink(proxy)
 
+    # Clean against the pack the model actually identified. When the sport was not
+    # given, the prompt ran on `generic`, so cleaning with THAT pack coerced every
+    # real event type and result down to "action"/neutral before the pipeline had a
+    # chance to load the identified pack.
     sport = out.sport if out.sport in KNOWN else pack.name
-    verdicts = {v.candidate - 1: _clean(v, pack) for v in out.events if 1 <= v.candidate <= len(cands)}
+    clean_pack = pack if sport == pack.name else sports.load(sport)
+    verdicts = {v.candidate - 1: _clean(v, clean_pack) for v in out.events
+                if 1 <= v.candidate <= len(cands)}
     for i in range(len(cands)):
         verdicts.setdefault(i, {"is_event": False, "type": "other", "result": "unknown", "feedback": "",
                                 "confidence": 0.0, "ratings": {}})

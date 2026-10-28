@@ -60,6 +60,20 @@ def measure(track: Track, i: int, side: str, pack: Pack) -> dict:
     return {"criteria": rows, "side": side, "sample": i, "t": float(track.t[i])}
 
 
+def unmeasured(pack: Pack) -> list[dict]:
+    """Rows for a moment where nothing could be measured at all.
+
+    Same shape as `measure()`, with no value: `apply_ratings` can still fill a
+    judged score, and `combine` reports None instead of pretending a zero. A bare
+    `{}` here used to crash `apply_ratings` with a KeyError.
+    """
+    return [{"key": c.key, "label": c.label, "metric": c.metric, "unit": "deg", "weight": c.weight,
+             "ideal": list(c.ideal) if c.ideal else None,
+             "acceptable": list(c.acceptable) if c.acceptable else None,
+             "value": None, "confidence": None, "score": None, "source": "none",
+             "note": "player not clearly visible here"} for c in pack.criteria]
+
+
 def apply_ratings(rows: list[dict], ratings: dict[str, str]) -> None:
     """Fill unmeasured criteria from a model's rating, flagged as a judgement."""
     for row in rows:

@@ -29,13 +29,11 @@ def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgem
         v = judgement.verdicts.get(i)
         if not v or not v["is_event"]:
             continue
-        # Check if track has valid landmarks; if not, score is unknown
+        # No usable pose at this sample: keep real criterion rows (with no value)
+        # so a model rating can still fill them and `combine` reports None. Empty
+        # dicts here raised KeyError in apply_ratings/combine, failing the job.
         if not track.valid.any() or track.conf[c.i] < 0.3:
-            rows = [{}
-        for c_ in pack.criteria]
-            score = 0.0
-            coverage = 0.0
-            feedback = "Unable to measure - player not clearly visible"
+            rows = measure.unmeasured(pack)
         else:
             rows = measure.measure(track, c.i, c.side, pack)["criteria"]
         measure.apply_ratings(rows, v["ratings"])

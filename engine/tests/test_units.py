@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 from google.genai import errors
 
-from core import config, db, events, geometry as g, llm, measure, motion, sessions, sports, storage
+from core import config, db, events, geometry as g, judge, llm, measure, motion, result, sessions, sports, storage
+from core.judge import Review, Verdict
 from core.sports import Criterion
 from core.track import Track, clean
 
@@ -250,3 +251,59 @@ def test_sessions_expire_and_replaced_uploads_are_reported(monkeypatch):
     assert sessions.angle(token, "side")[0] == "primary"  # unknown angle falls back to primary
     monkeypatch.setattr(config.settings, "session_ttl_s", -1)
     assert sessions.get(token) is None
+
+
+# -- judging and result edge cases --------------------------------------------
+
+class SportModel:
+    """Answers with a sport the caller did not name, as the real model can."""
+
+    def video_part(self, path, fps):
+        return object(), None
+
+    def drop_file(self, name):
+        pass
+
+    def structured(self, contents, schema, system=None, video=False):
+        return "fake", Review(
+            sport="tennis",
+            events=[Verdict(candidate=1, is_event=True, event_type="serve", result="ace",
+                            ratings=[], feedback="Toss higher.", confidence=0.9)],
+            summary="", strengths=[], focus_areas=[], priority_drill="",
+        )
+
+
+def test_a_model_identified_sport_cleans_its_own_event_types(video):
+    track = synthetic_track({2.0: 0.6})
+    cands = [motion.Candidate(i=24, t=2.0, strength=1.0, side="right")]
+    judged = judge.review(track, cands, [{"criteria": []}], sports.load(None), video,
+                          sport_known=False, make_llm=SportModel)
+    # "serve"/"ace" are tennis words. Cleaning with the generic pack that the prompt
+    # was built from rewrote both to "action"/unknown before anything reloaded the
+    # identified pack, so the result lost the real event type it was given.
+    assert judged.sport == "tennis"
+    assert judged.verdicts[0]["type"] == "serve" and judged.verdicts[0]["result"] == "ace"
+
+
+def test_unmeasured_rows_keep_their_shape_and_accept_a_judged_rating():
+    pack = sports.load("basketball")
+    rows = measure.unmeasured(pack)
+    assert [r["key"] for r in rows] == [c.key for c in pack.criteria]
+    assert all(r["source"] == "none" and r["score"] is None for r in rows)
+    assert measure.apply_ratings(rows, {rows[0]["key"]: "good"}) is None
+    assert rows[0]["source"] == "judged" and rows[0]["score"] == 1.0
+    score, coverage = measure.combine(rows)
+    assert coverage > 0 and (score is None or 0 <= score <= 10)
+
+
+def test_an_event_at_a_weak_pose_sample_is_unmeasured_not_a_crash():
+    track = synthetic_track({2.0: 0.6})
+    track.conf[:] = 0.1  # below the 0.3 confidence floor result.build checks
+    cands = [motion.Candidate(i=24, t=2.0, strength=1.0, side="right")]
+    judged = judge.Judgement(source="model", sport="basketball", verdicts={
+        0: {"is_event": True, "type": "three_pointer", "result": "made", "feedback": "",
+            "confidence": 0.9, "ratings": {}}})
+    built = result._events("job", track, cands, judged, sports.load("basketball"))
+    assert len(built) == 1
+    assert built[0]["score"] is None and built[0]["score_source"] is None
+    assert built[0]["measurements"] and built[0]["feedback"]
