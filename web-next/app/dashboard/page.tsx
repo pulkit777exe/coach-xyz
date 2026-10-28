@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 
 import CoachHome from '@/components/dashboard/CoachHome'
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 }
 
 export default async function DashboardPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id, role } = orgCtx

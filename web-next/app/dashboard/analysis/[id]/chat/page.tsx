@@ -1,12 +1,12 @@
 import { notFound, redirect } from 'next/navigation'
 import { getDashboardAnalysisDetail, getOrgContext } from '@/lib/serverData'
 import { getSession } from '@/lib/session'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import HistoryChat from '@/components/HistoryChat'
 
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
     redirect('/auth/login')

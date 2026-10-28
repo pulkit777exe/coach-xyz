@@ -33,7 +33,7 @@ import { join, relative } from 'node:path'
 //
 // This is a source-level guard and says so, in the spirit of `typeScale.test.ts`:
 // it sees the import statement, not the rendered output. What it cannot check is
-// whether a page fetches the right THING, or whether it calls `noStore()`.
+// whether a page fetches the right THING, or whether it calls `connection()`.
 
 const APP_DIR = join(import.meta.dirname, '..', '..', 'app')
 
@@ -291,13 +291,17 @@ describe('the limits of this guard, stated rather than implied', () => {
     expect(file!.source.length).toBeGreaterThan(0)
   })
 
-  test('the noStore() requirement on authenticated pages is NOT checked here', () => {
-    // Named as a known gap. `AGENTS.md` requires unstable_noStore on
+  test('the connection() requirement on authenticated pages is NOT checked here', () => {
+    // Named as a known gap. `AGENTS.md` requires `connection()` (next/server) on
     // authenticated dashboard pages serving fresh data; nothing in this file
     // verifies it, and pretending otherwise would be the same error as the
     // original 43-skip gate — a claim in the ledger that no assertion backs.
-    const noStorePages = serverFiles.filter((f) => /unstable_noStore|noStore\(\)/.test(f.source))
-    expect(noStorePages.length).toBeGreaterThan(0)
+    // `unstable_noStore` is deprecated in Next 16 and resolves to the same
+    // dynamic-rendering opt-out, so both spellings count as opting out.
+    const dynamicPages = serverFiles.filter((f) =>
+      /connection\(\)|unstable_noStore/.test(f.source),
+    )
+    expect(dynamicPages.length).toBeGreaterThan(0)
     // Recorded, not asserted: the count is informational so a drop is visible in
     // a diff rather than silent.
   })

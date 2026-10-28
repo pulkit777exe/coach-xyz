@@ -14,7 +14,7 @@ import {
 import StudentProfile from '@/components/org/StudentProfile'
 import { hasPermission } from '@/lib/permissions'
 import PageHeader from '@/components/org/PageHeader'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export async function generateMetadata({
   params,
@@ -35,7 +35,7 @@ export async function generateMetadata({
 }
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
+  await connection()
   const { id } = await params
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')

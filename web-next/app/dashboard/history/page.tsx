@@ -9,7 +9,7 @@ import EmptyState from '@/components/org/EmptyState'
 import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
 import { HISTORY_NAV_ROLES } from '@/lib/nav'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import { formatDateMed } from '@/lib/date'
 
 export const metadata: Metadata = {
@@ -22,7 +22,7 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ page?: string }>
 }) {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
     redirect('/auth/login')

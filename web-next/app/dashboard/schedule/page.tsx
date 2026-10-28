@@ -6,7 +6,7 @@ import { scheduleMonthWindow } from '@/lib/date'
 import ScheduleClient from '@/components/org/ScheduleClient'
 import PageHeader from '@/components/org/PageHeader'
 import { hasPermission } from '@/lib/permissions'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Schedule | CoachXYZ',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 }
 
 export default async function SchedulePage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id } = orgCtx

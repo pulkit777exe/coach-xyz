@@ -8,7 +8,7 @@ import InvitesClient from '@/components/org/InvitesClient'
 import PageHeader from '@/components/org/PageHeader'
 import { MEMBERS_NAV_ROLES } from '@/lib/nav'
 import { MEMBER_INVITE_ROLES } from '@/lib/permissions'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Members | CoachXYZ',
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 }
 
 export default async function MembersPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id, role } = orgCtx

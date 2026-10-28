@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { getSession } from '@/lib/session'
 import { getOrgContext, getDashboardAnalysisDetail } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import AnalysisDetailClient from '@/components/AnalysisDetailClient'
 import { analysisDetailCapabilities } from '@/lib/permissions'
 import { isCoachAIError } from '@/lib/errors'
@@ -20,7 +20,7 @@ export async function generateMetadata({
 }
 
 export default async function AnalysisDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
+  await connection()
   const { id } = await params
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) {
