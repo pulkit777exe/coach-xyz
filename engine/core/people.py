@@ -110,7 +110,7 @@ def _crop_b64(frame: np.ndarray, box) -> str:
     return base64.b64encode(buf.tobytes()).decode() if ok else ""
 
 
-def scan(path: str, detector, progress=lambda done, total: None, samples: int = 20) -> list[dict]:
+def scan(path: str, detector, progress=lambda done, total: None, samples: int = 20, require_players: bool = True, whole_frame_analysis: bool = False) -> dict:
     """Sample the video and describe the people in the clearest frame, left to right."""
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():

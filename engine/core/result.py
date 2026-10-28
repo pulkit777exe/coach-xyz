@@ -29,7 +29,15 @@ def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgem
         v = judgement.verdicts.get(i)
         if not v or not v["is_event"]:
             continue
-        rows = measure.measure(track, c.i, c.side, pack)["criteria"]
+        # Check if track has valid landmarks; if not, score is unknown
+        if not track.valid.any() or track.conf[c.i] < 0.3:
+            rows = [{}
+        for c_ in pack.criteria]
+            score = 0.0
+            coverage = 0.0
+            feedback = "Unable to measure - player not clearly visible"
+        else:
+            rows = measure.measure(track, c.i, c.side, pack)["criteria"]
         measure.apply_ratings(rows, v["ratings"])
         score, coverage = measure.combine(rows)
         k = len(events) + 1
