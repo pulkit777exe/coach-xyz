@@ -143,6 +143,34 @@ def test_job_creation_is_idempotent(video, wait):
     assert types("same").count("job.queued") == 1
 
 
+def test_proxy_decodes_only_the_windows_it_keeps(video, tmp_path, monkeypatch):
+    from core import video as video_mod
+
+    real_capture = video_mod.cv2.VideoCapture
+    grabs = {"n": 0}
+
+    class CountingCapture:
+        def __init__(self, *args, **kwargs):
+            self._inner = real_capture(*args, **kwargs)
+
+        def grab(self):
+            grabs["n"] += 1
+            return self._inner.grab()
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(video_mod.cv2, "VideoCapture", lambda *a, **k: CountingCapture(*a, **k))
+    segments = video_mod.build_proxy(video, str(tmp_path / "proxy.mp4"), box_at=lambda t: None, marks=[],
+                                     windows=[(0.0, 1.0), (11.0, 12.0)], fps=5)
+    total = fakes.FPS * fakes.SECONDS
+    assert len(segments) == 2
+    assert all(s.duration == pytest.approx(1.0, abs=0.25) for s in segments)
+    # The gap between the two windows is 10 s of source. Grabbing through it would
+    # decode ~150 frames; seeking past it decodes none of them.
+    assert grabs["n"] < total / 2
+
+
 def test_render_failure_does_not_lose_the_analysis(video, wait, monkeypatch):
     from core import render
 

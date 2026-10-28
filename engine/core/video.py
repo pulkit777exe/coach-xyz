@@ -44,9 +44,9 @@ def _ffprobe(path: str, *args: str) -> dict:
 
 
 def probe(path: str, max_seconds: float = 3600) -> Media:
-    info = _ffprobe(path, "-select_streams", "v:0", "-show_entries",
-                    "stream=avg_frame_rate,duration:format=duration")
-    stream = (info.get("streams") or [None])[0]
+    info = _ffprobe(path, "-show_entries", "stream=codec_type,avg_frame_rate,duration:format=duration")
+    streams = info.get("streams") or []
+    stream = next((s for s in streams if s.get("codec_type") == "video"), None)
     if not stream:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO)
     try:
@@ -57,23 +57,26 @@ def probe(path: str, max_seconds: float = 3600) -> Media:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO) from exc
     if fps <= 0 or duration <= 0 or duration > max_seconds:
         raise EngineError("VIDEO_DECODE_FAILED", "Video must be between 1 second and 60 minutes long.")
-    audio = _ffprobe(path, "-select_streams", "a:0", "-show_entries", "stream=codec_type")
-    return Media(duration=duration, fps=fps, has_audio=bool(audio.get("streams")))
+    # One ffprobe answers both questions: the audio stream is in the same listing.
+    return Media(duration=duration, fps=fps,
+                 has_audio=any(s.get("codec_type") == "audio" for s in streams))
 
 
 class FFmpegWriter:
     """Pipes BGR frames to ffmpeg: H.264, yuv420p, faststart, optional audio from the source."""
 
     def __init__(self, out: str, width: int, height: int, fps: float,
-                 audio_from: str | None = None, crf: int = 21):
+                 audio_from: str | None = None, crf: int = 21, has_audio: bool | None = None):
         if shutil.which("ffmpeg") is None:
             raise EngineError("ENGINE_UNAVAILABLE", "ffmpeg is not installed on the engine.", status=503)
         self.size = (width, height)
         self.frames = 0
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                "-s", f"{width}x{height}", "-r", f"{fps:.4f}", "-i", "-"]
-        audio = bool(audio_from) and bool(_ffprobe(audio_from, "-select_streams", "a:0",
-                                                   "-show_entries", "stream=codec_type").get("streams"))
+        # `has_audio` lets a caller that already probed the source skip a second
+        # ffprobe; with no answer, ask once here.
+        audio = bool(audio_from) and (has_audio if has_audio is not None else bool(
+            _ffprobe(audio_from, "-select_streams", "a:0", "-show_entries", "stream=codec_type").get("streams")))
         if audio:
             cmd += ["-i", audio_from]
         cmd += ["-map", "0:v:0"]
@@ -147,11 +150,28 @@ def build_proxy(path: str, dst: str, *, box_at, marks, windows=None, fps: float 
     segments: list[Segment] = []
     writer = None
     kept = -1
-    i = -1
+    pos = 0
+    win = 0
     try:
-        while cap.grab():
-            i += 1
-            t = i / src_fps
+        while True:
+            if windows:
+                # Skip the stretches the proxy does not keep. Grabbing through a
+                # 10-minute gap decodes every frame in it; seeking past it decodes
+                # one — the windowed path used to cost a full-video decode.
+                while win < len(windows) and windows[win][1] < pos / src_fps:
+                    win += 1
+                if win >= len(windows):
+                    break
+                start = windows[win][0]
+                if pos / src_fps < start - 0.5 / fps:
+                    target = max(0, int(start * src_fps))
+                    if target > pos:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                        pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+            if not cap.grab():
+                break
+            t = pos / src_fps
+            pos += 1
             window = _window_index(windows, t)
             if window is None or t + 1e-6 < next_t:
                 continue

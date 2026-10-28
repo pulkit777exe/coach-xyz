@@ -150,7 +150,7 @@ def render(src: str, track: Track, result: dict, pack: Pack, out: str, media: Me
     if thumbs_dir:
         Path(thumbs_dir).mkdir(parents=True, exist_ok=True)
 
-    with FFmpegWriter(out, size[0], size[1], fps, audio_from=src) as writer:
+    with FFmpegWriter(out, size[0], size[1], fps, audio_from=src, has_audio=media.has_audio) as writer:
         for i in range(total):
             ok, frame = cap.read()
             if not ok:
