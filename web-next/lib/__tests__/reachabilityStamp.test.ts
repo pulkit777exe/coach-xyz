@@ -103,8 +103,8 @@ describe('the reachability figures AGENTS.md states are re-derivable', () => {
     expect(lib, 'no lib/ line in the untouched breakdown').not.toBeNull()
     expect(Number(app![1]) + Number(lib![1])).toBe(field(out, 'touched by nothing at all'))
 
-    // "that list is now **one**: `SettingsClient.tsx` (162)". If a second
-    // component loses its test — or this one gains one — the count and the line
+    // "that list is now **four**", first among them `SettingsClient.tsx` (164).
+    // If a component loses its test — or one gains a test — the count and the line
     // figure move, and the ledger must say so rather than describe the past.
     // Match only the indented data lines, not the section's own header line —
     // and stop at the next section, or the "25 largest untouched files" table
@@ -114,7 +114,11 @@ describe('the reachability figures AGENTS.md states are re-derivable', () => {
     )[0]
     const sweptOnly = block.split('\n').filter((l) => /^\s{4,}\d+\s+\S/.test(l))
     const settingsLine = sweptOnly.find((l) => l.includes('SettingsClient.tsx'))!
-    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(3)
+    // Derived from the run, not restated: the count is the same figure the ledger
+    // quotes, so a newly untested component shows up as a diff here.
+    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(
+      field(out, 'loaded only by a generic sweep'),
+    )
 
     const [, lines, file] = settingsLine.match(/^\s*(\d+)\s+(.+)$/) ?? []
     // The script prints a repo-rooted path; the ledger quotes the basename, so

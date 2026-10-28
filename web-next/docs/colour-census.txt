@@ -3,7 +3,7 @@ re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/co
 
 scope
   roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
-  first-party files: 190 (app 52, components 74, lib 64)
+  first-party files: 197 (app 55, components 78, lib 64)
   vendored path exemption: components/9ui/, components/interior/ — 31 files
   colour utilities resolvable from @theme (--color-*): 52
 
@@ -39,8 +39,8 @@ boundary — recorded, NOT guarded (outside the three rules)
   rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/interior/progress-bar.tsx:81 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   literal white/black colour classes, non-dark, first-party: 3 — theme-invariant chrome (video overlays render on a black video surface in both themes)
-    components/VideoPlayer.tsx:385 bg-black
-    components/VideoPlayer.tsx:397 text-white/70
-    components/VideoPlayer.tsx:402 text-white/85
+    components/VideoPlayer.tsx:388 bg-black
+    components/VideoPlayer.tsx:400 text-white/70
+    components/VideoPlayer.tsx:405 text-white/85
   literal white/black colour classes, non-dark, vendored: 4 (registry scrim/chrome patterns)
 

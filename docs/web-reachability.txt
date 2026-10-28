@@ -1,23 +1,24 @@
 web-next source reachability from tests
 ========================================================================
-source files                     226
+source files                     233
 test files                       72
 
-statically imported by a test     166
-loaded only by a generic sweep    3    (readdirSync enumeration, no import edge)
-touched by nothing at all         57
-  static import edge              73.5% of files
-  any loader at all (edge+sweep)  74.8% of files
+statically imported by a test     169
+loaded only by a generic sweep    4    (readdirSync enumeration, no import edge)
+touched by nothing at all         60
+  static import edge              72.5% of files
+  any loader at all (edge+sweep)  74.2% of files
 
-lines in source                  32700
-lines in untouched files         4629  (14.2%)
+lines in source                  33273
+lines in untouched files         4687  (14.1%)
 
 touched by nothing, by top-level directory
-  app            51 files    4414 lines
+  app            54 files    4472 lines
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
     455  components/MarketingLanding.tsx
+    199  components/dashboard/DashboardAnalyseClient.tsx
     164  components/org/SettingsClient.tsx
     133  components/org/OrgSwitcher.tsx
 
@@ -40,8 +41,8 @@ the 25 largest untouched files
     103  app/contact/page.tsx
      91  app/dashboard/_shell.ts
      83  app/dashboard/students/[id]/page.tsx
+     71  app/layout.tsx
      71  app/player/layout.tsx
-     69  app/layout.tsx
      68  app/login/page.tsx
      65  app/dashboard/attendance/page.tsx
      62  app/dashboard/history/error.tsx

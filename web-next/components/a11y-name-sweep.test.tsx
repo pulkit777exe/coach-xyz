@@ -43,7 +43,7 @@
 //    product; `a11ySource.test.ts` holds the stricter SelectTrigger grep.
 //
 // COVERAGE IS ASSERTED, NOT IMPLIED
-// `REGISTRY` below names every `.tsx` under `components/` (101 files as of this
+// `REGISTRY` below names every `.tsx` under `components/` (108 files as of this
 // writing). Each entry either renders or carries a documented `skip` reason. The
 // final describe block asserts the render/skip split against an expected list,
 // so adding a component that cannot render is a visible diff rather than a
@@ -1905,6 +1905,37 @@ add(
     },
   },
   {
+    id: 'components/dashboard/AnalyzeUploadCard.tsx',
+    // The idle upload state: the file input is `sr-only` and named by its <label>,
+    // which is exactly the association this sweep claims to check.
+    render: async () => {
+      const { AnalyzeUploadCard } = await import('@/components/dashboard/AnalyzeUploadCard')
+      return h(AnalyzeUploadCard, { onFileSelected: noop })
+    },
+  },
+  {
+    id: 'components/dashboard/DashboardAnalyseClient.tsx',
+    // Held at null until its fetch resolves, and its only markup for that state is
+    // the upload card, which is swept on its own above.
+    skip: 'drives the live scan pipeline from usePipeline; renders no markup until a job exists',
+  },
+  {
+    id: 'components/marketing/MarketingFooter.tsx',
+    render: async () => {
+      const { default: MarketingFooter } = await import('@/components/marketing/MarketingFooter')
+      return h(MarketingFooter)
+    },
+  },
+  {
+    id: 'components/marketing/NewsletterForm.tsx',
+    // Label association again: the visible placeholder is deliberately NOT a name
+    // source, so this case fails if the <label> is dropped.
+    render: async () => {
+      const { default: NewsletterForm } = await import('@/components/marketing/NewsletterForm')
+      return h(NewsletterForm)
+    },
+  },
+  {
     id: 'components/marketing/ContactForm.tsx',
     render: async () => {
       const { default: ContactForm } = await import('@/components/marketing/ContactForm')
@@ -2283,6 +2314,7 @@ const EXPECTED_SKIPS: string[] = [
   'components/org/settings/buildSettingsSections.tsx — not a component; it exports a pure data function with no JSX',
   'components/MarketingLanding.tsx — marketing page component, requires server context not available in sweep',
   'components/org/OrgSwitcher.tsx — requires org context provider not available in sweep',
+  'components/dashboard/DashboardAnalyseClient.tsx — drives the live scan pipeline from usePipeline; renders no markup until a job exists',
 
   // These read `usePreferences()` at the top level, and the context has no
   // default. withPrefs() supplies it, so these are NOT harness limits in
