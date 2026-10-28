@@ -72,6 +72,7 @@ const spacingPx = (): number => {
 const sourceFiles = (dir: string): string[] => {
   const out: string[] = []
   for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+    if (e.name.startsWith('__fixture')) continue
     const p = join(dir, e.name)
     if (e.isDirectory()) out.push(...sourceFiles(p))
     else if (/\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name)) out.push(p)

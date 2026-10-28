@@ -49,8 +49,8 @@ export function getRawRedisClient(): IORedis | null {
     const tlsOpts = url.startsWith('rediss://') ? {} : undefined
     _rawClient = new IORedis(url, {
       maxRetriesPerRequest: null,
-      commandTimeout: 10000,
-      connectTimeout: 10000,
+      commandTimeout: 30000,
+      connectTimeout: 30000,
       tls: tlsOpts,
       lazyConnect: false,
     })

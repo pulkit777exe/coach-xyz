@@ -2,7 +2,7 @@
 // These types define the contract between engine → server → frontend.
 // Server is the source of truth. Frontend mirrors them.
 
-export const DEFAULT_MODEL = 'gemini-2.5-flash'
+export const DEFAULT_MODEL = 'gemini-3.8-flash'
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 
 export type Player = {

@@ -1,9 +1,16 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/session'
 import { Button } from '@/components/9ui/ui/button'
 
 export const metadata = { title: 'Log in | CoachXYZ' }
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await getSession()
+  if (session) {
+    redirect('/dashboard')
+  }
+
   return (
     <main
       id="main"
@@ -24,7 +31,7 @@ export default function LoginPage() {
         <div className="mt-6">
           <Button
             nativeButton={false}
-            render={<a href="/auth/login" />}
+            render={<a href="/auth/login?returnTo=/dashboard" />}
             className="h-10 w-full rounded-[6px] bg-primary text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Continue with Auth0

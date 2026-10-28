@@ -311,7 +311,7 @@ async function main() {
     await ensureInitialized()
     await db`
       insert into analysis_history (server_job_id, engine_job_id, session_token, model, complete, video_ready, auth0_id, requested_at)
-      values (${analysisId}, ${`eng-smoke-${tag}`}, ${`sess-smoke-${tag}`}, 'gemini-2.5-flash', true, false, ${coachId}, now())
+      values (${analysisId}, ${`eng-smoke-${tag}`}, ${`sess-smoke-${tag}`}, 'gemini-3.8-flash', true, false, ${coachId}, now())
       on conflict (server_job_id) do update set auth0_id = excluded.auth0_id;
     `
   })

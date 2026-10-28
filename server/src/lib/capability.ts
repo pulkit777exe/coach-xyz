@@ -141,11 +141,31 @@ export type JsonBody =
 /** Lenient JSON body parse: non-objects (incl. literal `null`) are 400s. */
 export const MAX_JSON_BODY_BYTES = 1024 * 1024
 
-export const readJsonBody = async (request: Request): Promise<JsonBody> => {
-  // The global body limit is sized for multipart uploads (~510MB): reject
-  // absurd JSON up front so a 500MB blob posted to a JSON route never gets
-  // parsed into memory. All callers take small payloads (analyze/invite/
-  // intent metadata).
+/**
+ * Elysia 1.4+ auto-parses `Content-Type: application/json` bodies before the
+ * route handler runs, exhausting the Request stream. Routes must pass the
+ * already-parsed `body` context parameter as the second argument; `request.json()`
+ * is only used as a fallback for contexts where Elysia didn't pre-parse.
+ */
+export const readJsonBody = async (
+  request: Request,
+  preparsed?: unknown,
+): Promise<JsonBody> => {
+  // Fast path: Elysia already parsed the JSON — validate shape only.
+  if (preparsed !== undefined) {
+    const body = preparsed
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return {
+        ok: false,
+        status: 400,
+        body: buildError('INVALID_REQUEST', 'Invalid JSON request body.', false),
+      }
+    }
+    return { ok: true, body: body as Record<string, unknown> }
+  }
+
+  // Slow path: body wasn't pre-parsed. Guard size first so a 500MB blob
+  // posted to a JSON route is never fully parsed into memory.
   const declared = Number(request.headers.get('content-length') || 0)
   if (declared > MAX_JSON_BODY_BYTES) {
     return {

@@ -152,7 +152,7 @@ export async function startAnalysis(params: {
     capabilityUrl('/api/analyze-video'),
     {
       ...rest,
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
     },
     {
       timeoutMs: 30_000, // 30s for enqueue

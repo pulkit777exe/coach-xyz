@@ -89,7 +89,7 @@ def load() -> Settings:
         pose_model=_env("POSE_MODEL", "lite"),
         pose_model_path=_env("POSE_MODEL_PATH"),
         gemini_key=_env("GEMINI_API_KEY"),
-        gemini_models=_list("GEMINI_MODELS", "gemini-2.5-flash,gemini-2.5-flash-lite"),
+        gemini_models=_list("GEMINI_MODELS", "gemini-3.8-flash,gemini-3.8-flash-lite"),
         gemini_timeout_s=_num("GEMINI_TIMEOUT_S", 240),
         gemini_min_interval_s=_num("GEMINI_MIN_INTERVAL_S", 2),
         gemini_thinking_budget=int(_num("GEMINI_THINKING_BUDGET", 0)),

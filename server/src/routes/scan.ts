@@ -81,7 +81,7 @@ const persistScanResult = async (
 }
 
 export default new Elysia()
-  .post('/api/scan-video', async ({ request, set }) => {
+  .post('/api/scan-video', async ({ request, set, body: rawBody }) => {
     // ── Rate Limiting ──────────────────────────────────────────────────────
     // Key by verified sub when the caller sent a signed attribution token —
     // unlike X-Forwarded-For, the sub cannot be spoofed, so logged-in callers
@@ -116,14 +116,28 @@ export default new Elysia()
     }
     try {
       // ── Validate Request ─────────────────────────────────────────────────
-      const form = await request.formData()
-      const value = form.get('video')
-      // Multi-angle flow: the web appends these fields when adding another
-      // camera perspective to an existing session.
-      const appendSessionToken =
-        typeof form.get('session_token') === 'string' ? (form.get('session_token') as string) : null
-      const angleLabel =
-        typeof form.get('angle') === 'string' ? (form.get('angle') as string) : null
+      let value: unknown = (rawBody as Record<string, unknown> | null)?.video
+      let appendSessionToken: string | null =
+        typeof (rawBody as Record<string, unknown> | null)?.session_token === 'string'
+          ? ((rawBody as Record<string, unknown>).session_token as string)
+          : null
+      let angleLabel: string | null =
+        typeof (rawBody as Record<string, unknown> | null)?.angle === 'string'
+          ? ((rawBody as Record<string, unknown>).angle as string)
+          : null
+
+      if (!value) {
+        try {
+          const form = await request.formData()
+          value = form.get('video')
+          appendSessionToken =
+            typeof form.get('session_token') === 'string' ? (form.get('session_token') as string) : null
+          angleLabel =
+            typeof form.get('angle') === 'string' ? (form.get('angle') as string) : null
+        } catch {
+          // Stream already consumed or non-multipart
+        }
+      }
 
       if (!(value instanceof File)) {
         set.status = 400
@@ -173,7 +187,7 @@ export default new Elysia()
   // Validates metadata + rate limit up front, then mints a namespaced key.
   // The browser uploads straight to storage (presigned POST on S3, or the
   // local multipart /scan-video path) and finishes with /api/scan-from-key.
-  .post('/api/scan-intent', async ({ request, set }) => {
+  .post('/api/scan-intent', async ({ request, set, body: rawBody }) => {
     const gate = await gateRateLimit(request, set, {
       check: () => checkScanLimit(capabilityLimitKey(request)),
       deniedMessage: 'Too many scan requests. Wait a minute before trying again.',
@@ -183,7 +197,7 @@ export default new Elysia()
       return gate.body
     }
 
-    const parsed = await readJsonBody(request)
+    const parsed = await readJsonBody(request, rawBody)
     if (!parsed.ok) {
       set.status = parsed.status
       return parsed.body
@@ -245,7 +259,7 @@ export default new Elysia()
   // ── Scan an already-uploaded key (§8) ──────────────────────────────────
   // Completes the direct-upload flow: the key must match an intent-minted
   // shape (raw/…) so result keys and arbitrary paths are rejected.
-  .post('/api/scan-from-key', async ({ request, set }) => {
+  .post('/api/scan-from-key', async ({ request, set, body: rawBody }) => {
     const gate = await gateRateLimit(request, set, {
       check: () => checkScanLimit(capabilityLimitKey(request)),
       deniedMessage: 'Too many scan requests. Wait a minute before trying again.',
@@ -255,7 +269,7 @@ export default new Elysia()
       return gate.body
     }
 
-    const parsed = await readJsonBody(request)
+    const parsed = await readJsonBody(request, rawBody)
     if (!parsed.ok) {
       set.status = parsed.status
       return parsed.body

@@ -1,12 +1,18 @@
 import Link from 'next/link'
-import { Check } from 'lucide-react'
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/session'
 import { Button } from '@/components/9ui/ui/button'
 
 export const metadata = { title: 'Sign up | CoachXYZ' }
 
 const perks = ['6 sports', '60s analysis', 'Reports']
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const session = await getSession()
+  if (session) {
+    redirect('/dashboard')
+  }
+
   return (
     <main
       id="main"
@@ -26,7 +32,7 @@ export default function SignupPage() {
         <div className="mt-6">
           <Button
             nativeButton={false}
-            render={<a href="/auth/login?screen_hint=signup" />}
+            render={<a href="/auth/login?screen_hint=signup&returnTo=/dashboard" />}
             className="h-10 w-full rounded-[6px] bg-primary text-body leading-5 font-medium text-primary-foreground hover:bg-primary-hover"
           >
             Sign up with Auth0
@@ -49,8 +55,7 @@ export default function SignupPage() {
                 key={perk}
                 className="flex flex-col items-center gap-1 text-caption leading-4 text-muted-foreground"
               >
-                <Check className="size-4 text-check" aria-hidden />
-                {perk}
+                <span className="font-medium text-foreground-strong">{perk}</span>
               </li>
             ))}
           </ul>

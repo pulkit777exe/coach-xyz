@@ -1912,6 +1912,36 @@ add(
     },
   },
   {
+    id: 'components/dashboard/AnalyzeUploadCard.tsx',
+    render: async () => {
+      const { AnalyzeUploadCard } = await import('@/components/dashboard/AnalyzeUploadCard')
+      return h(AnalyzeUploadCard, { onFileSelected: () => {} })
+    },
+  },
+  {
+    id: 'components/dashboard/DashboardAnalyseClient.tsx',
+    render: async () => {
+      const { default: DashboardAnalyseClient } = await import(
+        '@/components/dashboard/DashboardAnalyseClient'
+      )
+      return h(DashboardAnalyseClient, { auth0Id: 'test-user' })
+    },
+  },
+  {
+    id: 'components/marketing/MarketingFooter.tsx',
+    render: async () => {
+      const { default: MarketingFooter } = await import('@/components/marketing/MarketingFooter')
+      return h(MarketingFooter)
+    },
+  },
+  {
+    id: 'components/marketing/NewsletterForm.tsx',
+    render: async () => {
+      const { default: NewsletterForm } = await import('@/components/marketing/NewsletterForm')
+      return h(NewsletterForm)
+    },
+  },
+  {
     id: 'components/notifications/NotificationBell.tsx',
     render: async () => {
       const { default: NotificationBell } =

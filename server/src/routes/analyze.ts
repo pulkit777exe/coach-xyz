@@ -3,11 +3,11 @@ import { Elysia } from 'elysia'
 import { admitAnalysis } from '../lib/admission'
 import { buildError } from '../lib/errors'
 
-export default new Elysia().post('/api/analyze-video', async ({ request, set }) => {
+export default new Elysia().post('/api/analyze-video', async ({ request, set, body }) => {
   // Admission (rate → validate → quota → tier → persist → enqueue → usage)
   // lives in lib/admission; this route maps outcomes to HTTP.
   try {
-    const outcome = await admitAnalysis({ request })
+    const outcome = await admitAnalysis({ request, body: body as Parameters<typeof admitAnalysis>[0]['body'] })
     if (!outcome.ok) {
       set.status = outcome.status
       return outcome.body

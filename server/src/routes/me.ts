@@ -27,6 +27,8 @@ import { checkLimit } from '../lib/ratelimit'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 
+const SESSION_TOKEN_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
+
 export default new Elysia()
   .use(serviceGuard)
 
@@ -232,9 +234,9 @@ export default new Elysia()
   // persisted under the LINKED coach's auth0Id (so it appears in the coach's
   // dashboard history) with requested_by = the player, and is linked to the
   // player's student row so it shows up in /api/me/analyses.
-  .post('/api/me/analyze', async ({ request, set }) => {
+  .post('/api/me/analyze', async ({ request, set, body: rawBody }) => {
     return withVerified(request, set, async (verified) => {
-      const parsed = await readJsonBody(request)
+      const parsed = await readJsonBody(request, rawBody)
       if (!parsed.ok) {
         set.status = parsed.status
         return parsed.body
@@ -249,7 +251,7 @@ export default new Elysia()
         set.status = 400
         return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
       }
-      if (sessionTokenRaw !== null && !UUID_RE.test(sessionTokenRaw)) {
+      if (sessionTokenRaw !== null && !SESSION_TOKEN_RE.test(sessionTokenRaw)) {
         set.status = 400
         return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
       }
@@ -334,9 +336,9 @@ export default new Elysia()
 
   // Accept an organization invitation: the verified caller redeems a
   // single-use token minted for their email. Links their account on success.
-  .post('/api/me/invites/accept', async ({ request, set }) => {
+  .post('/api/me/invites/accept', async ({ request, set, body: rawBody }) => {
     return withVerified(request, set, async (verified) => {
-      const parsed = await readJsonBody(request)
+      const parsed = await readJsonBody(request, rawBody)
       if (!parsed.ok) {
         set.status = parsed.status
         return parsed.body

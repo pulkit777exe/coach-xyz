@@ -50,6 +50,11 @@ async def maintenance() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+    except Exception:
+        pass
     s = config.settings
     setup_logging()
     if s.production and not s.service_token:

@@ -3,7 +3,7 @@ re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/co
 
 scope
   roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
-  first-party files: 190 (app 52, components 74, lib 64)
+  first-party files: 196 (app 54, components 78, lib 64)
   vendored path exemption: components/9ui/, components/interior/ — 31 files
   colour utilities resolvable from @theme (--color-*): 52
 
@@ -19,7 +19,6 @@ rule 2 — dark: colour pairs, first-party (classified)
   C token → token / transparent: 2
   D same token, alpha shifted: 9
   S sanctioned non-colour (none): 7
-  V var()-backed arbitrary value: 2
   violations: 0
   vendored (path-exempt, rule 2): 8 pairs
     B literal over literal (scrim pair; vendored registry exempt, first-party = violation): 3
