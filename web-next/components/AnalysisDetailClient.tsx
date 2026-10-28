@@ -20,13 +20,14 @@ const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
   ),
 })
 import HistoryChat from '@/components/HistoryChat'
+import { VideoPlayer } from '@/components/VideoPlayer'
 import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
 import type { CoachAIError } from '@/lib/data/errors'
 import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
-import type { JobStatus } from '@/types'
+import type { JobStatus, AnalysisSummary } from '@/types'
 import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
@@ -307,10 +308,6 @@ export default function AnalysisDetailClient({
   }
 
   if (!initialData) {
-    // A failed READ is not an expiry verdict. The two are different facts about different
-    // things — one about the server's response, one about whether the analysis still exists —
-    // and collapsing them told a coach to discard work that was fine. A retry is offered here
-    // precisely because this state is expected to be transient.
     if (initialLoadFailed) {
       return (
         <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
@@ -392,7 +389,7 @@ export default function AnalysisDetailClient({
       />
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 mb-6 text-meta text-muted-foreground">
+      <div className="flex items-center gap-1.5 my-6 pt-4 text-meta text-muted-foreground">
         <span>History</span>
         <span className="text-muted-foreground/60">/</span>
         <span className="text-foreground">{data.display_name || data.file_name || 'Untitled'}</span>
@@ -454,6 +451,11 @@ export default function AnalysisDetailClient({
         <Button variant="outline" size="sm" onClick={() => setLightboxOpen(true)}>
           Preview
         </Button>
+        <Link href={`/dashboard/analysis/${jobId}/chat`}>
+          <Button size="sm">
+            Chat with AI
+          </Button>
+        </Link>
 
         {/* Lightbox */}
         <Lightbox
@@ -578,9 +580,47 @@ export default function AnalysisDetailClient({
         </div>
       )}
 
+      {/* Chat View */}
+      {summary && activeView === 'chat' && (
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
+                Chat with AI Coach
+              </h2>
+              <p className="text-meta text-muted-foreground mt-0.5">
+                Ask questions about your form score, key observations, and recommended drills.
+              </p>
+            </div>
+            <Link
+              href={`/dashboard/analysis/${jobId}/chat`}
+              className="text-meta font-medium text-primary hover:underline flex items-center gap-1"
+            >
+              Full Screen Mode →
+            </Link>
+          </div>
+          <div
+            className="rounded-[6px] border border-border bg-background overflow-hidden"
+            style={{ height: 'min(600px, 70vh)' }}
+          >
+            <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
+          </div>
+        </div>
+      )}
+
+      {/* Video Player */}
+      {data.video_ready && activeView === 'overview' && (
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8 overflow-hidden">
+          <CardHeading>Video Playback & Overlays</CardHeading>
+          <div className="max-w-4xl mx-auto">
+            <VideoPlayer jobId={jobId} summary={summary as unknown as AnalysisSummary} />
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
-      {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {summary && activeView === 'overview' && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {[
             {
               label: 'Form Score',
@@ -598,9 +638,16 @@ export default function AnalysisDetailClient({
               value: 'total_events' in summary ? (summary.total_events as number) : '—',
             },
             {
-              label: 'Duration',
-              value:
-                'duration_sec' in summary ? `${Math.round(summary.duration_sec as number)}s` : '—',
+              label: 'Average Score',
+              value: 'average_score' in summary
+                ? `${((summary.average_score as number) / 10) * 100}%`
+                : '—',
+            },
+            {
+              label: 'Success Rate',
+              value: 'success_rate' in summary
+                ? `${((summary.success_rate as number) * 100).toFixed(0)}%`
+                : '—',
             },
           ].map((card) => (
             <div key={card.label} className="rounded-[6px] border border-border bg-card p-5">
@@ -628,6 +675,7 @@ export default function AnalysisDetailClient({
 
       {/* Shot Events with Reorder */}
       {summary &&
+        (activeView === 'overview' || activeView === 'events') &&
         'shot_events' in summary &&
         Array.isArray(summary.shot_events) &&
         shotEvents.length > 0 && (
@@ -670,7 +718,10 @@ export default function AnalysisDetailClient({
         )}
 
       {/* Shot Events with Show More */}
-      {summary && 'shot_events' in summary && Array.isArray(summary.shot_events) && (
+      {summary &&
+        (activeView === 'overview' || activeView === 'events') &&
+        'shot_events' in summary &&
+        Array.isArray(summary.shot_events) && (
         <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
           <CardHeading>
             Shot Events{' '}
@@ -729,7 +780,7 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Tips & Strengths */}
-      {summary && (
+      {summary && activeView === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
           {'top_tips' in summary &&
             Array.isArray(summary.top_tips) &&
@@ -770,7 +821,7 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Drill */}
-      {drill && (
+      {drill && activeView === 'overview' && (
         <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
           <CardHeading>Recommended Drill</CardHeading>
           <p className="text-body text-foreground">{drill}</p>
@@ -778,7 +829,7 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Analysis Structure Tree */}
-      {summary && (
+      {summary && activeView === 'overview' && (
         <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
           <CardHeading>Analysis Structure</CardHeading>
           <TreeView
@@ -807,46 +858,48 @@ export default function AnalysisDetailClient({
       )}
 
       {/* Metadata */}
-      <div className="rounded-[6px] border border-border bg-card p-6">
-        <CardHeading>Metadata</CardHeading>
-        <dl className="grid grid-cols-2 gap-4 text-body">
-          <div>
-            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-              Job ID
-            </dt>
-            <dd className="text-foreground font-mono text-meta break-all">{data.engine_job_id}</dd>
-          </div>
-          {data.session_token && (
+      {activeView === 'overview' && (
+        <div className="rounded-[6px] border border-border bg-card p-6">
+          <CardHeading>Metadata</CardHeading>
+          <dl className="grid grid-cols-2 gap-4 text-body">
             <div>
               <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                Session Token
+                Job ID
               </dt>
-              <dd className="text-foreground font-mono text-meta break-all">
-                {data.session_token}
-              </dd>
+              <dd className="text-foreground font-mono text-meta break-all">{data.engine_job_id}</dd>
             </div>
-          )}
-          {data.completed_at && (
-            <div>
-              <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                Completed
-              </dt>
-              <dd className="text-foreground tabular-nums">{formatDateTime(data.completed_at)}</dd>
-            </div>
-          )}
-          {data.download_count > 0 && (
-            <div>
-              <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                Downloads
-              </dt>
-              <dd className="text-foreground tabular-nums">{data.download_count}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+            {data.session_token && (
+              <div>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
+                  Session Token
+                </dt>
+                <dd className="text-foreground font-mono text-meta break-all">
+                  {data.session_token}
+                </dd>
+              </div>
+            )}
+            {data.completed_at && (
+              <div>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
+                  Completed
+                </dt>
+                <dd className="text-foreground tabular-nums">{formatDateTime(data.completed_at)}</dd>
+              </div>
+            )}
+            {data.download_count > 0 && (
+              <div>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
+                  Downloads
+                </dt>
+                <dd className="text-foreground tabular-nums">{data.download_count}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
 
       {/* Chat */}
-      {summary && (
+      {summary && activeView === 'overview' && (
         <div className="mt-8">
           <h2 className="mb-3 text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
             Chat with AI
