@@ -3,11 +3,11 @@
 import {
   useRef,
   useEffect,
-  forwardRef,
   useImperativeHandle,
   useState,
   useCallback,
   useMemo,
+  type Ref,
 } from 'react'
 import { Slide } from 'loading-dev'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
@@ -81,10 +81,13 @@ function _eventTypeLabel(eventType: string): string {
   return map[eventType] || eventType.replace(/_/g, ' ')
 }
 
-export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(
-  { jobId, summary },
+// React 19 passes `ref` as a normal prop, so `forwardRef` is no longer needed
+// (it is deprecated in the React 19 line). The imperative handle stays the same.
+export function VideoPlayer({
+  jobId,
+  summary,
   ref,
-) {
+}: VideoPlayerProps & { ref?: Ref<VideoPlayerHandle> }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -437,4 +440,4 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       />
     </div>
   )
-})
+}
