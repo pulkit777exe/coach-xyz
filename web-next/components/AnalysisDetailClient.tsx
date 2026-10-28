@@ -9,8 +9,7 @@ import AnalysisTitle from '@/components/AnalysisTitle'
 import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
-// Lazy for the same reason as in `AppClient`: GSAP has one importer app-wide and this
-// static import shipped the whole library on a route that usually has no summary yet.
+
 const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
   ssr: false,
   loading: () => (
@@ -60,7 +59,6 @@ function CardHeading({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** Outline action chip used where a full Button can't be the child (hold-to-confirm). */
 const CHIP_CLASS =
   'inline-flex items-center rounded-[6px] border border-border px-3 py-1.5 text-meta font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer'
 
@@ -68,18 +66,6 @@ interface AnalysisDetailClientProps {
   auth0Id: string
   jobId: string
   initialData: DashboardAnalysis | null
-  /**
-   * The detail read FAILED, as distinct from the analysis not existing.
-   *
-   * The page used to collapse 404, 403 and 500 into `initialData: null`, and this component
-   * renders `null` as "Analysis Expired — Analysis not found or expired." So **one transient
-   * 5xx told a coach their analysis had expired** for an analysis that exists and that they
-   * own, with a "Start New Analysis" link inviting them to redo work they had already paid
-   * for. `errorFromResponse` already draws the distinction we need: it sets `retryable` from
-   * `status >= 500`, so the page passes `retryable: false` for a genuine absence and `true`
-   * for a transport or server failure. That is a real distinction already present in the
-   * error shape — the fix is not inventing a signal, it is refusing to throw one away.
-   */
   initialLoadFailed?: boolean
   canShareTokens?: boolean
   canLinkToStudent?: boolean
@@ -113,10 +99,9 @@ export default function AnalysisDetailClient({
   const [shareError, setShareError] = useState<string | null>(null)
   const [shareExpires, setShareExpires] = useState<string | null>(null)
   const shareLoadIdRef = useRef(0)
-  // Owned jobs need the signed token on the download URL (<a>/lightbox
-  // cannot send headers) — resolve per analysis, fall back to the base URL.
   const [downloadUrl, setDownloadUrl] = useState(() => getDownloadUrl(jobId))
   const [downloadUrlJob, setDownloadUrlJob] = useState(jobId)
+
   if (downloadUrlJob !== jobId) {
     setDownloadUrlJob(jobId)
     setDownloadUrl(getDownloadUrl(jobId))
@@ -186,8 +171,6 @@ export default function AnalysisDetailClient({
     }
   }, [jobId, initialData])
 
-  // Create the share token once the share modal opens; the link is minted per
-  // analysis and expires after a fixed window (72h on the server).
   useEffect(() => {
     if (!showShareModal || !initialData) return
     const loadId = ++shareLoadIdRef.current
@@ -207,7 +190,6 @@ export default function AnalysisDetailClient({
       })
   }, [showShareModal, auth0Id, initialData])
 
-  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center">
@@ -217,7 +199,6 @@ export default function AnalysisDetailClient({
     )
   }
 
-  // ── Expired / Not Found ──────────────────────────────────────────────────
   if (expiredMessage) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
@@ -250,7 +231,6 @@ export default function AnalysisDetailClient({
     )
   }
 
-  // ── Poll Error Banner ────────────────────────────────────────────────────
   if (pollError && status && !status.complete) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
@@ -263,7 +243,6 @@ export default function AnalysisDetailClient({
     )
   }
 
-  // ── In Progress ──────────────────────────────────────────────────────────
   if (status && !status.complete) {
     if (!stuckWarning) {
       return <AnalysisProgress status={status} />
@@ -348,7 +327,6 @@ export default function AnalysisDetailClient({
     )
   }
 
-  // ── Completed or Failed: full detail view ────────────────────────────────
   const data = initialData
   const ec: string | null = data.error_code
   const em: string | null = data.error_message
@@ -375,7 +353,6 @@ export default function AnalysisDetailClient({
       {/* Reading Progress */}
       <ReadingProgress scroller={containerRef} className="fixed top-14 left-0 right-0 z-40" />
 
-      {/* Scroll Spy Navigation */}
       <ScrollSpy
         sections={[
           { id: 'header', label: 'Overview' },
@@ -525,9 +502,6 @@ export default function AnalysisDetailClient({
             ) : shareUrl ? (
               <>
                 <div className="flex gap-2">
-                  {/* The <p> above is prose, not a label: without this the field
-                      is announced as an unnamed text box and a screen reader
-                      user reads the URL as an unlabelled edit box. */}
                   <label htmlFor="analysis-share-url" className="sr-only">
                     Share link
                   </label>
@@ -680,11 +654,6 @@ export default function AnalysisDetailClient({
         Array.isArray(summary.shot_events) &&
         shotEvents.length > 0 && (
           <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-            {/* Heading says "Event Priority" and nothing more: `ReorderList` sets
-                `draggable` unconditionally, so the previous "drag to reorder" let a coach
-                move a row, see it move, and lose the order — there is no endpoint that
-                persists event priority and the ranking is the engine's. Same rows, same
-                order, stated as what it is. */}
             <CardHeading>Event Priority</CardHeading>
             <ol aria-label="Shot events, in engine priority order" className="m-0 list-none p-0">
               {shotEvents.slice(0, 5).map((event, i) => (
