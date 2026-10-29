@@ -10,6 +10,9 @@ from . import fakes
 @pytest.fixture(autouse=True)
 def env(tmp_path, monkeypatch):
     s = config.settings
+    # Never inherit production hardening from a developer's local .env: the
+    # suite exercises the unauthenticated local contract.
+    monkeypatch.setattr(s, "env", "test")
     monkeypatch.setattr(s, "data_dir", tmp_path / "data")
     monkeypatch.setattr(s, "service_token", "")
     monkeypatch.setattr(s, "storage_backend", "local")

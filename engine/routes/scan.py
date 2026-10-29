@@ -7,7 +7,7 @@ import tempfile
 
 import cv2
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
 from core import config, events, people, pipeline, sessions, sports, storage, video
 from core.errors import EngineError, invalid
@@ -136,7 +136,7 @@ async def scan_from_key(request: Request):
     store = storage.backend()
     try:
         with store.local_copy(key) as path:
-            sha = await asyncio.to_thread(pipeline._file_sha256, path)
+            sha = await asyncio.to_thread(video.sha256_file, path)
             return await _scan(key, path, token, label, sha)
     except FileNotFoundError:
         raise EngineError("SESSION_EXPIRED", "Upload not found in storage. Please upload your video again.",
@@ -146,10 +146,8 @@ async def scan_from_key(request: Request):
 @router.get("/scan-progress/{token}")
 async def scan_progress(token: str, request: Request, angle: str | None = None):
     stream = _stream(token, sessions.angle_label(angle))
-    return StreamingResponse(
-        events.follow(stream, disconnected=request.is_disconnected, idle_timeout=120),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    return events.sse_stream(
+        events.follow(stream, disconnected=request.is_disconnected, idle_timeout=120)
     )
 
 

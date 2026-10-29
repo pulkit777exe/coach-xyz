@@ -15,6 +15,7 @@ import time
 from collections.abc import AsyncIterator
 
 import httpx
+from fastapi.responses import StreamingResponse
 
 from . import config, db
 
@@ -22,6 +23,12 @@ log = logging.getLogger("engine.events")
 
 TERMINAL = {"job.completed", "job.failed", "job.cancelled", "scan.completed", "scan.failed"}
 MAX_DELIVERY_ATTEMPTS = 12
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+def sse_stream(source, **kwargs) -> StreamingResponse:
+    """One place for the headers every event stream must send."""
+    return StreamingResponse(source, media_type="text/event-stream", headers=SSE_HEADERS, **kwargs)
 
 
 def emit(stream: str, type: str, data: dict | None = None, *, webhook: bool = True) -> int:

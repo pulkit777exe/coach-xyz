@@ -5,10 +5,10 @@ from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from core import jobs, llm, pipeline, prompts
+from core import events, jobs, llm, pipeline, prompts
 from core.errors import invalid
 
 router = APIRouter()
@@ -99,8 +99,7 @@ async def chat_stream(request: Request):
         finally:
             task.cancel()
 
-    return StreamingResponse(sse(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return events.sse_stream(sse())
 
 
 @router.post("/report")

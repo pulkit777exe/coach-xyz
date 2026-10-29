@@ -55,14 +55,6 @@ def _digest(*parts) -> str:
     return hashlib.sha1("|".join(str(p) for p in parts).encode()).hexdigest()[:20]
 
 
-def _file_sha256(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def _publish(job_id: str, store, name: str, path: str, kind: str) -> None:
     key = storage.result_key(job_id, name)
     store.put(key, path)
@@ -98,7 +90,7 @@ def run(job_id: str, params: dict) -> dict:
     with store.local_copy(params["video_key"]) as src:
         with rep.stage("prepare", 0, 4):
             media = video.probe(src)
-            sha = params.get("sha256") or _file_sha256(src)
+            sha = params.get("sha256") or video.sha256_file(src)
             rep.check()
 
         sport_known = bool(params.get("sport"))

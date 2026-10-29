@@ -16,6 +16,7 @@ from core import config, db, events, jobs, pose, sessions
 from core.errors import EngineError
 from routes import chat, scan
 from routes import jobs as job_routes
+from routes import legacy
 
 log = logging.getLogger("engine")
 STARTED = time.time()
@@ -140,6 +141,7 @@ def health_deep():
 
 app.include_router(scan.router)
 app.include_router(job_routes.router)
+app.include_router(legacy.router)
 app.include_router(chat.router)
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """ffmpeg / OpenCV helpers: probing, encoding, and the proxy video sent to the model."""
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -28,6 +29,15 @@ def looks_like_video(head: bytes) -> bool:
         or (window.startswith(b"RIFF") and b"AVI" in window[:16])
         or window.startswith(b"\x1a\x45\xdf\xa3")
     )
+
+
+def sha256_file(path: str, chunk: int = 8 << 20) -> str:
+    """Content digest used to cache tracking/model work across retries."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(chunk), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _ffprobe(path: str, *args: str) -> dict:
