@@ -39,6 +39,12 @@ export function generateSimpleResponse(
   return keywordFallback(question, summary)
 }
 
+/** Standard 400 response for missing/invalid path params. */
+const badRequest = (set: { status?: number | string }, message = 'Missing required parameters') => {
+  set.status = 400
+  return buildError('INVALID_REQUEST', message, false)
+}
+
 const UUID_PARAM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default new Elysia()
@@ -53,10 +59,7 @@ export default new Elysia()
       email_verified?: boolean
     }
 
-    if (!sub) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required field: sub', false)
-    }
+    if (!sub) return badRequest(set, 'Missing required field: sub')
 
     const user = await upsertUser({
       sub,
@@ -86,8 +89,7 @@ export default new Elysia()
     const { auth0Id } = params
 
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
 
     const user = await getUserByAuth0Id(auth0Id)
@@ -103,8 +105,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/analyses', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
 
     const url = new URL(request.url)
@@ -121,8 +122,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
 
     const analysis = await getUserAnalysisById(auth0Id, jobId)
@@ -147,8 +147,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/stats', async ({ params, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
 
     const stats = await getUserStats(auth0Id)
@@ -158,8 +157,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/findings/trends', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
 
     const url = new URL(request.url)
@@ -170,14 +168,12 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/findings', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const url = new URL(request.url)
     const studentId = url.searchParams.get('student_id') ?? ''
     if (!UUID_PARAM_RE.test(studentId)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
+      return badRequest(set, 'student_id must be a valid UUID')
     }
     const limitRaw = Number(url.searchParams.get('limit') || 50)
     const limit = Number.isFinite(limitRaw) ? limitRaw : 50
@@ -187,14 +183,12 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/findings/export', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const url = new URL(request.url)
     const studentId = url.searchParams.get('student_id') ?? ''
     if (!UUID_PARAM_RE.test(studentId)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'student_id must be a valid UUID', false)
+      return badRequest(set, 'student_id must be a valid UUID')
     }
     const limitRaw = Number(url.searchParams.get('limit') || 200)
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 500) : 200
@@ -209,8 +203,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/analyses/:jobId/clips', async ({ params, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     set.status = 200
     return { clips: await listClips(auth0Id, jobId) }
@@ -305,8 +298,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/analyses/:jobId/stages', async ({ params, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     const analysis = await getUserAnalysisById(auth0Id, jobId)
     if (!analysis) {
@@ -319,8 +311,7 @@ export default new Elysia()
   .patch('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, body, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
 
     const { display_name } = body as { display_name?: string }
@@ -381,8 +372,7 @@ export default new Elysia()
   .post('/api/auth/user/:auth0Id/analyses/:jobId/cancel', async ({ params, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     const analysis = await getUserAnalysisById(auth0Id, jobId)
     if (!analysis) {
@@ -419,8 +409,7 @@ export default new Elysia()
   .delete('/api/auth/user/:auth0Id/analyses/:jobId', async ({ params, request, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     await failEngineJobForServerJob(jobId, 'Analysis deleted.')
     const removed = await deleteAnalysis(auth0Id, jobId)
@@ -435,8 +424,7 @@ export default new Elysia()
   .get('/api/auth/user/:auth0Id/analyses/:jobId/chat', async ({ params, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
 
     const messages = await getChatMessages(jobId, auth0Id)
@@ -447,8 +435,7 @@ export default new Elysia()
   .post('/api/auth/user/:auth0Id/analyses/:jobId/chat', async ({ params, body, set }) => {
     const { auth0Id, jobId } = params
     if (!auth0Id || !jobId) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
 
     const { message } = body as { message?: string }

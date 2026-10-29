@@ -19,13 +19,13 @@ import {
 } from '../lib/orgReports'
 import { listObjectives } from '../lib/orgObjectives'
 import { serviceGuard } from '../lib/serviceGuard'
-import { UUID_RE } from './org/shared'
 import { redactWellness } from '../lib/permissions'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { mintAttributionToken } from '../lib/attribution'
 import { checkLimit } from '../lib/ratelimit'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
+import { logEvent } from '../lib/log'
 
 const SESSION_TOKEN_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
 
@@ -317,13 +317,10 @@ export default new Elysia()
           set.status = 503
           return buildError('QUEUE_UNAVAILABLE', 'Job queue is not configured.', true)
         }
-        console.error(
-          JSON.stringify({
-            type: 'me_analyze_enqueue_error',
-            message: (error as Error)?.message,
-            timestamp: new Date().toISOString(),
-          }),
-        )
+        logEvent('error', 'me_analyze_enqueue_error', {
+          message: (error as Error)?.message,
+          timestamp: new Date().toISOString(),
+        })
         set.status = 500
         return buildError(
           'INTERNAL_ERROR',

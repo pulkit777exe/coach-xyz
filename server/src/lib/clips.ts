@@ -1,4 +1,4 @@
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 import { CLIP_ID_RE, parseClipInput, type ClipInput } from './clipsPolicy'
 
 // ── Clips (subclip bookmarks) ───────────────────────────────────────────────
@@ -33,7 +33,6 @@ export type ClipRecord = {
 export const listClips = async (auth0Id: string, serverJobId: string): Promise<ClipRecord[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<ClipRecord[]>`
         select c.id, c.server_job_id, c.finding_id, c.label,
           c.start_ms, c.end_ms, c.created_by, c.created_at
@@ -50,7 +49,6 @@ export const listClips = async (auth0Id: string, serverJobId: string): Promise<C
 /** Count an analysis's clips (cap enforcement). */
 export const countClips = async (auth0Id: string, serverJobId: string): Promise<number> => {
   const rows = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     return db<{ n: number }[]>`
       select count(*)::int as n from clips c
       join analysis_history a on a.server_job_id = c.server_job_id
@@ -73,7 +71,6 @@ export const createClip = async (
   // an orphan clip between the checks and the write.
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       return db.begin(async (tx) => {
         // The analysis must belong to the caller's account — no cross-account clips.
         const owned = await tx<{ server_job_id: string }[]>`
@@ -116,7 +113,6 @@ export const deleteClip = async (
   if (!CLIP_ID_RE.test(clipId)) return false
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
         delete from clips c
         using analysis_history a

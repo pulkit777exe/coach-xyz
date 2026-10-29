@@ -1,4 +1,4 @@
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 import { applyEvidenceGate, findingNumber, findingText, type ReviewState } from './findingsPolicy'
 
 // ── Findings persistence lives here; pure curation rules live in ─────────
@@ -39,7 +39,6 @@ export type FindingRecord = {
       .map(applyEvidenceGate)
       .slice(0, 500)
     await withHistoryStore(async (db) => {
-      await ensureInitialized()
       await db`delete from findings where server_job_id = ${serverJobId};`
       for (const f of rows) {
         await db`
@@ -106,7 +105,6 @@ export const getStudentFindings = async (
   const capped = Math.min(Math.max(limit, 1), 200)
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<StoredFinding[]>`
       select f.id, f.server_job_id, f.category, f.start_ms, f.end_ms,
         f.confidence, f.confidence_band, f.severity, f.observation,
@@ -132,7 +130,6 @@ export const reviewFinding = async (
 ): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       update findings set review_state = ${reviewState}
       where id = ${findingId}
@@ -162,7 +159,6 @@ export const getFindingsTrend = async (
   const days = Math.min(Math.max(opts.days ?? 30, 1), 365)
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<FindingsTrendPoint[]>`
       select
         to_char(date_trunc('day', f.created_at), 'YYYY-MM-DD') as day,

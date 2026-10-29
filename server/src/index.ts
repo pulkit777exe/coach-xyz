@@ -5,6 +5,7 @@ import { cors } from '@elysiajs/cors'
 import { swagger } from '@elysiajs/swagger'
 
 import { bootWorkers } from './lib/workerLifecycle'
+import { logEvent } from './lib/log'
 
 import scanRoute from './routes/scan'
 import analyzeRoute from './routes/analyze'
@@ -34,25 +35,19 @@ assertServiceGuardConfigured()
 
 // ── Global Crash Prevention ─────────────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {
-  console.error(
-    JSON.stringify({
-      type: 'unhandled_rejection',
+  logEvent('error', 'unhandled_rejection', {
       reason: reason instanceof Error ? reason.message : String(reason),
       stack: reason instanceof Error ? reason.stack : undefined,
       timestamp: new Date().toISOString(),
-    }),
-  )
+  })
 })
 
 process.on('uncaughtException', (error) => {
-  console.error(
-    JSON.stringify({
-      type: 'uncaught_exception',
+  logEvent('error', 'uncaught_exception', {
       message: error.message,
       stack: error.stack,
       timestamp: new Date().toISOString(),
-    }),
-  )
+  })
   // Give in-flight requests time to drain, then exit
   setTimeout(() => process.exit(1), 1000)
 })
@@ -61,7 +56,7 @@ process.on('uncaughtException', (error) => {
 const requiredEnvVars = ['ENGINE_URL']
 const missingEnvVars = requiredEnvVars.filter((k) => !process.env[k])
 if (missingEnvVars.length > 0) {
-  console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`)
+  logEvent('error', 'missing_required_env', { missing: missingEnvVars })
   process.exit(1)
 }
 
@@ -70,13 +65,10 @@ const maxRequestBodySize = Math.max(MAX_FILE_SIZE_BYTES + 10 * 1024 * 1024, 64 *
 try {
   await initializeHistoryStore()
 } catch (err) {
-  console.error(
-    JSON.stringify({
-      type: 'history_store_init_failed',
+  logEvent('error', 'history_store_init_failed', {
       error: err instanceof Error ? err.message : 'unknown',
       timestamp: new Date().toISOString(),
-    }),
-  )
+  })
   // Continue — history is non-critical
 }
 
@@ -159,17 +151,9 @@ const app = new Elysia({
     maxRequestBodySize,
   })
 
-console.log(
-  JSON.stringify({
-    type: 'server_started',
+logEvent('info', 'server_started', {
     port: app.server?.port,
     maxRequestBodySize,
-  }),
-)
-console.log(
-  JSON.stringify({
-    type: 'history_store_status',
-    enabled: historyStoreEnabled(),
-  }),
-)
-console.log(JSON.stringify({ type: 'worker_started' }))
+  })
+logEvent('info', 'history_store_status', { enabled: historyStoreEnabled() })
+logEvent('info', 'worker_started', {})

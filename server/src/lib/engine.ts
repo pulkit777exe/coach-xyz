@@ -262,14 +262,6 @@ export const markEngineJobFailed = async (
   })
 }
 
-export type ScanProgressEvent = {
-  session_token: string
-  current: number
-  total: number
-  complete: boolean
-  error: string | null
-}
-
 export const getScanProgressStream = async (
   sessionToken: string,
   angle?: string | null,
