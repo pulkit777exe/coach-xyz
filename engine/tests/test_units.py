@@ -250,3 +250,34 @@ def test_sessions_expire_and_replaced_uploads_are_reported(monkeypatch):
     assert sessions.angle(token, "side")[0] == "primary"  # unknown angle falls back to primary
     monkeypatch.setattr(config.settings, "session_ttl_s", -1)
     assert sessions.get(token) is None
+
+
+# -- camera angle validity ----------------------------------------------------
+
+def test_classifier_reads_the_torso_axis_as_front_or_side():
+    # Front: shoulders vertically above hips (small lateral offset, larger forward offset)
+    facing = pose(i11=(0.5, 0.3), i12=(0.55, 0.3), i23=(0.5, 0.6), i24=(0.54, 0.6))
+    assert g.classify_angle(facing, 1000, 1000) == "front"
+    # Side: shoulders and hips horizontally separated, same vertical level
+    side = pose(i11=(0.5, 0.5), i12=(0.5, 0.5), i23=(0.7, 0.5), i24=(0.7, 0.5))
+    assert g.classify_angle(side, 1000, 1000) == "side"
+    # Diagonal: both offsets moderate → ambiguous
+    diagonal = pose(i11=(0.5, 0.5), i12=(0.55, 0.5), i23=(0.525, 0.525), i24=(0.55, 0.55))
+    assert g.classify_angle(diagonal, 1000, 1000) is None  # ambiguous
+
+
+def test_measure_skips_criteria_the_angle_cannot_support():
+    pack = sports.Pack(
+        name="test", version=1, label="Test", signal="wrist_speed", min_gap_s=1.5, floor=4.0,
+        event_types=["action"], positive=["made"], negative=["missed"], neutral=["unknown"],
+        # positions and camera_angles are required fields in Pack; valid_angles is the new addition
+        positions=[{"id": "sg", "label": "Shooting Guard"}],
+        camera_angles=[{"id": "side", "label": "Side view"}, {"id": "front", "label": "Front view"}],
+        criteria=[Criterion("arm_extension", "Arm extension", "elbow_angle", (155, 180), (135, 180), 0.3,
+                              valid_angles=("side",))],
+    )
+    front = measure.measure(synthetic_track({}), 0, "left", pack, angle="front")
+    assert front["criteria"][0]["source"] == "none"
+    assert front["criteria"][0]["skipped"] is True
+    side = measure.measure(synthetic_track({}), 0, "left", pack, angle="side")
+    assert side["criteria"][0]["source"] == "pose"

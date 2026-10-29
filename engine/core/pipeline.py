@@ -12,7 +12,9 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import config, events, exports, jobs, judge, llm, measure, motion, pose, render, result, sports, storage, video
+import numpy as np
+
+from . import config, events, exports, jobs, judge, llm, measure, motion, pose, render, result, sports, storage, video, geometry
 from .errors import Cancelled, EngineError
 from .judge import Judgement
 from .track import Lock, Track, clean, track_athlete
@@ -115,7 +117,11 @@ def run(job_id: str, params: dict) -> dict:
         with rep.stage("candidates", 52, 55):
             cands = motion.candidates(track, pack)
             events.emit(job_id, "candidates.found", {"count": len(cands)}, webhook=False)
-            measured = [measure.measure(track, c.i, c.side, pack) for c in cands]
+            angle_tag = geometry.classify_angle(track.lm[int(np.flatnonzero(~np.isnan(track.lm[:, 0, 0]))[0])],
+                                                 track.width, track.height) if len(track.lm) else None
+            effective_angle = angle_tag or params.get("angle") or "primary"
+            params = {**params, "angle": effective_angle}
+            measured = [measure.measure(track, c.i, c.side, pack, angle=effective_angle) for c in cands]
             rep.check()
 
         judge_key = _digest(track_key, params.get("sport"), pack.version, ",".join(s.gemini_models),

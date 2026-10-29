@@ -33,11 +33,28 @@ def score_value(value: float, c: Criterion) -> tuple[float, str]:
     return max(0.0, score), f"{'below' if below else 'above'} target by {gap:.0f}°"
 
 
-def measure(track: Track, i: int, side: str, pack: Pack) -> dict:
-    """Pack criteria measured around sample `i`. Median over a few samples to ignore jitter."""
+def measure(track: Track, i: int, side: str, pack: Pack, angle: str | None = None) -> dict:
+    """Pack criteria measured around sample `i`. Median over a few samples to ignore jitter.
+
+    Criteria that declare `valid_angles` the current camera angle cannot support
+    are skipped (left unmeasured) rather than scored from data that cannot answer
+    the question.
+    """
     lo, hi = max(0, i - HALF_WINDOW), min(len(track.t), i + HALF_WINDOW + 1)
     rows = []
     for c in pack.criteria:
+        valid_here = True
+        if c.valid_angles and angle and angle != "primary":
+            valid_here = angle in c.valid_angles
+        if not valid_here:
+            rows.append({
+                "key": c.key, "label": c.label, "metric": c.metric, "unit": "deg", "weight": c.weight,
+                "ideal": list(c.ideal) if c.ideal else None,
+                "acceptable": list(c.acceptable) if c.acceptable else None,
+                "value": None, "confidence": None, "score": None, "source": "none", "skipped": True,
+                "note": f"not measurable from {angle or 'unknown'}",
+            })
+            continue
         vals, confs = [], []
         for j in range(lo, hi):
             if np.isnan(track.lm[j, 0, 0]):
@@ -61,8 +78,13 @@ def measure(track: Track, i: int, side: str, pack: Pack) -> dict:
 
 
 def apply_ratings(rows: list[dict], ratings: dict[str, str]) -> None:
-    """Fill unmeasured criteria from a model's rating, flagged as a judgement."""
+    """Fill unmeasured criteria from a model's rating, flagged as a judgement.
+
+    Rows skipped for an unsupported camera angle are left alone — never guessed.
+    """
     for row in rows:
+        if row.get("skipped"):
+            continue
         rating = ratings.get(row["key"])
         if row["source"] == "none" and rating in RATING_SCORE:
             row.update(score=RATING_SCORE[rating], source="judged", note=f"judged {rating.replace('_', ' ')} from video")

@@ -26,6 +26,7 @@ class Criterion:
     weight: float
     look_for: str = ""
     drill: str = ""
+    valid_angles: tuple[str, ...] | None = None  # camera angles this measurement is valid from; None = any
 
 
 @dataclass
@@ -68,6 +69,7 @@ def _criterion(raw: dict) -> Criterion:
         weight=float(raw.get("weight", 0) or 0),
         look_for=raw.get("look_for", ""),
         drill=raw.get("drill", ""),
+        valid_angles=tuple(raw["valid_angles"]) if raw.get("valid_angles") else None,
     )
 
 

@@ -131,3 +131,32 @@ def torso_length(lm: np.ndarray, w: int, h: int) -> float:
     hx = (lm[L_HIP, 0] + lm[R_HIP, 0]) / 2 * w
     hy = (lm[L_HIP, 1] + lm[R_HIP, 1]) / 2 * h
     return math.hypot(sx - hx, sy - hy)
+
+
+def classify_angle(lm: np.ndarray, w: int, h: int) -> str | None:
+    """Lightweight camera-angle tag: which way the athlete's torso runs in frame.
+
+    "front" when the torso axis is forward-dominated (athlete facing the camera),
+    "side" when it is lateral-dominated (athlete's side to the camera). Returns
+    None when the skeleton is too ambiguous to tag confidently, so callers fall
+    back to the coach's label.
+    """
+    pts = {}
+    for name, ids in (
+        ("shoulder", (L_SHOULDER, R_SHOULDER)),
+        ("hip", (L_HIP, R_HIP)),
+    ):
+        conf = float(min(lm[i, 3] for i in ids))
+        if not conf >= MIN_VISIBILITY:
+            return None
+        pts[name] = ((lm[ids[0], 0] + lm[ids[1], 0]) / 2 * w, (lm[ids[0], 1] + lm[ids[1], 1]) / 2 * h)
+    lateral = abs(pts["shoulder"][0] - pts["hip"][0])
+    forward = abs(pts["shoulder"][1] - pts["hip"][1])
+    if lateral < 1e-6 and forward < 1e-6:
+        return None
+    axis = math.degrees(math.atan2(lateral, forward))
+    if axis < 45:
+        return "front"
+    if axis > 45:
+        return "side"
+    return None
