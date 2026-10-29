@@ -1,6 +1,6 @@
 import type { Player } from '../types'
 import type { RequestMeta } from './requestMeta'
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 import { persistFindings, type FindingRecord } from './findings'
 import { persistPlayerEvents } from './registry'
 type VideoConversationRecord = RequestMeta & {
@@ -83,7 +83,6 @@ const supabasePublishableKey =
 
 export const persistVideoConversation = async (record: VideoConversationRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into video_conversations (
         session_token,
@@ -130,7 +129,6 @@ export const persistVideoConversation = async (record: VideoConversationRecord):
 
 export const persistAnalysisStart = async (record: AnalysisStartRecord): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into analysis_history (
         server_job_id,
@@ -184,7 +182,6 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
   const completedAt = record.status.complete ? new Date().toISOString() : null
 
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     // A cancelled analysis stays cancelled: late worker completions must not
     // resurrect it (cancellation is an explicit terminal state).
     const existing = await db<{ complete: boolean; error_code: string | null }[]>`
@@ -282,7 +279,6 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
 
   // Internal stage history (§13): append only on transition, not per poll.
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const last = await db<{ stage: number | null }[]>`
       select stage from analysis_stages
       where server_job_id = ${record.serverJobId}
@@ -300,7 +296,6 @@ export const persistAnalysisStatus = async (record: AnalysisStatusRecord): Promi
 export const deleteAnalysis = async (auth0Id: string, serverJobId: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const owned = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where auth0_id = ${auth0Id} and server_job_id = ${serverJobId}
@@ -334,7 +329,6 @@ export {
 
 export const markAnalysisDownloaded = async (serverJobId: string): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       update analysis_history
       set
@@ -352,7 +346,6 @@ export const updateAnalysisDisplayName = async (
   displayName: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set display_name = ${displayName || null}, updated_at = now()
@@ -370,7 +363,6 @@ export const linkAnalysisToStudent = async (
   studentId: string | null,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       update analysis_history
       set student_id = ${studentId ?? null}, updated_at = now()
@@ -424,7 +416,6 @@ export const getUserAnalyses = async (
 ): Promise<DashboardAnalysis[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const unlinkedFilter = opts.unlinked ? 'and a.student_id is null' : ''
       const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
@@ -445,7 +436,6 @@ export const getUserAnalysisById = async (
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
@@ -461,7 +451,6 @@ export const getAnalysisByServerJobId = async (
   serverJobId: string,
 ): Promise<DashboardAnalysis | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<DashboardAnalysis[]>`
       select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
       from analysis_history a
@@ -483,7 +472,6 @@ export const getAnalysisOwner = async (
   student_id: string | null
 } | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<
       {
         auth0_id: string | null
@@ -502,7 +490,6 @@ export const getAnalysisOwner = async (
 export const getUserStats = async (auth0Id: string): Promise<DashboardStats> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<DashboardStats[]>`
       select
         count(*)::int as total_analyses,
@@ -548,7 +535,6 @@ export const getAnalysisStages = async (
 ): Promise<AnalysisStageEntry[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<AnalysisStageEntry[]>`
       select s.stage, s.stage_name, s.created_at
       from analysis_stages s

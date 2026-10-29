@@ -1,19 +1,11 @@
-// ── Org reports slice (vertical slice: how we are doing) ─────────────────────
-// Reports, performance metrics/series/trends, and the cross-entity assembled
-// views (buildReportContent, compareStudents, getOrgOverview, searchOrg).
-// Assembly lives here — not in callers — reusing the roster slice
-// (getStudent) and the attendance slice (attendanceSummary) so each lookup
-// has a single home. Pure move from lib/orgData.ts: all names and
-// signatures are unchanged.
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './orgStore'
-import { ANALYSES_SELECT_COLUMNS } from './analyses'
-import type { DashboardAnalysis } from './analyses'
+// ── Org reports slice ────────────────────────────────────────────────────────
+// Report CRUD. Assembly lives in orgReportContent; analysis lookups in
+// orgAnalysisQueries; performance in orgPerformance; cross-entity views in
+// orgInsights. Everything is re-exported here so existing importers and the
+// orgData barrel keep one stable surface.
+import { withHistoryStoreOrThrow as withHistoryStore } from './orgStore'
 import { REPORT_TYPES } from './orgEnums'
 import type { ReportType } from './orgEnums'
-import { computeMetricTrends as computeTrends } from './orgValidate'
-import type { MetricTrend } from './orgValidate'
-import { getStudent } from './orgRoster'
-import { attendanceSummary } from './orgAttendance'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,60 +22,6 @@ export type ReportRecord = {
   updated_at: string
 }
 
-export type PerformanceMetric = {
-  id: string
-  auth0_id: string
-  student_id: string
-  metric_key: string
-  metric_value: number
-  unit: string | null
-  source_analysis_id: string | null
-  measured_at: string
-  created_at: string
-}
-
-export type OrgOverview = {
-  student_count: number
-  active_students: number
-  sessions_this_month: number
-  upcoming_events: number
-  analyses_linked: number
-  avg_attendance_rate: number | null
-}
-
-export type PerformanceSeriesPoint = {
-  id: string | null
-  measured_at: string
-  metric_key: string
-  metric_value: number
-  unit: string | null
-  source: 'analysis' | 'manual'
-  source_analysis_id: string | null
-}
-
-// ── Reports ──────────────────────────────────────────────────────────────────
-
-export const getStudentAnalyses = async (
-  auth0Id: string,
-  studentId: string,
-  limit = 200,
-): Promise<DashboardAnalysis[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const rows = await db<DashboardAnalysis[]>`
-        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
-        from analysis_history a
-        left join video_conversations v on a.session_token = v.session_token
-        where a.auth0_id = ${auth0Id} and a.student_id = ${studentId}
-        order by a.requested_at desc
-        limit ${limit};
-      `
-      return rows ?? []
-    })) ?? []
-  )
-}
-
 export type ReportInput = {
   student_id?: string | null
   report_type: ReportType
@@ -93,17 +31,22 @@ export type ReportInput = {
   content_json: Record<string, unknown>
 }
 
+const REPORT_SELECT = `
+  select r.*, s.full_name
+  from reports r
+  left join students s on s.id = r.student_id
+`
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+
 export const listReports = async (
   auth0Id: string,
   opts: { studentId?: string } = {},
 ): Promise<Array<ReportRecord & { full_name: string | null }>> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
-        select r.*, s.full_name
-        from reports r
-        left join students s on s.id = r.student_id
+        ${db.unsafe(REPORT_SELECT)}
         where r.auth0_id = ${auth0Id}
           and (${opts.studentId ?? null}::uuid is null or r.student_id = ${opts.studentId ?? null}::uuid)
         order by r.created_at desc;
@@ -118,11 +61,8 @@ export const getReport = async (
   id: string,
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
-      select r.*, s.full_name
-      from reports r
-      left join students s on s.id = r.student_id
+      ${db.unsafe(REPORT_SELECT)}
       where r.auth0_id = ${auth0Id} and r.id = ${id}
       limit 1;
     `
@@ -135,7 +75,6 @@ export const createReportRecord = async (
   input: ReportInput,
 ): Promise<ReportRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<ReportRecord[]>`
       insert into reports (
         auth0_id, student_id, report_type, title, period_start, period_end, content_json
@@ -156,196 +95,12 @@ export const createReportRecord = async (
 
 export const deleteReport = async (auth0Id: string, id: string): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ id: string }[]>`
       delete from reports where auth0_id = ${auth0Id} and id = ${id} returning id;
     `
-    return rows?.[0] ? true : false
+    return Boolean(rows?.[0])
   })
   return res ?? false
-}
-
-export const listRecentAnalysisScores = async (
-  auth0Id: string,
-  limit = 20,
-): Promise<DashboardAnalysis[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const rows = await db<DashboardAnalysis[]>`
-        select ${db.unsafe(ANALYSES_SELECT_COLUMNS)}
-        from analysis_history a
-        left join video_conversations v on a.session_token = v.session_token
-        where a.auth0_id = ${auth0Id}
-          and a.complete = true
-          and a.summary_json is not null
-          and (a.summary_json->>'form_score') is not null
-        order by a.requested_at desc
-        limit ${limit};
-      `
-      return rows ?? []
-    })) ?? []
-  )
-}
-
-export function buildPeriodLabel(opts: {
-  reportType?: ReportType | null
-  from?: string | null
-  to?: string | null
-}): string {
-  const { reportType, from, to } = opts
-  const fmt = (iso: string) =>
-    new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-  if (reportType === 'monthly') {
-    const anchor = from ? new Date(`${from.slice(0, 10)}T00:00:00`) : new Date()
-    return `Month of ${anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
-  }
-  if (from && to) return `from ${fmt(from)} to ${fmt(to)}`
-  if (from) return `since ${fmt(from)}`
-  if (to) return `through ${fmt(to)}`
-  return 'All time'
-}
-
-export const buildReportContent = async (
-  auth0Id: string,
-  opts: {
-    student_id?: string | null
-    from?: string | null
-    to?: string | null
-    report_type?: ReportType | null
-  } = {},
-): Promise<Record<string, unknown>> => {
-  const { student_id, from, to, report_type } = opts
-  const [attendance, series, analyses] = await Promise.all([
-    attendanceSummary(auth0Id, {
-      from: from ?? undefined,
-      to: to ?? undefined,
-      studentId: student_id ?? undefined,
-    }),
-    student_id
-      ? getStudentPerformanceSeries(auth0Id, student_id, {
-          from: from ?? undefined,
-          to: to ?? undefined,
-        })
-      : Promise.resolve([]),
-    student_id
-      ? getStudentAnalyses(auth0Id, student_id, 20)
-      : listRecentAnalysisScores(auth0Id, 20),
-  ])
-
-  const student = student_id ? await getStudent(auth0Id, student_id) : null
-
-  const formScores = series.filter((s) => s.metric_key === 'form_score')
-  const formScoreAvg =
-    formScores.length > 0
-      ? Math.round(
-          (formScores.reduce((acc, s) => acc + s.metric_value, 0) / formScores.length) * 10,
-        ) / 10
-      : null
-  const formScoreLatest =
-    formScores.length > 0 ? formScores[formScores.length - 1].metric_value : null
-
-  const orgBlock = student_id
-    ? null
-    : await (async () => {
-        const o = await getOrgOverview(auth0Id)
-        return {
-          student_count: o.student_count,
-          active_students: o.active_students,
-          sessions_this_month: o.sessions_this_month,
-          upcoming_events: o.upcoming_events,
-          analyses_linked: o.analyses_linked,
-          avg_attendance_rate: o.avg_attendance_rate,
-        }
-      })()
-
-  const attendanceBlock = {
-    total_records: attendance.total_records,
-    present: attendance.present,
-    absent: attendance.absent,
-    late: attendance.late,
-    excused: attendance.excused,
-    attendance_rate: attendance.attendance_rate,
-  }
-  const performanceBlock = {
-    form_score_avg: formScoreAvg,
-    form_score_latest: formScoreLatest,
-    total_sessions: formScores.length,
-    latest_analysis_at:
-      formScores.length > 0 ? formScores[formScores.length - 1].measured_at : null,
-  }
-  const analysesBlock = analyses.map((a) => ({
-    server_job_id: a.server_job_id,
-    requested_at: a.requested_at,
-    display_name: a.display_name,
-    student_id: a.student_id,
-    form_score:
-      typeof a.summary_json === 'object' && a.summary_json && 'form_score' in a.summary_json
-        ? Number((a.summary_json as Record<string, unknown>).form_score)
-        : null,
-  }))
-
-  let summary: string | null
-  if (orgBlock) {
-    const parts: string[] = []
-    parts.push(
-      `${orgBlock.student_count} student(s) on the roster (${orgBlock.active_students} active).`,
-    )
-    if (orgBlock.avg_attendance_rate !== null) {
-      parts.push(`Roster attendance over the last 30 days: ${orgBlock.avg_attendance_rate}%.`)
-    }
-    if (orgBlock.sessions_this_month > 0)
-      parts.push(`${orgBlock.sessions_this_month} session(s) scheduled this month.`)
-    if (orgBlock.analyses_linked > 0)
-      parts.push(`${orgBlock.analyses_linked} analysis(ies) linked to students.`)
-    if (performanceBlock.form_score_avg !== null) {
-      parts.push(
-        `Average form score across the ${performanceBlock.total_sessions} most recent analyzed session(s) is ${performanceBlock.form_score_avg}/10.`,
-      )
-    } else if (attendanceBlock.total_records > 0) {
-      parts.push(
-        `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`,
-      )
-    }
-    summary = parts.length ? parts.join(' ') : 'No data is available yet for this academy.'
-  } else if (performanceBlock.form_score_avg !== null) {
-    summary = `Average form score across ${performanceBlock.total_sessions} analyzed session(s) is ${performanceBlock.form_score_avg}/10${
-      attendanceBlock.total_records > 0
-        ? `; attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}%`
-        : ''
-    }.`
-  } else if (attendanceBlock.total_records > 0) {
-    summary = `Attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}% across ${attendanceBlock.total_records} record(s).`
-  } else {
-    summary = 'No attendance or performance data is available for the selected period.'
-  }
-
-  return {
-    generated_at: new Date().toISOString(),
-    student: student
-      ? {
-          id: student.id,
-          full_name: student.full_name,
-          sport: student.sport,
-          position: student.position,
-          status: student.status,
-        }
-      : null,
-    period: {
-      start: from ?? null,
-      end: to ?? null,
-      label: buildPeriodLabel({ reportType: report_type, from, to }),
-    },
-    attendance: attendanceBlock,
-    performance: performanceBlock,
-    analyses: analysesBlock,
-    summary,
-    org: orgBlock,
-  }
 }
 
 export const updateReportRecord = async (
@@ -360,7 +115,6 @@ export const updateReportRecord = async (
   },
 ): Promise<(ReportRecord & { full_name: string | null }) | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Array<ReportRecord & { full_name: string | null }>>`
       update reports set
         report_type = ${input.report_type},
@@ -376,389 +130,17 @@ export const updateReportRecord = async (
   })
 }
 
-// ── Performance ──────────────────────────────────────────────────────────────
-
-export const listPerformance = async (
-  auth0Id: string,
-  studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string; limit?: number } = {},
-): Promise<PerformanceMetric[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const rows = await db<PerformanceMetric[]>`
-        select id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value, unit,
-               source_analysis_id, measured_at, created_at
-        from performance_metrics
-        where auth0_id = ${auth0Id} and student_id = ${studentId}
-          and (${opts.metricKey ?? ''} = '' or metric_key = ${opts.metricKey ?? null})
-          and (${opts.from ?? null}::timestamptz is null or measured_at >= ${opts.from ?? null}::timestamptz)
-          and (${opts.to ?? null}::timestamptz is null or measured_at <= ${opts.to ?? null}::timestamptz)
-        order by measured_at asc
-        limit ${opts.limit ?? 500};
-      `
-      return rows ?? []
-    })) ?? []
-  )
-}
-
-export type PerformanceInput = {
-  student_id: string
-  metric_key: string
-  metric_value: number
-  unit?: string | null
-  source_analysis_id?: string | null
-  measured_at?: string | null
-}
-
-export const createPerformanceMetric = async (
-  auth0Id: string,
-  input: PerformanceInput,
-): Promise<PerformanceMetric | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<PerformanceMetric[]>`
-      insert into performance_metrics (
-        auth0_id, student_id, metric_key, metric_value, unit, source_analysis_id, measured_at
-      ) values (
-        ${auth0Id},
-        ${input.student_id}::uuid,
-        ${input.metric_key},
-        ${input.metric_value}::float8,
-        ${input.unit ?? null},
-        ${input.source_analysis_id ?? null},
-        ${input.measured_at ?? null}::timestamptz
-      )
-      on conflict (auth0_id, student_id, metric_key, measured_at) do nothing
-      returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
-        unit, source_analysis_id, measured_at, created_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
-
-export const updatePerformanceMetric = async (
-  auth0Id: string,
-  id: string,
-  input: { metric_value: number; unit?: string | null },
-): Promise<PerformanceMetric | null> => {
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<PerformanceMetric[]>`
-      update performance_metrics set
-        metric_value = ${input.metric_value}::float8,
-        unit = ${input.unit ?? null}
-      where auth0_id = ${auth0Id} and id = ${id}::uuid and source_analysis_id is null
-      returning id, auth0_id, student_id, metric_key, metric_value::float8 as metric_value,
-        unit, source_analysis_id, measured_at, created_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
-
-export const deletePerformanceMetric = async (auth0Id: string, id: string): Promise<boolean> => {
-  const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
-    const rows = await db<{ id: string }[]>`
-      delete from performance_metrics where auth0_id = ${auth0Id} and id = ${id} returning id;
-    `
-    return rows?.[0] ? true : false
-  })
-  return res ?? false
-}
-
-/**
- * Combined performance timeline for a student: manual metrics + form scores
- * extracted from completed AI analyses.
- */
-export const getStudentPerformanceSeries = async (
-  auth0Id: string,
-  studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string } = {},
-): Promise<PerformanceSeriesPoint[]> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const analyses = await db<
-        {
-          requested_at: string
-          form_score: number | null
-          server_job_id: string
-        }[]
-      >`
-        select
-          requested_at,
-          (summary_json->>'form_score')::float8 as form_score,
-          server_job_id
-        from analysis_history
-        where auth0_id = ${auth0Id}
-          and student_id = ${studentId}::uuid
-          and complete = true
-          and summary_json is not null
-          and (summary_json->>'form_score') is not null
-          and (${opts.from ?? null}::timestamptz is null or requested_at >= ${opts.from ?? null}::timestamptz)
-          and (${opts.to ?? null}::timestamptz is null or requested_at <= ${opts.to ?? null}::timestamptz)
-        order by requested_at asc;
-      `
-      const manual = await listPerformance(auth0Id, studentId, {
-        metricKey: opts.metricKey || undefined,
-        from: opts.from,
-        to: opts.to,
-      })
-
-      const points: PerformanceSeriesPoint[] = [
-        ...(analyses ?? []).map((a) => ({
-          id: null as string | null,
-          measured_at: a.requested_at,
-          metric_key: 'form_score',
-          metric_value: a.form_score as number,
-          unit: '/10',
-          source: 'analysis' as const,
-          source_analysis_id: a.server_job_id,
-        })),
-        ...(manual ?? []).map((m) => ({
-          id: m.id,
-          measured_at: m.measured_at,
-          metric_key: m.metric_key,
-          metric_value: m.metric_value,
-          unit: m.unit,
-          source: 'manual' as const,
-          source_analysis_id: m.source_analysis_id,
-        })),
-      ]
-
-      points.sort((a, b) => a.measured_at.localeCompare(b.measured_at))
-      return points
-    })) ?? []
-  )
-}
-
-// ── Trends ─────────────────────────────────────────────────────────────────
-
-/**
- * Group the student's performance series into per-metric trends with slope
- * info (latest, avg, change). Pure computation lives in orgValidate.computeMetricTrends.
- */
-export const getStudentTrends = async (
-  auth0Id: string,
-  studentId: string,
-  opts: { metricKey?: string; from?: string; to?: string } = {},
-): Promise<MetricTrend[]> => {
-  const series = await getStudentPerformanceSeries(auth0Id, studentId, opts)
-  return computeTrends(series)
-}
-
-// ── Comparison ─────────────────────────────────────────────────────────────
-
-export type ComparisonStudent = {
-  student_id: string
-  full_name: string
-  latest: number | null
-  avg: number | null
-  points: Array<{ measured_at: string; metric_value: number }>
-}
-
-/**
- * Compare multiple students on a single metric key.
- * Returns per-student latest, avg, and full points array.
- */
-export const compareStudents = async (
-  auth0Id: string,
-  studentIds: string[],
-  metricKey = 'form_score',
-): Promise<ComparisonStudent[]> => {
-  if (studentIds.length === 0) return []
-
-  return withHistoryStore(async (_db) => {
-    await ensureInitialized()
-
-    const result: ComparisonStudent[] = []
-
-    for (const sid of studentIds) {
-      const series = await getStudentPerformanceSeries(auth0Id, sid, {})
-      const filtered = series.filter((s) => s.metric_key === metricKey)
-      const values = filtered.map((s) => s.metric_value)
-
-      const student = await getStudent(auth0Id, sid)
-      result.push({
-        student_id: sid,
-        full_name: student?.full_name ?? 'Unknown',
-        latest: values.length > 0 ? values[values.length - 1] : null,
-        avg:
-          values.length > 0
-            ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100
-            : null,
-        points: filtered.map((s) => ({
-          measured_at: s.measured_at,
-          metric_value: s.metric_value,
-        })),
-      })
-    }
-
-    return result
-  })
-}
-
-// ── Org Overview ─────────────────────────────────────────────────────────────
-
-export const getOrgOverview = async (auth0Id: string): Promise<OrgOverview> => {
-  return (
-    (await withHistoryStore(async (db) => {
-      await ensureInitialized()
-      const rows = await db<OrgOverview[]>`
-        select
-          (select count(*)::int from students where auth0_id = ${auth0Id}) as student_count,
-          (select count(*)::int from students where auth0_id = ${auth0Id} and status = 'active') as active_students,
-          (select count(*)::int from schedule_events
-             where auth0_id = ${auth0Id}
-               and date_trunc('month', starts_at) = date_trunc('month', now())) as sessions_this_month,
-          (select count(*)::int from schedule_events
-             where auth0_id = ${auth0Id} and status = 'scheduled' and starts_at > now()) as upcoming_events,
-          (select count(*)::int from analysis_history
-             where auth0_id = ${auth0Id} and student_id is not null) as analyses_linked,
-          (
-            select case when count(*) = 0 then null
-                 else round((count(*) filter (where status in ('present', 'late')) * 100.0) / count(*), 1)
-            end
-            from attendance
-            where auth0_id = ${auth0Id}
-              and session_date >= current_date - interval '30 days'
-          ) as avg_attendance_rate;
-      `
-      return (
-        rows?.[0] ?? {
-          student_count: 0,
-          active_students: 0,
-          sessions_this_month: 0,
-          upcoming_events: 0,
-          analyses_linked: 0,
-          avg_attendance_rate: null,
-        }
-      )
-    })) ?? {
-      student_count: 0,
-      active_students: 0,
-      sessions_this_month: 0,
-      upcoming_events: 0,
-      analyses_linked: 0,
-      avg_attendance_rate: null,
-    }
-  )
-}
-
-// ── Global search ────────────────────────────────────────────────────────────
-
-export type SearchItem = {
-  id: string
-  label: string
-  subtitle: string | null
-}
-
-export type OrgSearchResult = {
-  students: SearchItem[]
-  schedule: SearchItem[]
-  reports: SearchItem[]
-  analyses: SearchItem[]
-}
-
-export const searchOrg = async (auth0Id: string, query: string): Promise<OrgSearchResult> => {
-  const q = query.trim().slice(0, 100)
-  if (!q) return { students: [], schedule: [], reports: [], analyses: [] }
-  const like = `%${q}%`
-
-  return withHistoryStore(async (db) => {
-    await ensureInitialized()
-
-    const [students, schedule, reports, analyses] = await Promise.all([
-      db<
-        {
-          id: string
-          full_name: string
-          email: string | null
-          sport: string | null
-          position: string | null
-        }[]
-      >`
-        select id, full_name, email, sport, "position"
-        from students
-        where auth0_id = ${auth0Id}
-          and (full_name ilike ${like} or email ilike ${like} or sport ilike ${like} or "position" ilike ${like})
-        order by full_name asc
-        limit 8;
-      `,
-      db<
-        {
-          id: string
-          title: string
-          event_type: string
-          starts_at: string
-          location: string | null
-        }[]
-      >`
-        select id, title, event_type, starts_at, location
-        from schedule_events
-        where auth0_id = ${auth0Id}
-          and (title ilike ${like} or location ilike ${like} or event_type ilike ${like} or description ilike ${like})
-        order by starts_at desc
-        limit 8;
-      `,
-      db<
-        {
-          id: string
-          title: string
-          report_type: string
-          created_at: string
-          full_name: string | null
-        }[]
-      >`
-        select r.id, r.title, r.report_type, r.created_at, s.full_name
-        from reports r
-        left join students s on r.student_id = s.id
-        where r.auth0_id = ${auth0Id}
-          and (r.title ilike ${like} or r.report_type ilike ${like} or s.full_name ilike ${like})
-        order by r.created_at desc
-        limit 8;
-      `,
-      db<
-        {
-          server_job_id: string
-          display_name: string | null
-          student_id: string | null
-          requested_at: string
-          file_name: string | null
-        }[]
-      >`
-        select a.server_job_id, a.display_name, a.student_id, a.requested_at, v.file_name
-        from analysis_history a
-        left join video_conversations v on a.session_token = v.session_token
-        where a.auth0_id = ${auth0Id}
-          and (a.display_name ilike ${like} or a.server_job_id ilike ${like} or v.file_name ilike ${like})
-        order by a.requested_at desc
-        limit 8;
-      `,
-    ])
-
-    return {
-      students: (students ?? []).map((s) => ({
-        id: s.id,
-        label: s.full_name,
-        subtitle: [s.email, s.sport, s.position].filter(Boolean).join(' · ') || null,
-      })),
-      schedule: (schedule ?? []).map((e) => ({
-        id: e.id,
-        label: e.title,
-        subtitle: `${e.event_type}${e.location ? ` · ${e.location}` : ''}`,
-      })),
-      reports: (reports ?? []).map((r) => ({
-        id: r.id,
-        label: r.title,
-        subtitle: `${r.report_type}${r.full_name ? ` · ${r.full_name}` : ''}`,
-      })),
-      analyses: (analyses ?? []).map((a) => ({
-        id: a.server_job_id,
-        label: a.display_name || a.file_name || a.server_job_id,
-        subtitle: a.student_id ? 'Linked to a player' : 'Unlinked',
-      })),
-    }
-  })
-}
+// ── Re-exports (stable surface for routes, aiReportData, and orgData) ───────
+export { getStudentAnalyses, listRecentAnalysisScores } from './orgAnalysisQueries'
+export { buildPeriodLabel, buildReportContent } from './orgReportContent'
+export {
+  listPerformance,
+  createPerformanceMetric,
+  updatePerformanceMetric,
+  deletePerformanceMetric,
+  getStudentPerformanceSeries,
+  getStudentTrends,
+} from './orgPerformance'
+export type { PerformanceMetric, PerformanceSeriesPoint, PerformanceInput } from './orgPerformance'
+export { compareStudents, getOrgOverview, searchOrg } from './orgInsights'
+export type { ComparisonStudent, OrgOverview, SearchItem, OrgSearchResult } from './orgInsights'

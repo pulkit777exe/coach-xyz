@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 export type UserRecord = {
   id: string
   auth0_id: string
@@ -51,7 +51,6 @@ export const upsertUser = async (user: {
   email_verified?: boolean
 }): Promise<UserRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
 
     // Check if a user with this auth0_id already exists
     const existingById = await db<UserRecord[]>`
@@ -127,7 +126,6 @@ export const upsertUser = async (user: {
 
 export const getUserByAuth0Id = async (auth0Id: string): Promise<UserRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<UserRecord[]>`
       select * from users where auth0_id = ${auth0Id} limit 1;
     `
@@ -150,7 +148,6 @@ export const updateUserProfile = async (
 ): Promise<UserRecord | null> => {
   const primary = (await resolveAuth0Id(auth0Id)) ?? auth0Id
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const existing = await db<UserRecord[]>`
       select * from users where auth0_id = ${primary} limit 1;
     `
@@ -176,7 +173,6 @@ export const updateUserProfile = async (
 
 export const resolveAuth0Id = async (auth0Id: string): Promise<string> => {
   const result = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ auth0_id: string }[]>`
       select auth0_id from users
       where auth0_id = ${auth0Id}

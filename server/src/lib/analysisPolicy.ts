@@ -5,7 +5,7 @@
 // routes and admission import policy here so quota/tier/retention evolve in
 // one module without touching the history queries.
 
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 
 /** Daily per-org analysis cap (§17 precursor). */
 
@@ -18,7 +18,6 @@ export const orgDailyAnalysisLimit = (): number => {
 
 export const countTodayOrgAnalyses = async (orgAuth0Id: string): Promise<number | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ count: number }[]>`
       select count(*)::int as count from analysis_history
       where auth0_id = ${orgAuth0Id}
@@ -53,7 +52,6 @@ export type OrgTier = 'free' | 'pro' | 'elite'
 
 export const getOrgTier = async (orgAuth0Id: string): Promise<OrgTier> => {
   const tier = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ tier: OrgTier }[]>`
       insert into subscriptions (org_auth0_id) values (${orgAuth0Id})
       on conflict (org_auth0_id) do nothing
@@ -76,7 +74,6 @@ export const recordUsage = async (
   quantity = 1,
 ): Promise<void> => {
   await withHistoryStore(async (db) => {
-    await ensureInitialized()
     await db`
       insert into usage_records (org_auth0_id, kind, quantity)
       values (${orgAuth0Id}, ${kind.slice(0, 60)}, ${quantity});
@@ -89,7 +86,6 @@ export const recordUsage = async (
 export const getTodayUsage = async (orgAuth0Id: string): Promise<Record<string, number>> => {
   const rows =
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       return (
         (await db<{ kind: string; total: number }[]>`
       select kind, sum(quantity)::int as total from usage_records
@@ -118,7 +114,6 @@ export const pruneRetention = async (): Promise<number> => {
   const days = retentionDays()
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const stale = await db<{ server_job_id: string }[]>`
       select server_job_id from analysis_history
       where requested_at < now() - (${days} || ' days')::interval;

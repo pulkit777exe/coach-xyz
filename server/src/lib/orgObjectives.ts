@@ -2,7 +2,7 @@
 // Training objectives, training plans, and wellness check-ins. Pure move from
 // lib/orgData.ts — all names and signatures are unchanged. Scope guards reuse
 // the roster slice (getStudent) so there is a single student-lookup path.
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './orgStore'
+import { withHistoryStoreOrThrow as withHistoryStore } from './orgStore'
 import { getTeam } from './teams'
 import { getStudent } from './orgRoster'
 
@@ -40,7 +40,6 @@ export const listObjectives = async (
 ): Promise<TrainingObjective[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<TrainingObjective[]>`
       select *
       from training_objectives
@@ -72,7 +71,6 @@ export const createObjective = async (
     if (!team) return null
   }
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<TrainingObjective[]>`
       insert into training_objectives (
         org_auth0_id, student_id, team_id, finding_id, analysis_job_id,
@@ -101,7 +99,6 @@ export const setObjectiveStatus = async (
 ): Promise<TrainingObjective | null> => {
   if (!(OBJECTIVE_STATUSES as readonly string[]).includes(status)) return null
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<TrainingObjective[]>`
       update training_objectives set status = ${status}, updated_at = now()
       where org_auth0_id = ${auth0Id} and id = ${id}
@@ -114,7 +111,6 @@ export const setObjectiveStatus = async (
 export const deleteObjective = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       delete from training_objectives
       where org_auth0_id = ${auth0Id} and id = ${id}
@@ -146,7 +142,6 @@ export const listTrainingPlans = async (
 ): Promise<TrainingPlan[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<TrainingPlan[]>`
       select * from training_plans
       where org_auth0_id = ${auth0Id}
@@ -180,7 +175,6 @@ export const createTrainingPlan = async (
     if (!team) return null
   }
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<TrainingPlan[]>`
       insert into training_plans (org_auth0_id, team_id, student_id, title, description, created_by)
       values (
@@ -204,7 +198,6 @@ export const setTrainingPlanStatus = async (
 ): Promise<TrainingPlan | null> => {
   if (status !== 'active' && status !== 'done' && status !== 'archived') return null
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<TrainingPlan[]>`
       update training_plans set status = ${status}, updated_at = now()
       where org_auth0_id = ${auth0Id} and id = ${id}
@@ -217,7 +210,6 @@ export const setTrainingPlanStatus = async (
 export const deleteTrainingPlan = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       delete from training_plans where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -249,7 +241,6 @@ export const listWellness = async (
   const capped = Math.min(Math.max(limit, 1), 200)
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<WellnessCheckin[]>`
       select * from wellness_checkins
       where org_auth0_id = ${auth0Id} and student_id = ${studentId}::uuid
@@ -286,7 +277,6 @@ export const createWellnessCheckin = async (
       ? input.fatigue
       : null
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<WellnessCheckin[]>`
       insert into wellness_checkins (
         org_auth0_id, student_id, sleep_hours, fatigue, pain,

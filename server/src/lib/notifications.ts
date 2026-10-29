@@ -4,7 +4,6 @@
 // keep working; new code should import the seam directly.
 export {
   createNotificationRow,
-  ensureNotificationsInitialized,
   getAnalysisOwnerRow,
   listNotifications,
   markAllRead,

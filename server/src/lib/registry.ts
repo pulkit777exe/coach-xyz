@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 
-import { ensureInitialized, withHistoryStore } from './historyStore'
+import { withHistoryStore } from './historyStore'
 
 // ── Organization + video + event registries ────────────────────────────────
 // The org identity stays the Auth0 sub (org_auth0_id); the organizations
@@ -24,7 +24,6 @@ export const ensureOrg = async (
 ): Promise<Organization | null> => {
   if (!orgAuth0Id) return null
   return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     const rows = await db<Organization[]>`
       insert into organizations (auth0_id, name, created_by)
       values (${orgAuth0Id}, ${name?.trim().slice(0, 120) || null}, ${createdBy ?? null})
@@ -32,17 +31,6 @@ export const ensureOrg = async (
         name = coalesce(organizations.name, excluded.name),
         updated_at = now()
       returning auth0_id, name, created_by, created_at, updated_at;
-    `
-    return rows?.[0] ?? null
-  })
-}
-
-export const getOrg = async (orgAuth0Id: string): Promise<Organization | null> => {
-  return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
-    const rows = await db<Organization[]>`
-      select auth0_id, name, created_by, created_at, updated_at
-      from organizations where auth0_id = ${orgAuth0Id} limit 1;
     `
     return rows?.[0] ?? null
   })
@@ -77,7 +65,6 @@ export const registerVideo = async (input: {
   uploadedBy?: string | null
 }): Promise<VideoRecord | null> => {
   return withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     const rows = await db<VideoRecord[]>`
       insert into videos (
         org_auth0_id, storage_key, session_token, file_name, mime_type,
@@ -110,7 +97,6 @@ export const updateVideoProbe = async (
   },
 ): Promise<void> => {
   await withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     await db`
       update videos set
         status = ${probe.status},
@@ -121,17 +107,6 @@ export const updateVideoProbe = async (
       where storage_key = ${storageKey};
     `
   })
-}
-
-export type PlayerEventRecord = {
-  id: string
-  org_auth0_id: string | null
-  server_job_id: string | null
-  student_id: string | null
-  category: string
-  event_at_s: number | null
-  form_score: number | null
-  created_at: string
 }
 
 /** Materialize an analysis's shot events for timeline/trend queries. */
@@ -145,7 +120,6 @@ export const persistPlayerEvents = async (
     .filter((e) => e && typeof e === 'object')
     .slice(0, 200)
   await withHistoryStore(async (db: SQL) => {
-    await ensureInitialized()
     await db`delete from player_events where server_job_id = ${serverJobId};`
     for (const e of rows) {
       const ts = typeof e.timestamp === 'number' && Number.isFinite(e.timestamp) ? e.timestamp : null
@@ -165,25 +139,4 @@ export const persistPlayerEvents = async (
       `
     }
   })
-}
-
-export const listPlayerEvents = async (
-  opts: { orgAuth0Id?: string | null; studentId?: string | null; jobId?: string | null },
-  limit = 100,
-): Promise<PlayerEventRecord[]> => {
-  const capped = Math.min(Math.max(limit, 1), 500)
-  return (
-    (await withHistoryStore(async (db: SQL) => {
-      await ensureInitialized()
-      const rows = await db<PlayerEventRecord[]>`
-        select * from player_events
-        where (${opts.orgAuth0Id ?? null}::text is null or org_auth0_id = ${opts.orgAuth0Id ?? null})
-          and (${opts.studentId ?? null}::uuid is null or student_id = ${opts.studentId ?? null}::uuid)
-          and (${opts.jobId ?? null}::text is null or server_job_id = ${opts.jobId ?? null})
-        order by event_at_s asc nulls last, created_at asc
-        limit ${capped};
-      `
-      return rows ?? []
-    })) ?? []
-  )
 }

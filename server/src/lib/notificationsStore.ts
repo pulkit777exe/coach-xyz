@@ -3,7 +3,7 @@
 // event handlers need. No bus, no queue wiring — the event fan-out lives
 // in ./notificationsEvents, which calls createNotificationRow and publishes.
 
-import { withHistoryStore, ensureInitialized } from './historyStore'
+import { withHistoryStore } from './historyStore'
 
 export type NotificationRow = {
   id: string
@@ -26,43 +26,12 @@ export type CreateNotificationInput = {
 
 export type AnalysisOwner = { auth0Id: string; displayName: string | null }
 
-// ── Table bootstrap ──────────────────────────────────────────────────────────
-
-let notificationsInitPromise: Promise<void> | null = null
-
-export async function ensureNotificationsInitialized(): Promise<void> {
-  if (notificationsInitPromise) return notificationsInitPromise
-  notificationsInitPromise = (async () => {
-    await ensureInitialized()
-    await withHistoryStore(async (db) => {
-      await db`
-        create table if not exists notifications (
-          id uuid primary key default gen_random_uuid(),
-          auth0_id text not null,
-          type text not null,
-          title text not null,
-          body text,
-          data jsonb not null default '{}'::jsonb,
-          read boolean not null default false,
-          created_at timestamptz not null default now()
-        );
-      `
-      await db`
-        create index if not exists idx_notifications_auth0_created
-        on notifications (auth0_id, created_at desc);
-      `
-    })
-  })()
-  return notificationsInitPromise
-}
-
 // ── CRUD helpers ─────────────────────────────────────────────────────────────
 
 export async function createNotificationRow(
   input: CreateNotificationInput,
 ): Promise<NotificationRow | null> {
   return withHistoryStore(async (db) => {
-    await ensureNotificationsInitialized()
     const rows = await db<NotificationRow[]>`
       insert into notifications (auth0_id, type, title, body, data)
       values (
@@ -86,7 +55,6 @@ export async function listNotifications(
   const unreadFilter = unreadOnly ? 'and read = false' : ''
   return (
     (await withHistoryStore(async (db) => {
-      await ensureNotificationsInitialized()
       return db<NotificationRow[]>`
       select * from notifications
       where auth0_id = ${auth0Id}
@@ -103,7 +71,6 @@ export async function markNotificationRead(
   id: string,
 ): Promise<NotificationRow | null> {
   return withHistoryStore(async (db) => {
-    await ensureNotificationsInitialized()
     const rows = await db<NotificationRow[]>`
       update notifications set read = true
       where id = ${id} and auth0_id = ${auth0Id}
@@ -115,7 +82,6 @@ export async function markNotificationRead(
 
 export async function markAllRead(auth0Id: string): Promise<void> {
   await withHistoryStore(async (db) => {
-    await ensureNotificationsInitialized()
     await db`
       update notifications set read = true
       where auth0_id = ${auth0Id} and read = false;
@@ -125,7 +91,6 @@ export async function markAllRead(auth0Id: string): Promise<void> {
 
 export async function unreadCount(auth0Id: string): Promise<number> {
   const result = await withHistoryStore(async (db) => {
-    await ensureNotificationsInitialized()
     const rows = await db<{ count: number }[]>`
       select count(*)::int as count from notifications
       where auth0_id = ${auth0Id} and read = false;
@@ -141,7 +106,6 @@ export async function unreadCount(auth0Id: string): Promise<number> {
  */
 export const getAnalysisOwnerRow = async (serverJobId: string): Promise<AnalysisOwner | null> => {
   const owner = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ auth0_id: string | null; display_name: string | null }[]>`
       select auth0_id, display_name from analysis_history
       where server_job_id = ${serverJobId}

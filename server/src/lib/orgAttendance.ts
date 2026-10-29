@@ -1,7 +1,7 @@
 // ── Org attendance slice (vertical slice: showing up) ────────────────────────
 // Attendance records (+ summary) and schedule events. Pure move from
 // lib/orgData.ts — all names and signatures are unchanged.
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './orgStore'
+import { withHistoryStoreOrThrow as withHistoryStore } from './orgStore'
 import { EVENT_STATUSES, EVENT_TYPES } from './orgEnums'
 import type { AttendanceStatus } from './orgEnums'
 
@@ -53,7 +53,6 @@ export const listAttendance = async (
 ): Promise<AttendanceWithStudent[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<AttendanceWithStudent[]>`
         select a.*, s.full_name, s.sport
         from attendance a
@@ -77,7 +76,6 @@ export const upsertAttendance = async (
   note?: string | null,
 ): Promise<AttendanceRecord | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<AttendanceRecord[]>`
       insert into attendance (auth0_id, student_id, session_date, status, note)
       values (${auth0Id}, ${studentId}, ${sessionDate}::date, ${status}, ${note || null})
@@ -120,7 +118,6 @@ export const deleteAttendance = async (
   sessionDate: string,
 ): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ id: string }[]>`
       delete from attendance
       where auth0_id = ${auth0Id} and student_id = ${studentId} and session_date = ${sessionDate}::date
@@ -137,7 +134,6 @@ export const attendanceSummary = async (
 ): Promise<AttendanceSummary> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<AttendanceSummary[]>`
         select
           count(*)::int as total_records,
@@ -183,7 +179,6 @@ export const listSchedule = async (
 ): Promise<ScheduleEvent[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<ScheduleEvent[]>`
         select * from schedule_events
         where auth0_id = ${auth0Id}
@@ -213,7 +208,6 @@ export const createScheduleEvent = async (
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const cols = Object.keys(scheduleInsertCols).filter(
       (k) => k in input && input[k] !== undefined && input[k] !== null && input[k] !== '',
     )
@@ -234,7 +228,6 @@ export const updateScheduleEvent = async (
   input: ScheduleInput,
 ): Promise<ScheduleEvent | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const cols = Object.keys(scheduleInsertCols).filter((k) => k in input)
     const setClause =
       cols.map((k, i) => `${k} = $${i + 1}::text`).join(', ') + (cols.length ? ', ' : '')
@@ -256,7 +249,6 @@ export const updateScheduleEvent = async (
 
 export const deleteScheduleEvent = async (auth0Id: string, id: string): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ id: string }[]>`
       delete from schedule_events where auth0_id = ${auth0Id} and id = ${id} returning id;
     `

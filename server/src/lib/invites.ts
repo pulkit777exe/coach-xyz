@@ -1,10 +1,6 @@
-import { SQL } from 'bun'
 import { createHash, randomBytes } from 'node:crypto'
 
-import {
-  withHistoryStoreOrThrow as withHistoryStore,
-  ensureInitialized,
-} from './historyStore'
+import { withHistoryStoreOrThrow as withHistoryStore } from './historyStore'
 import { inviteOrgMember, type OrgMemberInviteRole } from './orgMembers'
 
 // ── Organization invitations (§7) ───────────────────────────────────────────
@@ -28,32 +24,6 @@ export type OrgInvite = {
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 
-const ensureSchema = async (db: SQL) => {
-  await ensureInitialized()
-  await db`
-    create table if not exists org_invites (
-      id uuid primary key default gen_random_uuid(),
-      org_auth0_id text not null,
-      email text not null,
-      role text not null,
-      token_hash text not null unique,
-      created_by text,
-      expires_at timestamptz not null,
-      accepted_at timestamptz,
-      revoked_at timestamptz,
-      created_at timestamptz not null default now()
-    );
-  `
-  await db`
-    create index if not exists idx_org_invites_org_auth0_id
-    on org_invites (org_auth0_id);
-  `
-  await db`
-    create index if not exists idx_org_invites_token_hash
-    on org_invites (token_hash);
-  `
-}
-
 export const mintInvite = async (
   orgAuth0Id: string,
   createdBy: string,
@@ -63,7 +33,6 @@ export const mintInvite = async (
   if (!email) return null
   const token = randomBytes(32).toString('hex')
   const created = await withHistoryStore(async (db) => {
-    await ensureSchema(db)
     const rows = await db<OrgInvite[]>`
       insert into org_invites (org_auth0_id, email, role, token_hash, created_by, expires_at)
       values (
@@ -86,7 +55,6 @@ export const mintInvite = async (
 export const listInvites = async (orgAuth0Id: string): Promise<OrgInvite[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
       const rows = await db<OrgInvite[]>`
       select id, org_auth0_id, email, role, created_by, expires_at,
         accepted_at, revoked_at, created_at
@@ -102,7 +70,6 @@ export const listInvites = async (orgAuth0Id: string): Promise<OrgInvite[]> => {
 export const revokeInvite = async (orgAuth0Id: string, inviteId: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
       const rows = await db<{ id: string }[]>`
       update org_invites set revoked_at = now()
       where org_auth0_id = ${orgAuth0Id}
@@ -132,7 +99,6 @@ export const acceptInvite = async (
     return { ok: false, error: 'Invalid or expired invitation' }
   return (
     (await withHistoryStore(async (db) => {
-      await ensureSchema(db)
       const rows = await db<OrgInvite[]>`
       update org_invites set accepted_at = now()
       where token_hash = ${hashToken(token)}

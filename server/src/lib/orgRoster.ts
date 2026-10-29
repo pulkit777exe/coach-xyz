@@ -1,4 +1,4 @@
-import { withHistoryStoreOrThrow as withHistoryStore, ensureInitialized } from './orgStore'
+import { withHistoryStoreOrThrow as withHistoryStore } from './orgStore'
 import { STUDENT_STATUSES } from './orgEnums'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ export const listStudents = async (
 ): Promise<Student[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const search = opts.search?.trim() ?? ''
       const teamId = opts.teamId?.trim() ?? ''
       // Scope filter (coach hierarchy): when teamIds is present, only
@@ -71,7 +70,6 @@ export const listStudents = async (
 
 export const getStudent = async (auth0Id: string, id: string): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Student[]>`
       select * from students where auth0_id = ${auth0Id} and id = ${id} limit 1;
     `
@@ -91,7 +89,6 @@ export type LinkedPlayer = {
  */
 export const getLinkedPlayer = async (accountAuth0Id: string): Promise<LinkedPlayer | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Student[]>`
       select * from students where account_auth0_id = ${accountAuth0Id} limit 1;
     `
@@ -124,7 +121,6 @@ export const createStudent = async (
   input: StudentInput,
 ): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const cols = Object.keys(studentInsertCols).filter(
       (k) => k in input && input[k] !== undefined && input[k] !== null && input[k] !== '',
     )
@@ -146,7 +142,6 @@ export const updateStudent = async (
   input: StudentInput,
 ): Promise<Student | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const cols = Object.keys(studentInsertCols).filter((k) => k in input)
     const colCasts = {
       jersey_number: '::integer',
@@ -177,7 +172,6 @@ export const updateStudent = async (
 
 export const deleteStudent = async (auth0Id: string, id: string): Promise<boolean> => {
   const res = await withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<{ id: string }[]>`
       delete from students where auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -189,7 +183,6 @@ export const deleteStudent = async (auth0Id: string, id: string): Promise<boolea
 export const listStudentSports = async (auth0Id: string): Promise<string[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ sport: string | null }[]>`
         select distinct sport from students
         where auth0_id = ${auth0Id} and sport is not null
@@ -226,7 +219,6 @@ export type Match = {
 export const listSeasons = async (auth0Id: string): Promise<Season[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<Season[]>`
       select * from seasons where org_auth0_id = ${auth0Id} order by created_at desc;
     `
@@ -242,7 +234,6 @@ export const createSeason = async (
   const name = input.name.trim().slice(0, 120)
   if (!name) return null
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Season[]>`
       insert into seasons (org_auth0_id, name, starts_on, ends_on)
       values (${auth0Id}, ${name}, ${input.starts_on ?? null}::date, ${input.ends_on ?? null}::date)
@@ -255,7 +246,6 @@ export const createSeason = async (
 export const deleteSeason = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       delete from seasons where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -270,7 +260,6 @@ export const listMatches = async (
 ): Promise<Match[]> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<Match[]>`
       select * from matches
       where org_auth0_id = ${auth0Id}
@@ -295,7 +284,6 @@ export const createMatch = async (
   },
 ): Promise<Match | null> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
     const rows = await db<Match[]>`
       insert into matches (org_auth0_id, team_id, season_id, opponent, match_on, location, result)
       values (
@@ -316,7 +304,6 @@ export const createMatch = async (
 export const deleteMatch = async (auth0Id: string, id: string): Promise<boolean> => {
   return (
     (await withHistoryStore(async (db) => {
-      await ensureInitialized()
       const rows = await db<{ id: string }[]>`
       delete from matches where org_auth0_id = ${auth0Id} and id = ${id} returning id;
     `
@@ -343,7 +330,6 @@ export const importStudents = async (
   rows: Array<{ cleaned: Record<string, unknown> }>,
 ): Promise<ImportResult> => {
   return withHistoryStore(async (db) => {
-    await ensureInitialized()
 
     const result: ImportResult = {
       imported: 0,
