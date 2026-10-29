@@ -83,11 +83,6 @@ const ROLE_PERMISSIONS: Record<OrgMemberRole, readonly Permission[]> = {
   player: PLAYER_PERMISSIONS,
 }
 
-/** Read-only view of the role table (matrix tests, access explanations). */
-export function permissionsForRole(role: OrgMemberRole | null): readonly Permission[] {
-  return role ? ROLE_PERMISSIONS[role] : []
-}
-
 export type AccessScope = 'org' | 'teams' | 'self' | 'none'
 
 export function accessScope(role: OrgMemberRole | null): AccessScope {
