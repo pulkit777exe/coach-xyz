@@ -772,7 +772,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Fresh Dashboard Data (web)
 
-- Authenticated dashboard/player pages call `unstable_noStore()` — no caching layers intervene; fetches hit the live API. `serverData.ts` fetchers themselves are cache-keyed per request only.
+- Authenticated dashboard/player pages call `await connection()` (from `next/server`) — no caching layers intervene; fetches hit the live API. `serverData.ts` fetchers themselves are cache-keyed per request only.
 - **Trade-off:** no edge staleness profit on these pages, but they serve per-user live data; the marketing site is the cacheable surface.
 
 ### Heavy Client Visuals Loaded Lazy (web)

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { getSession } from '@/lib/session'
 import { changePasswordUrl } from '@/lib/authUrls'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import SettingsClient, { type SettingsIdentity } from '@/components/org/SettingsClient'
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
  * the panel is instant — the fresh profile reconciles in client-side.
  */
 export default async function PlayerSettingsPage() {
-  noStore()
+  await connection()
   const session = await getSession()
   if (!session) redirect('/auth/login')
 

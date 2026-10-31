@@ -1,4 +1,4 @@
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import { redirect } from 'next/navigation'
 
 import { getSession } from '@/lib/session'
@@ -43,13 +43,13 @@ export async function loadPage<
   let ctx: OrgShellCtx | PlayerShellCtx | PublicShellCtx
 
   if (gate === 'org') {
-    noStore()
+    await connection()
     const session = await getSession()
     if (!session) redirect('/auth/login')
     const { auth0Id, role } = await getOrgContext()
     ctx = { session, auth0Id, role }
   } else if (gate === 'player') {
-    noStore()
+    await connection()
     const session = await getSession()
     if (!session) redirect('/auth/login')
 
@@ -64,7 +64,7 @@ export async function loadPage<
     if (role === 'coach') redirect('/dashboard')
     ctx = { session, role }
   } else {
-    noStore()
+    await connection()
     ctx = { session: null }
   }
 

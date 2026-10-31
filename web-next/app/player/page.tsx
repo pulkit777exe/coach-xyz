@@ -3,7 +3,7 @@ import { getSession } from '@/lib/session'
 import { getUserProfile } from '@/lib/serverData'
 import { redirect } from 'next/navigation'
 import PlayerHub from '@/components/player/PlayerHub'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Player Hub | CoachXYZ',
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function PlayerPage() {
-  noStore()
+  await connection()
   const session = await getSession()
   if (!session) redirect('/auth/login')
 

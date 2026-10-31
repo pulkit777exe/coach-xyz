@@ -6,7 +6,7 @@ import { toISODate } from '@/lib/date'
 import AttendanceGrid from '@/components/org/AttendanceGrid'
 import PageHeader from '@/components/org/PageHeader'
 import { hasPermission } from '@/lib/permissions'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Attendance | CoachXYZ',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AttendancePage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id } = orgCtx

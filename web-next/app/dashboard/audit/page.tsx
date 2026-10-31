@@ -6,7 +6,7 @@ import AccessDenied from '@/components/AccessDenied'
 import AuditClient from '@/components/org/AuditClient'
 import PageHeader from '@/components/org/PageHeader'
 import { AUDIT_NAV_ROLES } from '@/lib/nav'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Audit Log | CoachXYZ',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AuditPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id, role } = orgCtx

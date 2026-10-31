@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import { ClockIcon, LinkIcon } from 'lucide-react'
 import { resolveShareToken } from '@/lib/aiReports'
 import type { SharedAnalysis } from '@/lib/aiReports'
@@ -30,7 +30,7 @@ export async function generateMetadata({
 }
 
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
-  noStore()
+  await connection()
   const { token } = await params
 
   let data: SharedAnalysis | null = null

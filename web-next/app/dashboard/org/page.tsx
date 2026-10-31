@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 
 import { getSession } from '@/lib/session'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import {
   getMyOrgsCached,
   getOrgContext,
@@ -121,7 +121,7 @@ async function read<T>(p: Promise<T>): Promise<Read<T>> {
 }
 
 export default async function OrgPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const ownAuth0Id = session.user.sub
