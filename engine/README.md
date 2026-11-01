@@ -1,7 +1,7 @@
 # CoachAI engine
 
-Finds one athlete in a video, measures their movement with pose estimation, has a coach model
-judge the moments that matter, and hands back a result, CSVs, an annotated video and an overlay.
+Finds the players who matter at each action, measures their movement with pose estimation, has a coach
+model judge the moments that matter, and hands back a result, CSVs, an annotated video and an overlay.
 It runs on any Gemini API key, and without one: the measurements and rule-based coaching still
 come out, the job is just marked `degraded: ["llm"]`.
 
@@ -18,11 +18,11 @@ POST /jobs ──► 202 queued ──► events ──► result.json, CSVs, an
 | stage | does | model call |
 |---|---|---|
 | prepare | probe the video, hash it | – |
-| track | follow the chosen athlete at ~12 fps, pose on a crop around them, re-find by torso colour if the lock drifts | – |
+| track | find the action athlete at ~12 fps (internal only; the video shows no continuous tracking overlay). With no player selected, the dominant athlete is used | – |
 | candidates | peaks of the sport's signal (wrist rising, wrist speed, ankle speed) become candidate moments | – |
-| judge | one call: low-res video with the athlete boxed and moments numbered; the model says which are real, their type, result and per-criterion ratings | 1 |
-| result | measure criteria from pose at each moment, score them against the sport pack, build findings, write exports | – |
-| render | skeleton, per-event banner, measured angles coloured by target, summary card, thumbnails | – |
+| judge | one call: low-res video with the athlete boxed and moments numbered; the model says which are real, their type, result and per-criterion ratings. If the sport was not supplied, the model's answer selects the sport pack | 1 |
+| result | measure criteria from pose at each moment, score them against the sport pack, pair the action player with the nearest opponent (different shirt colour first), derive sport key metrics for both, build findings, write exports | – |
+| render | skeletons for the two players only around each event, running HUD, per-event metrics panel, measured angles coloured by target, session KPI card, thumbnails | – |
 
 Measured numbers come only from pose geometry. A rating from the model fills in criteria that
 could not be measured, counts for half, and is labelled `source: "judged"`.
@@ -90,22 +90,33 @@ All routes except `/health` need `x-service-token` when `SERVICE_TOKEN` is set. 
 Compatibility for a server not yet moved to events: `POST /analyze` (blocks until done),
 `GET /status/{id}` (old shape), `GET /download/{id}`.
 
-### Result (schema 2)
+### Result (schema 3)
 
 `events[]` each have `id` (`<job>:e<n>`), `t`, `type`, `result`, `score` (0-10 or null),
-`score_source` (`measured` | `judged`), `coverage`, `feedback`, `confidence`, and
-`measurements[]`: `{key, label, metric, value, unit, ideal, acceptable, score, weight, source, confidence, note}`.
-Also `findings[]` (same ids, with evidence frames and review state), `consistency[]` (mean and spread
-of each measure across events), `summary` (rating, average, success rate, text, strengths, focus areas,
-priority drill), `quality`, `needs_review`, `degraded`, `provenance`.
+`score_source` (`measured` | `judged`), `coverage`, `feedback`, `confidence`, `measurements[]`
+(`{key, label, metric, value, unit, ideal, acceptable, score, weight, source, confidence, note}`),
+`metrics[]` (the sport's key numbers at that moment) and `matchup` (the action player and the nearest
+opponent, each with role, side, confidence and `metrics[]`, plus separation in torso lengths and the
+frames used for the overlay). Also `session_metrics[]` (session average, best and worst per key metric,
+plus tempo, action rate, pose coverage and opponent distance), `findings[]`, `consistency[]`,
+`summary` (rating, average, success rate, confidence, text, strengths, focus areas, priority drill),
+`athlete`, `quality`, `needs_review`, `degraded`, `provenance`.
+
+CSV exports: `events.csv`, `measurements.csv`, `metrics.csv`, `findings.csv`, `session.csv`.
 
 ## Sport packs
 
-`sports/<sport>.json`: the action signal, event types and results, and criteria
-(`metric`, `ideal`, `acceptable`, `weight`, `look_for`, `drill`). Metrics: `elbow_angle`,
-`shoulder_angle` (active arm), `active_knee_angle` (active leg), `knee_angle`, `hip_angle`,
-`ankle_angle` (both sides averaged), `trunk_lean_deg`, or an explicit `left_`/`right_` joint. The bundled
-ranges are starting points: tune them with your coaches; `version` is stamped on every result.
+`engine/sports/<sport>.json`: the action signal, event types and results, scoring criteria
+(`metric`, `ideal`, `acceptable`, `weight`, `look_for`, `drill`), role names (`roles.primary`,
+`roles.opponent`) and `key_metrics` — the sport-specific performance numbers shown in the video
+(`wrist_speed_peak`, `hip_rise`, `shoulder_hip_angle`, `stance_width`, `head_movement`,
+`trunk_lean`, …). Key metrics are normalised by the athlete's torso length, so camera distance
+does not change the reading.
+Metrics: `elbow_angle`, `shoulder_angle` (active arm), `active_knee_angle` (active leg),
+`knee_angle`, `hip_angle`, `ankle_angle` (both sides averaged), `trunk_lean_deg`, or an explicit
+`left_`/`right_` joint. The bundled ranges are starting points: tune them with your coaches;
+`version` is stamped on every result.
+
 
 ## Running
 
