@@ -17,10 +17,14 @@ MIN_COVERAGE = 0.35
 HALF_WINDOW = 2
 
 
-def score_value(value: float, c: Criterion) -> tuple[float, str]:
-    """1 inside the ideal range, 0.5 at the edge of acceptable, falling to 0 beyond it."""
+def score_value(value: float, c: Criterion) -> tuple[float | None, str]:
+    """1 inside the ideal range, 0.5 at the edge of acceptable, falling to 0 beyond it.
+
+    A criterion with no target range is reported as a measurement only; scoring
+    it against nothing would drag every other criterion down.
+    """
     if c.ideal is None:
-        return 0.0, "no target range"
+        return None, "no target range"
     lo, hi = c.ideal
     alo, ahi = c.acceptable or c.ideal
     if lo <= value <= hi:
@@ -71,7 +75,8 @@ def measure(track: Track, i: int, side: str, pack: Pack, angle: str | None = Non
         if vals:
             value = float(np.median(vals))
             score, why = score_value(value, c)
-            row.update(value=round(value, 1), confidence=round(float(np.mean(confs)), 2), score=round(score, 2),
+            row.update(value=round(value, 1), confidence=round(float(np.mean(confs)), 2),
+                       score=None if score is None else round(score, 2),
                        source="pose", note=why)
         rows.append(row)
     return {"criteria": rows, "side": side, "sample": i, "t": float(track.t[i])}

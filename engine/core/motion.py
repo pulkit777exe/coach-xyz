@@ -48,6 +48,21 @@ def _speed(track: Track, idx: int, scale: float) -> np.ndarray:
     return np.nan_to_num(out)
 
 
+def limb_speed(track: Track, idx: int) -> np.ndarray:
+    """Joint speed in torso lengths per second, one value per tracked sample."""
+    return _speed(track, idx, torso_px(track))
+
+
+def peak_speed(track: Track, idx: int, i: int, window_s: float = 0.7) -> float | None:
+    """Fastest speed of one joint around sample `i`, in torso lengths per second."""
+    values = limb_speed(track, idx)
+    near = np.flatnonzero(np.abs(track.t - track.t[i]) <= window_s)
+    if not len(near):
+        return None
+    peak = float(values[near].max())
+    return peak if peak > 0 else None
+
+
 def _rise(track: Track, wrist: int, shoulder: int, scale: float) -> np.ndarray:
     out = (track.lm[:, shoulder, 1] - track.lm[:, wrist, 1]) * track.height / scale
     out[~(_visible(track, wrist) & _visible(track, shoulder))] = 0

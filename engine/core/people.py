@@ -1,8 +1,14 @@
 """Finding people in a frame and telling them apart.
 
-`scan` picks the frame where the players are easiest to tell apart, so the
-coach can choose one. The chosen player is remembered as a box plus a colour
-signature of their torso, which the tracker later uses to find them again.
+`scan` samples the video and picks the frame where the athletes are clearest,
+so the coach can choose one. The chosen player is remembered as a box plus a
+colour signature of their torso, which the tracker later uses to find them
+again.
+
+Detection is deliberately forgiving: a small, distant or partly visible player
+is still returned (with a lower confidence) instead of failing the upload. The
+choice of athlete is the coach's, and measurement simply skips joints that are
+not visible.
 """
 
 import base64
@@ -15,6 +21,9 @@ from .errors import EngineError
 
 CORE = [11, 12, 23, 24, 25, 26]
 MAX_SIDE = 1280
+MIN_PEOPLE = 8
+STRICT_HEIGHT = 0.06  # a person must fill this much of the frame to count as clear
+RELAXED_HEIGHT = 0.03
 
 
 @dataclass
@@ -42,14 +51,17 @@ def box_from(lm: np.ndarray, w: int, h: int) -> np.ndarray:
     return np.array([max(0, x1 - px), max(0, y1 - py * 1.5), min(w - 1, x2 + px), min(h - 1, y2 + py)], dtype=float)
 
 
-def _person(lm: np.ndarray, w: int, h: int) -> Person | None:
+def _person(lm: np.ndarray, w: int, h: int, relaxed: bool = False) -> Person | None:
     box = box_from(lm, w, h)
-    if box[3] - box[1] < max(40, 0.06 * h) or box[2] - box[0] < 12:
+    height = box[3] - box[1]
+    width = box[2] - box[0]
+    min_height = max(20 if relaxed else 40, (RELAXED_HEIGHT if relaxed else STRICT_HEIGHT) * h)
+    if height < min_height or width < (8 if relaxed else 12):
         return None
     return Person(lm=lm, box=box, conf=float(lm[CORE, 3].mean()))
 
 
-def _detect(detector, crop, x0, y0, w, h, max_people) -> list[Person]:
+def _detect(detector, crop, x0, y0, w, h, max_people, relaxed=False) -> list[Person]:
     ch, cw = crop.shape[:2]
     k = min(1.0, MAX_SIDE / max(ch, cw))
     small = cv2.resize(crop, None, fx=k, fy=k, interpolation=cv2.INTER_AREA) if k < 1 else crop
@@ -58,26 +70,44 @@ def _detect(detector, crop, x0, y0, w, h, max_people) -> list[Person]:
         lm = lm.copy()
         lm[:, 0] = (x0 + lm[:, 0] * cw) / w
         lm[:, 1] = (y0 + lm[:, 1] * ch) / h
-        person = _person(lm, w, h)
+        person = _person(lm, w, h, relaxed)
         if person:
             found.append(person)
     return found
 
 
-def find_people(detector, frame: np.ndarray, max_people: int = 8) -> list[Person]:
-    """Everyone clearly visible. Wide frames with few results are retried in overlapping tiles."""
+def _dedupe(people: list[Person]) -> list[Person]:
+    kept: list[Person] = []
+    for person in sorted(people, key=lambda p: (p.conf, (p.box[2] - p.box[0]) * (p.box[3] - p.box[1])), reverse=True):
+        if all(iou(person.box, other.box) <= 0.5 for other in kept):
+            kept.append(person)
+    return kept
+
+
+def _quality(person: Person, w: int, h: int) -> float:
+    """How useful a person is for selection: visible and reasonably large."""
+    box = person.box
+    if w <= 0 or h <= 0:
+        return person.conf
+    area = (box[2] - box[0]) * (box[3] - box[1]) / (w * h)
+    centre = 1.0 - min(1.0, abs((box[0] + box[2]) / 2 / w - 0.5) * 2)
+    return person.conf * (0.6 + min(0.9, area * 8)) + 0.1 * centre
+
+
+def find_people(detector, frame: np.ndarray, max_people: int = MIN_PEOPLE) -> list[Person]:
+    """Everyone visible. Small frames are retried relaxed; wide frames in tiles."""
     h, w = frame.shape[:2]
     people = _detect(detector, frame, 0, 0, w, h, max_people)
+    if not people:
+        people = _detect(detector, frame, 0, 0, w, h, max_people, relaxed=True)
     if len(people) < 2 and w >= 1280:
         cut = int(w * 0.55)
         for x0, x1 in ((0, cut), (w - cut, w)):
             people += _detect(detector, frame[:, x0:x1], x0, 0, w, h, max_people)
-        kept: list[Person] = []
-        for p in sorted(people, key=lambda p: -p.conf):
-            if all(iou(p.box, q.box) <= 0.5 for q in kept):
-                kept.append(p)
-        people = kept
-    return people
+        if not people:
+            for x0, x1 in ((0, cut), (w - cut, w)):
+                people += _detect(detector, frame[:, x0:x1], x0, 0, w, h, max_people, relaxed=True)
+    return _dedupe(people)[:max_people]
 
 
 def signature(frame: np.ndarray, box) -> np.ndarray | None:
@@ -110,14 +140,25 @@ def _crop_b64(frame: np.ndarray, box) -> str:
     return base64.b64encode(buf.tobytes()).decode() if ok else ""
 
 
-def scan(path: str, detector, progress=lambda done, total: None, samples: int = 20, require_players: bool = True, whole_frame_analysis: bool = False) -> dict:
+def _frame_score(people: list[Person], w: int, h: int) -> float:
+    """Best person first, with a small bonus for a frame that offers a choice."""
+    ranked = sorted((_quality(p, w, h) for p in people), reverse=True)
+    if not ranked:
+        return -1.0
+    best = ranked[0]
+    extras = sum(q for q in ranked[1:] if q > best * 0.65)
+    return best + 0.12 * extras
+
+
+def scan(path: str, detector, progress=lambda done, total: None, samples: int = 24) -> list[dict]:
     """Sample the video and describe the people in the clearest frame, left to right."""
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise EngineError("VIDEO_DECODE_FAILED", "Could not read this video.")
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     duration = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
-    times = np.linspace(0.0, max(0.0, duration - 0.3), max(1, min(samples, int(duration * 2) or 1)))
+    count = max(1, min(samples, int(duration * 2) or 1))
+    times = np.linspace(0.0, max(0.0, duration - 0.3), count)
     best, best_score = None, -1.0
     try:
         for n, t in enumerate(times):
@@ -129,8 +170,7 @@ def scan(path: str, detector, progress=lambda done, total: None, samples: int = 
             people = find_people(detector, frame)
             if not people:
                 continue
-            overlap = sum(iou(a.box, b.box) for i, a in enumerate(people) for b in people[i + 1:])
-            score = len(people) * float(np.mean([p.conf for p in people])) - overlap
+            score = _frame_score(people, frame.shape[1], frame.shape[0])
             if score > best_score:
                 best, best_score = (frame.copy(), people, float(t)), score
     finally:
@@ -139,8 +179,9 @@ def scan(path: str, detector, progress=lambda done, total: None, samples: int = 
         raise EngineError("NO_PLAYERS_DETECTED", "No players detected clearly in this video. "
                           "Try better lighting or a less crowded frame.", retryable=True)
     frame, people, t = best
+    ranked = sorted(people, key=lambda p: -_quality(p, frame.shape[1], frame.shape[0]))[:MIN_PEOPLE]
     out = []
-    for k, p in enumerate(sorted(people, key=lambda p: p.box[0] + p.box[2]), start=1):
+    for k, p in enumerate(sorted(ranked, key=lambda p: p.box[0] + p.box[2]), start=1):
         sig = signature(frame, p.box)
         out.append({
             "player_index": k,

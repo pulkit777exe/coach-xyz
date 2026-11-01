@@ -96,6 +96,21 @@ def rules(cands: list[Candidate], pack: Pack, reason: str) -> Judgement:
     return Judgement(source="rules", sport=pack.name, verdicts=verdicts, reason=reason)
 
 
+def reconcile(judgement: Judgement, pack: Pack) -> Judgement:
+    """Normalise verdict vocabulary after the sport was identified mid-pipeline."""
+    fallback_type = "other" if "other" in pack.event_types else pack.event_types[0]
+    fallback_result = ("unknown" if "unknown" in pack.results
+                       else pack.neutral[0] if pack.neutral
+                       else pack.results[0] if pack.results else "unknown")
+    for verdict in judgement.verdicts.values():
+        if verdict["type"] not in pack.event_types:
+            verdict["type"] = fallback_type
+        if verdict["result"] not in pack.results:
+            verdict["result"] = fallback_result
+    judgement.sport = pack.name
+    return judgement
+
+
 def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pack, path: str, *,
            sport_known: bool, make_llm=llm.default, workdir: str | None = None,
            cancelled=lambda: None) -> Judgement:
@@ -110,7 +125,7 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
         segments = video.build_proxy(path, proxy, box_at=track.box_at, marks=marks, windows=_windows(track, cands),
                                      fps=config.settings.proxy_fps, cancelled=cancelled)
         moments = []
-        for n, (c, m) in enumerate(zip(cands, measured), 1):
+        for n, (c, m) in enumerate(zip(cands, measured, strict=False), 1):
             reel = video.to_reel(segments, c.t)
             if reel is None:
                 continue
