@@ -30,6 +30,23 @@ class Criterion:
 
 
 @dataclass
+class MetricDef:
+    """A sport-specific performance number that is shown, not scored.
+
+    Criteria answer "is this joint in the target range". Key metrics answer
+    "how fast / how high / how balanced was the athlete" and are derived from
+    the whole track, so they read the same regardless of camera distance.
+    """
+
+    key: str
+    label: str
+    metric: str
+    unit: str = ""
+    ideal: tuple[float, float] | None = None
+    acceptable: tuple[float, float] | None = None
+
+
+@dataclass
 class Pack:
     name: str
     version: int
@@ -44,6 +61,8 @@ class Pack:
     criteria: list[Criterion]
     positions: list[dict]
     camera_angles: list[dict]
+    key_metrics: list[MetricDef] = field(default_factory=list)
+    roles: dict = field(default_factory=dict)
     display_s: float = 2.5
     coaching_note: str = ""
     colors: dict = field(default_factory=dict)
@@ -51,6 +70,14 @@ class Pack:
     @property
     def results(self) -> list[str]:
         return [*self.positive, *self.negative, *self.neutral]
+
+    @property
+    def primary_role(self) -> str:
+        return self.roles.get("primary", "Athlete")
+
+    @property
+    def opponent_role(self) -> str:
+        return self.roles.get("opponent", "Nearest player")
 
 
 def _range(value) -> tuple[float, float] | None:
@@ -70,6 +97,17 @@ def _criterion(raw: dict) -> Criterion:
         look_for=raw.get("look_for", ""),
         drill=raw.get("drill", ""),
         valid_angles=tuple(raw["valid_angles"]) if raw.get("valid_angles") else None,
+    )
+
+
+def _metric(raw: dict) -> MetricDef:
+    return MetricDef(
+        key=raw["key"],
+        label=raw.get("label", raw["key"]),
+        metric=raw.get("metric", raw["key"]),
+        unit=raw.get("unit", ""),
+        ideal=_range(raw.get("ideal", raw.get("ideal_range"))),
+        acceptable=_range(raw.get("acceptable", raw.get("acceptable_range"))),
     )
 
 
@@ -96,6 +134,8 @@ def load(name: str | None) -> Pack:
         criteria=[_criterion(c) for c in raw.get("criteria") or raw.get("form_criteria") or [] if "key" in c],
         positions=raw.get("positions", []),
         camera_angles=raw.get("camera_angles", []),
+        key_metrics=[_metric(m) for m in raw.get("key_metrics") or [] if "key" in m],
+        roles=raw.get("roles", {}),
         display_s=float(raw.get("display_s", raw.get("feedback_display_seconds", 2.5))),
         coaching_note=raw.get("coaching_note", ""),
         colors=raw.get("colors", {}),

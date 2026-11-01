@@ -58,11 +58,31 @@ def findings_csv(r: dict) -> str:
 def session_csv(r: dict) -> str:
     s, p = r["summary"], r["provenance"]
     return _csv(
-        ["job_id", "sport", "angle", "rating", "average_score", "events", "success_rate", "needs_review",
-         "judged_by", "model", "engine", "analyzed_at"],
-        [[r["job_id"], r["sport"], r["angle"], s["rating"], s["average_score"], s["events"], s["success_rate"],
+        ["job_id", "sport", "angle", "rating", "average_score", "confidence", "events", "made", "missed",
+         "success_rate", "track_coverage", "needs_review", "judged_by", "model", "engine", "analyzed_at"],
+        [[r["job_id"], r["sport"], r["angle"], s["rating"], s["average_score"], s.get("confidence"), s["events"],
+          s.get("made"), s.get("missed"), s["success_rate"], r.get("athlete", {}).get("track_coverage"),
           r["needs_review"], p["judged_by"], p["model"], p["engine"], p["analyzed_at"]]],
     )
+
+
+def metrics_csv(r: dict) -> str:
+    rows = []
+    for e in r["events"]:
+        for m in e.get("metrics") or []:
+            lo, hi = m["ideal"] or (None, None)
+            rows.append([r["job_id"], e["id"], e["t"], "event", m["key"], m["label"], m["unit"], m["value"],
+                         m["score"], lo, hi, None, None])
+        opponent = (e.get("matchup") or {}).get("opponent") or {}
+        for m in opponent.get("metrics") or []:
+            lo, hi = m["ideal"] or (None, None)
+            rows.append([r["job_id"], e["id"], e["t"], "opponent", m["key"], m["label"], m["unit"], m["value"],
+                         m["score"], lo, hi, None, None])
+    for m in r.get("session_metrics") or []:
+        rows.append([r["job_id"], "", "", "session", m["key"], m["label"], m["unit"], m["value"],
+                     None, None, None, m.get("best"), m.get("worst")])
+    return _csv(["job_id", "event_id", "t_seconds", "scope", "key", "label", "unit", "value", "score",
+                 "ideal_min", "ideal_max", "best", "worst"], rows)
 
 
 def write_all(result: dict, out_dir: str) -> dict[str, str]:
@@ -74,6 +94,7 @@ def write_all(result: dict, out_dir: str) -> dict[str, str]:
         "events.csv": events_csv(result),
         "measurements.csv": measurements_csv(result),
         "findings.csv": findings_csv(result),
+        "metrics.csv": metrics_csv(result),
     }
     paths = {}
     for name, text in files.items():

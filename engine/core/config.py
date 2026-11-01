@@ -11,8 +11,8 @@ try:
 except ImportError:
     pass
 
-ENGINE_VERSION = "1.1.0"
-PIPELINE_VERSION = "2"
+ENGINE_VERSION = "1.2.0"
+PIPELINE_VERSION = "3"
 PROMPT_VERSION = "2"
 ROOT = Path(__file__).resolve().parent.parent
 

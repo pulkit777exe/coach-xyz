@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from . import config, judge, measure
+from . import config, judge, measure, metrics
 from .judge import Judgement
 from .motion import Candidate
 from .sports import Pack
 from .track import Track
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _band(conf: float) -> str:
@@ -23,32 +23,34 @@ def _severity(score: float | None) -> str:
     return "low" if score >= 8 else "medium" if score >= 5 else "high"
 
 
-def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgement, pack: Pack) -> list[dict]:
+def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgement, pack: Pack,
+            angle: str | None, matchups: dict[int, dict] | None = None) -> list[dict]:
     events = []
     for i, c in enumerate(cands):
-        v = judgement.verdicts.get(i)
-        if not v or not v["is_event"]:
+        verdict = judgement.verdicts.get(i)
+        if not verdict or not verdict["is_event"]:
             continue
-        # Check if track has valid landmarks; if not, score is unknown
-        if not track.valid.any() or track.conf[c.i] < 0.3:
-            rows = [{}
-        for c_ in pack.criteria]
-            score = 0.0
-            coverage = 0.0
-            feedback = "Unable to measure - player not clearly visible"
-        else:
-            rows = measure.measure(track, c.i, c.side, pack)["criteria"]
-        measure.apply_ratings(rows, v["ratings"])
+        rows = measure.measure(track, c.i, c.side, pack, angle=angle)["criteria"]
+        measure.apply_ratings(rows, verdict["ratings"])
         score, coverage = measure.combine(rows)
         k = len(events) + 1
         pose_conf = float(track.conf[c.i])
-        conf = pose_conf if judgement.source == "rules" else min(pose_conf, v["confidence"])
+        confidence = pose_conf if judgement.source == "rules" else min(pose_conf, verdict["confidence"])
         source = None if score is None else ("measured" if any(r["source"] == "pose" for r in rows) else "judged")
+        event_metrics = metrics.event_metrics(track, c.i, c.side, pack)
+        matchup = (matchups or {}).get(c.i)
+        if matchup and matchup.get("primary"):
+            # The primary role is the athlete we already measure; reuse those numbers
+            # so the session average, the banner and the two-player panel agree.
+            matchup["primary"]["metrics"] = event_metrics
         events.append({
-            "id": f"{job_id}:e{k}", "index": k, "type": v["type"], "t": round(c.t, 2), "side": c.side,
-            "result": v["result"], "score": score, "score_source": source, "coverage": coverage,
-            "feedback": v["feedback"] or judge.event_feedback(rows, pack),
-            "confidence": round(conf, 2), "measurements": rows,
+            "id": f"{job_id}:e{k}", "index": k, "type": verdict["type"], "t": round(c.t, 2), "side": c.side,
+            "result": verdict["result"], "score": score, "score_source": source, "coverage": coverage,
+            "feedback": verdict["feedback"] or judge.event_feedback(rows, pack),
+            "confidence": round(confidence, 2),
+            "measurements": rows,
+            "metrics": event_metrics,
+            "matchup": matchup,
         })
     return events
 
@@ -56,49 +58,52 @@ def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgem
 def _consistency(events: list[dict]) -> list[dict]:
     by_key: dict[str, list[float]] = {}
     meta: dict[str, dict] = {}
-    for e in events:
-        for r in e["measurements"]:
-            if r["source"] == "pose":
-                by_key.setdefault(r["key"], []).append(r["value"])
-                meta[r["key"]] = r
+    for event in events:
+        for row in event["measurements"]:
+            if row["source"] == "pose" and row["value"] is not None:
+                by_key.setdefault(row["key"], []).append(row["value"])
+                meta[row["key"]] = row
     out = []
     for key, vals in by_key.items():
         if len(vals) >= 3:
-            out.append({"key": key, "label": meta[key]["label"], "n": len(vals), "mean": round(float(np.mean(vals)), 1),
-                        "sd": round(float(np.std(vals)), 1), "ideal": meta[key]["ideal"]})
+            out.append({"key": key, "label": meta[key]["label"], "n": len(vals),
+                        "mean": round(float(np.mean(vals)), 1), "sd": round(float(np.std(vals)), 1),
+                        "ideal": meta[key]["ideal"]})
     return out
 
 
 def _findings(events: list[dict], track: Track, fps: float, pack: Pack, provenance: dict) -> list[dict]:
     out = []
-    for e in events:
-        near = np.flatnonzero(track.valid & (np.abs(track.t - e["t"]) <= 0.5))
+    for event in events:
+        near = np.flatnonzero(track.valid & (np.abs(track.t - event["t"]) <= 0.5))
         frames = [int(round(track.t[j] * fps)) for j in near]
-        band = _band(e["confidence"])
+        band = _band(event["confidence"])
         out.append({
-            "id": e["id"], "category": e["type"], "start_ms": int(e["t"] * 1000),
-            "end_ms": int((e["t"] + pack.display_s) * 1000), "confidence": e["confidence"],
-            "confidence_band": band, "severity": _severity(e["score"]), "observation": e["feedback"],
-            "feedback": e["feedback"], "form_score": e["score"], "evidence_frames": frames,
-            "measured_at_timestamp": e["t"], "model_versions": provenance,
+            "id": event["id"], "category": event["type"], "start_ms": int(event["t"] * 1000),
+            "end_ms": int((event["t"] + pack.display_s) * 1000), "confidence": event["confidence"],
+            "confidence_band": band, "severity": _severity(event["score"]), "observation": event["feedback"],
+            "feedback": event["feedback"], "form_score": event["score"], "evidence_frames": frames,
+            "measured_at_timestamp": event["t"], "model_versions": provenance,
             "review_state": "needs_review" if band == "needs_review" or len(frames) < 3 else "auto",
         })
     return out
 
 
-def _session_text(events: list[dict], stats: dict, consistency: list[dict], pack: Pack, judgement: Judgement) -> dict:
+def _session_text(events: list[dict], stats: dict, pack: Pack, judgement: Judgement,
+                  session_metrics: list[dict]) -> dict:
     """Model-written summary when there is one, otherwise a short factual one from the numbers."""
     scored: dict[str, list[float]] = {}
-    for e in events:
-        for r in e["measurements"]:
-            if r["score"] is not None:
-                scored.setdefault(r["key"], []).append(r["score"])
+    for event in events:
+        for row in event["measurements"]:
+            if row["score"] is not None:
+                scored.setdefault(row["key"], []).append(row["score"])
     means = {k: float(np.mean(v)) for k, v in scored.items()}
     label = {c.key: c.label for c in pack.criteria}
     drills = {c.key: c.drill for c in pack.criteria}
     strong = [label[k] for k, m in sorted(means.items(), key=lambda x: -x[1]) if m >= 0.85][:3]
     weak = [k for k, m in sorted(means.items(), key=lambda x: x[1]) if m < 0.75][:3]
-    text = judgement.summary
+
+    text = judgement.summary.strip()
     if not text:
         n = stats["events"]
         text = f"{n} moment{'s' if n != 1 else ''} analysed."
@@ -106,6 +111,13 @@ def _session_text(events: list[dict], stats: dict, consistency: list[dict], pack
             text += f" Average technique score {stats['average_score']}/10."
         if weak:
             text += f" Biggest focus: {label[weak[0]].lower()}."
+    kpis = [f"{m['label'].lower()} {m['value']} {m['unit']}".strip()
+            for m in session_metrics if m.get("kind") == "metric"][:2]
+    if kpis:
+        text += " Measured: " + ", ".join(kpis) + "."
+    pressure = next((m for m in session_metrics if m.get("key") == "opponent_distance"), None)
+    if pressure:
+        text += f" {pack.opponent_role} distance averaged {pressure['value']} torso lengths."
     return {
         "text": text,
         "strengths": judgement.strengths or strong,
@@ -115,38 +127,47 @@ def _session_text(events: list[dict], stats: dict, consistency: list[dict], pack
 
 
 def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: list[Candidate],
-          judgement: Judgement, degraded: list[str]) -> dict:
+          judgement: Judgement, degraded: list[str], angle: str | None = None,
+          matchups: dict[int, dict] | None = None) -> dict:
     provenance = {
         "engine": config.ENGINE_VERSION, "pipeline": config.PIPELINE_VERSION, "prompt": config.PROMPT_VERSION,
         "sport_pack": pack.version, "judged_by": judgement.source, "model": judgement.model,
         "pose_model": config.settings.pose_model, "analyzed_at": datetime.now(timezone.utc).isoformat(),
     }
-    events = _events(job_id, track, cands, judgement, pack)
+    events = _events(job_id, track, cands, judgement, pack, angle or params.get("angle"), matchups)
     scored = [e["score"] for e in events if e["score"] is not None]
     made = sum(e["result"] in pack.positive for e in events)
     missed = sum(e["result"] in pack.negative for e in events)
     avg = round(float(np.mean(scored)), 1) if scored else None
+    mean_conf = float(track.conf[track.valid].mean()) if track.valid.any() else 0.0
+    event_conf = float(np.mean([e["confidence"] for e in events])) if events else mean_conf
     stats = {"events": len(events), "made": made, "missed": missed, "average_score": avg,
-             "success_rate": round(100 * made / (made + missed), 1) if made + missed else None}
+             "success_rate": round(100 * made / (made + missed), 1) if made + missed else None,
+             "confidence": round(event_conf, 2)}
     consistency = _consistency(events)
-    text = _session_text(events, stats, consistency, pack, judgement)
+    session_metrics = metrics.session_metrics(track, events, pack) + metrics.matchup_metrics(events, pack)
+    text = _session_text(events, stats, pack, judgement, session_metrics)
     findings = _findings(events, track, media.fps, pack, provenance)
 
     issues = []
     if track.coverage < 0.5:
         issues.append("low_track_coverage")
+    if track.valid.any() and mean_conf < 0.45:
+        issues.append("low_pose_confidence")
     if not events:
         issues.append("no_events")
     if events and not scored:
         issues.append("no_measurable_events")
     return {
-        "schema_version": SCHEMA_VERSION, "job_id": job_id, "sport": pack.name, "angle": params.get("angle"),
+        "schema_version": SCHEMA_VERSION, "job_id": job_id, "sport": pack.name,
+        "angle": angle or params.get("angle"),
         "video": {"duration": round(media.duration, 2), "fps": round(media.fps, 2),
                   "width": track.width, "height": track.height},
-        "athlete": {"track_coverage": round(track.coverage, 2),
-                    "mean_confidence": round(float(track.conf[track.valid].mean()), 2) if track.valid.any() else 0.0},
+        "athlete": {"track_coverage": round(track.coverage, 2), "mean_confidence": round(mean_conf, 2),
+                    "longest_gap_s": round(track.longest_gap_s, 2)},
         "summary": {**stats, "rating": measure.rating_label(avg), **text},
         "events": events, "findings": findings, "consistency": consistency,
+        "session_metrics": session_metrics,
         "quality": {"passed": not issues, "issues": issues},
         "needs_review": bool(issues) or any(f["review_state"] == "needs_review" for f in findings),
         "degraded": degraded, "provenance": provenance,

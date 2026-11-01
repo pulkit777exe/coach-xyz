@@ -29,6 +29,9 @@ def legacy_summary(result: dict) -> dict:
     shots = []
     for event in result["events"]:
         measured = [m for m in event["measurements"] if m["score"] is not None]
+        matchup = event.get("matchup")
+        if matchup:
+            matchup = {k: v for k, v in matchup.items() if k != "frames"}
         shots.append({
             "timestamp": event["t"],
             "event_type": event["type"],
@@ -36,6 +39,10 @@ def legacy_summary(result: dict) -> dict:
             "feedback": event["feedback"],
             "result": event["result"],
             "key_observation": event["feedback"],
+            "confidence": event["confidence"],
+            "coverage": event["coverage"],
+            "metrics": event.get("metrics", []),
+            "matchup": matchup,
             "form_breakdown": {
                 m["key"]: "good" if m["score"] >= 0.85 else "needs_work" if m["score"] >= 0.5 else "poor"
                 for m in measured
@@ -80,6 +87,12 @@ def legacy_summary(result: dict) -> dict:
         "shot_events": shots,
         "success_rate_percent": summary["success_rate"] or 0,
         "average_form_score": summary["average_score"] or 0,
+        # Normalised stats for the web UI (0-10 score, 0-1 rates).
+        "average_score": summary["average_score"] or 0,
+        "success_rate": round((summary["success_rate"] or 0) / 100, 3),
+        "confidence": summary.get("confidence") or 0,
+        "session_metrics": result.get("session_metrics", []),
+        "tracking_coverage": result.get("athlete", {}).get("track_coverage"),
         "total_events": summary["events"],
         "findings": result["findings"],
         "quality": result["quality"],

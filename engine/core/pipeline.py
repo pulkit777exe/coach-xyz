@@ -1,5 +1,10 @@
 """prepare -> track -> candidates -> judge -> result -> render -> publish.
 
+The track stage is internal: it finds the moments and measures the action
+player. It is not a tracking product. At result time each event is paired with
+the nearest opponent, so the video and the results describe the two players who
+mattered, not a box following someone for the whole clip.
+
 Each stage reports through events. Tracking and the model's verdicts are
 cached by content, so a retry, or the same clip analysed twice, skips straight
 past the expensive work.
@@ -14,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config, events, exports, jobs, judge, llm, measure, motion, pose, render, result, sports, storage, video, geometry
+from . import config, events, exports, jobs, judge, llm, matchup, measure, motion, pose, render, result, sports, storage, video, geometry
 from .errors import Cancelled, EngineError
 from .judge import Judgement
 from .track import Lock, Track, clean, track_athlete
@@ -139,11 +144,35 @@ def run(job_id: str, params: dict) -> dict:
                 cands = motion.candidates(track, pack, strict=True)
                 judgement = judge.rules(cands, pack, judgement.reason or "")
             elif not sport_known:
-                pack = sports.load(judgement.sport)
+                detected = sports.load(judgement.sport)
+                if detected.name != pack.name:
+                    pack = detected
+                    judgement = judge.reconcile(judgement, pack)
             rep.check()
 
         with rep.stage("result", 75, 80):
-            out = result.build(job_id, params, pack, track, media, cands, judgement, degraded)
+            matchups: dict[int, dict] = {}
+            if cands:
+                matchup_key = _digest(track_key, pack.name, pack.version,
+                                      ",".join(f"{c.i}:{c.t:.2f}" for c in cands))
+                matchup_file = cache / f"{matchup_key}.json"
+                if matchup_file.is_file():
+                    matchups = {int(k): v for k, v in json.loads(matchup_file.read_text()).items()}
+                else:
+                    detector = None
+                    try:
+                        detector = make_detector()
+                        matchups = matchup.analyse(src, detector, track, cands, pack, progress=lambda f: None,
+                                                   cancelled=rep.check)
+                        if matchups:
+                            matchup_file.write_text(json.dumps(matchups))
+                    except Cancelled:
+                        raise
+                    except Exception:
+                        log.exception("matchup analysis failed")
+                    finally:
+                        detector.close() if detector is not None and hasattr(detector, "close") else None
+            out = result.build(job_id, params, pack, track, media, cands, judgement, degraded, matchups=matchups)
             files = exports.write_all(out, str(work))
             overlay = work / "track.json"
             overlay.write_text(json.dumps(track.overlay(), separators=(",", ":")))
