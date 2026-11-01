@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Basketball",
   "action": {
     "signal": "wrist_rise",
@@ -26,6 +26,10 @@
     "neutral": [
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Ball handler",
+    "opponent": "Defender"
   },
   "criteria": [
     {
@@ -91,6 +95,26 @@
       "weight": 0.25,
       "look_for": "legs extending through the jump, power coming from the base",
       "drill": "Pause-dip shots: sit into the knees, then drive up through the release."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "release_height",
+      "label": "Release height",
+      "metric": "wrist_above_shoulder",
+      "unit": "torso"
+    },
+    {
+      "key": "jump_height",
+      "label": "Jump height",
+      "metric": "hip_rise",
+      "unit": "torso"
+    },
+    {
+      "key": "hand_speed",
+      "label": "Release speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
     }
   ],
   "positions": [

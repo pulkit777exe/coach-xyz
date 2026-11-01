@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "General",
   "action": {
     "signal": "wrist_speed",
@@ -16,7 +16,74 @@
       "unknown"
     ]
   },
-  "criteria": [],
+  "roles": {
+    "primary": "Athlete",
+    "opponent": "Nearest player"
+  },
+  "criteria": [
+    {
+      "key": "balance",
+      "label": "Balance",
+      "metric": "trunk_lean_deg",
+      "ideal": [
+        0,
+        15
+      ],
+      "acceptable": [
+        0,
+        25
+      ],
+      "weight": 0.4,
+      "look_for": "controlled posture through the action, no falling away",
+      "drill": "Slow repetitions, holding the finish for two seconds."
+    },
+    {
+      "key": "extension",
+      "label": "Extension through the action",
+      "metric": "elbow_angle",
+      "ideal": [
+        145,
+        180
+      ],
+      "acceptable": [
+        120,
+        180
+      ],
+      "weight": 0.35,
+      "look_for": "the working arm extends through the action",
+      "drill": "Shadow reps: freeze at full extension and check the arm line."
+    },
+    {
+      "key": "base",
+      "label": "Base and knee bend",
+      "metric": "knee_angle",
+      "ideal": [
+        130,
+        175
+      ],
+      "acceptable": [
+        105,
+        180
+      ],
+      "weight": 0.25,
+      "look_for": "stable base with the knees loading and driving",
+      "drill": "Load-and-drive repetitions with a deliberate knee bend."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "movement_speed",
+      "label": "Movement speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "balance",
+      "label": "Body lean",
+      "metric": "trunk_lean",
+      "unit": "deg"
+    }
+  ],
   "positions": [],
   "camera_angles": [
     {

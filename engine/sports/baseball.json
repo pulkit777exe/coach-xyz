@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Baseball",
   "action": {
     "signal": "wrist_speed",
@@ -26,6 +26,10 @@
       "foul",
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Batter",
+    "opponent": "Nearest opponent"
   },
   "criteria": [
     {
@@ -91,6 +95,26 @@
       "weight": 0.2,
       "look_for": "hips opening ahead of the hands",
       "drill": "Hip-lead drill with a med ball."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "swing_speed",
+      "label": "Swing speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "rotation",
+      "label": "Hip-shoulder separation",
+      "metric": "shoulder_hip_angle",
+      "unit": "deg"
+    },
+    {
+      "key": "base_width",
+      "label": "Stance width",
+      "metric": "stance_width",
+      "unit": "torso"
     }
   ],
   "positions": [

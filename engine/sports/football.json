@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Football",
   "action": {
     "signal": "ankle_speed",
@@ -27,6 +27,10 @@
       "offside",
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Ball carrier",
+    "opponent": "Defender"
   },
   "criteria": [
     {
@@ -76,6 +80,26 @@
       "weight": 0.25,
       "look_for": "hips open through contact, not collapsing",
       "drill": "Hip rotation drills with a band before striking."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "kick_speed",
+      "label": "Kick speed",
+      "metric": "ankle_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "hip_rotation",
+      "label": "Hip rotation",
+      "metric": "shoulder_hip_angle",
+      "unit": "deg"
+    },
+    {
+      "key": "lean",
+      "label": "Body lean",
+      "metric": "trunk_lean",
+      "unit": "deg"
     }
   ],
   "positions": [

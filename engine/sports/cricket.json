@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Cricket",
   "action": {
     "signal": "wrist_speed",
@@ -31,6 +31,10 @@
       "three",
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Batter",
+    "opponent": "Nearest opponent"
   },
   "criteria": [
     {
@@ -96,6 +100,26 @@
       "weight": 0.2,
       "look_for": "hips rotating through, weight transferring forward",
       "drill": "Weight-transfer drills stepping into the shot."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "bat_speed",
+      "label": "Bat speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "head_stillness",
+      "label": "Head stability",
+      "metric": "head_movement",
+      "unit": "torso"
+    },
+    {
+      "key": "base_width",
+      "label": "Stance width",
+      "metric": "stance_width",
+      "unit": "torso"
     }
   ],
   "positions": [

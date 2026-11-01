@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Hockey",
   "action": {
     "signal": "wrist_speed",
@@ -26,6 +26,10 @@
     "neutral": [
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Puck carrier",
+    "opponent": "Defender"
   },
   "criteria": [
     {
@@ -91,6 +95,26 @@
       "weight": 0.2,
       "look_for": "hips and shoulders rotating through the shot",
       "drill": "Rotational throws with a med ball."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "shot_speed",
+      "label": "Shot speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "rotation",
+      "label": "Torso rotation",
+      "metric": "shoulder_hip_angle",
+      "unit": "deg"
+    },
+    {
+      "key": "lean",
+      "label": "Body lean",
+      "metric": "trunk_lean",
+      "unit": "deg"
     }
   ],
   "positions": [

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "label": "Tennis",
   "action": {
     "signal": "wrist_speed",
@@ -27,6 +27,10 @@
       "in_play",
       "unknown"
     ]
+  },
+  "roles": {
+    "primary": "Hitter",
+    "opponent": "Opponent"
   },
   "criteria": [
     {
@@ -92,6 +96,26 @@
       "weight": 0.2,
       "look_for": "contact at a comfortable height, arm not cramped",
       "drill": "Ball-feed drills at varying heights."
+    }
+  ],
+  "key_metrics": [
+    {
+      "key": "swing_speed",
+      "label": "Swing speed",
+      "metric": "wrist_speed_peak",
+      "unit": "torso/s"
+    },
+    {
+      "key": "contact_height",
+      "label": "Contact height",
+      "metric": "wrist_above_shoulder",
+      "unit": "torso"
+    },
+    {
+      "key": "rotation",
+      "label": "Torso rotation",
+      "metric": "shoulder_hip_angle",
+      "unit": "deg"
     }
   ],
   "positions": [
