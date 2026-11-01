@@ -7,9 +7,12 @@ import numpy as np
 import pytest
 from google.genai import errors
 
-from core import config, db, events, geometry as g, llm, measure, motion, sessions, sports, storage
-from core.sports import Criterion
+from core import config, db, events, geometry as g, judge, llm, measure, metrics, motion, result, sessions, sports, storage
+from core.judge import Judgement
+from core.motion import Candidate
+from core.sports import Criterion, MetricDef
 from core.track import Track, clean
+from core.video import Media
 
 
 def pose(**pts) -> np.ndarray:
@@ -261,9 +264,9 @@ def test_classifier_reads_the_torso_axis_as_front_or_side():
     # Side: shoulders and hips horizontally separated, same vertical level
     side = pose(i11=(0.5, 0.5), i12=(0.5, 0.5), i23=(0.7, 0.5), i24=(0.7, 0.5))
     assert g.classify_angle(side, 1000, 1000) == "side"
-    # Diagonal: both offsets moderate → ambiguous
+    # Diagonal: both offsets moderate → forward-biased (forward > lateral)
     diagonal = pose(i11=(0.5, 0.5), i12=(0.55, 0.5), i23=(0.525, 0.525), i24=(0.55, 0.55))
-    assert g.classify_angle(diagonal, 1000, 1000) is None  # ambiguous
+    assert g.classify_angle(diagonal, 1000, 1000) == "front"
 
 
 def test_measure_skips_criteria_the_angle_cannot_support():
@@ -279,5 +282,74 @@ def test_measure_skips_criteria_the_angle_cannot_support():
     front = measure.measure(synthetic_track({}), 0, "left", pack, angle="front")
     assert front["criteria"][0]["source"] == "none"
     assert front["criteria"][0]["skipped"] is True
-    side = measure.measure(synthetic_track({}), 0, "left", pack, angle="side")
-    assert side["criteria"][0]["source"] == "pose"
+# -- derived metrics ----------------------------------------------------------
+
+def test_metrics_without_a_target_range_are_measured_but_not_scored():
+    value, note = measure.score_value(0.8, MetricDef("rise", "Rise", "hip_rise"))
+    assert value is None and note == "no target range"
+
+
+def test_key_metrics_are_normalised_by_torso_length():
+    track = synthetic_track({})
+    track.lm[:, 16, 1] = 0.2  # right wrist well above the shoulder line at 0.4
+    close = metrics.derive("wrist_above_shoulder", track, 20, "right")
+    track.width = track.height = 2000  # same pose, camera twice as far: torso doubles too
+    far = metrics.derive("wrist_above_shoulder", track, 20, "right")
+    assert close == pytest.approx(1.0, abs=0.05)
+    assert far == pytest.approx(close, abs=0.01)
+
+
+def test_every_pack_key_metric_gets_a_row_per_event():
+    pack = sports.load("basketball")
+    track = synthetic_track({2.0: 0.6})
+    rows = metrics.event_metrics(track, 25, "right", pack)
+    assert [r["key"] for r in rows] == [m.key for m in pack.key_metrics]
+    assert all("score" in r and "value" in r for r in rows)
+    assert any(r["value"] is not None for r in rows)
+
+
+def test_session_metrics_summarise_events_and_coverage():
+    pack = sports.load("basketball")
+    track = synthetic_track({2.0: 0.6, 6.0: 0.6})
+    events = [{"t": 2.0, "metrics": metrics.event_metrics(track, 24, "right", pack)},
+              {"t": 6.0, "metrics": metrics.event_metrics(track, 72, "right", pack)}]
+    rows = {m["key"]: m for m in metrics.session_metrics(track, events, pack)}
+    assert rows["tempo"]["value"] == pytest.approx(4.0)
+    assert rows["events_per_min"]["value"] == pytest.approx(12.0, abs=0.5)
+    assert rows["tracking_coverage"]["value"] == pytest.approx(100.0)
+
+
+# -- result without usable pose ----------------------------------------------
+
+def test_result_still_builds_when_the_athlete_is_never_visible():
+    track = synthetic_track({})
+    track.lm[:] = np.nan
+    track.conf[:] = 0
+    judgement = Judgement(source="rules", sport="basketball", verdicts={
+        0: {"is_event": True, "type": "shot", "result": "unknown", "feedback": "", "confidence": 0.5,
+            "ratings": {}}})
+    out = result.build("job", {"angle": "front"}, sports.load("basketball"), track, Media(10.0, 12.0, False),
+                       [Candidate(0, 2.0, 1.0, "right")], judgement, [])
+    event = out["events"][0]
+    assert event["score"] is None and event["confidence"] == 0
+    assert all(m["value"] is None for m in event["metrics"])
+    assert out["summary"]["confidence"] == 0
+    assert {"low_track_coverage", "no_measurable_events"} <= set(out["quality"]["issues"])
+    assert out["needs_review"] is True
+
+
+def test_legacy_summary_exposes_ui_ready_stats():
+    from routes.legacy import legacy_summary
+
+    track = synthetic_track({2.0: 0.6})
+    judgement = Judgement(source="rules", sport="basketball", verdicts={
+        0: {"is_event": True, "type": "shot", "result": "made", "feedback": "Good look.", "confidence": 0.8,
+            "ratings": {}}})
+    out = result.build("job", {"angle": "front"}, sports.load("basketball"), track, Media(10.0, 12.0, False),
+                       [Candidate(24, 2.0, 1.0, "right")], judgement, [])
+    legacy = legacy_summary(out)
+    assert legacy["confidence"] == out["summary"]["confidence"]
+    assert legacy["average_score"] == (out["summary"]["average_score"] or 0)
+    assert legacy["success_rate"] == pytest.approx(out["summary"]["success_rate"] / 100)
+    assert legacy["session_metrics"] == out["session_metrics"]
+    assert legacy["shot_events"][0]["metrics"] == out["events"][0]["metrics"]

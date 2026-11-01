@@ -4,8 +4,9 @@ import subprocess
 
 import pytest
 
-from core import events, jobs, llm, people, pipeline, storage
+from core import events, jobs, llm, matchup, motion, people, pipeline, sports, storage
 from core.errors import EngineError
+from core.track import Lock
 
 from . import fakes
 
@@ -42,6 +43,21 @@ def test_scan_orders_players_left_to_right_and_keeps_a_signature(video):
     assert all(p["signature"] and p["crop_base64"] for p in found)
 
 
+def test_matchup_pairs_the_action_with_the_nearest_defender(video):
+    detector = fakes.FakePose()
+    athlete = pick_athlete(video)
+    track = pipeline.track_athlete(video, detector, Lock.from_player(athlete), rate=12)
+    cands = motion.candidates(track, sports.load("basketball"))
+    blocks = matchup.analyse(video, detector, track, cands, sports.load("basketball"))
+    block = blocks[cands[0].i]
+    assert block["roles"] == {"primary": "Ball handler", "opponent": "Defender"}
+    assert block["primary"]["metrics"] and any(m["value"] is not None for m in block["primary"]["metrics"])
+    assert block["found_opponent"] is True
+    assert block["opponent"]["metrics"]
+    assert block["separation"]["distance"] > 0
+    assert block["frames"] and block["frames"][0]["primary"]
+
+
 def test_job_emits_ordered_lifecycle_events_and_a_complete_result(video, wait):
     job = jobs.create("j1", params(video))
     done = wait(job["id"])
@@ -54,7 +70,7 @@ def test_job_emits_ordered_lifecycle_events_and_a_complete_result(video, wait):
         ["prepare", "track", "candidates", "judge", "result", "render"]
 
     result = jobs.load_result("j1")
-    assert result["schema_version"] == 2 and result["sport"] == "basketball"
+    assert result["schema_version"] == 3 and result["sport"] == "basketball"
     found = [e["t"] for e in result["events"]]
     assert len(found) == 3
     for got, want in zip(found, A_TIMES):
@@ -62,7 +78,13 @@ def test_job_emits_ordered_lifecycle_events_and_a_complete_result(video, wait):
     first = result["events"][0]
     assert first["id"] == "j1:e1" and first["result"] == "made"
     assert any(m["source"] == "pose" and 0 < m["value"] < 180 for m in first["measurements"])
+    assert first["metrics"] and any(m["value"] is not None for m in first["metrics"])
+    assert first["matchup"]["roles"] == {"primary": "Ball handler", "opponent": "Defender"}
+    assert first["matchup"]["found_opponent"] is True
+    assert first["matchup"]["separation"]["distance"] > 0
     assert result["summary"]["strengths"] == ["Release height"]
+    assert result["summary"]["confidence"] > 0.8 and result["summary"]["made"] >= 1
+    assert {m["key"] for m in result["session_metrics"]} >= {"tracking_coverage", "tempo"}
     assert result["athlete"]["track_coverage"] > 0.8
     assert result["provenance"]["judged_by"] == "model" and result["degraded"] == []
 
@@ -71,8 +93,8 @@ def test_outputs_are_published_as_artifacts_and_the_video_plays(video, wait, tmp
     jobs.create("j2", params(video))
     wait("j2")
     names = {e["data"]["name"] for e in events.read("j2") if e["type"] == "artifact.ready"}
-    assert {"result.json", "events.csv", "measurements.csv", "findings.csv", "session.csv", "track.json",
-            "analysis.mp4", "thumbs/event_1.jpg"} <= names
+    assert {"result.json", "events.csv", "measurements.csv", "findings.csv", "metrics.csv", "session.csv",
+            "track.json", "analysis.mp4", "thumbs/event_1.jpg"} <= names
     path = storage.backend().path(storage.result_key("j2", "analysis.mp4"))
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                             "stream=codec_name,pix_fmt", "-of", "json", str(path)], capture_output=True, text=True)
@@ -102,6 +124,27 @@ def test_missing_api_key_is_the_same_graceful_path(video, wait, monkeypatch):
     monkeypatch.setattr(pipeline, "make_model", no_key)
     jobs.create("j4", params(video))
     assert wait("j4")["degraded"] == ["llm"]
+
+
+def test_unselected_player_is_locked_automatically(video, wait):
+    jobs.create("auto", {**params(video, render=False), "player": None})
+    done = wait("auto")
+    assert done["state"] == "completed", done["error"]
+    result = jobs.load_result("auto")
+    assert result["athlete"]["track_coverage"] > 0.5
+    found = [e["t"] for e in result["events"]]
+    for got, want in zip(found, A_TIMES):
+        assert got == pytest.approx(want, abs=0.4)  # still the same athlete, not the passer
+
+
+def test_detected_sport_replaces_the_generic_pack(video, wait):
+    jobs.create("sport", {**params(video, render=False), "sport": ""})
+    done = wait("sport")
+    assert done["state"] == "completed", done["error"]
+    result = jobs.load_result("sport")
+    assert result["sport"] == "basketball"
+    assert result["provenance"]["sport_pack"] == sports.load("basketball").version
+    assert all(e["type"] in sports.load("basketball").event_types for e in result["events"])
 
 
 def test_second_job_on_same_clip_reuses_tracking_and_verdicts(video, wait, monkeypatch):
