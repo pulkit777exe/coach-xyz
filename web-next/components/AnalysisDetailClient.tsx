@@ -26,7 +26,7 @@ import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
-import type { JobStatus, AnalysisSummary } from '@/types'
+import type { JobStatus, AnalysisSummary, Matchup, PerformanceMetric } from '@/types'
 import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
@@ -61,6 +61,20 @@ function CardHeading({ children }: { children: React.ReactNode }) {
 
 const CHIP_CLASS =
   'inline-flex items-center rounded-[6px] border border-border px-3 py-1.5 text-meta font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer'
+
+function formatMetric(value: number, unit: string): string {
+  const rounded = Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1)
+  return `${rounded}${unit}`
+}
+
+function eventMetrics(event: Record<string, unknown>): PerformanceMetric[] {
+  return Array.isArray(event.metrics) ? (event.metrics as PerformanceMetric[]) : []
+}
+
+function eventMatchup(event: Record<string, unknown>): Matchup | null {
+  const raw = event.matchup
+  return raw && typeof raw === 'object' ? (raw as Matchup) : null
+}
 
 interface AnalysisDetailClientProps {
   auth0Id: string
@@ -348,6 +362,12 @@ export default function AnalysisDetailClient({
   const drill: string | null =
     summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
 
+  const sessionMetrics = Array.isArray(summary?.session_metrics)
+    ? (summary.session_metrics as Array<Record<string, unknown>>).filter(
+        (metric) => typeof metric.value === 'number',
+      )
+    : []
+
   return (
     <div ref={containerRef} className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       {/* Reading Progress */}
@@ -598,30 +618,35 @@ export default function AnalysisDetailClient({
           {[
             {
               label: 'Form Score',
-              value: 'form_score' in summary ? (summary.form_score as number) : '—',
+              value:
+                typeof summary.form_score === 'number'
+                  ? `${summary.form_score.toFixed(1)}/10`
+                  : '—',
             },
             {
               label: 'Confidence',
               value:
-                'confidence' in summary
-                  ? `${((summary.confidence as number) * 100).toFixed(0)}%`
+                typeof summary.confidence === 'number'
+                  ? `${(summary.confidence * 100).toFixed(0)}%`
                   : '—',
             },
             {
               label: 'Total Events',
-              value: 'total_events' in summary ? (summary.total_events as number) : '—',
+              value: typeof summary.total_events === 'number' ? summary.total_events : '—',
             },
             {
               label: 'Average Score',
-              value: 'average_score' in summary
-                ? `${((summary.average_score as number) / 10) * 100}%`
-                : '—',
+              value:
+                typeof summary.average_score === 'number'
+                  ? `${summary.average_score.toFixed(1)}/10`
+                  : '—',
             },
             {
               label: 'Success Rate',
-              value: 'success_rate' in summary
-                ? `${((summary.success_rate as number) * 100).toFixed(0)}%`
-                : '—',
+              value:
+                typeof summary.success_rate === 'number'
+                  ? `${(summary.success_rate * 100).toFixed(0)}%`
+                  : '—',
             },
           ].map((card) => (
             <div key={card.label} className="rounded-[6px] border border-border bg-card p-5">
@@ -644,6 +669,41 @@ export default function AnalysisDetailClient({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Measured performance */}
+      {summary && activeView === 'overview' && sessionMetrics.length > 0 && (
+        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
+          <CardHeading>Measured Performance</CardHeading>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+            {sessionMetrics.map((metric) => {
+              const value = metric.value as number
+              const unit = typeof metric.unit === 'string' ? metric.unit : ''
+              const best = typeof metric.best === 'number' ? metric.best : null
+              return (
+                <div
+                  key={String(metric.key)}
+                  className="rounded-[6px] border border-border bg-background px-4 py-3"
+                >
+                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    {String(metric.label ?? metric.key)}
+                  </p>
+                  <p className="mt-1 font-semibold text-[24px] leading-none tabular-nums text-foreground">
+                    {formatMetric(value, unit)}
+                  </p>
+                  <p className="mt-1 text-meta text-muted-foreground">
+                    {metric.kind === 'metric'
+                      ? 'session average'
+                      : metric.kind === 'matchup'
+                        ? 'matchup average'
+                        : 'session'}
+                    {best !== null && ` · best ${formatMetric(best, unit)}`}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -693,12 +753,15 @@ export default function AnalysisDetailClient({
         Array.isArray(summary.shot_events) && (
         <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
           <CardHeading>
-            Shot Events{' '}
+            Key Moments{' '}
             {shotEvents.length > visibleEventCount &&
               `(${visibleEventCount} of ${shotEvents.length})`}
           </CardHeading>
           <div className="space-y-0">
-            {shotEvents.slice(0, visibleEventCount).map((event, i) => (
+            {shotEvents.slice(0, visibleEventCount).map((event, i) => {
+              const metrics = eventMetrics(event)
+              const matchup = eventMatchup(event)
+              return (
               <div
                 key={i}
                 className={`flex items-start gap-4 py-3 ${
@@ -733,9 +796,69 @@ export default function AnalysisDetailClient({
                       {event.key_observation}
                     </p>
                   )}
+                  {metrics.length > 0 && !(matchup?.primary?.metrics?.length) && (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                      {metrics
+                        .filter((metric) => typeof metric.value === 'number')
+                        .slice(0, 3)
+                        .map((metric) => (
+                          <span key={metric.key} className="text-label text-muted-foreground">
+                            {metric.label}{' '}
+                            <span className="tabular-nums text-foreground">
+                              {formatMetric(metric.value as number, metric.unit)}
+                            </span>
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  {matchup && (
+                    <div className="mt-3 rounded-[6px] border border-border bg-background p-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          { key: 'primary', role: matchup.primary },
+                          { key: 'opponent', role: matchup.opponent },
+                        ].map(({ key, role }) =>
+                          role ? (
+                            <div key={key}>
+                              <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                {role.role}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                {(role.metrics ?? [])
+                                  .filter((metric) => typeof metric.value === 'number')
+                                  .slice(0, 3)
+                                  .map((metric) => (
+                                    <span
+                                      key={metric.key}
+                                      className="text-label text-muted-foreground"
+                                    >
+                                      {metric.label}{' '}
+                                      <span className="tabular-nums text-foreground">
+                                        {formatMetric(metric.value as number, metric.unit)}
+                                      </span>
+                                    </span>
+                                  ))}
+                              </div>
+                            </div>
+                          ) : null,
+                        )}
+                      </div>
+                      {typeof matchup.separation?.distance === 'number' && (
+                        <p className="mt-2 text-label text-muted-foreground">
+                          Distance to {matchup.roles.opponent.toLowerCase()}:{' '}
+                          <span className="tabular-nums text-foreground">
+                            {matchup.separation.distance.toFixed(1)} torso
+                          </span>
+                          {typeof matchup.separation.side === 'string' &&
+                            ` to the ${matchup.separation.side}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
           {shotEvents.length > visibleEventCount && (
             <button

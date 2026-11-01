@@ -23,6 +23,11 @@ interface ResultsSummaryProps {
   onStartChat?: () => void
 }
 
+function formatMetric(value: number, unit: string): string {
+  const rounded = Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1)
+  return `${rounded}${unit}`
+}
+
 export default function ResultsSummary({
   status,
   jobId,
@@ -74,6 +79,7 @@ export default function ResultsSummary({
   const scorePercent = formScore !== null ? Math.min(100, Math.max(0, formScore * 10)) : null
   const rating = summary.overall_rating || 'Good'
   const sport = summary.sport || 'General'
+  const sessionMetrics = summary.session_metrics ?? []
 
   const scoreTone =
     formScore === null
@@ -226,6 +232,39 @@ export default function ResultsSummary({
           </div>
         </div>
 
+        {/* Measured performance */}
+        {sessionMetrics.length > 0 && (
+          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
+            <h2 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-1">
+              Measured Performance
+            </h2>
+            <p className="text-muted-foreground text-meta mb-4">
+              Numbers measured from the athlete's pose, normalised so camera distance does not
+              change the reading.
+            </p>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              {sessionMetrics.map((metric) => (
+                <div
+                  key={metric.key}
+                  className="rounded-[6px] border border-border bg-background px-4 py-3"
+                >
+                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    {metric.label}
+                  </p>
+                  <p className="mt-1 font-semibold text-[24px] leading-none tabular-nums text-foreground">
+                    {formatMetric(metric.value, metric.unit)}
+                  </p>
+                  {typeof metric.best === 'number' && (
+                    <p className="mt-1 text-meta text-muted-foreground">
+                      best {formatMetric(metric.best, metric.unit)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Detailed Findings Timeline Component */}
         <div className="gsap-item">
           <FindingsTimeline findings={summary.findings || []} />
@@ -307,6 +346,66 @@ export default function ResultsSummary({
                           <p className="text-muted-foreground text-body leading-[1.55] pl-3">
                             {event.feedback}
                           </p>
+                          {event.metrics && event.metrics.length > 0 && !(event.matchup?.primary?.metrics?.length) && (
+                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-3">
+                              {event.metrics
+                                .filter((metric) => typeof metric.value === 'number')
+                                .slice(0, 3)
+                                .map((metric) => (
+                                  <span
+                                    key={metric.key}
+                                    className="text-label text-muted-foreground"
+                                  >
+                                    {metric.label}{' '}
+                                    <span className="tabular-nums text-foreground">
+                                      {formatMetric(metric.value as number, metric.unit)}
+                                    </span>
+                                  </span>
+                                ))}
+                            </div>
+                          )}
+                          {event.matchup && (
+                            <div className="mt-3 rounded-[6px] border border-border bg-background p-3">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                {[
+                                  { key: 'primary', role: event.matchup.primary },
+                                  { key: 'opponent', role: event.matchup.opponent },
+                                ].map(({ key, role }) =>
+                                  role ? (
+                                    <div key={key}>
+                                      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                                        {role.role}
+                                      </p>
+                                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                        {(role.metrics ?? [])
+                                          .filter((metric) => typeof metric.value === 'number')
+                                          .slice(0, 3)
+                                          .map((metric) => (
+                                            <span
+                                              key={metric.key}
+                                              className="text-label text-muted-foreground"
+                                            >
+                                              {metric.label}{' '}
+                                              <span className="tabular-nums text-foreground">
+                                                {formatMetric(metric.value as number, metric.unit)}
+                                              </span>
+                                            </span>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  ) : null,
+                                )}
+                              </div>
+                              {typeof event.matchup.separation?.distance === 'number' && (
+                                <p className="mt-2 text-label text-muted-foreground">
+                                  Distance to {event.matchup.roles.opponent.toLowerCase()}:{' '}
+                                  <span className="tabular-nums text-foreground">
+                                    {event.matchup.separation.distance.toFixed(1)} torso
+                                  </span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )

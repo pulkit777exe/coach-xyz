@@ -110,6 +110,53 @@ export type AnalysisProvenance = {
   analyzed_at: string
 }
 
+export type PerformanceMetric = {
+  key: string
+  label: string
+  metric?: string
+  unit: string
+  value: number | null
+  ideal?: number[] | null
+  score?: number | null
+  note?: string
+}
+
+export type SessionMetric = {
+  key: string
+  label: string
+  unit: string
+  kind: 'metric' | 'session' | 'matchup'
+  n?: number
+  value: number
+  best?: number | null
+  worst?: number | null
+}
+
+export type MatchupRole = {
+  role: string
+  side?: string
+  confidence?: number
+  metrics?: PerformanceMetric[]
+}
+
+export type Matchup = {
+  roles: { primary: string; opponent: string }
+  primary?: MatchupRole | null
+  opponent?: MatchupRole | null
+  found_opponent?: boolean
+  separation?: {
+    side?: string
+    distance?: number
+    dx?: number
+    dy?: number
+  } | null
+  frames?: Array<{
+    t: number
+    primary: number[][] | null
+    opponent: number[][] | null
+  }>
+}
+
 export type AnalysisSummary = {
   sport: string
   player_name?: string
@@ -123,6 +170,15 @@ export type AnalysisSummary = {
   shot_events: ShotEvent[]
   success_rate_percent?: number
   average_form_score?: number
+  /** 0–10 mean technique score across measured events. */
+  average_score?: number
+  /** 0–1 share of judged results that were successful. */
+  success_rate?: number
+  /** 0–1 mean confidence of the tracked events. */
+  confidence?: number
+  /** Sport-specific numbers measured over the whole session. */
+  session_metrics?: SessionMetric[]
+  tracking_coverage?: number | null
   total_events?: number
   /** Camera perspective the analysis ran on (engine-stamped). */
   angle?: string
@@ -149,6 +205,11 @@ export type ShotEvent = {
   feedback: string
   key_observation?: string
   result?: string
+  confidence?: number
+  coverage?: number
+  metrics?: PerformanceMetric[]
+  /** The ball carrier / action player and the nearest opponent at this event. */
+  matchup?: Matchup | null
   form_breakdown?: Record<string, string>
   biomechanics?: Record<string, unknown> | null
   weighted_scoring?: Record<string, unknown> | null
