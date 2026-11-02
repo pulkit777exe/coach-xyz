@@ -35,6 +35,10 @@ class Verdict(BaseModel):
     ratings: list[Rating]
     feedback: str
     confidence: float
+    # Optional analyst annotations. Defaults keep old cached judgements and the
+    # rule-based path loadable without a migration.
+    tags: list[str] = []
+    pressure: str = "unknown"
 
 
 class Review(BaseModel):
@@ -44,6 +48,8 @@ class Review(BaseModel):
     strengths: list[str]
     focus_areas: list[str]
     priority_drill: str
+    tactical_summary: str = ""
+    key_insights: list[str] = []
 
 
 @dataclass
@@ -55,6 +61,8 @@ class Judgement:
     strengths: list[str] = field(default_factory=list)
     focus_areas: list[str] = field(default_factory=list)
     priority_drill: str = ""
+    tactical_summary: str = ""
+    key_insights: list[str] = field(default_factory=list)
     model: str | None = None
     reason: str | None = None
 
@@ -79,20 +87,34 @@ def _windows(track: Track, cands: list[Candidate]) -> list[tuple[float, float]] 
     return [(a, b) for a, b in merged]
 
 
+def _clean_tags(tags: list[str]) -> list[str]:
+    """Short, de-duplicated labels; model text is data, never markup."""
+    out, seen = [], set()
+    for tag in tags:
+        text = " ".join(str(tag).split())[:40]
+        key = text.lower()
+        if text and key not in seen:
+            seen.add(key)
+            out.append(text)
+    return out[:5]
+
+
 def _clean(v: Verdict, pack: Pack) -> dict:
     kind = v.event_type if v.event_type in pack.event_types else ("other" if "other" in pack.event_types else pack.event_types[0])
     result = v.result if v.result in pack.results else "unknown"
+    pressure = v.pressure if v.pressure in ("open", "contested", "tight") else "unknown"
     return {
         "is_event": v.is_event, "type": kind, "result": result, "feedback": v.feedback.strip(),
         "confidence": max(0.0, min(1.0, v.confidence)),
         "ratings": {r.criterion: r.rating for r in v.ratings},
+        "tags": _clean_tags(v.tags), "pressure": pressure,
     }
 
 
 def rules(cands: list[Candidate], pack: Pack, reason: str) -> Judgement:
     kind = "other" if "other" in pack.event_types else pack.event_types[0]
     verdicts = {i: {"is_event": True, "type": kind, "result": "unknown", "feedback": "", "confidence": 0.5,
-                    "ratings": {}} for i in range(len(cands))}
+                    "ratings": {}, "tags": [], "pressure": "unknown"} for i in range(len(cands))}
     return Judgement(source="rules", sport=pack.name, verdicts=verdicts, reason=reason)
 
 
@@ -152,10 +174,12 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
     verdicts = {v.candidate - 1: _clean(v, pack) for v in out.events if 1 <= v.candidate <= len(cands)}
     for i in range(len(cands)):
         verdicts.setdefault(i, {"is_event": False, "type": "other", "result": "unknown", "feedback": "",
-                                "confidence": 0.0, "ratings": {}})
+                                "confidence": 0.0, "ratings": {}, "tags": [], "pressure": "unknown"})
     return Judgement(source="model", sport=sport, verdicts=verdicts, summary=out.summary.strip(),
                      strengths=out.strengths[:3], focus_areas=out.focus_areas[:3],
-                     priority_drill=out.priority_drill.strip(), model=used)
+                     priority_drill=out.priority_drill.strip(),
+                     tactical_summary=out.tactical_summary.strip(), key_insights=out.key_insights[:4],
+                     model=used)
 
 
 def event_feedback(rows: list[dict], pack: Pack) -> str:

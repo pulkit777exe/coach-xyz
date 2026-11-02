@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from . import config, judge, measure, metrics
+from . import config, judge, measure, metrics, performance
 from .judge import Judgement
 from .motion import Candidate
 from .sports import Pack
 from .track import Track
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def _band(conf: float) -> str:
@@ -42,12 +42,14 @@ def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgem
         if matchup and matchup.get("primary"):
             # The primary role is the athlete we already measure; reuse those numbers
             # so the session average, the banner and the two-player panel agree.
-            matchup["primary"]["metrics"] = event_metrics
+            matchup = {**matchup, "primary": {**matchup["primary"], "metrics": event_metrics}}
         events.append({
             "id": f"{job_id}:e{k}", "index": k, "type": verdict["type"], "t": round(c.t, 2), "side": c.side,
             "result": verdict["result"], "score": score, "score_source": source, "coverage": coverage,
             "feedback": verdict["feedback"] or judge.event_feedback(rows, pack),
             "confidence": round(confidence, 2),
+            "tags": list(verdict.get("tags") or []),
+            "pressure": verdict.get("pressure") or "unknown",
             "measurements": rows,
             "metrics": event_metrics,
             "matchup": matchup,
@@ -90,7 +92,7 @@ def _findings(events: list[dict], track: Track, fps: float, pack: Pack, provenan
 
 
 def _session_text(events: list[dict], stats: dict, pack: Pack, judgement: Judgement,
-                  session_metrics: list[dict]) -> dict:
+                  session_metrics: list[dict], professional: dict) -> dict:
     """Model-written summary when there is one, otherwise a short factual one from the numbers."""
     scored: dict[str, list[float]] = {}
     for event in events:
@@ -103,14 +105,10 @@ def _session_text(events: list[dict], stats: dict, pack: Pack, judgement: Judgem
     strong = [label[k] for k, m in sorted(means.items(), key=lambda x: -x[1]) if m >= 0.85][:3]
     weak = [k for k, m in sorted(means.items(), key=lambda x: x[1]) if m < 0.75][:3]
 
+    fallback_text, fallback_insights = performance.fallback_insights(pack, stats, professional)
     text = judgement.summary.strip()
     if not text:
-        n = stats["events"]
-        text = f"{n} moment{'s' if n != 1 else ''} analysed."
-        if stats["average_score"] is not None:
-            text += f" Average technique score {stats['average_score']}/10."
-        if weak:
-            text += f" Biggest focus: {label[weak[0]].lower()}."
+        text = fallback_text
     kpis = [f"{m['label'].lower()} {m['value']} {m['unit']}".strip()
             for m in session_metrics if m.get("kind") == "metric"][:2]
     if kpis:
@@ -123,6 +121,8 @@ def _session_text(events: list[dict], stats: dict, pack: Pack, judgement: Judgem
         "strengths": judgement.strengths or strong,
         "focus_areas": judgement.focus_areas or [label[k] for k in weak],
         "priority_drill": judgement.priority_drill or (drills.get(weak[0], "") if weak else ""),
+        "tactical_summary": judgement.tactical_summary.strip() or fallback_text,
+        "key_insights": judgement.key_insights or fallback_insights,
     }
 
 
@@ -146,7 +146,8 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
              "confidence": round(event_conf, 2)}
     consistency = _consistency(events)
     session_metrics = metrics.session_metrics(track, events, pack) + metrics.matchup_metrics(events, pack)
-    text = _session_text(events, stats, pack, judgement, session_metrics)
+    professional = performance.build(pack, events, session_metrics, consistency, stats)
+    text = _session_text(events, stats, pack, judgement, session_metrics, professional)
     findings = _findings(events, track, media.fps, pack, provenance)
 
     issues = []
@@ -167,7 +168,7 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
                     "longest_gap_s": round(track.longest_gap_s, 2)},
         "summary": {**stats, "rating": measure.rating_label(avg), **text},
         "events": events, "findings": findings, "consistency": consistency,
-        "session_metrics": session_metrics,
+        "session_metrics": session_metrics, "stats": professional,
         "quality": {"passed": not issues, "issues": issues},
         "needs_review": bool(issues) or any(f["review_state"] == "needs_review" for f in findings),
         "degraded": degraded, "provenance": provenance,

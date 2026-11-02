@@ -29,9 +29,10 @@ def _csv(header: list[str], rows) -> str:
 def events_csv(r: dict) -> str:
     return _csv(
         ["job_id", "event_id", "index", "type", "t_seconds", "result", "score", "score_source", "coverage",
-         "confidence", "feedback"],
+         "confidence", "pressure", "tags", "feedback"],
         [[r["job_id"], e["id"], e["index"], e["type"], e["t"], e["result"], e["score"], e["score_source"],
-          e["coverage"], e["confidence"], e["feedback"]] for e in r["events"]],
+          e["coverage"], e["confidence"], e.get("pressure"), "; ".join(e.get("tags") or []), e["feedback"]]
+         for e in r["events"]],
     )
 
 
@@ -85,6 +86,25 @@ def metrics_csv(r: dict) -> str:
                  "ideal_min", "ideal_max", "best", "worst"], rows)
 
 
+def stats_csv(r: dict) -> str:
+    rows = []
+    stats = r.get("stats") or {}
+    for group in stats.get("groups") or []:
+        for row in group.get("stats") or []:
+            rows.append([r["job_id"], group["label"], row["key"], row["label"], row.get("value"),
+                         row.get("display"), row.get("unit"), row.get("source"), row.get("band"),
+                         row.get("note")])
+    trend = stats.get("trend")
+    if trend:
+        rows.append([r["job_id"], "Trend", "trend", "Score trend", trend.get("delta"),
+                     trend.get("direction"), "/10", trend.get("source"), None, trend.get("note")])
+    for item in stats.get("unavailable") or []:
+        rows.append([r["job_id"], "Unavailable", "", item["label"], None, None, "", None, None,
+                     item["reason"]])
+    return _csv(["job_id", "group", "key", "label", "value", "display", "unit", "source", "band", "note"],
+                rows)
+
+
 def write_all(result: dict, out_dir: str) -> dict[str, str]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -95,6 +115,7 @@ def write_all(result: dict, out_dir: str) -> dict[str, str]:
         "measurements.csv": measurements_csv(result),
         "findings.csv": findings_csv(result),
         "metrics.csv": metrics_csv(result),
+        "stats.csv": stats_csv(result),
     }
     paths = {}
     for name, text in files.items():

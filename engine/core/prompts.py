@@ -17,7 +17,7 @@ def untrusted(text: str) -> str:
 def judge_system(pack: Pack, sport_known: bool) -> str:
     sport = pack.label.lower() if sport_known else "sport (identify it)"
     lines = [
-        f"You are an experienced {sport} coach reviewing one athlete's session.",
+        f"You are a professional {sport} performance analyst reviewing one athlete's session.",
         "The athlete you judge is inside the magenta box labelled TARGET. Ignore everyone else.",
         "Numbered labels (#1, #2, ...) appear in a corner of the video while each candidate moment happens.",
         "Judge only what you can see. If the outcome or a technique detail is not visible, say 'unknown' or 'unclear'. "
@@ -25,6 +25,15 @@ def judge_system(pack: Pack, sport_known: bool) -> str:
         "Measured joint angles are given for each moment; they are exact, so do not contradict them and do not "
         "restate numbers in your feedback. Use them to explain what to change.",
         "Feedback: one or two plain sentences to the athlete, naming one concrete cue.",
+        "Tags: one to three short labels for what you actually saw (for example 'high release', 'late closeout', "
+        "'balanced landing'). They are observations, not measured values.",
+        "Pressure: set open, contested, tight or unknown from the defender's visible distance only. Use unknown when "
+        "no defender is visible or the spacing cannot be judged.",
+        "tactical_summary: two or three sentences on the pattern across the whole session - what repeated, what "
+        "broke down, and what the athlete should change first. Do not invent statistics: no xG, pass percentage, "
+        "shot chart, speed or league percentile from a single camera clip. If the clip cannot answer it, say so.",
+        "key_insights: up to four specific, non-duplicative analyst points. Each must point to a visible moment or "
+        "a measured value. Do not pad the list.",
     ]
     if pack.coaching_note:
         lines.append(pack.coaching_note)
@@ -48,7 +57,8 @@ def judge_prompt(pack: Pack, sport_known: bool, moments: list[dict]) -> str:
         out.append(f"#{m['n']} at about {m['time']:.1f}s of the video. Measured: {measured}.")
     out.append("\nFor every candidate set is_event=false if it is not a real attempt or action. "
                "Then give a two-sentence session summary, up to three strengths, up to three focus areas and one "
-               "priority drill for the next session.")
+               "priority drill for the next session. Add the tactical_summary and key_insights described in the "
+               "system instructions, plus tags and a pressure label for each event.")
     return "\n".join(out)
 
 
@@ -61,16 +71,42 @@ def _events_block(result: dict) -> str:
     return "\n".join(lines) or "No events were detected."
 
 
+def _stats_block(result: dict) -> str:
+    stats = result.get("stats") or {}
+    lines = []
+    for group in stats.get("groups") or []:
+        rows = []
+        for row in group.get("stats") or []:
+            value = row.get("display") if row.get("display") is not None else row.get("value")
+            if value is None:
+                continue
+            rows.append(f"{row['label']} {value}{row.get('unit', '')} ({row.get('source', 'measured')})")
+        if rows:
+            lines.append(f"- {group['label']}: " + "; ".join(rows))
+    if stats.get("trend"):
+        trend = stats["trend"]
+        lines.append(f"- Trend: {trend.get('direction')} ({trend.get('first')} to {trend.get('second')} /10)")
+    unavailable = [item["label"] for item in stats.get("unavailable") or []]
+    if unavailable:
+        lines.append("- Not measurable from this clip: " + ", ".join(unavailable))
+    return "\n".join(lines) or "No professional stat rows were produced."
+
+
 def chat_system(result: dict) -> str:
     s = result.get("summary", {})
+    key_insights = s.get("key_insights") or []
     return "\n".join([
         "You are a sports coach answering follow-up questions about one analysed session.",
         f"Sport: {result.get('sport')}. Rating: {s.get('rating')}. Average score: {s.get('average_score')}/10.",
         f"Summary: {s.get('text', '')}",
+        f"Tactical read: {s.get('tactical_summary', '')}",
+        "Analyst insights: " + ("; ".join(key_insights) if key_insights else "none recorded."),
+        "Professional stats (source in brackets):", _stats_block(result),
         "Events:", _events_block(result),
         "Rules: answer only from this data; cite moments as 'at 12.3s' and event ids like [job:e2]; keep to 2-4 "
-        "short paragraphs; give specific drills; say so when the data cannot answer. Report fatigue, pain or "
-        "injury-risk notes as observed, never diagnose or predict medical conditions.",
+        "short paragraphs; give specific drills; say so when the data cannot answer. Never invent a stat listed "
+        "as not measurable. Report fatigue, pain or injury-risk notes as observed, never diagnose or predict "
+        "medical conditions.",
         GUARD,
     ])
 
