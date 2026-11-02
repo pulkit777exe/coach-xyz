@@ -340,6 +340,21 @@ const COACH_SIGNALS: Array<{ pattern: RegExp; angle: string }> = [
     angle:
       'Turn the tactical story into a constrained practice: one team shape, one trigger, one finish. Review whether the first action matched the trigger before judging the result.',
   },
+  {
+    pattern: /home|away|road|pit|court|stadium/i,
+    angle:
+      'Home/venue advantage factor in the training plan. Factor the extra crowd energy or travel fatigue into your session warm-up and rotation decisions.',
+  },
+  {
+    pattern: /rest|recovery|back-to-back|load management|ndays off/i,
+    angle:
+      'Rest cycle dictates the training focus. Prioritize active recovery and mobility work the day after a back-to-back set, then reassess readiness.',
+  },
+  {
+    pattern: /revenge|redemption|pursuit|reset|statement/i,
+    angle:
+      'Redemptive motivation shapes the game plan. Build the session around the narrative of correcting a prior mistake, then measure the response.',
+  },
 ]
 
 const SPORT_ANGLE: Record<NewsFeedSport, string> = {
