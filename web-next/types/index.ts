@@ -130,6 +130,60 @@ export type SessionMetric = {
   value: number
   best?: number | null
   worst?: number | null
+  /** How the number was produced. */
+  source?: ProfessionalStatSource
+  /** Sport-pack target band, when the pack declares one. */
+  ideal?: number[] | null
+  acceptable?: number[] | null
+}
+
+// ── Professional stat layer ─────────────────────────────────────────────────
+// Mirrors server/src/types/index.ts. Every stat is labelled by provenance;
+// stats the clip cannot support live in `unavailable` rather than being guessed.
+
+export type ProfessionalStatSource = 'measured' | 'counted' | 'observed'
+
+export type ProfessionalStat = {
+  key: string
+  label: string
+  unit: string
+  value: number | null
+  /** A non-numeric reading (for example a trend direction). */
+  display?: string | null
+  source: ProfessionalStatSource
+  /** Engine band key; the human meaning is in ProfessionalStats.bands. */
+  band?: string | null
+  note?: string
+}
+
+export type ProfessionalStatGroup = {
+  key: string
+  label: string
+  stats: ProfessionalStat[]
+}
+
+export type ProfessionalStats = {
+  groups: ProfessionalStatGroup[]
+  event_breakdown: Array<{ type: string; label: string; count: number; share: number }>
+  outcomes: Array<{
+    result: string
+    label: string
+    count: number
+    tone: 'positive' | 'negative' | 'neutral'
+  }>
+  tags: Array<{ tag: string; count: number }>
+  trend: {
+    direction: string
+    delta: number
+    first: number
+    second: number
+    n: number
+    source: ProfessionalStatSource
+    note?: string
+  } | null
+  provenance: { measured: number; counted: number; observed: number }
+  bands: Record<string, string>
+  unavailable: Array<{ label: string; reason: string }>
 }
 
 export type MatchupRole = {
@@ -178,6 +232,12 @@ export type AnalysisSummary = {
   confidence?: number
   /** Sport-specific numbers measured over the whole session. */
   session_metrics?: SessionMetric[]
+  /** Grouped professional stats with provenance and unavailable-stat disclosure. */
+  stats?: ProfessionalStats
+  /** Analyst-readable pattern across the session (model, or deterministic fallback). */
+  tactical_summary?: string
+  /** Up to four specific analyst points for the session. */
+  key_insights?: string[]
   tracking_coverage?: number | null
   total_events?: number
   /** Camera perspective the analysis ran on (engine-stamped). */
@@ -208,6 +268,10 @@ export type ShotEvent = {
   confidence?: number
   coverage?: number
   metrics?: PerformanceMetric[]
+  /** Model-observed short labels for this event. */
+  tags?: string[]
+  /** Model-observed defender spacing: open, contested, tight or unknown. */
+  pressure?: string | null
   /** The ball carrier / action player and the nearest opponent at this event. */
   matchup?: Matchup | null
   form_breakdown?: Record<string, string>
