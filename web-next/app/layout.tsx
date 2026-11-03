@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import AuthHeader from '@/components/AuthHeader'
@@ -8,6 +8,11 @@ import { Toaster } from '@/components/9ui/ui/sonner'
 import './globals.css'
 import { Analytics } from '@vercel/analytics/next'
 
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
 
 export const metadata: Metadata = {
   title: 'CoachXYZ | AI Sports Form Analysis',
@@ -49,9 +54,6 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </head>
       <body className="min-h-screen antialiased bg-background text-foreground">
         <Analytics />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

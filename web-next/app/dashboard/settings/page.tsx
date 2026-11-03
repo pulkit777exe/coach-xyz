@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 
 import { getSession } from '@/lib/session'
 import { changePasswordUrl } from '@/lib/authUrls'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import SettingsClient, { type SettingsIdentity } from '@/components/org/SettingsClient'
 
 export const metadata: Metadata = {
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
  * there is never a skeleton between click and panel).
  */
 export default async function SettingsPage() {
-  noStore()
+  await connection()
   const session = await getSession()
   if (!session) redirect('/auth/login')
 

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 
 import { getSession } from '@/lib/session'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import { getOrgContext, type OrgRole } from '@/lib/serverData'
 import { AUDIT_NAV_ROLES, HISTORY_NAV_ROLES, MEMBERS_NAV_ROLES, type NavRole } from '@/lib/nav'
 import { Button } from '@/components/9ui/ui/button'
@@ -182,7 +182,7 @@ function FeatureGrid({ features }: { features: Feature[] }) {
 }
 
 export default async function FeaturesPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { role } = orgCtx

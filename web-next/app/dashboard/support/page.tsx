@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { ArrowRight, CircleHelp, Mail, MessageSquare } from 'lucide-react'
 
 import { getSession } from '@/lib/session'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
 
@@ -118,7 +118,7 @@ function ChannelCard({
 }
 
 export default async function SupportPage() {
-  noStore()
+  await connection()
   const session = await getSession()
   if (!session) redirect('/auth/login')
 

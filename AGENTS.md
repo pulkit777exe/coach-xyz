@@ -47,7 +47,7 @@ Consulted skill guidance (installed locally, not vendored in the repo):
 
 ## Frontend conventions (from the skills, reconciled with repo state)
 
-- **Data fetching**: parallelize independent fetches with `Promise.all` (async-parallel). Use `unstable_noStore()` on authenticated dashboard pages serving fresh data; nothing to cache, fetches hit the live API. Prefer server components; add `"use client"` only where Web APIs/interactivity are needed.
+- **Data fetching**: parallelize independent fetches with `Promise.all` (async-parallel). Use `await connection()` from `next/server` on authenticated dashboard pages serving fresh data; nothing to cache, fetches hit the live API. (`unstable_noStore()` is deprecated in Next 16 and kept out of new code.) Prefer server components; add `"use client"` only where Web APIs/interactivity are needed.
 - **No barrel imports.** Import directly (`@/components/org/ScheduleClient`, not `@/components`). Statically analyzable paths only.
 - **Primitives**: use `@/components/9ui/ui/*` (button, badge, card, dialog, input, select, tooltip, chart, etc.). Legacy `components/ui/*` is deleted — do not resurrect. shadcn-style 9ui where available.
 - **Re-render hygiene**: no components defined inside components; no synchronous `setState` in effect bodies (defer via `requestAnimationFrame`, move to event handlers, or derive during render); use functional `setState` and lazy `useState(() => ...)` for expensive init; keep non-trivial derived data in `useMemo` (e.g., `byDay` map in ScheduleClient); use `Map`/`Set` for repeated lookups (not `find` in loops).

@@ -5,7 +5,7 @@ import { getMyReport } from '@/lib/serverData'
 import { REPORT_TYPE_LABELS } from '@/lib/org/types'
 import type { ReportType } from '@/lib/org/types'
 import { formatDateMed } from '@/lib/date'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 import ReportBody from '@/components/org/ReportBody'
 import PrintReportButton from '@/components/org/PrintReportButton'
 import PageHeader from '@/components/org/PageHeader'
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
  * else 404s (or comes back `report: null` when the player isn't linked yet).
  */
 export default async function PlayerReportPage({ params }: { params: Promise<{ id: string }> }) {
-  noStore()
+  await connection()
   const { id } = await params
 
   // Session + report resolve in parallel (the report fetch is self-scoped

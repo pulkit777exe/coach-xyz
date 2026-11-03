@@ -5,7 +5,7 @@ import { getOrgContext, orgReports, orgStudents } from '@/lib/serverData'
 import ReportsClient from '@/components/org/ReportsClient'
 import PageHeader from '@/components/org/PageHeader'
 import { hasPermission, REPORT_SEND_ROLES } from '@/lib/permissions'
-import { unstable_noStore as noStore } from 'next/cache'
+import { connection } from 'next/server'
 
 export const metadata: Metadata = {
   title: 'Reports | CoachXYZ',
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ReportsPage() {
-  noStore()
+  await connection()
   const [session, orgCtx] = await Promise.all([getSession(), getOrgContext()])
   if (!session) redirect('/auth/login')
   const { auth0Id, role } = orgCtx
