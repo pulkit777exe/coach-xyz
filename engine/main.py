@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CoachAI Engine", version=config.ENGINE_VERSION, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=list(config.settings.cors_origins), allow_credentials=True,
-                   allow_methods=["*"], allow_headers=["*"])
+                   allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["x-service-token", "x-verified-auth0-id", "x-request-id", "content-type", "authorization"])
 
 
 @app.middleware("http")
