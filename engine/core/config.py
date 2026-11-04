@@ -6,10 +6,8 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 except ImportError:
-    pass
+    load_dotenv = None
 
 ENGINE_VERSION = "1.2.0"
 PIPELINE_VERSION = "3"
@@ -69,6 +67,14 @@ class Settings:
 
 
 def load() -> Settings:
+    if load_dotenv:
+        # Load .env once on first call; positioned here so settings can be
+        # imported at module level without touching the filesystem until load()
+        # is explicitly invoked (avoids failures when .env is not yet available).
+        try:
+            load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+        except Exception:
+            pass
     data_dir = Path(_env("DATA_DIR", "./data"))
     if not data_dir.is_absolute():
         data_dir = ROOT / data_dir
