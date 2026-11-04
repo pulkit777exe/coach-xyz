@@ -268,6 +268,14 @@ export type ShotEvent = {
   injury_risk?: Record<string, unknown> | null
 }
 
+// ── UUID & Session Regex ──────────────────────────────────────────────────────
+// Shared regex patterns used across server routes for session token and
+// analysis job ID validation. Centralized here so every route uses the exact
+// same pattern and avoids subtle inconsistencies.
+
+export const UUID_PARAM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const SESSION_TOKEN_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
+
 // ── Error Types ──────────────────────────────────────────────────────────────
 // Canonical error shape returned by all layers (engine, server, client).
 // Engine: EngineError (Python dataclass) → serialized to this shape.

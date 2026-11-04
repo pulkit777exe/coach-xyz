@@ -1,4 +1,5 @@
 import { Elysia } from 'elysia'
+import { UUID_PARAM_RE } from '../types'
 import { upsertUser, getUserByAuth0Id, resolveAuth0Id } from '../lib/users'
 import {
   getUserAnalyses,
@@ -25,7 +26,7 @@ import { failEngineJobForServerJob } from '../lib/jobGuard'
 import { withUserJob } from '../lib/userJob'
 import { answerChatTurn, keywordFallback } from '../lib/chatTurn'
 import { checkClipLimit, getIP } from '../lib/ratelimit'
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import { serviceGuard, SERVICE_HEADERS } from '../lib/serviceGuard'
 import { auditRoute } from '../lib/audit'
 import { redactWellness, resolveMedicalAccess } from '../lib/permissions'
@@ -44,8 +45,6 @@ const badRequest = (set: { status?: number | string }, message = 'Missing requir
   set.status = 400
   return buildError('INVALID_REQUEST', message, false)
 }
-
-const UUID_PARAM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default new Elysia()
   .use(serviceGuard)
@@ -316,8 +315,7 @@ export default new Elysia()
 
     const { display_name } = body as { display_name?: string }
     if (display_name !== undefined && typeof display_name !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'display_name must be a string', false)
+      return badRequest(set, 'display_name must be a string')
     }
 
     if (display_name !== undefined) {
@@ -343,8 +341,7 @@ export default new Elysia()
     const { auth0Id, findingId } = params
     const { review_state } = (body ?? {}) as { review_state?: unknown }
     if (review_state !== 'approved' && review_state !== 'flagged') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'review_state must be approved or flagged', false)
+      return badRequest(set, 'review_state must be approved or flagged')
     }
     return withUserJob(
       request,
@@ -380,7 +377,7 @@ export default new Elysia()
       return buildError('NOT_FOUND', 'Analysis not found', false)
     }
     if (analysis.complete) {
-      set.status = 400
+      return badRequest(set, "Analysis is already complete")
       return buildError('INVALID_REQUEST', 'Analysis is already complete', false)
     }
     await failEngineJobForServerJob(jobId, 'Analysis cancelled.')
@@ -440,8 +437,7 @@ export default new Elysia()
 
     const { message } = body as { message?: string }
     if (!message || typeof message !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing message', false)
+      return badRequest(set, 'Missing message')
     }
 
     await saveChatMessage({

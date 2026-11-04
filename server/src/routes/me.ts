@@ -1,6 +1,7 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
+import { SESSION_TOKEN_RE } from '../types'
 import { getUserByAuth0Id, updateUserProfile, resolveAuth0Id } from '../lib/users'
 import { admitAnalysis } from '../lib/admission'
 import {
@@ -26,8 +27,6 @@ import { checkLimit } from '../lib/ratelimit'
 import { acceptInvite } from '../lib/invites'
 import { auditRoute } from '../lib/audit'
 import { logEvent } from '../lib/log'
-
-const SESSION_TOKEN_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
 
 export default new Elysia()
   .use(serviceGuard)
@@ -67,20 +66,13 @@ export default new Elysia()
         (nickname !== undefined && nickname !== null && typeof nickname !== 'string') ||
         (picture !== undefined && picture !== null && typeof picture !== 'string')
       ) {
-        set.status = 400
-        return buildError(
-          'INVALID_REQUEST',
-          'name, nickname and picture must be strings or null',
-          false,
-        )
+        return badRequest(set, 'name, nickname and picture must be strings or null')
       }
       if (typeof name === 'string' && name.length > 200) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'name is too long', false)
+        return badRequest(set, 'name is too long')
       }
       if (typeof picture === 'string' && picture.length > 2000) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'picture URL is too long', false)
+        return badRequest(set, 'picture URL is too long')
       }
 
       const user = await updateUserProfile(verified, {
@@ -248,12 +240,10 @@ export default new Elysia()
       const videoKeyRaw = body.video_key ?? null
       const angleRaw = body.angle ?? null
       if (sessionTokenRaw !== null && typeof sessionTokenRaw !== 'string') {
-        set.status = 400
-        return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
+        return badRequest(set, 'Session token must be a valid UUID.')
       }
       if (sessionTokenRaw !== null && !SESSION_TOKEN_RE.test(sessionTokenRaw)) {
-        set.status = 400
-        return buildError('INVALID_SESSION_TOKEN', 'Session token must be a valid UUID.', false)
+        return badRequest(set, 'Session token must be a valid UUID.')
       }
       if (
         playerIndexRaw !== null &&
@@ -261,16 +251,13 @@ export default new Elysia()
           !Number.isInteger(playerIndexRaw) ||
           playerIndexRaw < 1)
       ) {
-        set.status = 400
-        return buildError('INVALID_PLAYER_INDEX', undefined, false)
+        return badRequest(set, 'Invalid player index')
       }
       if (videoKeyRaw !== null && typeof videoKeyRaw !== 'string') {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'video_key must be null or a string.', false)
+        return badRequest(set, 'video_key must be null or a string.')
       }
       if (angleRaw !== null && typeof angleRaw !== 'string') {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'angle must be null or a string.', false)
+        return badRequest(set, 'angle must be null or a string.')
       }
 
       const sessionToken = typeof sessionTokenRaw === 'string' ? sessionTokenRaw : null
@@ -342,13 +329,11 @@ export default new Elysia()
       }
       const token = parsed.body.token
       if (typeof token !== 'string' || !token) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'token is required.', false)
+        return badRequest(set, 'token is required.')
       }
       const result = await acceptInvite(token, verified)
       if (!result.ok) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', result.error, false)
+        return badRequest(set, result.error)
       }
       auditRoute(
         request,

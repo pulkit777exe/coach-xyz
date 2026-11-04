@@ -5,6 +5,7 @@
 // imports these, and re-exports them so existing importers keep working.
 
 import type { FindingRecord, StoredFinding } from './findings'
+import { UUID_PARAM_RE } from '../types'
 
 export const REVIEW_STATES = ['auto', 'approved', 'flagged'] as const
 export type ReviewState = (typeof REVIEW_STATES)[number]
@@ -91,7 +92,6 @@ export type FindingsTrendQuery = {
   teamId: string | null
 }
 
-const UUID_PARAM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * Pure parser for the findings-trends query string. Bounds days to 1..365,
