@@ -40,10 +40,10 @@ def sha256_file(path: str, chunk: int = 8 << 20) -> str:
     return digest.hexdigest()
 
 
-def _ffprobe(path: str, *args: str) -> dict:
+def _ffprobe(path: str) -> dict:
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-of", "json", *args, path],
+            ["ffprobe", "-v", "error", "-of", "json", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,duration:format=duration", path],
             capture_output=True, timeout=60, check=True,
         )
         return json.loads(out.stdout or b"{}")
