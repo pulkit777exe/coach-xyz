@@ -61,7 +61,14 @@
         "forward_acceleration",
         "contact_interval"
       ],
-      "implementation_note": "Single-window image-plane knee angle, not a smoothed extension trajectory."
+      "implementation_note": "Single-window image-plane knee angle, not a smoothed extension trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "lean",
@@ -90,7 +97,14 @@
         "approach",
         "contact_interval"
       ],
-      "implementation_note": "Image-plane trunk lean, not a 3D trunk/pelvis rotation."
+      "implementation_note": "Image-plane trunk lean, not a 3D trunk/pelvis rotation.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "hip_position",
@@ -119,7 +133,14 @@
         "backswing",
         "forward_acceleration"
       ],
-      "implementation_note": "Single-window image-plane hip angle, not a kicking-hip trajectory."
+      "implementation_note": "Single-window image-plane hip angle, not a kicking-hip trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     }
   ],
   "key_metrics": [
@@ -374,5 +395,18 @@
       "implementation": "excluded_by_protocol",
       "note": ""
     }
-  ]
+  ],
+  "aggregation": "disabled_until_validated",
+  "fallback": {
+    "permitted": [
+      "valid measured criteria",
+      "candidate intervals",
+      "deterministic rule outputs labelled as candidates"
+    ],
+    "restricted_states": [
+      "confirmed events",
+      "qualitative VLM observations"
+    ],
+    "note": "degraded mode reports only what pose measurements support; motion peaks stay candidates and no VLM qualitative interpretation is produced"
+  }
 }

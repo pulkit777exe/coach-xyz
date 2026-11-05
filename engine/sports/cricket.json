@@ -63,7 +63,14 @@
       "phase_scope": [
         "bat_execution"
       ],
-      "implementation_note": "Lead-elbow extension is a proxy for bat execution; the bat itself is not tracked."
+      "implementation_note": "Lead-elbow extension is a proxy for bat execution; the bat itself is not tracked.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "base",
@@ -92,7 +99,14 @@
         "front_foot_support",
         "bat_execution"
       ],
-      "implementation_note": "Single-window image-plane knee angle, not a support-knee trajectory."
+      "implementation_note": "Single-window image-plane knee angle, not a support-knee trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "head_position",
@@ -121,7 +135,14 @@
         "front_foot_support",
         "bat_execution"
       ],
-      "implementation_note": "Image-plane trunk lean, not a calibrated 3D inclination."
+      "implementation_note": "Image-plane trunk lean, not a calibrated 3D inclination.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "hips",
@@ -151,7 +172,14 @@
         "preparation",
         "bat_execution"
       ],
-      "implementation_note": "Image-plane hip angle, not a 3D pelvis/shoulder rotation."
+      "implementation_note": "Image-plane hip angle, not a 3D pelvis/shoulder rotation.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     }
   ],
   "key_metrics": [
@@ -400,5 +428,18 @@
       "implementation": "excluded_by_protocol",
       "note": ""
     }
-  ]
+  ],
+  "aggregation": "disabled_until_validated",
+  "fallback": {
+    "permitted": [
+      "valid measured criteria",
+      "candidate intervals",
+      "deterministic rule outputs labelled as candidates"
+    ],
+    "restricted_states": [
+      "confirmed events",
+      "qualitative VLM observations"
+    ],
+    "note": "degraded mode reports only what pose measurements support; motion peaks stay candidates and no VLM qualitative interpretation is produced"
+  }
 }

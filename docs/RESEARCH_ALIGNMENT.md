@@ -108,7 +108,7 @@ Failure codes are separate from job state. A job can be `completed`/`degraded` w
 | F07_MISSED_CANDIDATE | Event annotation missed | offline evaluation |
 | F08_FALSE_CANDIDATE | Event candidate not in annotation | offline evaluation |
 | F09_INCORRECT_VLM_JUDGEMENT | VLM judgement disagrees with reference | offline evaluation |
-| F10_UNSUPPORTED_OBSERVATION | Claim not supported by visible evidence | judgement `state` (`uncertain`/`rejected`) |
+| F10_UNSUPPORTED_OBSERVATION | VLM claims unsupported by visible evidence, or rates criteria that are not in the pack | judgement `state` (`uncertain`/`rejected`); unknown rating keys dropped and recorded here |
 | F11_VLM_UNAVAILABLE | Model unavailable, timed out or rate-limited | `failures[]`, degraded job |
 | F12_INVALID_STRUCTURED_RESPONSE | Response failed schema/parsing | `failures[]`, degraded job |
 | F13_INSUFFICIENT_COVERAGE | Measured coverage below threshold | `coverage_detail`, `quality.issues` |
@@ -220,18 +220,34 @@ Remaining product/marketing exposure: `components/LandingPage.tsx` still quotes 
 percentages (including a "form score improvement" figure); that copy is out of scope of this
 alignment and should be replaced with capability statements, not performance claims.
 
+## Research camera mode (fail-closed)
+
+Product runs keep the historical permissive behaviour: an undeclared camera view does not apply the
+`allowed_views` gate. Research runs opt into fail-closed gating with the job param `research: true`
+or `ENGINE_RESEARCH_MODE=1`: only a declared view (`side`/`front`/...) may qualify a camera-gated
+criterion — an undeclared view reports `unavailable`, never measures from an assumed angle, and
+`provenance.manifest.camera.research_mode` is `true`. The wire's `"primary"` angle is treated as
+undeclared, never as a declared view. Phase segmentation (E2) is declared in the pack, carried in
+the manifest (`phases`) and annotated via `AnnotatedWindow.phase_boundaries`; the runtime does not
+localize phases yet, so `protocol.phase_localization_metrics()` reports `not_implemented` until a
+localizer and annotated boundaries exist. Packs now declare `aggregation: disabled_until_validated`
+(Appendix B) and the permitted/restricted degraded-mode fallback policy; every measured criterion
+carries `abstention_states`. VLM rating keys outside the pack are dropped and recorded as
+`F10_UNSUPPORTED_OBSERVATION`.
+
 ## Remaining gaps
 
 These are deliberate, tracked gaps rather than hidden claims:
 
-1. Phase boundaries are declared but not localized in the runtime; the evaluation harness treats
-   event detection and technique assessment separately.
+1. Phase boundaries are declared in the packs, carried in the manifest and annotated in the E2
+   harness, but not localized in the runtime; event detection and technique assessment stay separate.
 2. Ball, bat and object tracking are not implemented; criteria requiring them are `not implemented`.
-3. The camera gate is applied when a concrete view (`side`/`front`) is declared. `"primary"` means
-   the view was not declared; the gate is not applied and `view_verified` is false only for explicit
-   mismatches. Research runs must declare a view.
-4. VLM unsupported-observation detection is limited to confidence/state handling; claim-to-evidence
-   citation validation is not yet implemented.
+3. Automatic camera-view classification exists but is a product convenience. Research runs must use
+   `research: true` / `ENGINE_RESEARCH_MODE=1` with a declared view (fail-closed); undeclared views
+   report `unavailable` rather than measuring from an assumed angle.
+4. VLM unsupported-observation detection covers criteria the pack does not define (dropped +
+   `F10_UNSUPPORTED_OBSERVATION`) and confidence/state handling. Claim-to-evidence citation
+   validation against the clip is not yet implemented.
 5. The composite and the per-criterion ideal ranges remain provisional product heuristics. They are
    excluded from research output.
 6. The engine ships six broad sport packs; only cricket, football and basketball carry the paper

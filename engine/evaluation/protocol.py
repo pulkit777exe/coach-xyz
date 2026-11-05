@@ -54,6 +54,9 @@ class AnnotatedWindow:
 
     ``ratings`` maps paper criterion IDs to ordinal ratings or one of the two
     non-scored states. The annotation is the same for every ablation variant.
+    ``phase_boundaries`` optionally carries the independently annotated temporal
+    spans for the action phases (E2); the runtime does not localize phases yet,
+    so this is carried for the offline harness only.
     """
 
     clip_id: str
@@ -63,6 +66,7 @@ class AnnotatedWindow:
     ratings: dict[str, str] = field(default_factory=dict)
     athlete_id: str | None = None
     session_id: str | None = None
+    phase_boundaries: dict[str, tuple[float, float]] | None = None
 
 
 @dataclass
@@ -310,6 +314,83 @@ def event_detection_metrics(result: dict, annotations: Iterable[AnnotatedWindow]
     }
 
 
+def _phase_spans(result: dict) -> list[dict]:
+    """Phase spans the runtime produced, if any.
+
+    The runtime does not localize action phases yet. This reader exists so the
+    E2 harness can consume a result that carries ``events[].phases`` without a
+    special case once a phase localizer lands.
+    """
+    spans = []
+    for event in result.get("events") or []:
+        phases = event.get("phases") or {}
+        for phase_id, span in phases.items():
+            if isinstance(span, (list, tuple)) and len(span) == 2:
+                spans.append({"phase_id": str(phase_id),
+                              "start_s": float(span[0]), "end_s": float(span[1])})
+    return spans
+
+
+def phase_localization_metrics(result: dict, annotations: Iterable[AnnotatedWindow],
+                               *, iou_threshold: float = 0.5) -> dict:
+    """E2: phase boundary agreement, reported separately from event detection.
+
+    Gold phases come from the independently annotated ``phase_boundaries`` on
+    each window. The metric is computed per phase ID for a single clip; this
+    matches the E2 protocol (one clip, one attempt, independently annotated
+    boundaries), not a whole match. When the runtime produced no phase spans the
+    report is honestly marked ``not_implemented`` rather than scored.
+    """
+    annotations = list(annotations)
+    gold = {pid: span for window in annotations
+            if window.phase_boundaries
+            for pid, span in window.phase_boundaries.items()}
+    windows_with_phases = sum(1 for w in annotations if w.phase_boundaries)
+    detected_spans = _phase_spans(result)
+    detected = {span["phase_id"]: (span["start_s"], span["end_s"])
+                for span in detected_spans}
+    if not detected:
+        return {
+            "status": "not_implemented",
+            "annotated_phases": len(gold),
+            "windows_with_phase_annotations": windows_with_phases,
+            "detected_phases": 0,
+            "matched": 0,
+            "precision": None,
+            "recall": None,
+            "f1": None,
+            "boundary_error_s": None,
+            "note": "the runtime does not localize action phases yet; the E2 harness carries the annotations so phase segmentation can be scored when a localizer lands",
+        }
+
+    matched = 0
+    boundary_errors: list[float] = []
+    for pid, (g_start, g_end) in gold.items():
+        det = detected.get(pid)
+        if det is None:
+            continue
+        if _iou((g_start, g_end), det) >= iou_threshold:
+            matched += 1
+            boundary_errors.extend((abs(det[0] - g_start), abs(det[1] - g_end)))
+    precision = matched / len(detected) if detected else None
+    recall = matched / len(gold) if gold else None
+    f1 = (2 * precision * recall / (precision + recall)
+          if precision is not None and recall is not None and precision + recall else None)
+    return {
+        "status": "implemented",
+        "annotated_phases": len(gold),
+        "windows_with_phase_annotations": windows_with_phases,
+        "detected_phases": len(detected),
+        "matched": matched,
+        "precision": round(precision, 3) if precision is not None else None,
+        "recall": round(recall, 3) if recall is not None else None,
+        "f1": round(f1, 3) if f1 is not None else None,
+        "boundary_error_s": (round(sum(boundary_errors) / len(boundary_errors), 3)
+                            if boundary_errors else None),
+        "iou_threshold": iou_threshold,
+    }
+
+
 def evaluate(result: dict, annotations: Iterable[AnnotatedWindow], *,
              modes: Iterable[str] = MODES, training: Iterable[AnnotatedWindow] | None = None,
              rating_fn: Callable[[dict], str] | None = None,
@@ -341,10 +422,13 @@ def evaluate(result: dict, annotations: Iterable[AnnotatedWindow], *,
         },
         "annotated_windows": len(annotations),
         "variants": variants,
+        "phase_localization": phase_localization_metrics(result, annotations,
+                                                        iou_threshold=iou_threshold),
         "notes": [
             "B0 is computed from training annotations only.",
             "Every variant receives the same annotated action windows.",
             "Event detection is reported separately from technique agreement.",
+            "Phase segmentation is reported separately as E2 and is not_implemented in this runtime.",
         ],
     }
 

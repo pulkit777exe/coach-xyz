@@ -108,6 +108,31 @@ def _clean_tags(tags: list[str]) -> list[str]:
     return out[:5]
 
 
+def _drop_unsupported_ratings(verdicts: dict[int, dict], pack: Pack) -> dict | None:
+    """Drop judgements about criteria the pack does not define.
+
+    The VLM is told exactly which criteria it may rate; anything else is not
+    evidence for a configured criterion. Those rating entries are removed and
+    one ``F10_UNSUPPORTED_OBSERVATION`` failure is recorded — the claim is
+    neither scored nor shown as if it were an assessment of the pack.
+    """
+    known = {c.key for c in pack.criteria}
+    unsupported: set[str] = set()
+    for verdict in verdicts.values():
+        ratings = verdict.get("ratings") or {}
+        extra = {key for key in ratings if key not in known}
+        if extra:
+            unsupported |= extra
+            verdict["ratings"] = {key: rating for key, rating in ratings.items()
+                                  if key in known}
+    if not unsupported:
+        return None
+    return failures.failure(
+        "F10_UNSUPPORTED_OBSERVATION", "judge",
+        f"model rated criteria that are not in the sport pack: {', '.join(sorted(unsupported))}",
+        retryable=False, unsupported_criteria=sorted(unsupported)).to_dict()
+
+
 def _clean(v: Verdict, pack: Pack) -> dict:
     kind = v.event_type if v.event_type in pack.event_types else ("other" if "other" in pack.event_types else pack.event_types[0])
     result = v.result if v.result in pack.results else "unknown"
@@ -157,6 +182,9 @@ def reconcile(judgement: Judgement, pack: Pack) -> Judgement:
             verdict["type"] = fallback_type
         if verdict["result"] not in pack.results:
             verdict["result"] = fallback_result
+    unsupported = _drop_unsupported_ratings(judgement.verdicts, pack)
+    if unsupported:
+        judgement.failures = [*judgement.failures, unsupported]
     judgement.sport = pack.name
     return judgement
 
@@ -216,6 +244,9 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
         verdicts.setdefault(i, {"is_event": False, "state": "rejected", "type": "other",
                                 "result": "unknown", "feedback": "", "confidence": 0.0,
                                 "ratings": {}, "tags": [], "pressure": "unknown"})
+    unsupported = _drop_unsupported_ratings(verdicts, pack)
+    if unsupported:
+        failure_list.append(unsupported)
     return Judgement(source="model", sport=sport, verdicts=verdicts, summary=out.summary.strip(),
                      strengths=out.strengths[:3], focus_areas=out.focus_areas[:3],
                      priority_drill=out.priority_drill.strip(),

@@ -78,6 +78,43 @@ def test_vlm_unavailable_keeps_valid_measurements():
     assert detail["value"] is not None and detail["coverage"] >= measure.MIN_MEASURED_COVERAGE
 
 
+def test_research_mode_is_fail_closed_without_a_declared_camera_view():
+    pack = sports.load("basketball")
+    track = track_at()
+    undeclared = measure.measure(track, 10, "right", pack, angle=None, research=True)
+    for row in undeclared["criteria"]:
+        assert row["state"] == "unavailable" and row["score"] is None
+        assert row["view_verified"] is False
+        assert "declared camera view" in row["note"]
+
+    declared = measure.measure(track, 10, "right", pack, angle="side", research=True)
+    arm = next(r for r in declared["criteria"] if r["key"] == "arm_extension")
+    assert arm["state"] != "invalid_view" and arm["skipped"] is False
+
+    front = measure.measure(track, 10, "right", pack, angle="front", research=True)
+    arm = next(r for r in front["criteria"] if r["key"] == "arm_extension")
+    assert arm["state"] == "invalid_view"
+
+
+def test_research_mode_does_not_silently_widen_product_behaviour():
+    # Product runs keep the historical permissive behaviour: an undeclared view
+    # is not gated, because the caller has not opted into the research protocol.
+    pack = sports.load("basketball")
+    rows = measure.measure(track_at(), 10, "right", pack, angle=None)["criteria"]
+    arm = next(r for r in rows if r["key"] == "arm_extension")
+    assert arm["state"] != "invalid_view"
+
+
+def test_vlm_ratings_for_unknown_criteria_are_dropped_and_recorded():
+    pack = sports.load("basketball")
+    verdicts = {0: {"ratings": {"arm_extension": "consistent", "telekinesis": "consistent"}}}
+    failure = judge._drop_unsupported_ratings(verdicts, pack)
+    assert failure is not None and failure["code"] == "F10_UNSUPPORTED_OBSERVATION"
+    assert failure["detail"]["unsupported_criteria"] == ["telekinesis"]
+    assert verdicts[0]["ratings"] == {"arm_extension": "consistent"}
+    assert judge._drop_unsupported_ratings({0: {"ratings": {"arm_extension": "consistent"}}}, pack) is None
+
+
 def test_unsupported_or_low_confidence_vlm_claim_is_not_confirmed():
     pack = sports.load("basketball")
     uncertain = judge._clean(Verdict(
@@ -200,6 +237,43 @@ def test_every_paper_criterion_has_a_permanent_id_and_pack_traceability():
             assert criterion.evidence_type in evidence.EVIDENCE_TYPES
         registry = result._criteria_registry(pack)
         assert {row["criterion_id"] for row in registry} == set(expected)
+        assert pack.aggregation == "disabled_until_validated"
+        assert pack.fallback.get("restricted_states")
+        for criterion in pack.criteria:
+            assert criterion.abstention_states
+
+
+def test_phase_localization_is_reported_as_not_implemented_without_runtime_phases():
+    doc = _manifest_result()
+    doc["events"] = [
+        {"t": 1.0, "event_state": "confirmed", "duration_s": 2.0, "measurements": []},
+    ]
+    window = protocol.AnnotatedWindow("clip-1", 0.5, 3.0, True, {"BB04": "functional"},
+                                      phase_boundaries={"preparation": (0.0, 1.0)})
+    report = protocol.evaluate(doc, [window], training=[window])
+    phase = report["phase_localization"]
+    assert phase["status"] == "not_implemented"
+    assert phase["annotated_phases"] == 1 and phase["detected_phases"] == 0
+    assert phase["precision"] is None and phase["f1"] is None
+
+
+def test_phase_localization_metrics_score_boundary_agreement():
+    result = {
+        "events": [
+            {"t": 1.0, "phases": {"preparation": [0.1, 1.1], "ball_release": [1.2, 1.6]}},
+        ],
+    }
+    window = protocol.AnnotatedWindow(
+        "clip-1", 0.5, 3.0, True, {},
+        phase_boundaries={"preparation": (0.0, 1.0), "ball_release": (1.1, 1.5), "recovery": (1.6, 2.0)},
+    )
+    m = protocol.phase_localization_metrics(result, [window])
+    assert m["status"] == "implemented"
+    assert m["annotated_phases"] == 3
+    assert m["matched"] == 2
+    assert m["precision"] == 1.0
+    assert m["recall"] == pytest.approx(2 / 3, abs=0.01)
+    assert m["boundary_error_s"] is not None and m["boundary_error_s"] > 0
 
 
 def test_ablation_uses_the_same_annotated_windows_and_reports_event_detection_separately():

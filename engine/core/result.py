@@ -34,13 +34,15 @@ def _event_state(verdict: dict) -> str:
 
 
 def _events(job_id: str, track: Track, cands: list[Candidate], judgement: Judgement, pack: Pack,
-            angle: str | None, matchups: dict[int, dict] | None = None) -> list[dict]:
+            angle: str | None, matchups: dict[int, dict] | None = None,
+            research_mode: bool = False) -> list[dict]:
     events = []
     for i, c in enumerate(cands):
         verdict = judgement.verdicts.get(i)
         if not verdict or not verdict["is_event"]:
             continue
-        rows = measure.measure(track, c.i, c.side, pack, angle=angle)["criteria"]
+        rows = measure.measure(track, c.i, c.side, pack, angle=angle,
+                               research=research_mode)["criteria"]
         measure.apply_ratings(rows, verdict["ratings"])
         detail = measure.combine_detail(rows)
         score, coverage = detail["value"], detail["coverage"]
@@ -194,6 +196,7 @@ def _criteria_registry(pack: Pack) -> list[dict]:
             "implementation": (entry or {}).get("implementation", "engine_only"),
             "paper_definition": (entry or {}).get("definition"),
             "implementation_note": c.implementation_note,
+            "abstention_states": list(c.abstention_states),
         })
     implemented = {c.criterion_id for c in pack.criteria if c.criterion_id}
     for cid, entry in paper.items():
@@ -215,7 +218,8 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
           judgement: Judgement, degraded: list[str], angle: str | None = None,
           angle_source: str = "unknown", video_sha256: str | None = None,
           failures_list: list[dict] | None = None, pack_changed_after_judge: bool = False,
-          matchups: dict[int, dict] | None = None) -> dict:
+          matchups: dict[int, dict] | None = None, research_mode: bool = False,
+          detected_angle: str | None = None) -> dict:
     failures_list = list(failures_list or [])
     old_provenance = {
         "engine": config.ENGINE_VERSION, "pipeline": config.PIPELINE_VERSION, "prompt": config.PROMPT_VERSION,
@@ -228,7 +232,9 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
     manifest = provenance.build(
         pack=pack, media=media, video_sha256=video_sha256, judgement=judgement,
         angle=angle or params.get("angle"), angle_source=angle_source,
+        detected_angle=detected_angle,
         pack_changed_after_judge=pack_changed_after_judge,
+        research_mode=research_mode,
         preprocessing={"analysis_fps": config.settings.analysis_fps,
                        "proxy_fps": config.settings.proxy_fps,
                        "proxy_max_s": config.settings.proxy_max_s,
@@ -237,7 +243,8 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
     provenance_block = {**old_provenance, "manifest": manifest,
                         "sport_pack_manifest": manifest["sport_pack"]}
 
-    events = _events(job_id, track, cands, judgement, pack, angle or params.get("angle"), matchups)
+    events = _events(job_id, track, cands, judgement, pack, angle or params.get("angle"),
+                     matchups, research_mode=research_mode)
     scored = [e["score"] for e in events if e["score"] is not None]
     made = sum(e["result"] in pack.positive for e in events)
     missed = sum(e["result"] in pack.negative for e in events)
@@ -272,6 +279,10 @@ def build(job_id: str, params: dict, pack: Pack, track: Track, media, cands: lis
         "action_id": pack.action_id or None, "sport_pack_version": pack.pack_version or str(pack.version),
         "job_status": failures.status_for("completed", degraded, failures_list),
         "angle": angle or params.get("angle"), "angle_source": angle_source,
+        "detected_angle": detected_angle,
+        "research_mode": bool(research_mode),
+        "aggregation": pack.aggregation,
+        "fallback_policy": pack.fallback or None,
         "video": {"duration": round(media.duration, 2), "fps": round(media.fps, 2),
                   "width": track.width, "height": track.height,
                   "codec": getattr(media, "codec", "") or None, "sha256": video_sha256},

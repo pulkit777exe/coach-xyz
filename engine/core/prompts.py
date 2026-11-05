@@ -70,7 +70,10 @@ def _events_block(result: dict) -> str:
     lines = []
     for e in result.get("events", []):
         nums = ", ".join(f"{m['label']} {m['value']:.0f}°" for m in e["measurements"] if m["value"] is not None)
-        lines.append(f"- {e['id']} at {e['t']:.1f}s: {e['type']}, result {e['result']}, score {e['score']}. "
+        score = f"{e['score']:.1f}/10" if e.get("score") is not None else "not available"
+        state = e.get("event_state", "unstated")
+        lines.append(f"- {e['id']} at {e['t']:.1f}s: {e['type']}, result {e['result']}, "
+                     f"event state {state}, experimental score {score}. "
                      f"Measured: {nums or 'n/a'}. Feedback: {e['feedback']}")
     return "\n".join(lines) or "No events were detected."
 
@@ -99,9 +102,17 @@ def _stats_block(result: dict) -> str:
 def chat_system(result: dict) -> str:
     s = result.get("summary", {})
     key_insights = s.get("key_insights") or []
+    avg = s.get("average_score")
+    if isinstance(avg, (int, float)):
+        avg_text = f"{avg:.1f}/10"
+    else:
+        avg_text = "not available (insufficient measured coverage)"
+    rating = s.get("rating") or "not available"
     return "\n".join([
         "You are a sports coach answering follow-up questions about one analysed session.",
-        f"Sport: {result.get('sport')}. Rating: {s.get('rating')}. Average score: {s.get('average_score')}/10.",
+        f"Sport: {result.get('sport')}. Experimental rating (provisional, unvalidated): {rating}. "
+        f"Experimental average (provisional, unvalidated): {avg_text}.",
+        "The experimental score is not a validated measure of athletic performance; never present it as one and never use it for selection decisions. Criterion-level measurements are the primary evidence.",
         f"Summary: {s.get('text', '')}",
         f"Tactical read: {s.get('tactical_summary', '')}",
         "Analyst insights: " + ("; ".join(key_insights) if key_insights else "none recorded."),

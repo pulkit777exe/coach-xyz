@@ -124,10 +124,13 @@ def video_manifest(media, sha256: str | None) -> dict:
 
 def build(*, pack, media, video_sha256: str | None, judgement, angle: str | None,
           angle_source: str, pack_changed_after_judge: bool = False,
-          preprocessing: dict | None = None) -> dict:
+          preprocessing: dict | None = None, research_mode: bool = False,
+          detected_angle: str | None = None) -> dict:
     """The manifest stored under ``result.provenance.manifest``."""
+    phases = [p.get("id") for p in (getattr(pack, "phases", None) or []) if p.get("id")]
     return {
         "manifest_version": 1,
+        "phases": phases,
         "application": {
             "engine_version": config.ENGINE_VERSION,
             "pipeline_version": config.PIPELINE_VERSION,
@@ -148,7 +151,9 @@ def build(*, pack, media, video_sha256: str | None, judgement, angle: str | None
             "source_hash": prompts_source_hash(),
         },
         "video": video_manifest(media, video_sha256),
-        "camera": {"angle": angle, "angle_source": angle_source},
+        "camera": {"angle": angle, "angle_source": angle_source,
+                   "detected_angle": detected_angle,
+                   "research_mode": bool(research_mode)},
         "preprocessing": preprocessing or {},
         "judgement": {
             "source": judgement.source,

@@ -13,6 +13,7 @@ past the expensive work.
 import hashlib
 import json
 import logging
+import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -131,9 +132,26 @@ def run(job_id: str, params: dict) -> dict:
             angle_tag = geometry.classify_angle(track.lm[int(found[0])], track.width, track.height) \
                 if len(found) else None
             declared_angle = params.get("angle")
-            effective_angle = declared_angle or angle_tag or "primary"
-            angle_source = "declared" if declared_angle else ("detected" if angle_tag else "default")
-            measured = [measure.measure(track, c.i, c.side, pack, angle=effective_angle) for c in cands]
+            declared_view = None if declared_angle in measure.UNDECLARED_VIEWS else declared_angle
+            # Research runs are fail-closed: only a declared view may qualify
+            # a camera-gated criterion; the auto-classifier is a convenience
+            # for the product UI, not research evidence. In product mode the
+            # classifier labels the footage but never gates measurements.
+            research_mode = bool(params.get("research")) or os.environ.get(
+                "ENGINE_RESEARCH_MODE", "").lower() in ("1", "true", "yes")
+            detected_angle = angle_tag
+            if research_mode:
+                effective_angle = declared_view or "primary"
+                angle_source = "declared" if declared_view else "default"
+            elif declared_view:
+                effective_angle = declared_view
+                angle_source = "declared"
+            else:
+                effective_angle = "primary"
+                angle_source = "detected" if angle_tag else "default"
+            measured = [measure.measure(track, c.i, c.side, pack, angle=effective_angle,
+                                        research=research_mode)
+                        for c in cands]
             rep.check()
 
         judge_key = _digest(track_key, params.get("sport"), pack.version, pack.checksum,
@@ -190,8 +208,10 @@ def run(job_id: str, params: dict) -> dict:
                         detector.close() if detector is not None and hasattr(detector, "close") else None
             out = result.build(job_id, params, pack, track, media, cands, judgement, degraded,
                                angle=effective_angle, angle_source=angle_source,
+                               detected_angle=detected_angle,
                                video_sha256=sha, failures_list=failure_list,
                                pack_changed_after_judge=pack_changed_after_judge,
+                               research_mode=research_mode,
                                matchups=matchups)
             files = exports.write_all(out, str(work))
             overlay = work / "track.json"

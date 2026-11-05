@@ -106,17 +106,18 @@ A judgement is not a measurement, and an unavailable criterion is not a zero.
 
 Also `criteria_registry[]` (paper ID → engine key → implementation status), `event_detection`
 (confirmed/uncertain/rejected/candidate counts), `failures[]` (F01–F14 with stage and retryability),
-`summary` (criterion-level text plus the experimental composite), `athlete`, `quality`,
-`needs_review`, `degraded` and `provenance`.
+`aggregation` (`disabled_until_validated`), `fallback_policy`, `research_mode` (`false` unless the
+job asked for it), `summary` (criterion-level text plus the experimental composite), `athlete`,
+`quality`, `needs_review`, `degraded` and `provenance`.
+
+`provenance.manifest` records the Git commit, sport-pack checksum, pose/VLM model identifiers,
+prompt hash, video SHA-256 and metadata, camera angle source and research mode, the pack's declared
+phase IDs, preprocessing parameters and environment. The same manifest is exported as `manifest.json`.
 
 `summary.composite` is **experimental and unvalidated**. It is `null` unless valid measured
 coverage reaches `MIN_MEASURED_COVERAGE` (0.65), and it is marked
 `status: "experimental_unvalidated"`, `validated: false`, `excluded_from_research: true`.
 Criterion-level evidence is the primary output.
-
-`provenance.manifest` records the Git commit, sport-pack checksum, pose/VLM model identifiers,
-prompt hash, video SHA-256 and metadata, camera angle source, preprocessing parameters and
-environment. The same manifest is exported as `manifest.json`.
 
 CSV exports: `events.csv`, `measurements.csv`, `metrics.csv`, `findings.csv`, `session.csv`,
 plus `manifest.json`.
@@ -143,6 +144,11 @@ Metrics: `elbow_angle`, `shoulder_angle` (active arm), `active_knee_angle` (acti
 `left_`/`right_` joint. The bundled ranges are starting points: tune them with your coaches;
 `version` and the pack checksum are stamped on every result. `allowed_views` is the camera gate;
 `"primary"` means the view was not declared and the gate is not applied.
+
+Pass `research: true` (job param) or set `ENGINE_RESEARCH_MODE=1` to run the engine fail-closed:
+only a declared camera view can qualify a camera-gated criterion — an undeclared view reports the
+criterion as `unavailable`, never measures from an assumed angle, and the manifest records
+`camera.research_mode: true`. The composite stays excluded from research output either way.
 
 
 ## Running

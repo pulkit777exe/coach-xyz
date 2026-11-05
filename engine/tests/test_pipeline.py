@@ -95,7 +95,10 @@ def test_job_emits_ordered_lifecycle_events_and_a_complete_result(video, wait):
     assert result["provenance"]["judged_by"] == "model" and result["degraded"] == []
     assert result["provenance"]["manifest"]["sport_pack"]["sha256"]
     assert result["provenance"]["manifest"]["prompt"]["hash"]
-    assert result["angle_source"] == "declared"
+    # The wire's angle="primary" is not a declared view; the tag is reported as detected.
+    assert result["angle_source"] == "detected"
+    assert result["detected_angle"] == result["provenance"]["manifest"]["camera"]["detected_angle"]
+    assert result["provenance"]["manifest"]["camera"]["research_mode"] is False
     assert result["event_detection"]["confirmed"] == 3
 
 
@@ -117,6 +120,29 @@ def test_outputs_are_published_as_artifacts_and_the_video_plays(video, wait, tmp
     assert "criterion_id" in header and ",state," in header and ",source," in header
     manifest = json.loads(storage.backend().path(storage.result_key("j2", "manifest.json")).read_text())
     assert manifest["sport_pack"]["sha256"] and manifest["prompt"]["hash"]
+
+
+def test_research_mode_is_fail_closed_and_stamped_on_the_manifest(video, wait):
+    jobs.create("j6", params(video, research=True))
+    done = wait("j6")
+    assert done["degraded"] == []
+    result = jobs.load_result("j6")
+    assert result["research_mode"] is True
+    assert result["aggregation"] == "disabled_until_validated"
+    assert result["provenance"]["manifest"]["camera"]["research_mode"] is True
+    assert result["provenance"]["manifest"]["phases"] == [p["id"] for p in
+                                                          sports.load("basketball").phases]
+    gated = [r for e in result["events"] for r in e["measurements"] if r["key"] == "arm_extension"]
+    assert gated
+    # Research mode never lets a camera-gated criterion carry a numeric score.
+    for row in gated:
+        assert row["score"] is None
+        if row["source"] is None:
+            assert row["state"] == "unavailable"
+        else:
+            # The VLM may still record a qualitative observation; it is not a measurement.
+            assert row["source"] == "vlm" and row["evidence_type"] == "judged"
+            assert row.get("qualitative_rating")
 
 
 def test_model_outage_degrades_to_rules_but_still_delivers(video, wait, monkeypatch):

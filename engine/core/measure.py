@@ -90,13 +90,22 @@ def _row(c: Criterion, *, state: str, source: str | None, value: float | None = 
     }
 
 
-def measure(track: Track, i: int, side: str, pack: Pack, angle: str | None = None) -> dict:
+UNDECLARED_VIEWS = (None, "", "primary", "unknown")
+
+
+def measure(track: Track, i: int, side: str, pack: Pack, angle: str | None = None,
+            *, research: bool = False) -> dict:
     """Pack criteria measured around sample ``i``. Median over a few samples to ignore jitter.
 
     Criteria whose declared views cannot support the current camera angle are
     marked ``invalid_view`` rather than scored from data that cannot answer the
     question. Criteria that the pack declares but does not implement are marked
     ``unavailable`` with an explicit note.
+
+    ``research=True`` is fail-closed: a view the caller never declared cannot support a
+    criterion whose pack entry requires one, so the criterion is reported as
+    ``unavailable`` instead of being measured from an assumed camera. Product runs may
+    stay permissive; research runs must not.
     """
     lo, hi = max(0, i - HALF_WINDOW), min(len(track.t), i + HALF_WINDOW + 1)
     rows = []
@@ -108,11 +117,16 @@ def measure(track: Track, i: int, side: str, pack: Pack, angle: str | None = Non
 
         views = c.allowed_views or c.valid_angles
         view_verified = True
-        if views and angle and angle != "primary":
-            view_verified = angle in views
+        declared = None if angle in UNDECLARED_VIEWS else angle
+        if views and research and not declared:
+            rows.append(_row(c, state="unavailable", source=None, view_verified=False,
+                             note="research mode requires a declared camera view; none was declared"))
+            continue
+        if views and declared:
+            view_verified = declared in views
         if not view_verified:
             rows.append(_row(c, state="invalid_view", source=None, view_verified=False,
-                             note=f"not measurable from {angle or 'unknown'} view"))
+                             note=f"not measurable from {declared or 'unknown'} view"))
             continue
 
         vals, confs, frames, times = [], [], [], []

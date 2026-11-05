@@ -73,12 +73,14 @@ def session_csv(r: dict) -> str:
     composite = s.get("composite") or {}
     pack = p.get("sport_pack_manifest") or {}
     return _csv(
-        ["job_id", "sport", "action_id", "angle", "angle_source", "job_status", "rating", "rating_status",
+        ["job_id", "sport", "action_id", "angle", "angle_source", "research_mode", "aggregation",
+         "job_status", "rating", "rating_status",
          "average_score", "composite_status", "composite_value", "composite_coverage", "composite_validated",
          "composite_excluded_from_research", "confidence", "events", "made", "missed",
          "success_rate", "track_coverage", "needs_review", "judged_by", "model", "engine",
          "analyzed_at", "video_sha256", "pack_version", "pack_sha256", "git_commit", "prompt_hash"],
-        [[r["job_id"], r["sport"], r.get("action_id"), r["angle"], r.get("angle_source"), r.get("job_status"),
+        [[r["job_id"], r["sport"], r.get("action_id"), r["angle"], r.get("angle_source"),
+          r.get("research_mode"), r.get("aggregation"), r.get("job_status"),
           s["rating"], s.get("rating_status"), s["average_score"], composite.get("status"),
           composite.get("value"), composite.get("coverage"),
           composite.get("validated"), composite.get("excluded_from_research"), s.get("confidence"),

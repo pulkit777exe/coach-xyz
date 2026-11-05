@@ -60,7 +60,14 @@
         "arm_extension",
         "ball_release"
       ],
-      "implementation_note": "Single-window image-plane elbow angle, not a repeated-trial trajectory."
+      "implementation_note": "Single-window image-plane elbow angle, not a repeated-trial trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "arm_elevation",
@@ -90,7 +97,14 @@
         "ball_elevation",
         "arm_extension"
       ],
-      "implementation_note": "Image-plane shoulder angle, not a 3D shoulder movement trajectory."
+      "implementation_note": "Image-plane shoulder angle, not a 3D shoulder movement trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "balance",
@@ -120,7 +134,14 @@
         "preparation",
         "arm_extension"
       ],
-      "implementation_note": "Image-plane trunk lean, not pelvis displacement or whole-body COM."
+      "implementation_note": "Image-plane trunk lean, not pelvis displacement or whole-body COM.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     },
     {
       "key": "leg_drive",
@@ -149,7 +170,14 @@
         "preparation",
         "ball_elevation"
       ],
-      "implementation_note": "Single-window image-plane knee angle, not a flexion trajectory."
+      "implementation_note": "Single-window image-plane knee angle, not a flexion trajectory.",
+      "abstention_states": [
+        "unable_to_assess",
+        "not_applicable",
+        "invalid_view",
+        "occluded",
+        "unavailable"
+      ]
     }
   ],
   "key_metrics": [
@@ -414,5 +442,18 @@
       "implementation": "excluded_by_protocol",
       "note": ""
     }
-  ]
+  ],
+  "aggregation": "disabled_until_validated",
+  "fallback": {
+    "permitted": [
+      "valid measured criteria",
+      "candidate intervals",
+      "deterministic rule outputs labelled as candidates"
+    ],
+    "restricted_states": [
+      "confirmed events",
+      "qualitative VLM observations"
+    ],
+    "note": "degraded mode reports only what pose measurements support; motion peaks stay candidates and no VLM qualitative interpretation is produced"
+  }
 }

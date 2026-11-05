@@ -372,7 +372,7 @@ def test_legacy_summary_exposes_ui_ready_stats():
                        [Candidate(24, 2.0, 1.0, "right")], judgement, [])
     legacy = legacy_summary(out)
     assert legacy["confidence"] == out["summary"]["confidence"]
-    assert legacy["average_score"] == (out["summary"]["average_score"] or 0)
+    assert legacy["average_score"] == out["summary"]["average_score"]
     assert legacy["success_rate"] == pytest.approx(out["summary"]["success_rate"] / 100)
     assert legacy["session_metrics"] == out["session_metrics"]
     assert legacy["stats"] == out["stats"]

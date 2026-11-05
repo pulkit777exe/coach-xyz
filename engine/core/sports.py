@@ -18,6 +18,10 @@ SLUG = re.compile(r"^[a-z0-9_]+$")
 KNOWN = ("basketball", "football", "cricket", "tennis", "baseball", "hockey")
 
 
+DEFAULT_ABSTENTION_STATES: tuple[str, ...] = ("unable_to_assess", "not_applicable", "invalid_view",
+                                              "occluded", "unavailable")
+
+
 @dataclass
 class Criterion:
     key: str
@@ -41,6 +45,7 @@ class Criterion:
     quality_gate: str = ""
     supporting_references: tuple[str, ...] = ()
     implementation_note: str = ""
+    abstention_states: tuple[str, ...] = DEFAULT_ABSTENTION_STATES
 
 
 @dataclass
@@ -88,6 +93,8 @@ class Pack:
     phases: list[dict] = field(default_factory=list)
     objects: list[dict] = field(default_factory=list)
     scope_note: str = ""
+    aggregation: str = "disabled_until_validated"
+    fallback: dict = field(default_factory=dict)
 
     @property
     def results(self) -> list[str]:
@@ -134,6 +141,7 @@ def _criterion(raw: dict) -> Criterion:
         quality_gate=str(raw.get("quality_gate") or ""),
         supporting_references=tuple(raw.get("supporting_references") or ()),
         implementation_note=str(raw.get("implementation_note") or ""),
+        abstention_states=tuple(raw.get("abstention_states") or DEFAULT_ABSTENTION_STATES),
     )
 
 
@@ -185,4 +193,6 @@ def load(name: str | None) -> Pack:
         phases=list(raw.get("phases") or []),
         objects=list(raw.get("objects") or []),
         scope_note=str(raw.get("scope_note") or ""),
+        aggregation=str(raw.get("aggregation") or "disabled_until_validated"),
+        fallback=dict(raw.get("fallback") or {}),
     )

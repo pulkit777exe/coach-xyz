@@ -10,6 +10,7 @@ from .protocol import (  # noqa: F401
     event_detection_metrics,
     majority_baseline,
     observe,
+    phase_localization_metrics,
     research_view,
     technique_agreement,
     validate_manifest,
