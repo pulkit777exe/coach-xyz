@@ -19,8 +19,12 @@ from pathlib import Path
 
 import numpy as np
 
-from . import config, events, exports, jobs, judge, llm, matchup, measure, motion, pose, render, result, sports, storage, video, geometry
+from . import (
+    config, events, exports, geometry, jobs, judge, llm, matchup,
+    measure, motion, pose, provenance, render, result, sports, storage, video,
+)
 from .errors import Cancelled, EngineError
+from . import failures
 from .judge import Judgement
 from .track import Lock, Track, clean, track_athlete
 
@@ -89,6 +93,7 @@ def run(job_id: str, params: dict) -> dict:
     cache.mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
     degraded: list[str] = []
+    failure_list: list[dict] = []
 
     def degrade(component: str, reason: str) -> None:
         degraded.append(component)
@@ -122,16 +127,20 @@ def run(job_id: str, params: dict) -> dict:
         with rep.stage("candidates", 52, 55):
             cands = motion.candidates(track, pack)
             events.emit(job_id, "candidates.found", {"count": len(cands)}, webhook=False)
-            angle_tag = geometry.classify_angle(track.lm[int(np.flatnonzero(~np.isnan(track.lm[:, 0, 0]))[0])],
-                                                 track.width, track.height) if len(track.lm) else None
-            effective_angle = angle_tag or params.get("angle") or "primary"
-            params = {**params, "angle": effective_angle}
+            found = np.flatnonzero(track.valid)
+            angle_tag = geometry.classify_angle(track.lm[int(found[0])], track.width, track.height) \
+                if len(found) else None
+            declared_angle = params.get("angle")
+            effective_angle = declared_angle or angle_tag or "primary"
+            angle_source = "declared" if declared_angle else ("detected" if angle_tag else "default")
             measured = [measure.measure(track, c.i, c.side, pack, angle=effective_angle) for c in cands]
             rep.check()
 
-        judge_key = _digest(track_key, params.get("sport"), pack.version, ",".join(s.gemini_models),
-                            config.PROMPT_VERSION)
+        judge_key = _digest(track_key, params.get("sport"), pack.version, pack.checksum,
+                            ",".join(s.gemini_models), config.PROMPT_VERSION,
+                            provenance.prompts_source_hash())
         judge_file = cache / f"{judge_key}.json"
+        pack_changed_after_judge = False
         with rep.stage("judge", 55, 75):
             judgement = _load_judgement(judge_file)
             if judgement is None:
@@ -139,21 +148,28 @@ def run(job_id: str, params: dict) -> dict:
                                          make_llm=make_model, workdir=str(work), cancelled=rep.check)
                 if judgement.source == "model":
                     _save_judgement(judge_file, judgement)
+            failure_list.extend(judgement.failures)
             if judgement.source == "rules":
                 degrade("llm", judgement.reason or "model unavailable")
+                if not any(f.get("code") == "F11_VLM_UNAVAILABLE" for f in failure_list):
+                    failure_list.append(failures.failure(
+                        "F11_VLM_UNAVAILABLE", "judge",
+                        judgement.reason or "model unavailable", retryable=True).to_dict())
                 cands = motion.candidates(track, pack, strict=True)
-                judgement = judge.rules(cands, pack, judgement.reason or "")
+                judgement = judge.rules(cands, pack, judgement.reason or "",
+                                        failure_list=failure_list)
             elif not sport_known:
                 detected = sports.load(judgement.sport)
                 if detected.name != pack.name:
                     pack = detected
+                    pack_changed_after_judge = True
                     judgement = judge.reconcile(judgement, pack)
             rep.check()
 
         with rep.stage("result", 75, 80):
             matchups: dict[int, dict] = {}
             if cands:
-                matchup_key = _digest(track_key, pack.name, pack.version,
+                matchup_key = _digest(track_key, pack.name, pack.version, pack.checksum,
                                       ",".join(f"{c.i}:{c.t:.2f}" for c in cands))
                 matchup_file = cache / f"{matchup_key}.json"
                 if matchup_file.is_file():
@@ -172,7 +188,11 @@ def run(job_id: str, params: dict) -> dict:
                         log.exception("matchup analysis failed")
                     finally:
                         detector.close() if detector is not None and hasattr(detector, "close") else None
-            out = result.build(job_id, params, pack, track, media, cands, judgement, degraded, matchups=matchups)
+            out = result.build(job_id, params, pack, track, media, cands, judgement, degraded,
+                               angle=effective_angle, angle_source=angle_source,
+                               video_sha256=sha, failures_list=failure_list,
+                               pack_changed_after_judge=pack_changed_after_judge,
+                               matchups=matchups)
             files = exports.write_all(out, str(work))
             overlay = work / "track.json"
             overlay.write_text(json.dumps(track.overlay(), separators=(",", ":")))

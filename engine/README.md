@@ -24,8 +24,10 @@ POST /jobs ──► 202 queued ──► events ──► result.json, CSVs, an
 | result | measure criteria from pose at each moment, score them against the sport pack, pair the action player with the nearest opponent (different shirt colour first), derive sport key metrics for both, build findings, write exports | – |
 | render | skeletons for the two players only around each event, running HUD, per-event metrics panel, measured angles coloured by target, session KPI card, thumbnails | – |
 
-Measured numbers come only from pose geometry. A rating from the model fills in criteria that
-could not be measured, counts for half, and is labelled `source: "judged"`.
+Measured numbers come only from pose geometry. A VLM rating is qualitative evidence: it keeps
+`source: "vlm"`, `state` and `evidence_type: "judged"`, never writes a numeric `score`, and never
+counts toward measurement coverage. Motion peaks from the rules fallback stay `event_state:
+"candidate"`; they are not confirmed sports actions.
 Tracking and verdicts are cached by content (video hash + athlete + sport + models), so a retry or a
 second job on the same clip skips straight past them.
 
@@ -90,19 +92,34 @@ All routes except `/health` need `x-service-token` when `SERVICE_TOKEN` is set. 
 Compatibility for a server not yet moved to events: `POST /analyze` (blocks until done),
 `GET /status/{id}` (old shape), `GET /download/{id}`.
 
-### Result (schema 3)
+### Result (schema 5)
 
-`events[]` each have `id` (`<job>:e<n>`), `t`, `type`, `result`, `score` (0-10 or null),
-`score_source` (`measured` | `judged`), `coverage`, `feedback`, `confidence`, `measurements[]`
-(`{key, label, metric, value, unit, ideal, acceptable, score, weight, source, confidence, note}`),
-`metrics[]` (the sport's key numbers at that moment) and `matchup` (the action player and the nearest
-opponent, each with role, side, confidence and `metrics[]`, plus separation in torso lengths and the
-frames used for the overlay). Also `session_metrics[]` (session average, best and worst per key metric,
-plus tempo, action rate, pose coverage and opponent distance), `findings[]`, `consistency[]`,
-`summary` (rating, average, success rate, confidence, text, strengths, focus areas, priority drill),
-`athlete`, `quality`, `needs_review`, `degraded`, `provenance`.
+`events[]` each have `id` (`<job>:e<n>`), `t`, `type`, `result`, `event_state`
+(`confirmed` | `uncertain` | `rejected` | `candidate`), `confirmed`, `score` (0-10 or null; only
+valid measured criteria), `score_source`, `coverage`, `coverage_detail`, `feedback`, `confidence`,
+`measurements[]` and `metrics[]`. Every measurement row carries four independent evidence axes:
+`{criterion_id, source, state, evidence_type, validation_status, value, unit, score, weight,
+measurement_type, calibration, confidence, source_frames, source_t, note}`. `source` is
+`pose` / `object_tracking` / `vlm` / `rule` / `human_reference`; `state` is
+`valid` / `low_confidence` / `invalid_view` / `occluded` / `unavailable` / `not_applicable`.
+A judgement is not a measurement, and an unavailable criterion is not a zero.
 
-CSV exports: `events.csv`, `measurements.csv`, `metrics.csv`, `findings.csv`, `session.csv`.
+Also `criteria_registry[]` (paper ID → engine key → implementation status), `event_detection`
+(confirmed/uncertain/rejected/candidate counts), `failures[]` (F01–F14 with stage and retryability),
+`summary` (criterion-level text plus the experimental composite), `athlete`, `quality`,
+`needs_review`, `degraded` and `provenance`.
+
+`summary.composite` is **experimental and unvalidated**. It is `null` unless valid measured
+coverage reaches `MIN_MEASURED_COVERAGE` (0.65), and it is marked
+`status: "experimental_unvalidated"`, `validated: false`, `excluded_from_research: true`.
+Criterion-level evidence is the primary output.
+
+`provenance.manifest` records the Git commit, sport-pack checksum, pose/VLM model identifiers,
+prompt hash, video SHA-256 and metadata, camera angle source, preprocessing parameters and
+environment. The same manifest is exported as `manifest.json`.
+
+CSV exports: `events.csv`, `measurements.csv`, `metrics.csv`, `findings.csv`, `session.csv`,
+plus `manifest.json`.
 
 ## Sport packs
 
@@ -112,10 +129,20 @@ CSV exports: `events.csv`, `measurements.csv`, `metrics.csv`, `findings.csv`, `s
 (`wrist_speed_peak`, `hip_rise`, `shoulder_hip_angle`, `stance_width`, `head_movement`,
 `trunk_lean`, …). Key metrics are normalised by the athlete's torso length, so camera distance
 does not change the reading.
+
+The three research packs (`cricket`, `football`, `basketball`) also carry the manuscript metadata:
+`action_id`, `pack_version`, `phases`, `objects`, `scope_note` and `paper_criteria` (the full
+CR01–CR11 / FB01–FB12 / BB01–BB12 tables). Each implemented criterion has a permanent
+`criterion_id`, `evidence_type`, `validation_status`, `measurement_type`, `calibration`,
+`allowed_views` and `phase_scope`. A criterion whose `allowed_views` does not include the declared
+camera view is `invalid_view`, not a poor score. `criteria_registry` in the result shows which
+paper criteria are implemented, partial or not implemented.
+
 Metrics: `elbow_angle`, `shoulder_angle` (active arm), `active_knee_angle` (active leg),
 `knee_angle`, `hip_angle`, `ankle_angle` (both sides averaged), `trunk_lean_deg`, or an explicit
 `left_`/`right_` joint. The bundled ranges are starting points: tune them with your coaches;
-`version` is stamped on every result.
+`version` and the pack checksum are stamped on every result. `allowed_views` is the camera gate;
+`"primary"` means the view was not declared and the gate is not applied.
 
 
 ## Running

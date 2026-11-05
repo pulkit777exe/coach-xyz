@@ -46,7 +46,21 @@
       ],
       "weight": 0.3,
       "look_for": "arm fully extended at release, elbow under the ball, not flaring out",
-      "drill": "Form shooting from 1 m: hold the follow-through until the ball lands."
+      "drill": "Form shooting from 1 m: hold the follow-through until the ball lands.",
+      "criterion_id": "BB04",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "ball_elevation",
+        "arm_extension",
+        "ball_release"
+      ],
+      "implementation_note": "Single-window image-plane elbow angle, not a repeated-trial trajectory."
     },
     {
       "key": "arm_elevation",
@@ -62,7 +76,21 @@
       ],
       "weight": 0.25,
       "look_for": "ball released high, above the forehead, shooting arm driving up",
-      "drill": "Wall shots: release the ball at the highest point you can reach."
+      "drill": "Wall shots: release the ball at the highest point you can reach.",
+      "criterion_id": "BB05",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side",
+        "front"
+      ],
+      "phase_scope": [
+        "ball_elevation",
+        "arm_extension"
+      ],
+      "implementation_note": "Image-plane shoulder angle, not a 3D shoulder movement trajectory."
     },
     {
       "key": "balance",
@@ -78,7 +106,21 @@
       ],
       "weight": 0.2,
       "look_for": "shoulders over hips, no fade, drift or lean at release",
-      "drill": "Land on the spot you jumped from, 10 reps, mark the floor."
+      "drill": "Land on the spot you jumped from, 10 reps, mark the floor.",
+      "criterion_id": "BB03",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side",
+        "front"
+      ],
+      "phase_scope": [
+        "preparation",
+        "arm_extension"
+      ],
+      "implementation_note": "Image-plane trunk lean, not pelvis displacement or whole-body COM."
     },
     {
       "key": "leg_drive",
@@ -94,7 +136,20 @@
       ],
       "weight": 0.25,
       "look_for": "legs extending through the jump, power coming from the base",
-      "drill": "Pause-dip shots: sit into the knees, then drive up through the release."
+      "drill": "Pause-dip shots: sit into the knees, then drive up through the release.",
+      "criterion_id": "BB02",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "preparation",
+        "ball_elevation"
+      ],
+      "implementation_note": "Single-window image-plane knee angle, not a flexion trajectory."
     }
   ],
   "key_metrics": [
@@ -157,5 +212,207 @@
     }
   ],
   "display_s": 2.5,
-  "coaching_note": "Judge only the shot motion of the target: base, shot pocket, release, follow-through."
+  "coaching_note": "Judge only the shot motion of the target: base, shot pocket, release, follow-through.",
+  "pack_version": "0.1.0",
+  "validation_status": "proposed",
+  "action_id": "free_throw",
+  "scope_note": "Research scope is the stationary one-handed free throw only. Catch-and-shoot, off-dribble, layup, dunk and contested event types are product-only and are not part of the research protocol.",
+  "phases": [
+    {
+      "id": "setup",
+      "label": "Setup",
+      "definition": "Stance and ball placement before the attempt."
+    },
+    {
+      "id": "preparation",
+      "label": "Preparation",
+      "definition": "Dip and knee load before extension."
+    },
+    {
+      "id": "ball_elevation",
+      "label": "Ball elevation",
+      "definition": "Ball is raised to the shooting pocket."
+    },
+    {
+      "id": "arm_extension",
+      "label": "Arm extension",
+      "definition": "Shooting arm extends toward release."
+    },
+    {
+      "id": "ball_release",
+      "label": "Ball release",
+      "definition": "Ball-hand separation."
+    },
+    {
+      "id": "follow_through",
+      "label": "Follow-through",
+      "definition": "Wrist and shooting arm finish after release."
+    },
+    {
+      "id": "recovery",
+      "label": "Recovery",
+      "definition": "Landing and return to a stable position."
+    }
+  ],
+  "objects": [
+    {
+      "class": "ball",
+      "required": true,
+      "operator": "ball_tracking",
+      "note": "Needed for BB08-BB09; not currently tracked."
+    }
+  ],
+  "paper_criteria": [
+    {
+      "criterion_id": "BB01",
+      "definition": "Initial stance/foot alignment",
+      "evidence_class": "M/C",
+      "requirements": "Both feet and ground reference; frontal or oblique view for bilateral alignment.",
+      "phase_scope": [
+        "setup"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB02",
+      "definition": "Knee-flexion trajectory",
+      "evidence_class": "M/C",
+      "requirements": "Hip-knee-ankle; sagittal-plane validity required.",
+      "phase_scope": [
+        "preparation",
+        "ball_elevation"
+      ],
+      "engine_key": "leg_drive",
+      "implementation": "partial",
+      "note": "The engine reports a single-window image-plane knee angle, not a flexion trajectory."
+    },
+    {
+      "criterion_id": "BB03",
+      "definition": "Hip/trunk movement",
+      "evidence_class": "M/C",
+      "requirements": "Pelvis and trunk proxy; do not call pelvis displacement whole-body COM without a segment model.",
+      "phase_scope": [
+        "preparation",
+        "arm_extension"
+      ],
+      "engine_key": "balance",
+      "implementation": "partial",
+      "note": "The engine reports image-plane trunk lean, not pelvis displacement or whole-body COM."
+    },
+    {
+      "criterion_id": "BB04",
+      "definition": "Shooting-elbow extension",
+      "evidence_class": "M/C",
+      "requirements": "Shooting shoulder-elbow-wrist; side view and repeated-trial analysis.",
+      "phase_scope": [
+        "ball_elevation",
+        "arm_extension",
+        "ball_release"
+      ],
+      "engine_key": "arm_extension",
+      "implementation": "partial",
+      "note": "The engine reports a single-window image-plane elbow angle, not a repeated-trial trajectory."
+    },
+    {
+      "criterion_id": "BB05",
+      "definition": "Shoulder movement",
+      "evidence_class": "M/C",
+      "requirements": "Shoulder and elbow; plane-specific interpretation.",
+      "phase_scope": [
+        "ball_elevation",
+        "arm_extension"
+      ],
+      "engine_key": "arm_elevation",
+      "implementation": "partial",
+      "note": "The engine reports an image-plane shoulder angle, not a 3D shoulder movement trajectory."
+    },
+    {
+      "criterion_id": "BB06",
+      "definition": "Shoulder-elbow-wrist sequencing",
+      "evidence_class": "C",
+      "requirements": "Temporal upper-limb series; robust time synchronization.",
+      "phase_scope": [
+        "ball_elevation",
+        "arm_extension",
+        "ball_release"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB07",
+      "definition": "Wrist/hand configuration",
+      "evidence_class": "C/J",
+      "requirements": "Hand landmarks and ball visibility; qualitative if projection is inadequate.",
+      "phase_scope": [
+        "ball_release",
+        "follow_through"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB08",
+      "definition": "Ball trajectory",
+      "evidence_class": "C",
+      "requirements": "Ball detection/tracking and temporal coverage.",
+      "phase_scope": [
+        "ball_release",
+        "follow_through"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB09",
+      "definition": "Release height/angle/velocity",
+      "evidence_class": "C",
+      "requirements": "Camera calibration and adequate frame rate; no metric claim from pixels alone.",
+      "phase_scope": [
+        "ball_release"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB10",
+      "definition": "Follow-through consistency",
+      "evidence_class": "M/J",
+      "requirements": "Arm/hand trajectory across repeated attempts.",
+      "phase_scope": [
+        "follow_through"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB11",
+      "definition": "Post-release stability",
+      "evidence_class": "M",
+      "requirements": "Full-body temporal pose.",
+      "phase_scope": [
+        "recovery"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "BB12",
+      "definition": "Psychological focus",
+      "evidence_class": "X",
+      "requirements": "Not reliably observable; excluded.",
+      "phase_scope": [],
+      "engine_key": null,
+      "implementation": "excluded_by_protocol",
+      "note": ""
+    }
+  ]
 }

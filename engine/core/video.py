@@ -19,6 +19,7 @@ class Media:
     duration: float
     fps: float
     has_audio: bool
+    codec: str = ""
 
 
 def looks_like_video(head: bytes) -> bool:
@@ -41,7 +42,7 @@ def sha256_file(path: str, chunk: int = 8 << 20) -> str:
 
 
 def _ffprobe(path: str, *, stream: str = "v:0",
-             entries: str = "stream=avg_frame_rate,duration:format=duration") -> dict:
+             entries: str = "stream=avg_frame_rate,duration,codec_name:format=duration") -> dict:
     """Probe one stream with a fixed, non-user-controlled argument set.
 
     The caller chooses which stream and which entries; it cannot append arbitrary
@@ -75,7 +76,8 @@ def probe(path: str, max_seconds: float = 3600) -> Media:
     if fps <= 0 or duration <= 0 or duration > max_seconds:
         raise EngineError("VIDEO_DECODE_FAILED", "Video must be between 1 second and 60 minutes long.")
     audio = _ffprobe(path, stream="a:0", entries="stream=codec_type")
-    return Media(duration=duration, fps=fps, has_audio=bool(audio.get("streams")))
+    return Media(duration=duration, fps=fps, has_audio=bool(audio.get("streams")),
+                 codec=str(stream.get("codec_name") or ""))
 
 
 class FFmpegWriter:

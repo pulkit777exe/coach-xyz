@@ -51,7 +51,19 @@
       ],
       "weight": 0.3,
       "look_for": "arms extend through the ball, bat face under control",
-      "drill": "Shadow drives to a cone, finish with the bat high and extended."
+      "drill": "Shadow drives to a cone, finish with the bat high and extended.",
+      "criterion_id": "CR07",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "bat_execution"
+      ],
+      "implementation_note": "Lead-elbow extension is a proxy for bat execution; the bat itself is not tracked."
     },
     {
       "key": "base",
@@ -67,7 +79,20 @@
       ],
       "weight": 0.25,
       "look_for": "stable base, front knee bending into the shot",
-      "drill": "Front-foot drives with a pause at contact."
+      "drill": "Front-foot drives with a pause at contact.",
+      "criterion_id": "CR04",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "front_foot_support",
+        "bat_execution"
+      ],
+      "implementation_note": "Single-window image-plane knee angle, not a support-knee trajectory."
     },
     {
       "key": "head_position",
@@ -83,7 +108,20 @@
       ],
       "weight": 0.25,
       "look_for": "head still and over the ball, body leaning into the shot",
-      "drill": "Throwdowns with the head held still until after contact."
+      "drill": "Throwdowns with the head held still until after contact.",
+      "criterion_id": "CR05",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "front_foot_support",
+        "bat_execution"
+      ],
+      "implementation_note": "Image-plane trunk lean, not a calibrated 3D inclination."
     },
     {
       "key": "hips",
@@ -99,7 +137,21 @@
       ],
       "weight": 0.2,
       "look_for": "hips rotating through, weight transferring forward",
-      "drill": "Weight-transfer drills stepping into the shot."
+      "drill": "Weight-transfer drills stepping into the shot.",
+      "criterion_id": "CR06",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side",
+        "front"
+      ],
+      "phase_scope": [
+        "preparation",
+        "bat_execution"
+      ],
+      "implementation_note": "Image-plane hip angle, not a 3D pelvis/shoulder rotation."
     }
   ],
   "key_metrics": [
@@ -157,5 +209,196 @@
     }
   ],
   "display_s": 2.5,
-  "coaching_note": "Judge the batting shot: stance, head position, weight transfer, follow-through."
+  "coaching_note": "Judge the batting shot: stance, head position, weight transfer, follow-through.",
+  "pack_version": "0.1.0",
+  "validation_status": "proposed",
+  "action_id": "front_foot_off_drive",
+  "scope_note": "Research scope is the front-foot off-drive only. The pack's other event types are product-only and are not part of the research protocol until separately configured and validated.",
+  "phases": [
+    {
+      "id": "preparation",
+      "label": "Preparation",
+      "definition": "Stance and initial bat lift before forward movement."
+    },
+    {
+      "id": "forward_movement",
+      "label": "Forward movement",
+      "definition": "Front foot travels toward the pitch of the ball."
+    },
+    {
+      "id": "front_foot_support",
+      "label": "Front-foot support",
+      "definition": "Front foot plants and the base is established."
+    },
+    {
+      "id": "bat_execution",
+      "label": "Bat execution",
+      "definition": "Bat is swung through the intended off-side line."
+    },
+    {
+      "id": "impact_interval",
+      "label": "Impact interval",
+      "definition": "Bat-ball contact when observable at the native frame rate."
+    },
+    {
+      "id": "recovery",
+      "label": "Recovery",
+      "definition": "Post-stroke balance and return to a stable position."
+    }
+  ],
+  "objects": [
+    {
+      "class": "bat",
+      "required": true,
+      "operator": "bat_keypoints",
+      "note": "Needed for CR07-CR09; not currently tracked."
+    },
+    {
+      "class": "ball",
+      "required": true,
+      "operator": "ball_tracking",
+      "note": "Needed for CR09; not currently tracked."
+    }
+  ],
+  "paper_criteria": [
+    {
+      "criterion_id": "CR01",
+      "definition": "Preparatory foot movement",
+      "evidence_class": "M/J",
+      "requirements": "Temporal foot landmarks; descriptive feature only until coach-validated; do not require a trigger step for every batter.",
+      "phase_scope": [
+        "preparation",
+        "forward_movement"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR02",
+      "definition": "Front-foot displacement",
+      "evidence_class": "M/C",
+      "requirements": "Foot landmarks and ground-plane reference; physical distance only after calibration.",
+      "phase_scope": [
+        "forward_movement",
+        "front_foot_support"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR03",
+      "definition": "Head trajectory relative to pelvis",
+      "evidence_class": "M",
+      "requirements": "Head proxy and bilateral hip midpoint; do not label pelvis midpoint as whole-body centre of mass.",
+      "phase_scope": [
+        "preparation",
+        "forward_movement",
+        "front_foot_support",
+        "bat_execution"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR04",
+      "definition": "Support-knee trajectory",
+      "evidence_class": "M/C",
+      "requirements": "Hip-knee-ankle landmarks; primary view and plane must be suitable.",
+      "phase_scope": [
+        "front_foot_support",
+        "bat_execution"
+      ],
+      "engine_key": "base",
+      "implementation": "partial",
+      "note": "The engine reports a single-window image-plane knee angle, not a full trajectory."
+    },
+    {
+      "criterion_id": "CR05",
+      "definition": "Trunk inclination",
+      "evidence_class": "M/C",
+      "requirements": "Shoulder and hip midpoints; report plane and camera suitability.",
+      "phase_scope": [
+        "front_foot_support",
+        "bat_execution"
+      ],
+      "engine_key": "head_position",
+      "implementation": "partial",
+      "note": "The engine reports image-plane trunk lean, not a calibrated 3D inclination."
+    },
+    {
+      "criterion_id": "CR06",
+      "definition": "Pelvis/shoulder orientation",
+      "evidence_class": "C",
+      "requirements": "Bilateral landmarks and suitable view; no full 3D rotation from a single projection.",
+      "phase_scope": [
+        "preparation",
+        "bat_execution"
+      ],
+      "engine_key": "hips",
+      "implementation": "partial",
+      "note": "The engine reports an image-plane hip angle, not a 3D pelvis/shoulder rotation."
+    },
+    {
+      "criterion_id": "CR07",
+      "definition": "Bat trajectory",
+      "evidence_class": "C",
+      "requirements": "Separate bat detector/keypoints; track confidence and occlusion.",
+      "phase_scope": [
+        "bat_execution"
+      ],
+      "engine_key": "arm_extension",
+      "implementation": "partial_proxy",
+      "note": "The engine measures lead-elbow extension as a proxy; the bat itself is not tracked."
+    },
+    {
+      "criterion_id": "CR08",
+      "definition": "Bat-face orientation",
+      "evidence_class": "C",
+      "requirements": "Bat-face geometry and calibrated view; exploratory until validated.",
+      "phase_scope": [
+        "bat_execution",
+        "impact_interval"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR09",
+      "definition": "Bat-ball contact interval",
+      "evidence_class": "C",
+      "requirements": "High-speed bat and ball tracking; otherwise return an interval or unobservable.",
+      "phase_scope": [
+        "impact_interval"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR10",
+      "definition": "Post-stroke balance/recovery",
+      "evidence_class": "M/J",
+      "requirements": "Full-body temporal pose; define a stable recovery interval operationally.",
+      "phase_scope": [
+        "recovery"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "CR11",
+      "definition": "Shot selection",
+      "evidence_class": "X",
+      "requirements": "Requires delivery reading and tactical context; excluded.",
+      "phase_scope": [],
+      "engine_key": null,
+      "implementation": "excluded_by_protocol",
+      "note": ""
+    }
+  ]
 }

@@ -4,12 +4,14 @@ Packs are JSON files in `sports/`. Older packs that use `form_criteria` /
 `ideal_range` / `events` are read as well.
 """
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
 from .config import ROOT
+from .evidence import EVIDENCE_TYPES, VALIDATION_STATUSES
 
 SPORTS_DIR = ROOT / "sports"
 SLUG = re.compile(r"^[a-z0-9_]+$")
@@ -26,7 +28,19 @@ class Criterion:
     weight: float
     look_for: str = ""
     drill: str = ""
-    valid_angles: tuple[str, ...] | None = None  # camera angles this measurement is valid from; None = any
+    valid_angles: tuple[str, ...] | None = None  # legacy name; use allowed_views
+    criterion_id: str | None = None  # paper identifier (CR01, FB04, BB09, ...)
+    evidence_type: str = "measured"  # measured | conditional | judged | excluded
+    validation_status: str = "proposed"  # proposed | coach_reviewed | ...
+    measurement_type: str = "image_plane_angle"
+    calibration: str = "uncalibrated_2d"
+    allowed_views: tuple[str, ...] | None = None  # camera views this measurement is valid from
+    phase_scope: tuple[str, ...] = ()  # paper phase identifiers this criterion belongs to
+    required_landmarks: tuple[str, ...] = ()
+    required_objects: tuple[str, ...] = ()
+    quality_gate: str = ""
+    supporting_references: tuple[str, ...] = ()
+    implementation_note: str = ""
 
 
 @dataclass
@@ -66,6 +80,14 @@ class Pack:
     display_s: float = 2.5
     coaching_note: str = ""
     colors: dict = field(default_factory=dict)
+    action_id: str = ""
+    pack_version: str = ""
+    checksum: str = ""
+    path: str = ""
+    paper_criteria: list[dict] = field(default_factory=list)
+    phases: list[dict] = field(default_factory=list)
+    objects: list[dict] = field(default_factory=list)
+    scope_note: str = ""
 
     @property
     def results(self) -> list[str]:
@@ -87,6 +109,9 @@ def _range(value) -> tuple[float, float] | None:
 
 
 def _criterion(raw: dict) -> Criterion:
+    evidence_type = str(raw.get("evidence_type") or "measured")
+    validation_status = str(raw.get("validation_status") or "proposed")
+    allowed = raw.get("allowed_views") or raw.get("valid_angles")
     return Criterion(
         key=raw["key"],
         label=raw.get("label", raw["key"]),
@@ -97,6 +122,18 @@ def _criterion(raw: dict) -> Criterion:
         look_for=raw.get("look_for", ""),
         drill=raw.get("drill", ""),
         valid_angles=tuple(raw["valid_angles"]) if raw.get("valid_angles") else None,
+        criterion_id=raw.get("criterion_id") or raw.get("id"),
+        evidence_type=evidence_type if evidence_type in EVIDENCE_TYPES else "measured",
+        validation_status=validation_status if validation_status in VALIDATION_STATUSES else "proposed",
+        measurement_type=str(raw.get("measurement_type") or "image_plane_angle"),
+        calibration=str(raw.get("calibration") or "uncalibrated_2d"),
+        allowed_views=tuple(allowed) if allowed else None,
+        phase_scope=tuple(raw.get("phase_scope") or ()),
+        required_landmarks=tuple(raw.get("required_landmarks") or ()),
+        required_objects=tuple(raw.get("required_objects") or ()),
+        quality_gate=str(raw.get("quality_gate") or ""),
+        supporting_references=tuple(raw.get("supporting_references") or ()),
+        implementation_note=str(raw.get("implementation_note") or ""),
     )
 
 
@@ -117,7 +154,8 @@ def load(name: str | None) -> Pack:
     path = SPORTS_DIR / f"{name}.json"
     if not SLUG.match(name) or not path.is_file():
         name, path = "generic", SPORTS_DIR / "generic.json"
-    raw = json.loads(path.read_text())
+    raw_bytes = path.read_bytes()
+    raw = json.loads(raw_bytes)
     action = raw.get("action", {})
     results = raw.get("results") or raw.get("events") or {}
     return Pack(
@@ -139,4 +177,12 @@ def load(name: str | None) -> Pack:
         display_s=float(raw.get("display_s", raw.get("feedback_display_seconds", 2.5))),
         coaching_note=raw.get("coaching_note", ""),
         colors=raw.get("colors", {}),
+        action_id=str(action.get("id") or raw.get("action_id") or ""),
+        pack_version=str(raw.get("pack_version") or ""),
+        checksum=hashlib.sha256(raw_bytes).hexdigest(),
+        path=str(path),
+        paper_criteria=list(raw.get("paper_criteria") or []),
+        phases=list(raw.get("phases") or []),
+        objects=list(raw.get("objects") or []),
+        scope_note=str(raw.get("scope_note") or ""),
     )

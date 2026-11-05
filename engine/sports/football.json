@@ -47,7 +47,21 @@
       ],
       "weight": 0.4,
       "look_for": "kicking leg extends through the ball, ankle locked",
-      "drill": "Slow-motion strikes against a wall: lock the ankle, finish toward the target."
+      "drill": "Slow-motion strikes against a wall: lock the ankle, finish toward the target.",
+      "criterion_id": "FB06",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "backswing",
+        "forward_acceleration",
+        "contact_interval"
+      ],
+      "implementation_note": "Single-window image-plane knee angle, not a smoothed extension trajectory."
     },
     {
       "key": "lean",
@@ -63,7 +77,20 @@
       ],
       "weight": 0.35,
       "look_for": "slight forward lean, head over the ball",
-      "drill": "Strike low driven balls and keep the chest over the ball."
+      "drill": "Strike low driven balls and keep the chest over the ball.",
+      "criterion_id": "FB07",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "approach",
+        "contact_interval"
+      ],
+      "implementation_note": "Image-plane trunk lean, not a 3D trunk/pelvis rotation."
     },
     {
       "key": "hip_position",
@@ -79,7 +106,20 @@
       ],
       "weight": 0.25,
       "look_for": "hips open through contact, not collapsing",
-      "drill": "Hip rotation drills with a band before striking."
+      "drill": "Hip rotation drills with a band before striking.",
+      "criterion_id": "FB05",
+      "evidence_type": "conditional",
+      "validation_status": "proposed",
+      "measurement_type": "image_plane_angle",
+      "calibration": "uncalibrated_2d",
+      "allowed_views": [
+        "side"
+      ],
+      "phase_scope": [
+        "backswing",
+        "forward_acceleration"
+      ],
+      "implementation_note": "Single-window image-plane hip angle, not a kicking-hip trajectory."
     }
   ],
   "key_metrics": [
@@ -137,5 +177,202 @@
     }
   ],
   "display_s": 2.5,
-  "coaching_note": "Judge the strike: approach, plant foot, contact, follow-through."
+  "coaching_note": "Judge the strike: approach, plant foot, contact, follow-through.",
+  "pack_version": "0.1.0",
+  "validation_status": "proposed",
+  "action_id": "stationary_instep_kick",
+  "scope_note": "Research scope is the stationary-ball instep kick only. Moving-ball kicks, volleys, headers, passing and dribbling are product-only event types and are not part of the research protocol.",
+  "phases": [
+    {
+      "id": "approach",
+      "label": "Approach",
+      "definition": "Run-up toward the stationary ball."
+    },
+    {
+      "id": "support_foot_plant",
+      "label": "Support-foot plant",
+      "definition": "Support foot is placed beside the ball."
+    },
+    {
+      "id": "backswing",
+      "label": "Backswing",
+      "definition": "Kicking leg is drawn back."
+    },
+    {
+      "id": "forward_acceleration",
+      "label": "Forward acceleration",
+      "definition": "Kicking leg accelerates toward the ball."
+    },
+    {
+      "id": "contact_interval",
+      "label": "Contact interval",
+      "definition": "Foot-ball contact when observable at the native frame rate."
+    },
+    {
+      "id": "follow_through",
+      "label": "Follow-through",
+      "definition": "Kicking leg continues after contact."
+    }
+  ],
+  "objects": [
+    {
+      "class": "ball",
+      "required": true,
+      "operator": "ball_tracking",
+      "note": "Needed for FB03 and FB09-FB10; not currently tracked."
+    }
+  ],
+  "paper_criteria": [
+    {
+      "criterion_id": "FB01",
+      "definition": "Approach trajectory",
+      "evidence_class": "M/C",
+      "requirements": "Pelvis/feet and calibrated ground plane; record approach angle and step count.",
+      "phase_scope": [
+        "approach"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB02",
+      "definition": "Final-step configuration",
+      "evidence_class": "M",
+      "requirements": "Feet and pelvis; temporal relationship to plant.",
+      "phase_scope": [
+        "approach",
+        "support_foot_plant"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB03",
+      "definition": "Support-foot placement",
+      "evidence_class": "C",
+      "requirements": "Support foot, ball and calibrated ground plane; continuous measurement, no universal threshold.",
+      "phase_scope": [
+        "support_foot_plant"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB04",
+      "definition": "Support-knee trajectory",
+      "evidence_class": "M/C",
+      "requirements": "Hip-knee-ankle; side/oblique view validation.",
+      "phase_scope": [
+        "support_foot_plant",
+        "backswing"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB05",
+      "definition": "Kicking-hip trajectory",
+      "evidence_class": "C",
+      "requirements": "Kicking-side landmarks and plane suitability.",
+      "phase_scope": [
+        "backswing",
+        "forward_acceleration"
+      ],
+      "engine_key": "hip_position",
+      "implementation": "partial",
+      "note": "The engine reports a single-window image-plane hip angle, not a trajectory."
+    },
+    {
+      "criterion_id": "FB06",
+      "definition": "Kicking-knee extension",
+      "evidence_class": "M/C",
+      "requirements": "Hip-knee-ankle; temporal smoothing and frame-rate sensitivity.",
+      "phase_scope": [
+        "backswing",
+        "forward_acceleration",
+        "contact_interval"
+      ],
+      "engine_key": "kick_extension",
+      "implementation": "partial",
+      "note": "The engine reports a single-window image-plane knee angle, not a smoothed extension trajectory."
+    },
+    {
+      "criterion_id": "FB07",
+      "definition": "Trunk/pelvis orientation",
+      "evidence_class": "C",
+      "requirements": "Bilateral landmarks; rotation estimates require suitable geometry.",
+      "phase_scope": [
+        "approach",
+        "contact_interval"
+      ],
+      "engine_key": "lean",
+      "implementation": "partial",
+      "note": "The engine reports image-plane trunk lean, not a 3D trunk/pelvis rotation."
+    },
+    {
+      "criterion_id": "FB08",
+      "definition": "Segmental timing",
+      "evidence_class": "C",
+      "requirements": "Stable time series and predefined onset/peak definitions.",
+      "phase_scope": [
+        "approach",
+        "backswing",
+        "forward_acceleration",
+        "contact_interval"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB09",
+      "definition": "Foot orientation/contact geometry",
+      "evidence_class": "C",
+      "requirements": "Foot keypoints/segmentation, ball and high-speed evidence.",
+      "phase_scope": [
+        "contact_interval"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB10",
+      "definition": "Foot-ball contact point",
+      "evidence_class": "C",
+      "requirements": "Advanced high-speed and calibrated object geometry; not inferred from leg swing.",
+      "phase_scope": [
+        "contact_interval"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB11",
+      "definition": "Follow-through/recovery",
+      "evidence_class": "M/J",
+      "requirements": "Full-body temporal sequence.",
+      "phase_scope": [
+        "follow_through"
+      ],
+      "engine_key": null,
+      "implementation": "not_implemented",
+      "note": ""
+    },
+    {
+      "criterion_id": "FB12",
+      "definition": "Tactical choice",
+      "evidence_class": "X",
+      "requirements": "Requires opponent, goalkeeper and match context; excluded.",
+      "phase_scope": [],
+      "engine_key": null,
+      "implementation": "excluded_by_protocol",
+      "note": ""
+    }
+  ]
 }

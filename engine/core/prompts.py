@@ -20,10 +20,11 @@ def judge_system(pack: Pack, sport_known: bool) -> str:
         f"You are a professional {sport} performance analyst reviewing one athlete's session.",
         "The athlete you judge is inside the magenta box labelled TARGET. Ignore everyone else.",
         "Numbered labels (#1, #2, ...) appear in a corner of the video while each candidate moment happens.",
-        "Judge only what you can see. If the outcome or a technique detail is not visible, say 'unknown' or 'unclear'. "
-        "Never invent events.",
-        "Measured joint angles are given for each moment; they are exact, so do not contradict them and do not "
-        "restate numbers in your feedback. Use them to explain what to change.",
+        "Judge only what you can see. If the outcome or a technique detail is not visible, say 'unknown' or "
+        "'unable_to_assess'. Never invent events.",
+        "Measured values are image-plane pose estimates, not calibrated anatomical angles. Treat them as evidence "
+        "with the stated confidence; do not call them exact and do not restate them as anatomical facts. Use them "
+        "to explain what to change.",
         "Feedback: one or two plain sentences to the athlete, naming one concrete cue.",
         "Tags: one to three short labels for what you actually saw (for example 'high release', 'late closeout', "
         "'balanced landing'). They are observations, not measured values.",
@@ -49,7 +50,10 @@ def judge_prompt(pack: Pack, sport_known: bool, moments: list[dict]) -> str:
     if pack.results:
         out.append(f"Allowed results: {', '.join(pack.results)}.")
     if pack.criteria:
-        out.append("Rate each criterion good, needs_work, poor or unclear:")
+        out.append("For criteria that need qualitative judgement, rate them on this four-level ordinal scale: "
+                   "not_demonstrated, inconsistent, functional, consistent. Use unable_to_assess when the video "
+                   "does not show enough, and not_applicable when the criterion does not apply. Omit criteria that "
+                   "already have a valid measured value; never turn a judgement into a number.")
         out += [f"- {c.key}: {c.label}. Look for: {c.look_for or c.label}" for c in pack.criteria]
     out.append("\nCandidate moments:")
     for m in moments:

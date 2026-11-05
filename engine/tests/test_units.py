@@ -7,7 +7,10 @@ import numpy as np
 import pytest
 from google.genai import errors
 
-from core import config, db, events, geometry as g, judge, llm, measure, metrics, motion, result, sessions, sports, storage
+from core import (
+    config, db, events, geometry as g, judge, llm, measure, metrics, motion, performance, result, sessions,
+    sports, storage,
+)
 from core.judge import Judgement
 from core.motion import Candidate
 from core.sports import Criterion, MetricDef
@@ -97,15 +100,28 @@ def test_score_falls_smoothly_from_target_to_zero(value, expect):
     assert measure.score_value(value, CRIT)[0] == pytest.approx(expect, abs=0.01)
 
 
-def test_unmeasured_criteria_do_not_count_as_zero_and_judgements_weigh_less():
-    rows = [{"weight": 0.5, "score": 1.0, "source": "pose"}, {"weight": 0.3, "score": None, "source": "none"},
-            {"weight": 0.2, "score": 0.0, "source": "judged"}]
+def test_judgements_are_evidence_but_never_measurements():
+    rows = [
+        {"key": "a", "weight": 0.5, "score": 1.0, "source": "pose", "state": "valid", "evidence_type": "measured"},
+        {"key": "b", "weight": 0.3, "score": None, "source": None, "state": "unavailable", "evidence_type": "measured"},
+        {"key": "c", "weight": 0.2, "score": 0.0, "source": "vlm", "state": "valid", "evidence_type": "judged"},
+    ]
     score, coverage = measure.combine(rows)
-    assert coverage == 0.7 and score == pytest.approx(10 * 0.5 / 0.6, abs=0.1)
+    # Only the pose measurement counts. The VLM row is valid evidence, but a
+    # judgement must not become a number, and the unavailable row is missing
+    # evidence rather than a zero.
+    assert coverage == 0.5 and score is None
 
 
 def test_a_score_needs_enough_of_the_pack_to_rest_on():
-    assert measure.combine([{"weight": 0.2, "score": 1.0, "source": "pose"}, {"weight": 0.8, "score": None, "source": "none"}])[0] is None
+    rows = [
+        {"key": "a", "weight": 0.2, "score": 1.0, "source": "pose", "state": "valid", "evidence_type": "measured"},
+        {"key": "b", "weight": 0.8, "score": None, "source": None, "state": "unavailable", "evidence_type": "measured"},
+    ]
+    detail = measure.combine_detail(rows)
+    assert detail["value"] is None
+    assert detail["coverage"] == 0.2 and detail["measured_weight"] == 0.2
+    assert detail["excluded_criteria"] == ["b"]
 
 
 # -- model access -------------------------------------------------------------
@@ -280,8 +296,15 @@ def test_measure_skips_criteria_the_angle_cannot_support():
                               valid_angles=("side",))],
     )
     front = measure.measure(synthetic_track({}), 0, "left", pack, angle="front")
-    assert front["criteria"][0]["source"] == "none"
+    assert front["criteria"][0]["source"] is None
+    assert front["criteria"][0]["state"] == "invalid_view"
     assert front["criteria"][0]["skipped"] is True
+    assert front["criteria"][0]["score"] is None
+    # The declared camera angle wins over the classifier, so the side view
+    # still measures the criterion.
+    side = measure.measure(synthetic_track({}), 0, "left", pack, angle="side")
+    assert side["criteria"][0]["state"] != "invalid_view"
+    assert side["criteria"][0]["skipped"] is False
 # -- derived metrics ----------------------------------------------------------
 
 def test_metrics_without_a_target_range_are_measured_but_not_scored():
@@ -352,4 +375,92 @@ def test_legacy_summary_exposes_ui_ready_stats():
     assert legacy["average_score"] == (out["summary"]["average_score"] or 0)
     assert legacy["success_rate"] == pytest.approx(out["summary"]["success_rate"] / 100)
     assert legacy["session_metrics"] == out["session_metrics"]
+    assert legacy["stats"] == out["stats"]
     assert legacy["shot_events"][0]["metrics"] == out["events"][0]["metrics"]
+
+
+# -- professional stat layer ---------------------------------------------------
+
+def test_professional_stats_label_every_source_and_name_what_is_unavailable():
+    pack = sports.load("basketball")
+    events = [
+        {"t": 2.0, "type": "catch_and_shoot", "result": "made", "score": 8.4, "score_source": "measured",
+         "measurements": [
+             {"key": "arm_extension", "label": "Shooting arm extension", "score": 1.0, "source": "pose"},
+             {"key": "balance", "label": "Upright balance", "score": 0.5, "source": "judged"},
+         ],
+         "metrics": [{"key": "release_height", "label": "Release height", "value": 0.9, "unit": "torso"}],
+         "matchup": {"separation": {"distance": 1.1}}, "tags": ["high release"], "pressure": "contested"},
+        {"t": 6.0, "type": "off_dribble", "result": "missed", "score": 7.2, "score_source": "measured",
+         "measurements": [
+             {"key": "arm_extension", "label": "Shooting arm extension", "score": 0.75, "source": "judged"},
+         ],
+         "metrics": [{"key": "release_height", "label": "Release height", "value": 0.7, "unit": "torso"}],
+         "matchup": {"separation": {"distance": 2.8}}, "tags": ["high release", "late closeout"],
+         "pressure": "open"},
+    ]
+    session_metrics = [
+        {"key": "release_height", "label": "Release height", "unit": "torso", "kind": "metric", "n": 2,
+         "value": 0.8, "best": 0.9, "worst": 0.7},
+        {"key": "tempo", "label": "Tempo", "unit": "s", "kind": "session", "n": 1, "value": 4.0},
+        {"key": "events_per_min", "label": "Action rate", "unit": "/min", "kind": "session", "n": 2,
+         "value": 12.0},
+        {"key": "tracking_coverage", "label": "Pose coverage", "unit": "%", "kind": "session", "n": 120,
+         "value": 92.0},
+        {"key": "opponent_distance", "label": "Defender distance", "unit": "torso", "kind": "matchup", "n": 2,
+         "value": 1.95, "best": 1.1, "worst": 2.8},
+    ]
+    consistency = [{"key": "arm_extension", "label": "Shooting arm extension", "n": 2, "mean": 165.0,
+                    "sd": 5.0, "ideal": [155, 180]}]
+    out = performance.build(pack, events, session_metrics, consistency,
+                            {"events": 2, "made": 1, "missed": 1})
+    groups = {g["key"]: g for g in out["groups"]}
+    assert {"output", "technique", "execution", "pressure", "consistency"} <= set(groups)
+    sources = {row["source"] for group in out["groups"] for row in group["stats"]}
+    assert sources <= {"measured", "counted", "observed"}
+    assert any(row["source"] == "observed" for row in groups["technique"]["stats"])
+    # A criterion that mixes pose measurements with model ratings is not
+    # reported as measured: the mean of the two is a judgement, not a measurement.
+    technique = {row["key"]: row for row in groups["technique"]["stats"]}
+    assert technique["arm_extension"]["source"] == "observed"
+    assert groups["output"]["stats"][0]["source"] == "counted"
+    assert out["provenance"]["counted"] >= 1 and out["provenance"]["measured"] >= 1
+    assert out["event_breakdown"][0]["label"] in ("Catch and shoot", "Off dribble")
+    assert out["tags"][0] == {"tag": "high release", "count": 2}
+    assert out["trend"] is None  # fewer than four scored events
+    assert any("Shot chart" in item["label"] for item in out["unavailable"])
+    assert out["bands"]["target"]
+
+
+def test_every_sport_pack_declares_the_stats_it_cannot_produce():
+    for name in sports.KNOWN + ("generic",):
+        stats = performance.UNAVAILABLE[name]
+        assert stats and all(item["label"] and item["reason"] for item in stats)
+
+
+def test_professional_fallback_copy_is_deterministic_and_specific():
+    pack = sports.load("basketball")
+    stats = {"events": 2, "made": 1, "missed": 1}
+    professional = {
+        "groups": [
+            {"key": "technique", "stats": [
+                {"key": "arm_extension", "label": "Shooting arm extension", "value": 9.0},
+                {"key": "balance", "label": "Upright balance", "value": 6.0},
+            ]},
+            {"key": "pressure", "stats": [
+                {"key": "opponent_distance", "label": "Defender distance", "value": 1.4,
+                 "band": "contested"},
+            ]},
+            {"key": "consistency", "stats": [
+                {"key": "technique_spread", "label": "Technique spread", "value": 4.0, "band": "high"},
+            ]},
+            {"key": "output", "stats": [
+                {"key": "conversion", "label": "Conversion", "value": 50.0},
+            ]},
+        ],
+        "trend": None,
+    }
+    summary, insights = performance.fallback_insights(pack, stats, professional)
+    assert "50.0%" in summary and "Shooting arm extension" in summary
+    assert 1 <= len(insights) <= 4
+    assert any("Defender distance" in line for line in insights)
