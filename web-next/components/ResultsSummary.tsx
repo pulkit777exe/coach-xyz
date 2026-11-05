@@ -77,9 +77,15 @@ export default function ResultsSummary({
   const formScore = summaryNumber(summary, 'form_score')
   const score = formScore
   const scorePercent = formScore !== null ? Math.min(100, Math.max(0, formScore * 10)) : null
-  const rating = summary.overall_rating || 'Good'
+  // The composite is experimental. There is deliberately no fallback label: an
+  // unavailable score must read as unavailable, never as "Good".
+  const rating = summary.overall_rating
+  const composite = summary.composite
+  const compositeCoverage = composite?.coverage
   const sport = summary.sport || 'General'
   const sessionMetrics = summary.session_metrics ?? []
+  const confirmedEvents = summary.event_detection?.confirmed
+  const candidateEvents = summary.event_detection?.candidate ?? 0
 
   const scoreTone =
     formScore === null
@@ -103,9 +109,14 @@ export default function ResultsSummary({
                   <h1 className="text-title font-semibold tracking-[-0.02em] text-foreground capitalize">
                     {sport} Analysis
                   </h1>
-                  <span className="rounded-[4px] border border-border bg-accent/50 px-2 py-0.5 text-meta font-medium capitalize text-muted-foreground">
-                    {rating}
+                  <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+                    Experimental score
                   </span>
+                  {rating && (
+                    <span className="rounded-[4px] border border-border bg-accent/50 px-2 py-0.5 text-meta font-medium capitalize text-muted-foreground">
+                      {rating}
+                    </span>
+                  )}
                 </div>
                 <p className="text-muted-foreground text-body">
                   AI-powered form feedback & biomechanics assessment
@@ -144,7 +155,7 @@ export default function ResultsSummary({
           <div className="gsap-item md:col-span-1 rounded-[6px] border border-border bg-card p-6 flex flex-col justify-between relative overflow-hidden">
             <div>
               <p className="text-muted-foreground text-meta font-medium uppercase tracking-[0.08em]">
-                Overall Form Score
+                Experimental Form Score
               </p>
               <div className="flex items-baseline gap-2 mt-4">
                 <span
@@ -154,6 +165,11 @@ export default function ResultsSummary({
                 </span>
                 <span className="text-muted-foreground text-body font-mono">/10</span>
               </div>
+              <p className="mt-2 text-meta text-muted-foreground">
+                {score !== null
+                  ? `Weighted ideal-range composite across ${compositeCoverage !== null && compositeCoverage !== undefined ? Math.round(compositeCoverage * 100) : 0}% measured coverage.`
+                  : 'Not available — too few criteria could be measured from this camera angle.'}
+              </p>
             </div>
 
             {/* Score Visual Bar */}
@@ -178,9 +194,13 @@ export default function ResultsSummary({
             </div>
 
             <div className="border-t border-border pt-4">
-              <p className="text-muted-foreground text-meta">Performance Rating</p>
+              <p className="text-muted-foreground text-meta">Experimental rating</p>
               <p className="text-body font-semibold text-foreground capitalize mt-0.5">
-                {rating} Execution
+                {rating ? `${rating} execution` : 'Not available'}
+              </p>
+              <p className="mt-3 rounded-[4px] border border-warning/30 bg-warning/10 px-3 py-2 text-meta leading-snug text-muted-foreground">
+                Provisional, unvalidated weighting. This is not an independently validated measure
+                of athletic performance and must not be used for coaching or selection decisions.
               </p>
             </div>
           </div>
@@ -217,8 +237,16 @@ export default function ResultsSummary({
             {/* Bottom Actions Row */}
             <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
               <span className="text-meta text-muted-foreground">
-                <span className="tabular-nums">{summary.shot_events?.length || 0}</span> events
-                captured
+                <span className="tabular-nums">
+                  {confirmedEvents ?? summary.shot_events?.length ?? 0}
+                </span>{' '}
+                confirmed events
+                {candidateEvents > 0 && (
+                  <>
+                    {' '}
+                    · <span className="tabular-nums">{candidateEvents}</span> unconfirmed
+                  </>
+                )}
               </span>
               <a
                 href={downloadUrl}
@@ -309,12 +337,15 @@ export default function ResultsSummary({
                 </summary>
                 <div className="px-6 pb-6 pt-2 space-y-4 border-t border-border mt-2">
                   {summary.shot_events.map((event, index) => {
+                    const eventScore = event.form_score
                     const toneClass =
-                      event.form_score >= 8
-                        ? 'bg-success/15 text-success'
-                        : event.form_score >= 5
-                          ? 'bg-warning/15 text-warning'
-                          : 'bg-destructive/10 text-destructive'
+                      eventScore === null
+                        ? 'bg-accent text-muted-foreground'
+                        : eventScore >= 8
+                          ? 'bg-success/15 text-success'
+                          : eventScore >= 5
+                            ? 'bg-warning/15 text-warning'
+                            : 'bg-destructive/10 text-destructive'
 
                     return (
                       <div
@@ -332,10 +363,20 @@ export default function ResultsSummary({
                             <span className="rounded-full bg-accent px-2 py-0.5 text-label font-medium capitalize text-muted-foreground">
                               {event.event_type?.replace('_', ' ') || 'Action'}
                             </span>
+                            {event.event_state && event.event_state !== 'confirmed' && (
+                              <span className="rounded-full bg-warning/15 px-2 py-0.5 text-label font-medium capitalize text-warning">
+                                {event.event_state === 'candidate'
+                                  ? 'Unconfirmed candidate'
+                                  : event.event_state}
+                              </span>
+                            )}
                             <span
                               className={`rounded-full px-2 py-0.5 text-label font-medium ${toneClass}`}
                             >
-                              Score: <span className="tabular-nums">{event.form_score}/10</span>
+                              Score:{' '}
+                              <span className="tabular-nums">
+                                {eventScore !== null ? `${eventScore}/10` : 'not available'}
+                              </span>
                             </span>
                           </div>
                           {event.key_observation && (

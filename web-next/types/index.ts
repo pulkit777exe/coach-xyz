@@ -94,10 +94,14 @@ export type Finding = {
   severity?: string
   observation?: string
   feedback?: string
-  form_score?: number
+  /** Experimental composite; never a validated performance measure. */
+  form_score?: number | null
   evidence_frames?: number[]
   measured_at_timestamp?: number | null
   model_versions?: Record<string, unknown>
+  /** Lifecycle state: a candidate is not a confirmed event. */
+  event_state?: EventState
+  confirmed?: boolean
   review_state?: string
 }
 
@@ -211,21 +215,129 @@ export type Matchup = {
   }>
 }
 
+// ── Research evidence contract ──────────────────────────────────────────────
+// Mirrors engine/core/evidence.py and engine/core/failures.py. The axes are
+// independent: a VLM judgement can be valid evidence without being a
+// measurement, and an unavailable criterion is missing evidence, not a zero.
+
+export type EvidenceSource = 'pose' | 'object_tracking' | 'vlm' | 'rule' | 'human_reference'
+export type EvidenceState =
+  | 'valid'
+  | 'low_confidence'
+  | 'invalid_view'
+  | 'occluded'
+  | 'unavailable'
+  | 'not_applicable'
+export type EvidenceType = 'measured' | 'conditional' | 'judged' | 'excluded'
+export type ValidationStatus =
+  | 'proposed'
+  | 'coach_reviewed'
+  | 'measurement_tested'
+  | 'coach_validated'
+  | 'production_approved'
+export type EventState = 'confirmed' | 'uncertain' | 'rejected' | 'candidate'
+export type AnalysisJobStatus = 'queued' | 'running' | 'completed' | 'degraded' | 'failed' | 'cancelled'
+export type ScoringStatus = 'experimental_unvalidated' | 'not_available' | 'excluded_from_research'
+
+/** Experimental composite. Never present this as a validated performance score. */
+export type CompositeScore = {
+  value: number | null
+  scale: '0-10'
+  status: ScoringStatus
+  validated: false
+  method: string
+  coverage: number | null
+  minimum_coverage: number
+  excluded_from_research: true
+  reason: string | null
+}
+
+export type CriterionEvidence = {
+  criterion_id: string
+  criterion: string
+  label: string
+  measured_value: number | null
+  unit: string
+  ideal_range?: number[] | null
+  acceptable_range?: number[] | null
+  score: number | null
+  weight: number
+  source: EvidenceSource | null
+  state: EvidenceState
+  evidence_type: EvidenceType
+  validation_status: ValidationStatus
+  measurement_type?: string
+  calibration?: string
+  source_frames?: number[]
+  rationale?: string
+}
+
+export type CriteriaRegistryEntry = {
+  criterion_id: string
+  engine_key: string | null
+  label: string
+  evidence_type: EvidenceType | string
+  validation_status: ValidationStatus | string
+  measurement_type?: string
+  calibration?: string
+  allowed_views?: string[]
+  phase_scope?: string[]
+  required_landmarks?: string[]
+  required_objects?: string[]
+  quality_gate?: string
+  implementation:
+    | 'partial'
+    | 'partial_proxy'
+    | 'not_implemented'
+    | 'excluded_by_protocol'
+    | 'engine_only'
+    | string
+  paper_definition?: string | null
+  implementation_note?: string
+}
+
+export type EventDetectionSummary = {
+  method: string
+  candidate_count: number
+  confirmed: number
+  uncertain: number
+  rejected: number
+  candidate: number
+  validation_status: string
+  note: string
+}
+
+export type AnalysisFailure = {
+  code: string
+  stage: string
+  message: string
+  retryable: boolean
+  detail?: Record<string, unknown> | null
+}
+
 export type AnalysisSummary = {
   sport: string
+  action_id?: string | null
+  sport_pack_version?: string | number | null
   player_name?: string
   session_date?: string | null
-  form_score: number
-  overall_rating: string
+  job_status?: AnalysisJobStatus
+  /** Experimental 0–10 composite. `null` when measured coverage is insufficient. */
+  form_score: number | null
+  /** Experimental label derived from the composite. `null` when unavailable. */
+  overall_rating: string | null
+  rating_status?: ScoringStatus
+  composite?: CompositeScore
   top_tips: string[]
   summary: string
   strengths: string[]
   priority_drill?: string
   shot_events: ShotEvent[]
   success_rate_percent?: number
-  average_form_score?: number
-  /** 0–10 mean technique score across measured events. */
-  average_score?: number
+  /** @deprecated experimental composite; use `composite` for research output. */
+  average_form_score?: number | null
+  /** Experimental 0–10 mean technique score across measured events. */
+  average_score?: number | null
   /** 0–1 share of judged results that were successful. */
   success_rate?: number
   /** 0–1 mean confidence of the tracked events. */
@@ -242,6 +354,16 @@ export type AnalysisSummary = {
   total_events?: number
   /** Camera perspective the analysis ran on (engine-stamped). */
   angle?: string
+  /** Whether the angle was declared by the caller, detected, or defaulted. */
+  angle_source?: 'declared' | 'detected' | 'default' | string
+  /** Paper criteria this run implemented, partial, or left unimplemented. */
+  criteria_registry?: CriteriaRegistryEntry[]
+  /** Confirmed vs candidate events, kept separate from technique assessment. */
+  event_detection?: EventDetectionSummary
+  /** Evidence failures; a degraded job can carry several. */
+  failures?: AnalysisFailure[]
+  /** The bounded research action this pack assesses, when configured. */
+  scope_note?: string | null
   /** Sport-specific guidance for the next angle to film. */
   recommended_angles?: CameraAngleGuidance[]
   /** True when any finding needs human review (§21 job-level flag). */
@@ -261,10 +383,14 @@ export type AnalysisSummary = {
 export type ShotEvent = {
   timestamp: number
   event_type: string
-  form_score: number
+  /** Experimental event composite. `null` when coverage is insufficient. */
+  form_score: number | null
   feedback: string
   key_observation?: string
   result?: string
+  /** Lifecycle state: only `confirmed` is a confirmed sports action. */
+  event_state?: EventState
+  confirmed?: boolean
   confidence?: number
   coverage?: number
   metrics?: PerformanceMetric[]

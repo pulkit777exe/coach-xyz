@@ -196,6 +196,30 @@ separately, so a VLM-only baseline is not given manually selected clips for even
 | Model version changed | New evaluation version created. |
 | Paper IDs | Every pack exposes CR/FB/BB IDs and every implemented criterion maps to one. |
 
+## Server and web alignment (product gating)
+
+The experimental composite is now gated at every tier, not only in the engine:
+
+- **Engine** (`engine/routes/legacy.py`): the wire summary passes through `criterion_id`,
+  `state`, `evidence_type`, `validation_status`, `measurement_type`, `calibration`,
+  `source_frames`, `event_state` and `confirmed`, plus `job_status`, `rating_status`,
+  `composite`, `criteria_registry`, `event_detection`, `failures`, `angle_source` and
+  `scope_note`. `form_score` / `overall_rating` are `null`, never coerced to `0`.
+- **Server**: `chat_turn` presents the score/rating only as provisional, unvalidated and
+  never for selection decisions; fallback answers say "no experimental form score" instead of
+  "N/A/10". `persistPlayerEvents` materializes only `confirmed` events (and legacy rows without
+  `event_state`); candidates never reach trend tables. Org reports say "average experimental form
+  score … (provisional, unvalidated weighting)" and never render a missing score as `0`.
+- **Web**: the score card is labelled "Experimental Form Score" with measured coverage and a
+  disclaimer; the rating chip is "Experimental score"; an unavailable score renders `—`, never a
+  red "failing" tile; unconfirmed events carry a warning chip and never colour a score red; the
+  share page, history list and Student Hub/Player Hub show "Exp. score"; null scores use a neutral
+  canvas marker in VideoPlayer instead of red.
+
+Remaining product/marketing exposure: `components/LandingPage.tsx` still quotes unsourced outcome
+percentages (including a "form score improvement" figure); that copy is out of scope of this
+alignment and should be replaced with capability statements, not performance claims.
+
 ## Remaining gaps
 
 These are deliberate, tracked gaps rather than hidden claims:

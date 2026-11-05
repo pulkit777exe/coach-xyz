@@ -116,13 +116,13 @@ export default async function HistoryPage({
                 <div className="ml-4 flex shrink-0 items-center gap-3">
                   {a.summary_json &&
                   typeof a.summary_json === 'object' &&
-                  'form_score' in a.summary_json ? (
+                  typeof (a.summary_json as { form_score?: unknown }).form_score === 'number' ? (
                     <div className="text-right">
                       <p className="text-[18px] font-semibold leading-none tabular-nums text-foreground">
                         {(a.summary_json as { form_score: number }).form_score}
                       </p>
                       <p className="mt-1 text-label font-medium uppercase leading-none tracking-[0.08em] text-muted-foreground">
-                        Score
+                        Exp. score
                       </p>
                     </div>
                   ) : null}

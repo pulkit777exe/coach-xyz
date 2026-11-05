@@ -90,7 +90,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       {summary && (
         <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: 'Form Score', value: fmtStat(num(summary.form_score), '—') },
+            { label: 'Experimental Score', value: fmtStat(num(summary.form_score), '—') },
             {
               label: 'Confidence',
               value:
@@ -186,6 +186,11 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-foreground text-body">{str(event.event_type) ?? 'Event'}</p>
+                    {str(event.event_state) && event.event_state !== 'confirmed' && (
+                      <span className="rounded-full bg-warning/15 px-2 text-label font-medium leading-[18px] capitalize text-warning">
+                        {event.event_state === 'candidate' ? 'unconfirmed' : str(event.event_state)}
+                      </span>
+                    )}
                     {typeof event.form_score === 'number' && (
                       <span
                         className={`rounded-full px-2 text-label font-medium leading-[18px] tabular-nums ${
@@ -255,6 +260,7 @@ function isEvents(v: unknown): v is Array<{
   timestamp?: unknown
   event_type?: unknown
   form_score?: unknown
+  event_state?: unknown
   feedback?: unknown
   key_observation?: unknown
 }> {

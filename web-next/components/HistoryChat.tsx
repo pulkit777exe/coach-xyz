@@ -98,8 +98,11 @@ function HistoryChatPanel({
                 {(summary.sport as string) || 'Sport'} Analysis
               </p>
               <p className="text-meta text-muted-foreground tabular-nums">
-                Score: {(summary.form_score as number) ?? '—'}/10 ·{' '}
-                {(summary.overall_rating as string) || ''}
+                Experimental score: {typeof summary.form_score === 'number' ? summary.form_score : '—'}
+                /10
+                {typeof summary.overall_rating === 'string' && summary.overall_rating
+                  ? ` · ${summary.overall_rating}`
+                  : ''}
               </p>
             </div>
           </div>

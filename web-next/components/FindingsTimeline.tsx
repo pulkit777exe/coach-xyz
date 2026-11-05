@@ -106,6 +106,13 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     <span className="text-caption text-muted-foreground">
                       {BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band}
                     </span>
+                    {finding.event_state && finding.event_state !== 'confirmed' && (
+                      <span className="text-caption font-medium capitalize text-warning">
+                        {finding.event_state === 'candidate'
+                          ? 'Unconfirmed candidate'
+                          : finding.event_state}
+                      </span>
+                    )}
                     {state === 'needs_review' && (
                       <span className="text-caption font-medium text-warning">Needs review</span>
                     )}

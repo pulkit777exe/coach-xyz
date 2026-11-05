@@ -52,12 +52,16 @@ export const withAlpha = (hex: string, alpha: number): string => {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }
 
-export function scoreColor(score: number): string {
+export function scoreColor(score: number | null): string {
   // Previously Tailwind's STOCK green-400 / amber-400 / red-500, which are not this
   // app's colours at all — so every timeline marker and every callout bar was a
   // different hue from the `--success` / `--warning` / `--danger` used everywhere
   // else. It also read as dead code because of the leading underscore, which is how
   // it survived an earlier full hex-to-token migration that touched this very file.
+  //
+  // A null score means "not enough measured coverage", not "bad technique", so it
+  // gets a neutral marker instead of falling through to red.
+  if (score === null) return themeColor('--muted-foreground', '#787774')
   if (score >= 8) return themeColor('--success', '#0f7b6c')
   if (score >= 5) return themeColor('--warning', '#d9730d')
   return themeColor('--danger', '#e03e3e')

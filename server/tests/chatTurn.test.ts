@@ -52,12 +52,16 @@ describe('answerChatTurn', () => {
     expect(seen?.message).toBe('Any tips?')
     expect(seen?.conversationHistory).toEqual(history)
     expect(seen?.systemPrompt).toContain('Sport: Tennis')
-    expect(seen?.systemPrompt).toContain('Form Score: 8/10')
-    expect(seen?.systemPrompt).toContain('Rating: Advanced')
+    expect(seen?.systemPrompt).toContain(
+      'Experimental form score (provisional, unvalidated weighting): 8/10',
+    )
+    expect(seen?.systemPrompt).toContain('Experimental rating label (unvalidated): Advanced')
+    expect(seen?.systemPrompt).toContain('not a validated measure of performance')
     expect(seen?.systemPrompt).toContain('Top Tips: Bend the knees; Follow through')
     expect(seen?.systemPrompt).toContain('Strengths: Footwork')
     expect(seen?.systemPrompt).toContain('Priority Drill: Shadow swings x20')
-    expect(seen?.systemPrompt).toContain('Shot Events (1):')
+    expect(seen?.systemPrompt).toContain('Events (1):')
+    expect(seen?.systemPrompt).toContain('Event state: unstated')
   })
 
   test('falls back to keyword answers when the engine returns nothing', async () => {
@@ -90,6 +94,58 @@ describe('answerChatTurn', () => {
       { chatWithEngine: async () => '' },
     )
     expect(empty).toContain('Shadow swings x20')
+  })
+
+  test('does not present a missing score or a candidate as a confirmed result', async () => {
+    const reply = await answerChatTurn(
+      {
+        message: 'What was my score?',
+        summary: {
+          sport: 'Basketball',
+          form_score: null,
+          overall_rating: null,
+          rating_status: 'not_available',
+          summary: 'The camera angle hid the shooting arm.',
+          shot_events: [],
+        },
+        engineJobId: 'eng-1',
+        conversationHistory: [],
+      },
+      { chatWithEngine: async () => null },
+    )
+    expect(reply).toContain('no experimental form score')
+    expect(reply).not.toContain('0/10')
+
+    let prompt = ''
+    await answerChatTurn(
+      {
+        message: 'Events?',
+        summary: {
+          ...summary,
+          form_score: null,
+          overall_rating: null,
+          shot_events: [
+            {
+              timestamp: 3,
+              event_type: 'free_throw',
+              form_score: null,
+              event_state: 'candidate',
+              feedback: 'Motion peak only.',
+            },
+          ],
+        },
+        engineJobId: 'eng-1',
+        conversationHistory: [],
+      },
+      {
+        chatWithEngine: async (args) => {
+          prompt = args.systemPrompt
+          return 'ok'
+        },
+      },
+    )
+    expect(prompt).toContain('Event state: candidate — not a confirmed sports action.')
+    expect(prompt).toContain('No experimental score (insufficient measured coverage).')
   })
 
   test('falls back to the unavailable message without a summary', async () => {

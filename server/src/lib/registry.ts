@@ -109,16 +109,31 @@ export const updateVideoProbe = async (
   })
 }
 
+/**
+ * A motion peak is a candidate, not a confirmed sports action. Older results
+ * predate `event_state`; keep those for back-compat rather than dropping data.
+ */
+export const confirmedEventsOnly = <T extends { event_state?: unknown }>(events: T[]): T[] =>
+  (Array.isArray(events) ? events : []).filter((e) => {
+    const state = e?.event_state
+    return state === undefined || state === null || state === 'confirmed'
+  })
+
 /** Materialize an analysis's shot events for timeline/trend queries. */
 export const persistPlayerEvents = async (
   serverJobId: string,
   orgAuth0Id: string | null,
   studentId: string | null,
-  events: Array<{ event_type?: unknown; timestamp?: unknown; form_score?: unknown }>,
+  events: Array<{
+    event_type?: unknown
+    timestamp?: unknown
+    form_score?: unknown
+    event_state?: unknown
+  }>,
 ): Promise<void> => {
-  const rows = (Array.isArray(events) ? events : [])
-    .filter((e) => e && typeof e === 'object')
-    .slice(0, 200)
+  const rows = confirmedEventsOnly(
+    (Array.isArray(events) ? events : []).filter((e) => e && typeof e === 'object'),
+  ).slice(0, 200)
   await withHistoryStore(async (db: SQL) => {
     await db`delete from player_events where server_job_id = ${serverJobId};`
     for (const e of rows) {

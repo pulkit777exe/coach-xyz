@@ -583,7 +583,8 @@ export default function AnalysisDetailClient({
                 Chat with AI Coach
               </h2>
               <p className="text-meta text-muted-foreground mt-0.5">
-                Ask questions about your form score, key observations, and recommended drills.
+                Ask questions about your experimental score, key observations, and recommended
+                drills.
               </p>
             </div>
             <Link
@@ -617,7 +618,7 @@ export default function AnalysisDetailClient({
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           {[
             {
-              label: 'Form Score',
+              label: 'Experimental Score',
               value:
                 typeof summary.form_score === 'number'
                   ? `${summary.form_score.toFixed(1)}/10`
@@ -635,7 +636,7 @@ export default function AnalysisDetailClient({
               value: typeof summary.total_events === 'number' ? summary.total_events : '—',
             },
             {
-              label: 'Average Score',
+              label: 'Experimental Average',
               value:
                 typeof summary.average_score === 'number'
                   ? `${summary.average_score.toFixed(1)}/10`
@@ -656,10 +657,10 @@ export default function AnalysisDetailClient({
               <p className="mt-2 font-semibold text-[28px] leading-none tabular-nums text-foreground">
                 {card.value}
               </p>
-              {card.label === 'Form Score' && (
+              {card.label === 'Experimental Score' && (
                 <Popover
                   trigger="click"
-                  label="Form score is calculated by AI based on technique, mechanics, and body position across all keyframes."
+                  label="Experimental performance rating — provisional, unvalidated weighting. It is not an independently validated measure of athletic performance and should not be used for coaching or selection decisions. Criterion-level measurements are the primary output."
                   className="[&_*]:!text-foreground"
                 >
                   <span className="mt-2 inline-block cursor-help text-meta text-muted-foreground underline decoration-dotted">
@@ -727,6 +728,11 @@ export default function AnalysisDetailClient({
                   <span className="text-body text-foreground">
                     {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                   </span>
+                  {typeof event.event_state === 'string' && event.event_state !== 'confirmed' && (
+                    <span className="text-label font-medium px-1.5 py-0.5 rounded-full bg-warning/15 text-warning capitalize">
+                      {event.event_state === 'candidate' ? 'unconfirmed' : event.event_state}
+                    </span>
+                  )}
                   {typeof event.form_score === 'number' && (
                     <span
                       className={`text-label font-medium px-1.5 py-0.5 rounded-full ${
@@ -774,6 +780,11 @@ export default function AnalysisDetailClient({
                     <p className="text-body text-foreground">
                       {typeof event.event_type === 'string' ? event.event_type : 'Event'}
                     </p>
+                    {typeof event.event_state === 'string' && event.event_state !== 'confirmed' && (
+                      <span className="text-label font-medium px-1.5 py-0.5 rounded-full bg-warning/15 text-warning capitalize">
+                        {event.event_state === 'candidate' ? 'unconfirmed' : event.event_state}
+                      </span>
+                    )}
                     {typeof event.form_score === 'number' && (
                       <span
                         className={`text-label font-medium px-1.5 py-0.5 rounded-full ${

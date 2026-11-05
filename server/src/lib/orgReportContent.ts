@@ -101,8 +101,8 @@ export const buildReportContent = async (
     form_score:
       typeof analysis.summary_json === 'object' &&
       analysis.summary_json &&
-      'form_score' in analysis.summary_json
-        ? Number((analysis.summary_json as Record<string, unknown>).form_score)
+      typeof (analysis.summary_json as Record<string, unknown>).form_score === 'number'
+        ? ((analysis.summary_json as Record<string, unknown>).form_score as number)
         : null,
   }))
 
@@ -121,7 +121,7 @@ export const buildReportContent = async (
     }
     if (performanceBlock.form_score_avg !== null) {
       parts.push(
-        `Average form score across the ${performanceBlock.total_sessions} most recent analyzed session(s) is ${performanceBlock.form_score_avg}/10.`,
+        `Average experimental form score across the ${performanceBlock.total_sessions} most recent analyzed session(s) is ${performanceBlock.form_score_avg}/10 (provisional, unvalidated weighting).`,
       )
     } else if (attendanceBlock.total_records > 0) {
       parts.push(
@@ -130,7 +130,7 @@ export const buildReportContent = async (
     }
     summary = parts.length ? parts.join(' ') : 'No data is available yet for this academy.'
   } else if (performanceBlock.form_score_avg !== null) {
-    summary = `Average form score across ${performanceBlock.total_sessions} analyzed session(s) is ${performanceBlock.form_score_avg}/10${
+    summary = `Average experimental form score across ${performanceBlock.total_sessions} analyzed session(s) is ${performanceBlock.form_score_avg}/10 (provisional, unvalidated weighting)${
       attendanceBlock.total_records > 0
         ? `; attendance rate over the period was ${attendanceBlock.attendance_rate ?? 0}%`
         : ''

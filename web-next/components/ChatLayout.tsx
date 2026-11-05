@@ -71,28 +71,32 @@ export default function ChatLayout({
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
                   <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    Score
+                    Experimental score
                   </span>
                   <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
-                    {jobStatus.summary.form_score}/10
+                    {typeof jobStatus.summary.form_score === 'number'
+                      ? `${jobStatus.summary.form_score}/10`
+                      : '—'}
                   </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
                   <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    Events
+                    Confirmed events
                   </span>
                   <span className="font-semibold text-[20px] leading-none tabular-nums text-foreground">
-                    {jobStatus.summary.total_events}
+                    {jobStatus.summary.event_detection?.confirmed ??
+                      jobStatus.summary.total_events ??
+                      '—'}
                   </span>
                 </div>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-2">
                   <span className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    Rating
+                    Experimental rating
                   </span>
                   <span className="font-semibold text-[20px] leading-none text-foreground capitalize">
-                    {jobStatus.summary.overall_rating}
+                    {jobStatus.summary.overall_rating ?? '—'}
                   </span>
                 </div>
               </div>

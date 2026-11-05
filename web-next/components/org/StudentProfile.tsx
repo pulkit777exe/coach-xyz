@@ -880,7 +880,7 @@ export default function StudentProfile({
                     Date
                   </th>
                   <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                    Form
+                    Exp. form
                   </th>
                   <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Action

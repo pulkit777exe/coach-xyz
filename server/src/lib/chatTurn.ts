@@ -35,8 +35,17 @@ const buildChatSystemPrompt = (summary: Record<string, unknown> | null): string 
   const contextParts: string[] = []
   if (summary) {
     if (summary.sport) contextParts.push(`Sport: ${summary.sport}`)
-    if (summary.form_score) contextParts.push(`Form Score: ${summary.form_score}/10`)
-    if (summary.overall_rating) contextParts.push(`Rating: ${summary.overall_rating}`)
+    if (typeof summary.form_score === 'number') {
+      contextParts.push(
+        `Experimental form score (provisional, unvalidated weighting): ${summary.form_score}/10`,
+      )
+    }
+    if (summary.overall_rating) {
+      contextParts.push(`Experimental rating label (unvalidated): ${summary.overall_rating}`)
+    }
+    contextParts.push(
+      'The experimental score is not a validated measure of performance and must not be used for selection decisions. Prefer criterion-level evidence.',
+    )
     if (summary.summary) contextParts.push(`Summary: ${summary.summary}`)
     if (summary.top_tips && Array.isArray(summary.top_tips)) {
       contextParts.push(`Top Tips: ${summary.top_tips.join('; ')}`)
@@ -47,10 +56,19 @@ const buildChatSystemPrompt = (summary: Record<string, unknown> | null): string 
     if (summary.priority_drill) contextParts.push(`Priority Drill: ${summary.priority_drill}`)
     if (summary.shot_events && Array.isArray(summary.shot_events)) {
       const events = summary.shot_events as Array<Record<string, unknown>>
-      contextParts.push(`Shot Events (${events.length}):`)
+      contextParts.push(`Events (${events.length}):`)
       events.forEach((e, i) => {
+        const state = typeof e.event_state === 'string' ? e.event_state : 'unstated'
+        const score =
+          typeof e.form_score === 'number'
+            ? `Experimental score ${e.form_score}/10.`
+            : 'No experimental score (insufficient measured coverage).'
+        const lifecycle =
+          state === 'confirmed'
+            ? 'Confirmed event.'
+            : `Event state: ${state} — not a confirmed sports action.`
         contextParts.push(
-          `  ${i + 1}. ${e.timestamp}s - ${e.event_type}: Score ${e.form_score}/10. ${e.feedback || ''}`,
+          `  ${i + 1}. ${e.timestamp}s - ${e.event_type}. ${lifecycle} ${score} ${e.feedback || ''}`,
         )
       })
     }
@@ -72,7 +90,14 @@ export const keywordFallback = (
   const q = question.toLowerCase()
 
   if (q.includes('score') || q.includes('rating')) {
-    return `Based on the analysis, the form score is ${summary.form_score ?? 'N/A'}/10 with an overall rating of "${summary.overall_rating ?? 'N/A'}". ${summary.summary || ''}`
+    const score =
+      typeof summary.form_score === 'number'
+        ? `the experimental form score is ${summary.form_score}/10`
+        : 'there is no experimental form score because too few criteria could be measured'
+    const rating = summary.overall_rating
+      ? ` with the experimental label "${summary.overall_rating}"`
+      : ''
+    return `Based on the analysis, ${score}${rating}. This composite uses provisional, unvalidated weighting and is not an independently validated measure of athletic performance. ${summary.summary || ''}`
   }
   if (q.includes('tip') || q.includes('improve') || q.includes('focus')) {
     const tips = summary.top_tips as string[] | undefined
@@ -93,13 +118,33 @@ export const keywordFallback = (
   }
   if (q.includes('event') || q.includes('shot')) {
     const events = summary.shot_events as Array<Record<string, unknown>> | undefined
+    const detection = summary.event_detection as Record<string, unknown> | undefined
     if (events?.length) {
-      return `There were ${events.length} events detected. Here's a summary:\n${events.map((e, i) => `${i + 1}. ${e.timestamp}s - ${e.event_type}: Score ${e.form_score}/10`).join('\n')}`
+      const confirmed = events.filter((e) => e.event_state === 'confirmed').length
+      const candidates = events.filter((e) => e.event_state === 'candidate').length
+      const counts =
+        typeof detection?.confirmed === 'number'
+          ? `${detection.confirmed} confirmed`
+          : `${confirmed} confirmed`
+      return `The analysis found ${counts} event(s)${candidates > 0 ? ` and ${candidates} unconfirmed candidate(s)` : ''}. Here's a summary:\n${events
+        .map((e, i) => {
+          const state = typeof e.event_state === 'string' ? e.event_state : 'unstated'
+          const score =
+            typeof e.form_score === 'number'
+              ? `experimental score ${e.form_score}/10`
+              : 'no experimental score'
+          return `${i + 1}. ${e.timestamp}s - ${e.event_type} (${state}): ${score}`
+        })
+        .join('\n')}`
     }
-    return `The analysis detected ${summary.total_events ?? 0} events.`
+    return `The analysis detected ${summary.total_events ?? 0} event(s).`
   }
 
-  return `${summary.summary || "Here's a summary of the analysis."} The form score was ${summary.form_score ?? 'N/A'}/10. Feel free to ask about specific events, tips, strengths, or drills.`
+  const scoreText =
+    typeof summary.form_score === 'number'
+      ? `The experimental form score was ${summary.form_score}/10.`
+      : 'No experimental form score was available.'
+  return `${summary.summary || "Here's a summary of the analysis."} ${scoreText} Feel free to ask about specific events, tips, strengths, or drills.`
 }
 
 const defaultChatWithEngine: EngineChatFn = async ({
