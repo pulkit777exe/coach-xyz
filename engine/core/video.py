@@ -40,10 +40,18 @@ def sha256_file(path: str, chunk: int = 8 << 20) -> str:
     return digest.hexdigest()
 
 
-def _ffprobe(path: str) -> dict:
+def _ffprobe(path: str, *, stream: str = "v:0",
+             entries: str = "stream=avg_frame_rate,duration:format=duration") -> dict:
+    """Probe one stream with a fixed, non-user-controlled argument set.
+
+    The caller chooses which stream and which entries; it cannot append arbitrary
+    ffprobe flags. That keeps the subprocess invocation auditable while still
+    supporting the video and audio probes the engine needs.
+    """
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-of", "json", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,duration:format=duration", path],
+            ["ffprobe", "-v", "error", "-of", "json", "-select_streams", stream,
+             "-show_entries", entries, path],
             capture_output=True, timeout=60, check=True,
         )
         return json.loads(out.stdout or b"{}")
@@ -54,8 +62,7 @@ def _ffprobe(path: str) -> dict:
 
 
 def probe(path: str, max_seconds: float = 3600) -> Media:
-    info = _ffprobe(path, "-select_streams", "v:0", "-show_entries",
-                    "stream=avg_frame_rate,duration:format=duration")
+    info = _ffprobe(path)
     stream = (info.get("streams") or [None])[0]
     if not stream:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO)
@@ -67,7 +74,7 @@ def probe(path: str, max_seconds: float = 3600) -> Media:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO) from exc
     if fps <= 0 or duration <= 0 or duration > max_seconds:
         raise EngineError("VIDEO_DECODE_FAILED", "Video must be between 1 second and 60 minutes long.")
-    audio = _ffprobe(path, "-select_streams", "a:0", "-show_entries", "stream=codec_type")
+    audio = _ffprobe(path, stream="a:0", entries="stream=codec_type")
     return Media(duration=duration, fps=fps, has_audio=bool(audio.get("streams")))
 
 
@@ -82,8 +89,8 @@ class FFmpegWriter:
         self.frames = 0
         cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                "-s", f"{width}x{height}", "-r", f"{fps:.4f}", "-i", "-"]
-        audio = bool(audio_from) and bool(_ffprobe(audio_from, "-select_streams", "a:0",
-                                                   "-show_entries", "stream=codec_type").get("streams"))
+        audio = bool(audio_from) and bool(_ffprobe(audio_from, stream="a:0",
+                                                   entries="stream=codec_type").get("streams"))
         if audio:
             cmd += ["-i", audio_from]
         cmd += ["-map", "0:v:0"]
