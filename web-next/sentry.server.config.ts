@@ -17,8 +17,11 @@ Sentry.init({
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,
 
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+  // Standalone Docker builds do not trace Sentry's ESM diagnostics-channel
+  // hook, so it warns on boot. Error capture still works; disable the hook
+  // there and keep it on Vercel/dev where the hook is traced.
+  enableRuntimeChannelInjection: process.env.SENTRY_RUNTIME_CHANNEL_INJECTION !== '0',
+
 
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:

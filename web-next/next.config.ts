@@ -3,34 +3,24 @@ import { withSentryConfig } from '@sentry/nextjs/config'
 
 const API_PROXY = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
-const isDev = process.env.NODE_ENV !== 'production'
-const connectSrc = ["'self'", 'https://*.sentry.io', 'https://*.upstash.io', API_PROXY]
-if (isDev) connectSrc.push('http://localhost:*')
-
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
-  {
-    key: 'Content-Security-Policy',
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
-      `connect-src ${connectSrc.join(' ')}`,
-      "worker-src 'self' blob:",
-      "base-uri 'self'",
-      "form-action 'self' mailto:",
-      "frame-ancestors 'none'",
-    ].join('; '),
-  },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  { key: 'X-DNS-Prefetch-Control', value: 'off' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+  // CSP is per-request (nonce) and applied by proxy.ts.
 ]
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  // The Docker image is a self-contained server; Vercel builds keep its own
+  // output layout. Gated so local/Vercel builds are unchanged.
+  ...(process.env.DOCKER_BUILD === '1' ? { output: 'standalone' as const } : {}),
   // The monorepo has a root bun.lock plus web-next/package-lock.json. Pin
   // Turbopack to the Next app so Next does not infer the repository root and
   // emit a workspace-root warning on every build.
