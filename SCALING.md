@@ -285,7 +285,7 @@ scrape_configs:
     static_configs:
       - targets: ['engine:8001']
     metrics_path: /metrics
-    
+
   - job_name: 'coachai-server'
     static_configs:
       - targets: ['server:8000']
@@ -303,13 +303,13 @@ groups:
         for: 5m
         labels:
           severity: warning
-          
+
       - alert: EngineHighMemory
         expr: engine_memory_usage_bytes > 3.5e9
         for: 5m
         labels:
           severity: critical
-          
+
       - alert: JobFailureRate
         expr: rate(bullmq_jobs_failed_total[5m]) > 0.1
         for: 5m
