@@ -14,6 +14,13 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL
 
+// Identity-bearing payloads are JSON documents (org rows, reports, invites).
+// The backend's own upload cap is 500 MB, but nothing proxied through this
+// handler is an upload — cap the body here so an authenticated caller cannot
+// make Vercel buffer an arbitrary payload. Override only if a real proxied
+// endpoint needs more.
+const MAX_PROXY_BODY_BYTES = Number(process.env.SERVICE_PROXY_MAX_BODY_BYTES ?? 2 * 1024 * 1024)
+
 /**
  * Proxy-own failures (misconfiguration, non-identity paths, missing
  * session, unreachable backend) in the canonical CoachAIError shape so
@@ -63,7 +70,14 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   let body: ArrayBuffer | undefined
   if (hasBody) {
+    const declaredLength = Number(request.headers.get('content-length') ?? 0)
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PROXY_BODY_BYTES) {
+      return proxyError('FILE_TOO_LARGE', 'Request body is too large.', 413, false)
+    }
     body = await request.arrayBuffer()
+    if (body.byteLength > MAX_PROXY_BODY_BYTES) {
+      return proxyError('FILE_TOO_LARGE', 'Request body is too large.', 413, false)
+    }
   }
 
   // The backend is the authorizer: it accepts the org owner OR any active
@@ -96,6 +110,13 @@ async function proxy(request: NextRequest, ctx: RouteContext) {
 
   const responseHeaders = new Headers(backendRes.headers)
   for (const name of HOP_BY_HOP) responseHeaders.delete(name)
+  // This handler is an identity proxy, not a cookie surface: the backend
+  // authenticates the web app with headers, never by setting browser cookies.
+  // Strip Set-Cookie so a compromised/misconfigured backend cannot plant one
+  // on the app origin.
+  responseHeaders.delete('set-cookie')
+  responseHeaders.delete('server')
+  responseHeaders.delete('x-powered-by')
 
   return new Response(backendRes.body, {
     status: backendRes.status,
