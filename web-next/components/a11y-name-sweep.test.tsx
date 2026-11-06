@@ -1552,6 +1552,53 @@ add(
     },
   },
   {
+    id: 'components/analysis/ProStatsPanel.tsx',
+    render: async () => {
+      const { default: ProStatsPanel } = await import('@/components/analysis/ProStatsPanel')
+      return h(ProStatsPanel, {
+        stats: {
+          groups: [
+            {
+              key: 'technique',
+              label: 'Technique',
+              stats: [
+                {
+                  key: 'arm_extension',
+                  label: 'Shooting arm extension',
+                  unit: '/10',
+                  value: 8.4,
+                  source: 'measured',
+                  band: 'developing',
+                  note: '3 events scored',
+                },
+              ],
+            },
+          ],
+          event_breakdown: [
+            { type: 'catch_and_shoot', label: 'Catch and shoot', count: 2, share: 66.7 },
+          ],
+          outcomes: [{ result: 'made', label: 'Made', count: 2, tone: 'positive' }],
+          tags: [{ tag: 'high release', count: 2 }],
+          trend: {
+            direction: 'improving',
+            delta: 0.8,
+            first: 7.2,
+            second: 8.0,
+            n: 4,
+            source: 'measured',
+          },
+          provenance: { measured: 1, counted: 2, observed: 1 },
+          bands: { developing: 'mean technique score 6.0-8.4 / 10' },
+          unavailable: [
+            { label: 'Shot chart / court location', reason: 'camera is not mapped to the court' },
+          ],
+        },
+        tacticalSummary: 'The release repeated; the balance broke down late.',
+        keyInsights: ['Keep the release height; rehearse the landing.'],
+      } as never)
+    },
+  },
+  {
     id: 'components/AnalysisTitle.tsx',
     render: async () => {
       const { default: AnalysisTitle } = await import('@/components/AnalysisTitle')
