@@ -10,7 +10,7 @@ import { isDate } from '../../lib/orgValidate'
 import { getTeam } from '../../lib/teams'
 import { resolveCaller } from '../../lib/caller'
 import { UUID_RE } from './shared'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
@@ -20,8 +20,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/seasons', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('team.read')) {
@@ -34,8 +33,7 @@ export default new Elysia()
   .post('/api/org/:auth0Id/seasons', async ({ params, body, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('team.manage')) {
@@ -44,8 +42,7 @@ export default new Elysia()
     }
     const raw = (body ?? {}) as Record<string, unknown>
     if (raw.starts_on !== undefined && raw.starts_on !== null && !isDate(raw.starts_on)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'starts_on must be YYYY-MM-DD', false)
+      return badRequest(set, 'starts_on must be YYYY-MM-DD')
     }
     if (raw.ends_on !== undefined && raw.ends_on !== null && !isDate(raw.ends_on)) {
       set.status = 400
@@ -57,8 +54,7 @@ export default new Elysia()
       ends_on: typeof raw.ends_on === 'string' ? raw.ends_on : null,
     })
     if (!season) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'name is required', false)
+      return badRequest(set, 'name is required')
     }
     set.status = 201
     return { season }
@@ -66,8 +62,7 @@ export default new Elysia()
   .delete('/api/org/:auth0Id/seasons/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id || !UUID_RE.test(id)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid season id', false)
+      return badRequest(set, 'Invalid season id')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('team.manage')) {
@@ -85,8 +80,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/matches', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
@@ -106,8 +100,7 @@ export default new Elysia()
   .post('/api/org/:auth0Id/matches', async ({ params, body, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('team.manage')) {
@@ -117,8 +110,7 @@ export default new Elysia()
     const raw = (body ?? {}) as Record<string, unknown>
     const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
     if (raw.match_on !== undefined && raw.match_on !== null && !isDate(raw.match_on)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'match_on must be YYYY-MM-DD', false)
+      return badRequest(set, 'match_on must be YYYY-MM-DD')
     }
     const teamId = pickId(raw.team_id)
     if (teamId && !(await getTeam(auth0Id, teamId))) {
@@ -143,8 +135,7 @@ export default new Elysia()
   .delete('/api/org/:auth0Id/matches/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id || !UUID_RE.test(id)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid match id', false)
+      return badRequest(set, 'Invalid match id')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('team.manage')) {

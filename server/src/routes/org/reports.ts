@@ -10,7 +10,7 @@ import { getStudent } from '../../lib/orgRoster'
 import { defaultReportTitle, isDate, isIsoDate } from '../../lib/orgValidate'
 import { REPORT_TYPE_SET } from './shared'
 import type { ReportType } from '../../lib/orgEnums'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
@@ -60,24 +60,17 @@ export default new Elysia()
     >
 
     if (!report_type || !REPORT_TYPE_SET.has(report_type as string)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `report_type must be one of ${[...REPORT_TYPE_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `report_type must be one of ${[...REPORT_TYPE_SET].join(', ')}`)
     }
     if (student_id && (await getStudent(auth0Id, student_id as string)) === null) {
       set.status = 404
       return buildError('NOT_FOUND', 'Student not found', false)
     }
     if (period_start !== undefined && !isDate(period_start)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'period_start must be YYYY-MM-DD', false)
+      return badRequest(set, 'period_start must be YYYY-MM-DD')
     }
     if (period_end !== undefined && !isDate(period_end)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'period_end must be YYYY-MM-DD', false)
+      return badRequest(set, 'period_end must be YYYY-MM-DD')
     }
 
     const from = isDate(period_start) ? period_start : undefined
@@ -136,16 +129,10 @@ export default new Elysia()
       report_type === undefined ? existing.report_type : String(report_type)
     ) as ReportType
     if (!REPORT_TYPE_SET.has(nextType)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `report_type must be one of ${[...REPORT_TYPE_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `report_type must be one of ${[...REPORT_TYPE_SET].join(', ')}`)
     }
     if (period_start !== undefined && period_start !== null && !isDate(period_start)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'period_start must be YYYY-MM-DD', false)
+      return badRequest(set, 'period_start must be YYYY-MM-DD')
     }
     if (
       period_end !== undefined &&
@@ -153,8 +140,7 @@ export default new Elysia()
       !isIsoDate(period_end) &&
       !isDate(period_end)
     ) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'period_end must be YYYY-MM-DD', false)
+      return badRequest(set, 'period_end must be YYYY-MM-DD')
     }
 
     const from =

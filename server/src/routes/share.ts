@@ -6,7 +6,7 @@
 // The default export mounts both; index.ts wires it in (reserved edit).
 
 import { Elysia } from 'elysia'
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import {
   orgRoleGuard,
   serviceGuard,
@@ -37,8 +37,7 @@ export const orgShareRoute = (deps: ShareRouteDeps = {}) => {
     .post('/api/org/:auth0Id/analyses/:jobId/share-token', async ({ params, request, set }) => {
       const { auth0Id, jobId } = params as { auth0Id: string; jobId: string }
       if (!auth0Id || !jobId) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id or jobId parameter', false)
+        return badRequest(set, 'Missing auth0Id or jobId parameter')
       }
 
       const analysis = await getAnalysis(jobId)
@@ -67,8 +66,7 @@ export const orgShareRoute = (deps: ShareRouteDeps = {}) => {
     .delete('/api/org/:auth0Id/share-tokens/:token', async ({ params, request, set }) => {
       const { token } = params as { auth0Id: string; token: string }
       if (!token) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing share token', false)
+        return badRequest(set, 'Missing share token')
       }
       const verifiedAuth0Id = request.headers.get(SERVICE_HEADERS.verifiedAuth0Id)
       const record = await store.getShareToken(token)
@@ -93,8 +91,7 @@ export const publicShareRoute = (deps: ShareRouteDeps = {}) => {
   return new Elysia({ name: 'publicShare' }).get('/api/share/:token', async ({ params, set }) => {
     const { token } = params as { token: string }
     if (!token) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing share token', false)
+      return badRequest(set, 'Missing share token')
     }
 
     // Raw read first so we can distinguish 404 (never existed) from 410 (expired).

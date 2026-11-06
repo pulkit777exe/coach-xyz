@@ -6,7 +6,7 @@ import {
 } from '../../lib/orgAttendance'
 import { isIsoDate } from '../../lib/orgValidate'
 import { EVENT_STATUS_SET, EVENT_TYPE_SET, parseScheduleInput } from './shared'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
@@ -38,28 +38,17 @@ export default new Elysia()
     }
     const input = parseScheduleInput(body as Record<string, unknown>)
     if (!input.title || typeof input.title !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required field: title', false)
+      return badRequest(set, 'Missing required field: title')
     }
     if (!input.starts_at || !isIsoDate(input.starts_at)) {
       set.status = 400
       return buildError('INVALID_REQUEST', 'starts_at must be a valid ISO datetime', false)
     }
     if (input.event_type !== undefined && !EVENT_TYPE_SET.has(input.event_type as string)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `event_type must be one of ${[...EVENT_TYPE_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `event_type must be one of ${[...EVENT_TYPE_SET].join(', ')}`)
     }
     if (input.status !== undefined && !EVENT_STATUS_SET.has(input.status as string)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `status must be one of ${[...EVENT_STATUS_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `status must be one of ${[...EVENT_STATUS_SET].join(', ')}`)
     }
     if (input.ends_at !== undefined && input.ends_at !== null && !isIsoDate(input.ends_at)) {
       set.status = 400
@@ -77,8 +66,7 @@ export default new Elysia()
   .put('/api/org/:auth0Id/schedule/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     const auth = await authorizeOrg(request, auth0Id, 'schedule.manage')
     if (!auth.ok) {
@@ -91,12 +79,7 @@ export default new Elysia()
       return buildError('INVALID_REQUEST', 'starts_at must be a valid ISO datetime', false)
     }
     if (input.event_type !== undefined && !EVENT_TYPE_SET.has(input.event_type as string)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `event_type must be one of ${[...EVENT_TYPE_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `event_type must be one of ${[...EVENT_TYPE_SET].join(', ')}`)
     }
     if (input.status !== undefined && !EVENT_STATUS_SET.has(input.status as string)) {
       set.status = 400

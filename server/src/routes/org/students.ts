@@ -22,7 +22,7 @@ import {
 import { linkAnalysisToStudent } from '../../lib/analyses'
 import { auditOrg, authorizeOrg } from '../../lib/orgRoute'
 import { STUDENT_STATUS_SET, parseStudentInput, resolveTeamId, studentScope } from './shared'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
@@ -32,8 +32,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/students', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const auth = await authorizeOrg(request, auth0Id, 'player.read')
     if (!auth.ok) {
@@ -67,8 +66,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/students/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     const auth = await authorizeOrg(request, auth0Id, 'player.read')
     if (!auth.ok) {
@@ -101,20 +99,13 @@ export default new Elysia()
     const input = parseStudentInput(body as Record<string, unknown>)
 
     if (!input.full_name || typeof input.full_name !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required field: full_name', false)
+      return badRequest(set, 'Missing required field: full_name')
     }
     if (input.status !== undefined && !STUDENT_STATUS_SET.has(input.status as string)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        `status must be one of ${[...STUDENT_STATUS_SET].join(', ')}`,
-        false,
-      )
+      return badRequest(set, `status must be one of ${[...STUDENT_STATUS_SET].join(', ')}`)
     }
     if (input.jersey_number !== undefined && typeof input.jersey_number !== 'number') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'jersey_number must be a number', false)
+      return badRequest(set, 'jersey_number must be a number')
     }
     if (input.date_of_birth !== undefined && !isDate(input.date_of_birth)) {
       set.status = 400
@@ -367,8 +358,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/students/:id/analyses', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing required parameters', false)
+      return badRequest(set, 'Missing required parameters')
     }
     const auth = await authorizeOrg(request, auth0Id, 'player.read')
     if (!auth.ok) {

@@ -9,7 +9,7 @@ import type { AttendanceStatus } from '../../lib/orgEnums'
 import { getStudent } from '../../lib/orgRoster'
 import { isDate } from '../../lib/orgValidate'
 import { ATTENDANCE_STATUS_SET } from './shared'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { authorizeOrg } from '../../lib/orgRoute'
 import { Elysia } from 'elysia'
@@ -58,8 +58,7 @@ export default new Elysia()
     }
     const { student_id, session_date, status, note } = body as Record<string, unknown>
     if (!student_id || !session_date || !ATTENDANCE_STATUS_SET.has(status as string)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing or invalid attendance fields', false)
+      return badRequest(set, 'Missing or invalid attendance fields')
     }
     const student = await getStudent(auth0Id, student_id as string)
     if (!student) {
@@ -89,8 +88,7 @@ export default new Elysia()
     }
     const { entries } = body as { entries?: unknown[] }
     if (!Array.isArray(entries) || entries.length === 0) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'entries must be a non-empty array', false)
+      return badRequest(set, 'entries must be a non-empty array')
     }
     const invalid = entries.find((entry) => {
       const e = entry as Record<string, unknown>
@@ -103,12 +101,7 @@ export default new Elysia()
       )
     })
     if (invalid) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        'Entry requires a valid student_id, session_date (YYYY-MM-DD) and status',
-        false,
-      )
+      return badRequest(set, 'Entry requires a valid student_id, session_date (YYYY-MM-DD) and status')
     }
 
     // Verify every student belongs to this org before any write.
@@ -151,8 +144,7 @@ export default new Elysia()
     const studentId = url.searchParams.get('studentId')
     const sessionDate = url.searchParams.get('date')
     if (!studentId || !sessionDate) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing studentId or date', false)
+      return badRequest(set, 'Missing studentId or date')
     }
     const deleted = await deleteAttendance(auth0Id, studentId, sessionDate)
     if (!deleted) {

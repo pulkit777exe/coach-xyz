@@ -1,6 +1,6 @@
 import { getOrgTier, getTodayUsage, orgDailyAnalysisLimit } from '../../lib/analysisPolicy'
 import { resolveCaller } from '../../lib/caller'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
@@ -10,8 +10,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/subscription', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('org.billing')) {

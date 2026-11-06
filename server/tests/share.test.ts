@@ -4,7 +4,7 @@ import {
   createShareTokenStore,
   generateShareToken,
   DEFAULT_EXPIRES_HOURS,
-  type RedisLike,
+  type KeyValueLike,
   type ShareTokenRecord,
 } from '../src/lib/shareTokens'
 import { orgShareRoute, publicShareRoute } from '../src/routes/share'
@@ -20,7 +20,7 @@ const headersFor = (auth0Id: string) => ({
 
 function memoryClient(
   seed: Record<string, ShareTokenRecord> = {},
-): RedisLike & { map: Map<string, ShareTokenRecord> } {
+): KeyValueLike & { map: Map<string, ShareTokenRecord> } {
   const map = new Map<string, ShareTokenRecord>(Object.entries(seed))
   return {
     map,

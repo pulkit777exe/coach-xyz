@@ -187,7 +187,8 @@ with no network.
 ## Supported sports
 
 Gemini auto-detects the sport unless forced via the `sport` parameter; per-sport
-positions, camera-angle guidance, and scoring rules live in `sports/*.json`.
+positions, camera-angle guidance, scoring rules, and in-video key metrics live in
+`engine/sports/*.json`.
 
 | Sport | Result values scored |
 |---|---|
@@ -205,7 +206,7 @@ coach-xyz/
 ├── engine/          # Python FastAPI analysis engine (MediaPipe + Gemini, local/S3 storage)
 ├── server/          # Bun/Elysia middleware (BullMQ workers, org data layer, Supabase history, rate limiting)
 ├── web-next/        # Next.js 16 frontend (pipeline SPA + coach dashboard + player hub + marketing)
-├── sports/          # Per-sport config JSON (events, positions, camera angles, scoring)
+│   └── sports/      # Per-sport config JSON (events, positions, camera angles, scoring, key metrics)
 ├── docs/            # V1 (current app) + V2 (chat) + target-architecture plan + backup/auth0 runbooks
 ├── docker-compose.yml       # dev compose (engine + server)
 ├── docker-compose.prod.yml  # hardened prod compose

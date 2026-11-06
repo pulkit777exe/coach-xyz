@@ -32,11 +32,15 @@ export default new Elysia().get('/api/download/:jobId', async ({ params, request
     const engineResponse = await getDownloadStream(serverJob.engine_job_id, requestIdFrom(request))
     const contentType = engineResponse.headers?.get('content-type') ?? 'video/mp4'
     const contentLength = engineResponse.headers?.get('content-length')
+    // The stream is gated by an attribution token / service identity. A shared
+    // or browser cache must never replay one caller's video to another, so
+    // this is explicitly private and uncacheable.
     const headers: Record<string, string> = {
       'Content-Type': contentType,
       'Content-Disposition': 'inline; filename="coachai_analysis.mp4"',
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
     }
     if (contentLength) {
       headers['Content-Length'] = contentLength

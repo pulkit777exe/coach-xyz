@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import {
   ORG_MANAGER_ROLES,
   ORG_MEMBER_INVITE_ROLES,
@@ -37,8 +37,7 @@ export default new Elysia()
       .get('/api/org/:auth0Id/members', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         await ensureOrgOwner(auth0Id)
         const members = await listOrgMembers(auth0Id)
@@ -61,24 +60,17 @@ export default new Elysia()
         const { auth0Id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         const { email, role } = (body ?? {}) as {
           email?: unknown
           role?: unknown
         }
         if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'A valid email is required', false)
+          return badRequest(set, 'A valid email is required')
         }
         if (typeof role !== 'string' || !INVITE_ROLE_SET.has(role)) {
-          set.status = 400
-          return buildError(
-            'INVALID_REQUEST',
-            `role must be one of ${[...INVITE_ROLE_SET].join(', ')}`,
-            false,
-          )
+          return badRequest(set, 'role must be one of ' + [...INVITE_ROLE_SET].join(', '))
         }
         const auth = await authorizeOrg(request, auth0Id, 'org.invite', {
           inviteRole: role as OrgMemberRole,
@@ -93,8 +85,7 @@ export default new Elysia()
           role: role as OrgMemberInviteRole,
         })
         if (!member) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Cannot invite the org owner', false)
+          return badRequest(set, 'Cannot invite the org owner')
         }
         audit(
           'member.invited',
@@ -120,24 +111,17 @@ export default new Elysia()
       .post('/api/org/:auth0Id/invites', async ({ params, body, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         const { email, role } = (body ?? {}) as {
           email?: unknown
           role?: unknown
         }
         if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'A valid email is required', false)
+          return badRequest(set, 'A valid email is required')
         }
         if (typeof role !== 'string' || !INVITE_ROLE_SET.has(role)) {
-          set.status = 400
-          return buildError(
-            'INVALID_REQUEST',
-            `role must be one of ${[...INVITE_ROLE_SET].join(', ')}`,
-            false,
-          )
+          return badRequest(set, 'role must be one of ' + [...INVITE_ROLE_SET].join(', '))
         }
         const auth = await authorizeOrg(request, auth0Id, 'org.invite', {
           inviteRole: role as OrgMemberRole,
@@ -161,8 +145,7 @@ export default new Elysia()
       .get('/api/org/:auth0Id/invites', async ({ params, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         set.status = 200
         return { invites: await listInvites(auth0Id) }
@@ -171,8 +154,7 @@ export default new Elysia()
         const { auth0Id, id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id || !UUID_RE.test(id)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid invite id', false)
+          return badRequest(set, 'Invalid invite id')
         }
         const revoked = await revokeInvite(auth0Id, id)
         if (!revoked) {
@@ -186,8 +168,7 @@ export default new Elysia()
       .get('/api/org/:auth0Id/audit', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         const auth = await authorizeOrg(request, auth0Id, 'org.audit')
         if (!auth.ok) {
@@ -208,21 +189,14 @@ export default new Elysia()
         const { auth0Id, id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id or member id', false)
+          return badRequest(set, 'Missing auth0Id or member id')
         }
         if (!UUID_RE.test(id)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid member id', false)
+          return badRequest(set, 'Invalid member id')
         }
         const { role } = (body ?? {}) as { role?: unknown }
         if (typeof role !== 'string' || !ROLE_SET.has(role) || role === 'owner') {
-          set.status = 400
-          return buildError(
-            'INVALID_REQUEST',
-            `role must be one of ${[...ROLE_SET].filter((r) => r !== 'owner').join(', ')} (ownership transfer is a separate action)`,
-            false,
-          )
+          return badRequest(set, 'role must be one of ' + [...ROLE_SET].filter((r) => r !== 'owner').join(', '))
         }
         const target = await getOrgMember(auth0Id, id)
         if (!target) {
@@ -230,8 +204,7 @@ export default new Elysia()
           return buildError('NOT_FOUND', 'Member not found', false)
         }
         if (target.role === 'owner') {
-          set.status = 400
-          return buildError('INVALID_REQUEST', "The owner's role cannot be changed", false)
+          return badRequest(set, "The owner's role cannot be changed")
         }
         const updated = await setOrgMemberRole(auth0Id, id, role as OrgMemberRole)
         if (!updated) {
@@ -255,23 +228,16 @@ export default new Elysia()
         const { auth0Id, id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id || !UUID_RE.test(id)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid member id', false)
+          return badRequest(set, 'Invalid member id')
         }
         const { grants } = (body ?? {}) as { grants?: unknown }
         if (!Array.isArray(grants) || grants.some((g) => typeof g !== 'string')) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'grants must be an array of strings', false)
+          return badRequest(set, 'grants must be an array of strings')
         }
         const known: ReadonlySet<string> = new Set(GRANTS)
         const unknown = grants.filter((g) => !known.has(g as string))
         if (unknown.length > 0) {
-          set.status = 400
-          return buildError(
-            'INVALID_REQUEST',
-            `Unknown grant(s): ${unknown.join(', ')}. Allowed: ${GRANTS.join(', ')}`,
-            false,
-          )
+          return badRequest(set, `Unknown grant(s): ${unknown.join(', ')}. Allowed: ${GRANTS.join(', ')}`)
         }
         const target = await getOrgMember(auth0Id, id)
         if (!target) {
@@ -298,12 +264,10 @@ export default new Elysia()
         const { auth0Id, id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id or member id', false)
+          return badRequest(set, 'Missing auth0Id or member id')
         }
         if (!UUID_RE.test(id)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid member id', false)
+          return badRequest(set, 'Invalid member id')
         }
         const members = await listOrgMembers(auth0Id)
         const target = members.find((m) => m.id === id)
@@ -313,8 +277,7 @@ export default new Elysia()
         }
         const ownerCount = members.filter((m) => m.role === 'owner').length
         if (target.role === 'owner' && ownerCount <= 1) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Cannot remove the last owner', false)
+          return badRequest(set, 'Cannot remove the last owner')
         }
         const removed = await removeOrgMember(auth0Id, id)
         if (!removed) {

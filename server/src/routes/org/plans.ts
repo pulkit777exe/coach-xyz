@@ -6,7 +6,7 @@ import {
 } from '../../lib/orgObjectives'
 import { resolveCaller } from '../../lib/caller'
 import { UUID_RE } from './shared'
-import { buildError } from '../../lib/errors'
+import { badRequest, buildError } from '../../lib/errors'
 import { serviceGuard } from '../../lib/serviceGuard'
 import { Elysia } from 'elysia'
 
@@ -16,8 +16,7 @@ export default new Elysia()
   .get('/api/org/:auth0Id/plans', async ({ params, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const url = new URL(request.url)
     const pickId = (v: string | null) => (v && UUID_RE.test(v) ? v : null)
@@ -37,8 +36,7 @@ export default new Elysia()
   .post('/api/org/:auth0Id/plans', async ({ params, body, request, set }) => {
     const { auth0Id } = params
     if (!auth0Id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+      return badRequest(set, 'Missing auth0Id parameter')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
@@ -49,8 +47,7 @@ export default new Elysia()
     const pickId = (v: unknown) => (typeof v === 'string' && UUID_RE.test(v) ? v : null)
     const title = typeof raw.title === 'string' ? raw.title : ''
     if (!title.trim()) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'title is required', false)
+      return badRequest(set, 'title is required')
     }
     const plan = await createTrainingPlan(auth0Id, caller.verified, {
       team_id: pickId(raw.team_id),
@@ -59,8 +56,7 @@ export default new Elysia()
       description: typeof raw.description === 'string' ? raw.description : null,
     })
     if (!plan) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Could not create plan (unknown student/team?)', false)
+      return badRequest(set, 'Could not create plan (unknown student/team?)')
     }
     set.status = 201
     return { plan }
@@ -68,8 +64,7 @@ export default new Elysia()
   .patch('/api/org/:auth0Id/plans/:id', async ({ params, body, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id || !UUID_RE.test(id)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid plan id', false)
+      return badRequest(set, 'Invalid plan id')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {
@@ -92,8 +87,7 @@ export default new Elysia()
   .delete('/api/org/:auth0Id/plans/:id', async ({ params, request, set }) => {
     const { auth0Id, id } = params
     if (!auth0Id || !id || !UUID_RE.test(id)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Invalid plan id', false)
+      return badRequest(set, 'Invalid plan id')
     }
     const caller = await resolveCaller(auth0Id, request)
     if (!caller.can('player.manage')) {

@@ -2,6 +2,8 @@ import { Elysia } from 'elysia'
 import { ENGINE_URL } from '../lib/engine'
 import { getAnalysisQueueStats } from '../lib/workerLifecycle'
 import { withHistoryStore } from '../lib/historyStore'
+import { SERVICE_HEADERS, serviceTokenMatches } from '../lib/serviceGuard'
+import { buildError } from '../lib/errors'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
   // Shallow — used by Render health check probe
@@ -11,8 +13,14 @@ export const healthRoute = new Elysia({ prefix: '/health' })
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   }))
-  // Deep — used by monitoring and the frontend status badge
-  .get('/deep', async ({ set }) => {
+  // Deep — monitoring only. It reveals dependency state and queue depth, so
+  // it requires the service secret whenever the identity boundary is enabled.
+  .get('/deep', async ({ request, set }) => {
+    if (!serviceTokenMatches(request.headers.get(SERVICE_HEADERS.token))) {
+      set.status = 403
+      return buildError('FORBIDDEN', 'Invalid service credentials', false)
+    }
+
     // Check the history store (Postgres) — the app's only durable dependency
     let dbOk = false
     let dbLatency = 0
