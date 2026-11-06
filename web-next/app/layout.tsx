@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import AuthHeader from '@/components/AuthHeader'
@@ -37,11 +38,15 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 })
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // proxy.ts stamps every document request with a fresh CSP nonce. next-themes
+  // renders its own inline pre-hydration script, so it needs the nonce too.
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
     <html
       lang="en"
@@ -54,7 +59,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen antialiased bg-background text-foreground">
         <Analytics />
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem nonce={nonce}>
           <PreferencesProvider>
             <AuthHeader />
             <SkipLink />
