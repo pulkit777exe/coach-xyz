@@ -16,6 +16,9 @@ on:
   push:
     branches: [main, master]
 
+# The job only POSTs to external deploy hooks; it needs no repository access.
+permissions: {}
+
 jobs:
   trigger-deploy-hooks:
     name: Trigger Vercel + Render deploys

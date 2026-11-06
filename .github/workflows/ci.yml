@@ -7,6 +7,10 @@ on:
   push:
     branches: [main, master]
 
+# Read-only by default: CI only needs to fetch the repository.
+permissions:
+  contents: read
+
 jobs:
   engine:
     name: engine (Python)
@@ -29,7 +33,11 @@ jobs:
         run: |
           pip install -r requirements.txt
           # Test/lint tooling is not part of the runtime requirements
-          pip install pytest ruff
+          pip install pytest ruff pip-audit
+
+      - name: Dependency audit
+        working-directory: engine
+        run: pip-audit -r requirements.txt --progress-spinner off
 
       - name: Ruff lint
         working-directory: engine
@@ -52,6 +60,10 @@ jobs:
       - name: Install dependencies
         working-directory: server
         run: bun install --frozen-lockfile
+
+      - name: Dependency audit
+        working-directory: server
+        run: bun audit
 
       - name: Type check
         working-directory: server
@@ -82,6 +94,10 @@ jobs:
       - name: Install dependencies
         working-directory: web-next
         run: npm ci
+
+      - name: Dependency audit
+        working-directory: web-next
+        run: npm audit --audit-level=moderate
 
       - name: Type check
         working-directory: web-next

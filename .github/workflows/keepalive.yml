@@ -12,6 +12,9 @@ on:
     - cron: "*/9 * * * *"
   workflow_dispatch: {}
 
+# The job only curls a public health endpoint; it needs no repository access.
+permissions: {}
+
 jobs:
   ping-server:
     name: Wake free-tier server + worker
