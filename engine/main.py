@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     setup_logging()
     if s.production and not s.service_token:
         raise RuntimeError("ENVIRONMENT=production requires SERVICE_TOKEN; refusing to start unauthenticated.")
+    if s.production and "*" in s.cors_origins:
+        raise RuntimeError("ENVIRONMENT=production forbids wildcard CORS origins; set SERVER_URL explicitly.")
     if s.sentry_dsn:
         import sentry_sdk
 
@@ -77,7 +79,16 @@ async def lifespan(app: FastAPI):
     jobs.shutdown()
 
 
-app = FastAPI(title="CoachAI Engine", version=config.ENGINE_VERSION, lifespan=lifespan)
+app = FastAPI(
+    title="CoachAI Engine",
+    version=config.ENGINE_VERSION,
+    lifespan=lifespan,
+    # The docs UI and the OpenAPI schema describe the whole route surface.
+    # They are development aids only; production instances serve neither.
+    docs_url=None if config.settings.production else "/docs",
+    redoc_url=None if config.settings.production else "/redoc",
+    openapi_url=None if config.settings.production else "/openapi.json",
+)
 app.add_middleware(CORSMiddleware, allow_origins=list(config.settings.cors_origins), allow_credentials=True,
                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["x-service-token", "x-verified-auth0-id", "x-request-id", "content-type", "authorization"])
 
@@ -93,6 +104,10 @@ async def guard(request: Request, call_next):
     began = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Request-Id"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = response.headers.get("Cache-Control", "no-store")
     took = (time.perf_counter() - began) * 1000
     response.headers["X-Response-Time"] = f"{took:.0f}ms"
     if took > 2000 and "text/event-stream" not in response.headers.get("content-type", ""):

@@ -206,20 +206,26 @@ def session_metrics(track: Track, events: list[dict], pack: Pack) -> list[dict]:
         rows.append({
             "key": d.key, "label": d.label, "unit": d.unit, "kind": "metric", "n": len(values),
             "value": round(float(np.mean(values)), 1), "best": round(best, 1), "worst": round(worst, 1),
+            "source": "measured",
+            "ideal": list(d.ideal) if d.ideal else None,
+            "acceptable": list(d.acceptable) if d.acceptable else None,
         })
 
     times = sorted(float(e["t"]) for e in events)
     if len(times) >= 2:
         gaps = np.diff(times)
         rows.append({"key": "tempo", "label": "Tempo", "unit": "s", "kind": "session", "n": len(gaps),
+                     "source": "counted",
                      "value": round(float(np.mean(gaps)), 1), "best": round(float(np.min(gaps)), 1),
                      "worst": round(float(np.max(gaps)), 1)})
     duration = float(track.t[-1] - track.t[0]) if len(track.t) else 0.0
     if duration > 0:
         rows.append({"key": "events_per_min", "label": "Action rate", "unit": "/min", "kind": "session",
-                     "n": len(times), "value": round(len(times) / duration * 60, 1), "best": None, "worst": None})
+                     "n": len(times), "source": "counted",
+                     "value": round(len(times) / duration * 60, 1), "best": None, "worst": None})
     rows.append({"key": "tracking_coverage", "label": "Pose coverage", "unit": "%", "kind": "session",
-                 "n": len(track.t), "value": round(track.coverage * 100, 1), "best": None, "worst": None})
+                 "n": len(track.t), "source": "measured",
+                 "value": round(track.coverage * 100, 1), "best": None, "worst": None})
     return rows
 
 

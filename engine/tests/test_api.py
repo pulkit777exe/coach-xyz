@@ -86,6 +86,8 @@ def test_old_status_download_and_analyze_endpoints_still_work(client, video):
     summary = status["summary"]
     assert summary["sport"] == "basketball" and summary["shot_events"] and "findings" in summary
     assert {"timestamp", "event_type", "form_score", "feedback", "weighted_scoring"} <= set(summary["shot_events"][0])
+    assert summary["stats"]["groups"] and summary["stats"]["unavailable"]
+    assert summary["key_insights"] and summary["tactical_summary"]
     assert client.get("/download/old1").headers["content-type"] == "video/mp4"
 
 

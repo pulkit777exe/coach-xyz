@@ -27,6 +27,8 @@ from . import (
 from .errors import Cancelled, EngineError
 from . import failures
 from .judge import Judgement
+from .motion import Candidate
+from .sports import Pack
 from .track import Lock, Track, clean, track_athlete
 
 log = logging.getLogger("engine.pipeline")
@@ -85,6 +87,50 @@ def _save_judgement(path: Path, j: Judgement) -> None:
     path.write_text(json.dumps(j.__dict__))
 
 
+@contextmanager
+def _detector():
+    """Create a pose detector and always release its resources."""
+    detector = make_detector()
+    try:
+        yield detector
+    finally:
+        close = getattr(detector, "close", None)
+        if callable(close):
+            close()
+
+
+def _read_matchups(path: Path) -> dict[int, dict] | None:
+    if not path.is_file():
+        return None
+    try:
+        return {int(k): v for k, v in json.loads(path.read_text()).items()}
+    except (OSError, ValueError, TypeError, AttributeError):
+        log.warning("ignoring unreadable matchup cache: %s", path, exc_info=True)
+        return None
+
+
+def _matchup_blocks(src: str, track: Track, cands: list[Candidate], pack: Pack, path: Path,
+                    progress, cancelled) -> dict[int, dict]:
+    cached = _read_matchups(path)
+    if cached is not None:
+        return cached
+    try:
+        with _detector() as detector:
+            found = matchup.analyse(src, detector, track, cands, pack, progress=progress,
+                                    cancelled=cancelled)
+    except Cancelled:
+        raise
+    except Exception:
+        log.exception("matchup analysis failed")
+        return {}
+    if found:
+        try:
+            path.write_text(json.dumps(found))
+        except OSError:
+            log.warning("could not cache matchup analysis: %s", path, exc_info=True)
+    return found
+
+
 def run(job_id: str, params: dict) -> dict:
     s = config.settings
     rep = Reporter(job_id)
@@ -116,12 +162,9 @@ def run(job_id: str, params: dict) -> dict:
             if track_file.is_file():
                 track = Track.load(str(track_file))
             else:
-                detector = make_detector()
-                try:
+                with _detector() as detector:
                     track = track_athlete(src, detector, Lock.from_player(params.get("player")),
                                           rate=s.analysis_fps, progress=tick, cancelled=rep.check)
-                finally:
-                    detector.close() if hasattr(detector, "close") else None
                 track = clean(track)
                 track.save(str(track_file))
 
@@ -184,28 +227,13 @@ def run(job_id: str, params: dict) -> dict:
                     judgement = judge.reconcile(judgement, pack)
             rep.check()
 
-        with rep.stage("result", 75, 80):
+        with rep.stage("result", 75, 80) as tick:
             matchups: dict[int, dict] = {}
             if cands:
                 matchup_key = _digest(track_key, pack.name, pack.version, pack.checksum,
                                       ",".join(f"{c.i}:{c.t:.2f}" for c in cands))
-                matchup_file = cache / f"{matchup_key}.json"
-                if matchup_file.is_file():
-                    matchups = {int(k): v for k, v in json.loads(matchup_file.read_text()).items()}
-                else:
-                    detector = None
-                    try:
-                        detector = make_detector()
-                        matchups = matchup.analyse(src, detector, track, cands, pack, progress=lambda f: None,
-                                                   cancelled=rep.check)
-                        if matchups:
-                            matchup_file.write_text(json.dumps(matchups))
-                    except Cancelled:
-                        raise
-                    except Exception:
-                        log.exception("matchup analysis failed")
-                    finally:
-                        detector.close() if detector is not None and hasattr(detector, "close") else None
+                matchups = _matchup_blocks(src, track, cands, pack, cache / f"{matchup_key}.json",
+                                           tick, rep.check)
             out = result.build(job_id, params, pack, track, media, cands, judgement, degraded,
                                angle=effective_angle, angle_source=angle_source,
                                detected_angle=detected_angle,
