@@ -7,9 +7,9 @@ Guidance for agents working in this repo. Read `ARCHITECTURE.md` for the data mo
 CoachXYZ — multi-sport AI video analyzer. Three deployable tiers plus shared config:
 
 - `web-next/` — Next.js 16 (App Router) + React 19 + TS + Tailwind v4. Coach dashboard, marketing site, player hub.
-- `server/` — Bun 1.x + Elysia. Auth sync, org data layer, BullMQ orchestration, Supabase persistence, email (Resend).
+- `server/` — Bun 1.x + Elysia. Auth sync, org data layer, Postgres-backed durable job queue, Supabase persistence, email (Resend).
 - `engine/` — Python (3.11+ locally, 3.12-slim in Docker) + FastAPI. Video analysis pipeline (Gemini + MediaPipe).
-- `sports/` — per-sport scoring config JSON. `docs/` — feature docs.
+- `engine/sports/` — per-sport scoring config JSON (the runtime packs). `docs/` — feature docs.
 
 `web-next/proxy.ts` is the Next 16 Auth0 middleware (passthrough, not a reverse
 proxy). The identity proxy is `web-next/app/api/service/[[...path]]/route.ts`
@@ -34,7 +34,7 @@ Per-app: server uses `bun`, engine uses `pip`/`python`, web-next uses `npm` (CI 
 
 Tooling hygiene (learned 2026-10-13): always run app commands from the app dir (`cd server && bun run type-check`, never bare `bunx tsc`/`npx <bin>` from root — root has no local binaries, so the runner fetches wrong packages). Verify file writes landed (do not trust heredoc output alone). `/tmp/opencode` is volatile across restarts — rebuild the engine test venv there when missing.
 
-Test baselines (keep green): server unit suite `bun test` = 371 pass / 36 files (excludes 5 live-infra files — aiReports, notifications, orgMembers, clipsStore, chatMessages — whose 17 tests fail with timeouts when Neon/Upstash are unreachable; verified identical on a pristine pre-pass-6 checkout, so environmental, not regressions); web `vitest run` = 789 tests / 72 files; reachability 232 source files / 72 test files → 170 statically imported (73.3%), 3 loaded only by the generic render sweep, 59 touched by nothing (14.1% of lines). engine `pytest tests -q` = 288 tests / 28 files (verified live 2026-10-14 in a rebuilt venv with test deps; mediapipe absent, pose tests run against the available backend); `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks. (Verified green 2026-10-13.)
+Test baselines (keep green): server unit suite `bun test` = 411 pass / 42 files (10 live-Neon integration tests fail with `ERR_POSTGRES_CONNECTION_REFUSED` when the database is unreachable; verified environmental, not regressions); web `vitest run` = 816 tests / 75 files; reachability 243 source files / 75 test files → 173 statically imported (71.2%), 3 loaded only by the generic render sweep, 67 touched by nothing (14.8% of lines). engine `pytest tests -q` = 76 tests (verified live 2026-11-06 in a rebuilt venv at `/tmp/opencode/engine-venv`; mediapipe absent, pose tests run against the available backend); `tsc --noEmit` clean both; `next build` clean; live smoke `server/scripts/smokeOrgHttp.ts` = 51 checks. (Verified green 2026-11-06.)
 
 Per-request dedup: RSC pages import data fetchers from `lib/serverData.ts` (React.cache-wrapped) and the session via `lib/session.ts` (`getSession`, React.cache) — never call entity-facade/`lib/org` fetchers or `auth0.getSession()` directly from pages. Facades/`lib/org` stay for client components, middleware (`proxy.ts`), and route handlers. Heavy client visuals (recharts) load via `next/dynamic` with `ssr: false`.
 
