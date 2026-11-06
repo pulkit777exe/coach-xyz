@@ -12,7 +12,7 @@ import { Analytics } from '@vercel/analytics/next'
 export const metadata: Metadata = {
   title: 'CoachXYZ | AI Sports Form Analysis',
   description:
-    'Upload training footage and get timestamped form scores, correction cues, and annotated video — in under 60 seconds.',
+    'Upload training footage and get timestamped, criterion-level feedback, correction cues, and annotated video.',
   openGraph: {
     title: 'CoachXYZ',
     description: 'AI-powered sports video analysis for coaches.',

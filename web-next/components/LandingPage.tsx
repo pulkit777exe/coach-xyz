@@ -29,8 +29,8 @@ const statLabel = 'text-label font-medium uppercase tracking-[0.08em] text-muted
 const footerLink = `block text-body leading-5 text-foreground transition-colors duration-[var(--dur-fast)] hover:text-primary hover:underline ${focusRing}`
 
 const PREVIEW_CARDS = [
-  { k: 'Analysis', d: 'Form 8.4 → 6.2' },
-  { k: 'Scores', d: 'Confidence 92%' },
+  { k: 'Analysis', d: 'Criterion-level evidence' },
+  { k: 'Scores', d: 'Experimental composite' },
   { k: 'Chat', d: 'Ask about reps' },
   { k: 'Video', d: 'Pose overlays' },
   { k: 'Report', d: 'Share link' },
@@ -77,7 +77,7 @@ const TIMELINE_STEPS = [
     t: 'We detect every athlete',
     d: 'MediaPipe finds each player with boxes + confidence.',
   },
-  { n: '3', t: 'Gemini scores & corrects', d: 'Form, mechanics and timing across keyframes.' },
+  { n: '3', t: 'Gemini reviews & corrects', d: 'Qualitative read of each attempt, labelled as judged evidence.' },
   { n: '4', t: 'You get annotated video', d: 'Pose overlays, HUD stats, coaching cues.' },
   { n: '5', t: 'Share & track progress', d: 'Link to roster, reports and trends.' },
 ]
@@ -85,7 +85,7 @@ const TIMELINE_STEPS = [
 const FAQS = [
   {
     q: 'Why is AI analysis your personal platform to develop coaching?',
-    a: 'Every rep is scored, timestamped and explained — no manual tagging.',
+    a: 'Every rep is measured, timestamped and explained — no manual tagging.',
   },
   {
     q: 'How do I use the embedded analytics dashboard?',
@@ -174,8 +174,8 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             Analyze, protect &amp; elevate every <TypewriterHighlight />
           </h1>
           <p className="mx-auto mt-6 max-w-[640px] text-balance text-[18px] leading-7 text-muted-foreground lg:text-[20px]">
-            CoachXYZ makes high-performance video analysis effortless — from upload to annotated
-            video and shareable reports. Six sports, one pipeline, under 60 seconds.
+            CoachXYZ makes high-performance video analysis effortless — upload footage, get
+            criterion-level evidence and an annotated video. Six sports, one pipeline.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button
@@ -222,12 +222,12 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
             </div>
           </div>
 
-          {/* trusted by — grayscale muted */}
+          {/* scope — the three actions scoped by the research protocol */}
           <div
             className={`mx-auto mt-10 flex max-w-[900px] flex-wrap items-center justify-center gap-x-8 gap-y-3 border-t pt-6 text-label font-medium tracking-[0.12em] uppercase ${hairline} text-muted-foreground/70`}
           >
-            <span>Trusted by coaches at</span>
-            {['Academy FC', 'Elite Hoops', 'State Cricket', 'Hockey Pro'].map((s) => (
+            <span>Research-scoped actions</span>
+            {['Cricket off-drive', 'Football instep kick', 'Basketball free throw'].map((s) => (
               <span key={s} className="font-semibold tracking-widest">
                 {s.toUpperCase()}
               </span>
@@ -242,9 +242,9 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
           className={`mx-auto grid max-w-[1120px] grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0 divide-border `}
         >
           {[
-            { k: '500K+', l: 'analyses delivered', d: 'Across 6 sports and thousands of sessions' },
-            { k: '99.99%', l: 'pipeline uptime', d: 'Gemini + MediaPipe, built to scale' },
-            { k: '60s', l: 'median turnaround', d: 'Upload to annotated video & report' },
+            { k: '3', l: 'bounded actions', d: 'Cricket off-drive · football instep kick · basketball free throw' },
+            { k: '33', l: 'paper criteria', d: 'CR/FB/BB IDs traced from manuscript to measurement' },
+            { k: '2', l: 'evidence lanes', d: 'Measured vs judged — labelled separately, never blended' },
           ].map((s) => (
             <div key={s.k} className="px-6 py-7 text-center">
               <p className={statLabel}>{s.l}</p>
@@ -411,17 +411,18 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
                 Featured
               </p>
               <p className="mt-2 text-body leading-5 font-semibold text-foreground-strong">
-                Academy sprint analysis
+                Research-aligned engineering
               </p>
               <p className={`mt-1 text-caption leading-4 ${textMuted}`}>
-                U16 squad cut review time 37% in 3 weeks.
+                Every claim carries its source, validity state and confidence — and abstains when
+                the footage cannot support it.
               </p>
-              <div className="mt-3 flex gap-4 text-caption leading-4 tabular-nums">
+              <div className="mt-3 flex gap-4 text-caption leading-4">
                 <span className="text-muted-foreground">
-                  <strong className="font-semibold text-primary">74%</strong> faster
+                  <strong className="font-semibold text-primary">Measured vs judged</strong>, labelled
                 </span>
                 <span className="text-muted-foreground">
-                  <strong className="font-semibold text-primary">32%</strong> attendance up
+                  <strong className="font-semibold text-primary">No score</strong> without coverage
                 </span>
               </div>
             </div>
@@ -446,12 +447,10 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
         </div>
       </section>
 
-      {/* ── Integrate in minutes — code block ────────────────────────────── */}
+      {/* ── Artifacts — what every job hands back ─────────────────────────── */}
       <section className={`px-6 py-14 lg:px-8 ${surface}`}>
         <div className="mx-auto max-w-[1120px]">
-          <h2 className={`text-center ${sectionTitle}`}>
-            Integrate video analysis into any stack in minutes
-          </h2>
+          <h2 className={`text-center ${sectionTitle}`}>What every job hands back</h2>
           <div
             className={`mx-auto mt-8 max-w-[760px] overflow-hidden rounded-[8px] border ${hairline} ${band}`}
           >
@@ -460,32 +459,21 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
               <span className="size-2.5 rounded-full bg-warning/60" />
               <span className="size-2.5 rounded-full bg-success/60" />
               <span className={`ml-3 font-mono text-caption leading-4 ${textMuted}`}>
-                POST /api/analyze-video
+                job artifacts · schema 5
               </span>
             </div>
             <pre className="overflow-x-auto p-4 font-mono text-caption leading-5 text-foreground-strong/80">
-              <code>{`curl -X POST https://api.coachxyz.app/analyze-video \\
-  -H "Authorization: Bearer COACH_API_KEY" \\
-  -F video=@training.mp4 \\
-  -F sport=basketball \\
-  -F player_id=player_123
-
-# → { "job_id": "xyz_123", "status": "processing", "eta": "45s" }`}</code>
+              <code>{`result.json        events + criterion-level measurements (state · source · confidence)
+manifest.json      git commit · pack checksum · model IDs · video hash · camera
+measurements.csv   criterion × value × state × source × frames
+findings.csv       click-traceable evidence, review state per finding
+session.csv        provenance, job status, experimental composite
+analysis.mp4       annotated video + tracked-evidence overlay`}</code>
             </pre>
-            <div className={`flex gap-2 border-t px-4 py-2.5 ${hairline}`}>
-              <Button
-                size="sm"
-                className="h-8 rounded-[6px] bg-primary px-3 text-caption leading-4 font-medium text-primary-foreground hover:bg-primary-hover"
-              >
-                Copy
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-[6px] border-input bg-transparent text-caption leading-4 text-link hover:bg-background"
-              >
-                Docs
-              </Button>
+            <div className={`flex items-center gap-2 border-t px-4 py-2.5 ${hairline}`}>
+              <span className="text-caption leading-4 text-muted-foreground">
+                Composite scores are experimental and unvalidated; research exports strip them.
+              </span>
             </div>
           </div>
         </div>
@@ -494,13 +482,13 @@ export default function LandingPage({ onFileSelected }: LandingPageProps) {
       {/* ── Results ──────────────────────────────────────────────────────── */}
       <section className={`px-6 py-14 lg:px-8 ${band}`}>
         <div className="mx-auto max-w-[1120px]">
-          <h2 className={`text-center ${sectionTitle}`}>As you can see, we get results</h2>
+          <h2 className={`text-center ${sectionTitle}`}>What you actually get</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { k: '37%', d: 'faster review loops on average' },
-              { k: '22%', d: 'higher attendance after 4 weeks' },
-              { k: '17%', d: 'form score improvement (median)' },
-              { k: '246%', d: 'more video feedback shared per month' },
+              { k: '33', d: 'paper criteria with permanent CR/FB/BB IDs, manuscript to report' },
+              { k: '2', d: 'evidence lanes — measured values never blend with qualitative judgement' },
+              { k: '≥65%', d: 'measured coverage required before any aggregate score is emitted' },
+              { k: 'F01–F14', d: 'structured failure codes — missing evidence is never scored as zero' },
             ].map((s) => (
               <div key={s.k} className={`p-6 text-center ${card}`}>
                 <p className={statLabel}>{s.d}</p>
