@@ -2,7 +2,7 @@ import './instrument'
 
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
-import { swagger } from '@elysiajs/swagger'
+import { openapi } from '@elysiajs/openapi'
 
 import { bootWorkers } from './lib/workerLifecycle'
 import { logEvent } from './lib/log'
@@ -25,6 +25,7 @@ import { healthRoute } from './routes/health'
 import { sportPositionsRoute } from './routes/sports'
 import { historyStoreEnabled, initializeHistoryStore } from './lib/historyStore'
 import { globalErrorHandler } from './lib/httpErrors'
+import { buildError } from './lib/errors'
 import { assertServiceGuardConfigured, orgRoleGuard } from './lib/serviceGuard'
 import { ORG_MEMBER_ROLES } from './lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from './types'
@@ -62,6 +63,13 @@ if (missingEnvVars.length > 0) {
 
 const maxRequestBodySize = Math.max(MAX_FILE_SIZE_BYTES + 10 * 1024 * 1024, 64 * 1024 * 1024)
 
+// Only the scan route legitimately accepts a large body (multipart video).
+// Everything else is JSON metadata; cap it at the request edge so an
+// authenticated caller cannot make the process buffer hundreds of megabytes.
+const MAX_NON_UPLOAD_BODY_BYTES = Number(
+  process.env.MAX_NON_UPLOAD_BODY_BYTES ?? 2 * 1024 * 1024,
+)
+
 try {
   await initializeHistoryStore()
 } catch (err) {
@@ -76,11 +84,11 @@ try {
 // (Replaces the former BullMQ side-effect import; enqueue works pre-boot.)
 await bootWorkers()
 
-// Swagger docs are dev-only — don't expose the route surface in production.
+// API docs are dev-only — don't expose the route surface in production.
 const swaggerPlugin =
   process.env.NODE_ENV === 'production'
     ? new Elysia({ name: 'swagger-disabled' })
-    : swagger({
+    : openapi({
         path: '/swagger',
         documentation: {
           info: {
@@ -102,12 +110,24 @@ const app = new Elysia({
       credentials: true,
     }),
   )
+  // Reject oversized non-upload bodies before route parsing.
+  .onRequest(({ request, set }) => {
+    const contentType = request.headers.get('content-type') ?? ''
+    if (contentType.toLowerCase().startsWith('multipart/form-data')) return
+    const declared = Number(request.headers.get('content-length') ?? 0)
+    if (Number.isFinite(declared) && declared > MAX_NON_UPLOAD_BODY_BYTES) {
+      set.status = 413
+      return buildError('FILE_TOO_LARGE', 'Request body is too large.', false)
+    }
+  })
   // ── Security Headers ───────────────────────────────────────────
   .onAfterHandle(({ set, request }) => {
     set.headers['X-Content-Type-Options'] = 'nosniff'
     set.headers['X-Frame-Options'] = 'DENY'
     set.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     set.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    set.headers['X-DNS-Prefetch-Control'] = 'off'
+    set.headers['X-Permitted-Cross-Domain-Policies'] = 'none'
 
     // Only set HSTS over HTTPS to avoid pinning localhost during development
     const isHttps = request.url.startsWith('https')
@@ -115,16 +135,21 @@ const app = new Elysia({
       set.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
     }
 
+    // This process serves JSON and video bytes, not HTML. Production gets a
+    // deny-everything policy; the dev docs UI needs the looser one.
     const isDev = process.env.NODE_ENV !== 'production'
-    set.headers['Content-Security-Policy'] = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
-      `connect-src 'self' https://*.sentry.io https://*.upstash.io${isDev ? ' http://localhost:*' : ''}`,
-      "worker-src 'self' blob:",
-    ].join('; ')
+    set.headers['Content-Security-Policy'] = isDev
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://js.sentry-cdn.com",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          "font-src 'self' https://fonts.gstatic.com",
+          "img-src 'self' data: blob: https://*.auth0.com https://s.gravatar.com https://*.googleusercontent.com https://*.githubusercontent.com",
+          "connect-src 'self' https://*.sentry.io http://localhost:*",
+          "worker-src 'self' blob:",
+          "frame-ancestors 'none'",
+        ].join('; ')
+      : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
   })
   .use(swaggerPlugin)
   .use(healthRoute)
