@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import { isEmail } from '../lib/orgRoute'
 import {
   emailConfigured,
@@ -88,8 +88,7 @@ export default new Elysia()
 
     const batch = validateInviteBatch(emails)
     if (!batch.ok) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', batch.message, false)
+      return badRequest(batch.message)
     }
     const addresses = batch.addresses
 
@@ -187,8 +186,7 @@ export default new Elysia()
     const { report_id, to } = body as { report_id?: unknown; to?: unknown }
 
     if (typeof report_id !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'Provide a report_id.', false)
+      return badRequest(set, 'Provide a report_id.')
     }
     if (!emailConfigured()) {
       set.status = 501
@@ -215,12 +213,7 @@ export default new Elysia()
       }
     }
     if (!recipient || !isEmail(recipient)) {
-      set.status = 400
-      return buildError(
-        'INVALID_REQUEST',
-        'No valid recipient for this report (student has no email and no `to` given).',
-        false,
-      )
+      return badRequest(set, 'No valid recipient for this report (student has no email and no `to` given).')
     }
 
     const content = (report.content_json ?? {}) as { summary?: string | null }
@@ -282,8 +275,7 @@ export default new Elysia()
     }
 
     if (student_id !== undefined && student_id !== null && typeof student_id !== 'string') {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'student_id must be a string.', false)
+      return badRequest(set, 'student_id must be a string.')
     }
 
     const records = await listAttendance(auth0Id, {
@@ -327,8 +319,7 @@ export default new Elysia()
       if (!address && owner?.email) address = owner.email
     }
     if (!address || !isEmail(address)) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'No valid recipient for this attendance sheet.', false)
+      return badRequest(set, 'No valid recipient for this attendance sheet.')
     }
 
     try {

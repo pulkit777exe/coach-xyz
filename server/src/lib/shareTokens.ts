@@ -11,7 +11,7 @@ import { randomBytes } from 'crypto'
 
 import { withHistoryStore } from './historyStore'
 
-export type RedisLike = {
+export type KeyValueLike = {
   get(key: string): Promise<unknown>
   set(
     key: string,
@@ -96,7 +96,7 @@ const recordFromValue = (raw: unknown): ShareTokenRecord | null => {
 }
 
 /** Postgres-backed client with the same shape the store factory expects. */
-const pgShareClient: RedisLike = {
+const pgShareClient: KeyValueLike = {
   async get(key) {
     const token = stripPrefix(key)
     const rows = await withHistoryStore(
@@ -140,7 +140,7 @@ const pgShareClient: RedisLike = {
   },
 }
 
-export function createShareTokenStore(client: RedisLike = pgShareClient): ShareTokenStore {
+export function createShareTokenStore(client: KeyValueLike = pgShareClient): ShareTokenStore {
   const keyFor = (token: string) => `${KEY_PREFIX}${token}`
 
   const asRecord = (raw: unknown): ShareTokenRecord | null => {
@@ -163,8 +163,9 @@ export function createShareTokenStore(client: RedisLike = pgShareClient): ShareT
   return {
     async createShareToken({ auth0_id, server_job_id, expiresInHours = DEFAULT_EXPIRES_HOURS }) {
       const token = generateShareToken()
-      const created_at = new Date().toISOString()
-      const expires_at = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
+      const now = Date.now()
+      const created_at = new Date(now).toISOString()
+      const expires_at = new Date(now + expiresInHours * 60 * 60 * 1000).toISOString()
       const record: ShareTokenRecord = {
         auth0_id,
         server_job_id,

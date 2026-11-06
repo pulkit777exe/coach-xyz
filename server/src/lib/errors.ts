@@ -70,6 +70,27 @@ export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
 }
 
 /**
+ * Convenience: returns a buildError(INVALID_REQUEST, message, false).
+ * Two call shapes:
+ *  - badRequest(set, message) — sets status 400 and returns the error (routes).
+ *  - badRequest(message)      — builds the error only, for validators whose
+ *                              caller owns the status assignment.
+ */
+export function badRequest(message?: string): CoachAIError
+export function badRequest(
+  set: { status?: number | string },
+  message?: string,
+): CoachAIError
+export function badRequest(
+  setOrMessage?: { status?: number | string } | string,
+  message = 'Missing required parameters',
+): CoachAIError {
+  const text = typeof setOrMessage === 'string' ? setOrMessage : message
+  if (typeof setOrMessage !== 'string' && setOrMessage) setOrMessage.status = 400
+  return buildError('INVALID_REQUEST', text, false)
+}
+
+/**
  * Whether a queue should retry an engine error.
  *
  * The engine owns retryability (the `retryable` flag on every engine error);
@@ -78,6 +99,7 @@ export function wrapEngineError(body: Partial<CoachAIError>): CoachAIError {
  */
 export function isQueueRetryable(error: Pick<CoachAIError, 'retryable'>): boolean {
   return error.retryable !== false
+
 }
 
 /**

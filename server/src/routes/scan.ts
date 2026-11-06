@@ -7,7 +7,7 @@ import {
   scanFromKey,
   requestIdFrom,
 } from '../lib/engine'
-import { buildError, isCoachAIError } from '../lib/errors'
+import { badRequest, buildError, isCoachAIError } from '../lib/errors'
 import { readRequestMeta } from '../lib/requestMeta'
 import { checkScanLimit, checkScanProgressLimit } from '../lib/ratelimit'
 import { capabilityLimitKey, gateRateLimit, mapEngineError, readJsonBody } from '../lib/capability'
@@ -140,13 +140,11 @@ export default new Elysia()
       }
 
       if (!(value instanceof File)) {
-        set.status = 400
-        return buildError('NO_FILE', 'No video file provided.', false)
+        return badRequest(set, 'No video file provided.')
       }
 
       if (!value.type.startsWith('video/')) {
-        set.status = 400
-        return buildError('INVALID_FILE_TYPE', 'Please upload a video file.', false)
+        return badRequest(set, 'Please upload a video file.')
       }
 
       if (value.size > MAX_FILE_SIZE_BYTES) {
@@ -208,17 +206,14 @@ export default new Elysia()
     const mimeType = body.mime_type ?? body.mimeType
     const sizeBytes = body.size_bytes ?? body.sizeBytes
     if (typeof filename !== 'string' || !filename.trim()) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'filename is required.', false)
-    }
+        return badRequest(set, 'filename is required.')
+      }
     if (typeof mimeType !== 'string' || !mimeType.startsWith('video/')) {
-      set.status = 400
-      return buildError('INVALID_FILE_TYPE', 'Please upload a video file.', false)
-    }
+        return badRequest(set, 'Please upload a video file.')
+      }
     if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes <= 0) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'size_bytes must be a positive number.', false)
-    }
+        return badRequest(set, 'size_bytes must be a positive number.')
+      }
     if (sizeBytes > MAX_FILE_SIZE_BYTES) {
       set.status = 413
       return buildError('FILE_TOO_LARGE', 'File must be under 500MB.', false)
@@ -281,9 +276,8 @@ export default new Elysia()
       typeof storageKey !== 'string' ||
       !/^raw\/[A-Za-z0-9_@.|-]+\/[a-z0-9_-]+\/[a-f0-9]{32}\.mp4$/.test(storageKey)
     ) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'storage_key must be an upload-intent key.', false)
-    }
+        return badRequest(set, 'storage_key must be an upload-intent key.')
+      }
     const sessionToken = typeof body.session_token === 'string' ? body.session_token : null
     const angle = typeof body.angle === 'string' ? body.angle : null
 
@@ -308,11 +302,9 @@ export default new Elysia()
   })
   .get('/api/scan-progress/:sessionToken', async ({ params, request, set }) => {
     const { sessionToken } = params
-
     if (!sessionToken) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'sessionToken required.', false)
-    }
+        return badRequest(set, 'sessionToken required.')
+      }
 
     // Keyed on the session token, not the client IP (see checkScanProgressLimit).
     const { allowed, reset } = await checkScanProgressLimit(sessionToken)

@@ -23,6 +23,18 @@ export function serviceGuardEnabled(): boolean {
   return Boolean(process.env.SERVICE_TOKEN)
 }
 
+/** Constant-time check of a presented shared secret against SERVICE_TOKEN. */
+export function serviceTokenMatches(presented: string | null | undefined): boolean {
+  const expected = process.env.SERVICE_TOKEN
+  if (!expected) return true // guard disabled (local dev)
+  if (!presented) return false
+  try {
+    return timingSafeEqual(Buffer.from(presented), Buffer.from(expected))
+  } catch {
+    return false
+  }
+}
+
 /**
  * Fail-closed boot check: with REQUIRE_SERVICE_TOKEN=1 (set it in every
  * production deploy) the server refuses to boot without SERVICE_TOKEN.

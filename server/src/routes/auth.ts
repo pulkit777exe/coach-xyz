@@ -41,11 +41,6 @@ export function generateSimpleResponse(
 }
 
 /** Standard 400 response for missing/invalid path params. */
-const badRequest = (set: { status?: number | string }, message = 'Missing required parameters') => {
-  set.status = 400
-  return buildError('INVALID_REQUEST', message, false)
-}
-
 export default new Elysia()
   .use(serviceGuard)
   .post('/api/auth/sync', async ({ body, set }) => {
@@ -378,7 +373,6 @@ export default new Elysia()
     }
     if (analysis.complete) {
       return badRequest(set, "Analysis is already complete")
-      return buildError('INVALID_REQUEST', 'Analysis is already complete', false)
     }
     await failEngineJobForServerJob(jobId, 'Analysis cancelled.')
     await persistAnalysisStatus({

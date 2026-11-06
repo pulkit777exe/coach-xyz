@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import {
   capabilityLimitKey,
   gateRateLimit,
@@ -86,13 +86,11 @@ export default new Elysia()
     const { job_id, message } = body as { job_id?: string; message?: string }
 
     if (!job_id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'job_id is required.', false)
+      return badRequest(set, 'job_id is required.')
     }
     const valid = validateChatMessage(message)
     if (!valid.ok) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', valid.message, false)
+      return badRequest(set, valid.message)
     }
     const chatMessage = valid.text
 
@@ -188,13 +186,11 @@ export default new Elysia()
     const { job_id, message } = body as { job_id?: string; message?: string }
 
     if (!job_id) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', 'job_id is required.', false)
+      return badRequest(set, 'job_id is required.')
     }
     const valid = validateChatMessage(message)
     if (!valid.ok) {
-      set.status = 400
-      return buildError('INVALID_REQUEST', valid.message, false)
+      return badRequest(set, valid.message)
     }
     const chatMessage = valid.text
 

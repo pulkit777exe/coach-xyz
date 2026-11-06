@@ -33,7 +33,7 @@ export class UnrecoverableError extends Error {
 export const ANALYSIS_QUEUE_NAME = 'coachai-analysis'
 export const REPORT_QUEUE_NAME = 'coachai-report'
 
-/** attempts:3 / exponential-5s / removeOnComplete:50 / removeOnFail:100 */
+/** attempts:3 / exponential-5s / keep 50 completed / 100 failed */
 export const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
   backoff: { type: 'exponential' as const, delay: 5000 },
@@ -41,7 +41,7 @@ export const DEFAULT_JOB_OPTIONS = {
   removeOnFail: 100,
 } as const
 
-// Job priority (BullMQ: higher number = higher priority)
+// Job priority (higher number = sooner)
 export const JOB_PRIORITY = 0
 
 /** Stuck recovery: jobs active >13min (1 min buffer over the 12 min engine timeout). */
@@ -69,7 +69,7 @@ export interface AnalysisPayload {
   video_key: string | null
   angle?: string | null
   owner_ids?: string[]
-  /** BullMQ priority (higher = sooner). Signed-in flows outrank anonymous. */
+  /** Queue priority (higher = sooner). Signed-in flows outrank anonymous. */
   priority?: number
 }
 
@@ -88,15 +88,15 @@ export interface AiReportPayload {
 
 // ── Retry mapping ────────────────────────────────────────────────────────────
 
-/** Idempotency: skip jobs already in a terminal BullMQ state. */
+/** Idempotency: skip jobs already in a terminal queue state. */
 export function isTerminalJobState(state: string | null | undefined): boolean {
   return state === 'completed' || state === 'failed'
 }
 
 /**
  * Retry mapping: the engine owns retryability. Non-retryable errors will
- * never succeed on retry, so callers throw UnrecoverableError to stop BullMQ
- * (attempts: 3) from retrying a doomed job.
+ * never succeed on retry, so callers mark them unrecoverable to stop the
+ * Postgres drain loop (attempts: 3) from retrying a doomed job.
  */
 export function classifyProcessorError(
   error: unknown,

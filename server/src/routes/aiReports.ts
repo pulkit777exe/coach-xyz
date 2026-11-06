@@ -2,11 +2,11 @@
 // Guarded endpoints for one-click AI report generation:
 //   POST /api/org/:auth0Id/reports/ai        — validate, build context, enqueue
 //   GET  /api/org/:auth0Id/reports/ai/:id    — poll status + report when done
-// The engine call runs in the BullMQ coachai-report worker (queue.ts). Deps
-// are injectable so tests stay DB/Redis-free.
+// The engine call runs in the Postgres-backed AI report worker (queue.ts).
+// Deps are injectable so tests stay DB-free.
 
 import { Elysia } from 'elysia'
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import type { CoachAIError } from '../types'
 import { serviceGuard } from '../lib/serviceGuard'
 import { checkAiReportLimit } from '../lib/ratelimit'
@@ -34,54 +34,32 @@ export function validateAiReportBody(
   body: unknown,
 ): { ok: true; value: AiReportRequest } | { ok: false; error: CoachAIError } {
   if (!body || typeof body !== 'object') {
-    return {
-      ok: false,
-      error: buildError('INVALID_REQUEST', 'Body must be a JSON object', false),
-    }
+    return { ok: false, error: badRequest('Body must be a JSON object') }
   }
   const b = body as Record<string, unknown>
 
   const reportType = typeof b.report_type === 'string' ? b.report_type : ''
   if (!reportType || !REPORT_TYPE_SET.has(reportType)) {
-    return {
-      ok: false,
-      error: buildError(
-        'INVALID_REQUEST',
-        `report_type must be one of ${REPORT_TYPES.join(', ')}`,
-        false,
-      ),
-    }
+    return { ok: false, error: badRequest(`report_type must be one of ${REPORT_TYPES.join(', ')}`) }
   }
   if (
     b.student_id !== undefined &&
     (typeof b.student_id !== 'string' || !(b.student_id as string).trim())
   ) {
-    return {
-      ok: false,
-      error: buildError('INVALID_REQUEST', 'student_id must be a non-empty string', false),
-    }
+    return { ok: false, error: badRequest('student_id must be a non-empty string') }
   }
   if (b.period_start !== undefined && b.period_start !== null && !isDate(b.period_start)) {
-    return {
-      ok: false,
-      error: buildError('INVALID_REQUEST', 'period_start must be YYYY-MM-DD', false),
-    }
+    return { ok: false, error: badRequest('period_start must be YYYY-MM-DD') }
   }
   if (b.period_end !== undefined && b.period_end !== null && !isDate(b.period_end)) {
-    return {
-      ok: false,
-      error: buildError('INVALID_REQUEST', 'period_end must be YYYY-MM-DD', false),
-    }
+    return { ok: false, error: badRequest('period_end must be YYYY-MM-DD') }
   }
   if (
     b.title !== undefined &&
     b.title !== null &&
     (typeof b.title !== 'string' || !(b.title as string).trim())
   ) {
-    return {
-      ok: false,
-      error: buildError('INVALID_REQUEST', 'title must be a non-empty string', false),
-    }
+    return { ok: false, error: badRequest('title must be a non-empty string') }
   }
 
   return {
@@ -125,8 +103,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
     .post('/api/org/:auth0Id/reports/ai', async ({ params, body, set }) => {
       const { auth0Id } = params as { auth0Id: string }
       if (!auth0Id) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+        return badRequest(set, 'Missing auth0Id parameter')
       }
       const { allowed } = await checkAiReportLimit(auth0Id)
       if (!allowed) {
@@ -194,8 +171,7 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
         reportJobId: string
       }
       if (!auth0Id || !reportJobId) {
-        set.status = 400
-        return buildError('INVALID_REQUEST', 'Missing auth0Id or reportJobId parameter', false)
+        return badRequest(set, 'Missing auth0Id or reportJobId parameter')
       }
 
       const job = await getJob(reportJobId)

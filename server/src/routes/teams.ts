@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia'
 
-import { buildError } from '../lib/errors'
+import { badRequest, buildError } from '../lib/errors'
 import {
   addTeamMember,
   createTeam,
@@ -43,9 +43,8 @@ export default new Elysia()
       .get('/api/org/:auth0Id/teams', async ({ params, request, set }) => {
         const { auth0Id } = params
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
-        }
+        return badRequest(set, 'Missing auth0Id parameter')
+      }
         const caller = await resolveCaller(auth0Id, request)
         if (!caller.can('team.read')) return forbidOrg(set)
         const all = await listTeams(auth0Id)
@@ -61,8 +60,7 @@ export default new Elysia()
         const { auth0Id } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Missing auth0Id parameter', false)
+          return badRequest(set, 'Missing auth0Id parameter')
         }
         const g = await guard(auth0Id, request, set, 'team.create')
         if (!('caller' in g)) return g
@@ -71,20 +69,17 @@ export default new Elysia()
           sport?: unknown
         }
         if (typeof name !== 'string' || !name.trim()) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'name is required', false)
-        }
-        if (sport !== undefined && sport !== null && typeof sport !== 'string') {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'sport must be a string', false)
-        }
+        return badRequest(set, 'name is required')
+      }
+      if (sport !== undefined && sport !== null && typeof sport !== 'string') {
+        return badRequest(set, 'sport must be a string')
+      }
         const team = await createTeam(auth0Id, {
           name,
           sport: typeof sport === 'string' ? sport : null,
         })
         if (!team) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Could not create team', false)
+          return badRequest(set, 'Could not create team')
         }
         audit('team.created', 'team', team.id, {
           name: team.name,
@@ -106,9 +101,8 @@ export default new Elysia()
       .get('/api/org/:auth0Id/teams/:teamId', async ({ params, request, set }) => {
         const { auth0Id, teamId } = params
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
+        return badRequest(set, 'Invalid team id')
+      }
         const g = await guard(auth0Id, request, set, 'team.read', teamId)
         if (!('caller' in g)) return g
         const team = await getTeam(auth0Id, teamId)
@@ -123,16 +117,14 @@ export default new Elysia()
         const { auth0Id, teamId } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
+        return badRequest(set, 'Invalid team id')
+      }
         const g = await guard(auth0Id, request, set, 'team.manage', teamId)
         if (!('caller' in g)) return g
         const { name } = (body ?? {}) as { name?: unknown }
         if (typeof name !== 'string' || !name.trim()) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'name is required', false)
-        }
+        return badRequest(set, 'name is required')
+      }
         const team = await renameTeam(auth0Id, teamId, name)
         if (!team) {
           set.status = 404
@@ -148,9 +140,8 @@ export default new Elysia()
         const { auth0Id, teamId } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
+        return badRequest(set, 'Invalid team id')
+      }
         // Deletion is an owner action; head coaches manage (not destroy) teams.
         const g = await guard(auth0Id, request, set, 'team.delete', teamId)
         if (!('caller' in g)) return g
@@ -166,9 +157,8 @@ export default new Elysia()
       .get('/api/org/:auth0Id/teams/:teamId/members', async ({ params, request, set }) => {
         const { auth0Id, teamId } = params
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
+        return badRequest(set, 'Invalid team id')
+      }
         const g = await guard(auth0Id, request, set, 'team.read', teamId)
         if (!('caller' in g)) return g
         if (!(await getTeam(auth0Id, teamId))) {
@@ -182,9 +172,8 @@ export default new Elysia()
         const { auth0Id, teamId } = params
         const audit = auditOrg(request, auth0Id)
         if (!auth0Id || !teamId || !UUID_RE.test(teamId)) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Invalid team id', false)
-        }
+        return badRequest(set, 'Invalid team id')
+      }
         const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
         if (!('caller' in g)) return g
         if (!(await getTeam(auth0Id, teamId))) {
@@ -200,16 +189,10 @@ export default new Elysia()
           (typeof member_auth0_id !== 'string' || !member_auth0_id.trim()) &&
           (typeof student_id !== 'string' || !UUID_RE.test(student_id))
         ) {
-          set.status = 400
-          return buildError(
-            'INVALID_REQUEST',
-            'member_auth0_id or a valid student_id is required',
-            false,
-          )
+        return badRequest(set, 'member_auth0_id or a valid student_id is required')
         }
         if (role !== undefined && role !== 'coach' && role !== 'player') {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'role must be coach or player', false)
+        return badRequest(set, 'role must be coach or player')
         }
         const member = await addTeamMember(teamId, {
           memberAuth0Id: typeof member_auth0_id === 'string' ? member_auth0_id : null,
@@ -217,8 +200,7 @@ export default new Elysia()
           role: role === 'coach' ? 'coach' : 'player',
         })
         if (!member) {
-          set.status = 400
-          return buildError('INVALID_REQUEST', 'Could not add team member', false)
+        return badRequest(set, 'Could not add team member')
         }
         audit('team.member_added', 'team', teamId, {
           membership: member.id,
@@ -238,9 +220,8 @@ export default new Elysia()
             !membershipId ||
             !UUID_RE.test(membershipId)
           ) {
-            set.status = 400
-            return buildError('INVALID_REQUEST', 'Invalid team or membership id', false)
-          }
+        return badRequest(set, 'Invalid team or membership id')
+        }
           const g = await guard(auth0Id, request, set, 'team.manage_members', teamId)
           if (!('caller' in g)) return g
           const removed = await removeTeamMember(teamId, membershipId)
