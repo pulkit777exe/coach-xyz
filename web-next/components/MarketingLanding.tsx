@@ -158,7 +158,7 @@ export default function MarketingLanding() {
                 <Button
                   size="sm"
                   className="h-8 rounded-full bg-[var(--marketing-white)] px-4 text-[10px] font-bold text-[var(--marketing-dark)] tracking-wider"
-                 
+
                 >
                   <a href="/dashboard">{p.cta}</a>
                 </Button>
@@ -201,7 +201,7 @@ export default function MarketingLanding() {
               <Button
                 size="sm"
                 className="mt-6 h-9 rounded-full bg-[var(--marketing-white)] px-5 text-label font-bold text-[var(--marketing-dark)] tracking-wider"
-               
+
               >
                 <a href="/features">Read the full docs</a>
               </Button>
@@ -305,7 +305,7 @@ export default function MarketingLanding() {
           <Button
             size="sm"
             className="h-9 rounded-full bg-[var(--marketing-white)] px-6 text-label font-bold text-[var(--marketing-dark)] tracking-wider shadow-lg dark:shadow-none"
-           
+
           >
             <a href="/docs">Read the full docs →</a>
           </Button>

@@ -12,6 +12,7 @@ import {
   CalendarDays,
   FileText,
   History,
+  Newspaper,
   Sparkles,
   Settings,
   User,
@@ -78,6 +79,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Analysis',
     items: [
+      { href: '/dashboard/news', label: 'News', icon: Newspaper },
       { href: '/dashboard/history', label: 'History', icon: History, roles: HISTORY_NAV_ROLES },
       { href: '/dashboard/new-analysis', label: 'New Analysis', icon: Sparkles, exact: true, roles: ANALYZE_NAV_ROLES },
     ],

@@ -7,6 +7,7 @@ import { useReducedMotion } from 'motion/react'
 import { Button } from '@/components/9ui/ui/button'
 import { useAuthorizedMediaUrl } from '@/lib/useAuthorizedMediaUrl'
 import FindingsTimeline from '@/components/FindingsTimeline'
+import ProStatsPanel from '@/components/analysis/ProStatsPanel'
 import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
@@ -290,6 +291,19 @@ export default function ResultsSummary({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Professional stat layer: provenance-labelled groups + honest gaps */}
+        {(Boolean(summary.stats) ||
+          Boolean(summary.tactical_summary) ||
+          Boolean(summary.key_insights?.length)) && (
+          <div className="gsap-item">
+            <ProStatsPanel
+              stats={summary.stats}
+              tacticalSummary={summary.tactical_summary}
+              keyInsights={summary.key_insights}
+            />
           </div>
         )}
 

@@ -9,6 +9,7 @@ import AnalysisTitle from '@/components/AnalysisTitle'
 import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
+import ProStatsPanel from '@/components/analysis/ProStatsPanel'
 
 const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
   ssr: false,
@@ -26,7 +27,13 @@ import { createShareToken } from '@/lib/aiReports'
 import { getShotEvents } from '@/lib/analysis'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
-import type { JobStatus, AnalysisSummary, Matchup, PerformanceMetric } from '@/types'
+import type {
+  JobStatus,
+  AnalysisSummary,
+  Matchup,
+  PerformanceMetric,
+  ProfessionalStats,
+} from '@/types'
 import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
@@ -368,6 +375,16 @@ export default function AnalysisDetailClient({
       )
     : []
 
+  const proStats =
+    summary?.stats && typeof summary.stats === 'object' && !Array.isArray(summary.stats)
+      ? (summary.stats as ProfessionalStats)
+      : null
+  const tacticalSummary =
+    typeof summary?.tactical_summary === 'string' ? summary.tactical_summary : null
+  const keyInsights = Array.isArray(summary?.key_insights)
+    ? summary.key_insights.filter((insight): insight is string => typeof insight === 'string')
+    : []
+
   return (
     <div ref={containerRef} className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
       {/* Reading Progress */}
@@ -707,6 +724,19 @@ export default function AnalysisDetailClient({
           </div>
         </div>
       )}
+
+      {/* Professional stat layer: provenance-labelled groups + honest gaps */}
+      {summary &&
+        activeView === 'overview' &&
+        (proStats || tacticalSummary || keyInsights.length > 0) && (
+          <div className="mb-8">
+            <ProStatsPanel
+              stats={proStats}
+              tacticalSummary={tacticalSummary}
+              keyInsights={keyInsights}
+            />
+          </div>
+        )}
 
       {/* Shot Events with Reorder */}
       {summary &&
