@@ -18,18 +18,24 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-      - key: LOCAL_STORAGE_DIR
-        value: /tmp/storage
-      - key: UPSTASH_REDIS_REST_URL
+      # Persistence root: SQLite DB, uploaded objects, rendered results.
+      # Render disks are ephemeral across deploys — keep demo clips short.
+      - key: DATA_DIR
+        value: /app/data
+      # Shared secret with the server. The engine refuses to boot in
+      # production without it (see engine/main.py lifespan).
+      - key: SERVICE_TOKEN
         sync: false
-      - key: UPSTASH_REDIS_REST_TOKEN
+      # Browser-facing origin allowed by CORS. The browser never calls the
+      # engine directly, but keep it explicit (no wildcard) in production.
+      - key: SERVER_URL
         sync: false
       - key: SENTRY_DSN
         sync: false
       - key: ENVIRONMENT
         value: production
 
-  # ── Server (Bun/Elysia — middleware + BullMQ worker) ──────────────────────
+  # ── Server (Bun/Elysia — middleware + Postgres durable queue) ─────────────
   # Free plan is fine: tiny footprint, fits 512 MB. The queue worker lives in
   # this process; the keepalive workflow (.github/workflows/keepalive.yml) pings
   # /health every 9 min so the free instance never cold-starts and the worker
@@ -49,11 +55,17 @@ services:
           property: host
       - key: FRONTEND_URL
         sync: false
-      - key: UPSTASH_REDIS_REST_URL
-        sync: false
-      - key: UPSTASH_REDIS_REST_TOKEN
-        sync: false
       - key: DATABASE_URL
+        sync: false
+      # Identity boundary: the server refuses to boot without SERVICE_TOKEN
+      # when REQUIRE_SERVICE_TOKEN=1, and the engine requires the same value.
+      - key: SERVICE_TOKEN
+        sync: false
+      - key: REQUIRE_SERVICE_TOKEN
+        value: "1"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_DOMAIN
         sync: false
       - key: SENTRY_DSN
         sync: false

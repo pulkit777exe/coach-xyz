@@ -11,14 +11,14 @@ services:
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
       PYTHONUNBUFFERED: "1"
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
+      DATA_DIR: /app/data
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
-      SERVER_URL: http://server:8000
+      SERVER_URL: ${FRONTEND_URL:-http://localhost:3000}
     expose:
       - "8001"
     volumes:
-      - engine_tmp:/app/tmp
+      - engine_data:/app/data
     read_only: true
     tmpfs:
       - /tmp:size=256m,noexec,nosuid
@@ -64,10 +64,14 @@ services:
       ENGINE_URL: http://engine:8001
       PORT: 8000
       NODE_ENV: production
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
       DATABASE_URL: ${DATABASE_URL?DATABASE_URL is required}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
+      REQUIRE_SERVICE_TOKEN: "1"
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_DOMAIN: ${RESEND_FROM_DOMAIN:-}
+      RESEND_FROM_NAME: ${RESEND_FROM_NAME:-CoachXYZ}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
       engine:
         condition: service_healthy
@@ -115,22 +119,30 @@ services:
     build:
       context: ./web-next
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://coachxyz.com}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     container_name: coachai-web
     environment:
-      NEXT_PUBLIC_API_URL: ${FRONTEND_URL:-https://coachxyz.com}
-      NEXT_PUBLIC_UPSTASH_REDIS_REST_URL: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_URL:-}
-      NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN:-}
-      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://coachxyz.com}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:?SERVICE_TOKEN is required}
       NODE_ENV: production
-      APP_BASE_URL: ${FRONTEND_URL:-https://coachxyz.com}
-      NEXTAUTH_URL: ${FRONTEND_URL:-https://coachxyz.com}
+      APP_BASE_URL: ${APP_BASE_URL:-https://coachxyz.com}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:?AUTH0_DOMAIN is required}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:?AUTH0_CLIENT_ID is required}
+      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET:?AUTH0_CLIENT_SECRET is required}
+      AUTH0_SECRET: ${AUTH0_SECRET:?AUTH0_SECRET is required}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
       server:
         condition: service_healthy
-    networks:
-      - coachai_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
     init: true
     restart: unless-stopped
     networks:
@@ -141,5 +153,5 @@ networks:
     driver: bridge
 
 volumes:
-  engine_tmp:
+  engine_data:
     driver: local
