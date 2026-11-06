@@ -1,5 +1,9 @@
 # V2 — Interactive Analysis
 
+> **Historical design document.** Redis was removed from the application after
+> this was written; persistence and job orchestration now live in Postgres
+> (`docs/DURABLE_STATE.md`). Redis mentions below are retained as design history.
+>
 > Transform Coach-XYZ from a one-shot analysis tool into a conversational sports coaching interface.
 
 > **Status (2026-10-11): implemented.** Streaming SSE chat, Redis + Supabase persistence,

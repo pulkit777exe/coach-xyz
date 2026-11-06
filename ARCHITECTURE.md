@@ -1,5 +1,13 @@
 # Coach-XYZ Architecture
 
+> **Current state (2026-11-06):** the application is **Redis-free**. Durable
+> jobs live in Postgres (`server_jobs`, `FOR UPDATE SKIP LOCKED`), the engine
+> keeps its own job/event/session state in SQLite, share tokens and AI-report
+> records are Postgres tables, and rate limits are in-process. See
+> `docs/DURABLE_STATE.md` for the authoritative migration record. Sections
+> below were updated for that change; anything still describing Redis/BullMQ is
+> historical and should be treated as a bug in this document.
+
 ## 1. Overview
 
 Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to analyze athlete technique. Users upload sports videos (basketball, football, cricket, tennis, baseball, hockey), the system detects players, sends frames to Gemini for biomechanical analysis, and returns an annotated video with performance feedback. The system is designed for zero-cost deployment on free-tier infrastructure.
@@ -11,46 +19,44 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 ### Frontend (`web-next/`)
 | Technology | Version | Source |
 |------------|---------|--------|
-| Next.js | ^16.3.5 | `web-next/package.json:20` |
-| React | ^19.3.0 | `web-next/package.json:22` |
+| Next.js | ^16.4.5 | `web-next/package.json:20` |
+| React | ^19.3.1 | `web-next/package.json:22` |
 | Tailwind CSS | ^4.3.3 | `web-next/package.json:35` |
 | GSAP | ^3.15.0 | `web-next/package.json:18` |
 | TypeScript | ^5.9.3 | `web-next/package.json:35` (dev) |
-| @auth0/nextjs-auth0 | ^4.29.0 | `web-next/package.json:13` |
-| @sentry/nextjs | ^10.74.0 | `web-next/package.json:16` |
+| @auth0/nextjs-auth0 | ^4.33.0 | `web-next/package.json:13` |
+| @sentry/nextjs | ^11.11.0 | `web-next/package.json:16` |
 | recharts | ^3.10.1 | `web-next/package.json:24` (lazy chunk only) |
 
 ### Server (`server/`)
 | Technology | Version | Source |
 |------------|---------|--------|
 | Bun | (runtime) | `server/Dockerfile:1` — `oven/bun:1` |
-| Elysia | ^1.4.30 | `server/package.json:19` |
-| BullMQ | ^5.81.5 | `server/package.json:18` |
-| ioredis | ^5.11.1 | `server/package.json:20` (only Redis lib) |
-| @sentry/node | ^10.74.0 | `server/package.json:17` |
-| TypeScript | ^5.9.3 | `server/package.json:25` |
+| Elysia | ^1.4.30 | `server/package.json` |
+| @elysiajs/openapi | ^1.4.17 | `server/package.json` (dev docs only) |
+| @sentry/node | ^10.76.2 | `server/package.json` |
+| TypeScript | ^5.9.3 | `server/package.json` |
+| Durable queue | Postgres `server_jobs` | `server/src/lib/serverJobsStore.ts` |
 
 ### Engine (`engine/`)
 | Technology | Version | Source |
 |------------|---------|--------|
 | Python | 3.12-slim (Docker; 3.11+ local) | `engine/Dockerfile:6`, `engine/.python-version` |
-| FastAPI | 0.141.1 | `engine/requirements.txt:1` |
+| FastAPI | 0.162.0 | `engine/requirements.txt:1` |
 | uvicorn | 0.54.0 | `engine/requirements.txt:2` |
-| google-genai | 2.25.0 | `engine/requirements.txt:4` |
+| google-genai | 2.33.0 | `engine/requirements.txt:4` |
 | httpx | 0.28.1 | `engine/requirements.txt:5` |
-| mediapipe | 1.0.1 | `engine/requirements.txt:6` |
-| opencv-contrib-python | 5.0.0.93 | `engine/requirements.txt:10` |
-| orjson | 3.12.0 | `engine/requirements.txt:16` |
-| sentry-sdk | 2.70.0 | `engine/requirements.txt:21` |
-| upstash-redis | 1.8.0 | `engine/requirements.txt:22` |
-| boto3 | >=1.34.0 (S3 path only, lazy) | `engine/requirements.txt:3` |
+| mediapipe | 1.1.1 | `engine/requirements.txt:6` |
+| opencv-contrib-python | (via mediapipe) | `engine/requirements.txt` |
+| sentry-sdk | 2.73.0 | `engine/requirements.txt` |
+| Job/event state | SQLite (`DATA_DIR`) | `engine/core/db.py` |
 
 ### Infrastructure
 | Component | Technology | Source |
 |-----------|------------|--------|
-| Queue | BullMQ + Redis (ioredis TCP) | `server/src/lib/queue.ts:1` |
-| Job Storage | Upstash Redis (REST) | `engine/core/jobs.py:14-17` |
-| Server Redis | ioredis client derived from Upstash REST URL+token | `server/src/lib/redis.ts:6-48` |
+| Queue | Postgres `server_jobs` (`FOR UPDATE SKIP LOCKED`) | `server/src/lib/serverJobsStore.ts` |
+| Job Storage (engine) | SQLite `jobs` table | `engine/core/db.py` |
+| Server Redis | **none** — removed | `docs/DURABLE_STATE.md` |
 | Database | Supabase PostgreSQL (DDL in code) | `server/src/lib/historyStore.ts:11` |
 | Video Storage | Local disk (default) or S3-compatible | `engine/core/storage.py:46-52` |
 | Deployment | Render (free tier) | `render.yaml` |
@@ -68,21 +74,23 @@ Coach-XYZ is a sports video analysis platform that uses Google Gemini AI to anal
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                  │
 │  │   Frontend   │───▶│    Server    │───▶│    Engine    │                  │
 │  │  (Next.js)   │    │  (Elysia +   │    │  (FastAPI +  │                  │
-│  │  Port 3000   │    │   BullMQ)    │    │  MediaPipe)  │                  │
-│  └──────────────┘    │  Port 8000   │    │  Port 8001   │                  │
+│  │  Port 3000   │    │   Postgres   │    │  MediaPipe)  │                  │
+│  └──────────────┘    │   queue)     │    │  Port 8001   │                  │
 │                      └──────┬───────┘    └──────┬───────┘                  │
 │                             │                   │                           │
 │                             ▼                   ▼                           │
 │                      ┌──────────────┐    ┌──────────────┐                  │
-│                      │    Redis     │    │    Local     │                  │
-│                      │  (Upstash)   │    │   Storage    │                  │
-│                      └──────────────┘    │  /app/tmp/   │                  │
-│                             │            └──────────────┘                  │
-│                             ▼                   │                           │
-│                      ┌──────────────┐           │                           │
-│                      │   Supabase   │           │                           │
-│                      │  (Postgres)  │           │                           │
-│                      └──────────────┘           │                           │
+│                      │   Postgres   │    │   SQLite     │                  │
+│                      │ server_jobs  │    │ jobs/events  │                  │
+│                      │ + app tables │    │ + sessions   │                  │
+│                      └──────────────┘    └──────┬───────┘                  │
+│                                                 │                           │
+│                                                 ▼                           │
+│                                          ┌──────────────┐                  │
+│                                          │  Local disk  │                  │
+│                                          │  /app/data   │                  │
+│                                          └──────────────┘                  │
+│                                                 │                           │
 │                                                 ▼                           │
 │                                          ┌──────────────┐                  │
 │                                          │  Google      │                  │
@@ -194,13 +202,13 @@ coach-xyz/
 │   │   ├── me.ts              # /api/me/* — player self-scoped hub + attribution mint + analyze (via playerScope adapter + admission)
 │   │   ├── share.ts           # Share-token mint/list/revoke + public GET /api/share/:token
 │   │   ├── sports.ts          # Guard-exempt sport-positions proxy (cached, fail-open)
-│   │   ├── aiReports.ts       # AI report enqueue + poll (BullMQ coachai-report)
+│   │   ├── aiReports.ts       # AI report enqueue + poll (Postgres durable queue)
 │   │   ├── notifications.ts   # Notifications list/read + SSE stream
 │   │   └── health.ts          # GET /health, /health/deep (guard-exempt)
 │   ├── src/lib/
 │   │   ├── queue.ts           # Compat facade over workerLifecycle (preserved enqueue API)
 │   │   ├── workerLifecycle.ts # Lifecycle: retry/persist/events/sweeps/shutdown + job-kind adapters
-│   │   ├── redis.ts           # ioredis client derived from Upstash REST URL+token
+│   │   ├── serverJobsStore.ts # Durable Postgres queue (`server_jobs`, SKIP LOCKED claims)
 │   │   ├── jobs.ts            # Server-side job mapping (server_job_id → engine_job_id)
 │   │   ├── engine.ts          # HTTP client to engine (timeout-wrapped)
 │   │   ├── admission.ts       # Analyze admission (rate→validate→quota→tier→persist→enqueue→usage)
@@ -218,7 +226,7 @@ coach-xyz/
 │   │   ├── capability.ts      # Capability route kernel (rate gate→job access→engine error map)
 │   │   ├── playerScope.ts     # Self-scoped adapter (verified guard→linked scope→decision)
 │   │   ├── orgRoute.ts        # Org route kernel (validators, forbid, audit binder)
-│   │   ├── queueConnection.ts # Single IORedis builder (workerLifecycle + notification events)
+│   │   ├── notificationsEvents.ts # In-process fan-out + SSE (no broker)
 │   │   ├── findingsPolicy.ts / clipsPolicy.ts # Pure curation rules (gate/CSV/validators)
 │   │   ├── chatMessages.ts    # Single conversation home (both surfaces; anonymous sentinel)
 │   │   ├── notificationsStore.ts / notificationsEvents.ts # Persistence vs fan-out
@@ -245,38 +253,38 @@ coach-xyz/
 │   └── scripts/smokeOrgHttp.ts  # Live HTTP smoke (51 checks)
 │
 ├── engine/                    # Video analysis engine (Python + FastAPI)
-│   ├── main.py                # FastAPI app, routes, sessions, multicam, SSE (preambles via core/http.py)
+│   ├── main.py                # FastAPI app, routes, sessions, multicam, SSE
 │   ├── core/
-│   │   ├── analyzer.py        # Orchestrator (prepare/resume/tracking/reasoning/scoring/render)
-│   │   ├── scoring.py         # Criterion + weighted-composite form scoring
-│   │   ├── biomechanics.py    # Nearest-track metric attach + injury-risk delegation
-│   │   ├── http.py            # Route kernel (content guard, body parse, job lookup, Gemini map)
-│   │   ├── detector.py / tracking.py / pose_backend.py / detection_utils.py
-│   │   │                      # Unified pose-candidate seam (PoseDetectionOptions: SCAN/TRACKING presets) + MediaPipe abstraction, HOG/IoU
-│   │   ├── player_detector.py # Legacy OpenCV HOG+SVM path
-│   │   ├── player_tracker.py  # Keyframe scoring + box↔skeleton matching (CLI only)
-│   │   ├── gemini_client.py   # Active Gemini call + normalize
-│   │   ├── gemini_common.py   # Shared JSON helpers (gemini.py legacy video-file path deleted)
-│   │   ├── prompt.py / chat_prompt.py / report_prompt.py / prompt_guard.py
-│   │   │                      # Analysis/chat/report prompts + injection delimiters
-│   │   ├── validator.py       # Gemini output schema validation (tables from sport packs)
-│   │   ├── stats.py           # Shot-event stat recount + correction (made/missed from packs)
-│   │   ├── findings.py        # Evidence-traceable Finding objects (evidence gate)
-│   │   ├── quality.py         # Pre-render non-blocking quality check
-│   │   ├── injury_risk.py     # Injury-risk indicator computation (medical-gated downstream)
-│   │   ├── jobs.py            # Engine-side job state machine (JobStore seam: Redis prod, local adapter)
+│   │   ├── pipeline.py        # Orchestrator: prepare → track → candidates → judge → result → render → publish
+│   │   ├── track.py           # Internal action-player tracking (not a product overlay)
+│   │   ├── people.py          # Person detection + identity across frames
+│   │   ├── pose.py            # MediaPipe pose landmarker (one instance per job)
+│   │   ├── motion.py          # Candidate moments from the track (model-free)
+│   │   ├── judge.py           # Which candidates are real events, and how they went
+│   │   ├── measure.py         # Event moment → evidence records
+│   │   ├── evidence.py        # Evidence vocabulary shared across stages
+│   │   ├── metrics.py         # Sport-specific performance numbers from the pose track
+│   │   ├── matchup.py         # Action player + nearest opponent pairing
+│   │   ├── result.py          # Combine track, evidence and verdicts into the stored result
+│   │   ├── performance.py     # What this clip can honestly say, and what it cannot
+│   │   ├── render.py          # Annotated video: skeleton, HUD, per-event metrics, session card
+│   │   ├── video.py           # ffmpeg/OpenCV helpers: probe, encode, model proxy
+│   │   ├── storage.py         # StorageBackend seam: local / S3; raw/{session}/{angle} + results/{job}
+│   │   ├── sports.py          # Sport packs loader + vocab (events, criteria, ranges)
+│   │   ├── prompts.py         # Analysis/chat/report prompts + untrusted-content fencing
+│   │   ├── llm.py             # Gemini access that behaves on free-tier keys
+│   │   ├── provenance.py      # Reproducibility manifest for one run
+│   │   ├── exports.py         # result.json + CSVs
+│   │   ├── failures.py        # Structured failure codes (separate from job state)
+│   │   ├── geometry.py        # Joint angles from pose landmarks
+│   │   ├── jobs.py            # Job state machine (SQLite-backed)
+│   │   ├── events.py          # Event log + webhook delivery/retry
 │   │   ├── sessions.py        # Scan-session registry (resolve/store/progress/evict/teardown)
-│   │   ├── cache.py           # Video hash + Redis caching (24h TTL)
-│   │   ├── dedup.py           # In-memory request deduplication (300s)
-│   │   ├── storage.py         # StorageBackend seam: Local (in-place) / S3 (tmp copies); raw/{session}/{angle} + results/{job}
-│   │   ├── video_io.py        # ffprobe + ffmpeg preprocessing + keyframes
-│   │   ├── multicam.py        # Multi-angle session helpers (primary + angles)
-│   │   ├── sport_config.py    # sports/*.json loader (positions + versions)
+│   │   ├── db.py              # SQLite: jobs, events, sessions (WAL, per-thread connections)
 │   │   ├── config.py          # ENGINE_VERSION, model, timeouts, sizes
-│   │   ├── logging_config.py  # JSON structured logging (job-id correlation)
 │   │   └── errors.py          # Error types hierarchy
-│   │   ├── cli/_legacy/       # Quarantined frame_selector + player_tracker (unwired; runnable standalone)
-│   ├── tests/                 # pytest suite (28 files, 286 tests)
+│   ├── cli/_legacy/           # Quarantined frame_selector + player_tracker (unwired; runnable standalone)
+│   ├── tests/                 # pytest suite (76 tests)
 │   └── requirements.txt       # Python dependencies
 │
 ├── docker-compose.yml         # Local development (engine + server)
@@ -291,13 +299,17 @@ coach-xyz/
 
 ## 4. Data Model
 
-### Redis Data Structures
+### Durable Job State
 
-**Engine Jobs** (`engine/core/jobs.py:20`)
-- Key: `coachai:job:{job_id}`
-- TTL: 7200 seconds (2 hours)
-- Shape: `JobStatus` dataclass (job_id, state, stage, stage_name, progress, complete, error, error_code, retryable, summary, video_key, video_path, created_at)
-- States: uploading → scanning → player_selection → analyzing → rendering → completed (or → failed)
+**Engine Jobs** (`engine/core/db.py`, `engine/core/jobs.py`)
+- Table: `jobs` in the engine's SQLite file (`DATA_DIR`)
+- Shape: id, state, stage, progress, params, callback_url, error, degraded, cancel, attempts, timestamps
+- States: queued → running (scanning → analyzing → rendering) → completed (or → failed/cancelled)
+- Durable across restarts; the thread pool resumes queued work on boot.
+
+**Engine Events / Sessions** (`engine/core/db.py`)
+- `events`: per-stream event log with delivery/retry bookkeeping for the webhook dispatcher.
+- `sessions`: scan sessions and their multi-angle data, pruned by TTL.
 
 **Error Responses** (`server/src/lib/errors.ts`)
 - All error responses conform to the `CoachAIError` shape:
@@ -308,31 +320,32 @@ coach-xyz/
   - `retry_after?: number` — seconds to wait before retrying (optional)
 - The `isCoachAIError` type guard validates all five fields
 
-**Server Job Mappings** (`server/src/lib/jobs.ts:3-4`)
-- Key: `coachai:srv:{server_job_id}`
-- TTL: 7200 seconds (2 hours)
+**Server Job Registry** (`server/src/lib/jobs.ts`)
+- Table: `analysis_history` (written at admission; `saveJob` is a safety-net upsert)
 - Shape: `{ server_job_id, engine_job_id, session_token, player_index, model, created_at, owner_ids }`
 - `owner_ids` binds the job to its verified owners (analyze-video: the `x-attribution` sub; me/analyze: `[coachAuth0Id, requestedBy]`). Empty = anonymous demo job, bearer-readable. Status/chat/conversation/download require a matching `x-attribution` sub when owners exist (`server/src/lib/jobAccess.ts`).
 
-**Rate Limits** (`server/src/lib/ratelimit.ts:69-110`, Redis-backed with in-memory fallback)
+**Durable Queue** (`server/src/lib/serverJobsStore.ts`)
+- Table: `server_jobs` — `(kind, key)` unique; kinds `analysis` and `ai_report`
+- Claim: `FOR UPDATE SKIP LOCKED`, bounded by `ANALYSIS_DRAIN_BATCH` / `REPORT_DRAIN_BATCH`
+- Retry: `attempts: 3`, exponential backoff from 5 s capped at 5 min; terminal rows pruned after 30 days
+- Crash recovery: `reclaimStuckJobs` (requeue with attempts left) + `failStuckJobs` (mark exhausted jobs failed and notify)
+
+**Rate Limits** (`server/src/lib/ratelimit.ts`, bounded in-memory)
 - Key: `rl:scan:{ip}` (TTL 60s) — 10 scans/minute (`SCAN_RATE_LIMIT`)
 - Key: `rl:analysis:{ip}` (TTL 3600s) — 5 analyses/hour (`ANALYSIS_RATE_LIMIT`)
 - Key: `rl:chat:{ip+identity}` (TTL 3600s) — 30 AI chats/hour (`CHAT_RATE_LIMIT`)
 - Key: `rl:download:{ip+identity}` (TTL 3600s) — 60 downloads/hour (`DOWNLOAD_RATE_LIMIT`)
-- Key: `rl:scanprogress:{ip}` (TTL 60s) — 30 SSE opens/minute (`SCAN_PROGRESS_RATE_LIMIT`)
+- Key: `rl:scanprogress:{sessionToken}` (TTL 60s) — 30 SSE opens/minute (`SCAN_PROGRESS_RATE_LIMIT`)
 - Key: `rl:clip:{ip+identity}` (TTL 3600s) — 60 clip ops/hour (`CLIP_RATE_LIMIT`)
 - Key: `rl:email:{orgId}` (TTL 86400s) — 20 emails/day per org (`EMAIL_RATE_LIMIT`)
 - Key: `rl:aireport:{orgId}` (TTL 3600s) — 10 AI reports/hour per org (`AI_REPORT_RATE_LIMIT`)
-- Scan/analysis/scan-progress buckets key on IP; chat/download/clip use an IP+identity composite; email/AI-report key on the org.
+- Scan/analysis/scan-progress buckets key on IP or the unguessable session token; chat/download/clip use an IP+identity composite; email/AI-report key on the org.
+- The limiter is per instance with 10k-entry eviction; raise the limits or add a shared backend for multi-instance deploys.
 
-**Video Cache** (`engine/core/cache.py:26-27`)
-- Key: `coachai:analysis:{video_hash}:p{player_index|all}`
-- TTL: 86400 seconds (24 hours)
-- Shape: Full Gemini analysis JSON
-
-**Cache Metadata** (`engine/core/cache.py:87-93`)
-- Key: `coachai:analysis:{video_hash}:metadata`
-- Shape: `{ video_path, cached_at, access_count }`
+**Share Tokens / AI Reports**
+- `share_tokens` (Postgres): time-limited public links, pruned on write and filtered on read.
+- `ai_report_jobs` (Postgres): report job records and status; no TTL expiry.
 
 ### Supabase Tables (CONFIRMED — `server/src/lib/historyStore.ts`, all DDL in code)
 
@@ -433,8 +446,8 @@ Level 1 — pipeline + org core:
 6. Engine creates session (in-memory dict, multicam-aware)
     → engine/main.py
 
-7. Engine warms cache for video hash
-    → engine/core/cache.py
+7. Engine records the scan session in SQLite (`sessions` table)
+    → engine/core/sessions.py, engine/core/db.py
 
 8. Server persists to Supabase (historyStore.ts) + returns session_token
     → server/src/routes/scan.ts
@@ -453,47 +466,42 @@ Level 1 — pipeline + org core:
    → server/src/routes/analyze.ts (thin) → lib/admission.ts
 
 2. Admission runs rate → validate → quota → tier → persist → enqueue → usage
-   in one module (signed-in: base priority 10 + tier bump, owners
-   [coach, requester]; anonymous: attributed-priority or 0)
+   in one module, and creates the server_job_id + engine_job_id (signed-in:
+   base priority 10 + tier bump, owners [coach, requester]; anonymous:
+   attributed-priority or 0)
     → server/src/lib/admission.ts
-
-2. Server creates server_job_id + engine_job_id
     → server/src/routes/analyze.ts
 
-3. Server saves job mapping to Redis
+3. Server persists the job mapping to Postgres `analysis_history`
     → server/src/lib/jobs.ts
 
-4. Server pre-creates engine job in Redis
-    → server/src/routes/analyze.ts
+4. Server enqueues a durable row in `server_jobs` (idempotent by `(kind, key)`)
+    → server/src/lib/serverJobsStore.ts
 
-5. Server enqueues to BullMQ (coachai-analysis; attempts: 3, exponential backoff)
-    → server/src/lib/queue.ts
+5. The bounded drain loop claims due analysis jobs (`FOR UPDATE SKIP LOCKED`,
+   `ANALYSIS_DRAIN_BATCH`, default 4)
+    → server/src/lib/workerLifecycle.ts
 
-6. BullMQ worker picks up job (WORKER_CONCURRENCY, default 1)
-    → server/src/lib/queue.ts
+6. The worker calls Engine POST /analyze (12 min timeout; stuck jobs reclaimed
+   or failed at 13 min)
+    → server/src/lib/workerJobs.ts
 
-7. Worker calls Engine POST /analyze (12 min timeout; stuck jobs fail at 13 min)
-    → server/src/lib/queue.ts
+7. Engine runs the staged pipeline
+    → engine/main.py → engine/core/pipeline.py
+   a. Load the source from storage (local or S3)
+   b. Preprocess/normalize video (FFmpeg)
+   c. Track the action player and measure motion
+   d. Judge the candidate windows with Gemini (10-min deadline)
+   e. Build criterion measurements, evidence findings, and quality checks
+   f. Render the annotated video
+   g. Publish the result to storage (results/{job}.mp4)
 
-8. Engine runs analysis synchronously
-    → engine/main.py → engine/core/analyzer.py
-   a. Download video from storage (local or S3)
-   b. Check Redis cache → return if hit
-   c. Check deduplication → wait if in-progress
-   d. Preprocess video (FFmpeg normalize)
-   e. Extract keyframes (every 3s, max 30)
-   f. [PARALLEL] Detect players + Compute motion scores
-   g. Call Gemini API with best frames (10-min deadline)
-   h. Cache result in Redis; derive evidence findings; quality check
-   i. Render annotated video
-   j. Upload result to storage (results/{job}.mp4)
-
-9. Server reads engine status, double-persists completion to Supabase
-   (worker + poll), falls back to persisted rows when Redis expires
+8. Server reads engine status, double-persists completion to Postgres
+   (worker + poll); the engine SQLite job row is the engine-side source of truth
     → server/src/routes/status.ts
     → server/src/lib/analyses.ts
 
-10. Findings persist once on completion (idempotent replace); clips,
+9. Findings persist once on completion (idempotent replace); clips,
     share tokens, and notifications hang off the same server_job_id
 ```
 
@@ -522,11 +530,11 @@ Two server paths, both proxying to the engine's Gemini chat:
 1. Frontend sends `{ job_id, message }`
    → web-next/lib/chat.ts `getConversation`/`sendChatMessageStream`
    → server/src/routes/chat.ts:26
-2. Server loads conversation history from Redis (`coachai:conv:{server_job_id}`, TTL 2h)
-   → server/src/lib/conversation.ts
+2. Server loads conversation history from Postgres `chat_messages`
+   → server/src/lib/chatMessages.ts
 3. Server POSTs to engine `/chat` (60s timeout)
    → engine/main.py:868 → engine/core/chat_prompt.py (analysis context + history)
-4. Persists user + assistant messages to Redis; returns `{ reply, timestamp_refs, event_refs }`
+4. Persists user + assistant messages to Postgres; returns `{ reply, timestamp_refs, event_refs }`
 
 **Streaming (SSE)** (`POST /api/chat/stream`)
 1. Frontend POSTs `{ job_id, message }` with `Accept: text/event-stream`
@@ -643,14 +651,14 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 - **Key env:** `GEMINI_API_KEY` (required — engine startup fails without it)
 - **Model:** `gemini-2.5-flash` (default via `GEMINI_MODEL`, `engine/core/config.py`; mirrored as `DEFAULT_MODEL` in `server/src/types/index.ts` and sent by the frontend in `web-next/lib/scan.ts`)
 - **Usage:** Video analysis with structured JSON output (validated by `core/validator.py`, normalized by `normalize_gemini_result`)
-- **Timeouts:** analysis worker call 12 min (`server/src/lib/queue.ts`); engine-side Gemini analysis deadline 10 min (`GEMINI_ANALYSIS_TIMEOUT_S`, retryable `GEMINI_TIMEOUT`); conversational calls 100s (`CHAT_GEMINI_TIMEOUT_S`), with SSE comment heartbeats on `/chat/stream` during token gaps. Prompts carry `UNTRUSTED-USER-CONTENT` / `ORG-DATA` delimiters (`core/prompt_guard.py`); every summary is stamped with engine/prompt/sport-pack provenance.
+- **Timeouts:** analysis worker call 12 min (`server/src/lib/workerJobs.ts`); engine-side Gemini analysis deadline 10 min (`GEMINI_ANALYSIS_TIMEOUT_S`, retryable `GEMINI_TIMEOUT`); conversational calls 100s (`CHAT_GEMINI_TIMEOUT_S`), with SSE comment heartbeats on `/chat/stream` during token gaps. Prompts carry `UNTRUSTED-USER-CONTENT` / `ORG-DATA` delimiters (`core/prompt_guard.py`); every summary is stamped with engine/prompt/sport-pack provenance.
 
-### Upstash Redis (CONFIRMED)
+### Postgres Job Queue + Engine SQLite (CONFIRMED)
 
-- **Engine:** `engine/core/jobs.py:14-17` — REST client (`upstash-redis` Python)
-- **Server:** `server/src/lib/redis.ts:6-48` — ioredis-only; derives a `rediss://` URL from `UPSTASH_REDIS_REST_URL` + `_TOKEN` (or `UPSTASH_REDIS_IOREDIS_URL` / local URL)
-- **Queue:** `server/src/lib/queue.ts` — TCP connection (`ioredis`) for BullMQ (two queues: `coachai-analysis` + `coachai-report`)
-- **Env vars:** `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_IOREDIS_URL` (local override)
+- **Server queue:** `server_jobs` table, claimed with `FOR UPDATE SKIP LOCKED` by the bounded drain loop in `server/src/lib/workerLifecycle.ts`; no Redis/BullMQ.
+- **Engine state:** one SQLite file under `DATA_DIR` holds jobs, the event log and scan sessions (`engine/core/db.py`); the engine owns retry/resume for its own work.
+- **Ephemeral state:** rate limits are in-process (`server/src/lib/ratelimit.ts`); share tokens and AI-report records are Postgres tables.
+- **Env vars:** none for Redis. The only durable dependency is `DATABASE_URL` (server) plus the engine's `DATA_DIR` volume.
 
 ### Supabase PostgreSQL (CONFIRMED)
 
@@ -667,7 +675,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### FFmpeg (CONFIRMED)
 
-- **Usage:** Video preprocessing (`engine/core/analyzer.py:42-72`), compression (`engine/core/compress.py:26-38`)
+- **Usage:** Video probing/encoding (`engine/core/video.py`), annotated render (`engine/core/render.py`)
 - **Installed in:** `engine/Dockerfile:12` — `apt-get install ffmpeg`
 
 ### MediaPipe (CONFIRMED)
@@ -713,14 +721,14 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Keep-Alive (CONFIRMED)
 
-- **External cron:** `.github/workflows/keepalive.yml` pings server `GET /health` every 9 minutes (keeps the free-plan server + BullMQ worker warm)
+- **External cron:** `.github/workflows/keepalive.yml` pings server `GET /health` every 9 minutes (keeps the free-plan server warm)
 - **Frontend:** `web-next/lib/usePipeline.ts:56-61` — pings server `/health` every 8 minutes while the pipeline is mounted
-- **Engine:** paid/starter plan stays up on its own; sessions evict every 5 min, stuck BullMQ jobs fail at 13 min, retention prunes daily
+- **Engine:** paid/starter plan stays up on its own; sessions evict on TTL, stuck jobs are reclaimed/failed at 13 min, retention prunes daily
 
 ### Graceful Shutdown (CONFIRMED — `server/src/lib/workerLifecycle.ts`)
 
 - SIGTERM/SIGINT handlers; explicit `bootWorkers()` (replaces the side-effect import)
-- Closes: workers (graceful drain) → QueueEvents → queues → Redis connection → history store
+- Closes: in-flight drain loop → workers → history store
 - 10 second timeout before force exit
 - Engine: cleans up orphaned files on shutdown (`engine/main.py`)
 
@@ -736,8 +744,8 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 ### Synchronous Engine Analysis (CONFIRMED)
 
-- `engine/main.py` — `run_analysis()` called synchronously in `/analyze` (2-worker thread pool)
-- BullMQ worker waits for response (`server/src/lib/queue.ts`, 12-min timeout; stuck recovery at 13 min)
+- `engine/main.py` — the staged pipeline (`core/pipeline.py`) runs inside the engine's bounded thread pool
+- The server's durable drain loop waits for the response (`server/src/lib/workerJobs.ts`, 12-min timeout; stuck recovery at 13 min)
 - Stage resume reuses a committed summary on retry (skips Gemini, re-tracks landmarks); surviving renders complete directly
 - **Trade-off:** Simpler error handling, but single job at a time per engine instance at default concurrency
 
@@ -746,22 +754,21 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 - `engine/main.py:57-58` — Python dict with threading lock
 - **Trade-off:** Fast, but sessions lost on restart, no horizontal scaling
 
-### Two Redis Clients (CONFIRMED)
+### Durable Postgres Queue (CONFIRMED)
 
-- Server uses both `@upstash/redis` (REST, for general ops) and `ioredis` (TCP, for BullMQ)
-- `server/src/lib/redis.ts` handles local vs Upstash routing
-- **Trade-off:** BullMQ requires TCP connection; Upstash REST used elsewhere for serverless compatibility
+- `server_jobs` is the single queue for analysis and AI-report work; `FOR UPDATE SKIP LOCKED` gives at-least-once claims without a broker
+- Enqueue is transactional with the rest of the write path; `(kind, key)` makes retries idempotent
+- **Trade-off:** one fewer service to run and no Redis bill; throughput is bounded by Postgres and the drain batch, which is ample for this workload
 
-### Frame Caching (CONFIRMED)
+### Single-File Result (CONFIRMED)
 
-- `engine/core/analyzer.py:95` — decoded frames cached during extraction
-- Reused for detection + motion scoring (`analyzer.py:600-604`)
-- **Trade-off:** Higher memory usage, but avoids ~60 redundant VideoCapture open/seek/read cycles
+- The pipeline emits one `result.json` plus CSVs (`engine/core/exports.py`); the server stores the summary and evidence, not intermediate frames.
+- **Trade-off:** no separate media cache to invalidate; re-analysis recomputes from the source video.
 
-### Rate Limiting with Memory Fallback (CONFIRMED)
+### In-Process Rate Limiting (CONFIRMED)
 
-- `server/src/lib/ratelimit.ts:50-53` — Redis-backed with in-memory fallback
-- **Trade-off:** Rate limits lost on restart when using memory fallback, but service stays available
+- `server/src/lib/ratelimit.ts` — bounded in-memory counter (10k entries, expired-entry eviction) behind the `RateLimitBackend` seam
+- **Trade-off:** counters reset on restart and are per instance; fine for single-instance deploys, and a shared backend can be dropped in without changing call sites
 
 ### Per-Request Dedup via React.cache (web)
 
@@ -796,7 +803,7 @@ All resolve the linked student via `students.account_auth0_id` and scope queries
 
 None. The last orphans — `engine/core/baseline.py` and `web-next/components/InlineRename.tsx` — were **deleted** (2026-09-17), and legacy `web-next/components/ui/*` is gone (primitives live in `components/9ui/ui/*` + `components/interior/`).
 
-**One analysis driver:** `engine/core/analyzer.py::run_analysis` serves the server
+**One analysis driver:** `engine/core/pipeline.py::run` serves the server
 (`/analyze`), the CLI (`cli/main.py`, as a progress adapter), and retries. The old
 video-upload path (`core/gemini.py::analyze_video`), the LangChain chunker
 (`core/chunker.py`), and the dead server-job bridge (`cli/analyze_session.py`,
@@ -814,7 +821,7 @@ Also deleted 2026-09-17: `engine/core/baseline.py` (sport baseline models, never
 
 ### Inconsistencies
 
-None documented. The HOG descriptor is a single module-level singleton (`core/detection_utils.py:25`) shared by `detector.py` and `analyzer.py` alike.
+None documented. Person detection is centralized in `core/people.py` and pose extraction in `core/pose.py`; the old HOG singleton is gone.
 
 ### Resolved (fixed 2026-09-11)
 
@@ -830,7 +837,7 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 8. ~~Per-call `HOGDescriptor` in `detector.py`~~ — already resolved by the `detection_utils` refactor: one module-level `_HOG_DESCRIPTOR` (`core/detection_utils.py:25`) serves `detector.py` and `analyzer.py`. Doc updated to match reality.
 9. ~~Session/scan-progress memory growth in `engine/main.py`~~ — sessions already cap at `MAX_SESSIONS` with every-300s TTL eviction; the unbounded path was the **`scan_progress` dict**, which was never pruned. Added `_evict_old_scan_progress()` (only reachable fix) — stale entries are dropped by the 2h TTL; completed entries are retained for only 5 min (`COMPLETE_SCAN_PROGRESS_RETENTION`). `started_at` is stamped on every entry.
-10. ~~Two Redis libraries in `server/`~~ — redis is ioredis-only now. `server/src/lib/redis.ts` derives a `rediss://` URL from `UPSTASH_REDIS_REST_URL` + `_TOKEN` (same derivation as `queue.ts`, already proven in prod by BullMQ) or uses the local URL; the Upstash REST branch and both `@upstash/redis` and `@upstash/ratelimit` dependencies are gone.
+10. ~~Two Redis libraries in `server/`~~ — resolved twice: first to ioredis-only, then by removing Redis entirely in favour of the Postgres `server_jobs` queue and in-process limits (see `docs/DURABLE_STATE.md`).
 11. ~~`lib/notifications.ts` tsc errors~~ — `DashboardAnalysis` now carries `auth0_id` (matches the `analysis_history` row shape); `orgValidate.ts` status-set typed as `ReadonlySet<string>` (mirrors `routes/org.ts`); lint fixes in the notifications file.
 
 ### Missing Features
@@ -849,30 +856,31 @@ None documented. The HOG descriptor is a single module-level singleton (`core/de
 
 | Claim | Verification |
 |-------|--------------|
-| Next.js ^16.3.5 | `web-next/package.json:20` |
-| Elysia ^1.4.30 | `server/package.json:19` |
-| FastAPI 0.141.1 | `engine/requirements.txt:1` |
-| google-genai 2.25.0 | `engine/requirements.txt:4` |
-| Worker concurrency default: 1 | `server/src/lib/queue.ts` (`WORKER_CONCURRENCY`, default 1) |
+| Next.js ^16.4.5 | `web-next/package.json` |
+| Elysia ^1.4.30 | `server/package.json` |
+| FastAPI 0.162.0 | `engine/requirements.txt:1` |
+| google-genai 2.33.0 | `engine/requirements.txt:4` |
+| Worker concurrency default: 1 | `server/src/lib/workerJobs.ts` (`WORKER_CONCURRENCY`, default 1) |
 | Worker timeout: 12 min | engine analyze call in `server/src/lib/engine.ts` |
-| Stuck job recovery: 13 min | `server/src/lib/queue.ts` (`STUCK_MS`, 10-min sweep) |
-| Session TTL: 2 hours | `engine/main.py` (`SESSION_TTL=7200`, max 10 sessions) |
-| Cache TTL: 24 hours | `engine/core/cache.py` (`CACHE_TTL=86400`) |
+| Stuck job recovery: 13 min | `server/src/lib/workerJobs.ts` (`STUCK_TIMEOUT_MS`, 10-min sweep) |
+| Session TTL: 2 hours | `engine/core/sessions.py` (`SESSION_TTL=7200`, max 10 sessions) |
+| Durable queue | `server/src/lib/serverJobsStore.ts` (`server_jobs`, `FOR UPDATE SKIP LOCKED`) |
+| Engine job/event state | `engine/core/db.py` (SQLite `jobs`, `events`, `sessions`) |
 | Rate limit: scan 10/min | `server/src/lib/ratelimit.ts` (`SCAN_RATE_LIMIT`) |
 | Rate limit: analysis 5/hour | `server/src/lib/ratelimit.ts` (`ANALYSIS_RATE_LIMIT`) |
 | Rate limits: chat/download/clips/email/aireport | `server/src/lib/ratelimit.ts` (30/hr, 60/hr, 60/hr, 20/day/org, 10/hr/org) |
 | Local or S3 storage | `engine/core/storage.py` (`STORAGE_BACKEND`, `raw/…` + `results/…` keys) |
 | Direct-upload intents | `POST /upload-intent` + `POST /scan-from-key` in `engine/main.py` |
-| Pipeline states | `engine/core/jobs.py` (`STATE_FLOW`, `PIPELINE_STATES`) |
-| Test suite: 288 tests | `cd engine && python -m pytest tests -q` (28 files) |
-| Test suite: 371 pass / 36 files | `cd server && bun test` (5 live-infra files excluded — fail with timeouts when Neon/Upstash unreachable; verified environmental on pristine checkout) |
-| Test suite: 209 tests / 23 files | `cd web-next && npx vitest run` (verified green 2026-10-13) |
+| Pipeline states | `engine/core/jobs.py` (`ACTIVE`, state transitions) |
+| Test suite: 76 tests | `cd engine && python -m pytest tests -q` |
+| Test suite: 411 pass / 42 files | `cd server && bun test` (10 live-DB tests fail when Neon is unreachable — environmental) |
+| Test suite: 816 tests / 75 files | `cd web-next && npx vitest run` (verified green 2026-11-06) |
 | Live smoke: 51 checks | `cd server && bun run smoke` (needs `.env` + running server + Neon DB) |
 | Dead code deleted: baseline.py, InlineRename.tsx, ui/* | `rg "baseline" engine/core engine/main.py`, `rg "InlineRename" web-next/`, `ls web-next/components/ui` — all empty |
 | Quarantined: frame_selector + player_tracker | `ls engine/cli/_legacy/` (unwired; runnable standalone) |
 | scan_progress pruned | `engine/core/sessions.py`: `SCAN_PROGRESS_TTL` / `COMPLETE_SCAN_PROGRESS_RETENTION`, evicted alongside sessions |
 | HOG singleton | `engine/core/detection_utils.py` module-level descriptor used by `detector.py` + `analyzer.py` |
-| Redis is ioredis-only | `server/src/lib/redis.ts`; `rg "@upstash" server/package.json` returns nothing (engine Python still uses `upstash-redis`) |
+| No Redis/Upstash/BullMQ | `rg -i "redis|upstash|bullmq" server/src engine/core engine/requirements.txt` returns only migration comments |
 | Auth0 auth (beta gate removed) | `grep -rn "BETA_CODES" server/src/` returns nothing |
 | Keep-alive: 9 min (external cron) | `.github/workflows/keepalive.yml` → `GET /health` |
 | Frontend status poll: 8 min | `web-next/lib/usePipeline.ts` |

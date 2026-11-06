@@ -1,5 +1,9 @@
 # V1 — Current Application
 
+> **Historical document (pre-Redis removal).** Kept for design context. The
+> current architecture is Redis-free and documented in `docs/DURABLE_STATE.md`;
+> Redis/BullMQ references below describe the state at the time of writing.
+>
 > A living document of what CoachXYZ offers today. Last verified against source: 2026-10-11.
 
 ---

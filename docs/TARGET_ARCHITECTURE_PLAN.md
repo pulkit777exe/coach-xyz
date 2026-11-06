@@ -34,8 +34,8 @@ Baselines (must stay green every phase; verified green 2026-10-11): server `bun 
 - Evidence-flavored outputs: shot events carry timestamps, biomechanics,
   per-criterion scoring rationale; chat cites `timestamp_refs`; rendered video
   has HUD + summary screen. Precursor to §19–§21, not yet Findings.
-- Idempotency precursors: video-hash cache + dedup keys, BullMQ retries with
-  `UnrecoverableError`, per-job Redis locks. Part of §18.
+- Idempotency precursors: video-hash cache + dedup keys, durable `server_jobs`
+  retries (3 attempts, exponential backoff), per-job Postgres claims. Part of §18.
 - Structured JSON logs + Sentry on all three layers. Precursor to §32.
 
 ## Gap map (doc § → status → evidence)
@@ -52,7 +52,7 @@ Baselines (must stay green every phase; verified green 2026-10-11): server `bun 
 | 23     | Prompt-injection separation (system vs untrusted content)                                   | **Shipped in Phase 0** — `UNTRUSTED-USER-CONTENT` / `ORG-DATA` delimiters + guard rules + tests | `prompt_guard.py`, `chat_prompt.py`, `prompt.py` |
 | 8, 10  | Signed-URL upload intents; storage buckets raw/normalized/frames/clips                      | **Shipped in Phase 4 (core)** — intent-first uploads (`/upload-intent` → presigned S3 or multipart local → `/scan-from-key`), dual backend, bucket-shaped `raw/…` + `results/…` layout; versioned buckets still open | `scan.ts`, `storage.py`, `main.py` |
 | 9      | Hardened media workers (non-root, no shell strings, limits)                                 | **Shipped in Phase 4 (core)** — ffmpeg via structured args, ffprobe inspection at scan, non-root Docker users, compose `no-new-privileges` + cpu/mem/pid ceilings | `video_io.py`, `Dockerfile`s, `docker-compose.prod.yml` |
-| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing                          | **Shipped in Phase 3 (core)** — stage resume, Supabase completion truth (worker + poll double-persist), terminal cancels, daily per-org cap + tier priority; per-org aging still open | `queue.ts`, `analyses.ts`, `jobs.py` |
+| 16, 17 | Durable workflow; Redis not source of truth; fair per-org queueing                          | **Shipped in Phase 3 (core)** — stage resume, Supabase completion truth (worker + poll double-persist), terminal cancels, daily per-org cap + tier priority; per-org aging still open | `workerLifecycle.ts`, `analyses.ts`, `db.py` |
 | 29     | Audit logs                                                                                  | **Shipped in Phase 2** — `audit_logs` table + best-effort `auditRoute()` writer, owner/admin reads | `audit.ts`, `historyStore.ts` |
 | 7      | Single-use hashed invite tokens                                                             | **Shipped in Phase 2** — random 256-bit hashed tokens, 7-day TTL, single-use, revocable, self-accept | `invites.ts`, `routes/members.ts`, `/invite` |
 | 5      | Health/wellness boundary                                                                    | **Shipped in Phase 2** — `injury_risk` stripped unless the caller is the owning account or holds the medical role | `injury_risk.py`, `permissions.ts` (`maySeeMedical`/`redactWellness`) |
@@ -132,7 +132,8 @@ Baselines (must stay green every phase; verified green 2026-10-11): server `bun 
    (skip Gemini, re-track for fresh landmarks); a surviving render
    completes directly. Committed-artifact short-circuit, tested helpers.
 2. Priority tilt: player-hub jobs enqueue at priority 1 over anonymous 0
-   (BullMQ); per-org quotas remain open (need org resolution at enqueue).
+   (durable `server_jobs` queue); per-org quotas remain open (need org
+   resolution at enqueue).
 3. Supabase completion truth strengthened: worker + poll double-persist
    plus persisted-fallback reads (existing); cancelled rows are terminal —
    late completions can't resurrect them.

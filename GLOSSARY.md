@@ -22,7 +22,7 @@ depth, seam, adapter, leverage, locality).
 - **page shell** — the single RSC helper owning session + gate + org context + fetchers + fallback for dashboard pages.
 - **detection seam** — the one pose-candidate module with tuning options (scan vs tracking presets) (`engine/core`).
 - **session registry** — the engine module owning scan-session resolve, scan-result store, progress, eviction, teardown (`engine/core`).
-- **analysis driver** — the single staged pipeline (`run_analysis`: tracking → reasoning → scoring → quality → render) crossed by server, CLI, and retries; job state behind a store seam (Redis in prod, local adapter otherwise).
+- **analysis driver** — the single staged pipeline (`engine/core/pipeline.py`: prepare → track → candidates → judge → result → render → publish) crossed by server, CLI, and retries; job state in engine SQLite.
 - **user-job adapter** — the server adapter owning the curatorial handler chain (params → guard → store → audit → errors) behind `withUserJob` (`server/src/lib/userJob.ts`).
 - **analysis policy** — the server module owning org quota/tier/usage + retention policy, split from the analyses persistence seam (`server/src/lib/analysisPolicy.ts`).
 - **org subdomains (web)** — per-domain entity facades under `web-next/lib/org/` (students, attendance, schedule, reports, objectives, findings, compete, plans, wellness, subscription, performance, overview, email) re-exported via the `lib/org.ts` shim.
@@ -32,11 +32,11 @@ depth, seam, adapter, leverage, locality).
 - **biomechanics** — the engine module owning nearest-track metric attach + injury-risk delegation (`engine/core/biomechanics.py`).
 - **storage backend** — the engine seam with Local/S3 adapters behind capability methods (`engine/core/storage.py`).
 - **crud list** — the shared web hook owning the load → create → setStatus → remove loop (`web-next/lib/useOrgCrudList.ts`).
-- **route kernel (engine)** — shared JSON-route preambles in `engine/core/http.py` (content guard, body parse, job lookup, summary check, Gemini map, timestamp refs).
+- **route kernel (engine)** — shared JSON-route preambles in `engine/main.py` + `engine/core/errors.py` (content guard, body parse, job lookup, summary check, Gemini map, timestamp refs).
 - **curation policy** — pure findings/clips rules in `server/src/lib/findingsPolicy.ts` + `clipsPolicy.ts`, split from the persistence seam (single-transaction `createClip`).
-- **notifications split** — store (`notificationsStore.ts`) vs fan-out (`notificationsEvents.ts`) with the shared `queueConnection.ts` IORedis builder.
+- **notifications split** — store (`notificationsStore.ts`) vs fan-out (`notificationsEvents.ts`); the worker calls `notifyAnalysisOutcome()` directly and SSE listens on an in-process EventEmitter.
 - **profile data** — `web-next/lib/useStudentProfileData.ts` owning StudentProfile's server-data states + loaders.
 - **month navigator** — `web-next/lib/useMonthNavigator.ts` owning the calendar loop (AI-report polling crosses the shared `jobPolling` core).
 - **pack tables** — validator + stats vocabularies derived from `sports/*.json` via `sport_outcomes`/`sport_stat_keys` (`engine/core/sport_config.py`); neutral outcomes live in the packs.
 - **org kernel** — validators, forbid, and audit binder in `server/src/lib/orgRoute.ts` (guard topology untouched).
-- **conversation merge** — one Postgres home for both chat surfaces (`server/src/lib/chatMessages.ts`); Redis `conversation.ts` deleted.
+- **conversation merge** — one Postgres home for both chat surfaces (`server/src/lib/chatMessages.ts`); the old Redis `conversation.ts` is deleted.

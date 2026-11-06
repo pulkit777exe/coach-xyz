@@ -1,19 +1,19 @@
 web-next source reachability from tests
 ========================================================================
-source files                     232
-test files                       72
+source files                     243
+test files                       75
 
-statically imported by a test     170
+statically imported by a test     173
 loaded only by a generic sweep    3    (readdirSync enumeration, no import edge)
-touched by nothing at all         59
-  static import edge              73.3% of files
-  any loader at all (edge+sweep)  74.6% of files
+touched by nothing at all         67
+  static import edge              71.2% of files
+  any loader at all (edge+sweep)  72.4% of files
 
-lines in source                  33278
-lines in untouched files         4698  (14.1%)
+lines in source                  34915
+lines in untouched files         5176  (14.8%)
 
 touched by nothing, by top-level directory
-  app            53 files    4483 lines
+  app            61 files    4961 lines
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
@@ -23,8 +23,9 @@ components with NO test written for them (sweep-rendered only)
 
 the 25 largest untouched files
     347  app/dashboard/org/page.tsx
-    269  app/share/[token]/page.tsx
+    275  app/share/[token]/page.tsx
     249  app/pricing/page.tsx
+    238  app/dashboard/news/page.tsx
     234  app/dashboard/features/page.tsx
     184  app/account/page.tsx
     177  app/dashboard/support/page.tsx
@@ -41,12 +42,11 @@ the 25 largest untouched files
      91  app/dashboard/_shell.ts
      83  app/dashboard/students/[id]/page.tsx
      75  app/login/page.tsx
+     74  app/layout.tsx
      71  app/player/layout.tsx
-     69  app/layout.tsx
+     68  app/(site)/about/page.tsx
      67  app/signup/page.tsx
      65  app/dashboard/attendance/page.tsx
-     62  app/dashboard/history/error.tsx
-     61  app/player/reports/[id]/page.tsx
 
 LIMITS, stated so this number is not over-read:
   * Reachability is a graph fact, not an execution fact. A reachable file

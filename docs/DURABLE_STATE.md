@@ -28,6 +28,6 @@ concern now lives in Postgres or in bounded in-memory state.
 - Crash recovery: a job claimed `processing` for more than 13 minutes is either requeued
   (attempts left) or failed permanently (attempts exhausted) with the engine job marked
   failed and the owning coach notified.
-- `docker-compose.prod.yml`, `render.yaml`, CI workflows and `AGENTS.md` still reference
-  Upstash from before the migration; those are deployment-facing files owned by ops
-  and should be updated when this lands.
+- `docker-compose.prod.yml`, `render.yaml`, CI workflows and `AGENTS.md` are
+  Redis-free as of the same pass; `.env.prod.example` and the app `.env.example`
+  files no longer document Upstash variables.
