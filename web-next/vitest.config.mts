@@ -28,6 +28,13 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./', import.meta.url)),
     },
   },
+  // Next needs `jsx: "preserve"` in tsconfig.json, and Vite 8's oxc transform
+  // otherwise honours it for tests too — leaving JSX in the module that Vite's
+  // SSR transform then parses as TypeScript, so every `.tsx` test dies with
+  // "Unexpected JSX expression". Tests run under Node, not the Next compiler,
+  // so compile JSX with the automatic runtime here. (Vite 7 ignored the setting;
+  // this keeps the suite runnable on both.)
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     environment: 'node',
     include: ['lib/**/*.test.{ts,tsx}', 'components/**/*.test.{ts,tsx}', 'app/**/*.test.{ts,tsx}'],
