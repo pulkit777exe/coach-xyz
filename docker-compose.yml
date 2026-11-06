@@ -8,12 +8,14 @@ services:
     container_name: coachai-engine
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
-      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL:?UPSTASH_REDIS_REST_URL is required}
-      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:?UPSTASH_REDIS_REST_TOKEN is required}
+      DATA_DIR: /app/data
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      SERVER_URL: http://localhost:8000
     ports:
       - "8001:8001"
     volumes:
-      - engine_tmp:/app/tmp
+      - engine_data:/app/data
     init: true
     restart: unless-stopped
     security_opt:
@@ -39,14 +41,11 @@ services:
     environment:
       ENGINE_URL: http://engine:8001
       PORT: "8000"
-      UPSTASH_REDIS_IOREDIS_URL: redis://redis:6379
       DATABASE_URL: "postgresql://coachai:coachai@database:5432/coachai?sslmode=disable"
       SERVICE_TOKEN: ${SERVICE_TOKEN:-}
       NODE_ENV: development
       FRONTEND_URL: http://localhost:3000
     depends_on:
-      redis:
-        condition: service_healthy
       database:
         condition: service_healthy
       engine:
@@ -59,20 +58,6 @@ services:
       - no-new-privileges:true
     pids_limit: 64
     mem_limit: 1g
-
-  redis:
-    networks:
-      - coachai_net
-    image: redis:7-alpine
-    container_name: coachai-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
 
   database:
     networks:
@@ -100,20 +85,21 @@ services:
     build:
       context: ./web-next
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     container_name: coachai-web
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_UPSTASH_REDIS_REST_URL: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_URL:-}
-      NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN: ${NEXT_PUBLIC_UPSTASH_REDIS_REST_TOKEN:-}
       SERVICE_TOKEN: ${SERVICE_TOKEN:-}
-      NODE_ENV: development
+      NODE_ENV: production
       APP_BASE_URL: http://localhost:3000
-      NEXTAUTH_URL: http://localhost:3000
       AUTH0_DOMAIN: ${AUTH0_DOMAIN}
       AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID}
       AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET}
       AUTH0_SECRET: ${AUTH0_SECRET}
-    command: ["bun", "run", "dev"]
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+      SENTRY_RUNTIME_CHANNEL_INJECTION: "0"
     ports:
       - "3000:3000"
     depends_on:
@@ -122,13 +108,12 @@ services:
     init: true
     restart: unless-stopped
 
-
 networks:
   coachai_net:
     driver: bridge
 
 volumes:
-  engine_tmp:
+  engine_data:
     driver: local
   pgdata:
     driver: local
