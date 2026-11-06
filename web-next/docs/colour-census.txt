@@ -3,7 +3,7 @@ re-derive: node scripts/colourCensus.mjs   (freshness pinned by lib/__tests__/co
 
 scope
   roots: app/, components/, lib/ — *.ts/*.tsx; *.test.* and __tests__/ excluded
-  first-party files: 196 (app 54, components 78, lib 64)
+  first-party files: 207 (app 62, components 79, lib 66)
   vendored path exemption: components/9ui/, components/interior/ — 31 files
   colour utilities resolvable from @theme (--color-*): 52
 
@@ -30,7 +30,7 @@ rule 3 — Tailwind stock palette classes
 
 boundary — recorded, NOT guarded (outside the three rules)
   hex outside className/inline-style (first-party): 
-    components/VideoPlayer.tsx ×7
+    components/VideoPlayer.tsx ×8
     (VideoPlayer paints to canvas, which cannot take var(): theme-invariant overlay scrims + getComputedStyle-resolved token fallbacks — components/VideoPlayer.colors.test.ts pins them)
   rgba() in className: components/HeaderClient.tsx:108 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/org/SettingsPanel.tsx:146 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
@@ -38,8 +38,8 @@ boundary — recorded, NOT guarded (outside the three rules)
   rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/interior/progress-bar.tsx:81 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   literal white/black colour classes, non-dark, first-party: 3 — theme-invariant chrome (video overlays render on a black video surface in both themes)
-    components/VideoPlayer.tsx:385 bg-black
-    components/VideoPlayer.tsx:397 text-white/70
-    components/VideoPlayer.tsx:402 text-white/85
+    components/VideoPlayer.tsx:389 bg-black
+    components/VideoPlayer.tsx:401 text-white/70
+    components/VideoPlayer.tsx:406 text-white/85
   literal white/black colour classes, non-dark, vendored: 4 (registry scrim/chrome patterns)
 

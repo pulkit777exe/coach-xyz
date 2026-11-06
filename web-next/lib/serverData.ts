@@ -190,4 +190,3 @@ export async function syncUser(user: {
 }): Promise<{ user: UserRecord }> {
   return apiSyncUser(user)
 }
-
