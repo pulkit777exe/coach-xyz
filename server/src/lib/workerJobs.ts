@@ -1,9 +1,7 @@
 // ── Job-kind adapters ────────────────────────────────────────────────────────
-// Dependency-injected, side-effect-free on import: no Redis, BullMQ server, or
-// Supabase. `workerLifecycle.ts` wires these to real queues/workers; tests
-// exercise them with in-memory fakes.
-import { UnrecoverableError } from 'bullmq'
-
+// Dependency-injected, side-effect-free on import: no Postgres, no worker
+// timers. `workerLifecycle.ts` wires these to the durable Postgres queue;
+// tests exercise them with in-memory fakes.
 import { DEFAULT_MODEL } from '../types'
 import type { CoachAIError } from '../types'
 import { isCoachAIError, isQueueRetryable, wrapEngineError } from './errors'
@@ -17,6 +15,18 @@ import {
   persistAiReportRecord,
   updateAiReportJob,
 } from './aiReportData'
+
+/**
+ * Thrown by processors for errors that will never succeed on retry.
+ * The durable queue treats it as a permanent failure without consuming an
+ * extra attempt.
+ */
+export class UnrecoverableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'UnrecoverableError'
+  }
+}
 
 // ── Names + defaults ─────────────────────────────────────────────────────────
 
@@ -371,7 +381,7 @@ export interface ReportFailureDeps {
   updateAiReportJob: typeof updateAiReportJob
 }
 
-/** Report failed-handler adapter: mark the Redis record failed on exhaustion. */
+/** Report failed-handler adapter: mark the report job record failed on exhaustion. */
 export async function handleReportFailure(
   event: { jobId: string; failedReason?: string | null },
   lookup: (jobId: string) => Promise<ReportFailureJob | null | undefined>,

@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia'
 import { ENGINE_URL } from '../lib/engine'
 import { getAnalysisQueueStats } from '../lib/workerLifecycle'
-import { redis } from '../lib/redis'
+import { withHistoryStore } from '../lib/historyStore'
 
 export const healthRoute = new Elysia({ prefix: '/health' })
   // Shallow — used by Render health check probe
@@ -13,22 +13,21 @@ export const healthRoute = new Elysia({ prefix: '/health' })
   }))
   // Deep — used by monitoring and the frontend status badge
   .get('/deep', async ({ set }) => {
-    // Check Redis
-    let redisOk = false
-    let redisLatency = 0
+    // Check the history store (Postgres) — the app's only durable dependency
+    let dbOk = false
+    let dbLatency = 0
     try {
       const t = Date.now()
-      await Promise.race([
-        redis.ping(),
-        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 2000)),
-      ])
-      redisOk = true
-      redisLatency = Date.now() - t
+      await withHistoryStore(async (db) => {
+        await db`select 1`
+      })
+      dbOk = true
+      dbLatency = Date.now() - t
     } catch (err) {
       console.warn(
         JSON.stringify({
           type: 'health_check_degraded',
-          component: 'redis',
+          component: 'database',
           error: err instanceof Error ? err.message : 'unknown',
         }),
       )
@@ -71,7 +70,7 @@ export const healthRoute = new Elysia({ prefix: '/health' })
       )
     }
 
-    const status = !redisOk
+    const status = !dbOk
       ? 'unhealthy'
       : !engineOk
         ? 'degraded'
@@ -84,7 +83,7 @@ export const healthRoute = new Elysia({ prefix: '/health' })
     return {
       status,
       checks: {
-        redis: { ok: redisOk, latency_ms: redisLatency },
+        database: { ok: dbOk, latency_ms: dbLatency },
         engine: { ok: engineOk, latency_ms: engineLatency },
         queue: { ok: true, waiting, failed },
       },

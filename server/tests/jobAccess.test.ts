@@ -81,7 +81,7 @@ describe('verifyJobAccess', () => {
     })
   })
 
-  test('persisted fallback owners authorize after Redis expiry', () => {
+  test('persisted fallback owners authorize when the registry has no row', () => {
     setToken(SECRET)
     const minted = mintAttributionToken(OWNER, SECRET)!
     const outcome = verifyJobAccess(requestWith(minted.token), null, {

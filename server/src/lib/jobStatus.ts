@@ -1,5 +1,5 @@
 // ── Job-status orchestration ─────────────────────────────────────────────────
-// One home for the GET /api/job-status decision tree: Redis row → persisted
+// One home for the GET /api/job-status decision tree: registry row → persisted
 // fallback → engine poll → persist → medical-redacted response. Injectable
 // seams ({ store, engine, access, medical }) in the admission style so tests
 // drive every branch with fakes; the route maps outcomes to HTTP.
@@ -74,7 +74,7 @@ export const resolveJobStatus = async (
   const serverJob = await getJobFn(serverJobId)
 
   if (!serverJob) {
-    // Redis key expired — check Supabase for persisted analysis
+    // Registry miss — check Supabase for persisted analysis
     const persisted = await getPersisted(serverJobId)
     if (persisted) {
       const access = checkAccess(request, null, persisted)

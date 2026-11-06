@@ -1,7 +1,7 @@
 // ── Notifications (compat shim) ──────────────────────────────────────────────
 // Split into ./notificationsStore (persistence) + ./notificationsEvents
-// (pub/sub fan-out + queue hooks). Re-exported here so existing importers
-// keep working; new code should import the seam directly.
+// (pub/sub fan-out + direct worker notification calls). Re-exported here so
+// existing importers keep working; new code should import the seam directly.
 export {
   createNotificationRow,
   getAnalysisOwnerRow,
@@ -14,7 +14,8 @@ export {
   type NotificationRow,
 } from './notificationsStore'
 export {
-  attachNotificationQueueEvents,
   createNotification,
+  notifyAnalysisOutcome,
   onNotification,
+  type AnalysisOutcome,
 } from './notificationsEvents'

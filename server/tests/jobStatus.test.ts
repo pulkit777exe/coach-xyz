@@ -57,7 +57,7 @@ describe('resolveJobStatus', () => {
     }
   })
 
-  test('expired Redis rows fall back to the persisted analysis', async () => {
+  test('registry misses fall back to the persisted analysis', async () => {
     const outcome = await resolveJobStatus('srv-1', request(), {
       ...baseSeams(),
       getJob: async () => null,
@@ -157,9 +157,9 @@ describe('resolveJobStatus', () => {
 
 describe('checkJobStatusRateLimit', () => {
   test('allows normal polling and rejects floods', async () => {
-    const { __setRedisForTests } = await import('../src/lib/ratelimit')
+    const { __setLimitBackendForTests } = await import('../src/lib/ratelimit')
     const { checkJobStatusRateLimit } = await import('../src/routes/status')
-    __setRedisForTests({
+    __setLimitBackendForTests({
       rateLimitIncrement: async () => {
         throw new Error('redis_unavailable')
       },
@@ -172,7 +172,7 @@ describe('checkJobStatusRateLimit', () => {
       }
       expect(await checkJobStatusRateLimit(req())).toBe(false)
     } finally {
-      __setRedisForTests(null)
+      __setLimitBackendForTests(null)
     }
   })
 })

@@ -1,18 +1,20 @@
 // ── AI report data layer ─────────────────────────────────────────────────────
-// Orchestrates the lifecycle of a one-click AI report between Redis (job
-// record for polling) and Postgres (persisted reports row). The BullMQ worker
-// in queue.ts imports persistAiReportRecord; routes import the job record
-// helpers and the engine adapter below.
+// Orchestrates the lifecycle of a one-click AI report between Postgres
+// (report_jobs table for polling + reports row for the persisted content).
+// The worker in queue.ts imports persistAiReportRecord; routes import the job
+// record helpers and the engine adapter below.
 
 import { withTimeout, ENGINE_URL, engineServiceHeaders, isConnectivityError } from './engine'
 import { buildReportContent, createReportRecord } from './orgReports'
 import type { ReportType } from './orgEnums'
 import type { CoachAIError } from '../types'
-import { redis } from './redis'
+import { withHistoryStore } from './historyStore'
 
 function engineError(code: string, message: string, retryable = true): CoachAIError {
   return { code, message, layer: 'engine', retryable }
 }
+
+// ── Job records (Postgres) ───────────────────────────────────────────────────
 
 export type AiReportJobStatus = 'queued' | 'running' | 'done' | 'failed'
 
@@ -27,46 +29,77 @@ export type AiReportJob = {
   updated_at: number
 }
 
-const KEY_PREFIX = 'coachai:reportjob:'
-const JOB_TTL = 7200 // 2h — aligned with server job TTL
+type AiReportJobRow = {
+  report_job_id: string
+  auth0_id: string
+  status: string
+  report_id: string | null
+  error: string | null
+  progress: number
+  created_at: Date | string
+  updated_at: Date | string
+}
 
-export const reportJobKey = (reportJobId: string) => `${KEY_PREFIX}${reportJobId}`
+const asJob = (row: AiReportJobRow): AiReportJob => ({
+  report_job_id: row.report_job_id,
+  auth0_id: row.auth0_id,
+  status: row.status as AiReportJobStatus,
+  report_id: row.report_id,
+  error: row.error,
+  progress: row.progress,
+  created_at: new Date(row.created_at).getTime(),
+  updated_at: new Date(row.updated_at).getTime(),
+})
 
 export async function initAiReportJob(input: {
   report_job_id: string
   auth0_id: string
 }): Promise<AiReportJob> {
-  const ts = Date.now()
-  const record: AiReportJob = {
-    report_job_id: input.report_job_id,
-    auth0_id: input.auth0_id,
-    status: 'queued',
-    report_id: null,
-    error: null,
-    progress: 0,
-    created_at: ts,
-    updated_at: ts,
-  }
-  await redis.set(reportJobKey(input.report_job_id), record, { ex: JOB_TTL })
-  return record
+  const rows = await withHistoryStore(
+    (db) =>
+      db<AiReportJobRow[]>`
+        insert into ai_report_jobs (report_job_id, auth0_id, status, progress, created_at, updated_at)
+        values (${input.report_job_id}, ${input.auth0_id}, 'queued', 0, now(), now())
+        on conflict (report_job_id) do update set
+          auth0_id = excluded.auth0_id,
+          updated_at = now()
+        returning report_job_id, auth0_id, status, report_id, error, progress, created_at, updated_at;
+      `,
+  )
+  if (!rows?.[0]) throw new Error('ai_report_jobs store unavailable')
+  return asJob(rows[0])
 }
 
 export async function updateAiReportJob(
   reportJobId: string,
   patch: Partial<Pick<AiReportJob, 'status' | 'report_id' | 'error' | 'progress'>>,
 ): Promise<AiReportJob | null> {
-  const raw = await redis.get(reportJobKey(reportJobId))
-  if (!raw) return null
-  const record = raw as AiReportJob
-  const next: AiReportJob = { ...record, ...patch, updated_at: Date.now() }
-  await redis.set(reportJobKey(reportJobId), next, { ex: JOB_TTL })
-  return next
+  const rows = await withHistoryStore(
+    (db) =>
+      db<AiReportJobRow[]>`
+        update ai_report_jobs set
+          status = coalesce(${(patch.status as AiReportJobStatus | undefined) ?? null}::text, status),
+          progress = coalesce(${patch.progress ?? null}::integer, progress),
+          error = case when ${patch.error !== undefined} then ${patch.error ?? null}::text else error end,
+          report_id = case when ${patch.report_id !== undefined}
+                           then ${patch.report_id ?? null}::uuid else report_id end,
+          updated_at = now()
+        where report_job_id = ${reportJobId}
+        returning report_job_id, auth0_id, status, report_id, error, progress, created_at, updated_at;
+      `,
+  )
+  return rows?.[0] ? asJob(rows[0]) : null
 }
 
 export async function getAiReportJob(reportJobId: string): Promise<AiReportJob | null> {
-  const raw = await redis.get(reportJobKey(reportJobId))
-  if (!raw) return null
-  return raw as AiReportJob
+  const rows = await withHistoryStore(
+    (db) =>
+      db<AiReportJobRow[]>`
+        select report_job_id, auth0_id, status, report_id, error, progress, created_at, updated_at
+        from ai_report_jobs where report_job_id = ${reportJobId} limit 1;
+      `,
+  )
+  return rows?.[0] ? asJob(rows[0]) : null
 }
 
 // ── Engine adapter ───────────────────────────────────────────────────────────

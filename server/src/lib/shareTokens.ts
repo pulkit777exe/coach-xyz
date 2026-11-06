@@ -1,13 +1,15 @@
 // ── Share token store ────────────────────────────────────────────────────────
 // Time-limited tokens that let coaches share an analysis with players via a
-// public, unauthenticated GET /api/share/:token route. Tokens + metadata live
-// in Redis under coachai:share:<token> with a matching TTL (72h default).
+// public, unauthenticated GET /api/share/:token route. Tokens live in Postgres
+// (`share_tokens`), not Redis — the app already requires the history store,
+// and a durable row survives restarts with no eviction surprises.
 //
 // The store is a factory (`createShareTokenStore`) so tests can inject an
-// in-memory Redis-like client; the default export uses the real client.
+// in-memory Redis-like client; the default client is Postgres-backed.
 
 import { randomBytes } from 'crypto'
-import { redis } from './redis'
+
+import { withHistoryStore } from './historyStore'
 
 export type RedisLike = {
   get(key: string): Promise<unknown>
@@ -49,7 +51,96 @@ export function generateShareToken(): string {
   return randomBytes(24).toString('hex')
 }
 
-export function createShareTokenStore(client: RedisLike = redis): ShareTokenStore {
+type ShareRow = {
+  token: string
+  auth0_id: string
+  server_job_id: string
+  created_at: Date | string
+  expires_at: Date | string
+}
+
+const stripPrefix = (key: string): string =>
+  key.startsWith(KEY_PREFIX) ? key.slice(KEY_PREFIX.length) : key
+
+const rowToRecord = (row: ShareRow): ShareTokenRecord => ({
+  auth0_id: row.auth0_id,
+  server_job_id: row.server_job_id,
+  created_at: new Date(row.created_at).toISOString(),
+  expires_at: new Date(row.expires_at).toISOString(),
+})
+
+const recordFromValue = (raw: unknown): ShareTokenRecord | null => {
+  const obj =
+    typeof raw === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(raw)
+          } catch {
+            return null
+          }
+        })()
+      : raw
+  if (!obj || typeof obj !== 'object') return null
+  const record = obj as Record<string, unknown>
+  if (typeof record.auth0_id !== 'string' || typeof record.server_job_id !== 'string') {
+    return null
+  }
+  return {
+    auth0_id: record.auth0_id,
+    server_job_id: record.server_job_id,
+    created_at:
+      typeof record.created_at === 'string' ? record.created_at : new Date().toISOString(),
+    expires_at:
+      typeof record.expires_at === 'string' ? record.expires_at : new Date().toISOString(),
+  }
+}
+
+/** Postgres-backed client with the same shape the store factory expects. */
+const pgShareClient: RedisLike = {
+  async get(key) {
+    const token = stripPrefix(key)
+    const rows = await withHistoryStore(
+      (db) =>
+        db<ShareRow[]>`
+          select token, auth0_id, server_job_id, created_at, expires_at
+          from share_tokens where token = ${token} limit 1;
+        `,
+    )
+    return rows?.[0] ? rowToRecord(rows[0]) : null
+  },
+  async set(key, value) {
+    const token = stripPrefix(key)
+    const record = recordFromValue(value)
+    if (!record) return
+    const createdMs = Date.parse(record.created_at)
+    const expiresMs = Date.parse(record.expires_at)
+    await withHistoryStore(async (db) => {
+      // Expired rows are dead weight; prune them on every write.
+      await db`delete from share_tokens where expires_at <= now();`
+      await db`
+        insert into share_tokens (token, auth0_id, server_job_id, created_at, expires_at)
+        values (
+          ${token}, ${record.auth0_id}, ${record.server_job_id},
+          ${Number.isFinite(createdMs) ? new Date(createdMs) : new Date()}::timestamptz,
+          ${Number.isFinite(expiresMs) ? new Date(expiresMs) : new Date(Date.now() + 72 * 3600e3)}::timestamptz
+        )
+        on conflict (token) do update set
+          auth0_id = excluded.auth0_id,
+          server_job_id = excluded.server_job_id,
+          expires_at = excluded.expires_at;
+      `
+    })
+  },
+  async del(key) {
+    const token = stripPrefix(key)
+    const rows = await withHistoryStore(
+      (db) => db<{ token: string }[]>`delete from share_tokens where token = ${token} returning token;`,
+    )
+    return rows?.length ?? 0
+  },
+}
+
+export function createShareTokenStore(client: RedisLike = pgShareClient): ShareTokenStore {
   const keyFor = (token: string) => `${KEY_PREFIX}${token}`
 
   const asRecord = (raw: unknown): ShareTokenRecord | null => {

@@ -1,8 +1,11 @@
-import { redis } from './redis'
 import { readRequestMeta } from './requestMeta'
 
-// Rate limiting with atomic Redis increments
-// When Redis is unavailable, fail open — don't block users
+// Rate limiting with a bounded in-memory backend. The app previously used Redis
+// with an in-memory fallback when Redis was down; the fallback is now the
+// implementation — Postgres carries the durable state, in-memory counting
+// carries the ephemeral request-rate window. Limits are per instance; if the
+// app ever runs multi-instance, a shared store can replace InMemoryBackend
+// behind the same seam.
 
 interface RateLimitResult {
   allowed: boolean
@@ -10,7 +13,7 @@ interface RateLimitResult {
   reset: number
 }
 
-// Simple in-memory rate limit fallback with eviction
+// Simple in-memory rate limit with eviction
 const memoryLimits = new Map<string, { count: number; resetAt: number }>()
 const MEMORY_LIMIT_MAX_ENTRIES = 10000
 
@@ -45,26 +48,42 @@ function memoryLimit(key: string, limit: number, windowMs: number): RateLimitRes
   }
 }
 
+interface RateLimitBackend {
+  rateLimitIncrement(
+    key: string,
+    limit: number,
+    windowSec: number,
+  ): Promise<{ allowed: boolean; current: number; reset: number }>
+}
+
+const inMemoryBackend: RateLimitBackend = {
+  async rateLimitIncrement(key, limit, windowSec) {
+    // Deterministic mapping onto the shared memory limiter; evictions keep the
+    // map bounded even under hostile key churn.
+    const result = memoryLimit(key, limit, windowSec * 1000)
+    const current = limit - result.remaining
+    return { allowed: result.allowed, current, reset: result.reset }
+  },
+}
+
 interface RateLimitConfig {
   key: string
   limit: number
   windowSec: number
 }
 
-/** Test seam: substitute the Redis client (e.g. a throwing stub for the no-Redis path). */
-let redisOverride: Pick<typeof redis, 'rateLimitIncrement'> | null = null
-export const __setRedisForTests = (
-  client: Pick<typeof redis, 'rateLimitIncrement'> | null,
-): void => {
-  redisOverride = client
+/** Test seam: substitute the counting backend (e.g. a throwing stub for the
+ * backend-failure path). Pass null to restore the in-memory backend. */
+let backendOverride: RateLimitBackend | null = null
+export const __setLimitBackendForTests = (client: RateLimitBackend | null): void => {
+  backendOverride = client
 }
 
 export async function checkLimit(config: RateLimitConfig): Promise<RateLimitResult> {
   const { key, limit, windowSec } = config
   try {
-    // Atomic increment fails over to the in-memory limiter below when Redis is down
-    const client = redisOverride ?? redis
-    const result = await client.rateLimitIncrement(key, limit, windowSec)
+    const backend = backendOverride ?? inMemoryBackend
+    const result = await backend.rateLimitIncrement(key, limit, windowSec)
     return {
       allowed: result.allowed,
       remaining: Math.max(0, limit - result.current),

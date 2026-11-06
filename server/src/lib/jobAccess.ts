@@ -57,7 +57,7 @@ export function resolveJobCaller(request: Request, opts?: CallerOpts): string | 
  * empty owner set are anonymous (demo flow) and stay bearer-accessible. Jobs
  * with owners require the caller's verified sub to be one of the owners.
  * The persisted row (auth0_id + requested_by) is a fallback owner source for
- * jobs whose Redis mapping expired.
+ * jobs with no registry row yet (or whose row was missed).
  */
 export function verifyJobAccess(
   request: Request,

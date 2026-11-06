@@ -72,8 +72,8 @@ try {
   // Continue — history is non-critical
 }
 
-// One explicit boot: workers, QueueEvents, sweeps, and signal handlers.
-// (Replaces the former queue side-effect import; enqueue works pre-boot.)
+// One explicit boot: the Postgres drain loop, sweeps, and signal handlers.
+// (Replaces the former BullMQ side-effect import; enqueue works pre-boot.)
 await bootWorkers()
 
 // Swagger docs are dev-only — don't expose the route surface in production.

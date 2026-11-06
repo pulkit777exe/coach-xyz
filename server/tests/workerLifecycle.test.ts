@@ -1,5 +1,5 @@
 // ── workerLifecycle tests (pure gain: zero queue tests existed) ─────────────
-// All adapters are exercised with in-memory fakes — no Redis, BullMQ server,
+// All adapters are exercised with in-memory fakes — no Postgres,
 // or Supabase. Importing the lifecycle module is side-effect free when the
 // Upstash env is unset (queues stay null, workers start only via bootWorkers).
 
@@ -339,7 +339,7 @@ describe('handleAnalysisFailure', () => {
 })
 
 describe('handleReportFailure', () => {
-  test('exhausted retries mark the Redis record failed', async () => {
+  test('exhausted retries mark the report job record failed', async () => {
     const updates: unknown[] = []
     const result = await handleReportFailure(
       { jobId: 'bull-r', failedReason: 'Error: llm down' },

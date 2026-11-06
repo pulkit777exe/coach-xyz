@@ -1,16 +1,15 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
-import { __setRedisForTests, checkLimit } from '../src/lib/ratelimit'
+import { __setLimitBackendForTests, checkLimit } from '../src/lib/ratelimit'
 
 afterEach(() => {
-  __setRedisForTests(null)
+  __setLimitBackendForTests(null)
 })
 
-describe('checkLimit without Redis', () => {
+describe('checkLimit backend failure', () => {
   test('fails over to the in-memory limiter instead of allowing everything', async () => {
-    // Noop client behavior (see src/lib/redis.ts): no Redis behind us, so
-    // the increment throws and checkLimit must use the memory limiter.
-    __setRedisForTests({
+    // The backend throws, so checkLimit must use the in-memory limiter.
+    __setLimitBackendForTests({
       rateLimitIncrement: async () => {
         throw new Error('redis_unavailable')
       },
@@ -29,7 +28,7 @@ describe('checkLimit without Redis', () => {
 describe('checkScanProgressLimit', () => {
   test('is keyed on the session token, not the client IP', async () => {
     const { checkScanProgressLimit } = await import('../src/lib/ratelimit')
-    __setRedisForTests({
+    __setLimitBackendForTests({
       rateLimitIncrement: async () => {
         throw new Error('redis_unavailable')
       },
@@ -44,7 +43,7 @@ describe('checkScanProgressLimit', () => {
       expect((await checkScanProgressLimit(victim)).allowed).toBe(false)
       expect((await checkScanProgressLimit(sibling)).allowed).toBe(true)
     } finally {
-      __setRedisForTests(null)
+      __setLimitBackendForTests(null)
     }
   })
 })

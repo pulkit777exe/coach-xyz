@@ -365,6 +365,48 @@ export const SCHEMA_LEVELS: readonly (readonly string[])[] = [
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     );`,
+
+    `create table if not exists share_tokens (
+      token text primary key,
+      auth0_id text not null,
+      server_job_id text not null,
+      created_at timestamptz not null default now(),
+      expires_at timestamptz not null
+    );`,
+
+    `create index if not exists share_tokens_expires_idx on share_tokens (expires_at);`,
+
+    `create table if not exists ai_report_jobs (
+      report_job_id text primary key,
+      auth0_id text not null,
+      status text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
+      progress integer not null default 0,
+      report_id uuid,
+      error text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );`,
+
+    `create table if not exists server_jobs (
+      kind text not null check (kind in ('analysis', 'ai_report')),
+      key text not null,
+      payload jsonb not null default '{}'::jsonb,
+      priority integer not null default 0,
+      status text not null default 'queued' check (status in ('queued', 'processing', 'completed', 'failed')),
+      attempts integer not null default 0,
+      max_attempts integer not null default 3,
+      next_attempt_at timestamptz not null default now(),
+      last_error text,
+      started_at timestamptz,
+      finished_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (kind, key)
+    );`,
+
+    `create index if not exists server_jobs_due_idx
+      on server_jobs (kind, status, priority, next_attempt_at)
+      where status = 'queued';`,
   ],
 
   // ── Level 2: tables referencing students ─────────────────────────────────

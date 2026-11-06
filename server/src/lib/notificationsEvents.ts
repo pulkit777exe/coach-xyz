@@ -1,16 +1,10 @@
 // ── Notifications events (fan-out seam) ────────────────────────────────────
-// In-process pub/sub for SSE endpoints plus BullMQ completed/failed hooks
-// that notify owning coaches. Persistence lives in ./notificationsStore;
-// queue connectivity comes from the shared ./queueConnection builder (not a
-// fork). The connection is injectable via attachNotificationQueueEvents for
-// tests; production auto-attaches at import when Redis is configured.
+// In-process pub/sub for SSE endpoints. Notification creation is a direct
+// call from the analysis worker (no queue hooks, no Redis). Persistence
+// lives in ./notificationsStore.
 
 import { EventEmitter } from 'events'
 
-import type { Queue as BullQueue } from 'bullmq'
-import type { Redis } from 'ioredis'
-
-import { buildQueueConnection } from './queueConnection'
 import {
   createNotificationRow,
   getAnalysisOwnerRow,
@@ -66,104 +60,43 @@ async function resolveAnalysisOwner(serverJobId: string): Promise<AnalysisOwner 
   return getAnalysisOwnerRow(serverJobId)
 }
 
-// ── BullMQ queue event hooks ─────────────────────────────────────────────────
-// Listens for completed/failed analysis jobs and creates notifications for the
-// owning coach.  Replicates the Redis connection setup from queue.ts without
-// importing or modifying it.
+// ── Analysis outcome notifications ───────────────────────────────────────────
+// The worker calls this directly on completion or permanent failure. No queue
+// events, no Redis connection.
 
-type AnalysisQueueJobData = {
-  server_job_id: string
-  engine_job_id: string
-  session_token: string | null
-  player_index: number | null
-  video_key: string | null
-}
+export type AnalysisOutcome = 'completed' | 'failed'
 
-const queueEventsConnection = buildQueueConnection('notifications-events')
-let analysisQueue: BullQueue<AnalysisQueueJobData> | null = null
-
-export function attachNotificationQueueEvents(connection: Redis | null = queueEventsConnection) {
-  if (!connection) return
-
+/**
+ * Notify the owning coach of an analysis outcome. Anonymous jobs (no resolvable
+ * owner) produce no notification — there is no one to tell.
+ */
+export async function notifyAnalysisOutcome(
+  serverJobId: string,
+  engineJobId: string,
+  outcome: AnalysisOutcome,
+): Promise<void> {
   try {
-    const { QueueEvents: QueueEventsClass, Queue } = require('bullmq')
-    const qe = new QueueEventsClass('coachai-analysis', {
-      connection,
-    })
-    analysisQueue = new Queue('coachai-analysis', {
-      connection,
-    }) as BullQueue<AnalysisQueueJobData>
+    const analysis = await resolveAnalysisOwner(serverJobId)
+    if (!analysis) return
 
-    qe.on('completed', async ({ jobId }: { jobId: string }) => {
-      try {
-        const job = await analysisQueue!.getJob(jobId)
-        if (!job?.data?.server_job_id) return
-
-        const analysis = await resolveAnalysisOwner(job.data.server_job_id)
-        if (!analysis) return
-
-        await createNotification({
-          auth0Id: analysis.auth0Id,
-          type: 'analysis_complete',
-          title: 'Analysis complete',
-          body: analysis.displayName || job.data.engine_job_id,
-          data: {
-            server_job_id: job.data.server_job_id,
-            engine_job_id: job.data.engine_job_id,
-          },
-        })
-      } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'notification_completed_handler_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
-      }
-    })
-
-    qe.on('failed', async ({ jobId, failedReason }: { jobId: string; failedReason?: string }) => {
-      try {
-        const job = await analysisQueue!.getJob(jobId)
-        if (!job?.data?.server_job_id) return
-
-        const isUnrecoverable = failedReason?.includes('UnrecoverableError')
-        const retriesExhausted = (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 3)
-        if (!retriesExhausted && !isUnrecoverable) return
-
-        const analysis = await resolveAnalysisOwner(job.data.server_job_id)
-        if (!analysis) return
-
-        await createNotification({
-          auth0Id: analysis.auth0Id,
-          type: 'analysis_failed',
-          title: 'Analysis failed',
-          body: analysis.displayName || job.data.engine_job_id,
-          data: {
-            server_job_id: job.data.server_job_id,
-            engine_job_id: job.data.engine_job_id,
-          },
-        })
-      } catch (err) {
-        console.error(
-          JSON.stringify({
-            type: 'notification_failed_handler_error',
-            jobId,
-            error: err instanceof Error ? err.message : 'unknown',
-          }),
-        )
-      }
+    await createNotification({
+      auth0Id: analysis.auth0Id,
+      type: outcome === 'completed' ? 'analysis_complete' : 'analysis_failed',
+      title: outcome === 'completed' ? 'Analysis complete' : 'Analysis failed',
+      body: analysis.displayName || engineJobId,
+      data: {
+        server_job_id: serverJobId,
+        engine_job_id: engineJobId,
+      },
     })
   } catch (err) {
     console.error(
       JSON.stringify({
-        type: 'notification_queue_events_init_error',
+        type: 'notification_outcome_error',
+        outcome,
+        serverJobId,
         error: err instanceof Error ? err.message : 'unknown',
       }),
     )
   }
 }
-
-// Attach lazily — if Redis is available
-attachNotificationQueueEvents()

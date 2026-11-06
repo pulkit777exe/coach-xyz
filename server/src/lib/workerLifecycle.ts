@@ -1,19 +1,14 @@
 // ── Worker lifecycle ─────────────────────────────────────────────────────────
-// Connections and queues exist at module load (so enqueue works before boot);
-// workers, QueueEvents, sweeps, and signal handlers start only via ONE explicit
-// bootWorkers() call from index.ts.
+// The durable queue is Postgres (`server_jobs`, SKIP-LOCKED claims). No Redis,
+// no BullMQ: boot starts a bounded drain loop, sweeps and signal handlers via
+// ONE explicit bootWorkers() call from index.ts. Enqueue must work before
+// boot, so the drain timer only starts during boot while stores are usable.
 //
-// Shutdown order follows BullMQ v5 practice: worker.close() is graceful (stops
-// fetching, waits for active jobs), so close WORKERS FIRST, then
-// QueueEvents/queues/connections.
-//
-// The job adapters themselves (retry mapping, processors, sweeps, shutdown
-// helpers) are dependency-injected and live in ./workerJobs so tests can run
-// them without Redis/BullMQ/Supabase. They are re-exported here to keep the
-// single import surface used by routes and tests.
-import { Queue, QueueEvents, UnrecoverableError, Worker } from 'bullmq'
+// The job adapters (retry mapping, processors, sweeps, shutdown helpers) are
+// dependency-injected and live in ./workerJobs so tests can run them without
+// live infra. They are re-exported here to keep the single import surface used
+// by routes and tests.
 import { randomUUID } from 'crypto'
-import type { Redis } from 'ioredis'
 
 import { DEFAULT_MODEL } from '../types'
 import {
@@ -27,61 +22,53 @@ import { analyzeVideo, getEngineJobStatus, markEngineJobFailed } from './engine'
 import { shutdownHistoryStore } from './historyStore'
 import { getJob, saveJob } from './jobs'
 import { logEvent } from './log'
-import { buildQueueConnection } from './queueConnection'
+import { notifyAnalysisOutcome } from './notificationsEvents'
 import {
-  ANALYSIS_QUEUE_NAME,
-  DEFAULT_JOB_OPTIONS,
   JOB_PRIORITY,
-  REPORT_QUEUE_NAME,
   SHUTDOWN_TIMEOUT_MS,
+  STUCK_TIMEOUT_MS,
+  classifyProcessorError,
   createIdempotentBoot,
+  getAnalysisWorkerConcurrency,
+  getReportWorkerConcurrency,
   handleAnalysisFailure,
   handleReportFailure,
   pruneOldAnalyses,
-  recoverStuckJobs,
   runAiReportProcessor,
   runAnalysisProcessor,
   shutdownInOrder,
   startSweeps,
+  UnrecoverableError,
 } from './workerJobs'
+import {
+  claimDueJobs,
+  completeJob,
+  enqueueDurableJob,
+  failJob,
+  failStuckJobs,
+  pruneTerminalJobs,
+  queueCounts,
+  reclaimStuckJobs,
+  retryDelayMs,
+} from './serverJobsStore'
 import type { AiReportPayload, AnalysisPayload, Closable } from './workerJobs'
 
 export * from './workerJobs'
 
-// ── Connection + queues (eager: enqueue must work before boot) ──────────────
+const ANALYSIS_POLL_MS = Math.max(200, Number(process.env.ANALYSIS_QUEUE_POLL_MS) || 1000)
+const ANALYSIS_DRAIN_BATCH = Math.max(1, Number(process.env.ANALYSIS_DRAIN_BATCH) || 4)
+const REPORT_DRAIN_BATCH = Math.max(1, Number(process.env.REPORT_DRAIN_BATCH) || 2)
+const TERMINAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
-function getRedisConnection(): Redis | null {
-  try {
-    return buildQueueConnection('queue')
-  } catch {
-    logEvent('error', 'queue_unavailable', {
-      message: 'ioredis not available, queue disabled',
-    })
-    return null
-  }
-}
-
-const connection = getRedisConnection()
-const redisAvailable = !!connection
-
-export const analysisQueue = redisAvailable
-  ? new Queue(ANALYSIS_QUEUE_NAME, {
-      connection: connection!,
-      defaultJobOptions: { ...DEFAULT_JOB_OPTIONS },
-    })
-  : null
-
-export const aiReportQueue = redisAvailable
-  ? new Queue(REPORT_QUEUE_NAME, {
-      connection: connection!,
-      defaultJobOptions: { ...DEFAULT_JOB_OPTIONS },
-    })
-  : null
+let drainTimer: ReturnType<typeof setInterval> | null = null
+let shuttingDown = false
 
 // ── Enqueue paths ────────────────────────────────────────────────────────────
 
 /** Shared enqueue path for analyze-video and me/analyze-video. */
 export async function enqueueAnalysis(job: AnalysisPayload): Promise<void> {
+  // The analysis row is already written by admission (persistAnalysisStart);
+  // this upsert is the safety net for enqueue paths that bypass admission.
   await saveJob({
     server_job_id: job.server_job_id,
     engine_job_id: job.engine_job_id,
@@ -91,163 +78,225 @@ export async function enqueueAnalysis(job: AnalysisPayload): Promise<void> {
     created_at: Date.now(),
     owner_ids: job.owner_ids ?? [],
   })
-
-  if (!analysisQueue) {
-    throw new Error('QUEUE_UNAVAILABLE')
-  }
-  await analysisQueue.add(job.server_job_id, job, {
+  await enqueueDurableJob('analysis', job.server_job_id, { ...job }, {
     priority: job.priority ?? JOB_PRIORITY,
+    maxAttempts: 3,
   })
 }
 
-/**
- * Create a queued report job record and enqueue the BullMQ job. Returns the
- * report_job_id, or null when the queue is not configured.
- */
+/** Create a queued report job record and enqueue the durable job. */
 export const enqueueAiReport = async (
   payload: Omit<AiReportPayload, 'report_job_id'>,
 ): Promise<string | null> => {
-  if (!aiReportQueue) return null
   const reportJobId = randomUUID()
   await initAiReportJob({ report_job_id: reportJobId, auth0_id: payload.auth0_id })
-  await aiReportQueue.add('ai-report', { ...payload, report_job_id: reportJobId })
+  await enqueueDurableJob('ai_report', reportJobId, { ...payload, report_job_id: reportJobId }, {
+    maxAttempts: 3,
+  })
   return reportJobId
 }
 
-// ── Real boot / shutdown ─────────────────────────────────────────────────────
+// ── Job processing ───────────────────────────────────────────────────────────
 
-let analysisWorker: Worker<AnalysisPayload> | null = null
-let reportWorker: Worker<AiReportPayload> | null = null
-let analysisEvents: QueueEvents | null = null
-let reportEvents: QueueEvents | null = null
-let sweeps: { stop: () => void } | null = null
-let signalsRegistered = false
-let shuttingDown = false
-
-function attachWorkerErrorHandler(worker: Worker, type: string): void {
-  worker.on('error', (err) => {
-    logEvent('error', type, { message: err.message, timestamp: new Date().toISOString() })
-  })
+type ClaimedAnalysis = {
+  key: string
+  payload: AnalysisPayload
+  attempts: number
+  max_attempts: number
+}
+type ClaimedReport = {
+  key: string
+  payload: AiReportPayload
+  attempts: number
+  max_attempts: number
 }
 
-async function doBootReal(): Promise<void> {
-  if (!redisAvailable || !analysisQueue || !aiReportQueue || !connection) {
-    logEvent('error', 'queue_unavailable', { message: 'workers not started, queue disabled' })
-    return
-  }
-
-  // BullMQ manages concurrency — the engine processes one job at a time.
-  analysisWorker = new Worker<AnalysisPayload>(
-    ANALYSIS_QUEUE_NAME,
-    async (job) =>
-      runAnalysisProcessor(job.data, () => job.getState(), {
-        analyzeVideo,
-        getEngineJobStatus,
-        getJob,
-        persistAnalysisStatus,
-      }),
-    {
-      connection: connection!,
-      // Single concurrency for the 512MB RAM free tier (WORKER_CONCURRENCY overrides).
-      concurrency: Number(process.env.WORKER_CONCURRENCY) || 1,
-    },
+const notifyFailure = async (
+  payload: AnalysisPayload,
+  reason: string,
+  attempts = 3,
+  maxAttempts = 3,
+) => {
+  await handleAnalysisFailure(
+    { jobId: payload.server_job_id, failedReason: reason },
+    async () => ({
+      attemptsMade: attempts,
+      opts: { attempts: maxAttempts },
+      data: payload,
+    }),
+    { markEngineJobFailed, getJob, persistAnalysisStatus },
+    DEFAULT_MODEL,
   )
-  attachWorkerErrorHandler(analysisWorker, 'worker_error')
-  analysisWorker.on('stalled', (jobId) => {
-    logEvent('warn', 'worker_stalled', { jobId, timestamp: new Date().toISOString() })
-  })
+  await notifyAnalysisOutcome(payload.server_job_id, payload.engine_job_id, 'failed')
+}
 
-  reportWorker = new Worker<AiReportPayload>(
-    REPORT_QUEUE_NAME,
-    async (job) =>
-      runAiReportProcessor(job.data, () => job.getState(), {
-        updateAiReportJob,
-        generateAiReport,
-        persistAiReportRecord,
-      }),
-    {
-      connection: connection!,
-      // Reports are LLM-bound, not video-bound; stay serialized like analysis.
-      concurrency: Number(process.env.REPORT_WORKER_CONCURRENCY) || 1,
-    },
-  )
-  attachWorkerErrorHandler(reportWorker, 'ai_report_worker_error')
-
-  // Handle jobs exhausting all retries (terminal-failure persistence).
-  analysisEvents = new QueueEvents(ANALYSIS_QUEUE_NAME, { connection: connection! })
-  analysisEvents.on('failed', async ({ jobId, failedReason }) => {
-    await handleAnalysisFailure({ jobId, failedReason }, (id) => analysisQueue!.getJob(id), {
-      markEngineJobFailed,
+async function processAnalysisJob(job: ClaimedAnalysis): Promise<void> {
+  const payload = job.payload
+  try {
+    await runAnalysisProcessor(payload, async () => 'processing', {
+      analyzeVideo,
+      getEngineJobStatus,
       getJob,
       persistAnalysisStatus,
+    }, DEFAULT_MODEL)
+    await completeJob('analysis', job.key)
+    await notifyAnalysisOutcome(payload.server_job_id, payload.engine_job_id, 'completed')
+  } catch (error) {
+    const mapped = classifyProcessorError(error)
+    const permanent = error instanceof UnrecoverableError || !mapped.retryable
+    const status = await failJob('analysis', job.key, {
+      message: `${mapped.code}: ${mapped.message}`,
+      permanent,
     })
-  })
-  analysisEvents.on('error', (err) => {
-    logEvent('error', 'queue_events_error', {
-      queue: ANALYSIS_QUEUE_NAME,
-      message: err.message,
-      timestamp: new Date().toISOString(),
-    })
-  })
+    if (status === 'failed') {
+      await notifyFailure(
+        payload,
+        `${mapped.code}: ${mapped.message}`,
+        job.attempts,
+        job.max_attempts,
+      )
+      logEvent('error', 'analysis_job_failed', {
+        engine_job_id: payload.engine_job_id,
+        code: mapped.code,
+        server_job_id: payload.server_job_id,
+      })
+    } else {
+      logEvent('warn', 'analysis_job_retry_scheduled', {
+        engine_job_id: payload.engine_job_id,
+        attempt: job.attempts,
+        max_attempts: job.max_attempts,
+        retry_in_ms: retryDelayMs(job.attempts + 1),
+      })
+    }
+  }
+}
 
-  reportEvents = new QueueEvents(REPORT_QUEUE_NAME, { connection: connection! })
-  reportEvents.on('failed', async ({ jobId, failedReason }) => {
-    await handleReportFailure({ jobId, failedReason }, (id) => aiReportQueue!.getJob(id), {
+async function processReportJob(job: ClaimedReport): Promise<void> {
+  const payload = job.payload
+  try {
+    await runAiReportProcessor(payload, async () => 'processing', {
+      generateAiReport,
       updateAiReportJob,
+      persistAiReportRecord,
     })
-  })
-  reportEvents.on('error', (err) => {
-    logEvent('error', 'queue_events_error', {
-      queue: REPORT_QUEUE_NAME,
-      message: err.message,
-      timestamp: new Date().toISOString(),
+    await completeJob('ai_report', job.key)
+  } catch (error) {
+    const mapped = classifyProcessorError(error, 'Unknown AI report error.')
+    const permanent = error instanceof UnrecoverableError || !mapped.retryable
+    const status = await failJob('ai_report', job.key, {
+      message: `${mapped.code}: ${mapped.message}`,
+      permanent,
     })
-  })
+    if (status === 'failed') {
+      await handleReportFailure(
+        { jobId: job.key, failedReason: `${mapped.code}: ${mapped.message}` },
+        async () => ({
+          attemptsMade: job.attempts,
+          opts: { attempts: job.max_attempts },
+          data: { report_job_id: payload.report_job_id },
+        }),
+        { updateAiReportJob },
+      )
+      logEvent('error', 'ai_report_job_failed', {
+        report_job_id: payload.report_job_id,
+        code: mapped.code,
+      })
+    }
+  }
+}
 
-  analysisQueue.on('error', (err) => {
-    logEvent('error', 'queue_error', { message: err.message, timestamp: new Date().toISOString() })
-  })
-  aiReportQueue.on('error', (err) => {
-    logEvent('error', 'ai_report_queue_error', {
-      message: err.message,
-      timestamp: new Date().toISOString(),
-    })
-  })
+async function drain(): Promise<void> {
+  if (shuttingDown) return
+  const analysisBatch = Math.max(1, Math.min(ANALYSIS_DRAIN_BATCH, getAnalysisWorkerConcurrency()))
+  const reportBatch = Math.max(1, Math.min(REPORT_DRAIN_BATCH, getReportWorkerConcurrency()))
+  const [claimedAnalysis, claimedReports] = await Promise.all([
+    claimDueJobs<AnalysisPayload>('analysis', analysisBatch),
+    claimDueJobs<AiReportPayload>('ai_report', reportBatch),
+  ])
+  await Promise.allSettled([
+    ...claimedAnalysis.map((job) =>
+      processAnalysisJob({
+        key: job.key,
+        payload: job.payload,
+        attempts: job.attempts,
+        max_attempts: job.max_attempts,
+      })),
+    ...claimedReports.map((job) =>
+      processReportJob({
+        key: job.key,
+        payload: job.payload,
+        attempts: job.attempts,
+        max_attempts: job.max_attempts,
+      })),
+  ])
+}
 
-  // Stuck-job recovery + retention pruning as sweep adapters.
+function startDrainTimer(): void {
+  if (drainTimer) return
+  drainTimer = setInterval(() => {
+    void drain().catch((err) => {
+      logEvent('error', 'queue_drain_error', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }, ANALYSIS_POLL_MS)
+  drainTimer.unref()
+}
+
+// ── Boot / shutdown ──────────────────────────────────────────────────────────
+
+let sweeps: { stop: () => void } | null = null
+
+const runStuckRecovery = async () => {
+  let reclaimed = 0
+  for (const kind of ['analysis', 'ai_report'] as const) {
+    reclaimed += (await reclaimStuckJobs(kind, STUCK_TIMEOUT_MS)).length
+  }
+  for (const job of await failStuckJobs('analysis', STUCK_TIMEOUT_MS)) {
+    const payload = job.payload as unknown as AnalysisPayload
+    await notifyFailure(payload, 'Job exceeded the 13 minute timeout.', job.attempts, job.max_attempts)
+    reclaimed += 1
+  }
+  for (const job of await failStuckJobs('ai_report', STUCK_TIMEOUT_MS)) {
+    await handleReportFailure(
+      { jobId: job.key, failedReason: 'AI report exceeded the 13 minute timeout.' },
+      async () => ({
+        attemptsMade: job.attempts,
+        opts: { attempts: job.max_attempts },
+        data: { report_job_id: (job.payload as { report_job_id?: string }).report_job_id },
+      }),
+      { updateAiReportJob },
+    )
+    reclaimed += 1
+  }
+  if (reclaimed > 0) {
+    logEvent('info', 'stuck_jobs_reclaimed', { count: reclaimed })
+  }
+  await pruneTerminalJobs(TERMINAL_RETENTION_MS)
+}
+
+function registerSignalHandlers(): void {
+  const handle = (signal: string) => {
+    void shutdownWorkers(signal)
+  }
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(signal, () => handle(signal))
+  }
+}
+
+const doBootReal = async () => {
+  startDrainTimer()
   sweeps = startSweeps(
     () => {
-      void recoverStuckJobs(
-        () => analysisQueue!.getActive(),
-        (job) =>
-          (job as unknown as JobLike).moveToFailed(
-            new UnrecoverableError('Job exceeded 13 minute timeout'),
-            job.token ?? '0',
-            true,
-          ),
-      )
+      void runStuckRecovery()
     },
     () => {
       void pruneOldAnalyses()
     },
   )
-
   registerSignalHandlers()
-}
-
-interface JobLike {
-  moveToFailed: (err: Error, token: string, ignoreLock: boolean) => Promise<void>
-}
-
-function registerSignalHandlers(): void {
-  if (signalsRegistered) return
-  signalsRegistered = true
-  process.on('SIGTERM', () => {
-    void shutdownWorkers('SIGTERM')
-  })
-  process.on('SIGINT', () => {
-    void shutdownWorkers('SIGINT')
-  })
+  // Drain immediately so work enqueued before boot does not wait for the first tick.
+  void drain()
 }
 
 export const bootWorkers = createIdempotentBoot(async () => {
@@ -272,19 +321,11 @@ export async function shutdownWorkers(signal: string): Promise<void> {
   forceExit.unref()
 
   try {
+    if (drainTimer) {
+      clearInterval(drainTimer)
+      drainTimer = null
+    }
     sweeps?.stop()
-
-    // Close in dependency order; only attach handles that actually exist.
-    const stages: Closable[] = []
-    if (analysisWorker) stages.push({ close: () => analysisWorker!.close() })
-    if (reportWorker) stages.push({ close: () => reportWorker!.close() })
-    if (analysisEvents) stages.push({ close: () => analysisEvents!.close() })
-    if (reportEvents) stages.push({ close: () => reportEvents!.close() })
-    if (analysisQueue) stages.push({ close: () => analysisQueue!.close() })
-    if (aiReportQueue) stages.push({ close: () => aiReportQueue!.close() })
-    if (connection) stages.push({ close: () => connection!.quit().then(() => undefined) })
-
-    await shutdownInOrder(stages)
     await shutdownHistoryStore()
     logEvent('info', 'shutdown_complete', { signal, timestamp: new Date().toISOString() })
   } catch (err) {
@@ -296,12 +337,5 @@ export async function shutdownWorkers(signal: string): Promise<void> {
 }
 
 export async function getAnalysisQueueStats(): Promise<{ waiting: number; failed: number }> {
-  if (!analysisQueue) return { waiting: 0, failed: 0 }
-  const [waiting, failed] = await Promise.all([
-    analysisQueue.getWaitingCount(),
-    analysisQueue.getFailedCount(),
-  ])
-  return { waiting, failed }
+  return queueCounts('analysis')
 }
-
-export { analysisWorker as worker, reportWorker as aiReportWorker }
