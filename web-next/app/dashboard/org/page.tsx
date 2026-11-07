@@ -1,15 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import {
-  ArrowRight,
-  CalendarDays,
-  ClipboardCheck,
-  FileText,
-  History,
-  Target,
-  Users,
-} from 'lucide-react'
+import { ArrowRight, CalendarDays, ClipboardCheck, FileText, History, Target, Users } from 'lucide-react'
 
 import { getSession } from '@/lib/session'
 import { unstable_noStore as noStore } from 'next/cache'
@@ -28,7 +20,8 @@ import PageHeader from '@/components/org/PageHeader'
 import Section from '@/components/org/Section'
 import StatusPill, { type StatusTone } from '@/components/org/StatusPill'
 import EmptyState from '@/components/org/EmptyState'
-import { initials } from '@/lib/initials'
+import DefRow from '@/components/org/DefRow'
+import MemberRow from '@/components/org/MemberRow'
 
 export const metadata: Metadata = {
   title: 'Organization | CoachXYZ',
@@ -48,43 +41,6 @@ function roleTone(role: OrgMemberRole): StatusTone {
   if (role === 'owner') return 'primary'
   if (role === 'head_coach') return 'blue'
   return 'gray'
-}
-
-function DefRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 last:border-b-0">
-      <span className="w-[180px] shrink-0 text-body leading-5 text-muted-foreground">{label}</span>
-      <span
-        className={
-          mono
-            ? 'min-w-0 break-all text-right font-mono text-caption leading-4 text-muted-foreground'
-            : 'text-body leading-5 tabular-nums text-foreground'
-        }
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function MemberRow({ member }: { member: OrgMember }) {
-  const name = member.display_name ?? member.member_email ?? 'Member'
-  return (
-    <li className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
-      <span className="grid size-8 shrink-0 place-items-center rounded-[4px] bg-muted text-label font-medium text-muted-foreground">
-        {initials(name)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body leading-5 font-medium text-foreground">{name}</p>
-        <p className="truncate text-meta text-muted-foreground">
-          {member.member_email ?? 'No email on file'}
-        </p>
-      </div>
-      <StatusPill tone={roleTone(member.role)} className="shrink-0">
-        {ORG_MEMBER_ROLE_LABELS[member.role]}
-      </StatusPill>
-    </li>
-  )
 }
 
 /**
