@@ -9,6 +9,7 @@ import { Elysia } from 'elysia'
 import { badRequest, buildError } from '../lib/errors'
 import type { CoachAIError } from '../types'
 import { serviceGuard } from '../lib/serviceGuard'
+import { authorizeOrg } from '../lib/orgRoute'
 import { checkAiReportLimit } from '../lib/ratelimit'
 import { REPORT_TYPES } from '../lib/orgEnums'
 import type { ReportType } from '../lib/orgEnums'
@@ -100,10 +101,15 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
 
   return new Elysia({ name: 'aiReports' })
     .use(serviceGuard)
-    .post('/api/org/:auth0Id/reports/ai', async ({ params, body, set }) => {
+    .post('/api/org/:auth0Id/reports/ai', async ({ params, body, request, set }) => {
       const { auth0Id } = params as { auth0Id: string }
       if (!auth0Id) {
         return badRequest(set, 'Missing auth0Id parameter')
+      }
+      const authz = await authorizeOrg(request, auth0Id, 'report.create')
+      if (!authz.ok) {
+        set.status = authz.status
+        return authz.body
       }
       const { allowed } = await checkAiReportLimit(auth0Id)
       if (!allowed) {
@@ -165,13 +171,18 @@ export const aiReportsRoute = (deps: AiReportsDeps = {}) => {
       set.status = 201
       return { report_job_id: reportJobId, status: 'queued' }
     })
-    .get('/api/org/:auth0Id/reports/ai/:reportJobId', async ({ params, set }) => {
+    .get('/api/org/:auth0Id/reports/ai/:reportJobId', async ({ params, request, set }) => {
       const { auth0Id, reportJobId } = params as {
         auth0Id: string
         reportJobId: string
       }
       if (!auth0Id || !reportJobId) {
         return badRequest(set, 'Missing auth0Id or reportJobId parameter')
+      }
+      const authz = await authorizeOrg(request, auth0Id, 'report.read')
+      if (!authz.ok) {
+        set.status = authz.status
+        return authz.body
       }
 
       const job = await getJob(reportJobId)

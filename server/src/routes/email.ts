@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia'
 
 import { badRequest, buildError } from '../lib/errors'
-import { isEmail } from '../lib/orgRoute'
+import { isEmail, authorizeOrg } from '../lib/orgRoute'
 import {
   emailConfigured,
   sendEmail,
@@ -69,8 +69,13 @@ export default new Elysia()
   // body: { emails: string[], student_ids?: string[] }
   // Creates missing student rows (arm-band email only, no account link),
   // then emails each address an invitation with a signup link.
-  .post('/api/email/:auth0Id/invite', async ({ params, body, set }) => {
+  .post('/api/email/:auth0Id/invite', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    const authz = await authorizeOrg(request, auth0Id, 'org.invite')
+    if (!authz.ok) {
+      set.status = authz.status
+      return authz.body
+    }
     const { allowed: emailOk, remaining } = await checkEmailLimit(auth0Id)
     set.headers['X-RateLimit-Remaining'] = String(remaining)
     if (!emailOk) {
@@ -174,6 +179,11 @@ export default new Elysia()
   // body: { report_id: string, to?: string }  — `to` defaults to the student's email
   .post('/api/email/:auth0Id/report', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    const authz = await authorizeOrg(request, auth0Id, 'report.read')
+    if (!authz.ok) {
+      set.status = authz.status
+      return authz.body
+    }
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
       set.status = 429
@@ -248,8 +258,13 @@ export default new Elysia()
 
   // ── Email an attendance sheet ───────────────────────────────────────────
   // body: { student_id?: string, from?: string, to?: string, to?: string }
-  .post('/api/email/:auth0Id/attendance', async ({ params, body, set }) => {
+  .post('/api/email/:auth0Id/attendance', async ({ params, body, request, set }) => {
     const auth0Id = params.auth0Id as string
+    const authz = await authorizeOrg(request, auth0Id, 'attendance.mark')
+    if (!authz.ok) {
+      set.status = authz.status
+      return authz.body
+    }
     const { allowed: emailOk } = await checkEmailLimit(auth0Id)
     if (!emailOk) {
       set.status = 429
