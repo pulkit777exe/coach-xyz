@@ -19,6 +19,8 @@ import {
   getAnalysisByServerJobId,
 } from '../lib/analyses'
 import type { DashboardAnalysis } from '../lib/analyses'
+import { readRequestMeta } from '../lib/requestMeta'
+import { checkLimit } from '../lib/ratelimit'
 
 const defaultStore = createShareTokenStore()
 
@@ -88,10 +90,25 @@ export const publicShareRoute = (deps: ShareRouteDeps = {}) => {
   const store = deps.store ?? defaultStore
   const getAnalysis = deps.getAnalysis ?? getAnalysisByServerJobId
 
-  return new Elysia({ name: 'publicShare' }).get('/api/share/:token', async ({ params, set }) => {
+  return new Elysia({ name: 'publicShare' }).get('/api/share/:token', async ({ params, request, set }) => {
     const { token } = params as { token: string }
     if (!token) {
       return badRequest(set, 'Missing share token')
+    }
+
+    const meta = readRequestMeta(request)
+    const { allowed, reset } = await checkLimit({
+      key: `rl:share:public:${meta.clientIp ?? 'unknown'}`,
+      limit: 120,
+      windowSec: 60,
+    })
+    if (!allowed) {
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000)
+      set.status = 429
+      return {
+        ...buildError('RATE_LIMITED', 'Too many share requests. Try again later.', true),
+        retry_after: retryAfter,
+      }
     }
 
     // Raw read first so we can distinguish 404 (never existed) from 410 (expired).

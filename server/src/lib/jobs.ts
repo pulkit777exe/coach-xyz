@@ -78,3 +78,38 @@ export async function getJob(serverJobId: string): Promise<ServerJob | null> {
     owner_ids: ownerSet(row.auth0_id, row.requested_by),
   }
 }
+
+export async function getJobBySessionToken(sessionToken: string): Promise<ServerJob | null> {
+  const rows = await withHistoryStore(
+    (db) =>
+      db<
+        {
+          server_job_id: string
+          engine_job_id: string
+          session_token: string | null
+          player_index: number | null
+          model: string
+          requested_at: Date | string
+          auth0_id: string | null
+          requested_by: string | null
+        }[]
+      >`
+        select server_job_id, engine_job_id, session_token, player_index, model,
+               requested_at, auth0_id, requested_by
+        from analysis_history where session_token = ${sessionToken}
+        order by requested_at desc
+        limit 1;
+      `,
+  )
+  const row = rows?.[0]
+  if (!row) return null
+  return {
+    server_job_id: row.server_job_id,
+    engine_job_id: row.engine_job_id,
+    session_token: row.session_token,
+    player_index: row.player_index,
+    model: row.model,
+    created_at: new Date(row.requested_at).getTime(),
+    owner_ids: ownerSet(row.auth0_id, row.requested_by),
+  }
+}

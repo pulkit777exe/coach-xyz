@@ -17,6 +17,8 @@ import { registerVideo, updateVideoProbe } from '../lib/registry'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
 import type { ScanResult } from '../types'
+import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
+import { getJobBySessionToken } from '../lib/jobs'
 
 /** Bound on simultaneous /scan-video uploads (see acquireUploadSlot). */
 export const MAX_CONCURRENT_UPLOADS = parseInt(process.env.SCAN_MAX_CONCURRENT_UPLOADS ?? '2', 10)
@@ -303,8 +305,8 @@ export default new Elysia()
   .get('/api/scan-progress/:sessionToken', async ({ params, request, set }) => {
     const { sessionToken } = params
     if (!sessionToken) {
-        return badRequest(set, 'sessionToken required.')
-      }
+      return badRequest(set, 'sessionToken required.')
+    }
 
     // Keyed on the session token, not the client IP (see checkScanProgressLimit).
     const { allowed, reset } = await checkScanProgressLimit(sessionToken)
@@ -314,6 +316,15 @@ export default new Elysia()
       return {
         ...buildError('RATE_LIMITED', 'Too many scan-progress requests. Try again later.', true),
         retry_after: retryAfter,
+      }
+    }
+
+    const job = await getJobBySessionToken(sessionToken)
+    if (job && Array.isArray(job.owner_ids) && job.owner_ids.length > 0) {
+      const access = verifyJobAccess(request, job)
+      if (!access.ok) {
+        set.status = access.status
+        return access.body
       }
     }
 
