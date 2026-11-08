@@ -27,6 +27,8 @@ import { describe, expect, test } from 'vitest'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const students = readFileSync(join(ROOT, 'components', 'org', 'StudentsClient.tsx'), 'utf8')
+const studentsTable = readFileSync(join(ROOT, 'components', 'org', 'StudentsTable.tsx'), 'utf8')
+const studentsSource = students + studentsTable
 const teams = readFileSync(join(ROOT, 'components', 'org', 'TeamsClient.tsx'), 'utf8')
 const teamsPage = readFileSync(join(ROOT, 'app', 'dashboard', 'teams', 'page.tsx'), 'utf8')
 const studentsPage = readFileSync(join(ROOT, 'app', 'dashboard', 'students', 'page.tsx'), 'utf8')
@@ -39,24 +41,12 @@ describe('a failed read cannot be re-reported as an empty one', () => {
     // The specific regression: moving the empty check first makes a failed read render
     // "No students yet — Add your first student", which is the defect this whole pass exists
     // to remove. Asserted as an ORDER because that is the only thing that can change it.
-    // Anchored on the RENDER's use of the flag, not its declaration: my first version took
-    // `at(students, 'rosterReadFailed')`, which finds the `useState(rosterReadFailed)` on
-    // line 463 — so neutering the render branch left the assertion satisfied and the mutation
-    // came back green. The declaration is not the decision.
-    const fail = at(students, '{rosterReadFailed ?')
-    // Anchored on the TERNARY, not on the bare expression: `filtered.length === 0` occurs
-    // first inside the comment that explains why this ordering exists, so the bare anchor
-    // resolved there and truncated the branch before its own copy — which made the assertion
-    // fail against correct code. The comment is the first mention; the ternary is the decision.
-    const renderEmpty = at(students, ') : filtered.length === 0 ? (', fail)
+    const fail = at(studentsSource, '{rosterReadFailed ?')
+    // Anchored on the TERNARY, not on the bare expression.
+    const renderEmpty = at(studentsSource, ') : filtered.length === 0 ? (', fail)
     expect(fail).toBeGreaterThan(-1)
     expect(renderEmpty).toBeGreaterThan(fail)
-    // …and the failure branch must WITHHOLD the add affordance, because the original defect
-    // was a false claim shipped together with the button that acts on it: "No students yet"
-    // plus a live Add button. My first version asserted both that this branch contains
-    // "Add student" AND that it does not, which is self-contradictory and made the baseline
-    // red for a reason that had nothing to do with the code under test.
-    const failureBranch = students.slice(fail, renderEmpty)
+    const failureBranch = studentsSource.slice(fail, renderEmpty)
     expect(failureBranch).toContain('Roster failed to load.')
     expect(failureBranch).not.toMatch(/<Button/)
     expect(failureBranch).not.toMatch(/Add your first student/)

@@ -1509,6 +1509,99 @@ add(
       return h(WellnessSection, { auth0Id: ORG, studentId: 's1', canWrite: true })
     },
   },
+  {
+    id: 'components/org/DefRow.tsx',
+    skip: 'internal presentational component',
+  },
+  {
+    id: 'components/org/MemberRow.tsx',
+    skip: 'internal presentational component',
+  },
+  {
+    id: 'components/org/StudentImportDialog.tsx',
+    render: async () => {
+      const { default: StudentImportDialog } = await import('@/components/org/StudentImportDialog')
+      return h(StudentImportDialog, { open: false, onOpenChange: noop, auth0Id: ORG, onImported: noop })
+    },
+  },
+  {
+    id: 'components/org/StudentProfileHeader.tsx',
+    render: async () => {
+      const { default: StudentProfileHeader } = await import('@/components/org/StudentProfileHeader')
+      return h(StudentProfileHeader, { student: student as never, canWrite: true, onEdit: noop, onDelete: noop })
+    },
+  },
+  {
+    id: 'components/org/StudentRow.tsx',
+    skip: 'internal presentational component',
+  },
+  {
+    id: 'components/org/StudentsBulkActions.tsx',
+    render: async () => {
+      const { default: StudentsBulkActions } = await import('@/components/org/StudentsBulkActions')
+      return h(StudentsBulkActions, {
+        selectedCount: 2,
+        canManage: true,
+        canInvite: true,
+        bulkBusy: false,
+        onMarkActive: noop,
+        onMarkInactive: noop,
+        onMarkTransferred: noop,
+        onInvite: noop,
+        onDelete: noop,
+        onClear: noop,
+      })
+    },
+  },
+  {
+    id: 'components/org/StudentsFilters.tsx',
+    render: async () => {
+      const { default: StudentsFilters } = await import('@/components/org/StudentsFilters')
+      return h(StudentsFilters, {
+        search: '',
+        onSearchChange: noop,
+        sport: '',
+        onSportChange: noop,
+        status: '',
+        onStatusChange: noop,
+        teamId: '',
+        onTeamChange: noop,
+        sportsForForm: ['basketball'],
+        teams: [team] as never,
+        filteredLength: 0,
+        studentsLength: 0,
+        showArchived: false,
+        onToggleArchived: noop,
+        onExport: noop,
+        canInvite: true,
+        onInvite: noop,
+        canManage: true,
+        onImport: noop,
+        onCreate: noop,
+      })
+    },
+  },
+  {
+    id: 'components/org/StudentsTable.tsx',
+    render: async () => {
+      const { default: StudentsTable } = await import('@/components/org/StudentsTable')
+      return h(StudentsTable, {
+        students: [],
+        filtered: [],
+        selected: new Set<string>(),
+        onToggleSelect: noop,
+        onToggleSelectAll: noop,
+        allFilteredSelected: false,
+        selectedIds: [],
+        onEdit: noop,
+        onDelete: noop,
+        canManage: true,
+        teams: [team] as never,
+        rosterReadFailed: false,
+        onCreate: noop,
+      })
+    },
+  },
 )
 
 // ── components/ root — pages, player hub chrome, and the vendored widgets ───
@@ -2378,4 +2471,7 @@ const EXPECTED_SKIPS: string[] = [
   // has no boundary to catch it with. Wiring a Suspense fallback would change the
   // markup under test, which defeats the point of the assertion.
   'components/AuthHeader.tsx — suspends during the server render (a component suspended while responding to synchronous input)',
+  'components/org/DefRow.tsx — internal presentational component',
+  'components/org/MemberRow.tsx — internal presentational component',
+  'components/org/StudentRow.tsx — internal presentational component',
 ]

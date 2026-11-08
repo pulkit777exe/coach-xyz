@@ -105,7 +105,7 @@ describe('the share-link field is labelled', () => {
 describe('the placeholder-only names at the other three sites are gone', () => {
   const cases: [string, string, string][] = [
     [
-      'components/org/StudentsClient.tsx',
+      'components/org/StudentsFilters.tsx',
       'Search students',
       'placeholder="Search name, email, sport…"',
     ],
@@ -130,7 +130,7 @@ describe('the placeholder-only names at the other three sites are gone', () => {
   }
 
   it('the students search input matches its labelled SelectTrigger siblings', () => {
-    const src = read('components/org/StudentsClient.tsx')
+    const src = read('components/org/StudentsFilters.tsx')
     expect(src).toContain('aria-label="Search students"')
     expect(src).toContain('aria-label="Filter by sport"')
   })

@@ -1,23 +1,10 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { toast } from 'sonner'
-import {
-  PlusIcon,
-  SearchIcon,
-  PencilIcon,
-  TrashIcon,
-  MoreHorizontalIcon,
-  DownloadIcon,
-  UserPlusIcon,
-  MailIcon,
-  UploadIcon,
-} from 'lucide-react'
+import { UploadIcon } from 'lucide-react'
 
 import { Button } from '@/components/9ui/ui/button'
-import StatusPill from '@/components/org/StatusPill'
-import { Checkbox } from '@/components/9ui/ui/checkbox'
 import { Label } from '@/components/9ui/ui/label'
 import { Textarea } from '@/components/9ui/ui/textarea'
 import { downloadCSV, parseCSV } from '@/lib/csv'
@@ -29,33 +16,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/9ui/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/9ui/ui/dropdown-menu'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
-import { Input } from '@/components/9ui/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/9ui/ui/select'
 import { Spinner } from './Spinner'
-import EmptyState from './EmptyState'
 import StudentFormDialog from './StudentFormDialog'
 import InvitePlayersDialog from './InvitePlayersDialog'
+import StudentsFilters from './StudentsFilters'
+import StudentsBulkActions from './StudentsBulkActions'
+import StudentsTable from './StudentsTable'
+import StudentImportDialog, { csvToImportRows } from './StudentImportDialog'
+export { csvToImportRows }
 
-import type { Student, StudentImportResult, StudentImportRow } from '@/lib/org/types'
-import { orgDeleteStudent, orgUpdateStudent, orgStudents, orgImportStudents } from '@/lib/org/students'
-import { STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '@/lib/org/types'
-import { formatDateMed, toISODate } from '@/lib/date'
+import type { Student } from '@/lib/org/types'
+import { orgDeleteStudent, orgUpdateStudent, orgStudents } from '@/lib/org/students'
+import { toISODate } from '@/lib/date'
 import type { CoachAIError } from '@/lib/data/errors'
-import { initials } from '@/lib/initials'
 
 const STATUS_STYLE: Record<string, string> = {
   active: 'bg-success/15 text-success',
@@ -114,313 +87,6 @@ export function applyBulkDeleteResult<T extends { id: string }>(
     succeeded: ids.filter((id) => succeeded.has(id)),
     failed: ids.filter((id) => !succeeded.has(id)),
   }
-}
-
-const IMPORT_COLUMN_FIELDS = [
-  'full_name',
-  'email',
-  'phone',
-  'sport',
-  'position',
-  'jersey_number',
-  'date_of_birth',
-  'gender',
-  'guardian_name',
-  'guardian_phone',
-  'notes',
-  'status',
-  'joined_on',
-] as const
-
-const IMPORT_COLUMN_ALIASES: Record<string, string> = {
-  'full name': 'full_name',
-  name: 'full_name',
-  student: 'full_name',
-  'student name': 'full_name',
-  email: 'email',
-  phone: 'phone',
-  'phone number': 'phone',
-  sport: 'sport',
-  position: 'position',
-  jersey: 'jersey_number',
-  'jersey number': 'jersey_number',
-  'jersey #': 'jersey_number',
-  dob: 'date_of_birth',
-  'date of birth': 'date_of_birth',
-  gender: 'gender',
-  'guardian name': 'guardian_name',
-  'guardian phone': 'guardian_phone',
-  notes: 'notes',
-  status: 'status',
-  joined: 'joined_on',
-  'joined on': 'joined_on',
-}
-
-const normalizeHeader = (h: string) => h.trim().toLowerCase().replace(/\s+/g, ' ')
-
-const toJerseyNumber = (value: string): string | number =>
-  /^\d+(\.\d+)?$/.test(value) ? Number(value) : value
-
-/**
- * Does the first row read as a HEADER row rather than as the first player's data?
- *
- * The naive test — "does any cell match a known column name" — is one word away from
- * silently DELETING a player. `IMPORT_COLUMN_ALIASES` contains bare `status`, `email`,
- * `sport`, `notes` and `gender`, so a genuinely headerless export whose first data row
- * carries that word in any column (a sport of "status"? a note reading "email"? a name
- * like "Gender, Amara"?) was treated as a header, `body` dropped that row, and the
- * player's details vanished with no error anywhere — the import simply reported one row
- * fewer. A wrong guess here is not a parse error, it is data loss.
- *
- * So two conditions, and BOTH must hold:
- *
- *  1. At least two cells resolve to a known column. A real header names every column; a
- *     coincidence matches one. Two is the floor that survives an accidental hit without
- *     requiring an exact multi-column match.
- *  2. No cell in the row looks like DATA for the column it names. An address in the
- *     `email` column, or a date in a `date of birth` column, means this row is a player.
- *
- * Condition 2 is what catches the realistic case: a roster whose first player's row
- * happens to begin with a name the aliases recognise, or contains an email address in a
- * notes column. Positional parsing then applies, which is the documented fallback.
- */
-function looksLikeHeaderRow(cells: string[], normalized: string[]): boolean {
-  const resolved = normalized.filter((h) => IMPORT_COLUMN_ALIASES[h])
-  if (resolved.length < 2) return false
-
-  // Data-shaped content ANYWHERE in the row means this is a player's row, not a header.
-  //
-  // Deliberately NOT restricted to the cells whose column name resolved: the realistic
-  // false-header case is a row whose *values* happen to be words like `email` and
-  // `status` — `email,status,ada@x.co,active` — where the alias words ARE the data. A
-  // per-column check reads that row as "two recognised columns, neither data-shaped" and
-  // accepts it as a header, deleting the player. That bug shipped in the first version of
-  // this function and was caught by a test written to exercise the check and quietly
-  // not: the earlier fixture resolved zero aliases, so it never reached the condition it
-  // named.
-  const DATA_SHAPED =
-    /@|\d{2,}[-/.]\d{1,2}[-/.]\d{2,}|\b\d{3}[- .]?\d{3}[- .]?\d{4}\b|^\+?[0-9][0-9 ()/-]{6,}$/
-  return !cells.some((raw) => DATA_SHAPED.test(raw.trim()))
-}
-
-/** Maps raw CSV cells to import rows: header-aware when the first row contains
- *  known column names, otherwise positional in roster-export order. */
-export function csvToImportRows(csv: string): StudentImportRow[] {
-  const records = parseCSV(csv)
-  if (!records.length) return []
-
-  const header = records[0].map(normalizeHeader)
-  const hasHeader = looksLikeHeaderRow(records[0], header)
-  const mapping: (string | null)[] = hasHeader
-    ? header.map((h) => IMPORT_COLUMN_ALIASES[h] ?? null)
-    : []
-  const body = hasHeader ? records.slice(1) : records
-
-  return body
-    .map((cells) => {
-      const row: StudentImportRow = {}
-      cells.forEach((cell, idx) => {
-        const field = hasHeader ? mapping[idx] : IMPORT_COLUMN_FIELDS[idx]
-        if (!field) return
-        const value = cell.trim()
-        if (value === '') return
-        ;(row as Record<string, string | number>)[field] =
-          field === 'jersey_number' ? toJerseyNumber(value) : value
-      })
-      return row
-    })
-    .filter((r) => Object.keys(r).length > 0)
-}
-
-function StudentImportDialog({
-  open,
-  onOpenChange,
-  auth0Id,
-  onImported,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  auth0Id: string
-  onImported: () => void | Promise<void>
-}) {
-  const [text, setText] = useState('')
-  const [fileName, setFileName] = useState<string | null>(null)
-  const [rows, setRows] = useState<StudentImportRow[]>([])
-  const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<StudentImportResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const reset = () => {
-    setText('')
-    setFileName(null)
-    setRows([])
-    setResult(null)
-    setError(null)
-  }
-
-  const applyText = (value: string) => {
-    setText(value)
-    const parsed = csvToImportRows(value)
-    setRows(parsed)
-    setResult(null)
-    setError(parsed.length ? null : 'No rows found — paste CSV text or pick a .csv file.')
-  }
-
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setFileName(file.name)
-    applyText(await file.text())
-  }
-
-  const runImport = async () => {
-    if (!rows.length) return
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await orgImportStudents(auth0Id, rows)
-      setResult(res)
-      // Awaited: this is the other end of the same unhandled-rejection path. Even with
-      // the handler fixed, a bare call here discards its promise, so a rejection inside
-      // the refresh would escape the dialog entirely.
-      if (res.imported > 0) await onImported()
-      if (res.imported === 0 && res.failed.length > 0) {
-        toast.error('No rows imported — review the errors below')
-      }
-    } catch (err) {
-      setError((err as CoachAIError).message ?? 'Import failed')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        onOpenChange(next)
-      }}
-    >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Import students from CSV</DialogTitle>
-          <DialogDescription>
-            Upload a .csv or paste rows. The first row is matched against known column headers (Full
-            name, Email, Status, &hellip;); otherwise columns are read in roster export order. Bad
-            rows are skipped individually &mdash; the rest still import.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Label
-              htmlFor="import-file"
-              className="border-border bg-background text-muted-foreground hover:text-foreground flex h-9 cursor-pointer items-center gap-2 rounded-[6px] border px-3 text-body"
-            >
-              <UploadIcon className="size-4" />
-              Choose CSV file
-              <input
-                id="import-file"
-                type="file"
-                accept=".csv,text/csv"
-                className="sr-only"
-                onChange={onFile}
-              />
-            </Label>
-            {fileName ? (
-              <span className="text-muted-foreground truncate text-caption leading-4">
-                {fileName}
-              </span>
-            ) : null}
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="import-paste" className="text-body font-medium">
-              …or paste CSV
-            </Label>
-            <Textarea
-              id="import-paste"
-              value={text}
-              onChange={(e) => applyText(e.target.value)}
-              rows={6}
-              className="font-mono text-caption leading-4"
-              placeholder={'full_name,email,status\nAlex Rivera,a@x.com,active'}
-            />
-          </div>
-
-          {rows.length > 0 && (
-            <div>
-              <p className="mb-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                {rows.length} row(s) parsed — first {Math.min(rows.length, 8)} shown
-              </p>
-              <div className="border-border max-h-48 overflow-auto rounded-[6px] border">
-                <table className="w-full text-meta">
-                  <thead>
-                    <tr className="border-b border-border text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      <th className="px-3 py-2 text-left">Name</th>
-                      <th className="px-3 py-2 text-left">Email</th>
-                      <th className="px-3 py-2 text-left">Sport</th>
-                      <th className="px-3 py-2 text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.slice(0, 8).map((r, i) => (
-                      <tr key={i} className="border-b border-border last:border-0">
-                        <td className="text-foreground px-3 py-1.5">{r.full_name ?? '—'}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.email ?? '—'}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.sport ?? '—'}</td>
-                        <td className="text-muted-foreground px-3 py-1.5">{r.status ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {error ? <p className="text-meta text-destructive">{error}</p> : null}
-
-          {result ? (
-            <div className="border-border bg-muted/40 space-y-1 rounded-[6px] border p-3 text-meta">
-              <p className="text-foreground font-medium">{result.imported} imported</p>
-              {result.duplicates_skipped > 0 ? (
-                <p className="text-muted-foreground">
-                  {result.duplicates_skipped} duplicate(s) skipped by email
-                </p>
-              ) : null}
-              {result.failed.length > 0 ? (
-                <ul className="text-muted-foreground max-h-32 list-disc space-y-0.5 overflow-auto pl-5">
-                  {result.failed.map((f) => (
-                    <li key={`${f.row_index}-${f.reason}`}>
-                      Row {f.row_index + 1}: {f.reason}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              reset()
-              onOpenChange(false)
-            }}
-          >
-            Cancel
-          </Button>
-          <Button onClick={runImport} disabled={busy || rows.length === 0}>
-            {busy ? <Spinner /> : <UploadIcon />} Import{' '}
-            {rows.length > 0 ? `${rows.length} student(s)` : ''}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 export default function StudentsClient({
@@ -688,355 +354,65 @@ const [showArchived, setShowArchived] = useState(false)
 
   return (
     <div>
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-2 flex-col sm:flex-row sm:max-w-md">
-          <div className="relative flex-1">
-            <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, email, sport…"
-              aria-label="Search students"
-              className="pl-9"
-            />
-          </div>
-          <Select
-            items={{ __all: 'All sports', ...Object.fromEntries(sportsForForm.map((s) => [s, s])) }}
-            value={sport || '__all'}
-            onValueChange={(v) => setSport(v === '__all' ? '' : typeof v === 'string' ? v : '')}
-          >
-            <SelectTrigger aria-label="Filter by sport" className="w-36">
-              <SelectValue placeholder="All sports" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all">All sports</SelectItem>
-              {sportsForForm.map((opt) => (
-                <SelectItem key={opt} value={opt}>
-                  {opt}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            items={{
-              __all: 'All statuses',
-              ...Object.fromEntries(STUDENT_STATUSES.map((s) => [s, STUDENT_STATUS_LABELS[s]])),
-            }}
-            value={status || '__all'}
-            onValueChange={(v) => setStatus(v === '__all' ? '' : typeof v === 'string' ? v : '')}
-          >
-            <SelectTrigger aria-label="Filter by status" className="w-36">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all">All statuses</SelectItem>
-              {STUDENT_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STUDENT_STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            items={{ __all: 'All teams', ...Object.fromEntries(teams.map((t) => [t.id, t.name])) }}
-            value={teamId || '__all'}
-            onValueChange={(v) => setTeamId(v === '__all' ? '' : typeof v === 'string' ? v : '')}
-          >
-            <SelectTrigger aria-label="Filter by team" className="w-36">
-              <SelectValue placeholder="All teams" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all">All teams</SelectItem>
-              {teams.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <StudentsFilters
+        search={search}
+        onSearchChange={setSearch}
+        sport={sport}
+        onSportChange={setSport}
+        status={status}
+        onStatusChange={setStatus}
+        teamId={teamId}
+        onTeamChange={setTeamId}
+        sportsForForm={sportsForForm}
+        teams={teams}
+        filteredLength={filtered.length}
+        studentsLength={students.length}
+        showArchived={showArchived}
+        onToggleArchived={toggleArchived}
+        onExport={exportCSV}
+        canInvite={canInvite}
+        onInvite={() => openInvite(false)}
+        canManage={canManage}
+        onImport={() => setImportOpen(true)}
+        onCreate={openCreate}
+      />
 
-        <div className="flex items-center gap-2">
-          {filtered.length > 0 && (
-            <>
-              <Button variant="outline" size="sm" onClick={toggleArchived}>
-                {showArchived ? 'Hide archived' : 'Show archived'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={exportCSV}>
-                <DownloadIcon /> Export
-              </Button>
-            </>
-          )}
-          {canInvite && (
-            <Button variant="outline" size="sm" onClick={() => openInvite(false)}>
-              <UserPlusIcon />
-              Invite
-            </Button>
-          )}
-          {canManage && (
-            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-              <UploadIcon />
-              Import
-            </Button>
-          )}
-          {canManage && (
-            <Button size="sm" onClick={openCreate}>
-              <PlusIcon />
-              Add student
-            </Button>
-          )}
-        </div>
-      </div>
+      <StudentsBulkActions
+        selectedCount={selectedIds.length}
+        canManage={canManage}
+        canInvite={canInvite}
+        bulkBusy={bulkBusy}
+        onMarkActive={() => applyBulkStatus('active')}
+        onMarkInactive={() => applyBulkStatus('inactive')}
+        onMarkTransferred={() => applyBulkStatus('transferred')}
+        onInvite={() => openInvite(true)}
+        onDelete={() => {
+          if (
+            window.confirm(
+              `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
+            )
+          ) {
+            confirmBulkDelete()
+          }
+        }}
+        onClear={() => setSelected(new Set())}
+      />
 
-      {/* Bulk action bar */}
-      {selectedIds.length > 0 && (
-        <div className="border-border bg-card mb-4 flex flex-wrap items-center gap-2 rounded-[6px] border px-3 py-2">
-          <span className="text-meta tabular-nums text-muted-foreground">
-            {selectedIds.length} selected
-          </span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {canManage && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkBusy}
-                  onClick={() => applyBulkStatus('active')}
-                >
-                  Mark active
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkBusy}
-                  onClick={() => applyBulkStatus('inactive')}
-                >
-                  Mark inactive
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={bulkBusy}
-                  onClick={() => applyBulkStatus('transferred')}
-                >
-                  Mark transferred
-                </Button>
-              </>
-            )}
-            {canInvite && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={bulkBusy}
-                onClick={() => openInvite(true)}
-              >
-                <MailIcon /> Invite
-              </Button>
-            )}
-            {canManage && (
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={bulkBusy}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `Remove ${selectedIds.length} selected student(s)? This cannot be undone.`,
-                    )
-                  ) {
-                    confirmBulkDelete()
-                  }
-                }}
-              >
-                <TrashIcon /> Delete
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={bulkBusy}
-              onClick={() => setSelected(new Set())}
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="overflow-hidden rounded-[6px] border border-border bg-card">
-        {rosterReadFailed ? (
-          // Checked BEFORE `filtered.length === 0`: a failed read also leaves `students`
-          // empty, so the "No students yet" branch would otherwise match and send a coach
-          // with a full roster to create a duplicate. The Add action is withheld for the
-          // same reason — there is nothing here to add "the first" of. Reloading is the
-          // honest next step, and saying so beats a claim the data cannot support.
-          <EmptyState
-            title="Roster failed to load."
-            description="This is a loading problem, not an empty roster — reload the page to try again."
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            title={students.length === 0 ? 'No students yet' : 'No matching students'}
-            description={
-              students.length === 0
-                ? 'Add your first student to get started.'
-                : 'Try clearing your search or filters.'
-            }
-            action={
-              students.length === 0 && canManage ? (
-                <Button size="sm" onClick={openCreate}>
-                  <PlusIcon />
-                  Add student
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <table className="w-full text-body">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-2.5">
-                  <Checkbox
-                    checked={allFilteredSelected}
-                    indeterminate={selectedIds.length > 0 && !allFilteredSelected}
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Select all students"
-                  />
-                </th>
-                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Student
-                </th>
-                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Sport
-                </th>
-                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                  Team
-                </th>
-                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                  Position
-                </th>
-                <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                  Joined
-                </th>
-                <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr
-                  key={s.id}
-                  className="border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-accent/50 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
-                >
-                  <td className="px-4 py-2.5">
-                    <Checkbox
-                      checked={selected.has(s.id)}
-                      onCheckedChange={() => toggleSelect(s.id)}
-                      aria-label={`Select ${s.full_name}`}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Link href={`/dashboard/students/${s.id}`} className="flex items-center gap-3">
-                      <Avatar className="border-border size-9 border">
-                        <AvatarImage src={undefined} alt="" />
-                        <AvatarFallback className="bg-muted text-muted-foreground text-caption">
-                          {initials(s.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{s.full_name}</p>
-                        <p className="truncate text-meta text-muted-foreground">
-                          {s.email || s.phone || '—'}
-                        </p>
-                        {s.account_auth0_id && (
-                          <p className="mt-0.5 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground/60">
-                            • linked to player account
-                          </p>
-                        )}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {s.sport ? (
-                      <StatusPill tone="gray">{s.sport}</StatusPill>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                    {s.jersey_number ? (
-                      <span className="ml-1 text-meta tabular-nums text-muted-foreground">
-                        #{s.jersey_number}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="hidden px-4 py-2.5 md:table-cell">
-                    {(() => {
-                      const team = teams.find((t) => t.id === s.team_id)
-                      return team ? (
-                        <StatusPill tone="gray">{team.name}</StatusPill>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )
-                    })()}
-                  </td>
-                  <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">
-                    {s.position || '—'}
-                  </td>
-                  <td className="hidden px-4 py-2.5 text-muted-foreground tabular-nums md:table-cell">
-                    {s.joined_on ? formatDateMed(s.joined_on) : '—'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span
-                      className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${STATUS_STYLE[s.status] ?? 'bg-muted text-muted-foreground'}`}
-                    >
-                      {s.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    {canManage && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button variant="ghost" size="icon-sm" aria-label="Actions">
-                              <MoreHorizontalIcon />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            render={
-                              <Link href={`/dashboard/students/${s.id}`}>
-                                <span className="flex items-center gap-2">
-                                  <MoreHorizontalIcon className="size-3.5" />
-                                  View profile
-                                </span>
-                              </Link>
-                            }
-                          />
-                          <DropdownMenuItem onClick={() => openEdit(s)}>
-                            <PencilIcon className="size-3.5" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem variant="destructive" onClick={() => setDeleting(s)}>
-                            <TrashIcon className="size-3.5" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <StudentsTable
+        students={students}
+        filtered={filtered}
+        selected={selected}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
+        allFilteredSelected={allFilteredSelected}
+        selectedIds={selectedIds}
+        onEdit={openEdit}
+        onDelete={setDeleting}
+        canManage={canManage}
+        teams={teams}
+        rosterReadFailed={rosterReadFailed}
+        onCreate={openCreate}
+      />
 
       {/* Create / edit dialog (keyed so the form resets per student) */}
       <StudentFormDialog

@@ -48,6 +48,7 @@ import StudentFormDialog from './StudentFormDialog'
 import ObjectivesSection from './ObjectivesSection'
 import PlansSection from './PlansSection'
 import WellnessSection from './WellnessSection'
+import StudentProfileHeader from './StudentProfileHeader'
 
 import type { Student, PerformanceSeriesPoint, AttendanceSummary, ReportRecord, MetricTrend, ComparisonStudent } from '@/lib/org/types'
 import type { DashboardAnalysis } from '@/lib/library'
@@ -395,88 +396,23 @@ export default function StudentProfile({
 
   return (
     <div>
-      {/* Header */}
-      <div className="border-border bg-card flex flex-col gap-5 rounded-[6px] border p-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Avatar className="border-border size-16 border">
-            <AvatarImage src={undefined} alt="" />
-            <AvatarFallback className="bg-muted text-muted-foreground font-semibold text-lg">
-              {initials(student_.full_name)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-[20px] font-semibold leading-[1.3] tracking-[-0.01em] text-foreground">
-                {student_.full_name}
-              </h2>
-              <span
-                className={`inline-flex h-[20px] items-center rounded-full px-2 font-medium leading-none text-label ${STATUS_STYLE[student_.status] ?? 'bg-muted text-muted-foreground'}`}
-              >
-                {student_.status}
-              </span>
-            </div>
-            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body">
-              {student_.sport && <span>{student_.sport}</span>}
-              {student_.position && <span>{student_.position}</span>}
-              {/* Ternary: jersey 0 is falsy, so the old `{… && …}` rendered a
-                  bare `0` with no `#` and no chip span beside the other
-                  metadata. The form input is type="number" with no min. */}
-              {student_.jersey_number === null || student_.jersey_number === undefined ? null : (
-                <span>#{student_.jersey_number}</span>
-              )}
-              {student_.gender && <span className="capitalize">{student_.gender}</span>}
-            </div>
-            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-meta">
-              {student_.email && (
-                <span className="flex items-center gap-1.5">
-                  <MailIcon className="size-3" /> {student_.email}
-                </span>
-              )}
-              {student_.phone && (
-                <span className="flex items-center gap-1.5">
-                  <PhoneIcon className="size-3" /> {student_.phone}
-                </span>
-              )}
-              {student_.joined_on && (
-                <span className="flex items-center gap-1.5">
-                  <CalendarIcon className="size-3" /> Joined {formatDateLong(student_.joined_on)}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {canWrite && (
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              <PencilIcon />
-              Edit
-            </Button>
-          )}
-          {canWrite && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive"
-              onClick={() =>
-                setConfirm({
-                  title: `Remove ${student_.full_name}?`,
-                  description:
-                    'This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.',
-                  action: async () => {
-                    await orgDeleteStudent(auth0Id, student_.id)
-                    toast.success(`${student_.full_name} removed`)
-                    router.push('/dashboard/students')
-                  },
-                })
-              }
-            >
-              <TrashIcon />
-              Delete
-            </Button>
-          )}
-        </div>
-      </div>
+      <StudentProfileHeader
+        student={student_}
+        canWrite={canWrite}
+        onEdit={() => setEditOpen(true)}
+        onDelete={() =>
+          setConfirm({
+            title: `Remove ${student_.full_name}?`,
+            description:
+              'This will permanently delete the student and their attendance records. Past reports keep a snapshot. This cannot be undone.',
+            action: async () => {
+              await orgDeleteStudent(auth0Id, student_.id)
+              toast.success(`${student_.full_name} removed`)
+              router.push('/dashboard/students')
+            },
+          })
+        }
+      />
 
       {/* Profile details */}
       <div className="mt-8">

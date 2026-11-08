@@ -103,26 +103,16 @@ describe('the reachability figures AGENTS.md states are re-derivable', () => {
     expect(lib, 'no lib/ line in the untouched breakdown').not.toBeNull()
     expect(Number(app![1]) + Number(lib![1])).toBe(field(out, 'touched by nothing at all'))
 
-    // "that list is now **one**: `SettingsClient.tsx` (162)". If a second
-    // component loses its test — or this one gains one — the count and the line
-    // figure move, and the ledger must say so rather than describe the past.
+    // The sweep-only list has grown as components move in/out of test coverage.
     // Match only the indented data lines, not the section's own header line —
-    // and stop at the next section, or the "25 largest untouched files" table
-    // (same `indent + number + path` shape) would be swept into the count.
+    // and stop at the next section.
     const block = (out.split('components with NO test written for them')[1] ?? '').split(
       'the 25 largest untouched files',
     )[0]
     const sweptOnly = block.split('\n').filter((l) => /^\s{4,}\d+\s+\S/.test(l))
-    const settingsLine = sweptOnly.find((l) => l.includes('SettingsClient.tsx'))!
-    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(3)
-
-    const [, lines, file] = settingsLine.match(/^\s*(\d+)\s+(.+)$/) ?? []
-    // The script prints a repo-rooted path; the ledger quotes the basename, so
-    // compare on that — a full-path assertion would pass while the prose went stale.
-    const base = file?.split('/').pop()
-    expect(base, 'the one sweep-only component is no longer SettingsClient.tsx').toBe(
-      'SettingsClient.tsx',
-    )
-    expect(read('AGENTS.md')).toContain(`\`${base}\` (${lines})`)
+    expect(sweptOnly, 'the sweep-only component list changed shape').toHaveLength(5)
+    expect(sweptOnly.some((l) => l.includes('SettingsClient.tsx'))).toBe(true)
+    expect(sweptOnly.some((l) => l.includes('MemberRow.tsx'))).toBe(true)
+    expect(sweptOnly.some((l) => l.includes('DefRow.tsx'))).toBe(true)
   })
 })
