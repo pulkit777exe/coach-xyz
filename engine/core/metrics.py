@@ -15,7 +15,8 @@ import math
 
 import numpy as np
 
-from . import geometry as g, measure, motion
+from . import geometry as g
+from . import measure, motion
 from .sports import MetricDef, Pack
 from .track import Track
 
@@ -37,10 +38,14 @@ def _mid(lm: np.ndarray, a: int, b: int, w: int, h: int) -> tuple[float, float] 
 
 
 def _window(track: Track, i: int, before: float, after: float) -> np.ndarray:
-    return np.flatnonzero((track.t >= track.t[i] - before) & (track.t <= track.t[i] + after))
+    return np.flatnonzero(
+        (track.t >= track.t[i] - before) & (track.t <= track.t[i] + after)
+    )
 
 
-def _mean_y(track: Track, idx: int, i: int, before: float, after: float) -> float | None:
+def _mean_y(
+    track: Track, idx: int, i: int, before: float, after: float
+) -> float | None:
     vals = []
     for j in _window(track, i, before, after):
         p = _xy(track.lm[j], idx, track.width, track.height)
@@ -115,7 +120,9 @@ def head_movement(track: Track, i: int, side: str) -> float | None:
     if len(pts) < 2:
         return None
     arr = np.asarray(pts)
-    return float(np.linalg.norm(arr - np.median(arr, axis=0), axis=1).mean()) / motion.torso_px(track)
+    return float(
+        np.linalg.norm(arr - np.median(arr, axis=0), axis=1).mean()
+    ) / motion.torso_px(track)
 
 
 def trunk_lean(track: Track, i: int, side: str) -> float | None:
@@ -162,10 +169,16 @@ def event_metrics(track: Track, i: int, side: str, pack: Pack) -> list[dict]:
     rows = []
     for d in pack.key_metrics:
         value = derive(d.metric, track, i, side)
-        row = {"key": d.key, "label": d.label, "metric": d.metric, "unit": d.unit,
-               "value": round(value, 1) if value is not None else None,
-               "ideal": list(d.ideal) if d.ideal else None,
-               "score": None, "note": "not visible"}
+        row = {
+            "key": d.key,
+            "label": d.label,
+            "metric": d.metric,
+            "unit": d.unit,
+            "value": round(value, 1) if value is not None else None,
+            "ideal": list(d.ideal) if d.ideal else None,
+            "score": None,
+            "note": "not visible",
+        }
         if value is not None:
             if d.ideal is not None:
                 row["score"], row["note"] = measure.score_value(value, d)
@@ -203,29 +216,66 @@ def session_metrics(track: Track, events: list[dict], pack: Pack) -> list[dict]:
         if not values:
             continue
         best, worst = _best(values, d)
-        rows.append({
-            "key": d.key, "label": d.label, "unit": d.unit, "kind": "metric", "n": len(values),
-            "value": round(float(np.mean(values)), 1), "best": round(best, 1), "worst": round(worst, 1),
-            "source": "measured",
-            "ideal": list(d.ideal) if d.ideal else None,
-            "acceptable": list(d.acceptable) if d.acceptable else None,
-        })
+        rows.append(
+            {
+                "key": d.key,
+                "label": d.label,
+                "unit": d.unit,
+                "kind": "metric",
+                "n": len(values),
+                "value": round(float(np.mean(values)), 1),
+                "best": round(best, 1),
+                "worst": round(worst, 1),
+                "source": "measured",
+                "ideal": list(d.ideal) if d.ideal else None,
+                "acceptable": list(d.acceptable) if d.acceptable else None,
+            }
+        )
 
     times = sorted(float(e["t"]) for e in events)
     if len(times) >= 2:
         gaps = np.diff(times)
-        rows.append({"key": "tempo", "label": "Tempo", "unit": "s", "kind": "session", "n": len(gaps),
-                     "source": "counted",
-                     "value": round(float(np.mean(gaps)), 1), "best": round(float(np.min(gaps)), 1),
-                     "worst": round(float(np.max(gaps)), 1)})
+        rows.append(
+            {
+                "key": "tempo",
+                "label": "Tempo",
+                "unit": "s",
+                "kind": "session",
+                "n": len(gaps),
+                "source": "counted",
+                "value": round(float(np.mean(gaps)), 1),
+                "best": round(float(np.min(gaps)), 1),
+                "worst": round(float(np.max(gaps)), 1),
+            }
+        )
     duration = float(track.t[-1] - track.t[0]) if len(track.t) else 0.0
     if duration > 0:
-        rows.append({"key": "events_per_min", "label": "Action rate", "unit": "/min", "kind": "session",
-                     "n": len(times), "source": "counted",
-                     "value": round(len(times) / duration * 60, 1), "best": None, "worst": None})
-    rows.append({"key": "tracking_coverage", "label": "Pose coverage", "unit": "%", "kind": "session",
-                 "n": len(track.t), "source": "measured",
-                 "value": round(track.coverage * 100, 1), "best": None, "worst": None})
+        rows.append(
+            {
+                "key": "events_per_min",
+                "label": "Action rate",
+                "unit": "/min",
+                "kind": "session",
+                "n": len(times),
+                "source": "counted",
+                "value": round(len(times) / duration * 60, 1),
+                "best": None,
+                "worst": None,
+            }
+        )
+    rows.append(
+        {
+            "key": "tracking_coverage",
+            "label": "Pose coverage",
+            "unit": "%",
+            "kind": "session",
+            "n": len(track.t),
+            "source": "measured",
+            "value": round(track.coverage * 100, 1),
+            "best": None,
+            "worst": None,
+        }
+    )
     return rows
 
 
@@ -234,13 +284,22 @@ def matchup_metrics(events: list[dict], pack: Pack) -> list[dict]:
     blocks = [e.get("matchup") for e in events if e.get("matchup")]
     if not blocks:
         return []
-    distances = [b["separation"]["distance"] for b in blocks
-                 if b.get("separation") and b["separation"].get("distance") is not None]
+    distances = [
+        b["separation"]["distance"]
+        for b in blocks
+        if b.get("separation") and b["separation"].get("distance") is not None
+    ]
     if not distances:
         return []
-    return [{"key": "opponent_distance", "label": f"{pack.opponent_role} distance",
-             "unit": "torso", "kind": "matchup", "n": len(distances),
-             "value": round(float(np.mean(distances)), 1),
-             "best": round(float(np.min(distances)), 1),
-             "worst": round(float(np.max(distances)), 1)}]
-
+    return [
+        {
+            "key": "opponent_distance",
+            "label": f"{pack.opponent_role} distance",
+            "unit": "torso",
+            "kind": "matchup",
+            "n": len(distances),
+            "value": round(float(np.mean(distances)), 1),
+            "best": round(float(np.min(distances)), 1),
+            "worst": round(float(np.max(distances)), 1),
+        }
+    ]

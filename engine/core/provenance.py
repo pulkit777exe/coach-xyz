@@ -14,7 +14,7 @@ import os
 import platform
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -91,8 +91,11 @@ def prompts_source_hash() -> str | None:
 
 def pose_model_manifest() -> dict:
     s = config.settings
-    path = Path(s.pose_model_path) if s.pose_model_path else \
-        s.data_dir / "models" / f"pose_landmarker_{s.pose_model}.task"
+    path = (
+        Path(s.pose_model_path)
+        if s.pose_model_path
+        else s.data_dir / "models" / f"pose_landmarker_{s.pose_model}.task"
+    )
     return {
         "family": "mediapipe_pose_landmarker",
         "variant": s.pose_model,
@@ -122,10 +125,19 @@ def video_manifest(media, sha256: str | None) -> dict:
     }
 
 
-def build(*, pack, media, video_sha256: str | None, judgement, angle: str | None,
-          angle_source: str, pack_changed_after_judge: bool = False,
-          preprocessing: dict | None = None, research_mode: bool = False,
-          detected_angle: str | None = None) -> dict:
+def build(
+    *,
+    pack,
+    media,
+    video_sha256: str | None,
+    judgement,
+    angle: str | None,
+    angle_source: str,
+    pack_changed_after_judge: bool = False,
+    preprocessing: dict | None = None,
+    research_mode: bool = False,
+    detected_angle: str | None = None,
+) -> dict:
     """The manifest stored under ``result.provenance.manifest``."""
     phases = [p.get("id") for p in (getattr(pack, "phases", None) or []) if p.get("id")]
     return {
@@ -151,9 +163,12 @@ def build(*, pack, media, video_sha256: str | None, judgement, angle: str | None
             "source_hash": prompts_source_hash(),
         },
         "video": video_manifest(media, video_sha256),
-        "camera": {"angle": angle, "angle_source": angle_source,
-                   "detected_angle": detected_angle,
-                   "research_mode": bool(research_mode)},
+        "camera": {
+            "angle": angle,
+            "angle_source": angle_source,
+            "detected_angle": detected_angle,
+            "research_mode": bool(research_mode),
+        },
         "preprocessing": preprocessing or {},
         "judgement": {
             "source": judgement.source,
@@ -161,6 +176,6 @@ def build(*, pack, media, video_sha256: str | None, judgement, angle: str | None
             "model": judgement.model,
         },
         "pack_changed_after_judge": bool(pack_changed_after_judge),
-        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+        "evaluated_at": datetime.now(UTC).isoformat(),
         "environment": environment(),
     }

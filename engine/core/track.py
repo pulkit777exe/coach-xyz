@@ -5,6 +5,7 @@ measurements are stable. The rendered video and the result focus on short event
 windows and on the two players who mattered (see `matchup.py`).
 """
 
+import itertools
 from dataclasses import dataclass
 
 import cv2
@@ -65,13 +66,28 @@ class Track:
         return float(np.max(np.diff(self.t[found])))
 
     def save(self, path: str) -> None:
-        np.savez_compressed(path, t=self.t, lm=self.lm, box=self.box, conf=self.conf,
-                            size=[self.width, self.height], rate=self.rate)
+        np.savez_compressed(
+            path,
+            t=self.t,
+            lm=self.lm,
+            box=self.box,
+            conf=self.conf,
+            size=[self.width, self.height],
+            rate=self.rate,
+        )
 
     @classmethod
     def load(cls, path: str) -> "Track":
         d = np.load(path)
-        return cls(d["t"], d["lm"], d["box"], d["conf"], int(d["size"][0]), int(d["size"][1]), float(d["rate"]))
+        return cls(
+            d["t"],
+            d["lm"],
+            d["box"],
+            d["conf"],
+            int(d["size"][0]),
+            int(d["size"][1]),
+            float(d["rate"]),
+        )
 
     def box_at(self, t: float):
         ok = np.flatnonzero(self.valid)
@@ -84,14 +100,23 @@ class Track:
         """Compact landmarks for a client that draws its own skeleton."""
         rows = []
         for i in np.flatnonzero(self.valid):
-            rows.append({"t": round(float(self.t[i]), 3),
-                         "lm": np.round(self.lm[i, :, [0, 1, 3]].T, 3).tolist()})
-        return {"width": self.width, "height": self.height, "rate": self.rate, "frames": rows}
+            rows.append(
+                {
+                    "t": round(float(self.t[i]), 3),
+                    "lm": np.round(self.lm[i, :, [0, 1, 3]].T, 3).tolist(),
+                }
+            )
+        return {
+            "width": self.width,
+            "height": self.height,
+            "rate": self.rate,
+            "frames": rows,
+        }
 
 
 def _fill_gaps(a: np.ndarray, valid: np.ndarray, max_gap: int) -> None:
     idx = np.flatnonzero(valid)
-    for lo, hi in zip(idx[:-1], idx[1:], strict=False):
+    for lo, hi in itertools.pairwise(idx):
         if 1 < hi - lo <= max_gap + 1:
             k = np.arange(lo + 1, hi)
             f = ((k - lo) / (hi - lo)).reshape(-1, *[1] * (a.ndim - 1))
@@ -111,7 +136,7 @@ def clean(track: Track, max_gap_s: float = 0.8) -> Track:
     xy = lm[:, :, :2]
     smooth = xy.copy()
     for i in range(1, len(xy) - 1):
-        if np.isnan(xy[i - 1:i + 2]).any():
+        if np.isnan(xy[i - 1 : i + 2]).any():
             continue
         smooth[i] = 0.25 * xy[i - 1] + 0.5 * xy[i] + 0.25 * xy[i + 1]
     lm[:, :, :2] = smooth
@@ -120,8 +145,12 @@ def clean(track: Track, max_gap_s: float = 0.8) -> Track:
 
 def _roi(box, w: int, h: int, pad: float = 0.35) -> tuple[int, int, int, int]:
     bw, bh = box[2] - box[0], box[3] - box[1]
-    return (max(0, int(box[0] - bw * pad)), max(0, int(box[1] - bh * pad * 0.6)),
-            min(w, int(box[2] + bw * pad)), min(h, int(box[3] + bh * pad * 0.6)))
+    return (
+        max(0, int(box[0] - bw * pad)),
+        max(0, int(box[1] - bh * pad * 0.6)),
+        min(w, int(box[2] + bw * pad)),
+        min(h, int(box[3] + bh * pad * 0.6)),
+    )
 
 
 def _map_person(lm, x0, y0, cw, ch, w, h):
@@ -145,7 +174,9 @@ def _follow(detector, frame, box, hint=None) -> people.Person | None:
     if not found:
         return None
     previous = hint if hint is not None else box
-    return max(found, key=lambda p: max(people.iou(p.box, previous), people.iou(p.box, box)))
+    return max(
+        found, key=lambda p: max(people.iou(p.box, previous), people.iou(p.box, box))
+    )
 
 
 def _find(detector, frame, t: float, lock: Lock, last) -> people.Person | None:
@@ -156,16 +187,27 @@ def _find(detector, frame, t: float, lock: Lock, last) -> people.Person | None:
     hint = last if last is not None else (lock.box if near_hint else None)
 
     def score(p: people.Person) -> float:
-        look = people.similarity(people.signature(frame, p.box), lock.signature) if lock.signature is not None else 0.0
+        look = (
+            people.similarity(people.signature(frame, p.box), lock.signature)
+            if lock.signature is not None
+            else 0.0
+        )
         place = people.iou(p.box, hint) if hint is not None else 0.0
-        size = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]) / (frame.shape[0] * frame.shape[1])
+        size = (
+            (p.box[2] - p.box[0])
+            * (p.box[3] - p.box[1])
+            / (frame.shape[0] * frame.shape[1])
+        )
         if lock.signature is None and hint is None:
             return size * p.conf
         return 0.65 * look + 0.35 * place + 0.05 * p.conf
 
     best = max(found, key=score)
-    if lock.signature is not None and people.similarity(people.signature(frame, best.box), lock.signature) < 0.15 \
-            and (hint is None or people.iou(best.box, hint) < 0.3):
+    if (
+        lock.signature is not None
+        and people.similarity(people.signature(frame, best.box), lock.signature) < 0.15
+        and (hint is None or people.iou(best.box, hint) < 0.3)
+    ):
         return None
     return best
 
@@ -175,12 +217,27 @@ def _dominant(detector, frame, lock: Lock | None = None) -> people.Person | None
     if not found:
         return None
     if lock is not None and lock.signature is not None:
-        return max(found, key=lambda p: people.similarity(people.signature(frame, p.box), lock.signature))
-    return max(found, key=lambda p: (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]) * max(p.conf, 0.2))
+        return max(
+            found,
+            key=lambda p: people.similarity(
+                people.signature(frame, p.box), lock.signature
+            ),
+        )
+    return max(
+        found,
+        key=lambda p: (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]) * max(p.conf, 0.2),
+    )
 
 
-def track_athlete(path: str, detector, lock: Lock, *, rate: float = 12, progress=lambda f: None,
-                  cancelled=lambda: None) -> Track:
+def track_athlete(
+    path: str,
+    detector,
+    lock: Lock,
+    *,
+    rate: float = 12,
+    progress=lambda f: None,
+    cancelled=lambda: None,
+) -> Track:
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise EngineError("VIDEO_DECODE_FAILED", "Could not read this video.")
@@ -209,21 +266,38 @@ def track_athlete(path: str, detector, lock: Lock, *, rate: float = 12, progress
                 if first is not None:
                     box = first.box
                     if lock.signature is None:
-                        lock = Lock(signature=people.signature(frame, first.box), box=tuple(first.box), at=t)
+                        lock = Lock(
+                            signature=people.signature(frame, first.box),
+                            box=tuple(first.box),
+                            at=t,
+                        )
                     primed = True
             found = None
             if box is not None and lost < LOST_AFTER:
                 predicted = box + np.tile(velocity, 2)
                 found = _follow(detector, frame, predicted, hint=box)
-                if found is not None and lost == 0 and people.iou(found.box, box) < MAX_DRIFT:
+                if (
+                    found is not None
+                    and lost == 0
+                    and people.iou(found.box, box) < MAX_DRIFT
+                ):
                     sig = people.signature(frame, found.box)
                     if people.similarity(sig, lock.signature) < 0.25:
                         found = None
-                if found is not None and lock.signature is not None and n % RECHECK_EVERY == 0:
-                    if people.similarity(people.signature(frame, found.box), lock.signature) < 0.2:
-                        found = None
+                if (
+                    found is not None
+                    and lock.signature is not None
+                    and n % RECHECK_EVERY == 0
+                    and people.similarity(
+                        people.signature(frame, found.box), lock.signature
+                    )
+                    < 0.2
+                ):
+                    found = None
             if found is None:
-                found = _find(detector, frame, t, lock, hint if lost < LOST_AFTER else None)
+                found = _find(
+                    detector, frame, t, lock, hint if lost < LOST_AFTER else None
+                )
             if found is not None:
                 if box is not None:
                     previous = (box[:2] + box[2:]) / 2
@@ -254,7 +328,17 @@ def track_athlete(path: str, detector, lock: Lock, *, rate: float = 12, progress
     finally:
         cap.release()
     if not times or not any(c > 0 for c in confs):
-        raise EngineError("NO_PLAYERS_DETECTED", "The selected player could not be followed in this video.",
-                          retryable=True)
-    return Track(np.array(times), np.stack(lms), np.stack(boxes), np.array(confs, dtype=np.float32),
-                 size[0], size[1], fps / stride)
+        raise EngineError(
+            "NO_PLAYERS_DETECTED",
+            "The selected player could not be followed in this video.",
+            retryable=True,
+        )
+    return Track(
+        np.array(times),
+        np.stack(lms),
+        np.stack(boxes),
+        np.array(confs, dtype=np.float32),
+        size[0],
+        size[1],
+        fps / stride,
+    )

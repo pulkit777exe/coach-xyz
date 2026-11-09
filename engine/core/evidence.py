@@ -113,8 +113,13 @@ def normalise_source(source: str | None) -> str | None:
     return source
 
 
-def state_for_missing(*, angle_ok: bool = True, landmarks_ok: bool = True,
-                      low_confidence: bool = False, applicable: bool = True) -> str:
+def state_for_missing(
+    *,
+    angle_ok: bool = True,
+    landmarks_ok: bool = True,
+    low_confidence: bool = False,
+    applicable: bool = True,
+) -> str:
     """Pick the most specific missing-evidence state."""
     if not applicable:
         return "not_applicable"
@@ -127,10 +132,21 @@ def state_for_missing(*, angle_ok: bool = True, landmarks_ok: bool = True,
     return "unavailable"
 
 
-def as_record(*, criterion_id: str, source: str | None, state: str, evidence_type: str,
-              validation_status: str, measurement_type: str, calibration: str,
-              value: float | None = None, unit: str = "", confidence: float | None = None,
-              source_frames: list[int] | None = None, note: str = "") -> dict:
+def as_record(
+    *,
+    criterion_id: str,
+    source: str | None,
+    state: str,
+    evidence_type: str,
+    validation_status: str,
+    measurement_type: str,
+    calibration: str,
+    value: float | None = None,
+    unit: str = "",
+    confidence: float | None = None,
+    source_frames: list[int] | None = None,
+    note: str = "",
+) -> dict:
     """Build one evidence record with all four axes present.
 
     ``source`` is ``None`` when no source produced a value; ``state`` still

@@ -1,9 +1,9 @@
 """Offline research evaluation harness (not part of the runtime pipeline)."""
 
 from .protocol import (  # noqa: F401
+    MODES,
     AnnotatedWindow,
     EvaluationRejected,
-    MODES,
     Observation,
     evaluate,
     evaluation_version,

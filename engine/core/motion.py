@@ -73,7 +73,10 @@ def signal(track: Track, kind: str) -> tuple[np.ndarray, np.ndarray]:
     """The signal over time and, per sample, which side (0 left, 1 right) produced it."""
     scale = torso_px(track)
     if kind == "wrist_rise":
-        pair = (_rise(track, g.L_WRIST, g.L_SHOULDER, scale), _rise(track, g.R_WRIST, g.R_SHOULDER, scale))
+        pair = (
+            _rise(track, g.L_WRIST, g.L_SHOULDER, scale),
+            _rise(track, g.R_WRIST, g.R_SHOULDER, scale),
+        )
     elif kind == "ankle_speed":
         pair = (_speed(track, g.L_ANKLE, scale), _speed(track, g.R_ANKLE, scale))
     else:
@@ -82,12 +85,18 @@ def signal(track: Track, kind: str) -> tuple[np.ndarray, np.ndarray]:
     return stacked.max(axis=0), stacked.argmax(axis=0)
 
 
-def peaks(values: np.ndarray, t: np.ndarray, min_gap_s: float, threshold: float) -> list[int]:
+def peaks(
+    values: np.ndarray, t: np.ndarray, min_gap_s: float, threshold: float
+) -> list[int]:
     if len(values) < 3:
         return []
     s = values.copy()
     s[1:-1] = 0.25 * values[:-2] + 0.5 * values[1:-1] + 0.25 * values[2:]
-    local = [i for i in range(1, len(s) - 1) if s[i] >= threshold and s[i] >= s[i - 1] and s[i] > s[i + 1]]
+    local = [
+        i
+        for i in range(1, len(s) - 1)
+        if s[i] >= threshold and s[i] >= s[i - 1] and s[i] > s[i + 1]
+    ]
     chosen: list[int] = []
     for i in sorted(local, key=lambda k: -s[k]):
         if all(abs(t[i] - t[j]) >= min_gap_s for j in chosen):
@@ -104,5 +113,12 @@ def candidates(track: Track, pack: Pack, strict: bool = False) -> list[Candidate
     floor = pack.floor * (1.4 if strict else 1.0)
     relative = (0.5 if strict else 0.3) * float(np.percentile(positive, 95))
     found = peaks(values, track.t, pack.min_gap_s, max(floor, relative))
-    return [Candidate(i=i, t=float(track.t[i]), strength=float(values[i]),
-                      side="right" if side[i] else "left") for i in found]
+    return [
+        Candidate(
+            i=i,
+            t=float(track.t[i]),
+            strength=float(values[i]),
+            side="right" if side[i] else "left",
+        )
+        for i in found
+    ]

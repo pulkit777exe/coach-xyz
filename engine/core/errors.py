@@ -1,7 +1,9 @@
 class EngineError(Exception):
     """An error the caller can act on. `retryable` tells the server whether to try again."""
 
-    def __init__(self, code: str, message: str, *, retryable: bool = False, status: int = 400):
+    def __init__(
+        self, code: str, message: str, *, retryable: bool = False, status: int = 400
+    ):
         super().__init__(message)
         self.code = code
         self.message = message
@@ -9,7 +11,12 @@ class EngineError(Exception):
         self.status = status
 
     def to_dict(self) -> dict:
-        return {"code": self.code, "message": self.message, "layer": "engine", "retryable": self.retryable}
+        return {
+            "code": self.code,
+            "message": self.message,
+            "layer": "engine",
+            "retryable": self.retryable,
+        }
 
 
 class Cancelled(Exception):

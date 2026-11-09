@@ -28,13 +28,18 @@ class Report(BaseModel):
 
 
 def _unavailable(exc: llm.Unavailable) -> JSONResponse:
-    return JSONResponse(exc.to_dict() | {"retry_after": exc.retry_after}, status_code=503,
-                        headers={"Retry-After": str(int(exc.retry_after))})
+    return JSONResponse(
+        exc.to_dict() | {"retry_after": exc.retry_after},
+        status_code=503,
+        headers={"Retry-After": str(int(exc.retry_after))},
+    )
 
 
 def _refs(text: str) -> dict:
-    return {"timestamp_refs": sorted({float(m) for m in SECONDS.findall(text)}),
-            "event_refs": sorted(set(EVENT_IDS.findall(text)))}
+    return {
+        "timestamp_refs": sorted({float(m) for m in SECONDS.findall(text)}),
+        "event_refs": sorted(set(EVENT_IDS.findall(text))),
+    }
 
 
 async def _chat_input(request: Request) -> tuple[dict, str, list[dict]]:
@@ -50,7 +55,11 @@ async def chat(request: Request):
     result, message, history = await _chat_input(request)
     try:
         model = pipeline.make_model()
-        reply = await asyncio.to_thread(model.text, prompts.chat_prompt(history, message), prompts.chat_system(result))
+        reply = await asyncio.to_thread(
+            model.text,
+            prompts.chat_prompt(history, message),
+            prompts.chat_system(result),
+        )
     except llm.Unavailable as exc:
         return _unavailable(exc)
     return {"reply": reply, **_refs(reply)}
@@ -74,7 +83,7 @@ async def chat_stream(request: Request):
                 for piece in model.stream(prompt, system):
                     loop.call_soon_threadsafe(queue.put_nowait, ("token", piece))
                 loop.call_soon_threadsafe(queue.put_nowait, ("end", None))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
 
         task = asyncio.create_task(asyncio.to_thread(pump))
@@ -83,7 +92,7 @@ async def chat_stream(request: Request):
             while True:
                 try:
                     kind, item = await asyncio.wait_for(queue.get(), timeout=15)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": ping\n\n"
                     continue
                 if kind == "token":
@@ -93,7 +102,11 @@ async def chat_stream(request: Request):
                     yield f"data: {json.dumps({'type': 'done', 'text': text, **_refs(text)})}\n\n"
                     return
                 else:
-                    msg = item.message if hasattr(item, "message") else "AI service error. Please try again."
+                    msg = (
+                        item.message
+                        if hasattr(item, "message")
+                        else "AI service error. Please try again."
+                    )
                     yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
                     return
         finally:
@@ -108,7 +121,9 @@ async def report(request: Request):
     context, kind = body.get("report_context"), (body.get("report_type") or "").strip()
     if not isinstance(context, dict) or not context or not kind:
         raise invalid("report_context (object) and report_type required")
-    prompt = prompts.report_prompt(context, kind, body.get("sport"), body.get("student_name"))
+    prompt = prompts.report_prompt(
+        context, kind, body.get("sport"), body.get("student_name")
+    )
     try:
         model = pipeline.make_model()
         _, parsed = await asyncio.to_thread(model.structured, prompt, Report)

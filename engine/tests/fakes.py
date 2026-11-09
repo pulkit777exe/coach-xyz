@@ -11,8 +11,8 @@ import re
 import cv2
 import numpy as np
 
-from core.llm import Unavailable
 from core.judge import Rating, Review, Verdict
+from core.llm import Unavailable
 from core.video import FFmpegWriter
 
 W, H, FPS, SECONDS = 640, 360, 15, 12
@@ -78,21 +78,37 @@ class FakePose:
             lm[:, :2] = [cx / w, (top + 40) / h]
             lm[:, 3] = 0.1
 
-            def put(i, x, y, v=0.95):
-                lm[i] = [x / w, y / h, 0, v]
+            def put(i, x, y, v=0.95, _lm=lm):
+                _lm[i] = [x / w, y / h, 0, v]
 
             put(0, cx, top - 35)
-            put(11, x1 + 3, top); put(12, x2 - 3, top)
-            put(23, x1 + 5, bottom); put(24, x2 - 5, bottom)
-            put(25, x1 + 5, bottom + 50); put(26, x2 - 5, bottom + 50)
-            put(27, x1 + 5, y2); put(28, x2 - 5, y2)
-            put(31, x1 + 5, y2); put(32, x2 - 5, y2)
-            region = bgr[max(0, top - 140):min(h, bottom + 20), max(0, int(cx) - 70):min(w, int(cx) + 70)]
+            put(11, x1 + 3, top)
+            put(12, x2 - 3, top)
+            put(23, x1 + 5, bottom)
+            put(24, x2 - 5, bottom)
+            put(25, x1 + 5, bottom + 50)
+            put(26, x2 - 5, bottom + 50)
+            put(27, x1 + 5, y2)
+            put(28, x2 - 5, y2)
+            put(31, x1 + 5, y2)
+            put(32, x2 - 5, y2)
+            region = bgr[
+                max(0, top - 140) : min(h, bottom + 20),
+                max(0, int(cx) - 70) : min(w, int(cx) + 70),
+            ]
             white = np.argwhere(cv2.inRange(region, (240, 240, 240), (255, 255, 255)))
-            wx, wy = (int(cx) - 70 + white[:, 1].mean(), max(0, top - 140) + white[:, 0].mean()) \
-                if len(white) else (x2 + 5, bottom)
-            put(16, wx, wy); put(15, x1 - 5, bottom)
-            put(14, (x2 - 3 + wx) / 2 + 4, (top + wy) / 2 + 6); put(13, x1 - 2, (top + bottom) / 2)
+            wx, wy = (
+                (
+                    int(cx) - 70 + white[:, 1].mean(),
+                    max(0, top - 140) + white[:, 0].mean(),
+                )
+                if len(white)
+                else (x2 + 5, bottom)
+            )
+            put(16, wx, wy)
+            put(15, x1 - 5, bottom)
+            put(14, (x2 - 3 + wx) / 2 + 4, (top + wy) / 2 + 6)
+            put(13, x1 - 2, (top + bottom) / 2)
             found.append((len(xs), lm))
         found.sort(key=lambda f: -f[0])
         return [lm for _, lm in found[:max_people]]
@@ -117,16 +133,30 @@ class FakeModel:
         if self.fail:
             raise Unavailable("quota exhausted")
         prompt = contents[-1] if isinstance(contents, list) else contents
-        count = len(re.findall(r"^#\d+ at about", prompt, re.M))
-        events = [Verdict(candidate=n, is_event=True, event_type="three_pointer",
-                          result="made" if n % 2 else "missed",
-                          ratings=[Rating(criterion="arm_extension", rating="good"),
-                                   Rating(criterion="balance", rating="needs_work")],
-                          feedback="Keep the elbow under the ball.", confidence=0.9)
-                  for n in range(1, count + 1)]
-        return "fake-model", Review(sport="basketball", events=events, summary="Solid session.",
-                                    strengths=["Release height"], focus_areas=["Balance"],
-                                    priority_drill="Form shooting from 1 m.")
+        count = len(re.findall(r"^#\d+ at about", prompt, re.MULTILINE))
+        events = [
+            Verdict(
+                candidate=n,
+                is_event=True,
+                event_type="three_pointer",
+                result="made" if n % 2 else "missed",
+                ratings=[
+                    Rating(criterion="arm_extension", rating="good"),
+                    Rating(criterion="balance", rating="needs_work"),
+                ],
+                feedback="Keep the elbow under the ball.",
+                confidence=0.9,
+            )
+            for n in range(1, count + 1)
+        ]
+        return "fake-model", Review(
+            sport="basketball",
+            events=events,
+            summary="Solid session.",
+            strengths=["Release height"],
+            focus_areas=["Balance"],
+            priority_drill="Form shooting from 1 m.",
+        )
 
     def text(self, prompt, system=None, temperature=0.4):
         return "At 2.0s your release looks good [x:e1]."

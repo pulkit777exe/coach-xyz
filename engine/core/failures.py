@@ -80,11 +80,14 @@ class Failure:
         }
 
 
-def failure(code: str, stage: str, message: str, *, retryable: bool = False,
-            **detail) -> Failure:
+def failure(
+    code: str, stage: str, message: str, *, retryable: bool = False, **detail
+) -> Failure:
     if code not in FAILURE_CODES:
         raise ValueError(f"unknown failure code: {code}")
-    return Failure(code=code, stage=stage, message=message, retryable=retryable, detail=detail)
+    return Failure(
+        code=code, stage=stage, message=message, retryable=retryable, detail=detail
+    )
 
 
 def from_engine_error(exc, stage: str) -> Failure | None:
@@ -92,12 +95,17 @@ def from_engine_error(exc, stage: str) -> Failure | None:
     code = _ERROR_MAP.get(getattr(exc, "code", ""), None)
     if code is None:
         return None
-    return failure(code, stage, getattr(exc, "message", str(exc)),
-                   retryable=bool(getattr(exc, "retryable", False)))
+    return failure(
+        code,
+        stage,
+        getattr(exc, "message", str(exc)),
+        retryable=bool(getattr(exc, "retryable", False)),
+    )
 
 
-def status_for(state: str, degraded: list[str] | None = None,
-               failures: list[dict] | None = None) -> str:
+def status_for(
+    state: str, degraded: list[str] | None = None, failures: list[dict] | None = None
+) -> str:
     """Derive the public job status without replacing the persisted state."""
     if state in ("failed", "cancelled", "queued", "running"):
         return state

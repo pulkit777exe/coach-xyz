@@ -20,7 +20,9 @@ RAW_KEY = re.compile(r"^raw/[A-Za-z0-9_@.|-]+/[a-z0-9_-]+/[a-f0-9]{32}\.mp4$")
 
 
 class JobRequest(BaseModel):
-    job_id: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$")
+    job_id: str | None = Field(
+        default=None, max_length=80, pattern=r"^[A-Za-z0-9_.:-]+$"
+    )
     session_token: str | None = Field(default=None, max_length=80)
     video_key: str | None = None
     sha256: str | None = None
@@ -38,15 +40,28 @@ def build_params(req: JobRequest) -> dict:
     sport = (req.sport or "").lower()
     if sport and sport not in sports.KNOWN:
         raise invalid(f"sport must be one of {', '.join(sports.KNOWN)}")
-    params = {"angle": angle, "sport": sport, "render": req.render, "meta": req.meta, "player": None}
+    params = {
+        "angle": angle,
+        "sport": sport,
+        "render": req.render,
+        "meta": req.meta,
+        "player": None,
+    }
     if req.session_token:
         found = sessions.angle(req.session_token, angle)
         if not found:
-            raise EngineError("SESSION_EXPIRED", "Session expired. Please upload your video again.", status=404)
+            raise EngineError(
+                "SESSION_EXPIRED",
+                "Session expired. Please upload your video again.",
+                status=404,
+            )
         params["angle"], entry = found
         params.update(video_key=entry["video_key"], sha256=entry.get("sha256"))
         if req.player_index is not None:
-            params["player"] = next((p for p in entry["players"] if p["player_index"] == req.player_index), None)
+            params["player"] = next(
+                (p for p in entry["players"] if p["player_index"] == req.player_index),
+                None,
+            )
             if params["player"] is None:
                 raise invalid("player_index was not found in this scan")
     elif req.video_key and RAW_KEY.match(req.video_key):
@@ -70,7 +85,12 @@ def get_job(job_id: str):
 
 
 @router.get("/jobs/{job_id}/events")
-async def job_events(job_id: str, request: Request, after: int = 0, last_event_id: str | None = Header(default=None)):
+async def job_events(
+    job_id: str,
+    request: Request,
+    after: int = 0,
+    last_event_id: str | None = Header(default=None),
+):
     jobs.require(job_id)
     start = int(last_event_id) if last_event_id and last_event_id.isdigit() else after
 
@@ -79,7 +99,9 @@ async def job_events(job_id: str, request: Request, after: int = 0, last_event_i
         return job is None or job["state"] not in jobs.ACTIVE
 
     return events.sse_stream(
-        events.follow(job_id, start, disconnected=request.is_disconnected, finished=over)
+        events.follow(
+            job_id, start, disconnected=request.is_disconnected, finished=over
+        )
     )
 
 
@@ -109,7 +131,9 @@ def retry_job(job_id: str):
 def delete_job(job_id: str):
     job = jobs.require(job_id)
     if job["state"] in jobs.ACTIVE:
-        raise EngineError("JOB_ACTIVE", "Cancel the job before deleting it.", status=409)
+        raise EngineError(
+            "JOB_ACTIVE", "Cancel the job before deleting it.", status=409
+        )
     storage.backend().delete_prefix(f"results/{job_id}")
     db.run("DELETE FROM events WHERE stream=?", (job_id,))
     db.run("DELETE FROM jobs WHERE id=?", (job_id,))

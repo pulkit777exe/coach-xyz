@@ -31,7 +31,9 @@ def _height(box) -> float:
     return max(1.0, float(box[3] - box[1]))
 
 
-def _pick_opponent(found: list[people.Person], primary: people.Person, frame) -> people.Person | None:
+def _pick_opponent(
+    found: list[people.Person], primary: people.Person, frame
+) -> people.Person | None:
     """Nearest other player, strongly preferring a different shirt colour over a teammate."""
     others = [p for p in found if p is not primary]
     if not others:
@@ -42,11 +44,19 @@ def _pick_opponent(found: list[people.Person], primary: people.Person, frame) ->
 
     def score(p: people.Person) -> float:
         distance = float(np.linalg.norm(_centre(p.box) - pc)) / height
-        look = people.similarity(people.signature(frame, p.box), primary_sig) if primary_sig is not None else 0.0
+        look = (
+            people.similarity(people.signature(frame, p.box), primary_sig)
+            if primary_sig is not None
+            else 0.0
+        )
         return distance + 2.0 * look
 
     best = min(others, key=score)
-    return best if float(np.linalg.norm(_centre(best.box) - pc)) / height <= MAX_OPPONENT_BODIES else None
+    return (
+        best
+        if float(np.linalg.norm(_centre(best.box) - pc)) / height <= MAX_OPPONENT_BODIES
+        else None
+    )
 
 
 def _window(track: Track, t: float) -> np.ndarray:
@@ -100,19 +110,29 @@ def _overlap(tr: Track, box) -> float:
 def _choose_primary(tracks: list[dict], reference, pack: Pack, t: float) -> dict:
     """The tracked athlete when they are visible, otherwise the strongest action."""
     if reference is not None:
-        best_overlap, best = max(((_overlap(tr["track"], reference), tr) for tr in tracks),
-                                 key=lambda pair: pair[0])
+        best_overlap, best = max(
+            ((_overlap(tr["track"], reference), tr) for tr in tracks),
+            key=lambda pair: pair[0],
+        )
         if best_overlap > 0.1:
             return best
     return max(tracks, key=lambda tr: _peak_signal(tr["track"], pack, t))
 
 
-def _nearest_index(persons: list, times: np.ndarray, t: float, max_dt: float = 0.4) -> int | None:
-    ok = [i for i, p in enumerate(persons) if p is not None and abs(float(times[i]) - t) <= max_dt]
+def _nearest_index(
+    persons: list, times: np.ndarray, t: float, max_dt: float = 0.4
+) -> int | None:
+    ok = [
+        i
+        for i, p in enumerate(persons)
+        if p is not None and abs(float(times[i]) - t) <= max_dt
+    ]
     return min(ok, key=lambda i: abs(float(times[i]) - t)) if ok else None
 
 
-def _nearest_other(tracks: list[dict], primary: dict, times: np.ndarray, t: float) -> dict | None:
+def _nearest_other(
+    tracks: list[dict], primary: dict, times: np.ndarray, t: float
+) -> dict | None:
     if primary.get("box") is None:
         return None
     centre = _centre(primary["box"])
@@ -129,7 +149,9 @@ def _nearest_other(tracks: list[dict], primary: dict, times: np.ndarray, t: floa
     return best
 
 
-def _track(times: np.ndarray, people_found: list[people.Person | None], w: int, h: int) -> Track:
+def _track(
+    times: np.ndarray, people_found: list[people.Person | None], w: int, h: int
+) -> Track:
     n = len(times)
     lm = np.full((n, 33, 4), np.nan, np.float32)
     box = np.full((n, 4), np.nan, np.float32)
@@ -158,11 +180,17 @@ def _nearest(tr: Track, t: float, max_dt: float = 0.4) -> int | None:
 def _role(pack: Pack, tr: Track, idx: int | None, side: str, label: str) -> dict | None:
     if idx is None:
         return None
-    return {"role": label, "side": side, "confidence": round(float(tr.conf[idx]), 2),
-            "metrics": metrics.event_metrics(tr, idx, side, pack)}
+    return {
+        "role": label,
+        "side": side,
+        "confidence": round(float(tr.conf[idx]), 2),
+        "metrics": metrics.event_metrics(tr, idx, side, pack),
+    }
 
 
-def _separation(primary: Track, p_idx: int | None, opponent: Track, o_idx: int | None) -> dict | None:
+def _separation(
+    primary: Track, p_idx: int | None, opponent: Track, o_idx: int | None
+) -> dict | None:
     if p_idx is None or o_idx is None:
         return None
     pbox, obox = primary.box[p_idx], opponent.box[o_idx]
@@ -171,13 +199,23 @@ def _separation(primary: Track, p_idx: int | None, opponent: Track, o_idx: int |
     torso = motion.torso_px(primary)
     dx = float(_centre(obox)[0] - _centre(pbox)[0])
     dy = float(_centre(obox)[1] - _centre(pbox)[1])
-    return {"side": "left" if dx < 0 else "right",
-            "distance": round(float(np.hypot(dx, dy)) / torso, 2),
-            "dx": round(dx / torso, 2), "dy": round(dy / torso, 2)}
+    return {
+        "side": "left" if dx < 0 else "right",
+        "distance": round(float(np.hypot(dx, dy)) / torso, 2),
+        "dx": round(dx / torso, 2),
+        "dy": round(dy / torso, 2),
+    }
 
 
-def analyse(path: str, detector, track: Track, cands: list[Candidate], pack: Pack,
-            progress=lambda f: None, cancelled=lambda: None) -> dict[int, dict]:
+def analyse(
+    path: str,
+    detector,
+    track: Track,
+    cands: list[Candidate],
+    pack: Pack,
+    progress=lambda f: None,
+    cancelled=lambda: None,
+) -> dict[int, dict]:
     """Role blocks keyed by candidate sample index. Failures leave that event empty."""
     if not cands:
         return {}
@@ -218,13 +256,25 @@ def analyse(path: str, detector, track: Track, cands: list[Candidate], pack: Pac
             if found_at_event is not None and frame_at_event is not None:
                 primary_person = primary_tr["persons"][event_i]
                 if primary_person is not None:
-                    opponent_person = _pick_opponent(found_at_event, primary_person, frame_at_event)
+                    opponent_person = _pick_opponent(
+                        found_at_event, primary_person, frame_at_event
+                    )
                     if opponent_person is not None:
-                        opponent_tr = next((tr for tr in tracks if tr["persons"][event_i] is opponent_person), None)
+                        opponent_tr = next(
+                            (
+                                tr
+                                for tr in tracks
+                                if tr["persons"][event_i] is opponent_person
+                            ),
+                            None,
+                        )
             if opponent_tr is None:
                 opponent_tr = _nearest_other(tracks, primary_tr, times, c.t)
-            opponent_track = (opponent_tr["track"] if opponent_tr is not None
-                              else _track(times, [None] * len(times), w, h))
+            opponent_track = (
+                opponent_tr["track"]
+                if opponent_tr is not None
+                else _track(times, [None] * len(times), w, h)
+            )
             o_idx = _nearest(opponent_track, c.t)
 
             opp_side = "left" if c.side == "right" else "right"
@@ -233,13 +283,19 @@ def analyse(path: str, detector, track: Track, cands: list[Candidate], pack: Pac
                 pv = not np.isnan(primary_track.lm[i, 0, 0])
                 ov = not np.isnan(opponent_track.lm[i, 0, 0])
                 if pv or ov:
-                    frames.append({"t": round(float(t), 3),
-                                   "primary": _points(primary_track.lm[i], pv),
-                                   "opponent": _points(opponent_track.lm[i], ov)})
+                    frames.append(
+                        {
+                            "t": round(float(t), 3),
+                            "primary": _points(primary_track.lm[i], pv),
+                            "opponent": _points(opponent_track.lm[i], ov),
+                        }
+                    )
             out[c.i] = {
                 "roles": {"primary": pack.primary_role, "opponent": pack.opponent_role},
                 "primary": _role(pack, primary_track, p_idx, c.side, pack.primary_role),
-                "opponent": _role(pack, opponent_track, o_idx, opp_side, pack.opponent_role),
+                "opponent": _role(
+                    pack, opponent_track, o_idx, opp_side, pack.opponent_role
+                ),
                 "found_opponent": o_idx is not None,
                 "separation": _separation(primary_track, p_idx, opponent_track, o_idx),
                 "frames": frames,

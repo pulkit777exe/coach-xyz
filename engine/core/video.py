@@ -41,8 +41,12 @@ def sha256_file(path: str, chunk: int = 8 << 20) -> str:
     return digest.hexdigest()
 
 
-def _ffprobe(path: str, *, stream: str = "v:0",
-             entries: str = "stream=avg_frame_rate,duration,codec_name:format=duration") -> dict:
+def _ffprobe(
+    path: str,
+    *,
+    stream: str = "v:0",
+    entries: str = "stream=avg_frame_rate,duration,codec_name:format=duration",
+) -> dict:
     """Probe one stream with a fixed, non-user-controlled argument set.
 
     The caller chooses which stream and which entries; it cannot append arbitrary
@@ -51,13 +55,27 @@ def _ffprobe(path: str, *, stream: str = "v:0",
     """
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-of", "json", "-select_streams", stream,
-             "-show_entries", entries, path],
-            capture_output=True, timeout=60, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-of",
+                "json",
+                "-select_streams",
+                stream,
+                "-show_entries",
+                entries,
+                path,
+            ],
+            capture_output=True,
+            timeout=60,
+            check=True,
         )
         return json.loads(out.stdout or b"{}")
     except FileNotFoundError as exc:
-        raise EngineError("ENGINE_UNAVAILABLE", "ffprobe is not installed on the engine.", status=503) from exc
+        raise EngineError(
+            "ENGINE_UNAVAILABLE", "ffprobe is not installed on the engine.", status=503
+        ) from exc
     except Exception as exc:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO) from exc
 
@@ -70,46 +88,101 @@ def probe(path: str, max_seconds: float = 3600) -> Media:
     try:
         num, _, den = (stream.get("avg_frame_rate") or "0/1").partition("/")
         fps = float(num) / float(den or 1)
-        duration = float(stream.get("duration") or info.get("format", {}).get("duration") or 0)
+        duration = float(
+            stream.get("duration") or info.get("format", {}).get("duration") or 0
+        )
     except (ValueError, ZeroDivisionError) as exc:
         raise EngineError("VIDEO_DECODE_FAILED", BAD_VIDEO) from exc
     if fps <= 0 or duration <= 0 or duration > max_seconds:
-        raise EngineError("VIDEO_DECODE_FAILED", "Video must be between 1 second and 60 minutes long.")
+        raise EngineError(
+            "VIDEO_DECODE_FAILED", "Video must be between 1 second and 60 minutes long."
+        )
     audio = _ffprobe(path, stream="a:0", entries="stream=codec_type")
-    return Media(duration=duration, fps=fps, has_audio=bool(audio.get("streams")),
-                 codec=str(stream.get("codec_name") or ""))
+    return Media(
+        duration=duration,
+        fps=fps,
+        has_audio=bool(audio.get("streams")),
+        codec=str(stream.get("codec_name") or ""),
+    )
 
 
 class FFmpegWriter:
     """Pipes BGR frames to ffmpeg: H.264, yuv420p, faststart, optional audio from the source."""
 
-    def __init__(self, out: str, width: int, height: int, fps: float,
-                 audio_from: str | None = None, crf: int = 21):
+    def __init__(
+        self,
+        out: str,
+        width: int,
+        height: int,
+        fps: float,
+        audio_from: str | None = None,
+        crf: int = 21,
+    ):
         if shutil.which("ffmpeg") is None:
-            raise EngineError("ENGINE_UNAVAILABLE", "ffmpeg is not installed on the engine.", status=503)
+            raise EngineError(
+                "ENGINE_UNAVAILABLE",
+                "ffmpeg is not installed on the engine.",
+                status=503,
+            )
         self.size = (width, height)
         self.frames = 0
-        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
-               "-s", f"{width}x{height}", "-r", f"{fps:.4f}", "-i", "-"]
-        audio = bool(audio_from) and bool(_ffprobe(audio_from, stream="a:0",
-                                                   entries="stream=codec_type").get("streams"))
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            f"{width}x{height}",
+            "-r",
+            f"{fps:.4f}",
+            "-i",
+            "-",
+        ]
+        audio = bool(audio_from) and bool(
+            _ffprobe(audio_from, stream="a:0", entries="stream=codec_type").get(
+                "streams"
+            )
+        )
         if audio:
             cmd += ["-i", audio_from]
         cmd += ["-map", "0:v:0"]
         if audio:
             cmd += ["-map", "1:a:0", "-c:a", "aac", "-b:a", "128k"]
-        cmd += ["-vf", "crop=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-preset", "veryfast",
-                "-crf", str(crf), "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
-        self.log = tempfile.TemporaryFile()
-        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log)
+        cmd += [
+            "-vf",
+            "crop=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            str(crf),
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            out,
+        ]
+        self.log = tempfile.TemporaryFile()  # noqa: SIM115
+        self.proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=self.log
+        )
 
     def write(self, frame) -> None:
         if frame.shape[1] != self.size[0] or frame.shape[0] != self.size[1]:
-            raise ValueError(f"frame is {frame.shape[1]}x{frame.shape[0]}, writer expects {self.size[0]}x{self.size[1]}")
+            raise ValueError(
+                f"frame is {frame.shape[1]}x{frame.shape[0]}, writer expects {self.size[0]}x{self.size[1]}"
+            )
         try:
             self.proc.stdin.write(frame.tobytes())
         except BrokenPipeError as exc:
-            raise EngineError("RENDER_FAILED", f"ffmpeg stopped early: {self._tail()}", retryable=True) from exc
+            raise EngineError(
+                "RENDER_FAILED", f"ffmpeg stopped early: {self._tail()}", retryable=True
+            ) from exc
         self.frames += 1
 
     def _tail(self) -> str:
@@ -125,7 +198,9 @@ class FFmpegWriter:
         tail = self._tail()
         self.log.close()
         if code != 0 or self.frames == 0:
-            raise EngineError("RENDER_FAILED", f"ffmpeg failed ({code}): {tail}", retryable=True)
+            raise EngineError(
+                "RENDER_FAILED", f"ffmpeg failed ({code}): {tail}", retryable=True
+            )
 
     def abort(self) -> None:
         self.proc.kill()
@@ -153,8 +228,17 @@ def to_reel(segments: list[Segment], t: float) -> float | None:
     return None
 
 
-def build_proxy(path: str, dst: str, *, box_at, marks, windows=None, fps: float = 5,
-                max_side: int = 640, cancelled=lambda: None) -> list[Segment]:
+def build_proxy(
+    path: str,
+    dst: str,
+    *,
+    box_at,
+    marks,
+    windows=None,
+    fps: float = 5,
+    max_side: int = 640,
+    cancelled=lambda: None,
+) -> list[Segment]:
     """Low-res copy for the model with the target boxed and candidate moments numbered.
 
     `windows` restricts the copy to the given (start, end) spans of the source;
@@ -218,11 +302,31 @@ def _annotate(img, src_shape, t: float, box, marks) -> None:
     sh, sw = src_shape[:2]
     kx, ky = img.shape[1] / sw, img.shape[0] / sh
     if box is not None:
-        x1, y1, x2, y2 = (int(v) for v in (box[0] * kx, box[1] * ky, box[2] * kx, box[3] * ky))
+        x1, y1, x2, y2 = (
+            int(v) for v in (box[0] * kx, box[1] * ky, box[2] * kx, box[3] * ky)
+        )
         cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 2)
-        cv2.putText(img, "TARGET", (x1, max(12, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(
+            img,
+            "TARGET",
+            (x1, max(12, y1 - 5)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 0, 255),
+            1,
+            cv2.LINE_AA,
+        )
     for a, b, label in marks:
         if a <= t <= b:
             cv2.rectangle(img, (4, 4), (62, 30), (0, 0, 0), -1)
-            cv2.putText(img, label, (8, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(
+                img,
+                label,
+                (8, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
             break

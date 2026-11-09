@@ -18,8 +18,13 @@ SLUG = re.compile(r"^[a-z0-9_]+$")
 KNOWN = ("basketball", "football", "cricket", "tennis", "baseball", "hockey")
 
 
-DEFAULT_ABSTENTION_STATES: tuple[str, ...] = ("unable_to_assess", "not_applicable", "invalid_view",
-                                              "occluded", "unavailable")
+DEFAULT_ABSTENTION_STATES: tuple[str, ...] = (
+    "unable_to_assess",
+    "not_applicable",
+    "invalid_view",
+    "occluded",
+    "unavailable",
+)
 
 
 @dataclass
@@ -38,8 +43,12 @@ class Criterion:
     validation_status: str = "proposed"  # proposed | coach_reviewed | ...
     measurement_type: str = "image_plane_angle"
     calibration: str = "uncalibrated_2d"
-    allowed_views: tuple[str, ...] | None = None  # camera views this measurement is valid from
-    phase_scope: tuple[str, ...] = ()  # paper phase identifiers this criterion belongs to
+    allowed_views: tuple[str, ...] | None = (
+        None  # camera views this measurement is valid from
+    )
+    phase_scope: tuple[
+        str, ...
+    ] = ()  # paper phase identifiers this criterion belongs to
     required_landmarks: tuple[str, ...] = ()
     required_objects: tuple[str, ...] = ()
     quality_gate: str = ""
@@ -131,7 +140,9 @@ def _criterion(raw: dict) -> Criterion:
         valid_angles=tuple(raw["valid_angles"]) if raw.get("valid_angles") else None,
         criterion_id=raw.get("criterion_id") or raw.get("id"),
         evidence_type=evidence_type if evidence_type in EVIDENCE_TYPES else "measured",
-        validation_status=validation_status if validation_status in VALIDATION_STATUSES else "proposed",
+        validation_status=validation_status
+        if validation_status in VALIDATION_STATUSES
+        else "proposed",
         measurement_type=str(raw.get("measurement_type") or "image_plane_angle"),
         calibration=str(raw.get("calibration") or "uncalibrated_2d"),
         allowed_views=tuple(allowed) if allowed else None,
@@ -141,7 +152,9 @@ def _criterion(raw: dict) -> Criterion:
         quality_gate=str(raw.get("quality_gate") or ""),
         supporting_references=tuple(raw.get("supporting_references") or ()),
         implementation_note=str(raw.get("implementation_note") or ""),
-        abstention_states=tuple(raw.get("abstention_states") or DEFAULT_ABSTENTION_STATES),
+        abstention_states=tuple(
+            raw.get("abstention_states") or DEFAULT_ABSTENTION_STATES
+        ),
     )
 
 
@@ -177,7 +190,11 @@ def load(name: str | None) -> Pack:
         positive=list(results.get("positive", [])),
         negative=list(results.get("negative", [])),
         neutral=list(results.get("neutral", ["unknown"])),
-        criteria=[_criterion(c) for c in raw.get("criteria") or raw.get("form_criteria") or [] if "key" in c],
+        criteria=[
+            _criterion(c)
+            for c in raw.get("criteria") or raw.get("form_criteria") or []
+            if "key" in c
+        ],
         positions=raw.get("positions", []),
         camera_angles=raw.get("camera_angles", []),
         key_metrics=[_metric(m) for m in raw.get("key_metrics") or [] if "key" in m],

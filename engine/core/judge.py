@@ -9,7 +9,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -25,9 +25,18 @@ log = logging.getLogger("engine.judge")
 
 class Rating(BaseModel):
     criterion: str
-    rating: Literal["good", "needs_work", "poor", "unclear",
-                    "not_demonstrated", "inconsistent", "functional", "consistent",
-                    "unable_to_assess", "not_applicable"]
+    rating: Literal[
+        "good",
+        "needs_work",
+        "poor",
+        "unclear",
+        "not_demonstrated",
+        "inconsistent",
+        "functional",
+        "consistent",
+        "unable_to_assess",
+        "not_applicable",
+    ]
 
 
 class Verdict(BaseModel):
@@ -123,18 +132,26 @@ def _drop_unsupported_ratings(verdicts: dict[int, dict], pack: Pack) -> dict | N
         extra = {key for key in ratings if key not in known}
         if extra:
             unsupported |= extra
-            verdict["ratings"] = {key: rating for key, rating in ratings.items()
-                                  if key in known}
+            verdict["ratings"] = {
+                key: rating for key, rating in ratings.items() if key in known
+            }
     if not unsupported:
         return None
     return failures.failure(
-        "F10_UNSUPPORTED_OBSERVATION", "judge",
+        "F10_UNSUPPORTED_OBSERVATION",
+        "judge",
         f"model rated criteria that are not in the sport pack: {', '.join(sorted(unsupported))}",
-        retryable=False, unsupported_criteria=sorted(unsupported)).to_dict()
+        retryable=False,
+        unsupported_criteria=sorted(unsupported),
+    ).to_dict()
 
 
 def _clean(v: Verdict, pack: Pack) -> dict:
-    kind = v.event_type if v.event_type in pack.event_types else ("other" if "other" in pack.event_types else pack.event_types[0])
+    kind = (
+        v.event_type
+        if v.event_type in pack.event_types
+        else ("other" if "other" in pack.event_types else pack.event_types[0])
+    )
     result = v.result if v.result in pack.results else "unknown"
     pressure = v.pressure if v.pressure in ("open", "contested", "tight") else "unknown"
     confidence = max(0.0, min(1.0, v.confidence))
@@ -147,15 +164,24 @@ def _clean(v: Verdict, pack: Pack) -> dict:
     else:
         state = "confirmed"
     return {
-        "is_event": v.is_event, "state": state, "type": kind, "result": result,
-        "feedback": v.feedback.strip(), "confidence": confidence,
+        "is_event": v.is_event,
+        "state": state,
+        "type": kind,
+        "result": result,
+        "feedback": v.feedback.strip(),
+        "confidence": confidence,
         "ratings": {r.criterion: r.rating for r in v.ratings},
-        "tags": _clean_tags(v.tags), "pressure": pressure,
+        "tags": _clean_tags(v.tags),
+        "pressure": pressure,
     }
 
 
-def rules(cands: list[Candidate], pack: Pack, reason: str,
-          failure_list: list[dict] | None = None) -> Judgement:
+def rules(
+    cands: list[Candidate],
+    pack: Pack,
+    reason: str,
+    failure_list: list[dict] | None = None,
+) -> Judgement:
     """Rule-based fallback.
 
     Candidates are deliberately left in the ``candidate`` state. A motion peak
@@ -163,20 +189,42 @@ def rules(cands: list[Candidate], pack: Pack, reason: str,
     separately validated, which is not the case here.
     """
     kind = "other" if "other" in pack.event_types else pack.event_types[0]
-    verdicts = {i: {"is_event": True, "state": "candidate", "type": kind, "result": "unknown",
-                    "feedback": "", "confidence": 0.5, "ratings": {}, "tags": [],
-                    "pressure": "unknown"} for i in range(len(cands))}
-    return Judgement(source="rules", sport=pack.name, verdicts=verdicts, reason=reason,
-                     judged_at=datetime.now(timezone.utc).isoformat(),
-                     failures=list(failure_list or []))
+    verdicts = {
+        i: {
+            "is_event": True,
+            "state": "candidate",
+            "type": kind,
+            "result": "unknown",
+            "feedback": "",
+            "confidence": 0.5,
+            "ratings": {},
+            "tags": [],
+            "pressure": "unknown",
+        }
+        for i in range(len(cands))
+    }
+    return Judgement(
+        source="rules",
+        sport=pack.name,
+        verdicts=verdicts,
+        reason=reason,
+        judged_at=datetime.now(UTC).isoformat(),
+        failures=list(failure_list or []),
+    )
 
 
 def reconcile(judgement: Judgement, pack: Pack) -> Judgement:
     """Normalise verdict vocabulary after the sport was identified mid-pipeline."""
     fallback_type = "other" if "other" in pack.event_types else pack.event_types[0]
-    fallback_result = ("unknown" if "unknown" in pack.results
-                       else pack.neutral[0] if pack.neutral
-                       else pack.results[0] if pack.results else "unknown")
+    fallback_result = (
+        "unknown"
+        if "unknown" in pack.results
+        else pack.neutral[0]
+        if pack.neutral
+        else pack.results[0]
+        if pack.results
+        else "unknown"
+    )
     for verdict in judgement.verdicts.values():
         if verdict["type"] not in pack.event_types:
             verdict["type"] = fallback_type
@@ -189,9 +237,18 @@ def reconcile(judgement: Judgement, pack: Pack) -> Judgement:
     return judgement
 
 
-def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pack, path: str, *,
-           sport_known: bool, make_llm=llm.default, workdir: str | None = None,
-           cancelled=lambda: None) -> Judgement:
+def review(
+    track: Track,
+    cands: list[Candidate],
+    measured: list[dict],
+    pack: Pack,
+    path: str,
+    *,
+    sport_known: bool,
+    make_llm=llm.default,
+    workdir: str | None = None,
+    cancelled=lambda: None,
+) -> Judgement:
     if not cands:
         return rules(cands, pack, "no candidate moments")
     fd, proxy = tempfile.mkstemp(suffix=".mp4", dir=workdir)
@@ -205,14 +262,25 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
     try:
         model = make_llm()
         marks = [(c.t - 1.0, c.t + 0.8, f"#{n}") for n, c in enumerate(cands, 1)]
-        segments = video.build_proxy(path, proxy, box_at=track.box_at, marks=marks, windows=_windows(track, cands),
-                                     fps=config.settings.proxy_fps, cancelled=cancelled)
+        segments = video.build_proxy(
+            path,
+            proxy,
+            box_at=track.box_at,
+            marks=marks,
+            windows=_windows(track, cands),
+            fps=config.settings.proxy_fps,
+            cancelled=cancelled,
+        )
         moments = []
         for n, (c, m) in enumerate(zip(cands, measured, strict=False), 1):
             reel = video.to_reel(segments, c.t)
             if reel is None:
                 continue
-            numbers = [f"{r['label']} {r['value']:.0f}°" for r in m["criteria"] if r["value"] is not None]
+            numbers = [
+                f"{r['label']} {r['value']:.0f}°"
+                for r in m["criteria"]
+                if r["value"] is not None
+            ]
             moments.append({"n": n, "time": reel, "measured": numbers})
         user = prompts.judge_prompt(pack, sport_known, moments)
         prompt_digest = provenance.prompt_hash(system, user)
@@ -220,18 +288,30 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
         used, out = model.structured([part, user], Review, system=system, video=True)
     except llm.Unavailable as exc:
         log.warning("model unavailable, using rules: %s", exc.message)
-        failure_list.append(failures.failure(
-            "F11_VLM_UNAVAILABLE", "judge", exc.message, retryable=True).to_dict())
+        failure_list.append(
+            failures.failure(
+                "F11_VLM_UNAVAILABLE", "judge", exc.message, retryable=True
+            ).to_dict()
+        )
         return rules(cands, pack, exc.message, failure_list=failure_list)
     except Cancelled:
         raise
     except Exception as exc:
         log.exception("judging failed, using rules")
         if isinstance(exc, (ValueError, TypeError)):
-            failure_list.append(failures.failure(
-                "F12_INVALID_STRUCTURED_RESPONSE", "judge",
-                f"structured response could not be parsed: {type(exc).__name__}").to_dict())
-        return rules(cands, pack, f"judging failed: {type(exc).__name__}", failure_list=failure_list)
+            failure_list.append(
+                failures.failure(
+                    "F12_INVALID_STRUCTURED_RESPONSE",
+                    "judge",
+                    f"structured response could not be parsed: {type(exc).__name__}",
+                ).to_dict()
+            )
+        return rules(
+            cands,
+            pack,
+            f"judging failed: {type(exc).__name__}",
+            failure_list=failure_list,
+        )
     finally:
         if uploaded and model is not None:
             model.drop_file(uploaded)
@@ -239,21 +319,44 @@ def review(track: Track, cands: list[Candidate], measured: list[dict], pack: Pac
             os.unlink(proxy)
 
     sport = out.sport if out.sport in KNOWN else pack.name
-    verdicts = {v.candidate - 1: _clean(v, pack) for v in out.events if 1 <= v.candidate <= len(cands)}
+    verdicts = {
+        v.candidate - 1: _clean(v, pack)
+        for v in out.events
+        if 1 <= v.candidate <= len(cands)
+    }
     for i in range(len(cands)):
-        verdicts.setdefault(i, {"is_event": False, "state": "rejected", "type": "other",
-                                "result": "unknown", "feedback": "", "confidence": 0.0,
-                                "ratings": {}, "tags": [], "pressure": "unknown"})
+        verdicts.setdefault(
+            i,
+            {
+                "is_event": False,
+                "state": "rejected",
+                "type": "other",
+                "result": "unknown",
+                "feedback": "",
+                "confidence": 0.0,
+                "ratings": {},
+                "tags": [],
+                "pressure": "unknown",
+            },
+        )
     unsupported = _drop_unsupported_ratings(verdicts, pack)
     if unsupported:
         failure_list.append(unsupported)
-    return Judgement(source="model", sport=sport, verdicts=verdicts, summary=out.summary.strip(),
-                     strengths=out.strengths[:3], focus_areas=out.focus_areas[:3],
-                     priority_drill=out.priority_drill.strip(),
-                     tactical_summary=out.tactical_summary.strip(), key_insights=out.key_insights[:4],
-                     model=used, prompt_hash=prompt_digest,
-                     judged_at=datetime.now(timezone.utc).isoformat(),
-                     failures=failure_list)
+    return Judgement(
+        source="model",
+        sport=sport,
+        verdicts=verdicts,
+        summary=out.summary.strip(),
+        strengths=out.strengths[:3],
+        focus_areas=out.focus_areas[:3],
+        priority_drill=out.priority_drill.strip(),
+        tactical_summary=out.tactical_summary.strip(),
+        key_insights=out.key_insights[:4],
+        model=used,
+        prompt_hash=prompt_digest,
+        judged_at=datetime.now(UTC).isoformat(),
+        failures=failure_list,
+    )
 
 
 def event_feedback(rows: list[dict], pack: Pack) -> str:

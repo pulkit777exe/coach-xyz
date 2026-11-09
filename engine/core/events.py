@@ -21,17 +21,27 @@ from . import config, db
 
 log = logging.getLogger("engine.events")
 
-TERMINAL = {"job.completed", "job.failed", "job.cancelled", "scan.completed", "scan.failed"}
+TERMINAL = {
+    "job.completed",
+    "job.failed",
+    "job.cancelled",
+    "scan.completed",
+    "scan.failed",
+}
 MAX_DELIVERY_ATTEMPTS = 12
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 def sse_stream(source, **kwargs) -> StreamingResponse:
     """One place for the headers every event stream must send."""
-    return StreamingResponse(source, media_type="text/event-stream", headers=SSE_HEADERS, **kwargs)
+    return StreamingResponse(
+        source, media_type="text/event-stream", headers=SSE_HEADERS, **kwargs
+    )
 
 
-def emit(stream: str, type: str, data: dict | None = None, *, webhook: bool = True) -> int:
+def emit(
+    stream: str, type: str, data: dict | None = None, *, webhook: bool = True
+) -> int:
     cur = db.run(
         "INSERT INTO events(stream, type, data, ts, delivered) VALUES (?,?,?,?,?)",
         (stream, type, db.dumps(data or {}), time.time(), 0 if webhook else 1),
@@ -53,8 +63,15 @@ def frame(e: dict) -> str:
     return f"id: {e['seq']}\nevent: {e['type']}\ndata: {json.dumps(e['data'])}\n\n"
 
 
-async def follow(stream: str, after: int = 0, disconnected=None, poll: float = 0.25,
-                 heartbeat: float = 15, idle_timeout: float | None = None, finished=None) -> AsyncIterator[str]:
+async def follow(
+    stream: str,
+    after: int = 0,
+    disconnected=None,
+    poll: float = 0.25,
+    heartbeat: float = 15,
+    idle_timeout: float | None = None,
+    finished=None,
+) -> AsyncIterator[str]:
     """Yield SSE frames until a terminal event, the client leaves, `finished()` says the stream is over,
     or nothing happens for `idle_timeout`."""
     last_sent = last_event = time.monotonic()
@@ -80,7 +97,10 @@ async def follow(stream: str, after: int = 0, disconnected=None, poll: float = 0
 
 def sign(body: bytes, timestamp: str) -> str:
     key = config.settings.service_token.encode()
-    return "sha256=" + hmac.new(key, timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+    return (
+        "sha256="
+        + hmac.new(key, timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+    )
 
 
 class Dispatcher(threading.Thread):
@@ -121,20 +141,34 @@ class Dispatcher(threading.Thread):
             gave_up = attempts >= MAX_DELIVERY_ATTEMPTS
             db.run(
                 "UPDATE events SET attempts=?, next_try=?, delivered=? WHERE seq=?",
-                (attempts, now + min(300, 2 ** attempts), 2 if gave_up else 0, e["seq"]),
+                (attempts, now + min(300, 2**attempts), 2 if gave_up else 0, e["seq"]),
             )
             blocked.add(e["stream"])
         return sent
 
     def deliver(self, e: dict) -> bool:
         body = json.dumps(
-            {"job_id": e["stream"], "seq": e["seq"], "type": e["type"], "ts": e["ts"], "data": json.loads(e["data"])}
+            {
+                "job_id": e["stream"],
+                "seq": e["seq"],
+                "type": e["type"],
+                "ts": e["ts"],
+                "data": json.loads(e["data"]),
+            }
         ).encode()
         stamp = str(int(time.time()))
-        headers = {"content-type": "application/json", "x-engine-timestamp": stamp,
-                   "x-engine-signature": sign(body, stamp)}
+        headers = {
+            "content-type": "application/json",
+            "x-engine-timestamp": stamp,
+            "x-engine-signature": sign(body, stamp),
+        }
         try:
-            return self.client.post(e["callback_url"], content=body, headers=headers).status_code < 300
+            return (
+                self.client.post(
+                    e["callback_url"], content=body, headers=headers
+                ).status_code
+                < 300
+            )
         except httpx.HTTPError as exc:
             log.warning("webhook to %s failed: %s", e["callback_url"], exc)
             return False

@@ -72,11 +72,13 @@ def expire() -> int:
     cutoff = time.time() - config.settings.session_ttl_s
     store = storage.backend()
     dropped = 0
-    for row in db.rows("SELECT token, data FROM sessions WHERE created_at < ?", (cutoff,)):
+    for row in db.rows(
+        "SELECT token, data FROM sessions WHERE created_at < ?", (cutoff,)
+    ):
         for entry in json.loads(row["data"]).get("angles", {}).values():
             try:
                 store.delete(entry["video_key"])
-            except Exception:
+            except Exception:  # noqa: S110, BLE001
                 pass
         db.run("DELETE FROM sessions WHERE token=?", (row["token"],))
         dropped += 1

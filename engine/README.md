@@ -164,3 +164,12 @@ Docker: `docker build -t coachai-engine . && docker run -p 8001:8001 -v engine-d
 Run one process: the queue, SQLite and webhook sender live in it. Use `ENGINE_WORKERS` for
 concurrency (each analysis needs roughly 300-500 MB); put `/app/data` on a persistent disk.
 Jobs left unfinished by a restart are re-queued on boot.
+
+## Development
+
+- **Lint/format (Ruff):** config lives in `engine/pyproject.toml` (`[tool.ruff]`, Python 3.11 target). From `engine/`:
+  - `ruff check .`
+  - `ruff format --check .` (or `ruff format .` to apply)
+- **Tests:** `./.venv/bin/python -m pytest tests -q` (or `python -m pytest tests` in an active venv). Current baseline: 76 tests pass.
+- **Type checking:** mypy/pyright are not yet configured.
+- **Dev dependencies:** lint/test/type-check tools are not declared in `requirements.txt`; install/manage them separately (do not add to runtime requirements without discussion).

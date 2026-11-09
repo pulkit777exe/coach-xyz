@@ -77,13 +77,17 @@ def trunk_lean(lm: np.ndarray, w: int, h: int) -> tuple[float, float] | None:
     sy = (lm[L_SHOULDER, 1] + lm[R_SHOULDER, 1]) / 2 * h
     hx = (lm[L_HIP, 0] + lm[R_HIP, 0]) / 2 * w
     hy = (lm[L_HIP, 1] + lm[R_HIP, 1]) / 2 * h
-    rise = hy - sy  # image y grows downward, so shoulders above hips gives a positive rise
+    rise = (
+        hy - sy
+    )  # image y grows downward, so shoulders above hips gives a positive rise
     if abs(sx - hx) + abs(rise) < 1e-6:
         return None
     return (math.degrees(math.atan2(abs(sx - hx), rise)) if rise > 0 else 90.0), conf
 
 
-def metric(name: str, lm: np.ndarray, w: int, h: int, side: str = "right") -> tuple[float, float] | None:
+def metric(
+    name: str, lm: np.ndarray, w: int, h: int, side: str = "right"
+) -> tuple[float, float] | None:
     """Value and confidence of a pack metric on one frame, or None when it can't be seen.
 
     Side-less names resolve like this: elbow and shoulder use the active arm,
@@ -97,10 +101,14 @@ def metric(name: str, lm: np.ndarray, w: int, h: int, side: str = "right") -> tu
     elif name == "active_knee_angle":
         name = f"{side}_knee_angle"
     elif name in ("knee_angle", "hip_angle", "ankle_angle"):
-        found = [r for r in (_joint(lm, f"{s}_{name}", w, h) for s in ("left", "right")) if r]
+        found = [
+            r for r in (_joint(lm, f"{s}_{name}", w, h) for s in ("left", "right")) if r
+        ]
         if not found:
             return None
-        return float(np.mean([r[0] for r in found])), float(np.mean([r[1] for r in found]))
+        return float(np.mean([r[0] for r in found])), float(
+            np.mean([r[1] for r in found])
+        )
     return _joint(lm, name, w, h) if name in JOINTS else None
 
 
@@ -149,7 +157,10 @@ def classify_angle(lm: np.ndarray, w: int, h: int) -> str | None:
         conf = float(min(lm[i, 3] for i in ids))
         if not conf >= MIN_VISIBILITY:
             return None
-        pts[name] = ((lm[ids[0], 0] + lm[ids[1], 0]) / 2 * w, (lm[ids[0], 1] + lm[ids[1], 1]) / 2 * h)
+        pts[name] = (
+            (lm[ids[0], 0] + lm[ids[1], 0]) / 2 * w,
+            (lm[ids[0], 1] + lm[ids[1], 1]) / 2 * h,
+        )
     lateral = abs(pts["shoulder"][0] - pts["hip"][0])
     forward = abs(pts["shoulder"][1] - pts["hip"][1])
     if lateral < 1e-6 and forward < 1e-6:

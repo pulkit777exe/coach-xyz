@@ -73,7 +73,9 @@ class S3(Local):
 
         s = config.settings
         self.bucket = s.s3_bucket
-        self.client = boto3.client("s3", region_name=s.s3_region or None, endpoint_url=s.s3_endpoint or None)
+        self.client = boto3.client(
+            "s3", region_name=s.s3_region or None, endpoint_url=s.s3_endpoint or None
+        )
 
     def put(self, key: str, src: str) -> None:
         self.client.upload_file(src, self.bucket, key)
@@ -82,7 +84,7 @@ class S3(Local):
         try:
             self.client.head_object(Bucket=self.bucket, Key=key)
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     def delete(self, key: str) -> None:
@@ -95,7 +97,7 @@ class S3(Local):
 
     @contextlib.contextmanager
     def local_copy(self, key: str):
-        tmp = tempfile.NamedTemporaryFile(suffix=Path(key).suffix, delete=False)
+        tmp = tempfile.NamedTemporaryFile(suffix=Path(key).suffix, delete=False)  # noqa: SIM115
         tmp.close()
         try:
             self.client.download_file(self.bucket, key, tmp.name)
@@ -111,8 +113,13 @@ class S3(Local):
 
     def upload_slot(self, key: str, mime: str) -> dict:
         post = self.client.generate_presigned_post(
-            Bucket=self.bucket, Key=key, Fields={"Content-Type": mime},
-            Conditions=[["content-length-range", 1, config.settings.max_upload_bytes], {"Content-Type": mime}],
+            Bucket=self.bucket,
+            Key=key,
+            Fields={"Content-Type": mime},
+            Conditions=[
+                ["content-length-range", 1, config.settings.max_upload_bytes],
+                {"Content-Type": mime},
+            ],
             ExpiresIn=3600,
         )
         return {"mode": "presigned", "url": post["url"], "fields": post["fields"]}

@@ -32,59 +32,69 @@ def legacy_summary(result: dict) -> dict:
         matchup = event.get("matchup")
         if matchup:
             matchup = {k: v for k, v in matchup.items() if k != "frames"}
-        shots.append({
-            "timestamp": event["t"],
-            "event_type": event["type"],
-            "form_score": event["score"],
-            "feedback": event["feedback"],
-            "result": event["result"],
-            "event_state": event.get("event_state"),
-            "confirmed": event.get("confirmed"),
-            "key_observation": event["feedback"],
-            "confidence": event["confidence"],
-            "coverage": event["coverage"],
-            "metrics": event.get("metrics", []),
-            "tags": event.get("tags", []),
-            "pressure": event.get("pressure"),
-            "matchup": matchup,
-            "form_breakdown": {
-                m["key"]: "good" if m["score"] >= 0.85 else "needs_work" if m["score"] >= 0.5 else "poor"
-                for m in measured
-            },
-            "biomechanics": {
-                "joint_angles": {m["metric"]: m["value"] for m in event["measurements"] if m["value"] is not None},
+        shots.append(
+            {
+                "timestamp": event["t"],
+                "event_type": event["type"],
+                "form_score": event["score"],
+                "feedback": event["feedback"],
+                "result": event["result"],
+                "event_state": event.get("event_state"),
+                "confirmed": event.get("confirmed"),
+                "key_observation": event["feedback"],
                 "confidence": event["confidence"],
-                "measured_at_timestamp": event["t"],
-            },
-            "weighted_scoring": {
-                "composite_score": event["score"],
                 "coverage": event["coverage"],
-                "weighted_rationale": event["feedback"],
-                "criteria": [
-                    {
-                        "criterion_id": m.get("criterion_id") or m["key"],
-                        "criterion": m["key"],
-                        "label": m["label"],
-                        "measured_value": m["value"],
-                        "unit": m["unit"],
-                        "ideal_range": m["ideal"],
-                        "acceptable_range": m["acceptable"],
-                        "score": m["score"],
-                        "weight": m["weight"],
-                        "source": m["source"],
-                        "state": m.get("state"),
-                        "evidence_type": m.get("evidence_type"),
-                        "validation_status": m.get("validation_status"),
-                        "measurement_type": m.get("measurement_type"),
-                        "calibration": m.get("calibration"),
-                        "source_frames": m.get("source_frames") or [],
-                        "rationale": m["note"],
-                    }
-                    for m in event["measurements"]
-                ],
-            },
-            "injury_risk": None,
-        })
+                "metrics": event.get("metrics", []),
+                "tags": event.get("tags", []),
+                "pressure": event.get("pressure"),
+                "matchup": matchup,
+                "form_breakdown": {
+                    m["key"]: "good"
+                    if m["score"] >= 0.85
+                    else "needs_work"
+                    if m["score"] >= 0.5
+                    else "poor"
+                    for m in measured
+                },
+                "biomechanics": {
+                    "joint_angles": {
+                        m["metric"]: m["value"]
+                        for m in event["measurements"]
+                        if m["value"] is not None
+                    },
+                    "confidence": event["confidence"],
+                    "measured_at_timestamp": event["t"],
+                },
+                "weighted_scoring": {
+                    "composite_score": event["score"],
+                    "coverage": event["coverage"],
+                    "weighted_rationale": event["feedback"],
+                    "criteria": [
+                        {
+                            "criterion_id": m.get("criterion_id") or m["key"],
+                            "criterion": m["key"],
+                            "label": m["label"],
+                            "measured_value": m["value"],
+                            "unit": m["unit"],
+                            "ideal_range": m["ideal"],
+                            "acceptable_range": m["acceptable"],
+                            "score": m["score"],
+                            "weight": m["weight"],
+                            "source": m["source"],
+                            "state": m.get("state"),
+                            "evidence_type": m.get("evidence_type"),
+                            "validation_status": m.get("validation_status"),
+                            "measurement_type": m.get("measurement_type"),
+                            "calibration": m.get("calibration"),
+                            "source_frames": m.get("source_frames") or [],
+                            "rationale": m["note"],
+                        }
+                        for m in event["measurements"]
+                    ],
+                },
+                "injury_risk": None,
+            }
+        )
     return {
         "sport": result["sport"],
         "action_id": result.get("action_id"),
@@ -167,7 +177,12 @@ async def analyze(request: Request):
             return JSONResponse(job["error"], status_code=500)
         if job["state"] == "cancelled":
             return JSONResponse(
-                {"code": "CANCELLED", "message": "Job cancelled.", "layer": "engine", "retryable": False},
+                {
+                    "code": "CANCELLED",
+                    "message": "Job cancelled.",
+                    "layer": "engine",
+                    "retryable": False,
+                },
                 status_code=409,
             )
         await asyncio.sleep(0.5)
@@ -189,8 +204,12 @@ def status(job_id: str):
         "stage_name": name,
         "progress": pct,
         "complete": job["state"] in ("completed", "failed", "cancelled"),
-        "summary": legacy_summary(jobs.load_result(job_id)) if job["state"] == "completed" else None,
-        "video_ready": storage.backend().exists(storage.result_key(job_id, "analysis.mp4")),
+        "summary": legacy_summary(jobs.load_result(job_id))
+        if job["state"] == "completed"
+        else None,
+        "video_ready": storage.backend().exists(
+            storage.result_key(job_id, "analysis.mp4")
+        ),
         "error": err["message"] if err else None,
         "error_code": err["code"] if err else None,
         "retryable": err["retryable"] if err else True,

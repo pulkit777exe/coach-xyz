@@ -73,7 +73,7 @@ def load() -> Settings:
         # is explicitly invoked (avoids failures when .env is not yet available).
         try:
             load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-        except Exception:
+        except Exception:  # noqa: S110, BLE001
             pass
     data_dir = Path(_env("DATA_DIR", "./data"))
     if not data_dir.is_absolute():

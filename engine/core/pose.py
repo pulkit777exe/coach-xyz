@@ -42,8 +42,12 @@ def ensure_model() -> Path:
                     f.write(chunk)
         os.replace(tmp, path)
     except Exception as exc:
-        raise EngineError("POSE_MODEL_MISSING", "Pose model is not available on the engine.",
-                          retryable=True, status=503) from exc
+        raise EngineError(
+            "POSE_MODEL_MISSING",
+            "Pose model is not available on the engine.",
+            retryable=True,
+            status=503,
+        ) from exc
     return path
 
 
@@ -51,19 +55,25 @@ class Pose:
     def __init__(self) -> None:
         import mediapipe as mp
         from mediapipe.tasks.python import BaseOptions
-        from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+        from mediapipe.tasks.python.vision import (
+            PoseLandmarker,
+            PoseLandmarkerOptions,
+            RunningMode,
+        )
 
         self._mp = mp
         path = str(ensure_model())
 
         def make(people: int):
-            return PoseLandmarker.create_from_options(PoseLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=path),
-                running_mode=RunningMode.IMAGE,
-                num_poses=people,
-                min_pose_detection_confidence=0.5,
-                min_pose_presence_confidence=0.5,
-            ))
+            return PoseLandmarker.create_from_options(
+                PoseLandmarkerOptions(
+                    base_options=BaseOptions(model_asset_path=path),
+                    running_mode=RunningMode.IMAGE,
+                    num_poses=people,
+                    min_pose_detection_confidence=0.5,
+                    min_pose_presence_confidence=0.5,
+                )
+            )
 
         self._make = make
         self._landmarkers: dict[int, object] = {}
@@ -73,7 +83,9 @@ class Pose:
         if landmarker is None:
             landmarker = self._landmarkers[max_people] = self._make(max_people)
         rgb = np.ascontiguousarray(bgr[:, :, ::-1])
-        result = landmarker.detect(self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb))
+        result = landmarker.detect(
+            self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
+        )
         return [
             np.array([[p.x, p.y, p.z, p.visibility] for p in person], dtype=np.float32)
             for person in result.pose_landmarks

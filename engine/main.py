@@ -14,9 +14,8 @@ from fastapi.responses import JSONResponse
 
 from core import config, db, events, jobs, pose, sessions
 from core.errors import EngineError
-from routes import chat, scan
+from routes import chat, legacy, scan
 from routes import jobs as job_routes
-from routes import legacy
 
 log = logging.getLogger("engine")
 STARTED = time.time()
@@ -24,8 +23,12 @@ STARTED = time.time()
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        entry = {"ts": round(record.created, 3), "level": record.levelname, "logger": record.name,
-                 "message": record.getMessage()}
+        entry = {
+            "ts": round(record.created, 3),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
         if record.exc_info:
             entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(entry)
@@ -53,26 +56,40 @@ async def maintenance() -> None:
 async def lifespan(app: FastAPI):
     try:
         import static_ffmpeg
+
         static_ffmpeg.add_paths()
-    except Exception:
+    except Exception:  # noqa: S110, BLE001
         pass
     s = config.settings
     setup_logging()
     if s.production and not s.service_token:
-        raise RuntimeError("ENVIRONMENT=production requires SERVICE_TOKEN; refusing to start unauthenticated.")
+        raise RuntimeError(
+            "ENVIRONMENT=production requires SERVICE_TOKEN; refusing to start unauthenticated."
+        )
     if s.production and "*" in s.cors_origins:
-        raise RuntimeError("ENVIRONMENT=production forbids wildcard CORS origins; set SERVER_URL explicitly.")
+        raise RuntimeError(
+            "ENVIRONMENT=production forbids wildcard CORS origins; set SERVER_URL explicitly."
+        )
     if s.sentry_dsn:
         import sentry_sdk
 
-        sentry_sdk.init(dsn=s.sentry_dsn, environment=s.env, release=f"engine@{config.ENGINE_VERSION}")
+        sentry_sdk.init(
+            dsn=s.sentry_dsn,
+            environment=s.env,
+            release=f"engine@{config.ENGINE_VERSION}",
+        )
     db.conn()
     dispatcher = events.Dispatcher()
     dispatcher.start()
     resumed = jobs.recover()
     sweeper = asyncio.create_task(maintenance())
-    log.info("engine %s ready (storage=%s, workers=%s, resumed=%s)", config.ENGINE_VERSION, s.storage_backend,
-             s.workers, resumed)
+    log.info(
+        "engine %s ready (storage=%s, workers=%s, resumed=%s)",
+        config.ENGINE_VERSION,
+        s.storage_backend,
+        s.workers,
+        resumed,
+    )
     yield
     sweeper.cancel()
     dispatcher.stop()
@@ -89,17 +106,38 @@ app = FastAPI(
     redoc_url=None if config.settings.production else "/redoc",
     openapi_url=None if config.settings.production else "/openapi.json",
 )
-app.add_middleware(CORSMiddleware, allow_origins=list(config.settings.cors_origins), allow_credentials=True,
-                   allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["x-service-token", "x-verified-auth0-id", "x-request-id", "content-type", "authorization"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(config.settings.cors_origins),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=[
+        "x-service-token",
+        "x-verified-auth0-id",
+        "x-request-id",
+        "content-type",
+        "authorization",
+    ],
+)
 
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
     token = config.settings.service_token
-    if token and request.url.path != "/health":
-        if not hmac.compare_digest(request.headers.get("x-service-token", ""), token):
-            return JSONResponse({"code": "FORBIDDEN", "message": "Invalid service credentials", "layer": "engine",
-                                 "retryable": False}, status_code=403)
+    if (
+        token
+        and request.url.path != "/health"
+        and not hmac.compare_digest(request.headers.get("x-service-token", ""), token)
+    ):
+        return JSONResponse(
+            {
+                "code": "FORBIDDEN",
+                "message": "Invalid service credentials",
+                "layer": "engine",
+                "retryable": False,
+            },
+            status_code=403,
+        )
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
     began = time.perf_counter()
     response = await call_next(request)
@@ -107,10 +145,14 @@ async def guard(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Cache-Control"] = response.headers.get("Cache-Control", "no-store")
+    response.headers["Cache-Control"] = response.headers.get(
+        "Cache-Control", "no-store"
+    )
     took = (time.perf_counter() - began) * 1000
     response.headers["X-Response-Time"] = f"{took:.0f}ms"
-    if took > 2000 and "text/event-stream" not in response.headers.get("content-type", ""):
+    if took > 2000 and "text/event-stream" not in response.headers.get(
+        "content-type", ""
+    ):
         log.warning("slow request %s %s %.0fms", request.method, request.url.path, took)
     return response
 
@@ -122,32 +164,54 @@ async def engine_error(_, exc: EngineError):
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(_, exc: RequestValidationError):
-    return JSONResponse({"code": "INVALID_REQUEST", "message": "Invalid request format.", "layer": "engine",
-                         "retryable": False}, status_code=400)
+    return JSONResponse(
+        {
+            "code": "INVALID_REQUEST",
+            "message": "Invalid request format.",
+            "layer": "engine",
+            "retryable": False,
+        },
+        status_code=400,
+    )
 
 
 @app.exception_handler(Exception)
 async def unexpected(_, exc: Exception):
     log.exception("unhandled error")
-    return JSONResponse({"code": "INTERNAL_ERROR", "message": "An unexpected error occurred.", "layer": "engine",
-                         "retryable": True}, status_code=500)
+    return JSONResponse(
+        {
+            "code": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred.",
+            "layer": "engine",
+            "retryable": True,
+        },
+        status_code=500,
+    )
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "uptime": round(time.time() - STARTED, 1), "version": config.ENGINE_VERSION}
+    return {
+        "status": "ok",
+        "uptime": round(time.time() - STARTED, 1),
+        "version": config.ENGINE_VERSION,
+    }
 
 
 @app.get("/health/deep")
 def health_deep():
     from core import llm
 
-    pending = db.one("SELECT COUNT(*) AS n FROM jobs WHERE state IN ('queued','running')")["n"]
+    pending = db.one(
+        "SELECT COUNT(*) AS n FROM jobs WHERE state IN ('queued','running')"
+    )["n"]
     return {
         "status": "ok",
         "pose_model": pose.model_path().is_file(),
         "gemini_key": bool(config.settings.gemini_key),
-        "gemini_models_blocked": sorted(m for m, until in llm._blocked.items() if until > time.monotonic()),
+        "gemini_models_blocked": sorted(
+            m for m, until in llm._blocked.items() if until > time.monotonic()
+        ),
         "jobs_active": pending,
         "workers": config.settings.workers,
         "storage": config.settings.storage_backend,
