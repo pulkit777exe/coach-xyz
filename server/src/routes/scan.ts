@@ -17,7 +17,7 @@ import { registerVideo, updateVideoProbe } from '../lib/registry'
 import { listMembershipsForUser } from '../lib/orgMembers'
 import { MAX_FILE_SIZE_BYTES } from '../types'
 import type { ScanResult } from '../types'
-import { resolveJobCaller, verifyJobAccess } from '../lib/jobAccess'
+import { verifyJobAccess } from '../lib/jobAccess'
 import { getJobBySessionToken } from '../lib/jobs'
 
 /** Bound on simultaneous /scan-video uploads (see acquireUploadSlot). */

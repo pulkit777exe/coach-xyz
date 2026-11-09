@@ -36,7 +36,6 @@ import {
   pruneOldAnalyses,
   runAiReportProcessor,
   runAnalysisProcessor,
-  shutdownInOrder,
   startSweeps,
   UnrecoverableError,
 } from './workerJobs'
@@ -51,7 +50,7 @@ import {
   reclaimStuckJobs,
   retryDelayMs,
 } from './serverJobsStore'
-import type { AiReportPayload, AnalysisPayload, Closable } from './workerJobs'
+import type { AiReportPayload, AnalysisPayload } from './workerJobs'
 
 export * from './workerJobs'
 

@@ -154,9 +154,9 @@ describe('SSE event formatting', () => {
     'createNotification inserts a row and returns it',
     async () => {
       const { createNotification, unreadCount } = await import('../src/lib/notifications')
-      const { ensureNotificationsInitialized } = await import('../src/lib/notifications')
+      const { ensureInitialized } = await import('../src/lib/historyStore')
 
-      await ensureNotificationsInitialized()
+      await ensureInitialized()
 
       const row = await createNotification({
         auth0Id: 'test-notif-integration',
