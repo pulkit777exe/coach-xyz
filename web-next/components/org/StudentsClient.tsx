@@ -2,12 +2,9 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { UploadIcon } from 'lucide-react'
 
 import { Button } from '@/components/9ui/ui/button'
-import { Label } from '@/components/9ui/ui/label'
-import { Textarea } from '@/components/9ui/ui/textarea'
-import { downloadCSV, parseCSV } from '@/lib/csv'
+import { downloadCSV } from '@/lib/csv'
 import {
   Dialog,
   DialogContent,
@@ -29,12 +26,6 @@ import type { Student } from '@/lib/org/types'
 import { orgDeleteStudent, orgUpdateStudent, orgStudents } from '@/lib/org/students'
 import { toISODate } from '@/lib/date'
 import type { CoachAIError } from '@/lib/data/errors'
-
-const STATUS_STYLE: Record<string, string> = {
-  active: 'bg-success/15 text-success',
-  inactive: 'bg-warning/15 text-warning',
-  transferred: 'bg-muted text-muted-foreground',
-}
 
 /**
  * Apply a bulk status change, honouring what the server actually accepted.
@@ -366,7 +357,6 @@ const [showArchived, setShowArchived] = useState(false)
         sportsForForm={sportsForForm}
         teams={teams}
         filteredLength={filtered.length}
-        studentsLength={students.length}
         showArchived={showArchived}
         onToggleArchived={toggleArchived}
         onExport={exportCSV}

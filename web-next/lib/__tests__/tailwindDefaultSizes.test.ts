@@ -82,7 +82,7 @@ const sourceFiles = (dir: string): string[] => {
 
 const firstParty = ['app', 'components']
   .flatMap(sourceFiles)
-  .filter((f) => !/(^|\/)(9ui|interior)\//.test(f) && !f.includes('/(site)/'))
+  .filter((f) => !/(^|\/)(9ui|interior)\//.test(f))
 
 describe('no component spells a documented size as a Tailwind default', () => {
   test("the mapping reproduces Tailwind's own font-size AND line-height", () => {

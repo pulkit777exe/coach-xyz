@@ -24,7 +24,6 @@ export function StudentsFilters({
   sportsForForm,
   teams,
   filteredLength,
-  studentsLength,
   showArchived,
   onToggleArchived,
   onExport,
@@ -45,7 +44,6 @@ export function StudentsFilters({
   sportsForForm: string[]
   teams: { id: string; name: string }[]
   filteredLength: number
-  studentsLength: number
   showArchived: boolean
   onToggleArchived: () => void
   onExport: () => void

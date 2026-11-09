@@ -10,9 +10,6 @@ import {
   TrashIcon,
   LinkIcon,
   UnlinkIcon,
-  MailIcon,
-  PhoneIcon,
-  CalendarIcon,
   FileTextIcon,
 } from 'lucide-react'
 import { Button } from '@/components/9ui/ui/button'
@@ -25,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/9ui/ui/select'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/9ui/ui/avatar'
 import { Skeleton } from '@/components/9ui/ui/skeleton'
 import dynamic from 'next/dynamic'
 import {
@@ -63,13 +59,6 @@ import { formatDateLong, formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/org/types'
 import { capitalize } from '@/lib/utils'
-import { initials } from '@/lib/initials'
-
-const STATUS_STYLE: Record<string, string> = {
-  active: 'bg-success/15 text-success',
-  inactive: 'bg-warning/15 text-warning',
-  transferred: 'bg-muted text-muted-foreground',
-}
 
 const PerformanceChart = dynamic(() => import('./PerformanceChart'), {
   ssr: false,
