@@ -1,0 +1,37 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+      - id: mixed-line-ending
+  - repo: local
+    hooks:
+      - id: no-hardcoded-secrets
+        name: Check for hardcoded secrets
+        entry: |
+          grep -rn --include='*.ts' --include='*.py' --include='*.md' --include='*.json' --include='*.yaml' --include='*.yml' 'password\s*=' . | grep -v 'FALLBACK_MESSAGES' | head -5
+          exit 1
+        language: script
+        always_run: true
+  - repo: local
+    hooks:
+      - id: check-secrets
+        name: Check for secrets in config
+        entry: |
+          grep -rn --include='*.env' 'SECRET' . | grep -v '^#' | head -5
+          exit 1
+        language: script
+        always_run: true
+  - repo: local
+    hooks:
+      - id: run-jscpd
+        name: Detect code duplication
+        entry: jscpd --min-tokens 50 --max-lines 200 engine/core server/src
+        language: python
+        always_run: true
+        stages: [commit]
