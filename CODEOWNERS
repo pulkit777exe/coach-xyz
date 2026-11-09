@@ -1,0 +1,23 @@
+# Code Owners
+
+@org/server-maintainers owns:
+- server/src/
+- server/tests/
+- server/.env.example
+
+@org/engine-maintainers owns:
+- engine/core/
+- engine/tests/
+- engine/requirements.txt
+
+@org/docs-maintainers owns:
+- README.md
+- CODEOWNERS
+- CONTRIBUTING.md
+- CHANGELOG.md
+- SECURITY.md
+
+@org/community-maintainers owns:
+- .github/
+- onboarding.sh
+- Makefile
