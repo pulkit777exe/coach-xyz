@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import logging
 import os
-import re
 import tempfile
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
@@ -10,11 +9,18 @@ from fastapi.responses import JSONResponse
 
 from core import config, events, sessions, sports, storage, video
 from core.errors import EngineError, invalid
-from core.scan_service import run_scan, stream_name
+from core.scan_service import (
+    RAW_KEY,
+    build_upload_intent,
+    resolve_scan_session,
+    run_scan,
+    stream_name,
+    validate_scan_storage_key,
+)
 
 router = APIRouter()
 log = logging.getLogger("engine.scan")
-KEY = re.compile(r"^raw/[A-Za-z0-9_@.|-]+/[a-z0-9_-]+/[a-f0-9]{32}\.mp4$")
+KEY = RAW_KEY
 CHUNK = 8 << 20
 
 
@@ -31,8 +37,7 @@ async def scan(
     session_token: str | None = Form(default=None),
     angle: str | None = Form(default=None),
 ):
-    label = sessions.angle_label(angle)
-    token = session_token if sessions.get(session_token) else sessions.new_token()
+    token, label = resolve_scan_session(session_token, angle)
     key = storage.raw_key(token, label)
     limit = config.settings.max_upload_bytes
     fd, tmp = tempfile.mkstemp(suffix=".mp4")
@@ -72,49 +77,21 @@ async def scan(
 @router.post("/upload-intent")
 async def upload_intent(request: Request):
     body = await request.json()
-    mime, name = body.get("mime_type"), body.get("filename")
-    if not isinstance(name, str) or not name.strip() or len(name) > 255:
-        raise invalid("filename (<=255 chars) required")
-    if not isinstance(mime, str) or not mime.startswith("video/"):
-        raise EngineError("INVALID_FILE_TYPE", "Please upload a video file.")
-    try:
-        size = int(body.get("size_bytes"))
-    except (TypeError, ValueError):
-        raise invalid("size_bytes (integer) required") from None
-    limit = config.settings.max_upload_bytes
-    if not 1 <= size <= limit:
-        raise EngineError(
-            "FILE_TOO_LARGE",
-            f"File must be between 1 byte and {limit // (1 << 20)}MB.",
-            status=413,
-        )
-    label = sessions.angle_label(body.get("angle"))
-    token = (
-        body.get("session_token")
-        if sessions.get(body.get("session_token"))
-        else sessions.new_token()
+    return build_upload_intent(
+        mime_type=body.get("mime_type"),
+        filename=body.get("filename"),
+        size_bytes=body.get("size_bytes"),
+        session_token=body.get("session_token"),
+        angle=body.get("angle"),
+        max_upload_bytes=config.settings.max_upload_bytes,
     )
-    key = storage.raw_key(token, label)
-    return {
-        "key": key,
-        "session_token": token,
-        "angle": label,
-        "upload": storage.backend().upload_slot(key, mime),
-    }
 
 
 @router.post("/scan-from-key")
 async def scan_from_key(request: Request):
     body = await request.json()
-    key = body.get("storage_key")
-    if not isinstance(key, str) or not KEY.match(key):
-        raise invalid("storage_key must be an upload-intent key")
-    label = sessions.angle_label(body.get("angle"))
-    token = (
-        body.get("session_token")
-        if sessions.get(body.get("session_token"))
-        else sessions.new_token()
-    )
+    key = validate_scan_storage_key(body.get("storage_key"))
+    token, label = resolve_scan_session(body.get("session_token"), body.get("angle"))
     store = storage.backend()
     try:
         with store.local_copy(key) as path:
