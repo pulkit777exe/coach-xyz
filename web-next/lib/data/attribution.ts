@@ -1,5 +1,4 @@
-import { queryJson } from './client'
-import { meUrl } from './transport'
+import { mintAttribution } from '../meApi'
 
 // ── Attribution tokens ───────────────────────────────────────────────────────
 // Short-lived tokens binding the verified session sub, sent as `x-attribution`
@@ -18,8 +17,7 @@ export type AttributionDeps = {
 }
 
 export function createAttributionStore(deps: AttributionDeps = {}) {
-  const fetchMint =
-    deps.fetchMint ?? (() => queryJson<AttributionMint>(meUrl('/attribution/mint')))
+  const fetchMint = deps.fetchMint ?? (() => mintAttribution())
   const now = deps.now ?? (() => Date.now())
   let cache: AttributionMint | null = null
 

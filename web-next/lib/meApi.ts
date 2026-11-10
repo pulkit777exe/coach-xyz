@@ -1,6 +1,6 @@
 import type { UserRecord } from './user'
 import type { OrgMemberRole } from './members'
-import { mutateJson, queryJson } from './data/client'
+import { mutateJson, postJob, queryJson } from './data/client'
 import { meUrl } from './data/transport'
 import type { AttendanceWithStudent, AttendanceSummary, PerformanceSeriesPoint, ReportRecord, ScheduleEvent, Student } from './org/types'
 
@@ -153,12 +153,16 @@ export type MeAnalyzeInput = {
 }
 
 export async function startMyAnalysis(params: MeAnalyzeInput): Promise<{ job_id: string }> {
-  return mutateJson<{ job_id: string }>(me('/analyze'), 'POST', {
-    session_token: params.session_token,
-    player_index: params.player_index ?? null,
-    video_key: params.video_key ?? null,
-    angle: params.angle ?? null,
-  })
+  return postJob(
+    meUrl('/analyze'),
+    {
+      session_token: params.session_token,
+      player_index: params.player_index ?? null,
+      video_key: params.video_key ?? null,
+      angle: params.angle ?? null,
+    },
+    { timeoutMs: 30_000 },
+  )
 }
 
 export async function getNotificationPrefs(): Promise<{ inApp: boolean }> {
