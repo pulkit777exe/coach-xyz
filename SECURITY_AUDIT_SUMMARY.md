@@ -5,6 +5,22 @@
 
 ---
 
+## Status update (2026-11-10)
+
+**This 2026-11-04 audit is historical.** The items below are verifiably resolved/changed in the current codebase (as of 2026-11-10); treat them as current status rather than open findings. Other findings/tables remain for historical context unless explicitly noted.
+
+- **Resolved — org route identity guard (S1/S2/S4/S5-type gaps):** org-scoped routes (including `attendance`, `billing`, `wellness`, `compete`, etc.) have `serviceGuard` applied.
+- **Resolved — engine ffprobe arg handling (E2):** `engine/core/video.py` `_ffprobe` no longer takes variadic `*args`.
+- **Resolved — history store init caching (M12):** `server/src/lib/historyStore.ts` `ensureInitialized` is cached via `initPromise` (runs once per process).
+- **Mitigated — engine CORS/methods (E4/M15 context):** engine CORS uses explicit methods and rejects wildcard origins in production.
+- **Resolved — engine dotenv loading (M8):** `load_dotenv` in engine config is inside `load()` (not at module import time).
+- **Partially addressed — regex/type centralization (M1):** UUID/`SESSION_TOKEN` regexes are centralized in `server/src/types/index.ts` on the server side.
+- **Resolved — stale route group:** `web-next/app/(site)` duplicate route group removed.
+- **Mitigated — secret hygiene/docs:** `SERVICE_TOKEN` warnings strengthened in `server/.env.example` and `web-next/.env.example`; `.env` is gitignored.
+- **Restored:** security audit docs restored/maintained in-repo.
+
+---
+
 ## TABLE OF CONTENTS
 
 1. [Server (Bun/Elysia) Security Audit](#server-bunelysia-security-audit)
@@ -77,7 +93,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 
 | # | Severity | File:Line | Issue | Impact | Fix |
 |---|----------|-----------|-------|--------|-----|
-| W6 | **MEDIUM** | `web-next/app/(site)/` directory | **Untracked user directory exists under `app/`** — the `a9e79c7` commit excluded it from scan paths, but it may contain leftover/unused routes. | Unknown attack surface; may contain routing bugs | Audit contents; either integrate properly or remove |
+| W6 | **MEDIUM** | `web-next/app/(site)/` directory | **Untracked user directory exists under `app/`** — the `a9e79c7` commit excluded it from scan paths, but it may contain leftover/unused routes. | Unknown attack surface; may contain routing bugs | Audit contents; either integrate properly or remove *(status 2026-11-10: resolved — duplicate `app/(site)` route group removed)* |
 | W7 | **MEDIUM** | `web-next/lib/usePipeline.ts:56-61` | **Pipeline keeps server `/health` warm every 8 minutes** — keeps free-tier server awake but also means a compromised pipeline process keeps a server instance alive longer than necessary. | Extended server uptime after compromise | Add max-idle timeout or process termination on pipeline unmount; the 8-min ping is a keep-alive, not a security control |
 | W8 | **MEDIUM** | `web-next/lib/attribution.ts` (if exists) or inline | **Attribution token mint `x-attribution` header sent by browser** — if this header is ever logged by a proxy/load balancer, the short-lived token could be harvested. | Token harvesting in transit | The token is 10-min TTL HMAC; the risk is low. Mitigate by ensuring no proxies log request headers indiscriminately. |
 
@@ -99,14 +115,14 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 | # | Severity | File:Line | Issue | Impact | Fix |
 |---|----------|-----------|-------|--------|-----|
 | E1 | **CRITICAL** | `engine/core/video.py:85` | **`FFmpegWriter.__init__` passes `audio_from` path to ffmpeg `-i` flag** — if `audio_from` is user-controlled and contains shell metacharacters, command injection is possible. The `subprocess.Popen(cmd, ...)` uses a list (no `shell=True`), so direct injection is prevented, BUT if `audio_from` path contains spaces or the path is constructed from user input without sanitization, ffmpeg may still error or behave unexpectedly. | Potential ffmpeg errors/crashes; indirect DoS | Validate `audio_from` is a safe file path; never construct from unsanitized user input |
-| E2 | **CRITICAL** | `engine/core/video.py:45-48` | **`_ffprobe` passes `*args` to ffprobe command list** — variadic args are appended directly. If any caller passes user-controlled args, ffprobe flag injection could occur. The function is called internally with hardcoded args, but the variadic signature is a footgun. | Flag injection → command injection if caller-controlled | Remove `*args` parameter; hardcode all ffprobe flags; or validate args against a strict allowlist |
+| E2 | **CRITICAL** | `engine/core/video.py:45-48` | **`_ffprobe` passes `*args` to ffprobe command list** — variadic args are appended directly. If any caller passes user-controlled args, ffprobe flag injection could occur. The function is called internally with hardcoded args, but the variadic signature is a footgun. | Flag injection → command injection if caller-controlled | Remove `*args` parameter; hardcode all ffprobe flags; or validate args against a strict allowlist *(status 2026-11-10: resolved — variadic `*args` removed; flags hardcoded)* |
 | E3 | **HIGH** | `engine/core/storage.py` (not fully read) | **S3 backend path construction** — need to verify S3 key sanitization prevents bucket-name injection or path traversal. | S3 key-based data exfiltration / leakage | Verify s3 key is validated against `^[a-zA-Z0-9._-]+$` before use |
 
 ### HIGH FINDINGS
 
 | # | Severity | File:Line | Issue | Impact | Fix |
 |---|----------|-----------|-------|--------|-----|
-| E4 | **HIGH** | `engine/main.py:52-55` | **Engine CORS allows `config.settings.cors_origins`** — origins are read from `SERVER_URL` env var. If misconfigured, allows cross-origin requests from arbitrary domains. | Cross-origin data exfiltration / credential leakage | Pin exact origins in production; avoid wildcard `*` |
+| E4 | **HIGH** | `engine/main.py:52-55` | **Engine CORS allows `config.settings.cors_origins`** — origins are read from `SERVER_URL` env var. If misconfigured, allows cross-origin requests from arbitrary domains. | Cross-origin data exfiltration / credential leakage | Pin exact origins in production; avoid wildcard `*` *(status 2026-11-10: mitigated — explicit methods; wildcard origins rejected in production)* |
 | E5 | **HIGH** | `engine/main.py:67-78` | **Engine middleware checks `x-service-token` only for non-health paths** — the health endpoint `/health` is guard-exempt. If the health endpoint leaks session info or status, it aids reconnaissance. | Reconnaissances aids attacks | Add minimal rate limiting on `/health`; consider adding basic auth or IP allowlist |
 | E6 | **HIGH** | `engine/core/sessions.py` | **In-memory session store with max 10 sessions, TTL 2h** — no persistent fallback; if Redis is down, sessions are lost. Not directly a security issue but causes availability problems. | Availability degradation | Add graceful degradation path; sessions should survive Redis outages with persisted metadata |
 
@@ -135,7 +151,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 
 | # | Severity | File/Module | Issue | Impact | Fix |
 |---|----------|-------------|-------|--------|-----|
-| M1 | **CRITICAL** | `server/src/lib/` **25+ files** | **Duplicated validation logic** — `UUID_PARAM_RE` defined in `auth.ts`, `SESSION_TOKEN_RE` defined in `me.ts`, `OrgMemberRole` type defined in `orgMembers.ts` and mirrored in `web-next/lib/org.ts` (or via barrel). Each route re-declares its own regex. | Maintenance burden; risk of inconsistency | Consolidate into shared types; import from a single source |
+| M1 | **CRITICAL** | `server/src/lib/` **25+ files** | **Duplicated validation logic** — `UUID_PARAM_RE` defined in `auth.ts`, `SESSION_TOKEN_RE` defined in `me.ts`, `OrgMemberRole` type defined in `orgMembers.ts` and mirrored in `web-next/lib/org.ts` (or via barrel). Each route re-declares its own regex. | Maintenance burden; risk of inconsistency | Consolidate into shared types; import from a single source *(status 2026-11-10: partially addressed — UUID/`SESSION_TOKEN` regexes centralized in `server/src/types/index.ts` on the server side)* |
 | M2 | **CRITICAL** | `server/src/lib/admission.ts` vs `server/src/routes/analyze.ts` | **Admission logic duplicated between lib and route** — the route thinly wraps `admitAnalysis`; the admission module handles rate/validate/quota/tier/persist/enqueue. The route just maps outcomes. The `withUserJob` wrapper in auth routes duplicates some of this pattern. | Risk of divergent behavior; double maintenance | Keep the thin-route pattern but ensure all outcome codes are documented and tested in one place |
 | M3 | **CRITICAL** | `web-next/lib/` **entity facade barrel** — `lib/org.ts`, `lib/scan.ts`, `lib/chat.ts`, `lib/user.ts` are re-export barrels over `lib/serverData.ts` or direct fetchers. Some are unused or overlap. | Indirection without value; import confusion | Audit each barrel; keep only actively used facades; delete unused ones |
 | M4 | **HIGH** | `server/src/lib/queue.ts` + `server/src/lib/workerLifecycle.ts` | **Two facades over BullMQ** — `queue.ts` exports `acquireUploadSlot`, `releaseUploadSlot`, `__resetUploadSlotsForTests` alongside the BullMQ enqueue API. The worker lifecycle is in `workerLifecycle.ts`. Two layers of abstraction over the same queue. | Confusion about where job management lives; risk of inconsistent state | Consolidate: either use `queue.ts` exports exclusively or `workerLifecycle.ts`; deprecate the redundant layer |
@@ -147,7 +163,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 | M5 | **HIGH** | `server/src/lib/orgData.ts` barrel + `server/src/lib/orgRoster.ts` + `orgAttendance.ts` + `orgReports.ts` + `orgObjectives.ts` | **Five sub-barrel modules** all re-exported via `orgData.ts` which is itself re-exported from `web-next/lib/org.ts`. Five files for org data that could be consolidated. | High cognitive load when looking up where a function lives; merge related modules | Merge `orgRoster.ts` + `orgAttendance.ts` into a single `orgStore.ts`; keep `orgReports.ts`/`orgObjectives.ts` as separate concerns but reduce the barrel depth |
 | M6 | **HIGH** | `web-next/lib/meApi.ts` vs `server/src/routes/me.ts` | **Mirrored API surfaces** — me route handlers in server and MeApiClient in web-next duplicate the same endpoint logic. Client fetcher vs server route. | Any endpoint change requires syncing both sides; 2-file maintenance | Generate client fetchers from server route definitions (openapi → typescript) or add strict e2e tests that sync them |
 | M7 | **MEDIUM** | `engine/core/` **15+ modules** | **Several core modules are thin wrappers or duplicates** — e.g., `engine/core/pipeline.py` orchestrator, `engine/core/sessions.py` session store, `engine/core/jobs.py` job store. Some overlap with `engine/routes/` which also have job/scan/chat logic. | Confusion about where state management lives; potential for divergent state | Audit which modules are actually imported; consolidate state logic into fewer modules with clear boundaries |
-| M8 | **MEDIUM** | `engine/core/config.py` + `engine/core/config.py` env loading | **`load_dotenv` called at module level** — if this file is imported before `.env` is set, settings will use defaults. The `load()` function is module-level. | Subtle config bugs in testing/deployment order | Move `load_dotenv` into `load()` function; or ensure it's called early in the process lifecycle |
+| M8 | **MEDIUM** | `engine/core/config.py` + `engine/core/config.py` env loading | **`load_dotenv` called at module level** — if this file is imported before `.env` is set, settings will use defaults. The `load()` function is module-level. | Subtle config bugs in testing/deployment order | Move `load_dotenv` into `load()` function; or ensure it's called early in the process lifecycle *(status 2026-11-10: resolved — `load_dotenv` is inside `load()`)* |
 
 ### MEDIUM FINDINGS
 
@@ -161,10 +177,10 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 
 | # | Severity | File/Module | Issue | Impact | Fix |
 |---|----------|-------------|-------|--------|-----|
-| M12 | **LOW** | `server/src/lib/` **many files** | **`ensureInitialized` in historyStore.ts runs DDL on every connection** — the function is idempotent but called on every DB operation through the `withHistoryStore` wrapper. | Slight performance overhead on every DB call; not critical | Cache the initialization state so `ensureInitialized` runs only once per process |
+| M12 | **LOW** | `server/src/lib/` **many files** | **`ensureInitialized` in historyStore.ts runs DDL on every connection** — the function is idempotent but called on every DB operation through the `withHistoryStore` wrapper. | Slight performance overhead on every DB call; not critical | Cache the initialization state so `ensureInitialized` runs only once per process *(status 2026-11-10: resolved — cached via `initPromise`)* |
 | M13 | **LOW** | `web-next/lib/` **various** | **`cn()` class helper in `utils.ts`** — simple utility, no issue but worth noting the pattern is consistent. | None | Keep as-is |
 | M14 | **LOW** | `engine/tests/` **28 files** | **pytest suite has 28 files with 286 tests** — some test files test modules that may not be used in production path (e.g., legacy routes). | Test suite bloat; slower CI | Review test relevance; the 5 live-infra timeout tests are expected to fail without Neon/Upstash — already documented |
-| M15 | **LOW** | `server/src/index.ts` | **CORS `allow_methods: ["*"]`** — allows all HTTP methods including potentially dangerous ones. | Theoretical attack surface | Restrict to needed methods: `GET, POST, PUT, PATCH, DELETE` |
+| M15 | **LOW** | `server/src/index.ts` | **CORS `allow_methods: ["*"]`** — allows all HTTP methods including potentially dangerous ones. | Theoretical attack surface | Restrict to needed methods: `GET, POST, PUT, PATCH, DELETE` *(status 2026-11-10: mitigated in engine CORS context — explicit methods used; wildcard rejected in production; verify server-specific config separately if needed)* |
 
 ---
 
@@ -172,17 +188,17 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
 
 ### Immediate (Critical — fix before production deploy)
 
-1. **S1/S2/S4/S5: Add `serviceGuard` to all org-scoped routes missing it**
+1. ~~**S1/S2/S4/S5: Add `serviceGuard` to all org-scoped routes missing it**~~ *(status 2026-11-10: resolved — org-scoped routes including attendance/billing/wellness/compete have `serviceGuard` applied)*
    - Routes: `org/attendance`, `org/billing`, `org/wellness`, `org/compete`
    - These allow cross-org data access if SERVICE_TOKEN is set, or unrestricted access if unset
    - **Estimated effort:** 30 min per route; 2 hours total
 
-2. **W1: Fix `SERVICE_TOKEN` exposure risk in proxy route**
+2. ~~**W1: Fix `SERVICE_TOKEN` exposure risk in proxy route**~~ *(status 2026-11-10: mitigated/documented — `SERVICE_TOKEN` warnings strengthened in `server/.env.example` and `web-next/.env.example`; `.env` gitignored. Continue to ensure token is never logged/exposed at runtime.)*
    - Ensure `SERVICE_TOKEN` is never logged or exposed in error messages
    - Add to `.env.example` with clear "never commit" warning
    - **Estimated effort:** 15 min
 
-3. **E2: Remove variadic `*args` from `_ffprobe` in engine/core/video.py**
+3. ~~**E2: Remove variadic `*args` from `_ffprobe` in engine/core/video.py**~~ *(status 2026-11-10: resolved)*
    - Prevent potential flag injection; hardcode all ffprobe flags
    - **Estimated effort:** 10 min
 
@@ -192,11 +208,11 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
    - Ensure all org-scoped operations use serviceGuard's full identity check, not just attribution token verification
    - **Estimated effort:** 20 min
 
-5. **W6: Audit and clean up `app/(site)/` directory**
+5. ~~**W6: Audit and clean up `app/(site)/` directory**~~ *(status 2026-11-10: resolved — duplicate `app/(site)` route group removed)*
    - Document intent or remove if unused
    - **Estimated effort:** 30 min
 
-6. **M1: Consolidate UUID/regex definitions into shared types**
+6. **M1: Consolidate UUID/regex definitions into shared types** *(status 2026-11-10: partially addressed — server-side UUID/`SESSION_TOKEN` regexes centralized in `server/src/types/index.ts`)*
    - Move `UUID_PARAM_RE`, `SESSION_TOKEN_RE` to a shared type file
    - **Estimated effort:** 30 min
 
@@ -204,7 +220,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
    - Consolidate `orgRoster.ts`, `orgAttendance.ts`, etc. into fewer files
    - **Estimated effort:** 2 hours
 
-8. **E4: Pin CORS origins in engine**
+8. ~~**E4: Pin CORS origins in engine**~~ *(status 2026-11-10: mitigated — explicit methods; wildcard origins rejected in production)*
    - Replace `allow_methods: ["*"]` with explicit methods
    - **Estimated effort:** 10 min
 
@@ -222,7 +238,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
     - Prevent token leakage in logs
     - **Estimated effort:** 20 min
 
-12. **M12: Cache `ensureInitialized` in historyStore**
+12. ~~**M12: Cache `ensureInitialized` in historyStore**~~ *(status 2026-11-10: resolved — cached via `initPromise`)*
     - Avoid repeated DDL on every connection
     - **Estimated effort:** 15 min
 
@@ -232,7 +248,7 @@ The server has a well-designed `serviceGuard` plugin that enforces service-to-se
     - Terminate idle pipeline processes sooner
     - **Estimated effort:** 20 min
 
-14. **E7: Move `load_dotenv` into `load()` function**
+14. ~~**E7: Move `load_dotenv` into `load()` function**~~ *(status 2026-11-10: resolved — `load_dotenv` is inside `load()` in engine config)*
     - Ensure clean config loading order
     - **Estimated effort:** 10 min
 

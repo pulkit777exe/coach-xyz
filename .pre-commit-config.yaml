@@ -13,25 +13,24 @@ repos:
     hooks:
       - id: no-hardcoded-secrets
         name: Check for hardcoded secrets
-        entry: |
-          grep -rn --include='*.ts' --include='*.py' --include='*.md' --include='*.json' --include='*.yaml' --include='*.yml' 'password\s*=' . | grep -v 'FALLBACK_MESSAGES' | head -5
-          exit 1
-        language: script
+        entry: bash -c 'matches=$(grep -rn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv --include="*.ts" --include="*.py" --include="*.md" --include="*.json" --include="*.yaml" --include="*.yml" -E "password[[:space:]]*=" . 2>/dev/null | grep -v "FALLBACK_MESSAGES" | head -5 || true); if [ -n "$matches" ]; then echo "Possible hardcoded secrets found:"; echo "$matches"; exit 1; fi'
+        language: system
+        pass_filenames: false
         always_run: true
   - repo: local
     hooks:
       - id: check-secrets
         name: Check for secrets in config
-        entry: |
-          grep -rn --include='*.env' 'SECRET' . | grep -v '^#' | head -5
-          exit 1
-        language: script
+        entry: bash -c 'files=$(git ls-files -- "*.env" "*.env.*" 2>/dev/null | grep -vE "\.example$|\.sample$|\.template$" || true); if [ -z "$files" ]; then exit 0; fi; matches=$(printf "%s\n" "$files" | xargs grep -nHE "SECRET[^=]*=[[:space:]]*[^[:space:]#]" 2>/dev/null | grep -vE "^[^:]*:[0-9]+:[[:space:]]*#" | head -5 || true); if [ -n "$matches" ]; then echo "Possible secrets found in tracked .env files:"; echo "$matches"; exit 1; fi'
+        language: system
+        pass_filenames: false
         always_run: true
   - repo: local
     hooks:
       - id: run-jscpd
         name: Detect code duplication
-        entry: jscpd --min-tokens 50 --max-lines 200 engine/core server/src
-        language: python
+        entry: bash -c 'if command -v jscpd >/dev/null 2>&1; then jscpd --min-tokens 50 --max-lines 200 engine/core server/src; else echo "jscpd not installed, skipping"; fi'
+        language: system
+        pass_filenames: false
         always_run: true
-        stages: [commit]
+        stages: [pre-commit]
