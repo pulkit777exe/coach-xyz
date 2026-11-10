@@ -133,6 +133,34 @@ export async function getMyReport(
   }>(me(`/reports/${encodeURIComponent(id)}`))
 }
 
+// ── Capability helpers (self-scoped) ────────────────────────────────────────
+// Low-level wrappers for /api/me endpoints used by browser-direct capability
+// flows. Higher-level flows (e.g. cached attribution minting, upload/analyze
+// orchestration) may live in dedicated modules; these keep the API surface
+// discoverable in one place.
+
+export type AttributionMint = { token: string; exp: number }
+
+export async function mintAttribution(): Promise<AttributionMint> {
+  return queryJson<AttributionMint>(me('/attribution/mint'))
+}
+
+export type MeAnalyzeInput = {
+  session_token: string | null
+  player_index?: number | null
+  video_key?: string | null
+  angle?: string | null
+}
+
+export async function startMyAnalysis(params: MeAnalyzeInput): Promise<{ job_id: string }> {
+  return mutateJson<{ job_id: string }>(me('/analyze'), 'POST', {
+    session_token: params.session_token,
+    player_index: params.player_index ?? null,
+    video_key: params.video_key ?? null,
+    angle: params.angle ?? null,
+  })
+}
+
 export async function getNotificationPrefs(): Promise<{ inApp: boolean }> {
   return { inApp: true }
 }
