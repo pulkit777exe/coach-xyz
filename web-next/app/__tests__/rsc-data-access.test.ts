@@ -61,9 +61,7 @@ const FETCHER_MODULES = [
   '@/lib/user',
   '@/lib/library',
   '@/lib/members',
-  '@/lib/org',
-  '@/lib/teams',
-  // Performs requests too, and is legitimately imported by the UNAUTHENTICATED
+  '@/lib/teams',  // Performs requests too, and is legitimately imported by the UNAUTHENTICATED
   // share page, which has no session to dedupe against (an exemption below). Watched
   // anyway: the exemption is per-IMPORT while the guard is per-MODULE, so keeping it
   // listed is what stops the share page becoming cover for a new violation elsewhere.

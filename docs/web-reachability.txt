@@ -1,15 +1,15 @@
 web-next source reachability from tests
 ========================================================================
-source files                     245
+source files                     244
 test files                       75
 
-statically imported by a test     179
+statically imported by a test     178
 loaded only by a generic sweep    5    (readdirSync enumeration, no import edge)
 touched by nothing at all         61
-  static import edge              73.1% of files
-  any loader at all (edge+sweep)  75.1% of files
+  static import edge              73.0% of files
+  any loader at all (edge+sweep)  75.0% of files
 
-lines in source                  34934
+lines in source                  34913
 lines in untouched files         4915  (14.1%)
 
 touched by nothing, by top-level directory

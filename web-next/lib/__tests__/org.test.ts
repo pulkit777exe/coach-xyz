@@ -5,16 +5,20 @@ import {
   EVENT_TYPES,
   REPORT_TYPES,
   STUDENT_STATUSES,
-  linkAnalysisToStudent,
+} from '../org/types'
+import {
   orgCreateStudent,
+  orgCompareStudents,
+  orgImportStudents,
+  orgStudents,
+  orgStudentTrends,
+} from '../org/students'
+import {
+  linkAnalysisToStudent,
   orgEmailAttendance,
   orgEmailReport,
   orgSendInvites,
-  orgStudents,
-  orgImportStudents,
-  orgStudentTrends,
-  orgCompareStudents,
-} from '../org'
+} from '../org/email'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
