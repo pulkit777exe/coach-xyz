@@ -8,9 +8,9 @@ from fastapi.responses import JSONResponse
 
 from core import jobs, storage
 from core.errors import invalid
+from core.job_params import JobRequest, build_params
 
 from .files import serve
-from .jobs import JobRequest, build_params
 
 router = APIRouter()
 
