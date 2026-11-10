@@ -5,12 +5,12 @@ import os
 import re
 import tempfile
 
-import cv2
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 
-from core import config, events, people, pipeline, sessions, sports, storage, video
+from core import config, events, sessions, sports, storage, video
 from core.errors import EngineError, invalid
+from core.scan_service import run_scan, stream_name
 
 router = APIRouter()
 log = logging.getLogger("engine.scan")
@@ -18,128 +18,11 @@ KEY = re.compile(r"^raw/[A-Za-z0-9_@.|-]+/[a-z0-9_-]+/[a-f0-9]{32}\.mp4$")
 CHUNK = 8 << 20
 
 
-def _stream(token: str, angle: str) -> str:
-    return f"scan:{token}:{angle}"
-
-
 async def _scan(
     key: str, path: str, token: str, angle: str, sha: str | None
 ) -> JSONResponse:
-    """Probe, find the players, remember them in the session."""
-    stream = _stream(token, angle)
-    store = storage.backend()
-
-    def progress(done: int, total: int) -> None:
-        events.emit(
-            stream,
-            "scan.progress",
-            {
-                "session_token": token,
-                "angle": angle,
-                "current": done,
-                "total": total,
-                "complete": False,
-                "error": None,
-            },
-            webhook=False,
-        )
-
-    def work():
-        media = video.probe(path)
-        cap = cv2.VideoCapture(path)
-        info = {
-            "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            "duration": round(media.duration, 1),
-            "has_audio": media.has_audio,
-        }
-        cap.release()
-        detector = pipeline.make_detector()
-        try:
-            return info, people.scan(path, detector, progress)
-        finally:
-            if hasattr(detector, "close"):
-                detector.close()
-
-    try:
-        info, found = await asyncio.to_thread(work)
-    except Exception as exc:
-        store.delete(key)
-        message = (
-            exc.message
-            if isinstance(exc, EngineError)
-            else "Could not scan this video."
-        )
-        events.emit(
-            stream,
-            "scan.failed",
-            {
-                "session_token": token,
-                "angle": angle,
-                "current": 0,
-                "total": 0,
-                "complete": True,
-                "error": message,
-            },
-            webhook=False,
-        )
-        raise
-
-    replaced = sessions.add_angle(
-        token,
-        angle,
-        {
-            "video_key": key,
-            "sha256": sha,
-            "media": info,
-            "players": [
-                {
-                    k: p[k]
-                    for k in (
-                        "player_index",
-                        "bbox",
-                        "frame_timestamp",
-                        "confidence",
-                        "signature",
-                    )
-                }
-                for p in found
-            ],
-        },
-    )
-    if replaced:
-        store.delete(replaced)
-    events.emit(
-        stream,
-        "scan.completed",
-        {
-            "session_token": token,
-            "angle": angle,
-            "current": 1,
-            "total": 1,
-            "complete": True,
-            "error": None,
-        },
-        webhook=False,
-    )
-    return JSONResponse(
-        {
-            "session_token": token,
-            "video_key": key,
-            "angle": angle,
-            "angles": sessions.labels(token),
-            "player_count": len(found),
-            "media": info,
-            "players": [
-                {
-                    "player_index": p["player_index"],
-                    "confidence": p["confidence"],
-                    "crop_base64": p["crop_base64"],
-                }
-                for p in found
-            ],
-        }
-    )
+    """HTTP adapter over core scan orchestration."""
+    return JSONResponse(await run_scan(key, path, token, angle, sha))
 
 
 @router.post("/scan")
@@ -247,7 +130,7 @@ async def scan_from_key(request: Request):
 
 @router.get("/scan-progress/{token}")
 async def scan_progress(token: str, request: Request, angle: str | None = None):
-    stream = _stream(token, sessions.angle_label(angle))
+    stream = stream_name(token, sessions.angle_label(angle))
     return events.sse_stream(
         events.follow(stream, disconnected=request.is_disconnected, idle_timeout=120)
     )
