@@ -359,11 +359,25 @@ export default function ScheduleClient({
             const { date, key } = cell
             const dayEvents = byDay.get(key) ?? []
             const isToday = date.toDateString() === todayKey
+            const openDay = () => setDayView(date)
             return (
-              <button
+              <div
                 key={key}
-                type="button"
-                onClick={() => setDayView(date)}
+                role="button"
+                tabIndex={0}
+                aria-label={`View events for ${date.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}`}
+                onClick={openDay}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openDay()
+                  }
+                }}
                 className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                   isToday ? 'bg-accent/40' : ''
                 }`}
@@ -379,19 +393,32 @@ export default function ScheduleClient({
                 <div className="space-y-1">
                   {dayEvents.slice(0, 3).map((ev) => {
                     const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
-                    return (
-                      <div
+                    const chipClassName = cn(
+                      'block w-full truncate rounded-[4px] border px-1.5 py-0.5 text-left text-label font-medium leading-tight transition-colors',
+                      meta.text,
+                      meta.bg,
+                      meta.border,
+                      ev.status === 'cancelled' ? 'line-through opacity-60' : '',
+                      canWrite && 'hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                    )
+                    return canWrite ? (
+                      <button
                         key={ev.id}
-                        onClick={canWrite ? (e) => openEdit(ev, e) : undefined}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEdit(ev, e)
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
                         title={ev.title}
-                        className={cn(
-                          'truncate rounded-[4px] border px-1.5 py-0.5 text-label font-medium leading-tight transition-colors',
-                          meta.text,
-                          meta.bg,
-                          meta.border,
-                          ev.status === 'cancelled' ? 'line-through opacity-60' : '',
-                        )}
+                        aria-label={`Edit event ${ev.title}`}
+                        className={chipClassName}
                       >
+                        <span className="tabular-nums">{ev.starts_at.slice(11, 16)}</span>{' '}
+                        {ev.title}
+                      </button>
+                    ) : (
+                      <div key={ev.id} title={ev.title} className={chipClassName}>
                         <span className="tabular-nums">{ev.starts_at.slice(11, 16)}</span>{' '}
                         {ev.title}
                       </div>
@@ -403,7 +430,7 @@ export default function ScheduleClient({
                     </span>
                   )}
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>

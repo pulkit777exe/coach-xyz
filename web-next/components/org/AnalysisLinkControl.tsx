@@ -102,11 +102,16 @@ export default function AnalysisLinkControl({
     }
   }
 
+  const panelId = `analysis-link-panel-${jobId.replace(/[^a-zA-Z0-9_-]/g, '')}`
+
   return (
     <div ref={rootRef} className="relative inline-block">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         className={`flex items-center gap-2 rounded-[6px] border px-3 py-1.5 text-meta font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
           hasLink
             ? 'border-transparent bg-success/10 text-success'
@@ -146,7 +151,10 @@ export default function AnalysisLinkControl({
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg dark:shadow-none">
+        <div
+          id={panelId}
+          className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg dark:shadow-none"
+        >
           <div className="border-b border-border px-4 py-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {linkedStudent ? 'Linked to' : hasLink ? 'Linked' : 'Choose a student'}
           </div>

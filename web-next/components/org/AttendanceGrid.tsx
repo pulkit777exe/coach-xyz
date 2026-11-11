@@ -717,6 +717,7 @@ export default function AttendanceGrid({
                                 }
                               : undefined
                           }
+                          aria-label={`Attendance status for ${s.full_name}`}
                           title="Status for this day"
                         >
                           <option value="">—</option>
