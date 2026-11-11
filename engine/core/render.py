@@ -46,6 +46,7 @@ FONTS = ROOT / "assets" / "fonts"
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
+    size = max(8, int(size))
     for name in (
         ("Montserrat-Bold.ttf", "Montserrat-SemiBold.ttf")
         if bold
@@ -53,18 +54,28 @@ def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     ):
         p = FONTS / name
         if p.is_file():
-            return ImageFont.truetype(str(p), size)
-    return ImageFont.load_default(size=size)
+            try:
+                return ImageFont.truetype(str(p), size)
+            except Exception:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
 
 def _text_len(font: ImageFont.ImageFont, text: str) -> float:
+    text = str(text)
     if hasattr(font, "getlength"):
-        return float(font.getlength(text))
+        try:
+            return float(font.getlength(text))
+        except Exception:
+            pass
     try:
         bbox = font.getbbox(text)
         return float(bbox[2] - bbox[0])
     except Exception:
-        return float(len(text) * getattr(font, "size", 12) * 0.55)
+        return float(len(text) * max(8, int(getattr(font, "size", 12) or 12)) * 0.55)
 
 
 def _wrap_pixels(text: str, font: ImageFont.ImageFont, max_w: float) -> list[str]:
@@ -101,12 +112,44 @@ def _wrap_pixels(text: str, font: ImageFont.ImageFont, max_w: float) -> list[str
     return out or [text]
 
 
+def _cap_drawn_lines(
+    drawn: list[tuple[ImageFont.ImageFont, str, tuple, int]],
+    max_h: int,
+    pad: int,
+    inner: float,
+) -> list[tuple[ImageFont.ImageFont, str, tuple, int]]:
+    if max_h <= 0 or not drawn:
+        return drawn
+    avail = max(1, max_h - pad * 2)
+    kept: list[tuple[ImageFont.ImageFont, str, tuple, int]] = []
+    used = 0
+    for i, (f, text, color, lh) in enumerate(drawn):
+        lh = max(1, int(lh))
+        remaining_after = len(drawn) - i - 1
+        if used + lh <= avail:
+            kept.append((f, text, color, lh))
+            used += lh
+            continue
+        room = avail - used
+        if room >= max(8, lh // 2):
+            kept.append((f, _fit_px(text, f, inner), color, min(lh, room)))
+        elif kept:
+            pf, pt, pc, plh = kept[-1]
+            marker = " ..." if remaining_after >= 0 else ""
+            kept[-1] = (pf, _fit_px((pt.rstrip() + marker).strip(), pf, inner), pc, plh)
+        else:
+            kept.append((f, _fit_px(text, f, inner), color, min(lh, avail)))
+        break
+    return kept or [(drawn[0][0], _fit_px(drawn[0][1], drawn[0][0], inner), drawn[0][2], min(max(1, int(drawn[0][3])), avail))]
+
+
 def _sprite(
     lines: list[tuple[str, int, bool, tuple]],
     width: int,
     pad: int,
     *,
     wrap: bool = True,
+    max_h: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """A dark rounded panel with text lines of (text, size, bold, rgb). Returns BGR image and alpha."""
     inner = max(8.0, float(width - pad * 2))
@@ -115,6 +158,8 @@ def _sprite(
     for f, text, color, lh in fonts:
         parts = _wrap_pixels(text, f, inner) if wrap else [text]
         drawn.extend((f, part, color, lh) for part in parts)
+    if max_h is not None:
+        drawn = _cap_drawn_lines(drawn, int(max_h), pad, inner)
     height = pad * 2 + sum(lh for _, _, _, lh in drawn)
     img = Image.new("RGBA", (width, max(height, pad * 2 + 1)), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -254,47 +299,69 @@ def _hud(
         parts.append(f"moment {active + 1}/{len(events)}")
     elif events:
         parts.append(f"{len(events)} moments")
-    parts.append(f"technique avg {s:.1f}/10" if s is not None else "not scored")
+    parts.append(f"avg {s:.1f}/10" if s is not None else "not scored")
     text = "  |  ".join(parts)
-    pad = int(10 * k)
-    inner = max(24.0, float(width - pad * 2))
-    size = int(17 * k)
+    pad = max(4, int(10 * k))
+    inner = max(16.0, float(width - pad * 2))
+    size = max(10, int(17 * k))
     font = _font(size, True)
     if _text_len(font, text) > inner:
-        # Prefer a compact HUD on narrow/portrait frames to avoid multi-line clipping.
         compact = [parts[0], parts[1], parts[-1]]
         text = "  |  ".join(compact)
-        if _text_len(font, text) > inner:
-            # drop middle if still tight before hard fitting
-            tighter = [parts[0], parts[-1]]
-            text = "  |  ".join(tighter)
-        if _text_len(font, text) > inner:
-            text = _fit_px(text, font, inner)
+    if _text_len(font, text) > inner:
+        text = "  |  ".join([parts[0], parts[-1]])
+    if _text_len(font, text) > inner and events:
+        text = "  |  ".join([pack.label[:12], parts[-1]])
+    if _text_len(font, text) > inner:
+        text = _fit_px(text, font, inner)
     lines = [(text, size, True, (255, 255, 255))]
-    return _sprite(lines, width, pad, wrap=False)
+    # Cap HUD height for extreme frames so it cannot cover the whole view.
+    max_h = max(size + pad * 2, int(44 * max(k, 0.45)))
+    return _sprite(lines, width, pad, wrap=False, max_h=max_h)
 
 
-def _banner(e: dict, width: int, k: float) -> tuple[np.ndarray, np.ndarray]:
-    """Event title, technique score, the sport's key metrics for both players and one coaching line."""
-    kind = e["type"].replace("_", " ").title()
+def _banner(
+    e: dict, width: int, k: float, *, max_h: int | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Event title, technique score, honesty/confidence cues, key metrics and coaching line."""
+    kind = str(e.get("type", "moment")).replace("_", " ").title()
     result = (
         ""
-        if e["result"] == "unknown"
-        else f"   {e['result'].replace('_', ' ').upper()}"
+        if e.get("result") == "unknown"
+        else f"   {str(e.get('result', '')).replace('_', ' ').upper()}"
     )
     score = (
-        f"Technique {e['score']:.1f}/10"
-        if e["score"] is not None
+        f"Technique {float(e['score']):.1f}/10"
+        if e.get("score") is not None
         else "Not enough visible to score"
     )
-    pad = int(14 * k)
-    inner = max(24.0, float(width - pad * 2))
-    title = f"#{e['index']}  {kind}{result}"
+    pad = max(6, int(14 * k))
+    inner = max(16.0, float(width - pad * 2))
+    title = f"#{e.get('index', '?')}  {kind}{result}"
+    state = e.get("event_state") or ("confirmed" if e.get("confirmed") else "uncertain")
     lines = [
-        (_fit_px(title, _font(int(22 * k), True), inner), int(22 * k), True, (255, 255, 255)),
-        (score, int(17 * k), False, (255, 205, 60)),
+        (_fit_px(title, _font(max(11, int(22 * k)), True), inner), max(11, int(22 * k)), True, (255, 255, 255)),
+        (_fit_px(score, _font(max(10, int(17 * k)), False), inner), max(10, int(17 * k)), False, (255, 205, 60)),
     ]
+    # Honesty/confidence cues are prioritized so they remain visible on dense/extreme frames.
+    if state != "confirmed":
+        label = "Unreviewed candidate" if state == "candidate" else str(state).replace("_", " ").title()
+        lines.append((_fit_px(f"Review: {label}", _font(max(10, int(15 * k)), True), inner), max(10, int(15 * k)), True, (255, 190, 0)))
+    conf = e.get("confidence")
+    conf_kind = e.get("confidence_kind")
+    if conf is not None:
+        c_label = "Confidence"
+        if conf_kind == "pose":
+            c_label = "Pose confidence"
+        elif conf_kind == "tracking":
+            c_label = "Tracking confidence"
+        elif conf_kind == "event":
+            c_label = "Event confidence"
+        lines.append((_fit_px(f"{c_label} {float(conf):.0%}", _font(max(9, int(14 * k)), False), inner), max(9, int(14 * k)), False, MUTED))
+    if (e.get("quality") or {}).get("needs_review"):
+        lines.append(("Needs review", max(9, int(14 * k)), False, (255, 190, 0)))
 
+    dense = (max_h is not None and max_h < 170 * max(k, 0.4)) or width < 260
     match = e.get("matchup") or {}
     roles = match.get("roles") or {}
     primary = match.get("primary") or {}
@@ -302,46 +369,53 @@ def _banner(e: dict, width: int, k: float) -> tuple[np.ndarray, np.ndarray]:
         m
         for m in (primary.get("metrics") or e.get("metrics") or [])
         if m.get("value") is not None
-    ][:2]
+    ][: (1 if dense else 2)]
     for m in shown:
         value = _fmt(float(m["value"]), m.get("unit"))
-        note = "" if m.get("score") is None else f"  ({m['score']:.0%})"
+        note = "" if m.get("score") is None else f" ({m['score']:.0%})"
         prefix = f"{roles.get('primary')}: " if roles.get("primary") else ""
-        lines.append(
-            (f"{prefix}{m['label']} {value}{note}", int(16 * k), False, _metric_color(m))
-        )
+        txt = _fit_px(f"{prefix}{m['label']} {value}{note}", _font(max(9, int(16 * k)), False), inner)
+        lines.append((txt, max(9, int(16 * k)), False, _metric_color(m)))
 
-    opponent = match.get("opponent") or {}
-    opp_metrics = [
-        m for m in opponent.get("metrics") or [] if m.get("value") is not None
-    ][:2]
-    if opp_metrics:
-        values = " | ".join(
-            f"{m['label']} {_fmt(float(m['value']), m.get('unit'))}"
-            for m in opp_metrics
-        )
-        lines.append(
-            (f"{opponent.get('role', 'Opponent')}: {values}", int(15 * k), False, (150, 205, 255))
-        )
-    separation = match.get("separation")
-    if separation and separation.get("distance") is not None:
-        lines.append(
-            (
-                f"Distance {_fmt(float(separation['distance']), 'torso')} to the {separation['side']}",
-                int(15 * k),
-                False,
-                (225, 225, 230),
+    if not dense:
+        opponent = match.get("opponent") or {}
+        opp_metrics = [
+            m for m in opponent.get("metrics") or [] if m.get("value") is not None
+        ][:1]
+        if opp_metrics:
+            values = " | ".join(
+                f"{m['label']} {_fmt(float(m['value']), m.get('unit'))}"
+                for m in opp_metrics
             )
-        )
+            lines.append(
+                (_fit_px(f"{opponent.get('role', 'Opponent')}: {values}", _font(max(9, int(15 * k)), False), inner), max(9, int(15 * k)), False, (150, 205, 255))
+            )
+        separation = match.get("separation")
+        if separation and separation.get("distance") is not None:
+            lines.append(
+                (
+                    _fit_px(
+                        f"Distance {_fmt(float(separation['distance']), 'torso')} to the {separation.get('side', '')}".strip(),
+                        _font(max(9, int(15 * k)), False),
+                        inner,
+                    ),
+                    max(9, int(15 * k)),
+                    False,
+                    (225, 225, 230),
+                )
+            )
 
     feedback = (e.get("feedback") or "").strip()
     if feedback:
-        tip_font = _font(int(15 * k), False)
-        tip_lines = _wrap_pixels(feedback, tip_font, inner)[:3]
-        if len(_wrap_pixels(feedback, tip_font, inner)) > 3 and tip_lines:
+        tip_size = max(9, int(15 * k))
+        tip_font = _font(tip_size, False)
+        max_tip_lines = 1 if dense else 3
+        tip_wrapped = _wrap_pixels(feedback, tip_font, inner)
+        tip_lines = tip_wrapped[:max_tip_lines]
+        if len(tip_wrapped) > max_tip_lines and tip_lines:
             tip_lines[-1] = _fit_px(tip_lines[-1], tip_font, inner)
-        lines += [(t, int(15 * k), False, (225, 225, 230)) for t in tip_lines]
-    return _sprite(lines, width, pad)
+        lines += [(t, tip_size, False, (225, 225, 230)) for t in tip_lines]
+    return _sprite(lines, width, pad, max_h=max_h)
 
 
 def _draw_wrapped(
@@ -357,21 +431,23 @@ def _draw_wrapped(
     bottom: int | None = None,
     last: bool = False,
 ) -> int:
+    size = max(8, int(size))
     font = _font(size, bold)
-    wrapped = _wrap_pixels(text, font, max_w)
-    step = int(size * 1.5)
+    wrapped = _wrap_pixels(str(text), font, max(8.0, float(max_w)))
+    step = max(size + 2, int(size * 1.45))
     limit = bottom if bottom is not None else 10**9
     for i, line in enumerate(wrapped):
         remaining = len(wrapped) - i - 1
+        if y >= limit:
+            return limit + 1
         if y + step > limit:
-            if last and y < limit:
-                d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
+            d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
             return limit + 1
         # reserve space for an ellipsis line only if this isn't the last logical row
         if not last and remaining > 0 and y + step * 2 > limit:
             d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
             return limit + 1
-        d.text((x, y), line, font=font, fill=color)
+        d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
         y += step
     return y
 
@@ -381,9 +457,10 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
     img = Image.fromarray(last[:, :, ::-1]).convert("RGB")
     img = Image.blend(img, Image.new("RGB", img.size, (10, 12, 18)), 0.9)
     d = ImageDraw.Draw(img)
-    x, y = int(img.width * 0.08), int(img.height * 0.12)
-    max_w = float(img.width - x - int(img.width * 0.08))
-    bottom = img.height - int(img.height * 0.08)
+    x = int(img.width * 0.06) if img.width < 260 else int(img.width * 0.08)
+    y = int(img.height * 0.08) if img.height < 260 else int(img.height * 0.12)
+    max_w = float(max(24, img.width - x - x))
+    bottom = img.height - max(10, int(img.height * 0.06)) if img.height < 260 else img.height - int(img.height * 0.08)
     summary = f"{s['events']} moments"
     if s.get("made") or s.get("missed"):
         summary += f"   {s.get('made', 0)} made / {s.get('missed', 0)} missed"
@@ -395,6 +472,7 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         (summary, 24, False, (255, 205, 60)),
         (f"{s['rating'] or 'Not rated'}{average}", 22, False, (255, 255, 255)),
     ]
+    # Honesty/confidence first; detailed metrics/focus follow and may be truncated on dense frames.
     conf_kind = s.get("confidence_kind")
     conf = s.get("confidence")
     pose = s.get("pose_confidence")
@@ -415,6 +493,20 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
             rows.append((f"Pose confidence {float(pose):.0%}", 16, False, MUTED))
     if s.get("success_rate") is not None:
         rows.append((f"Success rate {s['success_rate']:.0f}%", 17, False, MUTED))
+    quality = result.get("quality") or {}
+    issues = quality.get("issues") or []
+    if issues:
+        rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
+    failures_list = result.get("failures") or []
+    if failures_list:
+        msgs = []
+        for f in failures_list[:2]:
+            if isinstance(f, dict) and f.get("message"):
+                code = f.get("code")
+                msg = str(f.get("message"))
+                msgs.append(f"{code}: {msg}" if code else msg)
+        if msgs:
+            rows.append((f"Details: {'; '.join(msgs)}", 15, False, MUTED))
     metrics = [
         m
         for m in result.get("session_metrics") or []
@@ -430,7 +522,7 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         rows.append(
             (f"-  {m['label']}: {_fmt(float(m['value']), unit)}{best}", 18, False, (225, 225, 230))
         )
-    if s["focus_areas"]:
+    if s.get("focus_areas"):
         rows.append(("Focus", 19, True, (255, 205, 60)))
         rows += [(f"-  {f}", 17, False, (225, 225, 230)) for f in s["focus_areas"][:3]]
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
@@ -488,24 +580,38 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
     img = Image.fromarray(frame[:, :, ::-1]).convert("RGB")
     img = Image.blend(img, Image.new("RGB", img.size, (10, 12, 18)), 0.9)
     d = ImageDraw.Draw(img)
-    x, y = int(img.width * 0.08), int(img.height * 0.14)
-    max_w = float(img.width - x - int(img.width * 0.08))
-    bottom = img.height - int(img.height * 0.08)
+    x = int(img.width * 0.06) if img.width < 260 else int(img.width * 0.08)
+    y = int(img.height * 0.08) if img.height < 260 else int(img.height * 0.14)
+    max_w = float(max(24, img.width - x - x))
+    bottom = img.height - max(10, int(img.height * 0.06)) if img.height < 260 else img.height - int(img.height * 0.08)
+    # Prioritize honesty notes, failure reasons and confidence labels before metadata.
     rows = [
         ("Session summary", 38, True, (255, 255, 255)),
         (f"{s.get('events', 0)} moments", 24, False, (255, 205, 60)),
         (reason, 20, False, (255, 255, 255)),
     ]
+    conf = s.get("confidence")
+    conf_kind = s.get("confidence_kind")
+    if conf is not None:
+        label = "Confidence"
+        if conf_kind == "event":
+            label = "Event confidence"
+        elif conf_kind == "tracking":
+            label = "Tracking confidence"
+        elif conf_kind == "pose":
+            label = "Pose confidence"
+        rows.append((f"{label} {float(conf):.0%}", 16, False, MUTED))
     issues = (result.get("quality") or {}).get("issues") or []
     if issues:
-        rows.append((f"Quality: {', '.join(issues[:3])}", 16, False, MUTED))
+        rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
     failures_list = result.get("failures") or []
     if failures_list:
         msgs = []
-        for f in failures_list[:2]:
+        for f in failures_list[:3]:
             msg = (f or {}).get("message") if isinstance(f, dict) else None
+            code = (f or {}).get("code") if isinstance(f, dict) else None
             if msg:
-                msgs.append(str(msg))
+                msgs.append(f"{code}: {msg}" if code else str(msg))
         if msgs:
             rows.append((f"Details: {'; '.join(msgs)}", 15, False, MUTED))
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
@@ -573,7 +679,10 @@ def render(
     lm_f, present = _per_frame(track, fps, total + 1)
     events = result["events"]
     banner_w = int(min(size[0] * 0.94, 780 * k))
-    sprites = {e["id"]: _banner(e, banner_w, k) for e in events}
+    banner_max_h = max(int(90 * k), size[1] - int(120 * k))
+    sprites = {
+        e["id"]: _banner(e, banner_w, k, max_h=banner_max_h) for e in events
+    }
     hud_w = int(min(size[0] - 32 * k, 660 * k))
     hud_key: tuple[int, int] | None = None
     hud = None
@@ -662,12 +771,10 @@ def render(
                                 color,
                                 k,
                             )
-                _blit(
-                    frame,
-                    sprites[e["id"]],
-                    int(24 * k),
-                    size[1] - sprites[e["id"]][0].shape[0] - int(26 * k),
-                )
+                sprite = sprites[e["id"]]
+                top_y = int(80 * k)
+                bottom_y = size[1] - sprite[0].shape[0] - int(26 * k)
+                _blit(frame, sprite, int(24 * k), max(top_y, bottom_y))
             key = (int(t), -1 if active is None else active)
             if key != hud_key:
                 hud = _hud(pack, events, t, active, hud_w, k)

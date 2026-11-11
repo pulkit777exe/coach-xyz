@@ -355,13 +355,25 @@ def review(
                 "pressure": "unknown",
             }
     if unseen:
+        unseen_sorted = sorted(unseen)
+        unseen_times = []
+        for i in unseen_sorted:
+            try:
+                unseen_times.append(round(float(cands[i].t), 2))
+            except Exception:
+                pass
         failure_list.append(
             failures.failure(
                 "F07_MISSED_CANDIDATE",
                 "judge",
-                f"{len(unseen)} candidate moment(s) were not shown to the model for review",
+                f"{len(unseen)} of {len(cands)} candidate moment(s) were not shown to the model for review",
                 retryable=False,
-                unseen_candidates=sorted(unseen),
+                unseen_candidates=unseen_sorted,
+                unseen_candidate_times=unseen_times,
+                unseen_count=len(unseen),
+                shown_count=len(shown),
+                candidate_count=len(cands),
+                partial_review=True,
             ).to_dict()
         )
     unsupported = _drop_unsupported_ratings(verdicts, pack)

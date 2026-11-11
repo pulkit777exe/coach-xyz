@@ -263,9 +263,28 @@ def _composite(events: list[dict], avg: float | None) -> dict:
     }
 
 
-def _event_detection(cands: list[Candidate], judgement: Judgement) -> dict:
+def _event_detection(
+    cands: list[Candidate], judgement: Judgement, failures_list: list[dict] | None = None
+) -> dict:
     states = Counter(_event_state(v) for v in judgement.verdicts.values())
-    return {
+    unseen: list[int] = []
+    unseen_times: list[float] = []
+    for f in failures_list or []:
+        if f.get("code") == "F07_MISSED_CANDIDATE":
+            detail = f.get("detail") or {}
+            raw = detail.get("unseen_candidates") or []
+            if isinstance(raw, list):
+                unseen.extend(int(i) for i in raw if isinstance(i, (int, float)))
+            raw_t = detail.get("unseen_candidate_times") or []
+            if isinstance(raw_t, list):
+                for t in raw_t:
+                    try:
+                        unseen_times.append(round(float(t), 2))
+                    except Exception:
+                        pass
+    unseen = sorted(set(unseen))
+    partial = bool(unseen) or states.get("candidate", 0) > 0 or states.get("uncertain", 0) > 0
+    out = {
         "method": "motion_peak_plus_model_review"
         if judgement.source == "model"
         else "motion_peak_rules",
@@ -277,6 +296,14 @@ def _event_detection(cands: list[Candidate], judgement: Judgement) -> dict:
         "validation_status": "unvalidated",
         "note": "motion peaks are candidates until an independently validated event rule or model confirms them",
     }
+    if unseen:
+        out["unseen_candidates"] = unseen
+        out["unseen_candidate_count"] = len(unseen)
+        if unseen_times:
+            out["unseen_candidate_times"] = sorted(set(unseen_times))
+    out["partial_review"] = partial
+    out["review_complete"] = not partial and len(cands) == states.get("confirmed", 0) + states.get("rejected", 0) and len(cands) > 0
+    return out
 
 
 def _criteria_registry(pack: Pack) -> list[dict]:
@@ -426,7 +453,7 @@ def build(
     )
     findings = _findings(events, track, media.fps, pack, provenance_block)
     composite = _composite(confirmed_events, avg)
-    event_detection = _event_detection(cands, judgement)
+    event_detection = _event_detection(cands, judgement, failures_list)
 
     issues = []
     if track.coverage < 0.5:
@@ -475,6 +502,8 @@ def build(
         )
     if any(e.get("event_state") != "confirmed" for e in events):
         issues.append("unconfirmed_candidate_events")
+    if event_detection.get("partial_review"):
+        issues.append("partial_review")
     # dedupe failure codes+stage+message
     deduped, seen = [], set()
     for f in failures_list:
@@ -485,7 +514,12 @@ def build(
         deduped.append(f)
     failures_list = deduped
     issues = list(dict.fromkeys(issues))
-    quality = {"passed": not issues, "issues": issues, "needs_review": bool(issues)}
+    quality = {
+        "passed": not issues,
+        "issues": issues,
+        "needs_review": bool(issues),
+        "partial_review": bool(event_detection.get("partial_review")),
+    }
     return {
         "schema_version": SCHEMA_VERSION,
         "job_id": job_id,

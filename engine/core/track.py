@@ -225,8 +225,13 @@ def _find(
                         "code": "F02_IDENTITY_SWITCH",
                         "stage": "track",
                         "t": round(float(t), 3),
-                        "message": "low-similarity reacquisition while athlete was lost",
+                        "message": (
+                            "low-similarity reacquisition while athlete was lost "
+                            f"(similarity {sim:.2f} < {reacquire_threshold:.2f} at {t:.2f}s)"
+                        ),
                         "similarity": round(float(sim), 3),
+                        "threshold": float(reacquire_threshold),
+                        "reacquired": False,
                     }
                 )
             return None
