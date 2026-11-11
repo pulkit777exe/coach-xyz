@@ -45,7 +45,7 @@ export const ENGINE_PIPELINE_STATES = [
 export type EnginePipelineState = (typeof ENGINE_PIPELINE_STATES)[number]
 
 // ── Job Status ───────────────────────────────────────────────────────────────
-// Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
+// Returned by GET /api/job-status/:jobId (server polls engine status; durable state is Postgres-backed)
 
 export type JobStatus = {
   job_id: string

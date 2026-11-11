@@ -57,7 +57,7 @@ export type PipelineState =
   | 'error'
 
 // ── Job Status ───────────────────────────────────────────────────────────────
-// Returned by GET /api/job-status/:jobId (reads directly from engine Redis)
+// Returned by GET /api/job-status/:jobId (server polls engine status; durable state is Postgres-backed)
 
 export type JobStatus = {
   job_id: string
@@ -107,7 +107,7 @@ export type Finding = {
 
 export type AnalysisProvenance = {
   engine: string
-  model: string
+  model: string | null
   analysis_prompt: string
   sport: string | null
   sport_pack_version: number
@@ -194,6 +194,8 @@ export type MatchupRole = {
   role: string
   side?: string
   confidence?: number
+  /** False when the matchup primary could not be reliably tracked as that athlete. */
+  tracked?: boolean
   metrics?: PerformanceMetric[]
 }
 
@@ -248,6 +250,10 @@ export type CompositeScore = {
   method: string
   coverage: number | null
   minimum_coverage: number
+  /** Confirmed events whose score contributed to the composite. */
+  scored_events?: number
+  /** Confirmed events considered for composite coverage. */
+  considered_events?: number
   excluded_from_research: true
   reason: string | null
 }
@@ -333,15 +339,19 @@ export type AnalysisSummary = {
   strengths: string[]
   priority_drill?: string
   shot_events: ShotEvent[]
-  success_rate_percent?: number
+  success_rate_percent?: number | null
   /** @deprecated experimental composite; use `composite` for research output. */
   average_form_score?: number | null
   /** Experimental 0–10 mean technique score across measured events. */
   average_score?: number | null
   /** 0–1 share of judged results that were successful. */
-  success_rate?: number
-  /** 0–1 mean confidence of the tracked events. */
-  confidence?: number
+  success_rate?: number | null
+  /** 0–1 mean confidence for the session (event or tracking, see `confidence_kind`). */
+  confidence?: number | null
+  /** What `confidence` measures: event confidence when events were scored, else tracking/pose. */
+  confidence_kind?: 'event' | 'tracking' | 'pose' | string
+  /** 0–1 mean pose/track confidence across the clip. */
+  pose_confidence?: number | null
   /** Sport-specific numbers measured over the whole session. */
   session_metrics?: SessionMetric[]
   /** Grouped professional stats with provenance and unavailable-stat disclosure. */
@@ -392,6 +402,10 @@ export type ShotEvent = {
   event_state?: EventState
   confirmed?: boolean
   confidence?: number
+  /** What `confidence` measures for this event (pose, event, or tracking). */
+  confidence_kind?: 'pose' | 'event' | 'tracking' | string
+  /** 0–1 pose confidence at the event frame. */
+  pose_confidence?: number
   coverage?: number
   metrics?: PerformanceMetric[]
   /** Model-observed short labels for this event. */
