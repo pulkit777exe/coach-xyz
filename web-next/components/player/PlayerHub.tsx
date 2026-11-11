@@ -711,6 +711,7 @@ function AnalyzeVideoCard({
           ref={fileInputRef}
           type="file"
           accept="video/*"
+          aria-label="Choose video file"
           className="hidden"
           onChange={(e) => pick(e.target.files?.[0])}
         />
