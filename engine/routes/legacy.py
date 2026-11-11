@@ -166,8 +166,6 @@ def legacy_summary(result: dict) -> dict:
         "detected_angle": result.get("detected_angle"),
         "scope_note": result.get("scope_note"),
         "recommended_angles": result["recommended_angles"],
-        "confidence_kind": summary.get("confidence_kind"),
-        "pose_confidence": summary.get("pose_confidence"),
         "video": result.get("video"),
         "athlete": result.get("athlete"),
     }

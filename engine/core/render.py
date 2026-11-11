@@ -258,15 +258,20 @@ def _hud(
     text = "  |  ".join(parts)
     pad = int(10 * k)
     inner = max(24.0, float(width - pad * 2))
-    font = _font(int(17 * k), True)
+    size = int(17 * k)
+    font = _font(size, True)
     if _text_len(font, text) > inner:
         # Prefer a compact HUD on narrow/portrait frames to avoid multi-line clipping.
         compact = [parts[0], parts[1], parts[-1]]
         text = "  |  ".join(compact)
         if _text_len(font, text) > inner:
+            # drop middle if still tight before hard fitting
+            tighter = [parts[0], parts[-1]]
+            text = "  |  ".join(tighter)
+        if _text_len(font, text) > inner:
             text = _fit_px(text, font, inner)
-    lines = [(text, int(17 * k), True, (255, 255, 255))]
-    return _sprite(lines, width, pad)
+    lines = [(text, size, True, (255, 255, 255))]
+    return _sprite(lines, width, pad, wrap=False)
 
 
 def _banner(e: dict, width: int, k: float) -> tuple[np.ndarray, np.ndarray]:
@@ -348,11 +353,26 @@ def _draw_wrapped(
     bold: bool,
     color: tuple,
     max_w: float,
+    *,
+    bottom: int | None = None,
+    last: bool = False,
 ) -> int:
     font = _font(size, bold)
-    for line in _wrap_pixels(text, font, max_w):
+    wrapped = _wrap_pixels(text, font, max_w)
+    step = int(size * 1.5)
+    limit = bottom if bottom is not None else 10**9
+    for i, line in enumerate(wrapped):
+        remaining = len(wrapped) - i - 1
+        if y + step > limit:
+            if last and y < limit:
+                d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
+            return limit + 1
+        # reserve space for an ellipsis line only if this isn't the last logical row
+        if not last and remaining > 0 and y + step * 2 > limit:
+            d.text((x, y), _fit_px(line, font, max_w), font=font, fill=color)
+            return limit + 1
         d.text((x, y), line, font=font, fill=color)
-        y += int(size * 1.5)
+        y += step
     return y
 
 
@@ -363,6 +383,7 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
     d = ImageDraw.Draw(img)
     x, y = int(img.width * 0.08), int(img.height * 0.12)
     max_w = float(img.width - x - int(img.width * 0.08))
+    bottom = img.height - int(img.height * 0.08)
     summary = f"{s['events']} moments"
     if s.get("made") or s.get("missed"):
         summary += f"   {s.get('made', 0)} made / {s.get('missed', 0)} missed"
@@ -374,11 +395,24 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         (summary, 24, False, (255, 205, 60)),
         (f"{s['rating'] or 'Not rated'}{average}", 22, False, (255, 255, 255)),
     ]
-    if s.get("confidence") is not None:
+    conf_kind = s.get("confidence_kind")
+    conf = s.get("confidence")
+    pose = s.get("pose_confidence")
+    if conf is not None:
         label = "Pose confidence"
-        if s.get("events", 0) == 0 or s.get("average_score") is None:
+        if conf_kind == "event":
+            label = "Event confidence"
+        elif conf_kind == "tracking":
             label = "Tracking confidence"
-        rows.append((f"{label} {s['confidence']:.0%}", 17, False, MUTED))
+        elif s.get("events", 0) == 0 or s.get("average_score") is None:
+            label = "Tracking confidence"
+        rows.append((f"{label} {conf:.0%}", 17, False, MUTED))
+        if (
+            pose is not None
+            and conf_kind == "event"
+            and abs(float(pose) - float(conf)) > 0.01
+        ):
+            rows.append((f"Pose confidence {float(pose):.0%}", 16, False, MUTED))
     if s.get("success_rate") is not None:
         rows.append((f"Success rate {s['success_rate']:.0f}%", 17, False, MUTED))
     metrics = [
@@ -400,9 +434,11 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         rows.append(("Focus", 19, True, (255, 205, 60)))
         rows += [(f"-  {f}", 17, False, (225, 225, 230)) for f in s["focus_areas"][:3]]
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
-    for text, size, bold, color in rows:
+    for i, (text, size, bold, color) in enumerate(rows):
+        if y > bottom:
+            break
         size_px = int(size * k)
-        y = _draw_wrapped(d, text, x, y, size_px, bold, color, max_w)
+        y = _draw_wrapped(d, text, x, y, size_px, bold, color, max_w, bottom=bottom, last=i == len(rows) - 1)
     return np.asarray(img)[:, :, ::-1].copy()
 
 
@@ -454,6 +490,7 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
     d = ImageDraw.Draw(img)
     x, y = int(img.width * 0.08), int(img.height * 0.14)
     max_w = float(img.width - x - int(img.width * 0.08))
+    bottom = img.height - int(img.height * 0.08)
     rows = [
         ("Session summary", 38, True, (255, 255, 255)),
         (f"{s.get('events', 0)} moments", 24, False, (255, 205, 60)),
@@ -462,10 +499,21 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
     issues = (result.get("quality") or {}).get("issues") or []
     if issues:
         rows.append((f"Quality: {', '.join(issues[:3])}", 16, False, MUTED))
+    failures_list = result.get("failures") or []
+    if failures_list:
+        msgs = []
+        for f in failures_list[:2]:
+            msg = (f or {}).get("message") if isinstance(f, dict) else None
+            if msg:
+                msgs.append(str(msg))
+        if msgs:
+            rows.append((f"Details: {'; '.join(msgs)}", 15, False, MUTED))
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
-    for text, size, bold, color in rows:
+    for i, (text, size, bold, color) in enumerate(rows):
+        if y > bottom:
+            break
         size_px = int(size * k)
-        y = _draw_wrapped(d, text, x, y, size_px, bold, color, max_w)
+        y = _draw_wrapped(d, text, x, y, size_px, bold, color, max_w, bottom=bottom, last=i == len(rows) - 1)
     return np.asarray(img)[:, :, ::-1].copy()
 
 

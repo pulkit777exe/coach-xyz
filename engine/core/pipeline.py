@@ -295,11 +295,28 @@ def run(job_id: str, params: dict) -> dict:
             if view_issue and not any(
                 f.get("code") == "F05_UNSUITABLE_VIEW" for f in failure_list
             ):
+                affected = sorted(
+                    {
+                        r.get("criterion_id") or r.get("key")
+                        for m in measured
+                        for r in m.get("criteria", [])
+                        if r.get("state") in ("view_unverified", "invalid_view")
+                        and (r.get("criterion_id") or r.get("key"))
+                    }
+                )
+                detail = {"view_state": view_issue}
+                if effective_angle:
+                    detail["effective_angle"] = effective_angle
+                if detected_angle:
+                    detail["detected_angle"] = detected_angle
+                if affected:
+                    detail["affected_criteria"] = affected[:8]
                 failure_list.append(
                     failures.failure(
                         "F05_UNSUITABLE_VIEW",
                         "measure",
                         "camera view is undeclared or unsuitable for one or more criteria",
+                        **detail,
                     ).to_dict()
                 )
             rep.check()

@@ -85,6 +85,88 @@ def test_render_fmt_adds_space_for_word_units():
     assert render._fmt(90.0, "°") == "90°"
     assert render._fmt(10.0, "/10") == "10/10"
 
+
+def test_confirmed_unscored_events_report_event_confidence_kind():
+    from core.motion import Candidate
+
+    pack = sports.load("basketball")
+    track = _track()
+    c = Candidate(5, 0.5, "right", 1.0)
+    judgement = Judgement(
+        source="rules",
+        sport="basketball",
+        verdicts={
+            0: {
+                "is_event": True,
+                "state": "confirmed",
+                "type": "three_pointer",
+                "result": "unknown",
+                "feedback": "",
+                "confidence": 0.4,
+                "ratings": {},
+                "tags": [],
+                "pressure": "unknown",
+            }
+        },
+    )
+    out = result.build(
+        "job",
+        {"angle": "side"},
+        pack,
+        track,
+        Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"),
+        [c],
+        judgement,
+        [],
+        angle="side",
+        angle_source="declared",
+        failures_list=[],
+    )
+    assert out["summary"]["events"] == 1
+    assert out["summary"]["average_score"] is None
+    assert out["summary"]["confidence_kind"] == "event"
+    assert out["summary"]["pose_confidence"] == 0.9
+    assert out["summary"]["confidence"] == out["events"][0]["confidence"]
+
+
+def test_legacy_summary_keeps_confidence_fields_without_duplicates():
+    from routes.legacy import legacy_summary
+
+    out = _build(Judgement(source="rules", sport="basketball", verdicts={}))
+    legacy = legacy_summary(out)
+    assert legacy["confidence_kind"] == out["summary"]["confidence_kind"]
+    assert legacy["pose_confidence"] == out["summary"]["pose_confidence"]
+    assert list(legacy.keys()).count("confidence_kind") == 1
+    assert list(legacy.keys()).count("pose_confidence") == 1
+
+
+def test_reason_and_end_cards_keep_text_within_frame():
+    from PIL import Image, ImageDraw
+
+    pack = sports.load("basketball")
+    out = _build(Judgement(source="rules", sport="basketball", verdicts={}))
+    out["failures"] = [
+        {"code": "F13_INSUFFICIENT_COVERAGE", "message": "coverage too low " * 20}
+    ]
+    frame = np.zeros((180, 240, 3), np.uint8)
+    reason = render._reason_card(
+        frame, out, pack, 0.6, "No confirmed actions were detected in this clip. " * 8
+    )
+    end = render._end_card(frame, out, pack, 0.6)
+    assert reason.shape == frame.shape
+    assert end.shape == frame.shape
+    # bottom margin region should remain part of the composed card (no out-of-bounds draw errors)
+    assert reason.dtype == np.uint8 and end.dtype == np.uint8
+
+
+def test_hud_sprite_stays_single_line_when_compacted():
+    pack = sports.load("basketball")
+    sprite, alpha = render._hud(pack, [], 12.3, None, 90, 1.0)
+    assert sprite.shape[0] > 0 and sprite.shape[1] == 90
+    # no-wrap HUD should not grow tall from wrapped lines
+    assert sprite.shape[0] < 60
+    assert alpha.shape[:2] == sprite.shape[:2]
+
 import tempfile
 
 from core import judge, video

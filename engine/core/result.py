@@ -411,9 +411,7 @@ def build(
         "average_score": avg,
         "success_rate": round(100 * made / decisive, 1) if decisive else None,
         "confidence": round(event_conf, 2),
-        "confidence_kind": "event"
-        if confirmed_events and avg is not None
-        else "tracking",
+        "confidence_kind": "event" if confirmed_events else "tracking",
         "pose_confidence": round(mean_conf, 2),
     }
     consistency = _consistency(confirmed_events)
