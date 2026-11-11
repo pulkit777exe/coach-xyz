@@ -389,24 +389,25 @@ export default function ReportsClient({
 
           <div className="hidden border-border overflow-hidden rounded-[6px] border md:block">
             <table className="w-full text-body">
+              <caption className="sr-only">Generated reports</caption>
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
+                  <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Report
                   </th>
-                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
+                  <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Type
                   </th>
-                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] md:table-cell">
+                  <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] md:table-cell">
                     Student
                   </th>
-                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] lg:table-cell">
+                  <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] lg:table-cell">
                     Period
                   </th>
-                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
+                  <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em]">
                     Generated
                   </th>
-                  <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em]">
+                  <th scope="col" className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em]">
                     Actions
                   </th>
                 </tr>

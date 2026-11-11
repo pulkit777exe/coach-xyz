@@ -487,9 +487,10 @@ export default function AttendanceGrid({
 
       <div className="border-border overflow-x-auto rounded-[6px] border">
         <table className="w-full text-body">
+          <caption className="sr-only">Attendance grid for {monthLabel}</caption>
           <thead>
             <tr className="border-b border-border">
-              <th className="sticky left-0 z-10 bg-background/95 px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <th scope="col" className="sticky left-0 z-10 bg-background/95 px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Student
               </th>
               {days.map((d) => {

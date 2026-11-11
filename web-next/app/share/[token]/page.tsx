@@ -5,6 +5,13 @@ import { resolveShareToken } from '@/lib/aiReports'
 import type { SharedAnalysis } from '@/lib/aiReports'
 import type { CoachAIError } from '@/types'
 import { formatDateLong } from '@/lib/date'
+import { summaryNumber } from '@/lib/analysis'
+import {
+  eventStateBadgeLabel,
+  formatConfidencePercent,
+  formatFormScore,
+  getEventDetectionCounts,
+} from '@/lib/analysisDisplay'
 
 // Public share page for players/coaches who receive a share link. No login is
 // required: the backend resolves the token out-of-band and returns a read-only
@@ -70,6 +77,46 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   const summary = toRecord(data.analysis.summary_json)
   const shotEvents = summary && isEvents(summary.shot_events) ? summary.shot_events : []
+  const tips = summary ? strArray(summary.top_tips) : []
+  const strengths = summary ? strArray(summary.strengths) : []
+  const narrative = summary ? str(summary.summary) : null
+  const tactical = summary ? str(summary.tactical_summary) : null
+  const needsReview = summary
+    ? Boolean(summary.needs_review || toRecord(summary.quality)?.needs_review)
+    : false
+  const qualityIssues = summary ? strArray(toRecord(summary.quality)?.issues) : []
+  const failures = summary && Array.isArray(summary.failures) ? (summary.failures as Array<Record<string, unknown>>) : []
+  const failureNotes = failures
+    .map((f) => {
+      const detail = toRecord(f.detail)
+      const unseen = Array.isArray(detail?.unseen_candidates) ? detail.unseen_candidates.length : null
+      if (f.code === 'F07_MISSED_CANDIDATE' && unseen) {
+        return `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review`
+      }
+      return str(f.message) ?? str(f.code) ?? ''
+    })
+    .filter(Boolean)
+  const confidenceKind = summary ? str(summary.confidence_kind) : null
+  const poseConfidence = summary ? num(summary.pose_confidence) : null
+  const confidence = summary ? summaryNumber(summary, 'confidence') : null
+  const confidenceDetail =
+    confidence !== null
+      ? `${confidenceKind === 'tracking' || confidenceKind === 'pose' ? 'Tracking confidence' : 'Event confidence'} ${formatConfidencePercent(confidence)}${
+          poseConfidence !== null &&
+          confidenceKind !== 'tracking' &&
+          confidenceKind !== 'pose' &&
+          Math.abs(poseConfidence - confidence) > 0.01
+            ? ` · pose ${formatConfidencePercent(poseConfidence)}`
+            : ''
+        }`
+      : null
+  const composite = summary ? toRecord(summary.composite) : null
+  const compositeScored = composite ? num(composite.scored_events) : null
+  const compositeConsidered = composite ? num(composite.considered_events) : null
+  const eventCounts = getEventDetectionCounts({ summary_json: summary })
+  const confirmedEvents = eventCounts.confirmed
+  const candidateEvents = eventCounts.candidate
+  const uncertainEvents = eventCounts.uncertain
   const label = data.analysis.display_name || data.server_job_id.slice(0, 8)
 
   return (
@@ -79,7 +126,14 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         <p className="text-muted-foreground mb-3 text-label font-medium uppercase tracking-[0.08em]">
           Shared Analysis
         </p>
-        <h1 className="text-foreground text-[30px] font-bold tracking-[-0.015em]">{label}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-foreground text-[30px] font-bold tracking-[-0.015em]">{label}</h1>
+          {needsReview ? (
+            <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+              Needs review
+            </span>
+          ) : null}
+        </div>
         <div className="text-muted-foreground mt-2 flex items-center gap-3 text-meta tabular-nums">
           <span>{formatDateLong(data.analysis.requested_at)}</span>
           {data.analysis.model && <span>{data.analysis.model}</span>}
@@ -87,48 +141,85 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       </div>
 
       {/* Stats */}
-      {summary && (
-        <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { label: 'Experimental Score', value: fmtStat(num(summary.form_score), '—') },
-            {
-              label: 'Confidence',
-              value:
-                num(summary.confidence) === null
-                  ? '—'
-                  : `${Math.round(num(summary.confidence)! * 100)}%`,
-            },
-            { label: 'Total Events', value: fmtStat(num(summary.total_events), '—') },
-            {
-              label: 'Duration',
-              value:
-                num(summary.duration_sec) === null
-                  ? '—'
-                  : `${Math.round(num(summary.duration_sec)!)}s`,
-            },
-          ].map((card) => (
-            <div key={card.label} className="border-border bg-card rounded-[6px] border p-5">
-              <p className="text-muted-foreground text-label font-medium uppercase tracking-[0.08em]">
-                {card.label}
-              </p>
-              <p className="text-foreground mt-2 text-[28px] font-semibold leading-none tabular-nums">
-                {card.value}
-              </p>
-            </div>
-          ))}
+      {summary ? (
+        <div className="mb-8">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[
+              {
+                label: 'Experimental Score',
+                value: formatFormScore(summaryNumber(summary, 'form_score')),
+                note:
+                  compositeScored !== null && compositeConsidered !== null
+                    ? `${compositeScored} scored / ${compositeConsidered} considered`
+                    : null,
+              },
+              { label: 'Confidence', value: formatConfidencePercent(summaryNumber(summary, 'confidence')), note: confidenceDetail },
+              { label: 'Confirmed Events', value: confirmedEvents === null ? '—' : String(confirmedEvents), note: null },
+              {
+                label: 'Video',
+                value: data.analysis.video_ready ? 'Available' : 'Not available',
+                note: null,
+              },
+            ].map((card) => (
+              <div key={card.label} className="border-border bg-card rounded-[6px] border p-5">
+                <p className="text-muted-foreground text-label font-medium uppercase tracking-[0.08em]">
+                  {card.label}
+                </p>
+                <p className="text-foreground mt-2 text-[28px] font-semibold leading-none tabular-nums">
+                  {card.value}
+                </p>
+                {card.note ? <p className="mt-1 text-label text-muted-foreground">{card.note}</p> : null}
+              </div>
+            ))}
+          </div>
+          {candidateEvents > 0 || uncertainEvents > 0 ? (
+            <p className="text-muted-foreground mt-3 text-meta">
+              {candidateEvents > 0 ? (
+                <>
+                  <span className="tabular-nums">{candidateEvents}</span> unconfirmed candidate
+                  {candidateEvents === 1 ? '' : 's'}
+                </>
+              ) : null}
+              {candidateEvents > 0 && uncertainEvents > 0 ? ' · ' : null}
+              {uncertainEvents > 0 ? (
+                <>
+                  <span className="tabular-nums">{uncertainEvents}</span> uncertain
+                </>
+              ) : null}
+              {' '}not included in confirmed performance counts.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {(narrative || tactical) && (
+        <div className="border-border bg-card mb-8 rounded-[6px] border">
+          <div className="border-b border-border px-5 py-3.5">
+            <p className="text-lead font-semibold text-foreground">Session summary</p>
+          </div>
+          <div className="space-y-3 p-5 text-body leading-[1.7] text-foreground">
+            {narrative ? <p>{narrative}</p> : null}
+            {tactical && tactical !== narrative ? <p>{tactical}</p> : null}
+            {qualityIssues.length > 0 ? (
+              <p className="text-meta text-muted-foreground">Quality notes: {qualityIssues.join('; ')}</p>
+            ) : null}
+            {failureNotes.length > 0 ? (
+              <p className="text-meta text-muted-foreground">{failureNotes.slice(0, 2).join(' · ')}</p>
+            ) : null}
+          </div>
         </div>
       )}
 
       {/* Tips, strengths, drill */}
-      {summary && (
+      {summary && (tips.length > 0 || strengths.length > 0) && (
         <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {strArray(summary.top_tips).length > 0 && (
+          {tips.length > 0 && (
             <div className="border-border bg-card rounded-[6px] border">
               <div className="border-b border-border px-5 py-3.5">
                 <p className="text-lead font-semibold text-foreground">Priority Focus</p>
               </div>
               <ul className="space-y-2 p-5">
-                {strArray(summary.top_tips).map((tip, i) => (
+                {tips.map((tip, i) => (
                   <li key={i} className="text-foreground flex items-start gap-2 text-body">
                     <span className="text-muted-foreground shrink-0 tabular-nums">{i + 1}.</span>
                     {tip}
@@ -137,13 +228,13 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
               </ul>
             </div>
           )}
-          {strArray(summary.strengths).length > 0 && (
+          {strengths.length > 0 && (
             <div className="border-border bg-card rounded-[6px] border">
               <div className="border-b border-border px-5 py-3.5">
                 <p className="text-lead font-semibold text-foreground">Strengths</p>
               </div>
               <ul className="space-y-2 p-5">
-                {strArray(summary.strengths).map((s, i) => (
+                {strengths.map((s, i) => (
                   <li key={i} className="text-foreground flex items-start gap-2 text-body">
                     <span className="text-success shrink-0">✓</span>
                     {s}
@@ -165,10 +256,13 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       )}
 
       {/* Shot events */}
-      {shotEvents.length > 0 && (
+      {shotEvents.length > 0 ? (
         <div className="border-border bg-card mb-8 rounded-[6px] border">
           <div className="border-b border-border px-5 py-3.5">
-            <p className="text-lead font-semibold text-foreground">Shot Events</p>
+            <p className="text-lead font-semibold text-foreground">Key moments</p>
+            <p className="text-muted-foreground mt-1 text-meta">
+              Timeline includes unconfirmed candidates; only confirmed events count as performance.
+            </p>
           </div>
           <ul className="p-5 pt-4">
             {shotEvents.slice(0, 10).map((event, i) => (
@@ -184,14 +278,14 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-foreground text-body">{str(event.event_type) ?? 'Event'}</p>
-                    {str(event.event_state) && event.event_state !== 'confirmed' && (
-                      <span className="rounded-full bg-warning/15 px-2 text-label font-medium leading-[18px] capitalize text-warning">
-                        {event.event_state === 'candidate' ? 'unconfirmed' : str(event.event_state)}
+                    {eventStateBadgeLabel(event.event_state) && (
+                      <span className="rounded-full bg-warning/15 px-2 text-label font-medium leading-[18px] text-warning">
+                        {eventStateBadgeLabel(event.event_state)}
                       </span>
                     )}
-                    {typeof event.form_score === 'number' && (
+                    {typeof event.form_score === 'number' && Number.isFinite(event.form_score) ? (
                       <span
                         className={`rounded-full px-2 text-label font-medium leading-[18px] tabular-nums ${
                           event.form_score >= 8
@@ -201,9 +295,13 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                               : 'text-destructive bg-destructive/10'
                         }`}
                       >
-                        {event.form_score}/10
+                        {formatFormScore(event.form_score)}
                       </span>
-                    )}
+                    ) : event.form_score === null ? (
+                      <span className="rounded-full bg-accent px-2 text-label font-medium leading-[18px] text-muted-foreground">
+                        Score: —
+                      </span>
+                    ) : null}
                   </div>
                   {str(event.feedback) && (
                     <p className="text-muted-foreground mt-1 text-meta">{str(event.feedback)}</p>
@@ -213,18 +311,38 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
                       {str(event.key_observation)}
                     </p>
                   )}
+                  {toRecord(event.matchup)?.primary && (toRecord(toRecord(event.matchup)?.primary)?.tracked === false) ? (
+                    <p className="text-muted-foreground mt-1 text-meta">
+                      Primary athlete not reliably tracked for this matchup; values may be limited.
+                    </p>
+                  ) : null}
                 </div>
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : summary ? (
+        <div className="border-border bg-card mb-8 rounded-[6px] border p-5">
+          <p className="text-muted-foreground text-body">No key moments were detected in this clip.</p>
+        </div>
+      ) : null}
 
-      {!summary && (
+      {summary && (qualityIssues.length > 0 || failureNotes.length > 0) && !(narrative || tactical) ? (
+        <div className="border-border bg-card mb-8 rounded-[6px] border p-5 space-y-1">
+          {qualityIssues.length > 0 ? (
+            <p className="text-meta text-muted-foreground">Quality notes: {qualityIssues.join('; ')}</p>
+          ) : null}
+          {failureNotes.length > 0 ? (
+            <p className="text-meta text-muted-foreground">{failureNotes.slice(0, 2).join(' · ')}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!summary ? (
         <div className="border-border bg-card rounded-[6px] border p-6 text-body">
           <p className="text-muted-foreground">This analysis has no summary to display.</p>
         </div>
-      )}
+      ) : null}
 
       <p className="text-muted-foreground text-center text-meta tabular-nums">
         Shared via CoachXYZ · expires {formatDateLong(data.expires_at)}
@@ -252,9 +370,7 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
 }
 
-function fmtStat(v: number | null, fallback: string): string {
-  return v === null ? fallback : String(v)
-}
+// formatting/count helpers live in `@/lib/analysisDisplay` for cross-surface consistency.
 
 function isEvents(v: unknown): v is Array<{
   timestamp?: unknown
@@ -263,6 +379,7 @@ function isEvents(v: unknown): v is Array<{
   event_state?: unknown
   feedback?: unknown
   key_observation?: unknown
+  matchup?: unknown
 }> {
   return Array.isArray(v)
 }

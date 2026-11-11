@@ -20,6 +20,8 @@ import type { OrgSubscription } from '@/lib/org/subscription'
 import type { DashboardQuickActions } from '@/lib/permissions'
 import { initials } from '@/lib/initials'
 import { formatDayWeekday } from '@/lib/date'
+import { analysisScore } from '@/lib/analysis'
+import { formatFormScore } from '@/lib/analysisDisplay'
 
 export const shellClass = 'bg-grid relative mx-auto max-w-[1080px] px-6 py-6 lg:px-8'
 
@@ -213,14 +215,6 @@ export function QuickActions({ analyze, manageStudents, schedule, invite }: Dash
 
 // ── Shared feed rows (defined once, reused by CoachHome) ────────────────────
 
-function formScore(summary: unknown): number | null {
-  if (summary && typeof summary === 'object' && 'form_score' in summary) {
-    const value = (summary as { form_score: unknown }).form_score
-    return typeof value === 'number' ? value : null
-  }
-  return null
-}
-
 export function RecentList({
   analyses,
   limit,
@@ -248,7 +242,7 @@ export function RecentList({
       ) : (
         <ListShell>
           {rows.map((a) => {
-            const score = formScore(a.summary_json)
+            const score = analysisScore(a)
             return (
               <ListRow
                 key={a.server_job_id}
@@ -262,7 +256,7 @@ export function RecentList({
                     ) : null}
                   </>
                 }
-                meta={score !== null ? score : undefined}
+                meta={score !== null ? formatFormScore(score) : undefined}
                 trailing={
                   <StatusPill tone={a.complete ? 'green' : a.error_code ? 'red' : 'gray'}>
                     {a.complete ? 'Done' : a.error_code ? 'Failed' : 'Running'}

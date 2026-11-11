@@ -1,6 +1,7 @@
 import type { ReportContent, ReportRecord } from '@/lib/org/types'
 import { ATTENDANCE_STATUS_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org/types'
 import { formatDateMed, formatDateTimeShort } from '@/lib/date'
+import { formatFormScore } from '@/lib/analysisDisplay'
 
 const TYPE_ORDER: Record<string, string[]> = {
   attendance: ['summary', 'org', 'attendance', 'performance', 'analyses'],
@@ -147,8 +148,8 @@ function PerformanceBlock({ c }: { c: ReportContent }) {
     <Section title="Performance">
       <StatCells
         items={[
-          ['Avg form', p.form_score_avg === null ? '—' : `${p.form_score_avg}/10`],
-          ['Latest form', p.form_score_latest === null ? '—' : `${p.form_score_latest}/10`],
+          ['Avg form', formatFormScore(p.form_score_avg)],
+          ['Latest form', formatFormScore(p.form_score_latest)],
           ['Analyzed sessions', String(p.total_sessions)],
           [
             'Last analysis',
@@ -172,7 +173,7 @@ function AnalysesBlock({ c }: { c: ReportContent }) {
           >
             <span className="text-foreground">{a.display_name || 'Untitled video'}</span>
             <span className="text-muted-foreground tabular-nums">
-              {a.form_score === null ? '—' : `${a.form_score}/10`}
+              {formatFormScore(a.form_score)}
             </span>
           </li>
         ))}

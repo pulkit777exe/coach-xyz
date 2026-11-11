@@ -224,12 +224,13 @@ export function StudentImportDialog({
               </p>
               <div className="border-border max-h-48 overflow-auto rounded-[6px] border">
                 <table className="w-full text-meta">
+                  <caption className="sr-only">Preview of parsed student rows</caption>
                   <thead>
                     <tr className="border-b border-border text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      <th className="px-3 py-2 text-left">Name</th>
-                      <th className="px-3 py-2 text-left">Email</th>
-                      <th className="px-3 py-2 text-left">Sport</th>
-                      <th className="px-3 py-2 text-left">Status</th>
+                      <th scope="col" className="px-3 py-2 text-left">Name</th>
+                      <th scope="col" className="px-3 py-2 text-left">Email</th>
+                      <th scope="col" className="px-3 py-2 text-left">Sport</th>
+                      <th scope="col" className="px-3 py-2 text-left">Status</th>
                     </tr>
                   </thead>
                   <tbody>

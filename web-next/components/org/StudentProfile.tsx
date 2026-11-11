@@ -57,6 +57,7 @@ import { linkAnalysisToStudent } from '@/lib/org/email'
 import { orgAttendanceSummary } from '@/lib/org/attendance'
 import { formatDateLong, formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
+import { formatFormScore } from '@/lib/analysisDisplay'
 import { ATTENDANCE_STATUS_LABELS } from '@/lib/org/types'
 import { capitalize } from '@/lib/utils'
 
@@ -796,18 +797,19 @@ export default function StudentProfile({
         ) : (
           <div className="border-border overflow-hidden rounded-[6px] border">
             <table className="w-full text-body">
+              <caption className="sr-only">Analyses linked to this student</caption>
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Analysis
                   </th>
-                  <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Date
                   </th>
-                  <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                  <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
                     Exp. form
                   </th>
-                  <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  <th scope="col" className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
                     Action
                   </th>
                 </tr>
@@ -830,7 +832,7 @@ export default function StudentProfile({
                       {formatDateMed(a.requested_at)}
                     </td>
                     <td className="hidden px-4 py-2.5 text-body tabular-nums md:table-cell">
-                      {analysisScore(a) ?? '—'}
+                      {formatFormScore(analysisScore(a))}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {canWrite && (

@@ -383,14 +383,53 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }
 
+  const handleTimelineKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const video = videoRef.current
+    if (!video || !video.duration || !isFinite(video.duration)) return
+    const step = e.shiftKey ? 10 : 5
+    let next = video.currentTime
+    switch (e.key) {
+      case 'ArrowLeft':
+        next = Math.max(0, video.currentTime - step)
+        break
+      case 'ArrowRight':
+        next = Math.min(video.duration, video.currentTime + step)
+        break
+      case 'Home':
+        next = 0
+        break
+      case 'End':
+        next = video.duration
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+    video.currentTime = next
+  }
+
+  const timelineValue = videoRef.current?.currentTime ?? 0
+  const timelineMax = videoRef.current?.duration
+  const timelineNow =
+    timelineMax && isFinite(timelineMax) ? Math.max(0, Math.min(timelineMax, timelineValue)) : 0
+
   return (
     <div
       ref={containerRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-border bg-black"
     >
       {hasError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-          <svg className="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div
+          role="alert"
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground"
+        >
+          <svg
+            className="w-8 h-8 opacity-40"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -425,6 +464,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       {/* Canvas overlay — drawing only, no pointer events */}
       <canvas
         ref={canvasRef}
+        aria-hidden="true"
         className={`absolute inset-0 pointer-events-none ${hasError ? 'hidden' : ''}`}
         style={{ zIndex: 10 }}
       />
@@ -432,12 +472,24 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       {/* Timeline interaction layer — sits at the bottom, above video controls */}
       <div
         ref={timelineRef}
-        className="absolute bottom-0 left-0 right-0 cursor-pointer"
+        role="slider"
+        tabIndex={hasError ? -1 : 0}
+        aria-label="Video timeline"
+        aria-valuemin={0}
+        aria-valuemax={timelineMax && isFinite(timelineMax) ? Math.round(timelineMax) : 0}
+        aria-valuenow={Math.round(timelineNow)}
+        aria-valuetext={
+          timelineMax && isFinite(timelineMax)
+            ? `${timelineNow.toFixed(1)} seconds of ${timelineMax.toFixed(1)}`
+            : 'Video duration unavailable'
+        }
+        className={`absolute bottom-0 left-0 right-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${hasError ? 'hidden' : ''}`}
         style={{ height: TIMELINE_H, zIndex: 11 }}
         onClick={handleTimelineClick}
         onMouseEnter={() => setIsHoveringTimeline(true)}
         onMouseLeave={() => setIsHoveringTimeline(false)}
         onMouseMove={handleTimelineMove}
+        onKeyDown={handleTimelineKeyDown}
       />
     </div>
   )

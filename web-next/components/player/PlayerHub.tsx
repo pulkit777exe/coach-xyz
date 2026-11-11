@@ -45,6 +45,7 @@ import {
 import { ATTENDANCE_STATUS_LABELS, EVENT_STATUS_LABELS, EVENT_TYPE_LABELS, REPORT_TYPE_LABELS, STUDENT_STATUS_LABELS } from '@/lib/org/types'
 import { formatDateMed, formatDateShort } from '@/lib/date'
 import { analysisScore } from '@/lib/analysis'
+import { formatConfidencePercent, formatFormScore } from '@/lib/analysisDisplay'
 
 type LoadState =
   { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: HubData }
@@ -358,7 +359,7 @@ export default function PlayerHub() {
                 <div className="flex shrink-0 items-center gap-3">
                   {analysisScore(analysis) !== null && (
                     <span className="text-[17px] font-semibold tabular-nums text-foreground">
-                      {analysisScore(analysis)}
+                      {formatFormScore(analysisScore(analysis))}
                     </span>
                   )}
                   <StatusPill tone={analysis.complete ? 'green' : 'gray'}>
@@ -655,7 +656,7 @@ function AnalyzeVideoCard({
               size="sm"
               onClick={() => flow.handlePlayerSelected(player.player_index)}
             >
-              Player {player.player_index} · {Math.round(player.confidence * 100)}%
+              Player {player.player_index} · {formatConfidencePercent(player.confidence)}
             </Button>
           ))}
         </div>

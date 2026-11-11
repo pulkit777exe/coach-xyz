@@ -10,6 +10,7 @@ import TimestampPill from '@/components/TimestampPill'
 import AnalysisProgress from '@/components/AnalysisProgress'
 import ErrorScreen from '@/components/ErrorScreen'
 import ProStatsPanel from '@/components/analysis/ProStatsPanel'
+import FindingsTimeline from '@/components/FindingsTimeline'
 
 const ResultsSummary = dynamic(() => import('@/components/ResultsSummary'), {
   ssr: false,
@@ -24,32 +25,27 @@ import { VideoPlayer } from '@/components/VideoPlayer'
 import { getJobStatus, getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
 import type { CoachAIError } from '@/lib/data/errors'
 import { createShareToken } from '@/lib/aiReports'
-import { getShotEvents } from '@/lib/analysis'
+import { getShotEvents, summaryNumber } from '@/lib/analysis'
+import {
+  eventStateBadgeLabel,
+  formatAverageScore,
+  formatConfidencePercent,
+  formatFormScore,
+  formatRatePercent,
+  getEventDetectionCounts,
+} from '@/lib/analysisDisplay'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
-import type {
-  JobStatus,
-  AnalysisSummary,
-  Matchup,
-  PerformanceMetric,
-  ProfessionalStats,
-} from '@/types'
+import type { JobStatus, AnalysisSummary, Matchup, PerformanceMetric, ProfessionalStats, Finding } from '@/types'
 import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
 import { Button } from '@/components/9ui/ui/button'
 import { CopyButton } from '@/components/interior/copy-button'
-import { SegmentedControl } from '@/components/interior/segmented-control'
-import { ReadingProgress } from '@/components/interior/reading-progress'
-import { Popover } from '@/components/interior/popover'
-import { ScrollSpy } from '@/components/interior/scroll-spy'
-import { TreeView } from '@/components/interior/tree-view'
 import { HoldToConfirm } from '@/components/interior/hold-to-confirm'
 import { Modal } from '@/components/interior/modal'
 import { Drawer } from '@/components/interior/drawer'
 import { LoadingButton } from '@/components/interior/loading-button'
-import { ShowMore } from '@/components/interior/show-more'
-import { Lightbox } from '@/components/interior/lightbox'
 import { formatDateTime } from '@/lib/date'
 
 const FALLBACK_POLL_ATTEMPTS = 4
@@ -74,6 +70,8 @@ function formatMetric(value: number, unit: string): string {
   return `${rounded}${unit}`
 }
 
+/* formatting helpers live in @/lib/analysisDisplay */
+
 function eventMetrics(event: Record<string, unknown>): PerformanceMetric[] {
   return Array.isArray(event.metrics) ? (event.metrics as PerformanceMetric[]) : []
 }
@@ -81,6 +79,10 @@ function eventMetrics(event: Record<string, unknown>): PerformanceMetric[] {
 function eventMatchup(event: Record<string, unknown>): Matchup | null {
   const raw = event.matchup
   return raw && typeof raw === 'object' ? (raw as Matchup) : null
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v)
 }
 
 interface AnalysisDetailClientProps {
@@ -106,15 +108,10 @@ export default function AnalysisDetailClient({
   const [expiredMessage, setExpiredMessage] = useState<string | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
   const [stuckWarning, setStuckWarning] = useState(false)
-  const [activeView, setActiveView] = useState('overview')
   const pollControllerRef = useRef<JobPollingController | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
 
-  const shotEvents = getShotEvents(initialData)
-  const [showAllEvents, setShowAllEvents] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [showMetadataDrawer, setShowMetadataDrawer] = useState(false)
-  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [shareLoading, setShareLoading] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
@@ -136,7 +133,6 @@ export default function AnalysisDetailClient({
       cancelled = true
     }
   }, [jobId])
-  const visibleEventCount = showAllEvents ? shotEvents.length : Math.min(5, shotEvents.length)
 
   useEffect(() => {
     let cancelled = false
@@ -276,6 +272,7 @@ export default function AnalysisDetailClient({
             This analysis is taking longer than usual.
           </p>
           <button
+            type="button"
             onClick={() => {
               setStuckWarning(false)
               pollControllerRef.current?.refresh()
@@ -322,7 +319,7 @@ export default function AnalysisDetailClient({
             <button
               type="button"
               onClick={() => router.refresh()}
-              className="inline-block px-4 py-2 rounded-[6px] border border-border text-body font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-block px-4 py-2 rounded-[6px] border border-border text-body font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               Try Again
             </button>
@@ -353,65 +350,104 @@ export default function AnalysisDetailClient({
   const em: string | null = data.error_message
 
   const summaryRaw = data.summary_json
-  const summary =
-    summaryRaw && typeof summaryRaw === 'object' && !Array.isArray(summaryRaw)
-      ? (summaryRaw as Record<string, unknown>)
-      : typeof summaryRaw === 'string'
-        ? (() => {
-            try {
-              return JSON.parse(summaryRaw) as Record<string, unknown>
-            } catch {
-              return null
-            }
-          })()
-        : null
+  const summary = isRecord(summaryRaw)
+    ? summaryRaw
+    : typeof summaryRaw === 'string'
+      ? (() => {
+          try {
+            const parsed = JSON.parse(summaryRaw)
+            return isRecord(parsed) ? parsed : null
+          } catch {
+            return null
+          }
+        })()
+      : null
 
-  const drill: string | null =
-    summary && typeof summary.priority_drill === 'string' ? summary.priority_drill : null
-
+  const shotEvents = getShotEvents({ summary_json: summary })
+  const findings = Array.isArray(summary?.findings) ? (summary?.findings as Finding[]) : []
+  const focusAreas = Array.isArray(summary?.top_tips)
+    ? (summary.top_tips as unknown[]).filter((t): t is string => typeof t === 'string' && t.length > 0)
+    : []
+  const strengths = Array.isArray(summary?.strengths)
+    ? (summary.strengths as unknown[]).filter((s): s is string => typeof s === 'string' && s.length > 0)
+    : []
+  const drill = typeof summary?.priority_drill === 'string' ? summary.priority_drill : null
+  const narrative = typeof summary?.summary === 'string' ? summary.summary.trim() : ''
   const sessionMetrics = Array.isArray(summary?.session_metrics)
     ? (summary.session_metrics as Array<Record<string, unknown>>).filter(
         (metric) => typeof metric.value === 'number',
       )
     : []
-
   const proStats =
     summary?.stats && typeof summary.stats === 'object' && !Array.isArray(summary.stats)
       ? (summary.stats as ProfessionalStats)
       : null
-  const tacticalSummary =
-    typeof summary?.tactical_summary === 'string' ? summary.tactical_summary : null
+  const tacticalSummary = typeof summary?.tactical_summary === 'string' ? summary.tactical_summary : null
   const keyInsights = Array.isArray(summary?.key_insights)
     ? summary.key_insights.filter((insight): insight is string => typeof insight === 'string')
     : []
+  const eventCounts = getEventDetectionCounts({ summary_json: summary })
+  const confirmedEvents = eventCounts.confirmed
+  const candidateEvents = eventCounts.candidate
+  const uncertainEvents = eventCounts.uncertain
+  const needsReview = Boolean(summary?.needs_review || (isRecord(summary?.quality) && summary?.quality.needs_review))
+  const qualityIssues =
+    isRecord(summary?.quality) && Array.isArray(summary.quality.issues)
+      ? (summary.quality.issues as unknown[]).filter((i): i is string => typeof i === 'string')
+      : []
+  const failures = Array.isArray(summary?.failures) ? (summary.failures as Array<Record<string, unknown>>) : []
+  const failureNotes = failures
+    .map((f) => {
+      const detail = isRecord(f.detail) ? f.detail : null
+      const unseen = Array.isArray(detail?.unseen_candidates) ? detail.unseen_candidates.length : null
+      if (f.code === 'F07_MISSED_CANDIDATE' && unseen) {
+        return `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review`
+      }
+      return typeof f.message === 'string' && f.message ? f.message : typeof f.code === 'string' ? f.code : ''
+    })
+    .filter(Boolean)
+  const formScore = summaryNumber(summary, 'form_score')
+  const averageScore = summaryNumber(summary, 'average_score')
+  const confidence = summaryNumber(summary, 'confidence')
+  const confidenceKind = typeof summary?.confidence_kind === 'string' ? summary.confidence_kind : null
+  const poseConfidence = summaryNumber(summary, 'pose_confidence')
+  const successRate = summaryNumber(summary, 'success_rate')
+  const composite = isRecord(summary?.composite) ? (summary.composite as Record<string, unknown>) : null
+  const compositeScored = typeof composite?.scored_events === 'number' ? composite.scored_events : null
+  const compositeConsidered = typeof composite?.considered_events === 'number' ? composite.considered_events : null
+  const confidenceLabel =
+    confidenceKind === 'tracking' || confidenceKind === 'pose' ? 'Tracking confidence' : 'Event confidence'
+  const confidenceDetail =
+    typeof confidence === 'number'
+      ? `${confidenceLabel} ${formatConfidencePercent(confidence)}${
+          typeof poseConfidence === 'number' &&
+          confidenceKind !== 'tracking' &&
+          confidenceKind !== 'pose' &&
+          Math.abs(poseConfidence - confidence) > 0.01
+            ? ` · pose ${formatConfidencePercent(poseConfidence)}`
+            : ''
+        }`
+      : null
+  const hasProStats = Boolean(proStats || tacticalSummary || keyInsights.length > 0)
 
   return (
-    <div ref={containerRef} className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
-      {/* Reading Progress */}
-      <ReadingProgress scroller={containerRef} className="fixed top-14 left-0 right-0 z-40" />
+    <div className="mx-auto max-w-[1080px] px-6 py-6 lg:px-8">
+      <nav aria-label="Breadcrumb" className="my-6 pt-4">
+        <ol className="flex items-center gap-1.5 text-meta text-muted-foreground">
+          <li>
+            <Link href="/dashboard/history" className="hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-[2px]">
+              History
+            </Link>
+          </li>
+          <li aria-hidden="true" className="text-muted-foreground/60">/</li>
+          <li aria-current="page" className="text-foreground truncate max-w-[60ch]">
+            {data.display_name || data.file_name || 'Untitled'}
+          </li>
+        </ol>
+      </nav>
 
-      <ScrollSpy
-        sections={[
-          { id: 'header', label: 'Overview' },
-          { id: 'stats', label: 'Stats' },
-          { id: 'events', label: 'Events' },
-          { id: 'tips', label: 'Tips' },
-          { id: 'chat', label: 'Chat' },
-        ]}
-        root={containerRef}
-        className="mb-6 [&_*]:!text-foreground"
-      />
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 my-6 pt-4 text-meta text-muted-foreground">
-        <span>History</span>
-        <span className="text-muted-foreground/60">/</span>
-        <span className="text-foreground">{data.display_name || data.file_name || 'Untitled'}</span>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div className="min-w-0">
           <AnalysisTitle
             auth0Id={auth0Id}
             jobId={jobId}
@@ -420,7 +456,7 @@ export default function AnalysisDetailClient({
           />
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground">
             <span className="tabular-nums">{formatDateTime(data.requested_at)}</span>
-            {data.model && <span>{data.model}</span>}
+            {data.model ? <span>{data.model}</span> : null}
             {data.player_count ? (
               <span className="tabular-nums">
                 {data.player_count} player{data.player_count > 1 ? 's' : ''}
@@ -428,14 +464,20 @@ export default function AnalysisDetailClient({
             ) : null}
           </div>
         </div>
-        <StatusPill tone={data.complete ? 'green' : ec ? 'red' : 'blue'}>
-          {data.complete ? 'Complete' : ec ? 'Failed' : 'In Progress'}
-        </StatusPill>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone={data.complete ? 'green' : ec ? 'red' : 'blue'}>
+            {data.complete ? 'Complete' : ec ? 'Failed' : 'In Progress'}
+          </StatusPill>
+          {needsReview ? (
+            <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+              Needs review
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      {/* Actions */}
       <div className="flex flex-wrap items-center gap-2 mb-8">
-        {!data.complete && !ec && (
+        {!data.complete && !ec ? (
           <HoldToConfirm
             onConfirm={async () => {
               await cancelAnalysis(auth0Id, data.server_job_id)
@@ -446,8 +488,8 @@ export default function AnalysisDetailClient({
           >
             <span className={CHIP_CLASS}>Cancel</span>
           </HoldToConfirm>
-        )}
-        {data.complete && data.video_ready && (
+        ) : null}
+        {data.complete && data.video_ready ? (
           <LoadingButton
             onAction={() => {
               window.location.href = downloadUrl
@@ -458,26 +500,10 @@ export default function AnalysisDetailClient({
           >
             Download Video
           </LoadingButton>
-        )}
+        ) : null}
         <Button variant="outline" size="sm" onClick={() => setShowMetadataDrawer(true)}>
           View Metadata
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setLightboxOpen(true)}>
-          Preview
-        </Button>
-        <Link href={`/dashboard/analysis/${jobId}/chat`}>
-          <Button size="sm">
-            Chat with AI
-          </Button>
-        </Link>
-
-        {/* Lightbox */}
-        <Lightbox
-          open={lightboxOpen}
-          onClose={() => setLightboxOpen(false)}
-          src={data.video_ready ? downloadUrl : ''}
-          alt="Analysis video preview"
-        />
         <CopyButton
           value={data.engine_job_id}
           label="Copy Job ID"
@@ -518,7 +544,6 @@ export default function AnalysisDetailClient({
           </span>
         </HoldToConfirm>
 
-        {/* Share Modal */}
         <Modal
           open={showShareModal}
           onClose={() => setShowShareModal(false)}
@@ -535,7 +560,37 @@ export default function AnalysisDetailClient({
                 Creating share link…
               </div>
             ) : shareError ? (
-              <p className="text-meta text-destructive">{shareError}</p>
+              <div className="space-y-2">
+                <p className="text-meta text-destructive">{shareError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShareUrl(null)
+                    setShareError(null)
+                    setShareExpires(null)
+                    setShareLoading(true)
+                    shareLoadIdRef.current += 1
+                    const loadId = shareLoadIdRef.current
+                    createShareToken(auth0Id, data.server_job_id)
+                      .then((res) => {
+                        if (loadId !== shareLoadIdRef.current) return
+                        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+                        setShareUrl(`${origin}${res.url}`)
+                        setShareExpires(res.expires_at)
+                      })
+                      .catch((err) => {
+                        if (loadId !== shareLoadIdRef.current) return
+                        setShareError((err as CoachAIError).message ?? 'Failed to create share link')
+                      })
+                      .finally(() => {
+                        if (loadId === shareLoadIdRef.current) setShareLoading(false)
+                      })
+                  }}
+                >
+                  Try again
+                </Button>
+              </div>
             ) : shareUrl ? (
               <>
                 <div className="flex gap-2">
@@ -555,498 +610,307 @@ export default function AnalysisDetailClient({
                     className="!rounded-[6px] !border !border-border !bg-transparent !px-3 !py-1.5 !text-meta !font-medium"
                   />
                 </div>
-                {shareExpires && (
+                {shareExpires ? (
                   <p className="text-meta text-muted-foreground tabular-nums">
                     Expires {formatDateTime(shareExpires)}
                   </p>
-                )}
+                ) : null}
               </>
             ) : null}
           </div>
         </Modal>
       </div>
 
-      {/* Error */}
-      {ec && (
+      {pollError && !status?.complete ? (
+        <div className="rounded-[6px] border border-warning/30 bg-warning/10 p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-body text-foreground">{pollError}</p>
+          <Button variant="outline" size="sm" onClick={() => pollControllerRef.current?.refresh()}>
+            Retry now
+          </Button>
+        </div>
+      ) : null}
+
+      {ec ? (
         <div className="rounded-[6px] border border-destructive/20 bg-destructive/10 p-5 mb-8">
-          <p className="mb-2 text-meta font-medium text-destructive">Error — {ec}</p>
-          <p className="text-body text-muted-foreground">{em}</p>
+          <p className="mb-2 text-meta font-medium text-destructive">Analysis error — {ec}</p>
+          <p className="text-body text-muted-foreground">{em || 'The analysis did not complete successfully.'}</p>
         </div>
-      )}
+      ) : null}
 
-      {/* Segmented Control for view switching */}
-      {summary && (
-        <div className="mb-8">
-          <SegmentedControl
-            label="Analysis views"
-            options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'events', label: 'Events' },
-              { value: 'chat', label: 'Chat' },
-            ]}
-            value={activeView}
-            onValueChange={setActiveView}
-            className="!inline-flex"
-          />
-        </div>
-      )}
-
-      {/* Chat View */}
-      {summary && activeView === 'chat' && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
-                Chat with AI Coach
-              </h2>
-              <p className="text-meta text-muted-foreground mt-0.5">
-                Ask questions about your experimental score, key observations, and recommended
-                drills.
-              </p>
+      {summary ? (
+        <div className="space-y-8">
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <CardHeading>Summary & quality</CardHeading>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+                Experimental score
+              </span>
+              {needsReview ? (
+                <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+                  Needs review
+                </span>
+              ) : null}
             </div>
-            <Link
-              href={`/dashboard/analysis/${jobId}/chat`}
-              className="text-meta font-medium text-primary hover:underline flex items-center gap-1"
-            >
-              Full Screen Mode →
-            </Link>
-          </div>
-          <div
-            className="rounded-[6px] border border-border bg-background overflow-hidden"
-            style={{ height: 'min(600px, 70vh)' }}
-          >
-            <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
-          </div>
-        </div>
-      )}
-
-      {/* Video Player */}
-      {data.video_ready && activeView === 'overview' && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8 overflow-hidden">
-          <CardHeading>Video Playback & Overlays</CardHeading>
-          <div className="max-w-4xl mx-auto">
-            <VideoPlayer jobId={jobId} summary={summary as unknown as AnalysisSummary} />
-          </div>
-        </div>
-      )}
-
-      {/* Stats */}
-      {summary && activeView === 'overview' && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          {[
-            {
-              label: 'Experimental Score',
-              value:
-                typeof summary.form_score === 'number'
-                  ? `${summary.form_score.toFixed(1)}/10`
-                  : '—',
-            },
-            {
-              label: 'Confidence',
-              value:
-                typeof summary.confidence === 'number'
-                  ? `${(summary.confidence * 100).toFixed(0)}%`
-                  : '—',
-            },
-            {
-              label: 'Total Events',
-              value: typeof summary.total_events === 'number' ? summary.total_events : '—',
-            },
-            {
-              label: 'Experimental Average',
-              value:
-                typeof summary.average_score === 'number'
-                  ? `${summary.average_score.toFixed(1)}/10`
-                  : '—',
-            },
-            {
-              label: 'Success Rate',
-              value:
-                typeof summary.success_rate === 'number'
-                  ? `${(summary.success_rate * 100).toFixed(0)}%`
-                  : '—',
-            },
-          ].map((card) => (
-            <div key={card.label} className="rounded-[6px] border border-border bg-card p-5">
-              <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                {card.label}
-              </p>
-              <p className="mt-2 font-semibold text-[28px] leading-none tabular-nums text-foreground">
-                {card.value}
-              </p>
-              {card.label === 'Experimental Score' && (
-                <Popover
-                  trigger="click"
-                  label="Experimental performance rating — provisional, unvalidated weighting. It is not an independently validated measure of athletic performance and should not be used for coaching or selection decisions. Criterion-level measurements are the primary output."
-                  className="[&_*]:!text-foreground"
-                >
-                  <span className="mt-2 inline-block cursor-help text-meta text-muted-foreground underline decoration-dotted">
-                    What is this?
-                  </span>
-                </Popover>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Measured performance */}
-      {summary && activeView === 'overview' && sessionMetrics.length > 0 && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-          <CardHeading>Measured Performance</CardHeading>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-            {sessionMetrics.map((metric) => {
-              const value = metric.value as number
-              const unit = typeof metric.unit === 'string' ? metric.unit : ''
-              const best = typeof metric.best === 'number' ? metric.best : null
-              return (
-                <div
-                  key={String(metric.key)}
-                  className="rounded-[6px] border border-border bg-background px-4 py-3"
-                >
-                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                    {String(metric.label ?? metric.key)}
-                  </p>
-                  <p className="mt-1 font-semibold text-[24px] leading-none tabular-nums text-foreground">
-                    {formatMetric(value, unit)}
-                  </p>
-                  <p className="mt-1 text-meta text-muted-foreground">
-                    {metric.kind === 'metric'
-                      ? 'session average'
-                      : metric.kind === 'matchup'
-                        ? 'matchup average'
-                        : 'session'}
-                    {best !== null && ` · best ${formatMetric(best, unit)}`}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Professional stat layer: provenance-labelled groups + honest gaps */}
-      {summary &&
-        activeView === 'overview' &&
-        (proStats || tacticalSummary || keyInsights.length > 0) && (
-          <div className="mb-8">
-            <ProStatsPanel
-              stats={proStats}
-              tacticalSummary={tacticalSummary}
-              keyInsights={keyInsights}
-            />
-          </div>
-        )}
-
-      {/* Shot Events with Reorder */}
-      {summary &&
-        (activeView === 'overview' || activeView === 'events') &&
-        'shot_events' in summary &&
-        Array.isArray(summary.shot_events) &&
-        shotEvents.length > 0 && (
-          <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-            <CardHeading>Event Priority</CardHeading>
-            <ol aria-label="Shot events, in engine priority order" className="m-0 list-none p-0">
-              {shotEvents.slice(0, 5).map((event, i) => (
-                <li
-                  key={`${typeof event.timestamp === 'number' ? event.timestamp : i}-${i}`}
-                  className="flex items-center gap-3 py-2"
-                >
-                  <TimestampPill
-                    seconds={typeof event.timestamp === 'number' ? event.timestamp : 0}
-                  />
-                  <span className="text-body text-foreground">
-                    {typeof event.event_type === 'string' ? event.event_type : 'Event'}
-                  </span>
-                  {typeof event.event_state === 'string' && event.event_state !== 'confirmed' && (
-                    <span className="text-label font-medium px-1.5 py-0.5 rounded-full bg-warning/15 text-warning capitalize">
-                      {event.event_state === 'candidate' ? 'unconfirmed' : event.event_state}
-                    </span>
-                  )}
-                  {typeof event.form_score === 'number' && (
-                    <span
-                      className={`text-label font-medium px-1.5 py-0.5 rounded-full ${
-                        event.form_score >= 8
-                          ? 'bg-success/15 text-success'
-                          : event.form_score >= 5
-                            ? 'bg-warning/15 text-warning'
-                            : 'bg-destructive/10 text-destructive'
-                      }`}
-                    >
-                      <span className="tabular-nums">{event.form_score}/10</span>
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-
-      {/* Shot Events with Show More */}
-      {summary &&
-        (activeView === 'overview' || activeView === 'events') &&
-        'shot_events' in summary &&
-        Array.isArray(summary.shot_events) && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-          <CardHeading>
-            Key Moments{' '}
-            {shotEvents.length > visibleEventCount &&
-              `(${visibleEventCount} of ${shotEvents.length})`}
-          </CardHeading>
-          <div className="space-y-0">
-            {shotEvents.slice(0, visibleEventCount).map((event, i) => {
-              const metrics = eventMetrics(event)
-              const matchup = eventMatchup(event)
-              return (
-              <div
-                key={i}
-                className={`flex items-start gap-4 py-3 ${
-                  i < shotEvents.length - 1 ? 'border-b border-border' : ''
-                }`}
-              >
-                {typeof event.timestamp === 'number' && <TimestampPill seconds={event.timestamp} />}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-body text-foreground">
-                      {typeof event.event_type === 'string' ? event.event_type : 'Event'}
-                    </p>
-                    {typeof event.event_state === 'string' && event.event_state !== 'confirmed' && (
-                      <span className="text-label font-medium px-1.5 py-0.5 rounded-full bg-warning/15 text-warning capitalize">
-                        {event.event_state === 'candidate' ? 'unconfirmed' : event.event_state}
-                      </span>
-                    )}
-                    {typeof event.form_score === 'number' && (
-                      <span
-                        className={`text-label font-medium px-1.5 py-0.5 rounded-full ${
-                          event.form_score >= 8
-                            ? 'bg-success/15 text-success'
-                            : event.form_score >= 5
-                              ? 'bg-warning/15 text-warning'
-                              : 'bg-destructive/10 text-destructive'
-                        }`}
-                      >
-                        <span className="tabular-nums">{event.form_score}/10</span>
-                      </span>
-                    )}
-                  </div>
-                  {typeof event.feedback === 'string' && (
-                    <p className="mt-1 text-meta text-muted-foreground">{event.feedback}</p>
-                  )}
-                  {typeof event.key_observation === 'string' && (
-                    <p className="mt-0.5 text-meta text-muted-foreground">
-                      {event.key_observation}
-                    </p>
-                  )}
-                  {metrics.length > 0 && !(matchup?.primary?.metrics?.length) && (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                      {metrics
-                        .filter((metric) => typeof metric.value === 'number')
-                        .slice(0, 3)
-                        .map((metric) => (
-                          <span key={metric.key} className="text-label text-muted-foreground">
-                            {metric.label}{' '}
-                            <span className="tabular-nums text-foreground">
-                              {formatMetric(metric.value as number, metric.unit)}
-                            </span>
-                          </span>
-                        ))}
-                    </div>
-                  )}
-                  {matchup && (
-                    <div className="mt-3 rounded-[6px] border border-border bg-background p-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {[
-                          { key: 'primary', role: matchup.primary },
-                          { key: 'opponent', role: matchup.opponent },
-                        ].map(({ key, role }) =>
-                          role ? (
-                            <div key={key}>
-                              <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                                {role.role}
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                {(role.metrics ?? [])
-                                  .filter((metric) => typeof metric.value === 'number')
-                                  .slice(0, 3)
-                                  .map((metric) => (
-                                    <span
-                                      key={metric.key}
-                                      className="text-label text-muted-foreground"
-                                    >
-                                      {metric.label}{' '}
-                                      <span className="tabular-nums text-foreground">
-                                        {formatMetric(metric.value as number, metric.unit)}
-                                      </span>
-                                    </span>
-                                  ))}
-                              </div>
-                            </div>
-                          ) : null,
-                        )}
-                      </div>
-                      {typeof matchup.separation?.distance === 'number' && (
-                        <p className="mt-2 text-label text-muted-foreground">
-                          Distance to {matchup.roles.opponent.toLowerCase()}:{' '}
-                          <span className="tabular-nums text-foreground">
-                            {matchup.separation.distance.toFixed(1)} torso
-                          </span>
-                          {typeof matchup.separation.side === 'string' &&
-                            ` to the ${matchup.separation.side}`}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )
-            })}
-          </div>
-          {shotEvents.length > visibleEventCount && (
-            <button
-              onClick={() => setShowAllEvents(true)}
-              className="mt-4 text-meta font-medium text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded"
-            >
-              Show all <span className="tabular-nums">{shotEvents.length}</span> events →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Tips & Strengths */}
-      {summary && activeView === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          {'top_tips' in summary &&
-            Array.isArray(summary.top_tips) &&
-            (summary.top_tips as string[]).length > 0 && (
-              <div className="rounded-[6px] border border-border bg-card p-6">
-                <CardHeading>Priority Focus</CardHeading>
-                <ShowMore lines={3} className="[&_*]:!text-foreground">
-                  <ul className="space-y-2">
-                    {(summary.top_tips as string[]).map((tip, i) => (
-                      <li key={i} className="text-body text-foreground flex items-start gap-2">
-                        <span className="text-muted-foreground shrink-0 tabular-nums">
-                          {i + 1}.
-                        </span>
-                        {tip}
-                      </li>
-                    ))}
-                  </ul>
-                </ShowMore>
-              </div>
+            {narrative ? (
+              <p className="text-body leading-[1.7] text-foreground">{narrative}</p>
+            ) : (
+              <p className="text-body text-muted-foreground">No session summary was produced for this analysis.</p>
             )}
+            {qualityIssues.length > 0 ? (
+              <p className="mt-3 text-meta text-muted-foreground">Quality notes: {qualityIssues.join('; ')}</p>
+            ) : null}
+            {failureNotes.length > 0 ? (
+              <p className="mt-2 text-meta text-muted-foreground">{failureNotes.slice(0, 2).join(' · ')}</p>
+            ) : null}
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                {
+                  label: 'Experimental Score',
+                  value: formatFormScore(formScore),
+                  note:
+                    compositeScored !== null && compositeConsidered !== null
+                      ? `(${compositeScored} scored / ${compositeConsidered} considered)`
+                      : null,
+                },
+                { label: 'Confidence', value: formatConfidencePercent(confidence), note: confidenceDetail },
+                { label: 'Confirmed Events', value: confirmedEvents === null ? '—' : String(confirmedEvents), note: null },
+                { label: 'Experimental Average', value: formatAverageScore(averageScore), note: null },
+                { label: 'Success Rate', value: formatRatePercent(successRate), note: null },
+              ].map((card) => (
+                <div key={card.label} className="rounded-[6px] border border-border bg-background p-4">
+                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">{card.label}</p>
+                  <p className="mt-2 font-semibold text-[22px] leading-none tabular-nums text-foreground">{card.value}</p>
+                  {card.note ? <p className="mt-1 text-label text-muted-foreground">{card.note}</p> : null}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-meta text-muted-foreground">
+              <span className="tabular-nums">{confirmedEvents ?? '—'}</span> confirmed events
+              {candidateEvents > 0 ? (
+                <>
+                  {' '}
+                  · <span className="tabular-nums">{candidateEvents}</span> unconfirmed candidate{candidateEvents === 1 ? '' : 's'}
+                </>
+              ) : null}
+              {uncertainEvents > 0 ? (
+                <>
+                  {' '}
+                  · <span className="tabular-nums">{uncertainEvents}</span> uncertain
+                </>
+              ) : null}
+              . Unconfirmed candidates and uncertain detections are not confirmed performance.
+            </p>
+          </section>
 
-          {'strengths' in summary &&
-            Array.isArray(summary.strengths) &&
-            (summary.strengths as string[]).length > 0 && (
-              <div className="rounded-[6px] border border-border bg-card p-6">
-                <CardHeading>Strengths</CardHeading>
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <CardHeading>Video</CardHeading>
+            {data.video_ready ? (
+              <div className="max-w-4xl mx-auto">
+                <VideoPlayer jobId={jobId} summary={summary as unknown as AnalysisSummary} />
+              </div>
+            ) : (
+              <p className="text-body text-muted-foreground">Annotated video is not available for this analysis.</p>
+            )}
+          </section>
+
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <CardHeading>Evidence & findings</CardHeading>
+            {findings.length > 0 ? (
+              <FindingsTimeline findings={findings} />
+            ) : (
+              <p className="text-body text-muted-foreground">No evidence findings were produced for this analysis.</p>
+            )}
+          </section>
+
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <CardHeading>Key events</CardHeading>
+            {shotEvents.length > 0 ? (
+              <div className="space-y-3">
+                {shotEvents.map((event, i) => {
+                  const metrics = eventMetrics(event)
+                  const matchup = eventMatchup(event)
+                  const eventState = typeof event.event_state === 'string' ? event.event_state : null
+                  const eventScore = typeof event.form_score === 'number' ? event.form_score : null
+                  return (
+                    <div key={i} className="rounded-[6px] border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        {typeof event.timestamp === 'number' ? <TimestampPill seconds={event.timestamp} /> : null}
+                        <span className="text-body font-medium text-foreground capitalize">
+                          {typeof event.event_type === 'string' ? event.event_type.replace(/_/g, ' ') : 'Event'}
+                        </span>
+                        {eventStateBadgeLabel(eventState) ? (
+                          <span className="text-label font-medium px-2 py-0.5 rounded-full bg-warning/15 text-warning">
+                            {eventStateBadgeLabel(eventState)}
+                          </span>
+                        ) : (
+                          <span className="text-label font-medium px-2 py-0.5 rounded-full bg-accent text-muted-foreground">confirmed</span>
+                        )}
+                        <span className="text-label font-medium px-2 py-0.5 rounded-full bg-accent text-muted-foreground">
+                          Score: <span className="tabular-nums">{formatFormScore(eventScore)}</span>
+                        </span>
+                      </div>
+                      {typeof event.key_observation === 'string' && event.key_observation ? (
+                        <p className="text-body text-foreground mb-1">{event.key_observation}</p>
+                      ) : null}
+                      {typeof event.feedback === 'string' && event.feedback ? (
+                        <p className="text-meta text-muted-foreground">{event.feedback}</p>
+                      ) : null}
+                      {metrics.length > 0 && !(matchup?.primary?.metrics?.length) ? (
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                          {metrics
+                            .filter((metric) => typeof metric.value === 'number')
+                            .slice(0, 3)
+                            .map((metric) => (
+                              <span key={metric.key} className="text-label text-muted-foreground">
+                                {metric.label}{' '}
+                                <span className="tabular-nums text-foreground">
+                                  {formatMetric(metric.value as number, metric.unit)}
+                                </span>
+                              </span>
+                            ))}
+                        </div>
+                      ) : null}
+                      {matchup ? (
+                        <div className="mt-3 rounded-[6px] border border-border bg-card p-3">
+                          {matchup.primary?.tracked === false ? (
+                            <p className="mb-2 text-label text-muted-foreground">
+                              Primary athlete not reliably tracked for this matchup; matchup values may be limited.
+                            </p>
+                          ) : null}
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {[
+                              { key: 'primary', role: matchup.primary },
+                              { key: 'opponent', role: matchup.opponent },
+                            ].map(({ key, role }) =>
+                              role ? (
+                                <div key={key}>
+                                  <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">{role.role}</p>
+                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                    {(role.metrics ?? [])
+                                      .filter((metric) => typeof metric.value === 'number')
+                                      .slice(0, 3)
+                                      .map((metric) => (
+                                        <span key={metric.key} className="text-label text-muted-foreground">
+                                          {metric.label}{' '}
+                                          <span className="tabular-nums text-foreground">
+                                            {formatMetric(metric.value as number, metric.unit)}
+                                          </span>
+                                        </span>
+                                      ))}
+                                  </div>
+                                </div>
+                              ) : null,
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-body text-muted-foreground">No key events were detected. This can happen when events are unclear or not confirmed.</p>
+            )}
+          </section>
+
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <CardHeading>Measured performance & stats</CardHeading>
+            {sessionMetrics.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 mb-6">
+                {sessionMetrics.map((metric) => {
+                  const value = metric.value as number
+                  const unit = typeof metric.unit === 'string' ? metric.unit : ''
+                  const best = typeof metric.best === 'number' ? metric.best : null
+                  return (
+                    <div key={String(metric.key)} className="rounded-[6px] border border-border bg-background px-4 py-3">
+                      <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        {String(metric.label ?? metric.key)}
+                      </p>
+                      <p className="mt-1 font-semibold text-[24px] leading-none tabular-nums text-foreground">
+                        {formatMetric(value, unit)}
+                      </p>
+                      {best !== null ? (
+                        <p className="mt-1 text-meta text-muted-foreground">best {formatMetric(best, unit)}</p>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+            {hasProStats ? (
+              <ProStatsPanel stats={proStats} tacticalSummary={tacticalSummary} keyInsights={keyInsights} />
+            ) : null}
+            {sessionMetrics.length === 0 && !hasProStats ? (
+              <p className="text-body text-muted-foreground">No measured metrics or professional stats are available for this analysis.</p>
+            ) : null}
+          </section>
+
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-[6px] border border-border bg-card p-6">
+              <CardHeading>Strengths</CardHeading>
+              {strengths.length > 0 ? (
                 <ul className="space-y-2">
-                  {(summary.strengths as string[]).map((s, i) => (
+                  {strengths.map((s, i) => (
                     <li key={i} className="text-body text-foreground flex items-start gap-2">
-                      <span className="text-success shrink-0">✓</span>
-                      {s}
+                      <span className="text-success shrink-0">✓</span>{s}
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-        </div>
-      )}
-
-      {/* Drill */}
-      {drill && activeView === 'overview' && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-          <CardHeading>Recommended Drill</CardHeading>
-          <p className="text-body text-foreground">{drill}</p>
-        </div>
-      )}
-
-      {/* Analysis Structure Tree */}
-      {summary && activeView === 'overview' && (
-        <div className="rounded-[6px] border border-border bg-card p-6 mb-8">
-          <CardHeading>Analysis Structure</CardHeading>
-          <TreeView
-            label="Analysis structure"
-            nodes={[
-              {
-                id: 'root',
-                label: 'Analysis',
-                children: [
-                  { id: 'stats', label: 'Statistics' },
-                  {
-                    id: 'events',
-                    label: 'Events',
-                    children: shotEvents.slice(0, 3).map((e, i) => ({
-                      id: `event-${i}`,
-                      label: typeof e.event_type === 'string' ? e.event_type : `Event ${i + 1}`,
-                    })),
-                  },
-                  { id: 'tips', label: 'Tips & Strengths' },
-                ],
-              },
-            ]}
-            className="[&_*]:!text-foreground"
-          />
-        </div>
-      )}
-
-      {/* Metadata */}
-      {activeView === 'overview' && (
-        <div className="rounded-[6px] border border-border bg-card p-6">
-          <CardHeading>Metadata</CardHeading>
-          <dl className="grid grid-cols-2 gap-4 text-body">
-            <div>
-              <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                Job ID
-              </dt>
-              <dd className="text-foreground font-mono text-meta break-all">{data.engine_job_id}</dd>
+              ) : (
+                <p className="text-body text-muted-foreground">No strengths were identified for this analysis.</p>
+              )}
             </div>
-            {data.session_token && (
-              <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                  Session Token
-                </dt>
-                <dd className="text-foreground font-mono text-meta break-all">
-                  {data.session_token}
-                </dd>
+            <div className="rounded-[6px] border border-border bg-card p-6">
+              <CardHeading>Focus areas & drill</CardHeading>
+              {focusAreas.length > 0 ? (
+                <ul className="space-y-2 mb-4">
+                  {focusAreas.map((tip, i) => (
+                    <li key={i} className="text-body text-foreground flex items-start gap-2">
+                      <span className="text-muted-foreground shrink-0 tabular-nums">{i + 1}.</span>{tip}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-body text-muted-foreground mb-4">No specific focus areas were produced.</p>
+              )}
+              <div className="rounded-[6px] border border-border bg-background p-4">
+                <p className="text-meta font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">Recommended drill</p>
+                {drill ? (
+                  <p className="text-body text-foreground">{drill}</p>
+                ) : (
+                  <p className="text-body text-muted-foreground">No drill recommendation available.</p>
+                )}
               </div>
-            )}
-            {data.completed_at && (
+            </div>
+          </section>
+
+          <section className="rounded-[6px] border border-border bg-card p-6">
+            <div className="flex items-center justify-between mb-4 gap-3">
               <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                  Completed
-                </dt>
-                <dd className="text-foreground tabular-nums">{formatDateTime(data.completed_at)}</dd>
+                <h2 className="text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">Chat with AI Coach</h2>
+                <p className="text-meta text-muted-foreground mt-0.5">
+                  Ask questions about evidence, findings, and recommendations. Scores shown are experimental.
+                </p>
               </div>
-            )}
-            {data.download_count > 0 && (
-              <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground mb-1">
-                  Downloads
-                </dt>
-                <dd className="text-foreground tabular-nums">{data.download_count}</dd>
-              </div>
-            )}
-          </dl>
+              <Link href={`/dashboard/analysis/${jobId}/chat`} className="text-meta font-medium text-primary hover:underline">
+                Full screen →
+              </Link>
+            </div>
+            <div className="rounded-[6px] border border-border bg-background overflow-hidden" style={{ height: 'min(500px, 60vh)' }}>
+              <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="rounded-[6px] border border-border bg-card p-6">
+          <p className="text-body text-muted-foreground">
+            {data.complete
+              ? 'This analysis completed without a readable summary.'
+              : 'Summary is not available yet for this analysis.'}
+          </p>
         </div>
       )}
 
-      {/* Chat */}
-      {summary && activeView === 'overview' && (
-        <div className="mt-8">
-          <h2 className="mb-3 text-lead font-semibold leading-[1.4] tracking-[-0.01em] text-foreground">
-            Chat with AI
-          </h2>
-          <div
-            className="rounded-[6px] border border-border bg-card overflow-hidden"
-            style={{ height: 'min(500px, 60vh)' }}
-          >
-            <HistoryChat auth0Id={auth0Id} jobId={jobId} summary={summary} />
-          </div>
-        </div>
-      )}
-
-      {/* Metadata Drawer */}
       <Drawer
         open={showMetadataDrawer}
         onOpenChange={setShowMetadataDrawer}
@@ -1057,41 +921,27 @@ export default function AnalysisDetailClient({
         <div className="p-6 space-y-4">
           <dl className="space-y-3 text-body">
             <div>
-              <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Job ID
-              </dt>
-              <dd className="text-foreground font-mono text-meta break-all mt-1">
-                {data.engine_job_id}
-              </dd>
+              <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Job ID</dt>
+              <dd className="text-foreground font-mono text-meta break-all mt-1">{data.engine_job_id}</dd>
             </div>
-            {data.session_token && (
+            {data.session_token ? (
               <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Session Token
-                </dt>
-                <dd className="text-foreground font-mono text-meta break-all mt-1">
-                  {data.session_token}
-                </dd>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Session Token</dt>
+                <dd className="text-foreground font-mono text-meta break-all mt-1">{data.session_token}</dd>
               </div>
-            )}
-            {data.completed_at && (
+            ) : null}
+            {data.completed_at ? (
               <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Completed
-                </dt>
-                <dd className="text-foreground mt-1 tabular-nums">
-                  {formatDateTime(data.completed_at)}
-                </dd>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Completed</dt>
+                <dd className="text-foreground mt-1 tabular-nums">{formatDateTime(data.completed_at)}</dd>
               </div>
-            )}
-            {data.download_count > 0 && (
+            ) : null}
+            {data.download_count > 0 ? (
               <div>
-                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  Downloads
-                </dt>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Downloads</dt>
                 <dd className="text-foreground mt-1 tabular-nums">{data.download_count}</dd>
               </div>
-            )}
+            ) : null}
           </dl>
         </div>
       </Drawer>

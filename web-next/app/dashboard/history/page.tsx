@@ -11,6 +11,8 @@ import { Button } from '@/components/9ui/ui/button'
 import { HISTORY_NAV_ROLES } from '@/lib/nav'
 import { unstable_noStore as noStore } from 'next/cache'
 import { formatDateMed } from '@/lib/date'
+import { summaryNumber } from '@/lib/analysis'
+import { formatFormScore, historyConfirmedEventsLabel } from '@/lib/analysisDisplay'
 
 export const metadata: Metadata = {
   title: 'History | CoachXYZ',
@@ -111,15 +113,16 @@ export default async function HistoryPage({
                         {a.download_count} download{a.download_count > 1 ? 's' : ''}
                       </span>
                     ) : null}
+                    {historyConfirmedEventsLabel(a) ? (
+                      <span className="tabular-nums">{historyConfirmedEventsLabel(a)}</span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="ml-4 flex shrink-0 items-center gap-3">
-                  {a.summary_json &&
-                  typeof a.summary_json === 'object' &&
-                  typeof (a.summary_json as { form_score?: unknown }).form_score === 'number' ? (
+                  {summaryNumber(a.summary_json, 'form_score') !== null ? (
                     <div className="text-right">
                       <p className="text-[18px] font-semibold leading-none tabular-nums text-foreground">
-                        {(a.summary_json as { form_score: number }).form_score}
+                        {formatFormScore(summaryNumber(a.summary_json, 'form_score'))}
                       </p>
                       <p className="mt-1 text-label font-medium uppercase leading-none tracking-[0.08em] text-muted-foreground">
                         Exp. score

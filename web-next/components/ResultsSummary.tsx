@@ -12,6 +12,13 @@ import TimestampPill from '@/components/TimestampPill'
 import type { JobStatus } from '@/types'
 import { SPORT_EMOJI } from '@/lib/sports'
 import { summaryNumber } from '@/lib/analysis'
+import {
+  eventStateBadgeLabel,
+  formatConfidencePercent,
+  formatCoveragePercent,
+  formatFormScore,
+  getEventDetectionCounts,
+} from '@/lib/analysisDisplay'
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP)
@@ -27,6 +34,11 @@ interface ResultsSummaryProps {
 function formatMetric(value: number, unit: string): string {
   const rounded = Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1)
   return `${rounded}${unit}`
+}
+
+function trimScore(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
 }
 
 export default function ResultsSummary({
@@ -76,7 +88,6 @@ export default function ResultsSummary({
   }
 
   const formScore = summaryNumber(summary, 'form_score')
-  const score = formScore
   const scorePercent = formScore !== null ? Math.min(100, Math.max(0, formScore * 10)) : null
   // The composite is experimental. There is deliberately no fallback label: an
   // unavailable score must read as unavailable, never as "Good".
@@ -84,9 +95,31 @@ export default function ResultsSummary({
   const composite = summary.composite
   const compositeCoverage = composite?.coverage
   const sport = summary.sport || 'General'
-  const sessionMetrics = summary.session_metrics ?? []
-  const confirmedEvents = summary.event_detection?.confirmed
-  const candidateEvents = summary.event_detection?.candidate ?? 0
+  const sessionMetrics = Array.isArray(summary.session_metrics) ? summary.session_metrics : []
+  const eventCounts = getEventDetectionCounts({ summary_json: summary })
+  const confirmedEvents = eventCounts.confirmed
+  const candidateEvents = eventCounts.candidate
+  const uncertainEvents = eventCounts.uncertain
+  const focusAreas = Array.isArray(summary.top_tips) ? summary.top_tips.filter(Boolean) : []
+  const strengths = Array.isArray(summary.strengths) ? summary.strengths.filter(Boolean) : []
+  const narrative = typeof summary.summary === 'string' ? summary.summary.trim() : ''
+  const needsReview = Boolean(summary.needs_review || summary.quality?.needs_review)
+  const qualityIssues = Array.isArray(summary.quality?.issues) ? summary.quality?.issues : []
+  const failures = Array.isArray(summary.failures) ? summary.failures : []
+  const failureNotes = failures
+    .map((f) => {
+      const detail = f?.detail as Record<string, unknown> | null | undefined
+      const unseen = Array.isArray(detail?.unseen_candidates)
+        ? (detail?.unseen_candidates as unknown[]).length
+        : null
+      if (f.code === 'F07_MISSED_CANDIDATE' && unseen) {
+        return `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review`
+      }
+      return typeof f.message === 'string' && f.message ? f.message : f.code
+    })
+    .filter(Boolean)
+  const shotEvents = Array.isArray(summary.shot_events) ? summary.shot_events : []
+  const findings = Array.isArray(summary.findings) ? summary.findings : []
 
   const scoreTone =
     formScore === null
@@ -106,7 +139,7 @@ export default function ResultsSummary({
             <div className="flex items-center gap-3">
               <span className="text-3xl">{SPORT_EMOJI[sport.toLowerCase()] || '🎯'}</span>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-title font-semibold tracking-[-0.02em] text-foreground capitalize">
                     {sport} Analysis
                   </h1>
@@ -116,6 +149,11 @@ export default function ResultsSummary({
                   {rating && (
                     <span className="rounded-[4px] border border-border bg-accent/50 px-2 py-0.5 text-meta font-medium capitalize text-muted-foreground">
                       {rating}
+                    </span>
+                  )}
+                  {needsReview && (
+                    <span className="rounded-[4px] border border-warning/40 bg-warning/10 px-2 py-0.5 text-meta font-medium text-warning">
+                      Needs review
                     </span>
                   )}
                 </div>
@@ -150,6 +188,38 @@ export default function ResultsSummary({
           </div>
         </div>
 
+        {narrative ? (
+          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
+            <h2 className="text-lead font-semibold tracking-[-0.01em] text-foreground mb-2">
+              Session summary
+            </h2>
+            <p className="text-body leading-[1.7] text-foreground">{narrative}</p>
+            {qualityIssues.length > 0 && (
+              <p className="mt-3 text-meta text-muted-foreground">
+                Quality notes: {qualityIssues.join('; ')}
+              </p>
+            )}
+            {failureNotes.length > 0 && (
+              <p className="mt-2 text-meta text-muted-foreground">
+                {failureNotes.slice(0, 2).join(' · ')}
+              </p>
+            )}
+          </div>
+        ) : qualityIssues.length > 0 || failureNotes.length > 0 ? (
+          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
+            {qualityIssues.length > 0 && (
+              <p className="text-meta text-muted-foreground">
+                Quality notes: {qualityIssues.join('; ')}
+              </p>
+            )}
+            {failureNotes.length > 0 && (
+              <p className={`${qualityIssues.length > 0 ? 'mt-2 ' : ''}text-meta text-muted-foreground`}>
+                {failureNotes.slice(0, 2).join(' · ')}
+              </p>
+            )}
+          </div>
+        ) : null}
+
         {/* Main Grid: Score Card + Key Insights */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Form Score Card */}
@@ -161,16 +231,36 @@ export default function ResultsSummary({
               <div className="flex items-baseline gap-2 mt-4">
                 <span
                   className={`text-6xl font-bold tracking-tight ${scoreTone} font-mono tabular-nums`}
+                  aria-label={`Experimental form score ${formatFormScore(formScore)}`}
                 >
-                  {score !== null ? score : '—'}
+                  {formScore !== null ? trimScore(formScore) : '—'}
                 </span>
                 <span className="text-muted-foreground text-body font-mono">/10</span>
               </div>
               <p className="mt-2 text-meta text-muted-foreground">
-                {score !== null
-                  ? `Weighted ideal-range composite across ${compositeCoverage !== null && compositeCoverage !== undefined ? Math.round(compositeCoverage * 100) : 0}% measured coverage.`
+                {formScore !== null
+                  ? `Weighted ideal-range composite across ${formatCoveragePercent(compositeCoverage)} measured coverage${
+                      typeof composite?.scored_events === 'number' &&
+                      typeof composite?.considered_events === 'number'
+                        ? ` (${composite.scored_events} scored / ${composite.considered_events} considered events)`
+                        : ''
+                    }.`
                   : 'Not available — too few criteria could be measured from this camera angle.'}
               </p>
+              {typeof summary.confidence === 'number' && (
+                <p className="mt-2 text-meta text-muted-foreground">
+                  {summary.confidence_kind === 'tracking' || summary.confidence_kind === 'pose'
+                    ? 'Tracking confidence'
+                    : 'Event confidence'}{' '}
+                  {formatConfidencePercent(summary.confidence)}
+                  {typeof summary.pose_confidence === 'number' &&
+                  summary.confidence_kind !== 'tracking' &&
+                  summary.confidence_kind !== 'pose' &&
+                  Math.abs(summary.pose_confidence - summary.confidence) > 0.01
+                    ? ` · pose ${formatConfidencePercent(summary.pose_confidence)}`
+                    : ''}
+                </p>
+              )}
             </div>
 
             {/* Score Visual Bar */}
@@ -178,9 +268,9 @@ export default function ResultsSummary({
               <div className="h-2 w-full bg-accent rounded-full overflow-hidden">
                 <div
                   className={`h-full ${
-                    score !== null && score >= 8
+                    formScore !== null && formScore >= 8
                       ? 'bg-success'
-                      : score !== null && score >= 5
+                      : formScore !== null && formScore >= 5
                         ? 'bg-warning'
                         : 'bg-destructive'
                   }`}
@@ -219,44 +309,83 @@ export default function ResultsSummary({
                     <span className="text-success text-body">✓</span>
                     <h3 className="text-body font-semibold text-foreground">Top Strengths</h3>
                   </div>
-                  {summary.strengths && summary.strengths.length > 0 ? (
+                  {strengths.length > 0 ? (
                     <ul className="text-body text-muted-foreground space-y-1.5 list-disc list-inside">
-                      {summary.strengths.slice(0, 3).map((s, idx) => (
+                      {strengths.slice(0, 3).map((s, idx) => (
                         <li key={idx} className="leading-snug">
                           {s}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-body text-muted-foreground">Solid baseline mechanics.</p>
+                    <p className="text-body text-muted-foreground">
+                      Not enough measured evidence to highlight strengths yet.
+                    </p>
                   )}
                 </div>
 
+                {/* Focus areas */}
+                <div className="rounded-[6px] border border-warning/20 bg-warning/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-warning text-body">→</span>
+                    <h3 className="text-body font-semibold text-foreground">Focus Areas</h3>
+                  </div>
+                  {focusAreas.length > 0 ? (
+                    <ul className="text-body text-muted-foreground space-y-1.5 list-disc list-inside">
+                      {focusAreas.slice(0, 3).map((s, idx) => (
+                        <li key={idx} className="leading-snug">
+                          {s}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-body text-muted-foreground">
+                      No specific focus areas were produced for this clip.
+                    </p>
+                  )}
+                </div>
               </div>
+              {summary.priority_drill ? (
+                <div className="mt-4 rounded-[6px] border border-border bg-background p-4">
+                  <p className="text-meta font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    Priority drill
+                  </p>
+                  <p className="mt-1 text-body text-foreground">{summary.priority_drill}</p>
+                </div>
+              ) : null}
             </div>
 
             {/* Bottom Actions Row */}
-            <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 mt-4">
               <span className="text-meta text-muted-foreground">
-                <span className="tabular-nums">
-                  {confirmedEvents ?? summary.shot_events?.length ?? 0}
-                </span>{' '}
-                confirmed events
-                {candidateEvents > 0 && (
+                <span className="tabular-nums">{confirmedEvents ?? '—'}</span> confirmed events
+                {candidateEvents > 0 ? (
                   <>
                     {' '}
-                    · <span className="tabular-nums">{candidateEvents}</span> unconfirmed
+                    · <span className="tabular-nums">{candidateEvents}</span> unconfirmed candidate{candidateEvents === 1 ? '' : 's'}
                   </>
-                )}
+                ) : null}
+                {uncertainEvents > 0 ? (
+                  <>
+                    {' '}
+                    · <span className="tabular-nums">{uncertainEvents}</span> uncertain
+                  </>
+                ) : null}
               </span>
-              <a
-                href={downloadUrl}
-                download={`coachxyz-${jobId}.mp4`}
-                className="text-body font-medium text-primary hover:text-primary-hover flex items-center gap-1.5"
-              >
-                <span>Download Annotated Video</span>
-                <span>↓</span>
-              </a>
+              {status.video_ready ? (
+                <a
+                  href={downloadUrl}
+                  download={`coachxyz-${jobId}.mp4`}
+                  className="text-body font-medium text-primary hover:text-primary-hover flex items-center gap-1.5"
+                >
+                  <span>Download Annotated Video</span>
+                  <span>↓</span>
+                </a>
+              ) : (
+                <span className="text-meta text-muted-foreground">
+                  Annotated video is not available for this run.
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -309,12 +438,12 @@ export default function ResultsSummary({
 
         {/* Detailed Findings Timeline Component */}
         <div className="gsap-item">
-          <FindingsTimeline findings={summary.findings || []} />
+          <FindingsTimeline findings={findings} />
         </div>
 
         {/* Event Breakdown - Collapsible */}
         <div className="gsap-item">
-          {summary.shot_events && summary.shot_events.length > 0 && (
+          {shotEvents.length > 0 ? (
             <div className="rounded-[6px] border border-border bg-card overflow-hidden">
               <details className="group">
                 <summary className="flex items-center justify-between p-6 cursor-pointer hover:bg-accent/50 transition-colors list-none">
@@ -325,8 +454,13 @@ export default function ResultsSummary({
                         Event Timeline
                       </h3>
                       <p className="text-muted-foreground text-meta mt-1.5">
-                        <span className="tabular-nums">{summary.shot_events.length}</span> events
-                        analyzed
+                        <span className="tabular-nums">{shotEvents.length}</span> timeline events
+                        {confirmedEvents !== null ? (
+                          <>
+                            {' '}
+                            · <span className="tabular-nums">{confirmedEvents}</span> confirmed events
+                          </>
+                        ) : null}
                       </p>
                     </div>
                   </div>
@@ -350,8 +484,8 @@ export default function ResultsSummary({
                   </div>
                 </summary>
                 <div className="px-6 pb-6 pt-2 space-y-4 border-t border-border mt-2">
-                  {summary.shot_events.map((event, index) => {
-                    const eventScore = event.form_score
+                  {shotEvents.map((event, index) => {
+                    const eventScore = typeof event.form_score === 'number' ? event.form_score : null
                     const toneClass =
                       eventScore === null
                         ? 'bg-accent text-muted-foreground'
@@ -368,7 +502,7 @@ export default function ResultsSummary({
                       >
                         <div className="shrink-0 flex flex-col items-center">
                           <TimestampPill seconds={event.timestamp ?? 0} />
-                          {index !== summary.shot_events.length - 1 && (
+                          {index !== shotEvents.length - 1 && (
                             <div className="w-px h-full bg-border my-3"></div>
                           )}
                         </div>
@@ -377,20 +511,16 @@ export default function ResultsSummary({
                             <span className="rounded-full bg-accent px-2 py-0.5 text-label font-medium capitalize text-muted-foreground">
                               {event.event_type?.replace('_', ' ') || 'Action'}
                             </span>
-                            {event.event_state && event.event_state !== 'confirmed' && (
-                              <span className="rounded-full bg-warning/15 px-2 py-0.5 text-label font-medium capitalize text-warning">
-                                {event.event_state === 'candidate'
-                                  ? 'Unconfirmed candidate'
-                                  : event.event_state}
+                            {eventStateBadgeLabel(event.event_state) ? (
+                              <span className="rounded-full bg-warning/15 px-2 py-0.5 text-label font-medium text-warning">
+                                {eventStateBadgeLabel(event.event_state)}
                               </span>
-                            )}
+                            ) : null}
                             <span
                               className={`rounded-full px-2 py-0.5 text-label font-medium ${toneClass}`}
                             >
                               Score:{' '}
-                              <span className="tabular-nums">
-                                {eventScore !== null ? `${eventScore}/10` : 'not available'}
-                              </span>
+                              <span className="tabular-nums">{formatFormScore(eventScore)}</span>
                             </span>
                           </div>
                           {event.key_observation && (
@@ -459,6 +589,11 @@ export default function ResultsSummary({
                                   </span>
                                 </p>
                               )}
+                              {event.matchup.primary?.tracked === false && (
+                                <p className="mt-2 text-label text-muted-foreground">
+                                  Primary-player tracking was not confirmed for this matchup.
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -468,7 +603,7 @@ export default function ResultsSummary({
                 </div>
               </details>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </>

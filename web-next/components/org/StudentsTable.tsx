@@ -61,55 +61,58 @@ export function StudentsTable({
           }
         />
       ) : (
-        <table className="w-full text-body">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="px-4 py-2.5">
-                <Checkbox
-                  checked={allFilteredSelected}
-                  indeterminate={selectedIds.length > 0 && !allFilteredSelected}
-                  onCheckedChange={onToggleSelectAll}
-                  aria-label="Select all students"
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-body">
+            <caption className="sr-only">Students roster</caption>
+            <thead>
+              <tr className="border-b border-border">
+                <th scope="col" className="px-4 py-2.5">
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    indeterminate={selectedIds.length > 0 && !allFilteredSelected}
+                    onCheckedChange={onToggleSelectAll}
+                    aria-label="Select all students"
+                  />
+                </th>
+                <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Student
+                </th>
+                <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Sport
+                </th>
+                <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                  Team
+                </th>
+                <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                  Position
+                </th>
+                <th scope="col" className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
+                  Joined
+                </th>
+                <th scope="col" className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Status
+                </th>
+                <th scope="col" className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <StudentRow
+                  key={s.id}
+                  student={s}
+                  selected={selected.has(s.id)}
+                  onToggleSelect={onToggleSelect}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  canManage={canManage}
+                  teams={teams}
                 />
-              </th>
-              <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Student
-              </th>
-              <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Sport
-              </th>
-              <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                Team
-              </th>
-              <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                Position
-              </th>
-              <th className="hidden px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground md:table-cell">
-                Joined
-              </th>
-              <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Status
-              </th>
-              <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((s) => (
-              <StudentRow
-                key={s.id}
-                student={s}
-                selected={selected.has(s.id)}
-                onToggleSelect={onToggleSelect}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                canManage={canManage}
-                teams={teams}
-              />
-            ))}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
