@@ -610,7 +610,7 @@ export default function StudentProfile({
                           size="icon-sm"
                           className="text-muted-foreground"
                           onClick={() => openMetricEdit(p)}
-                          aria-label="Edit metric"
+                          aria-label={`Edit metric ${formatKey(p.metric_key)} ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}`}
                         >
                           <PencilIcon className="size-3.5" />
                         </Button>
@@ -632,7 +632,7 @@ export default function StudentProfile({
                               },
                             })
                           }
-                          aria-label="Delete metric"
+                          aria-label={`Delete metric ${formatKey(p.metric_key)} ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}`}
                         >
                           <TrashIcon className="size-3.5" />
                         </Button>
@@ -907,7 +907,7 @@ export default function StudentProfile({
                             },
                           })
                         }
-                        aria-label="Delete report"
+                        aria-label={`Delete report ${r.title}`}
                       >
                         <TrashIcon className="size-3.5" />
                       </Button>

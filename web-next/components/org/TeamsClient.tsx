@@ -416,6 +416,7 @@ export default function TeamsClient({
                           variant="outline"
                           size="sm"
                           className="text-destructive border-destructive/30"
+                          aria-label={`Delete team ${selected.name}`}
                           disabled={busy}
                           onClick={() =>
                             run(async () => {
@@ -453,43 +454,48 @@ export default function TeamsClient({
                   Coaches by account, players by roster row.
                 </p>
                 <div className="space-y-1">
-                  {members.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between gap-3 rounded-[4px] px-3 py-2 hover:bg-accent transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-body font-medium text-foreground truncate">
-                          {member.member_auth0_id ??
-                            students.find((s) => s.id === member.student_id)?.full_name ??
-                            'Unknown'}
-                        </p>
-                        <span className="mt-1 inline-flex h-[20px] items-center rounded-full bg-muted px-2 text-label font-medium leading-none text-muted-foreground capitalize">
-                          {member.role}
-                        </span>
+                  {members.map((member) => {
+                    const memberName =
+                      member.member_auth0_id ??
+                      students.find((s) => s.id === member.student_id)?.full_name ??
+                      'Unknown'
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between gap-3 rounded-[4px] px-3 py-2 hover:bg-accent transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-body font-medium text-foreground truncate">
+                            {memberName}
+                          </p>
+                          <span className="mt-1 inline-flex h-[20px] items-center rounded-full bg-muted px-2 text-label font-medium leading-none text-muted-foreground capitalize">
+                            {member.role}
+                          </span>
+                        </div>
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Remove ${memberName} from ${selected.name}`}
+                            disabled={busy}
+                            onClick={() =>
+                              run(async () => {
+                                const teamId = selected.id
+                                await removeTeamMember(auth0Id, teamId, member.id)
+                                const res = await listTeamMembers(auth0Id, teamId)
+                                // Refuse rather than paint another team's roster.
+                                if (!stillOnTeam(teamId)) return
+                                setMembers(res.members)
+                                clearPanelFailure('members')
+                              })
+                            }
+                          >
+                            Remove
+                          </Button>
+                        )}
                       </div>
-                      {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() =>
-                            run(async () => {
-                              const teamId = selected.id
-                              await removeTeamMember(auth0Id, teamId, member.id)
-                              const res = await listTeamMembers(auth0Id, teamId)
-                              // Refuse rather than paint another team's roster.
-                              if (!stillOnTeam(teamId)) return
-                              setMembers(res.members)
-                              clearPanelFailure('members')
-                            })
-                          }
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 {panelLoading ? (
                   <p className="py-2 text-meta text-muted-foreground">Loading members…</p>
@@ -626,6 +632,7 @@ export default function TeamsClient({
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label={`Remove match${match.opponent ? ` vs ${match.opponent}` : ''}${match.match_on ? ` on ${match.match_on}` : ''} from ${selected.name}`}
                           disabled={busy}
                           onClick={() =>
                             run(async () => {

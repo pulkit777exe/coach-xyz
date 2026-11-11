@@ -313,6 +313,7 @@ export default function ObjectivesSection({
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label={`Mark objective "${objective.title}" as done`}
                     disabled={busy}
                     onClick={() => setStatus(objective.id, 'done')}
                   >
@@ -323,6 +324,7 @@ export default function ObjectivesSection({
                   <Button
                     size="sm"
                     variant="outline"
+                    aria-label={`Reopen objective "${objective.title}"`}
                     disabled={busy}
                     onClick={() => setStatus(objective.id, 'active')}
                   >
@@ -334,6 +336,7 @@ export default function ObjectivesSection({
                     size="sm"
                     variant="ghost"
                     className="text-destructive"
+                    aria-label={`Delete objective "${objective.title}"`}
                     disabled={busy}
                     onClick={() => void removeObjective(objective.id)}
                   >
@@ -579,6 +582,7 @@ function ObjectiveBoard({
                           size="sm"
                           variant="outline"
                           className="h-7 text-meta"
+                          aria-label={`Mark objective "${o.title}" as done`}
                           disabled={busy}
                           onClick={() => onStatus(o.id, 'done')}
                         >
@@ -590,6 +594,7 @@ function ObjectiveBoard({
                           size="sm"
                           variant="outline"
                           className="h-7 text-meta"
+                          aria-label={`Reopen objective "${o.title}"`}
                           disabled={busy}
                           onClick={() => onStatus(o.id, 'active')}
                         >
@@ -601,6 +606,7 @@ function ObjectiveBoard({
                           size="sm"
                           variant="outline"
                           className="h-7 text-meta"
+                          aria-label={`Restore objective "${o.title}"`}
                           disabled={busy}
                           onClick={() => onStatus(o.id, 'active')}
                         >
@@ -611,6 +617,7 @@ function ObjectiveBoard({
                           size="sm"
                           variant="ghost"
                           className="h-7 text-meta text-muted-foreground"
+                          aria-label={`Archive objective "${o.title}"`}
                           disabled={busy}
                           onClick={() => onStatus(o.id, 'archived')}
                         >
@@ -621,6 +628,7 @@ function ObjectiveBoard({
                         size="sm"
                         variant="ghost"
                         className="h-7 text-meta text-destructive"
+                        aria-label={`Delete objective "${o.title}"`}
                         disabled={busy}
                         onClick={() => void onDelete(o.id)}
                       >

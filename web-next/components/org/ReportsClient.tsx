@@ -345,7 +345,7 @@ export default function ReportsClient({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => setViewing(r)}
-                    aria-label="View report"
+                    aria-label={`View report ${r.title}`}
                   >
                     <EyeIcon />
                   </Button>
@@ -355,7 +355,7 @@ export default function ReportsClient({
                       size="icon-sm"
                       className="text-muted-foreground"
                       onClick={() => openEmail(r)}
-                      aria-label="Email report"
+                      aria-label={`Email report ${r.title}`}
                     >
                       <MailIcon className="size-3.5" />
                     </Button>
@@ -366,7 +366,7 @@ export default function ReportsClient({
                       size="icon-sm"
                       className="text-muted-foreground"
                       onClick={() => openEdit(r)}
-                      aria-label="Edit report"
+                      aria-label={`Edit report ${r.title}`}
                     >
                       <PencilIcon className="size-3.5" />
                     </Button>
@@ -377,7 +377,7 @@ export default function ReportsClient({
                       size="icon-sm"
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleting(r)}
-                      aria-label="Delete report"
+                      aria-label={`Delete report ${r.title}`}
                     >
                       <TrashIcon className="size-3.5" />
                     </Button>
@@ -445,7 +445,7 @@ export default function ReportsClient({
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => setViewing(r)}
-                          aria-label="View report"
+                          aria-label={`View report ${r.title}`}
                         >
                           <EyeIcon />
                         </Button>
@@ -455,7 +455,7 @@ export default function ReportsClient({
                             size="icon-sm"
                             className="text-muted-foreground"
                             onClick={() => openEmail(r)}
-                            aria-label="Email report"
+                            aria-label={`Email report ${r.title}`}
                           >
                             <MailIcon className="size-3.5" />
                           </Button>
@@ -466,7 +466,7 @@ export default function ReportsClient({
                             size="icon-sm"
                             className="text-muted-foreground"
                             onClick={() => openEdit(r)}
-                            aria-label="Edit report"
+                            aria-label={`Edit report ${r.title}`}
                           >
                             <PencilIcon className="size-3.5" />
                           </Button>
@@ -477,7 +477,7 @@ export default function ReportsClient({
                             size="icon-sm"
                             className="text-muted-foreground hover:text-destructive"
                             onClick={() => setDeleting(r)}
-                            aria-label="Delete report"
+                            aria-label={`Delete report ${r.title}`}
                           >
                             <TrashIcon className="size-3.5" />
                           </Button>

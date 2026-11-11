@@ -219,6 +219,7 @@ export default function InvitesClient({
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-label={`Revoke invitation for ${invite.email}`}
                     disabled={busy}
                     onClick={async () => {
                       setBusy(true)
