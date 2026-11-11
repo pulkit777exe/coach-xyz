@@ -112,7 +112,11 @@ export function StudentRow({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" size="icon-sm" aria-label="Actions">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Actions for ${student.full_name}`}
+                >
                   <MoreHorizontalIcon />
                 </Button>
               }

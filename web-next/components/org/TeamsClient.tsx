@@ -83,16 +83,23 @@ function TrendBars({
   if (days.length === 0) {
     return <p className="text-meta text-muted-foreground">No findings in this window.</p>
   }
+  const total = days.reduce((sum, [, n]) => sum + n, 0)
+  const latest = days[days.length - 1]
+  const summary = `Findings per day for the last ${days.length} day${days.length === 1 ? '' : 's'}: ${total} total. Latest ${latest[0]}: ${latest[1]} finding${latest[1] === 1 ? '' : 's'}. Busiest day: ${days.reduce((a, b) => (b[1] > a[1] ? b : a))[1]} finding${days.reduce((a, b) => (b[1] > a[1] ? b : a))[1] === 1 ? '' : 's'}.`
   return (
-    <div className="flex items-end gap-1 h-16" role="img" aria-label="Findings per day">
-      {days.map(([day, n]) => (
-        <div
-          key={day}
-          title={`${day}: ${n}`}
-          className="flex-1 rounded-sm bg-primary/70 min-h-[3px]"
-          style={{ height: `${Math.max(4, Math.round((n / max) * 100))}%` }}
-        />
-      ))}
+    <div>
+      <span className="sr-only">{summary}</span>
+      <div className="flex h-16 items-end gap-1" role="img" aria-label="Findings per day" aria-describedby={undefined}>
+        {days.map(([day, n]) => (
+          <div
+            key={day}
+            title={`${day}: ${n}`}
+            aria-hidden="true"
+            className="min-h-[3px] flex-1 rounded-sm bg-primary/70"
+            style={{ height: `${Math.max(4, Math.round((n / max) * 100))}%` }}
+          />
+        ))}
+      </div>
     </div>
   )
 }

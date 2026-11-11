@@ -427,12 +427,19 @@ export default function AttendanceGrid({
           <Button
             variant="outline"
             size="icon-sm"
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
             onClick={() => nav(-1)}
             aria-label="Previous month"
           >
             <ChevronLeftIcon />
           </Button>
-          <Button variant="outline" size="icon-sm" onClick={() => nav(1)} aria-label="Next month">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
+            onClick={() => nav(1)}
+            aria-label="Next month"
+          >
             <ChevronRightIcon />
           </Button>
           <Button

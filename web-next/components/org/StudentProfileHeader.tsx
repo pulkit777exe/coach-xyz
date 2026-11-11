@@ -82,7 +82,11 @@ export function StudentProfileHeader({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon-sm" aria-label="Student actions">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Actions for ${student.full_name}`}
+              >
                 <MoreHorizontalIcon />
               </Button>
             }

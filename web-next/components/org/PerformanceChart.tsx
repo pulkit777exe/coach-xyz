@@ -25,8 +25,13 @@ export default function PerformanceChart({
   const chartLabel =
     label ?? (seriesLabels.length ? `Performance chart: ${seriesLabels.join(', ')}` : 'Performance chart')
   const latest = data[data.length - 1]
+  const first = data[0]
+  const rangeSummary =
+    first && latest && typeof first.date === 'string' && typeof latest.date === 'string'
+      ? ` covering ${formatDateShort(first.date)} to ${formatDateShort(latest.date)}`
+      : ''
   const summary = latest
-    ? `Latest values: ${keys
+    ? `${data.length} data point${data.length === 1 ? '' : 's'}${rangeSummary}. Latest values: ${keys
         .map((k) => {
           const v = latest[k]
           const n = String(config[k]?.label ?? k)

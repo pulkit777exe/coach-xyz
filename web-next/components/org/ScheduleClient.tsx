@@ -271,12 +271,19 @@ export default function ScheduleClient({
           <Button
             variant="outline"
             size="icon-sm"
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
             onClick={() => nav(-1)}
             aria-label="Previous month"
           >
             <ChevronLeftIcon />
           </Button>
-          <Button variant="outline" size="icon-sm" onClick={() => nav(1)} aria-label="Next month">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
+            onClick={() => nav(1)}
+            aria-label="Next month"
+          >
             <ChevronRightIcon />
           </Button>
           <Button
@@ -336,18 +343,19 @@ export default function ScheduleClient({
       </div>
 
       {/* Calendar grid */}
-      <div className="border-border overflow-hidden rounded-[6px] border">
-        <div className="grid grid-cols-7 border-b border-border">
-          {orderedWeekdays(weekStartsMonday).map((w) => (
-            <div
-              key={w}
-              className="py-2 text-center text-label font-medium uppercase tracking-[0.08em] text-muted-foreground"
-            >
-              {w}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
+      <div className="border-border overflow-x-auto rounded-[6px] border">
+        <div className="min-w-[44rem]">
+          <div className="grid grid-cols-7 border-b border-border">
+            {orderedWeekdays(weekStartsMonday).map((w) => (
+              <div
+                key={w}
+                className="py-2 text-center text-label font-medium uppercase tracking-[0.08em] text-muted-foreground"
+              >
+                {w}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
           {cells.map((cell, idx) => {
             if (!cell)
               return (
@@ -433,6 +441,7 @@ export default function ScheduleClient({
               </div>
             )
           })}
+          </div>
         </div>
       </div>
 

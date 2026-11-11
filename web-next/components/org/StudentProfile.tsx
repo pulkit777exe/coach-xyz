@@ -608,7 +608,7 @@ export default function StudentProfile({
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          className="text-muted-foreground"
+                          className="min-h-10 min-w-10 text-muted-foreground sm:min-h-0 sm:min-w-0"
                           onClick={() => openMetricEdit(p)}
                           aria-label={`Edit metric ${formatKey(p.metric_key)} ${p.metric_value}${p.unit ? ` ${p.unit}` : ''} on ${formatDateShort(p.measured_at)}`}
                         >
@@ -619,7 +619,7 @@ export default function StudentProfile({
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          className="text-muted-foreground hover:text-destructive"
+                          className="min-h-10 min-w-10 text-muted-foreground hover:text-destructive sm:min-h-0 sm:min-w-0"
                           onClick={() =>
                             p.id &&
                             setConfirm({
@@ -894,7 +894,7 @@ export default function StudentProfile({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="text-muted-foreground hover:text-destructive"
+                        className="min-h-10 min-w-10 text-muted-foreground hover:text-destructive sm:min-h-0 sm:min-w-0"
                         onClick={() =>
                           setConfirm({
                             title: 'Delete this report?',

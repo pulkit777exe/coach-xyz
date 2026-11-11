@@ -344,6 +344,7 @@ export default function ReportsClient({
                   <Button
                     variant="ghost"
                     size="icon-sm"
+                    className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
                     onClick={() => setViewing(r)}
                     aria-label={`View report ${r.title}`}
                   >
@@ -353,7 +354,7 @@ export default function ReportsClient({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="text-muted-foreground"
+                      className="min-h-10 min-w-10 text-muted-foreground sm:min-h-0 sm:min-w-0"
                       onClick={() => openEmail(r)}
                       aria-label={`Email report ${r.title}`}
                     >
@@ -364,7 +365,7 @@ export default function ReportsClient({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="text-muted-foreground"
+                      className="min-h-10 min-w-10 text-muted-foreground sm:min-h-0 sm:min-w-0"
                       onClick={() => openEdit(r)}
                       aria-label={`Edit report ${r.title}`}
                     >
@@ -375,7 +376,7 @@ export default function ReportsClient({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
+                      className="min-h-10 min-w-10 text-muted-foreground hover:text-destructive sm:min-h-0 sm:min-w-0"
                       onClick={() => setDeleting(r)}
                       aria-label={`Delete report ${r.title}`}
                     >
@@ -444,6 +445,7 @@ export default function ReportsClient({
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
                           onClick={() => setViewing(r)}
                           aria-label={`View report ${r.title}`}
                         >
@@ -453,7 +455,7 @@ export default function ReportsClient({
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="text-muted-foreground"
+                            className="min-h-10 min-w-10 text-muted-foreground sm:min-h-0 sm:min-w-0"
                             onClick={() => openEmail(r)}
                             aria-label={`Email report ${r.title}`}
                           >
@@ -464,7 +466,7 @@ export default function ReportsClient({
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="text-muted-foreground"
+                            className="min-h-10 min-w-10 text-muted-foreground sm:min-h-0 sm:min-w-0"
                             onClick={() => openEdit(r)}
                             aria-label={`Edit report ${r.title}`}
                           >
@@ -475,7 +477,7 @@ export default function ReportsClient({
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            className="text-muted-foreground hover:text-destructive"
+                            className="min-h-10 min-w-10 text-muted-foreground hover:text-destructive sm:min-h-0 sm:min-w-0"
                             onClick={() => setDeleting(r)}
                             aria-label={`Delete report ${r.title}`}
                           >

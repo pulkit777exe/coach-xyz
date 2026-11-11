@@ -226,6 +226,7 @@ export default function MembersSection({
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        className="min-h-10 min-w-10 sm:min-h-0 sm:min-w-0"
                         aria-label={`Remove ${name}`}
                         disabled={ownerRowCannotBeRemoved(member)}
                         onClick={() => openRemove(member)}
