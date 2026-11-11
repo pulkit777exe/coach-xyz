@@ -1,19 +1,19 @@
 web-next source reachability from tests
 ========================================================================
-source files                     244
-test files                       75
+source files                     245
+test files                       79
 
-statically imported by a test     178
+statically imported by a test     180
 loaded only by a generic sweep    5    (readdirSync enumeration, no import edge)
-touched by nothing at all         61
-  static import edge              73.0% of files
-  any loader at all (edge+sweep)  75.0% of files
+touched by nothing at all         60
+  static import edge              73.5% of files
+  any loader at all (edge+sweep)  75.5% of files
 
-lines in source                  34923
-lines in untouched files         4915  (14.1%)
+lines in source                  35266
+lines in untouched files         4643  (13.2%)
 
 touched by nothing, by top-level directory
-  app            55 files    4700 lines
+  app            54 files    4428 lines
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
@@ -25,14 +25,13 @@ components with NO test written for them (sweep-rendered only)
 
 the 25 largest untouched files
     303  app/dashboard/org/page.tsx
-    275  app/share/[token]/page.tsx
     249  app/pricing/page.tsx
     238  app/dashboard/news/page.tsx
     234  app/dashboard/features/page.tsx
     184  app/account/page.tsx
     177  app/dashboard/support/page.tsx
+    167  app/dashboard/history/page.tsx
     165  app/about/page.tsx
-    164  app/dashboard/history/page.tsx
     149  app/dashboard/help/page.tsx
     147  lib/useAnalysisDetailState.ts
     142  app/dashboard/page.tsx
@@ -49,6 +48,7 @@ the 25 largest untouched files
      67  app/signup/page.tsx
      65  app/dashboard/attendance/page.tsx
      62  app/dashboard/history/error.tsx
+     61  app/player/reports/[id]/page.tsx
 
 LIMITS, stated so this number is not over-read:
   * Reachability is a graph fact, not an execution fact. A reachable file
