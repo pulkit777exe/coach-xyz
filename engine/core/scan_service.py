@@ -21,7 +21,9 @@ def stream_name(token: str, angle: str) -> str:
     return f"scan:{token}:{angle}"
 
 
-def resolve_scan_session(session_token: str | None, angle: str | None) -> tuple[str, str]:
+def resolve_scan_session(
+    session_token: str | None, angle: str | None
+) -> tuple[str, str]:
     """Return (token, label), reusing an existing session token when valid."""
     label = sessions.angle_label(angle)
     token = session_token if sessions.get(session_token) else sessions.new_token()
@@ -67,7 +69,9 @@ def build_upload_intent(
     }
 
 
-async def run_scan(key: str, path: str, token: str, angle: str, sha: str | None) -> dict:
+async def run_scan(
+    key: str, path: str, token: str, angle: str, sha: str | None
+) -> dict:
     """Probe, find the players, remember them in the session."""
     stream = stream_name(token, angle)
     store = storage.backend()

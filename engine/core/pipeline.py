@@ -163,7 +163,12 @@ def _matchup_blocks(
         return {}
     if found:
         try:
-            path.write_text(json.dumps(found))
+            def _json_default(o):
+                if isinstance(o, np.generic):
+                    return o.item()
+                raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
+            path.write_text(json.dumps(found, default=_json_default))
         except OSError:
             log.warning("could not cache matchup analysis: %s", path, exc_info=True)
     return found
@@ -214,6 +219,20 @@ def run(job_id: str, params: dict) -> dict:
                         progress=tick,
                         cancelled=rep.check,
                     )
+                for ev in getattr(track, "identity_events", []):
+                    detail = {
+                        k: v
+                        for k, v in ev.items()
+                        if k not in ("code", "stage", "message")
+                    }
+                    failure_list.append(
+                        failures.failure(
+                            ev.get("code", "F02_IDENTITY_SWITCH"),
+                            ev.get("stage", "track"),
+                            ev.get("message", "identity reacquisition issue"),
+                            **detail,
+                        ).to_dict()
+                    )
                 track = clean(track)
                 track.save(str(track_file))
 
@@ -249,7 +268,9 @@ def run(job_id: str, params: dict) -> dict:
                 effective_angle = declared_view
                 angle_source = "declared"
             else:
-                effective_angle = "primary"
+                # Undeclared product runs must not present camera-gated
+                # criteria as verified measurements.
+                effective_angle = None
                 angle_source = "detected" if angle_tag else "default"
             measured = [
                 measure.measure(
@@ -262,6 +283,25 @@ def run(job_id: str, params: dict) -> dict:
                 )
                 for c in cands
             ]
+            view_issue = next(
+                (
+                    r.get("state")
+                    for m in measured
+                    for r in m.get("criteria", [])
+                    if r.get("state") in ("view_unverified", "invalid_view")
+                ),
+                None,
+            )
+            if view_issue and not any(
+                f.get("code") == "F05_UNSUITABLE_VIEW" for f in failure_list
+            ):
+                failure_list.append(
+                    failures.failure(
+                        "F05_UNSUITABLE_VIEW",
+                        "measure",
+                        "camera view is undeclared or unsuitable for one or more criteria",
+                    ).to_dict()
+                )
             rep.check()
 
         judge_key = _digest(
@@ -370,35 +410,59 @@ def run(job_id: str, params: dict) -> dict:
                 },
             )
 
-        if params.get("render", True) and out["events"]:
-            with rep.stage("render", 80, 96) as tick:
-                try:
-                    video_path = str(work / "analysis.mp4")
-                    thumbs = render.render(
-                        src,
-                        track,
-                        out,
-                        pack,
-                        video_path,
-                        media,
-                        thumbs_dir=str(work / "thumbs"),
-                        progress=tick,
-                        cancelled=rep.check,
-                    )
-                    _publish(job_id, store, "analysis.mp4", video_path, "video")
-                    for t in thumbs:
-                        _publish(
-                            job_id, store, f"thumbs/{Path(t).name}", t, "thumbnail"
+        if params.get("render", True):
+            if out["events"]:
+                with rep.stage("render", 80, 96) as tick:
+                    try:
+                        video_path = str(work / "analysis.mp4")
+                        thumbs = render.render(
+                            src,
+                            track,
+                            out,
+                            pack,
+                            video_path,
+                            media,
+                            thumbs_dir=str(work / "thumbs"),
+                            progress=tick,
+                            cancelled=rep.check,
                         )
-                except Cancelled:
-                    raise
-                except Exception as exc:
-                    log.exception("render failed")
-                    degrade(
-                        "render",
-                        exc.message
-                        if isinstance(exc, EngineError)
-                        else type(exc).__name__,
-                    )
+                        _publish(job_id, store, "analysis.mp4", video_path, "video")
+                        for t in thumbs:
+                            _publish(
+                                job_id, store, f"thumbs/{Path(t).name}", t, "thumbnail"
+                            )
+                    except Cancelled:
+                        raise
+                    except Exception as exc:
+                        log.exception("render failed")
+                        degrade(
+                            "render",
+                            exc.message
+                            if isinstance(exc, EngineError)
+                            else type(exc).__name__,
+                        )
+            else:
+                with rep.stage("render", 80, 96):
+                    issues = (out.get("quality") or {}).get("issues") or []
+                    if "no_events" in issues:
+                        reason = "No confirmed actions were detected in this clip."
+                    elif "no_measurable_events" in issues:
+                        reason = "Actions were found but none could be measured reliably."
+                    else:
+                        reason = "No confirmed actions were detected in this clip."
+                    try:
+                        video_path = str(work / "analysis.mp4")
+                        render.render_empty(src, out, pack, video_path, media, reason=reason)
+                        _publish(job_id, store, "analysis.mp4", video_path, "video")
+                    except Cancelled:
+                        raise
+                    except Exception as exc:
+                        log.exception("empty render failed")
+                        degrade(
+                            "render",
+                            exc.message
+                            if isinstance(exc, EngineError)
+                            else type(exc).__name__,
+                        )
 
     return {**out["summary"], "needs_review": out["needs_review"]}

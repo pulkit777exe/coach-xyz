@@ -418,7 +418,11 @@ def _workload(session_metrics: list[dict]) -> list[dict]:
 
 
 def _trend(events: list[dict]) -> dict | None:
-    scored = [e for e in events if e.get("score") is not None]
+    scored = [
+        e
+        for e in events
+        if e.get("event_state") == "confirmed" and e.get("score") is not None
+    ]
     if len(scored) < 4:
         return None
     ordered = sorted(scored, key=lambda e: float(e["t"]))

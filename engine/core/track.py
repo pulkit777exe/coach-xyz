@@ -179,7 +179,16 @@ def _follow(detector, frame, box, hint=None) -> people.Person | None:
     )
 
 
-def _find(detector, frame, t: float, lock: Lock, last) -> people.Person | None:
+def _find(
+    detector,
+    frame,
+    t: float,
+    lock: Lock,
+    last,
+    *,
+    events: list | None = None,
+    reacquire_threshold: float = 0.15,
+) -> people.Person | None:
     found = people.find_people(detector, frame)
     if not found:
         return None
@@ -203,12 +212,24 @@ def _find(detector, frame, t: float, lock: Lock, last) -> people.Person | None:
         return 0.65 * look + 0.35 * place + 0.05 * p.conf
 
     best = max(found, key=score)
-    if (
-        lock.signature is not None
-        and people.similarity(people.signature(frame, best.box), lock.signature) < 0.15
-        and (hint is None or people.iou(best.box, hint) < 0.3)
-    ):
-        return None
+    if lock.signature is not None:
+        sim = people.similarity(people.signature(frame, best.box), lock.signature)
+        if sim < reacquire_threshold and (
+            hint is None or people.iou(best.box, hint) < 0.3
+        ):
+            if events is not None and not any(
+                e.get("code") == "F02_IDENTITY_SWITCH" for e in events
+            ):
+                events.append(
+                    {
+                        "code": "F02_IDENTITY_SWITCH",
+                        "stage": "track",
+                        "t": round(float(t), 3),
+                        "message": "low-similarity reacquisition while athlete was lost",
+                        "similarity": round(float(sim), 3),
+                    }
+                )
+            return None
     return best
 
 
@@ -237,7 +258,7 @@ def track_athlete(
     rate: float = 12,
     progress=lambda f: None,
     cancelled=lambda: None,
-) -> Track:
+) -> tuple[Track, list[dict]]:
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise EngineError("VIDEO_DECODE_FAILED", "Could not read this video.")
@@ -250,6 +271,7 @@ def track_athlete(
     velocity = np.zeros(2)
     lost, primed, n, i = 0, lock.box is not None, 0, -1
     nan_lm = np.full((33, 4), np.nan, np.float32)
+    track_events: list[dict] = []
     try:
         while cap.grab():
             i += 1
@@ -296,7 +318,12 @@ def track_athlete(
                     found = None
             if found is None:
                 found = _find(
-                    detector, frame, t, lock, hint if lost < LOST_AFTER else None
+                    detector,
+                    frame,
+                    t,
+                    lock,
+                    hint if lost < LOST_AFTER else None,
+                    events=track_events if lost >= LOST_AFTER else None,
                 )
             if found is not None:
                 if box is not None:
@@ -333,7 +360,7 @@ def track_athlete(
             "The selected player could not be followed in this video.",
             retryable=True,
         )
-    return Track(
+    track = Track(
         np.array(times),
         np.stack(lms),
         np.stack(boxes),
@@ -342,3 +369,5 @@ def track_athlete(
         size[1],
         fps / stride,
     )
+    track.identity_events = track_events  # type: ignore[attr-defined]
+    return track

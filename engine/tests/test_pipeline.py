@@ -31,7 +31,7 @@ def params(video_path: str, **extra) -> dict:
     return {
         "video_key": upload(video_path),
         "sha256": "abc",
-        "angle": "primary",
+        "angle": "side",
         "sport": "basketball",
         "render": True,
         "player": pick_athlete(video_path),
@@ -123,8 +123,8 @@ def test_job_emits_ordered_lifecycle_events_and_a_complete_result(video, wait):
     assert result["provenance"]["judged_by"] == "model" and result["degraded"] == []
     assert result["provenance"]["manifest"]["sport_pack"]["sha256"]
     assert result["provenance"]["manifest"]["prompt"]["hash"]
-    # The wire's angle="primary" is not a declared view; the tag is reported as detected.
-    assert result["angle_source"] == "detected"
+    assert result["angle_source"] == "declared"
+    assert result["angle"] == "side"
     assert (
         result["detected_angle"]
         == result["provenance"]["manifest"]["camera"]["detected_angle"]
@@ -194,7 +194,7 @@ def test_outputs_are_published_as_artifacts_and_the_video_plays(video, wait, tmp
 
 
 def test_research_mode_is_fail_closed_and_stamped_on_the_manifest(video, wait):
-    jobs.create("j6", params(video, research=True))
+    jobs.create("j6", params(video, research=True, angle="primary"))
     done = wait("j6")
     assert done["degraded"] == []
     result = jobs.load_result("j6")

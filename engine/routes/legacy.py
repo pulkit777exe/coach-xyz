@@ -95,6 +95,35 @@ def legacy_summary(result: dict) -> dict:
                 "injury_risk": None,
             }
         )
+    success_rate = summary.get("success_rate")
+    quality = dict(result.get("quality") or {})
+    if "needs_review" not in quality:
+        quality["needs_review"] = bool(result.get("needs_review"))
+    prov = result.get("provenance") or {}
+    manifest = prov.get("manifest") or {}
+    manifest_pack = manifest.get("sport_pack") or {}
+    sport_pack = prov.get("sport_pack")
+    if isinstance(sport_pack, dict):
+        pack_version = sport_pack.get("version")
+    else:
+        pack_version = sport_pack
+    if pack_version is None:
+        pack_version = manifest_pack.get("version", result.get("sport_pack_version"))
+    try:
+        pack_version = int(pack_version) if pack_version is not None else 0
+    except (TypeError, ValueError):
+        pack_version = 0
+    provenance = {
+        "engine": prov.get("engine")
+        or (manifest.get("application") or {}).get("engine_version"),
+        "model": prov.get("model"),
+        "analysis_prompt": str(
+            prov.get("prompt") or (manifest.get("prompt") or {}).get("version") or ""
+        ),
+        "sport": result.get("sport"),
+        "sport_pack_version": pack_version,
+        "analyzed_at": prov.get("analyzed_at") or manifest.get("evaluated_at"),
+    }
     return {
         "sport": result["sport"],
         "action_id": result.get("action_id"),
@@ -111,12 +140,14 @@ def legacy_summary(result: dict) -> dict:
         "strengths": summary["strengths"],
         "priority_drill": summary["priority_drill"],
         "shot_events": shots,
-        "success_rate_percent": summary["success_rate"] or 0,
+        "success_rate_percent": success_rate,
         "average_form_score": summary.get("average_score"),
         # Normalised stats for the web UI (0-10 score, 0-1 rates).
         "average_score": summary.get("average_score"),
-        "success_rate": round((summary["success_rate"] or 0) / 100, 3),
+        "success_rate": round(success_rate / 100, 3) if success_rate is not None else None,
         "confidence": summary.get("confidence") or 0,
+        "confidence_kind": summary.get("confidence_kind"),
+        "pose_confidence": summary.get("pose_confidence"),
         "session_metrics": result.get("session_metrics", []),
         "stats": result.get("stats", {}),
         "tactical_summary": summary.get("tactical_summary", ""),
@@ -127,13 +158,18 @@ def legacy_summary(result: dict) -> dict:
         "criteria_registry": result.get("criteria_registry", []),
         "event_detection": result.get("event_detection"),
         "failures": result.get("failures", []),
-        "quality": result["quality"],
+        "quality": quality,
         "needs_review": result["needs_review"],
-        "provenance": result["provenance"],
+        "provenance": provenance,
         "angle": result["angle"],
         "angle_source": result.get("angle_source"),
+        "detected_angle": result.get("detected_angle"),
         "scope_note": result.get("scope_note"),
         "recommended_angles": result["recommended_angles"],
+        "confidence_kind": summary.get("confidence_kind"),
+        "pose_confidence": summary.get("pose_confidence"),
+        "video": result.get("video"),
+        "athlete": result.get("athlete"),
     }
 
 

@@ -272,10 +272,12 @@ def review(
             cancelled=cancelled,
         )
         moments = []
+        shown = set()
         for n, (c, m) in enumerate(zip(cands, measured, strict=False), 1):
             reel = video.to_reel(segments, c.t)
             if reel is None:
                 continue
+            shown.add(n - 1)
             numbers = [
                 f"{r['label']} {r['value']:.0f}°"
                 for r in m["criteria"]
@@ -324,10 +326,12 @@ def review(
         for v in out.events
         if 1 <= v.candidate <= len(cands)
     }
+    unseen = [i for i in range(len(cands)) if i not in shown]
     for i in range(len(cands)):
-        verdicts.setdefault(
-            i,
-            {
+        if i in verdicts:
+            continue
+        if i in shown:
+            verdicts[i] = {
                 "is_event": False,
                 "state": "rejected",
                 "type": "other",
@@ -337,7 +341,28 @@ def review(
                 "ratings": {},
                 "tags": [],
                 "pressure": "unknown",
-            },
+            }
+        else:
+            verdicts[i] = {
+                "is_event": True,
+                "state": "candidate",
+                "type": "other" if "other" in pack.event_types else pack.event_types[0],
+                "result": "unknown",
+                "feedback": "This moment was not shown in the model review clip; it remains an unreviewed candidate.",
+                "confidence": 0.0,
+                "ratings": {},
+                "tags": ["unreviewed"],
+                "pressure": "unknown",
+            }
+    if unseen:
+        failure_list.append(
+            failures.failure(
+                "F07_MISSED_CANDIDATE",
+                "judge",
+                f"{len(unseen)} candidate moment(s) were not shown to the model for review",
+                retryable=False,
+                unseen_candidates=sorted(unseen),
+            ).to_dict()
         )
     unsupported = _drop_unsupported_ratings(verdicts, pack)
     if unsupported:

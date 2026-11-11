@@ -177,15 +177,26 @@ def _nearest(tr: Track, t: float, max_dt: float = 0.4) -> int | None:
     return idx if abs(float(tr.t[idx]) - t) <= max_dt else None
 
 
-def _role(pack: Pack, tr: Track, idx: int | None, side: str, label: str) -> dict | None:
+def _role(
+    pack: Pack,
+    tr: Track,
+    idx: int | None,
+    side: str,
+    label: str,
+    *,
+    tracked: bool | None = None,
+) -> dict | None:
     if idx is None:
         return None
-    return {
+    role = {
         "role": label,
         "side": side,
         "confidence": round(float(tr.conf[idx]), 2),
         "metrics": metrics.event_metrics(tr, idx, side, pack),
     }
+    if tracked is not None:
+        role["tracked"] = tracked
+    return role
 
 
 def _separation(
@@ -251,6 +262,9 @@ def analyse(
             primary_tr = _choose_primary(tracks, reference, pack, c.t)
             primary_track = primary_tr["track"]
             p_idx = _nearest(primary_track, c.t)
+            primary_is_tracked = bool(
+                reference is not None and _overlap(primary_track, reference) > 0.1
+            )
 
             opponent_tr = None
             if found_at_event is not None and frame_at_event is not None:
@@ -292,7 +306,14 @@ def analyse(
                     )
             out[c.i] = {
                 "roles": {"primary": pack.primary_role, "opponent": pack.opponent_role},
-                "primary": _role(pack, primary_track, p_idx, c.side, pack.primary_role),
+                "primary": _role(
+                    pack,
+                    primary_track,
+                    p_idx,
+                    c.side,
+                    pack.primary_role,
+                    tracked=primary_is_tracked,
+                ),
                 "opponent": _role(
                     pack, opponent_track, o_idx, opp_side, pack.opponent_role
                 ),

@@ -142,16 +142,27 @@ def measure(
         views = c.allowed_views or c.valid_angles
         view_verified = True
         declared = None if angle in UNDECLARED_VIEWS else angle
-        if views and research and not declared:
-            rows.append(
-                _row(
-                    c,
-                    state="unavailable",
-                    source=None,
-                    view_verified=False,
-                    note="research mode requires a declared camera view; none was declared",
+        if views and not declared:
+            if research:
+                rows.append(
+                    _row(
+                        c,
+                        state="unavailable",
+                        source=None,
+                        view_verified=False,
+                        note="research mode requires a declared camera view; none was declared",
+                    )
                 )
-            )
+            else:
+                rows.append(
+                    _row(
+                        c,
+                        state="view_unverified",
+                        source=None,
+                        view_verified=False,
+                        note="camera view not declared; cannot verify this criterion",
+                    )
+                )
             continue
         if views and declared:
             view_verified = declared in views

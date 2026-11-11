@@ -135,12 +135,14 @@ def test_research_mode_is_fail_closed_without_a_declared_camera_view():
 
 
 def test_research_mode_does_not_silently_widen_product_behaviour():
-    # Product runs keep the historical permissive behaviour: an undeclared view
-    # is not gated, because the caller has not opted into the research protocol.
+    # Product runs must not overstate camera-gated measurements when the
+    # camera view was never declared or verified.
     pack = sports.load("basketball")
     rows = measure.measure(track_at(), 10, "right", pack, angle=None)["criteria"]
     arm = next(r for r in rows if r["key"] == "arm_extension")
-    assert arm["state"] != "invalid_view"
+    assert arm["state"] == "view_unverified"
+    assert arm["view_verified"] is False
+    assert arm["score"] is None and arm["source"] is None
 
 
 def test_vlm_ratings_for_unknown_criteria_are_dropped_and_recorded():

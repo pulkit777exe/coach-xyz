@@ -75,12 +75,17 @@ def _events(
         event_metrics = metrics.event_metrics(track, c.i, c.side, pack)
         matchup = (matchups or {}).get(c.i)
         if matchup and matchup.get("primary"):
-            # The primary role is the athlete we already measure; reuse those numbers
-            # so the session average, the banner and the two-player panel agree.
-            matchup = {
-                **matchup,
-                "primary": {**matchup["primary"], "metrics": event_metrics},
-            }
+            primary = matchup.get("primary") or {}
+            tracked = primary.get("tracked")
+            # Reuse tracked-athlete metrics only when the matchup primary is that athlete.
+            if tracked is None or tracked is True:
+                matchup = {
+                    **matchup,
+                    "primary": {**primary, "metrics": event_metrics},
+                }
+        confidence_label = "pose" if judgement.source == "rules" else "event"
+        if score is None:
+            confidence_label = "tracking"
         events.append(
             {
                 "id": f"{job_id}:e{k}",
@@ -97,6 +102,8 @@ def _events(
                 "confirmed": state == "confirmed",
                 "feedback": verdict["feedback"] or judge.event_feedback(rows, pack),
                 "confidence": round(confidence, 2),
+                "confidence_kind": confidence_label,
+                "pose_confidence": round(pose_conf, 2),
                 "tags": list(verdict.get("tags") or []),
                 "pressure": verdict.get("pressure") or "unknown",
                 "measurements": rows,
@@ -195,34 +202,52 @@ def _session_text(
     fallback_text, fallback_insights = performance.fallback_insights(
         pack, stats, professional
     )
-    text = judgement.summary.strip()
-    if not text:
+    model_text = judgement.summary.strip()
+    if model_text:
+        text = model_text
+    else:
         text = fallback_text
-    kpis = [
-        f"{m['label'].lower()} {m['value']} {m['unit']}".strip()
-        for m in session_metrics
-        if m.get("kind") == "metric"
-    ][:2]
-    if kpis:
-        text += " Measured: " + ", ".join(kpis) + "."
-    pressure = next(
-        (m for m in session_metrics if m.get("key") == "opponent_distance"), None
-    )
-    if pressure:
-        text += f" {pack.opponent_role} distance averaged {pressure['value']} torso lengths."
+        kpis = [
+            f"{m['label'].lower()} {m['value']} {m['unit']}".strip()
+            for m in session_metrics
+            if m.get("kind") == "metric"
+        ][:2]
+        if kpis:
+            text += " Measured: " + ", ".join(kpis) + "."
+        pressure = next(
+            (m for m in session_metrics if m.get("key") == "opponent_distance"), None
+        )
+        if pressure:
+            text += (
+                f" {pack.opponent_role} distance averaged {pressure['value']} "
+                "torso lengths."
+            )
+
+    tactical_summary = judgement.tactical_summary.strip()
+    if not tactical_summary:
+        # Avoid duplicating the fallback session summary in the pure-fallback case.
+        tactical_summary = "" if not model_text else fallback_text
     return {
         "text": text,
         "strengths": judgement.strengths or strong,
         "focus_areas": judgement.focus_areas or [label[k] for k in weak],
         "priority_drill": judgement.priority_drill
         or (drills.get(weak[0], "") if weak else ""),
-        "tactical_summary": judgement.tactical_summary.strip() or fallback_text,
+        "tactical_summary": tactical_summary,
         "key_insights": judgement.key_insights or fallback_insights,
     }
 
 
 def _composite(events: list[dict], avg: float | None) -> dict:
-    coverages = [float(e["coverage"]) for e in events if e["score"] is not None]
+    scored = [e for e in events if e["score"] is not None]
+    considered = [
+        e
+        for e in events
+        if e.get("coverage_detail", {}).get("applicable_weight", 0) > 0
+    ]
+    coverages = [float(e["coverage"]) for e in considered] or [
+        float(e["coverage"]) for e in events
+    ]
     return {
         "value": avg,
         "scale": "0-10",
@@ -231,6 +256,8 @@ def _composite(events: list[dict], avg: float | None) -> dict:
         "method": "weighted_ideal_ranges_v1",
         "coverage": round(float(np.mean(coverages)), 2) if coverages else None,
         "minimum_coverage": measure.MIN_MEASURED_COVERAGE,
+        "scored_events": len(scored),
+        "considered_events": len(considered) or len(events),
         "excluded_from_research": True,
         "reason": None if avg is not None else "insufficient valid measured criteria",
     }
@@ -365,46 +392,102 @@ def build(
         matchups,
         research_mode=research_mode,
     )
-    scored = [e["score"] for e in events if e["score"] is not None]
-    made = sum(e["result"] in pack.positive for e in events)
-    missed = sum(e["result"] in pack.negative for e in events)
+    confirmed_events = [e for e in events if e.get("event_state") == "confirmed"]
+    scored = [e["score"] for e in confirmed_events if e["score"] is not None]
+    made = sum(e["result"] in pack.positive for e in confirmed_events)
+    missed = sum(e["result"] in pack.negative for e in confirmed_events)
     avg = round(float(np.mean(scored)), 1) if scored else None
     mean_conf = float(track.conf[track.valid].mean()) if track.valid.any() else 0.0
     event_conf = (
-        float(np.mean([e["confidence"] for e in events])) if events else mean_conf
+        float(np.mean([e["confidence"] for e in confirmed_events]))
+        if confirmed_events
+        else mean_conf
     )
+    decisive = made + missed
     stats = {
-        "events": len(events),
+        "events": len(confirmed_events),
         "made": made,
         "missed": missed,
         "average_score": avg,
-        "success_rate": round(100 * made / (made + missed), 1)
-        if made + missed
-        else None,
+        "success_rate": round(100 * made / decisive, 1) if decisive else None,
         "confidence": round(event_conf, 2),
+        "confidence_kind": "event"
+        if confirmed_events and avg is not None
+        else "tracking",
+        "pose_confidence": round(mean_conf, 2),
     }
-    consistency = _consistency(events)
+    consistency = _consistency(confirmed_events)
     session_metrics = metrics.session_metrics(
-        track, events, pack
-    ) + metrics.matchup_metrics(events, pack)
-    professional = performance.build(pack, events, session_metrics, consistency, stats)
-    text = _session_text(events, stats, pack, judgement, session_metrics, professional)
+        track, confirmed_events, pack
+    ) + metrics.matchup_metrics(confirmed_events, pack)
+    professional = performance.build(
+        pack, confirmed_events, session_metrics, consistency, stats
+    )
+    text = _session_text(
+        confirmed_events, stats, pack, judgement, session_metrics, professional
+    )
     findings = _findings(events, track, media.fps, pack, provenance_block)
-    composite = _composite(events, avg)
+    composite = _composite(confirmed_events, avg)
     event_detection = _event_detection(cands, judgement)
 
     issues = []
     if track.coverage < 0.5:
         issues.append("low_track_coverage")
+        failures_list.append(
+            failures.failure(
+                "F13_INSUFFICIENT_COVERAGE",
+                "track",
+                "athlete track coverage was below the minimum confidence threshold",
+                coverage=round(track.coverage, 2),
+            ).to_dict()
+        )
     if track.valid.any() and mean_conf < 0.45:
         issues.append("low_pose_confidence")
+        failures_list.append(
+            failures.failure(
+                "F13_INSUFFICIENT_COVERAGE",
+                "track",
+                "mean pose confidence was too low for reliable measurements",
+                mean_confidence=round(mean_conf, 2),
+            ).to_dict()
+        )
     if not events:
         issues.append("no_events")
-    if events and not scored:
+    if confirmed_events and not scored:
         issues.append("no_measurable_events")
         issues.append("insufficient_measurement_coverage")
-    if any(e.get("event_state") == "candidate" for e in events):
+        failures_list.append(
+            failures.failure(
+                "F13_INSUFFICIENT_COVERAGE",
+                "measure",
+                "no confirmed events reached the minimum measurement coverage",
+                confirmed_events=len(confirmed_events),
+            ).to_dict()
+        )
+    if composite.get("coverage") is not None and composite["coverage"] < measure.MIN_MEASURED_COVERAGE:
+        issues.append("insufficient_measurement_coverage")
+        failures_list.append(
+            failures.failure(
+                "F13_INSUFFICIENT_COVERAGE",
+                "result",
+                "session composite coverage was below the minimum threshold",
+                coverage=composite["coverage"],
+                minimum_coverage=measure.MIN_MEASURED_COVERAGE,
+            ).to_dict()
+        )
+    if any(e.get("event_state") != "confirmed" for e in events):
         issues.append("unconfirmed_candidate_events")
+    # dedupe failure codes+stage+message
+    deduped, seen = [], set()
+    for f in failures_list:
+        key = (f.get("code"), f.get("stage"), f.get("message"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(f)
+    failures_list = deduped
+    issues = list(dict.fromkeys(issues))
+    quality = {"passed": not issues, "issues": issues, "needs_review": bool(issues)}
     return {
         "schema_version": SCHEMA_VERSION,
         "job_id": job_id,
@@ -449,7 +532,7 @@ def build(
         "stats": professional,
         "event_detection": event_detection,
         "failures": failures_list,
-        "quality": {"passed": not issues, "issues": issues},
+        "quality": quality,
         "needs_review": bool(issues)
         or any(f["review_state"] == "needs_review" for f in findings),
         "degraded": degraded,
