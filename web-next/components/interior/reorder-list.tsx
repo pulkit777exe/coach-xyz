@@ -84,7 +84,7 @@ export function ReorderList<T>({
                 type="button"
                 onClick={() => move(index, Math.max(0, index - 1))}
                 disabled={index === 0}
-                aria-label="Move up"
+                aria-label={`Move ${getLabel(item)} up`}
                 className="cursor-pointer rounded-[4px] px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-30"
               >
                 ↑
@@ -93,7 +93,7 @@ export function ReorderList<T>({
                 type="button"
                 onClick={() => move(index, Math.min(items.length - 1, index + 1))}
                 disabled={index === items.length - 1}
-                aria-label="Move down"
+                aria-label={`Move ${getLabel(item)} down`}
                 className="cursor-pointer rounded-[4px] px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-30"
               >
                 ↓

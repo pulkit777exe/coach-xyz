@@ -173,6 +173,20 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         ? `pack ${String(summary.sport_pack_version)}`
         : null,
   ].filter(Boolean)
+  const criteriaRegistry = summary && Array.isArray(summary.criteria_registry)
+    ? (summary.criteria_registry as Array<Record<string, unknown>>).filter((e) => toRecord(e) !== null)
+    : []
+  const truncateText = (value: string, max = 180) =>
+    value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value
+  const listSummary = (items: string[], empty = '—') => {
+    if (items.length === 0) return empty
+    if (items.length <= 3) return items.join(', ')
+    return `${items.slice(0, 3).join(', ')} +${items.length - 3} more`
+  }
+  const countOrList = (items: string[], noun: string) => {
+    if (items.length === 0) return `0 ${noun}`
+    return `${items.length} ${noun}: ${listSummary(items)}`
+  }
   const shownMoments = 10
   const label = data.analysis.display_name || data.server_job_id.slice(0, 8)
 
@@ -463,6 +477,110 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
             <p key={i} className="text-meta text-muted-foreground">{note}</p>
           ))}
         </div>
+      ) : null}
+
+      {criteriaRegistry.length > 0 ? (
+        <section className="border-border bg-card mb-8 rounded-[6px] border">
+          <div className="border-b border-border px-5 py-3.5">
+            <p className="text-lead font-semibold text-foreground">Criteria registry</p>
+            <p className="mt-1 text-meta text-muted-foreground">
+              Research context: implementation and validation status for assessed criteria. Registry entries describe support, not validated performance.
+            </p>
+          </div>
+          <div className="space-y-3 p-5">
+            {criteriaRegistry.map((entry, i) => {
+              const criterionId = str(entry.criterion_id)
+              const label = str(entry.label) ?? criterionId ?? 'Criterion'
+              const engineKey = str(entry.engine_key)
+              const evidenceType = str(entry.evidence_type)
+              const validationStatus = str(entry.validation_status)
+              const measurementType = str(entry.measurement_type)
+              const calibration = str(entry.calibration)
+              const implementation = str(entry.implementation)
+              const qualityGate = str(entry.quality_gate)
+              const paperDefinition = str(entry.paper_definition)
+              const implementationNote = str(entry.implementation_note)
+              const allowedViews = strArray(entry.allowed_views)
+              const phaseScope = strArray(entry.phase_scope)
+              const requiredLandmarks = strArray(entry.required_landmarks)
+              const requiredObjects = strArray(entry.required_objects)
+              const summaryLine = [
+                criterionId ? `ID ${criterionId}` : null,
+                engineKey ? `engine ${engineKey}` : null,
+                evidenceType ? `evidence ${evidenceType}` : null,
+                validationStatus ? `validation ${validationStatus}` : null,
+                implementation ? `implementation ${implementation}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+              return (
+                <details key={criterionId ?? `${label}-${i}`} className="rounded-[6px] border border-border bg-background p-4">
+                  <summary className="cursor-pointer list-none">
+                    <p className="text-body font-medium text-foreground">{label}</p>
+                    {summaryLine ? <p className="mt-1 text-meta text-muted-foreground break-words">{summaryLine}</p> : null}
+                  </summary>
+                  <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-meta sm:grid-cols-2">
+                    {measurementType ? (
+                      <div>
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Measurement</dt>
+                        <dd className="text-foreground mt-0.5 break-words">{measurementType}</dd>
+                      </div>
+                    ) : null}
+                    {calibration ? (
+                      <div>
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Calibration</dt>
+                        <dd className="text-foreground mt-0.5 break-words">{calibration}</dd>
+                      </div>
+                    ) : null}
+                    {allowedViews.length > 0 ? (
+                      <div>
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Allowed views</dt>
+                        <dd className="text-foreground mt-0.5 break-words">{listSummary(allowedViews)}</dd>
+                      </div>
+                    ) : null}
+                    {phaseScope.length > 0 ? (
+                      <div>
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Phase scope</dt>
+                        <dd className="text-foreground mt-0.5 break-words">{listSummary(phaseScope)}</dd>
+                      </div>
+                    ) : null}
+                    {(requiredLandmarks.length > 0 || requiredObjects.length > 0) ? (
+                      <div className="sm:col-span-2">
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Requirements</dt>
+                        <dd className="text-foreground mt-0.5 break-words">
+                          {[
+                            requiredLandmarks.length > 0 ? countOrList(requiredLandmarks, 'landmarks') : null,
+                            requiredObjects.length > 0 ? countOrList(requiredObjects, 'objects') : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {qualityGate ? (
+                      <div className="sm:col-span-2">
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Quality gate</dt>
+                        <dd className="text-foreground mt-0.5 break-words">{qualityGate}</dd>
+                      </div>
+                    ) : null}
+                    {paperDefinition ? (
+                      <div className="sm:col-span-2">
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Paper definition</dt>
+                        <dd className="text-foreground mt-0.5 break-words leading-[1.6]">{truncateText(paperDefinition)}</dd>
+                      </div>
+                    ) : null}
+                    {implementationNote ? (
+                      <div className="sm:col-span-2">
+                        <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Implementation note</dt>
+                        <dd className="text-foreground mt-0.5 break-words leading-[1.6]">{truncateText(implementationNote)}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </details>
+              )
+            })}
+          </div>
+        </section>
       ) : null}
 
       {provenanceParts.length > 0 ? (

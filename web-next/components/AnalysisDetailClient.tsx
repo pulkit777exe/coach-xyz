@@ -36,7 +36,15 @@ import {
 } from '@/lib/analysisDisplay'
 import { startAnalysisStatus } from '@/lib/analysisEvents'
 import type { JobPollingController } from '@/lib/jobPolling'
-import type { JobStatus, AnalysisSummary, Matchup, PerformanceMetric, ProfessionalStats, Finding } from '@/types'
+import type {
+  JobStatus,
+  AnalysisSummary,
+  Matchup,
+  PerformanceMetric,
+  ProfessionalStats,
+  Finding,
+  CriteriaRegistryEntry,
+} from '@/types'
 import { cancelAnalysis, deleteAnalysis, type DashboardAnalysis } from '@/lib/library'
 import AnalysisLinkControl from '@/components/org/AnalysisLinkControl'
 import StatusPill from '@/components/org/StatusPill'
@@ -412,6 +420,9 @@ export default function AnalysisDetailClient({
       return [prefix && core && prefix !== core ? `${prefix}: ${message || core}` : core, retryable].filter(Boolean).join(' · ')
     })
     .filter(Boolean)
+  const criteriaRegistry = Array.isArray(summary?.criteria_registry)
+    ? (summary.criteria_registry as CriteriaRegistryEntry[]).filter((e) => isRecord(e))
+    : []
   const formScore = summaryNumber(summary, 'form_score')
   const averageScore = summaryNumber(summary, 'average_score')
   const confidence = summaryNumber(summary, 'confidence')
@@ -450,6 +461,18 @@ export default function AnalysisDetailClient({
         })
         .filter((x): x is string => Boolean(x))
     : []
+
+  const truncateText = (value: string, max = 180) =>
+    value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value
+  const listSummary = (items: string[] | undefined, empty = '—') => {
+    if (!items || items.length === 0) return empty
+    if (items.length <= 3) return items.join(', ')
+    return `${items.slice(0, 3).join(', ')} +${items.length - 3} more`
+  }
+  const countOrList = (items: string[] | undefined, noun: string) => {
+    if (!items || items.length === 0) return `0 ${noun}`
+    return `${items.length} ${noun}: ${listSummary(items)}`
+  }
   const eventDetection = isRecord(summary?.event_detection) ? (summary.event_detection as Record<string, unknown>) : null
   const eventDetectionSummary = eventDetection
     ? [
@@ -785,6 +808,108 @@ export default function AnalysisDetailClient({
               <p className="text-body text-muted-foreground">No evidence findings were produced for this analysis.</p>
             )}
           </section>
+
+          {criteriaRegistry.length > 0 ? (
+            <section className="rounded-[6px] border border-border bg-card p-6">
+              <CardHeading>Criteria registry</CardHeading>
+              <p className="text-meta text-muted-foreground mb-4">
+                Research context: implementation and validation status for assessed criteria. Registry entries describe support, not validated performance.
+              </p>
+              <div className="space-y-3">
+                {criteriaRegistry.map((entry, i) => {
+                  const criterionId = typeof entry.criterion_id === 'string' ? entry.criterion_id : null
+                  const label = typeof entry.label === 'string' ? entry.label : criterionId ?? 'Criterion'
+                  const engineKey = typeof entry.engine_key === 'string' ? entry.engine_key : entry.engine_key === null ? null : null
+                  const evidenceType = typeof entry.evidence_type === 'string' ? entry.evidence_type : null
+                  const validationStatus = typeof entry.validation_status === 'string' ? entry.validation_status : null
+                  const measurementType = typeof entry.measurement_type === 'string' ? entry.measurement_type : null
+                  const calibration = typeof entry.calibration === 'string' ? entry.calibration : null
+                  const implementation = typeof entry.implementation === 'string' ? entry.implementation : null
+                  const qualityGate = typeof entry.quality_gate === 'string' ? entry.quality_gate : null
+                  const paperDefinition = typeof entry.paper_definition === 'string' ? entry.paper_definition : null
+                  const implementationNote = typeof entry.implementation_note === 'string' ? entry.implementation_note : null
+                  const allowedViews = Array.isArray(entry.allowed_views) ? entry.allowed_views.filter((v): v is string => typeof v === 'string') : []
+                  const phaseScope = Array.isArray(entry.phase_scope) ? entry.phase_scope.filter((v): v is string => typeof v === 'string') : []
+                  const requiredLandmarks = Array.isArray(entry.required_landmarks) ? entry.required_landmarks.filter((v): v is string => typeof v === 'string') : []
+                  const requiredObjects = Array.isArray(entry.required_objects) ? entry.required_objects.filter((v): v is string => typeof v === 'string') : []
+                  const summaryLine = [
+                    criterionId ? `ID ${criterionId}` : null,
+                    engineKey ? `engine ${engineKey}` : null,
+                    evidenceType ? `evidence ${evidenceType}` : null,
+                    validationStatus ? `validation ${validationStatus}` : null,
+                    implementation ? `implementation ${implementation}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                  return (
+                    <details key={criterionId ?? `${label}-${i}`} className="rounded-[6px] border border-border bg-background p-4">
+                      <summary className="cursor-pointer list-none">
+                        <p className="text-body font-medium text-foreground">{label}</p>
+                        {summaryLine ? <p className="mt-1 text-meta text-muted-foreground break-words">{summaryLine}</p> : null}
+                      </summary>
+                      <dl className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-meta sm:grid-cols-2">
+                        {measurementType ? (
+                          <div>
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Measurement</dt>
+                            <dd className="text-foreground mt-0.5 break-words">{measurementType}</dd>
+                          </div>
+                        ) : null}
+                        {calibration ? (
+                          <div>
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Calibration</dt>
+                            <dd className="text-foreground mt-0.5 break-words">{calibration}</dd>
+                          </div>
+                        ) : null}
+                        {allowedViews.length > 0 ? (
+                          <div>
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Allowed views</dt>
+                            <dd className="text-foreground mt-0.5 break-words">{listSummary(allowedViews)}</dd>
+                          </div>
+                        ) : null}
+                        {phaseScope.length > 0 ? (
+                          <div>
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Phase scope</dt>
+                            <dd className="text-foreground mt-0.5 break-words">{listSummary(phaseScope)}</dd>
+                          </div>
+                        ) : null}
+                        {(requiredLandmarks.length > 0 || requiredObjects.length > 0) ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Requirements</dt>
+                            <dd className="text-foreground mt-0.5 break-words">
+                              {[
+                                requiredLandmarks.length > 0 ? countOrList(requiredLandmarks, 'landmarks') : null,
+                                requiredObjects.length > 0 ? countOrList(requiredObjects, 'objects') : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {qualityGate ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Quality gate</dt>
+                            <dd className="text-foreground mt-0.5 break-words">{qualityGate}</dd>
+                          </div>
+                        ) : null}
+                        {paperDefinition ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Paper definition</dt>
+                            <dd className="text-foreground mt-0.5 break-words leading-[1.6]">{truncateText(paperDefinition)}</dd>
+                          </div>
+                        ) : null}
+                        {implementationNote ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Implementation note</dt>
+                            <dd className="text-foreground mt-0.5 break-words leading-[1.6]">{truncateText(implementationNote)}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </details>
+                  )
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-[6px] border border-border bg-card p-6">
             <CardHeading>Key events</CardHeading>

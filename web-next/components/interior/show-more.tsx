@@ -30,6 +30,7 @@ export function ShowMore({ lines, children, className }: ShowMoreProps) {
       </div>
       <button
         type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
         className="cursor-pointer rounded-[4px] text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       >

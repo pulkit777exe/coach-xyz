@@ -41,6 +41,7 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
 
   return (
     <nav
+      aria-label="Page sections"
       className={cn(
         'sticky top-14 z-30 flex flex-wrap items-center gap-x-6 gap-y-1 bg-background py-2',
         className,
@@ -51,6 +52,7 @@ export function ScrollSpy({ sections, root, className }: ScrollSpyProps) {
           key={s.id}
           type="button"
           onClick={() => scrollTo(s.id)}
+          aria-current={active === s.id ? 'location' : undefined}
           className={cn(
             'cursor-pointer rounded-[4px] px-1.5 py-0.5 text-[14px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             active === s.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
