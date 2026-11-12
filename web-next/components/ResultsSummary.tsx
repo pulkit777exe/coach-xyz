@@ -103,6 +103,25 @@ export default function ResultsSummary({
   const focusAreas = Array.isArray(summary.top_tips) ? summary.top_tips.filter(Boolean) : []
   const strengths = Array.isArray(summary.strengths) ? summary.strengths.filter(Boolean) : []
   const narrative = typeof summary.summary === 'string' ? summary.summary.trim() : ''
+  const angle = typeof summary.angle === 'string' ? summary.angle : null
+  const angleSource = typeof summary.angle_source === 'string' ? summary.angle_source : null
+  const scopeNote = typeof summary.scope_note === 'string' ? summary.scope_note : null
+  const recommendedAngles = Array.isArray(summary.recommended_angles)
+    ? summary.recommended_angles
+        .map((a) => {
+          const label = typeof a?.label === 'string' ? a.label : typeof a?.id === 'string' ? a.id : null
+          const description = typeof a?.description === 'string' ? a.description : null
+          if (!label && !description) return null
+          return description ? `${label ?? 'Angle'} — ${description}` : (label as string)
+        })
+        .filter((x): x is string => Boolean(x))
+    : []
+  const provenance = summary.provenance
+  const provenanceNote = [
+    provenance?.engine ? `engine ${provenance.engine}` : null,
+    provenance?.analyzed_at ? `analyzed ${provenance.analyzed_at}` : null,
+    provenance?.sport_pack_version != null ? `pack v${provenance.sport_pack_version}` : null,
+  ].filter(Boolean).join(' · ')
   const needsReview = Boolean(summary.needs_review || summary.quality?.needs_review)
   const qualityIssues = Array.isArray(summary.quality?.issues) ? summary.quality?.issues : []
   const failures = Array.isArray(summary.failures) ? summary.failures : []
@@ -112,10 +131,16 @@ export default function ResultsSummary({
       const unseen = Array.isArray(detail?.unseen_candidates)
         ? (detail?.unseen_candidates as unknown[]).length
         : null
+      const code = typeof f.code === 'string' ? f.code : null
+      const stage = typeof f.stage === 'string' ? f.stage : null
+      const retryable = typeof f.retryable === 'boolean' ? (f.retryable ? 'retryable' : 'not retryable') : null
+      let message = typeof f.message === 'string' && f.message ? f.message : ''
       if (f.code === 'F07_MISSED_CANDIDATE' && unseen) {
-        return `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review`
+        message = `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review${message ? ` — ${message}` : ''}`
       }
-      return typeof f.message === 'string' && f.message ? f.message : f.code
+      const core = message || code || ''
+      const prefix = [code, stage].filter(Boolean).join(' · ')
+      return [prefix && core && prefix !== core ? `${prefix}: ${core}` : core, retryable].filter(Boolean).join(' · ')
     })
     .filter(Boolean)
   const shotEvents = Array.isArray(summary.shot_events) ? summary.shot_events : []
@@ -194,29 +219,51 @@ export default function ResultsSummary({
               Session summary
             </h2>
             <p className="text-body leading-[1.7] text-foreground">{narrative}</p>
+            {scopeNote ? <p className="mt-3 text-meta text-muted-foreground">Scope: {scopeNote}</p> : null}
+            {angle ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Angle: {angle}{angleSource ? ` (${angleSource})` : ''}
+              </p>
+            ) : null}
+            {recommendedAngles.length > 0 ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Recommended angles: {recommendedAngles.join(' · ')}
+              </p>
+            ) : null}
             {qualityIssues.length > 0 && (
               <p className="mt-3 text-meta text-muted-foreground">
                 Quality notes: {qualityIssues.join('; ')}
               </p>
             )}
             {failureNotes.length > 0 && (
-              <p className="mt-2 text-meta text-muted-foreground">
-                {failureNotes.slice(0, 2).join(' · ')}
-              </p>
+              <div className="mt-2 space-y-1">
+                {failureNotes.slice(0, 3).map((note, i) => (
+                  <p key={i} className="text-meta text-muted-foreground">{note}</p>
+                ))}
+              </div>
             )}
+            {provenanceNote ? (
+              <p className="mt-2 text-meta text-muted-foreground">Provenance: {provenanceNote}</p>
+            ) : null}
           </div>
-        ) : qualityIssues.length > 0 || failureNotes.length > 0 ? (
-          <div className="gsap-item rounded-[6px] border border-border bg-card p-6">
+        ) : qualityIssues.length > 0 || failureNotes.length > 0 || scopeNote || angle || recommendedAngles.length > 0 ? (
+          <div className="gsap-item rounded-[6px] border border-border bg-card p-6 space-y-1">
+            {scopeNote ? <p className="text-meta text-muted-foreground">Scope: {scopeNote}</p> : null}
+            {angle ? <p className="text-meta text-muted-foreground">Angle: {angle}{angleSource ? ` (${angleSource})` : ''}</p> : null}
+            {recommendedAngles.length > 0 ? <p className="text-meta text-muted-foreground">Recommended angles: {recommendedAngles.join(' · ')}</p> : null}
             {qualityIssues.length > 0 && (
               <p className="text-meta text-muted-foreground">
                 Quality notes: {qualityIssues.join('; ')}
               </p>
             )}
             {failureNotes.length > 0 && (
-              <p className={`${qualityIssues.length > 0 ? 'mt-2 ' : ''}text-meta text-muted-foreground`}>
-                {failureNotes.slice(0, 2).join(' · ')}
-              </p>
+              <div className={`${qualityIssues.length > 0 || scopeNote || angle || recommendedAngles.length > 0 ? 'mt-1 ' : ''}space-y-1`}>
+                {failureNotes.slice(0, 3).map((note, i) => (
+                  <p key={i} className="text-meta text-muted-foreground">{note}</p>
+                ))}
+              </div>
             )}
+            {provenanceNote ? <p className="text-meta text-muted-foreground">Provenance: {provenanceNote}</p> : null}
           </div>
         ) : null}
 

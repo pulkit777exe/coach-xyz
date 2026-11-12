@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/9ui/ui/button'
 import TimestampPill from '@/components/TimestampPill'
+import { formatConfidencePercent, formatFormScore } from '@/lib/analysisDisplay'
 import { errorMessageOf } from '@/lib/errors'
 import type { Finding } from '@/types'
 
@@ -24,6 +25,34 @@ const BAND_LABEL: Record<string, string> = {
   high: 'High confidence',
   moderate: 'Moderate confidence',
   needs_review: 'Needs review',
+}
+
+function compactDiagnostics(finding: Finding): string | null {
+  const parts: string[] = []
+  if (typeof finding.confidence === 'number' && Number.isFinite(finding.confidence)) {
+    parts.push(`confidence ${formatConfidencePercent(finding.confidence)}`)
+  }
+  if (typeof finding.form_score === 'number' && Number.isFinite(finding.form_score)) {
+    parts.push(`score ${formatFormScore(finding.form_score)}`)
+  } else if (finding.form_score === null) {
+    parts.push('score —')
+  }
+  if (Array.isArray(finding.evidence_frames) && finding.evidence_frames.length > 0) {
+    const shown = finding.evidence_frames.slice(0, 3).join(', ')
+    const more = finding.evidence_frames.length > 3 ? ` +${finding.evidence_frames.length - 3}` : ''
+    parts.push(`evidence frames ${shown}${more}`)
+  }
+  if (typeof finding.measured_at_timestamp === 'number' && Number.isFinite(finding.measured_at_timestamp)) {
+    parts.push(`measured ${finding.measured_at_timestamp.toFixed(1)}s`)
+  }
+  if (finding.model_versions && typeof finding.model_versions === 'object') {
+    const entries = Object.entries(finding.model_versions)
+      .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+      .slice(0, 2)
+      .map(([k, v]) => `${k} ${String(v)}`)
+    if (entries.length > 0) parts.push(`model ${entries.join(', ')}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 export default function FindingsTimeline({ findings, onSeek, onReview }: FindingsTimelineProps) {
@@ -82,6 +111,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
           const severityClass = SEVERITY_STYLE[finding.severity ?? ''] ?? SEVERITY_STYLE.medium
           const isPending = pending.has(finding.id)
           const showReview = onReview && (state === 'auto' || state === 'needs_review')
+          const diagnostics = compactDiagnostics(finding)
           return (
             <li key={finding.id}>
               <div
@@ -94,7 +124,7 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                   disabled={!onSeek}
                   onClick={() => onSeek?.(seconds)}
                   className={`w-full text-left rounded-[4px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${onSeek ? 'cursor-pointer' : 'cursor-default'}`}
-                  aria-label={`${finding.category} at ${seconds.toFixed(1)} seconds`}
+                  aria-label={`${finding.category ?? 'Finding'} at ${seconds.toFixed(1)} seconds`}
                 >
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <TimestampPill seconds={seconds} />
@@ -103,9 +133,11 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                     >
                       {finding.severity ?? 'medium'}
                     </span>
-                    <span className="text-caption text-muted-foreground">
-                      {BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band}
-                    </span>
+                    {(BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band) ? (
+                      <span className="text-caption text-muted-foreground">
+                        {BAND_LABEL[finding.confidence_band ?? ''] ?? finding.confidence_band}
+                      </span>
+                    ) : null}
                     {finding.event_state && finding.event_state !== 'confirmed' && (
                       <span className="text-caption font-medium capitalize text-warning">
                         {finding.event_state === 'candidate'
@@ -131,6 +163,16 @@ export default function FindingsTimeline({ findings, onSeek, onReview }: Finding
                       {finding.observation}
                     </p>
                   )}
+                  {finding.feedback && finding.feedback !== finding.observation && (
+                    <p className="text-meta text-foreground/90 leading-[1.5] mt-0.5">
+                      {finding.feedback}
+                    </p>
+                  )}
+                  {diagnostics ? (
+                    <p className="text-label text-muted-foreground leading-[1.5] mt-1 tabular-nums">
+                      {diagnostics}
+                    </p>
+                  ) : null}
                 </button>
                 {showReview && (
                   <div className="flex gap-2 mt-2">

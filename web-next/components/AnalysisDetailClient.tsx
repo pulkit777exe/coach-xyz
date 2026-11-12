@@ -400,10 +400,16 @@ export default function AnalysisDetailClient({
     .map((f) => {
       const detail = isRecord(f.detail) ? f.detail : null
       const unseen = Array.isArray(detail?.unseen_candidates) ? detail.unseen_candidates.length : null
-      if (f.code === 'F07_MISSED_CANDIDATE' && unseen) {
-        return `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review`
+      const code = typeof f.code === 'string' ? f.code : null
+      const stage = typeof f.stage === 'string' ? f.stage : null
+      const retryable = typeof f.retryable === 'boolean' ? (f.retryable ? 'retryable' : 'not retryable') : null
+      let message = typeof f.message === 'string' && f.message ? f.message : ''
+      if (code === 'F07_MISSED_CANDIDATE' && unseen) {
+        message = `${unseen} candidate moment${unseen === 1 ? '' : 's'} not shown for model review${message ? ` — ${message}` : ''}`
       }
-      return typeof f.message === 'string' && f.message ? f.message : typeof f.code === 'string' ? f.code : ''
+      const core = message || code || ''
+      const prefix = [code, stage].filter(Boolean).join(' · ')
+      return [prefix && core && prefix !== core ? `${prefix}: ${message || core}` : core, retryable].filter(Boolean).join(' · ')
     })
     .filter(Boolean)
   const formScore = summaryNumber(summary, 'form_score')
@@ -415,6 +421,9 @@ export default function AnalysisDetailClient({
   const composite = isRecord(summary?.composite) ? (summary.composite as Record<string, unknown>) : null
   const compositeScored = typeof composite?.scored_events === 'number' ? composite.scored_events : null
   const compositeConsidered = typeof composite?.considered_events === 'number' ? composite.considered_events : null
+  const compositeReason = typeof composite?.reason === 'string' ? composite.reason : null
+  const compositeStatus = typeof composite?.status === 'string' ? composite.status : null
+  const compositeMethod = typeof composite?.method === 'string' ? composite.method : null
   const confidenceLabel =
     confidenceKind === 'tracking' || confidenceKind === 'pose' ? 'Tracking confidence' : 'Event confidence'
   const confidenceDetail =
@@ -428,6 +437,38 @@ export default function AnalysisDetailClient({
             : ''
         }`
       : null
+  const angle = typeof summary?.angle === 'string' ? summary.angle : null
+  const angleSource = typeof summary?.angle_source === 'string' ? summary.angle_source : null
+  const scopeNote = typeof summary?.scope_note === 'string' ? summary.scope_note : null
+  const recommendedAngles = Array.isArray(summary?.recommended_angles)
+    ? (summary.recommended_angles as Array<Record<string, unknown>>)
+        .map((a) => {
+          const label = typeof a.label === 'string' ? a.label : typeof a.id === 'string' ? a.id : null
+          const description = typeof a.description === 'string' ? a.description : null
+          if (!label && !description) return null
+          return description ? `${label ?? 'Angle'} — ${description}` : (label as string)
+        })
+        .filter((x): x is string => Boolean(x))
+    : []
+  const eventDetection = isRecord(summary?.event_detection) ? (summary.event_detection as Record<string, unknown>) : null
+  const eventDetectionSummary = eventDetection
+    ? [
+        typeof eventDetection.method === 'string' ? `method ${eventDetection.method}` : null,
+        typeof eventDetection.validation_status === 'string' ? `validation ${eventDetection.validation_status}` : null,
+        typeof eventDetection.rejected === 'number' ? `rejected ${eventDetection.rejected}` : null,
+        typeof eventDetection.note === 'string' ? eventDetection.note : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  const provenance = isRecord(summary?.provenance) ? (summary.provenance as Record<string, unknown>) : null
+  const provenanceSummary = [
+    typeof provenance?.engine === 'string' ? `engine ${provenance.engine}` : null,
+    typeof provenance?.analysis_prompt === 'string' ? `prompt ${provenance.analysis_prompt}` : null,
+    typeof provenance?.analyzed_at === 'string' ? `analyzed ${provenance.analyzed_at}` : null,
+    typeof provenance?.sport === 'string' ? `sport ${provenance.sport}` : null,
+    typeof provenance?.sport_pack_version === 'number' ? `pack v${provenance.sport_pack_version}` : null,
+  ].filter(Boolean).join(' · ')
   const hasProStats = Boolean(proStats || tacticalSummary || keyInsights.length > 0)
 
   return (
@@ -656,11 +697,34 @@ export default function AnalysisDetailClient({
             ) : (
               <p className="text-body text-muted-foreground">No session summary was produced for this analysis.</p>
             )}
+            {scopeNote ? <p className="mt-3 text-meta text-muted-foreground">Scope: {scopeNote}</p> : null}
+            {angle ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Angle: {angle}{angleSource ? ` (${angleSource})` : ''}
+              </p>
+            ) : null}
+            {recommendedAngles.length > 0 ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Recommended angles: {recommendedAngles.join(' · ')}
+              </p>
+            ) : null}
             {qualityIssues.length > 0 ? (
               <p className="mt-3 text-meta text-muted-foreground">Quality notes: {qualityIssues.join('; ')}</p>
             ) : null}
             {failureNotes.length > 0 ? (
-              <p className="mt-2 text-meta text-muted-foreground">{failureNotes.slice(0, 2).join(' · ')}</p>
+              <div className="mt-2 space-y-1">
+                {failureNotes.slice(0, 4).map((note, i) => (
+                  <p key={i} className="text-meta text-muted-foreground">{note}</p>
+                ))}
+              </div>
+            ) : null}
+            {eventDetectionSummary ? (
+              <p className="mt-2 text-meta text-muted-foreground">Event detection: {eventDetectionSummary}</p>
+            ) : null}
+            {compositeReason || compositeStatus || compositeMethod ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Composite: {[compositeStatus ? `status ${compositeStatus}` : null, compositeMethod ? `method ${compositeMethod}` : null, compositeReason ? `reason ${compositeReason}` : null].filter(Boolean).join(' · ')}
+              </p>
             ) : null}
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
               {[
@@ -940,6 +1004,20 @@ export default function AnalysisDetailClient({
               <div>
                 <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Downloads</dt>
                 <dd className="text-foreground mt-1 tabular-nums">{data.download_count}</dd>
+              </div>
+            ) : null}
+            {provenanceSummary ? (
+              <div>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Provenance</dt>
+                <dd className="text-foreground mt-1 text-meta leading-[1.5]">{provenanceSummary}</dd>
+              </div>
+            ) : null}
+            {(angle || scopeNote) ? (
+              <div>
+                <dt className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">Context</dt>
+                <dd className="text-foreground mt-1 text-meta leading-[1.5]">
+                  {[angle ? `Angle ${angle}${angleSource ? ` (${angleSource})` : ''}` : null, scopeNote ? `Scope: ${scopeNote}` : null].filter(Boolean).join(' · ')}
+                </dd>
               </div>
             ) : null}
           </dl>
