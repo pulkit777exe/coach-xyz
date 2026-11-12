@@ -9,7 +9,7 @@ touched by nothing at all         60
   static import edge              73.5% of files
   any loader at all (edge+sweep)  75.5% of files
 
-lines in source                  36104
+lines in source                  36114
 lines in untouched files         4643  (12.9%)
 
 touched by nothing, by top-level directory

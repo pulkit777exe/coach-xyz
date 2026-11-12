@@ -202,7 +202,7 @@ export default function AnalysisLinkControl({
           aria-modal="false"
           aria-labelledby={panelTitleId}
           tabIndex={-1}
-          className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg outline-none dark:shadow-none"
+          className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg dark:shadow-none outline-none"
         >
           <div
             id={panelTitleId}

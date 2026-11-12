@@ -81,6 +81,6 @@ describe('Share page presentation honesty', () => {
     expect(html).toContain('Confirmed Events')
     expect(html).toContain('1</span> unconfirmed candidate')
     expect(html).toContain('Unconfirmed candidate')
-    expect(html).toContain('Timeline includes unconfirmed candidates; only confirmed events count as performance.')
+    expect(html).toContain('Showing 2 of 2 timeline events. Unconfirmed candidates are not confirmed performance.')
   })
 })

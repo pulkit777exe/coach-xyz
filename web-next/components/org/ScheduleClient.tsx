@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils'
 import type { EventStatus, ScheduleEvent } from '@/lib/org/types'
 import { orgSchedule, orgDeleteEvent } from '@/lib/org/schedule'
 import { EVENT_STATUSES, EVENT_TYPE_LABELS, EVENT_STATUS_LABELS } from '@/lib/org/types'
-import { toISODate, scheduleMonthWindow } from '@/lib/date'
+import { formatWeekdayLongDate, formatWeekdayMonthDay, toISODate, scheduleMonthWindow } from '@/lib/date'
 import { usePreferences } from '@/lib/preferences'
 import type { CoachAIError } from '@/lib/data/errors'
 
@@ -366,11 +366,7 @@ export default function ScheduleClient({
                       onClick={() => setDayView(date)}
                       className="min-h-11 rounded-[4px] px-1 text-left text-body font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                     >
-                      {date.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                      {formatWeekdayMonthDay(date)}
                     </button>
                     {canWrite && (
                       <Button
@@ -483,12 +479,7 @@ export default function ScheduleClient({
                 key={key}
                 role="button"
                 tabIndex={0}
-                aria-label={`View events for ${date.toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}`}
+                aria-label={`View events for ${formatWeekdayLongDate(date)}`}
                 onClick={openDay}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
