@@ -746,3 +746,232 @@ def test_render_empty_and_banner_extreme_dense_frames_prioritize_honesty(tmp_pat
     }
     sprite, _ = render._banner(e, 120, 0.35, max_h=90)
     assert sprite.shape[1] == 120 and sprite.shape[0] <= 90 and sprite.mean() > 0
+
+def test_event_detection_normalizes_multiple_f07_records_and_edge_mix():
+    pack = sports.load("basketball")
+    track = _track()
+    cands = [Candidate(2, 0.2, "right", 1.0), Candidate(6, 0.6, "right", 0.9), Candidate(10, 1.0, "right", 0.8), Candidate(14, 1.4, "right", 0.7)]
+    judgement = Judgement(
+        source="model",
+        sport="basketball",
+        verdicts={
+            0: {"is_event": True, "state": "confirmed", "type": "three_pointer", "result": "made", "feedback": "ok", "confidence": 0.9, "ratings": {}, "tags": [], "pressure": "unknown"},
+            1: {"is_event": True, "state": "candidate", "type": "three_pointer", "result": "unknown", "feedback": "This moment was not shown in the model review clip; it remains an unreviewed candidate.", "confidence": 0.0, "ratings": {}, "tags": ["unreviewed"], "pressure": "unknown"},
+            2: {"is_event": True, "state": "uncertain", "type": "three_pointer", "result": "unknown", "feedback": "unclear", "confidence": 0.4, "ratings": {}, "tags": [], "pressure": "unknown"},
+            3: {"is_event": False, "state": "rejected", "type": "other", "result": "unknown", "feedback": "", "confidence": 0.0, "ratings": {}, "tags": [], "pressure": "unknown"},
+        },
+        failures=[
+            {"code": "F07_MISSED_CANDIDATE", "stage": "judge", "message": "partial", "retryable": False, "detail": {"unseen_candidates": [1, 99, "x"], "unseen_candidate_times": [999.0]}},
+            {"code": "F07_MISSED_CANDIDATE", "stage": "judge", "message": "partial-dup", "retryable": False, "detail": {"unseen_candidates": [1]}},
+        ],
+    )
+    out = result.build("job", {"angle": "side"}, pack, track, Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"), cands, judgement, [], angle="side", angle_source="declared", failures_list=list(judgement.failures))
+    ed = out["event_detection"]
+    assert ed["unseen_candidates"] == [1]
+    assert ed["unseen_candidate_count"] == 1
+    assert ed["unseen_candidate_times"] == [0.6]
+    assert ed["partial_review"] is True
+    assert ed["review_complete"] is False
+    assert "partial_review" in out["quality"]["issues"]
+
+
+def test_event_detection_infers_unseen_from_unreviewed_verdicts_without_f07_detail():
+    pack = sports.load("basketball")
+    track = _track()
+    cands = [Candidate(4, 0.4, "right", 1.0), Candidate(9, 0.9, "right", 0.8)]
+    judgement = Judgement(
+        source="model",
+        sport="basketball",
+        verdicts={
+            0: {"is_event": True, "state": "confirmed", "type": "three_pointer", "result": "made", "feedback": "ok", "confidence": 0.9, "ratings": {}, "tags": [], "pressure": "unknown"},
+            1: {"is_event": True, "state": "candidate", "type": "three_pointer", "result": "unknown", "feedback": "This moment was not shown in the model review clip; it remains an unreviewed candidate.", "confidence": 0.0, "ratings": {}, "tags": ["unreviewed"], "pressure": "unknown"},
+        },
+        failures=[],
+    )
+    out = result.build("job", {"angle": "side"}, pack, track, Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"), cands, judgement, [], angle="side", angle_source="declared", failures_list=[])
+    assert out["event_detection"]["unseen_candidates"] == [1]
+    assert out["event_detection"]["unseen_candidate_times"] == [0.9]
+    assert out["event_detection"]["partial_review"] is True
+    assert out["event_detection"]["review_complete"] is False
+
+
+def test_event_detection_review_complete_requires_full_confirmed_or_rejected_coverage():
+    pack = sports.load("basketball")
+    track = _track()
+    cands = [Candidate(4, 0.4, "right", 1.0), Candidate(9, 0.9, "right", 0.8)]
+    complete = Judgement(
+        source="model",
+        sport="basketball",
+        verdicts={
+            0: {"is_event": True, "state": "confirmed", "type": "three_pointer", "result": "made", "feedback": "ok", "confidence": 0.9, "ratings": {}, "tags": [], "pressure": "unknown"},
+            1: {"is_event": False, "state": "rejected", "type": "other", "result": "unknown", "feedback": "", "confidence": 0.0, "ratings": {}, "tags": [], "pressure": "unknown"},
+        },
+    )
+    out = result.build("job", {"angle": "side"}, pack, track, Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"), cands, complete, [], angle="side", angle_source="declared", failures_list=[])
+    assert out["event_detection"]["partial_review"] is False
+    assert out["event_detection"]["review_complete"] is True
+    mixed_uncertain = Judgement(
+        source="model",
+        sport="basketball",
+        verdicts={
+            0: {"is_event": True, "state": "confirmed", "type": "three_pointer", "result": "made", "feedback": "ok", "confidence": 0.9, "ratings": {}, "tags": [], "pressure": "unknown"},
+            1: {"is_event": True, "state": "uncertain", "type": "three_pointer", "result": "unknown", "feedback": "unclear", "confidence": 0.4, "ratings": {}, "tags": [], "pressure": "unknown"},
+        },
+    )
+    out2 = result.build("job", {"angle": "side"}, pack, track, Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"), cands, mixed_uncertain, [], angle="side", angle_source="declared", failures_list=[])
+    assert out2["event_detection"]["partial_review"] is True
+    assert out2["event_detection"]["review_complete"] is False
+
+
+def test_banner_compact_keeps_honesty_cues_on_pathological_density():
+    e = {
+        "index": 7,
+        "type": "three_pointer",
+        "result": "unknown",
+        "score": None,
+        "event_state": "candidate",
+        "confirmed": False,
+        "confidence": 0.0,
+        "confidence_kind": "event",
+        "feedback": "Unreviewed candidate with long feedback " * 20,
+        "quality": {"needs_review": True},
+        "metrics": [{"label": "Elbow", "value": 88, "unit": "°", "score": 0.4}],
+        "matchup": {"primary": {"metrics": [{"label": "Elbow", "value": 88, "unit": "°", "score": 0.4}]}, "roles": {"primary": "Athlete"}},
+    }
+    sprite, alpha = render._banner(e, 110, 0.3, max_h=60)
+    assert sprite.shape[1] == 110
+    assert sprite.shape[0] <= 60
+    assert alpha.max() > 0
+    # extreme/narrow case should still render a bounded, non-empty sprite
+    sprite2, alpha2 = render._banner(e, 80, 0.25, max_h=40)
+    assert sprite2.shape[1] == 80 and sprite2.shape[0] <= 40 and alpha2.max() > 0
+
+
+def test_track_identity_events_contract_and_episode_updates(tmp_path):
+    import cv2
+    import numpy as np
+    from core import people, track as track_mod
+
+    # Contract: Track always carries identity_events list (even when empty).
+    path = str(tmp_path / "ok.mp4")
+    w, h, fps = 120, 90, 10
+    vw = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    for i in range(fps * 2):
+        img = np.zeros((h, w, 3), np.uint8)
+        cv2.rectangle(img, (40, 20), (70, 80), (30, 30, 200), -1)
+        vw.write(img)
+    vw.release()
+
+    class GoodDet:
+        def detect(self, frame, max_people=1):
+            lm = np.full((33, 4), 0.5, np.float32)
+            lm[:, 3] = 0.9
+            return [lm]
+
+        def close(self):
+            pass
+
+    person = people.Person(np.full((33, 4), 0.5, np.float32), np.array([40, 20, 70, 80], np.float32), 0.9)
+    orig_find_people = people.find_people
+    orig_signature = people.signature
+    orig_similarity = people.similarity
+    try:
+        people.find_people = lambda detector, frame, max_people=8: [person]
+        people.signature = lambda frame, box: np.ones(4, np.float32)
+        people.similarity = lambda a, b: 0.95
+        tr = track_mod.track_athlete(path, GoodDet(), track_mod.Lock(None), rate=5)
+        assert isinstance(tr.identity_events, list)
+    finally:
+        people.find_people = orig_find_people
+        people.signature = orig_signature
+        people.similarity = orig_similarity
+
+    # Episode-aware F02 emission updates in place on repeated low-similarity attempts.
+    events = []
+    orig_find_people = people.find_people
+    orig_signature = people.signature
+    orig_similarity = people.similarity
+    try:
+        people.find_people = lambda detector, frame, max_people=8: [person]
+        people.signature = lambda frame, box: np.ones(4, np.float32)
+        people.similarity = lambda a, b: 0.05
+        frame = np.zeros((90, 120, 3), np.uint8)
+        lock = track_mod.Lock(signature=np.ones(4, np.float32), box=(50, 50, 70, 70), at=0.0)
+        out1 = track_mod._find(None, frame, 1.0, lock, None, events=events, episode=1, attempt=1)
+        out2 = track_mod._find(None, frame, 2.0, lock, None, events=events, episode=1, attempt=2)
+        assert out1 is None and out2 is None
+        f02 = [e for e in events if e.get("code") == "F02_IDENTITY_SWITCH"]
+        assert len(f02) == 1
+        assert f02[0]["episode"] == 1
+        assert f02[0]["attempts"] == 2
+        assert f02[0]["t"] == 2.0
+        assert f02[0]["reacquired"] is False
+    finally:
+        people.find_people = orig_find_people
+        people.signature = orig_signature
+        people.similarity = orig_similarity
+
+
+def test_identity_loss_episode_emits_f02_for_sustained_low_similarity(tmp_path):
+    import cv2
+    import numpy as np
+    from core import people, track as track_mod
+
+    # Initial frames keep athlete at A (track established), then athlete disappears
+    # from that region and only a dissimilar person appears far away -> lost episode
+    # with repeated low-similarity reacquire failures (F02) and sustained-loss note.
+    path = str(tmp_path / "lost.mp4")
+    w, h, fps = 200, 120, 12
+    vw = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    for _ in range(fps * 5):
+        vw.write(np.zeros((h, w, 3), np.uint8))
+    vw.release()
+
+    class Det:
+        def detect(self, frame, max_people=1):
+            lm = np.full((33, 4), 0.5, np.float32)
+            lm[:, 3] = 0.9
+            return [lm]
+
+        def close(self):
+            pass
+
+    person_a = people.Person(np.full((33, 4), 0.5, np.float32), np.array([20, 20, 50, 80], np.float32), 0.95)
+    person_b = people.Person(np.full((33, 4), 0.5, np.float32), np.array([140, 20, 180, 80], np.float32), 0.95)
+    sig_a = np.array([1.0, 0.0, 0.0, 0.0], np.float32)
+    sig_b = np.array([0.0, 1.0, 0.0, 0.0], np.float32)
+
+    orig_find_people = people.find_people
+    orig_signature = people.signature
+    orig_similarity = people.similarity
+    try:
+        state = {"n": 0}
+
+        def fake_find_people(detector, frame, max_people=8):
+            state["n"] += 1
+            # Keep A present briefly so lock/track are established, then only B appears.
+            return [person_a] if state["n"] <= 4 else [person_b]
+
+        def fake_signature(frame, box):
+            bx = tuple(float(x) for x in box)
+            return sig_a if bx[0] < 100 else sig_b
+
+        people.find_people = fake_find_people
+        people.signature = fake_signature
+        people.similarity = lambda a, b: 1.0 if a is b or (a is not None and b is not None and np.allclose(a, b)) else 0.0
+
+        tr = track_mod.track_athlete(path, Det(), track_mod.Lock(None), rate=8)
+        f02 = [e for e in tr.identity_events if e.get("code") == "F02_IDENTITY_SWITCH"]
+        assert len(f02) >= 1, tr.identity_events
+        ev = f02[0]
+        assert ev["reacquired"] is False
+        assert ev.get("reason") == "low_similarity_reacquire"
+        assert ev.get("similarity") == 0.0
+        assert "low-similarity reacquisition while athlete was lost" in ev.get("message", "")
+        # Episode metadata and/or sustained-loss annotation should be informative.
+        assert ev.get("episode") == 1
+        assert ev.get("attempts", 0) >= 1
+    finally:
+        people.find_people = orig_find_people
+        people.signature = orig_signature
+        people.similarity = orig_similarity

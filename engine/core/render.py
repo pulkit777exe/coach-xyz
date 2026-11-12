@@ -335,18 +335,18 @@ def _banner(
         if e.get("score") is not None
         else "Not enough visible to score"
     )
-    pad = max(6, int(14 * k))
-    inner = max(16.0, float(width - pad * 2))
+    pad = max(4, int(12 * k))
+    inner = max(12.0, float(width - pad * 2))
     title = f"#{e.get('index', '?')}  {kind}{result}"
     state = e.get("event_state") or ("confirmed" if e.get("confirmed") else "uncertain")
-    lines = [
-        (_fit_px(title, _font(max(11, int(22 * k)), True), inner), max(11, int(22 * k)), True, (255, 255, 255)),
-        (_fit_px(score, _font(max(10, int(17 * k)), False), inner), max(10, int(17 * k)), False, (255, 205, 60)),
-    ]
-    # Honesty/confidence cues are prioritized so they remain visible on dense/extreme frames.
+    dense = (max_h is not None and max_h < 170 * max(k, 0.4)) or width < 260
+    extreme = (max_h is not None and max_h < 110 * max(k, 0.35)) or width < 150
+    honesty_lines = []
     if state != "confirmed":
         label = "Unreviewed candidate" if state == "candidate" else str(state).replace("_", " ").title()
-        lines.append((_fit_px(f"Review: {label}", _font(max(10, int(15 * k)), True), inner), max(10, int(15 * k)), True, (255, 190, 0)))
+        honesty_lines.append(
+            (_fit_px(f"Review: {label}", _font(max(9, int(14 * k)), True), inner), max(9, int(14 * k)), True, (255, 190, 0))
+        )
     conf = e.get("confidence")
     conf_kind = e.get("confidence_kind")
     if conf is not None:
@@ -357,11 +357,21 @@ def _banner(
             c_label = "Tracking confidence"
         elif conf_kind == "event":
             c_label = "Event confidence"
-        lines.append((_fit_px(f"{c_label} {float(conf):.0%}", _font(max(9, int(14 * k)), False), inner), max(9, int(14 * k)), False, MUTED))
+        honesty_lines.append(
+            (_fit_px(f"{c_label} {float(conf):.0%}", _font(max(8, int(13 * k)), False), inner), max(8, int(13 * k)), False, MUTED)
+        )
     if (e.get("quality") or {}).get("needs_review"):
-        lines.append(("Needs review", max(9, int(14 * k)), False, (255, 190, 0)))
+        honesty_lines.append(("Needs review", max(8, int(13 * k)), False, (255, 190, 0)))
 
-    dense = (max_h is not None and max_h < 170 * max(k, 0.4)) or width < 260
+    title_size = max(10 if extreme else 11, int((18 if extreme else 22) * k))
+    score_size = max(9 if extreme else 10, int((14 if extreme else 17) * k))
+    lines = [
+        (_fit_px(title, _font(title_size, True), inner), title_size, True, (255, 255, 255)),
+        (_fit_px(score, _font(score_size, False), inner), score_size, False, (255, 205, 60)),
+        *honesty_lines,
+    ]
+
+    detail_budget = 0 if (extreme and honesty_lines) else (1 if dense else 99)
     match = e.get("matchup") or {}
     roles = match.get("roles") or {}
     primary = match.get("primary") or {}
@@ -369,15 +379,16 @@ def _banner(
         m
         for m in (primary.get("metrics") or e.get("metrics") or [])
         if m.get("value") is not None
-    ][: (1 if dense else 2)]
+    ][: (0 if detail_budget == 0 else 1 if dense else 2)]
     for m in shown:
         value = _fmt(float(m["value"]), m.get("unit"))
         note = "" if m.get("score") is None else f" ({m['score']:.0%})"
         prefix = f"{roles.get('primary')}: " if roles.get("primary") else ""
-        txt = _fit_px(f"{prefix}{m['label']} {value}{note}", _font(max(9, int(16 * k)), False), inner)
-        lines.append((txt, max(9, int(16 * k)), False, _metric_color(m)))
+        txt = _fit_px(f"{prefix}{m['label']} {value}{note}", _font(max(8, int(15 * k)), False), inner)
+        lines.append((txt, max(8, int(15 * k)), False, _metric_color(m)))
+        detail_budget -= 1
 
-    if not dense:
+    if not dense and detail_budget > 0:
         opponent = match.get("opponent") or {}
         opp_metrics = [
             m for m in opponent.get("metrics") or [] if m.get("value") is not None
@@ -388,7 +399,7 @@ def _banner(
                 for m in opp_metrics
             )
             lines.append(
-                (_fit_px(f"{opponent.get('role', 'Opponent')}: {values}", _font(max(9, int(15 * k)), False), inner), max(9, int(15 * k)), False, (150, 205, 255))
+                (_fit_px(f"{opponent.get('role', 'Opponent')}: {values}", _font(max(8, int(14 * k)), False), inner), max(8, int(14 * k)), False, (150, 205, 255))
             )
         separation = match.get("separation")
         if separation and separation.get("distance") is not None:
@@ -396,25 +407,32 @@ def _banner(
                 (
                     _fit_px(
                         f"Distance {_fmt(float(separation['distance']), 'torso')} to the {separation.get('side', '')}".strip(),
-                        _font(max(9, int(15 * k)), False),
+                        _font(max(8, int(14 * k)), False),
                         inner,
                     ),
-                    max(9, int(15 * k)),
+                    max(8, int(14 * k)),
                     False,
                     (225, 225, 230),
                 )
             )
 
     feedback = (e.get("feedback") or "").strip()
-    if feedback:
-        tip_size = max(9, int(15 * k))
+    if feedback and not (extreme and honesty_lines):
+        tip_size = max(8, int(14 * k))
         tip_font = _font(tip_size, False)
-        max_tip_lines = 1 if dense else 3
-        tip_wrapped = _wrap_pixels(feedback, tip_font, inner)
-        tip_lines = tip_wrapped[:max_tip_lines]
-        if len(tip_wrapped) > max_tip_lines and tip_lines:
-            tip_lines[-1] = _fit_px(tip_lines[-1], tip_font, inner)
-        lines += [(t, tip_size, False, (225, 225, 230)) for t in tip_lines]
+        max_tip_lines = 0 if (dense and honesty_lines) else (1 if dense else 3)
+        if max_tip_lines > 0:
+            tip_wrapped = _wrap_pixels(feedback, tip_font, inner)
+            tip_lines = tip_wrapped[:max_tip_lines]
+            if len(tip_wrapped) > max_tip_lines and tip_lines:
+                tip_lines[-1] = _fit_px(tip_lines[-1], tip_font, inner)
+            lines += [(t, tip_size, False, (225, 225, 230)) for t in tip_lines]
+
+    # On pathological density, if capping would drop honesty cues, keep a compact
+    # honesty-first layout.
+    if max_h is not None and honesty_lines and max_h < 150 * max(k, 0.35):
+        compact = [lines[0]] + honesty_lines[:2]
+        return _sprite(compact, width, pad, max_h=max_h)
     return _sprite(lines, width, pad, max_h=max_h)
 
 
@@ -499,14 +517,19 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
     failures_list = result.get("failures") or []
     if failures_list:
+        dense_card = img.height < 260 or img.width < 220
+        limit = 1 if dense_card else 2
         msgs = []
-        for f in failures_list[:2]:
+        for f in failures_list[:limit]:
             if isinstance(f, dict) and f.get("message"):
                 code = f.get("code")
                 msg = str(f.get("message"))
-                msgs.append(f"{code}: {msg}" if code else msg)
+                text_msg = f"{code}: {msg}" if code else msg
+                if dense_card and len(text_msg) > 90:
+                    text_msg = text_msg[:87].rstrip() + "..."
+                msgs.append(text_msg)
         if msgs:
-            rows.append((f"Details: {'; '.join(msgs)}", 15, False, MUTED))
+            rows.append((f"Details: {'; '.join(msgs)}", 14 if dense_card else 15, False, MUTED))
     metrics = [
         m
         for m in result.get("session_metrics") or []
@@ -606,14 +629,19 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
         rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
     failures_list = result.get("failures") or []
     if failures_list:
+        dense_card = img.height < 260 or img.width < 220
+        limit = 1 if dense_card else 3
         msgs = []
-        for f in failures_list[:3]:
+        for f in failures_list[:limit]:
             msg = (f or {}).get("message") if isinstance(f, dict) else None
             code = (f or {}).get("code") if isinstance(f, dict) else None
             if msg:
-                msgs.append(f"{code}: {msg}" if code else str(msg))
+                text_msg = f"{code}: {msg}" if code else str(msg)
+                if dense_card and len(text_msg) > 90:
+                    text_msg = text_msg[:87].rstrip() + "..."
+                msgs.append(text_msg)
         if msgs:
-            rows.append((f"Details: {'; '.join(msgs)}", 15, False, MUTED))
+            rows.append((f"Details: {'; '.join(msgs)}", 14 if dense_card else 15, False, MUTED))
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
     for i, (text, size, bold, color) in enumerate(rows):
         if y > bottom:

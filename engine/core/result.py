@@ -267,28 +267,56 @@ def _event_detection(
     cands: list[Candidate], judgement: Judgement, failures_list: list[dict] | None = None
 ) -> dict:
     states = Counter(_event_state(v) for v in judgement.verdicts.values())
-    unseen: list[int] = []
-    unseen_times: list[float] = []
+    n_cands = len(cands)
+    unseen_set: set[int] = set()
+    unseen_time_pairs: dict[int, float] = {}
     for f in failures_list or []:
-        if f.get("code") == "F07_MISSED_CANDIDATE":
-            detail = f.get("detail") or {}
-            raw = detail.get("unseen_candidates") or []
-            if isinstance(raw, list):
-                unseen.extend(int(i) for i in raw if isinstance(i, (int, float)))
-            raw_t = detail.get("unseen_candidate_times") or []
-            if isinstance(raw_t, list):
-                for t in raw_t:
-                    try:
-                        unseen_times.append(round(float(t), 2))
-                    except Exception:
-                        pass
-    unseen = sorted(set(unseen))
-    partial = bool(unseen) or states.get("candidate", 0) > 0 or states.get("uncertain", 0) > 0
+        if f.get("code") != "F07_MISSED_CANDIDATE":
+            continue
+        detail = f.get("detail") or {}
+        raw = detail.get("unseen_candidates") or []
+        if isinstance(raw, list):
+            for i in raw:
+                if isinstance(i, bool):
+                    continue
+                try:
+                    idx = int(i)
+                except Exception:
+                    continue
+                if 0 <= idx < n_cands:
+                    unseen_set.add(idx)
+        raw_t = detail.get("unseen_candidate_times") or []
+        if isinstance(raw_t, list):
+            for idx, t in zip(sorted(unseen_set), raw_t):
+                # best-effort positional pairing is ambiguous across records;
+                # prefer deriving times from candidate indices below.
+                try:
+                    ft = round(float(t), 2)
+                except Exception:
+                    continue
+                if idx not in unseen_time_pairs:
+                    unseen_time_pairs[idx] = ft
+    # Infer unseen from verdicts that are explicitly unreviewed candidates (kept
+    # unreviewed by judge) to stay accurate when F07 details are missing/mixed.
+    for i, c in enumerate(cands):
+        v = judgement.verdicts.get(i) or {}
+        state = _event_state(v)
+        tags = {str(t).lower() for t in (v.get("tags") or [])}
+        feedback = str(v.get("feedback") or "").lower()
+        if state == "candidate" and (
+            "unreviewed" in tags or "not shown in the model review" in feedback
+        ):
+            unseen_set.add(i)
+    unseen = sorted(i for i in unseen_set if 0 <= i < n_cands)
+    unseen_times = [round(float(cands[i].t), 2) for i in unseen]
+    uncertain_or_candidate_states = states.get("candidate", 0) + states.get("uncertain", 0)
+    partial = bool(unseen) or uncertain_or_candidate_states > 0
+    reviewed_states = states.get("confirmed", 0) + states.get("rejected", 0)
     out = {
         "method": "motion_peak_plus_model_review"
         if judgement.source == "model"
         else "motion_peak_rules",
-        "candidate_count": len(cands),
+        "candidate_count": n_cands,
         "confirmed": states.get("confirmed", 0),
         "uncertain": states.get("uncertain", 0),
         "rejected": states.get("rejected", 0),
@@ -300,9 +328,14 @@ def _event_detection(
         out["unseen_candidates"] = unseen
         out["unseen_candidate_count"] = len(unseen)
         if unseen_times:
-            out["unseen_candidate_times"] = sorted(set(unseen_times))
+            out["unseen_candidate_times"] = unseen_times
     out["partial_review"] = partial
-    out["review_complete"] = not partial and len(cands) == states.get("confirmed", 0) + states.get("rejected", 0) and len(cands) > 0
+    out["review_complete"] = (
+        not partial
+        and n_cands > 0
+        and reviewed_states == n_cands
+        and all(_event_state(judgement.verdicts.get(i, {})) in ("confirmed", "rejected") for i in range(n_cands))
+    )
     return out
 
 

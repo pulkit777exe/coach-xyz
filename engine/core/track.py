@@ -6,7 +6,7 @@ windows and on the two players who mattered (see `matchup.py`).
 """
 
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -47,6 +47,7 @@ class Track:
     width: int
     height: int
     rate: float
+    identity_events: list[dict] = field(default_factory=list)
 
     @property
     def valid(self) -> np.ndarray:
@@ -179,6 +180,49 @@ def _follow(detector, frame, box, hint=None) -> people.Person | None:
     )
 
 
+def _emit_f02(
+    events: list[dict] | None,
+    *,
+    t: float,
+    message: str,
+    similarity: float | None = None,
+    threshold: float | None = None,
+    reacquired: bool = False,
+    episode: int | None = None,
+    attempts: int | None = None,
+    reason: str | None = None,
+) -> None:
+    if events is None:
+        return
+    payload = {
+        "code": "F02_IDENTITY_SWITCH",
+        "stage": "track",
+        "t": round(float(t), 3),
+        "message": message,
+        "reacquired": reacquired,
+    }
+    if similarity is not None:
+        payload["similarity"] = round(float(similarity), 3)
+    if threshold is not None:
+        payload["threshold"] = float(threshold)
+    if episode is not None:
+        payload["episode"] = int(episode)
+    if attempts is not None:
+        payload["attempts"] = int(attempts)
+    if reason is not None:
+        payload["reason"] = reason
+    # Dedupe/update by episode when provided to avoid noisy repeated events while
+    # keeping the latest informative state; otherwise keep first event only.
+    if episode is not None:
+        for ev in reversed(events):
+            if ev.get("code") == "F02_IDENTITY_SWITCH" and ev.get("episode") == episode:
+                ev.update(payload)
+                return
+    elif any(e.get("code") == "F02_IDENTITY_SWITCH" for e in events):
+        return
+    events.append(payload)
+
+
 def _find(
     detector,
     frame,
@@ -188,6 +232,8 @@ def _find(
     *,
     events: list | None = None,
     reacquire_threshold: float = 0.15,
+    episode: int | None = None,
+    attempt: int | None = None,
 ) -> people.Person | None:
     found = people.find_people(detector, frame)
     if not found:
@@ -217,23 +263,20 @@ def _find(
         if sim < reacquire_threshold and (
             hint is None or people.iou(best.box, hint) < 0.3
         ):
-            if events is not None and not any(
-                e.get("code") == "F02_IDENTITY_SWITCH" for e in events
-            ):
-                events.append(
-                    {
-                        "code": "F02_IDENTITY_SWITCH",
-                        "stage": "track",
-                        "t": round(float(t), 3),
-                        "message": (
-                            "low-similarity reacquisition while athlete was lost "
-                            f"(similarity {sim:.2f} < {reacquire_threshold:.2f} at {t:.2f}s)"
-                        ),
-                        "similarity": round(float(sim), 3),
-                        "threshold": float(reacquire_threshold),
-                        "reacquired": False,
-                    }
-                )
+            _emit_f02(
+                events,
+                t=t,
+                similarity=sim,
+                threshold=reacquire_threshold,
+                reacquired=False,
+                episode=episode,
+                attempts=attempt,
+                reason="low_similarity_reacquire",
+                message=(
+                    "low-similarity reacquisition while athlete was lost "
+                    f"(similarity {sim:.2f} < {reacquire_threshold:.2f} at {t:.2f}s)"
+                ),
+            )
             return None
     return best
 
@@ -277,6 +320,11 @@ def track_athlete(
     lost, primed, n, i = 0, lock.box is not None, 0, -1
     nan_lm = np.full((33, 4), np.nan, np.float32)
     track_events: list[dict] = []
+    lost_episode = 0
+    lost_search_attempts = 0
+    had_low_sim_failure = False
+    lost_episode_started_at: float | None = None
+    last_t = 0.0
     try:
         while cap.grab():
             i += 1
@@ -288,6 +336,7 @@ def track_athlete(
             h, w = frame.shape[:2]
             size = (w, h)
             t = i / fps
+            last_t = t
             if not primed:
                 first = _dominant(detector, frame, lock)
                 if first is not None:
@@ -322,6 +371,17 @@ def track_athlete(
                 ):
                     found = None
             if found is None:
+                emit_episode = None
+                emit_attempt = None
+                if lost >= LOST_AFTER:
+                    if lost_episode == 0 or lost_episode_started_at is None:
+                        lost_episode += 1
+                        lost_search_attempts = 0
+                        had_low_sim_failure = False
+                        lost_episode_started_at = t
+                    lost_search_attempts += 1
+                    emit_episode = lost_episode
+                    emit_attempt = lost_search_attempts
                 found = _find(
                     detector,
                     frame,
@@ -329,13 +389,27 @@ def track_athlete(
                     lock,
                     hint if lost < LOST_AFTER else None,
                     events=track_events if lost >= LOST_AFTER else None,
+                    episode=emit_episode,
+                    attempt=emit_attempt,
                 )
+                if (
+                    emit_episode is not None
+                    and any(
+                        ev.get("code") == "F02_IDENTITY_SWITCH"
+                        and ev.get("episode") == emit_episode
+                        for ev in track_events
+                    )
+                ):
+                    had_low_sim_failure = True
             if found is not None:
                 if box is not None:
                     previous = (box[:2] + box[2:]) / 2
                     current = (found.box[:2] + found.box[2:]) / 2
                     velocity = 0.5 * velocity + 0.5 * (current - previous)
                 box, hint, lost = found.box, found.box, 0
+                lost_episode_started_at = None
+                lost_search_attempts = 0
+                had_low_sim_failure = False
                 if lock.signature is not None and n % RECHECK_EVERY == 0:
                     sig = people.signature(frame, found.box)
                     if sig is not None and people.similarity(sig, lock.signature) > 0.6:
@@ -359,6 +433,22 @@ def track_athlete(
                 progress(min(1.0, i / total))
     finally:
         cap.release()
+    if (
+        lost >= LOST_AFTER
+        and lost_episode_started_at is not None
+        and had_low_sim_failure
+    ):
+        for ev in reversed(track_events):
+            if ev.get("code") == "F02_IDENTITY_SWITCH" and ev.get("episode") == lost_episode:
+                duration = max(0.0, float(last_t) - float(lost_episode_started_at))
+                if duration >= 1.0:
+                    ev["message"] = (
+                        ev.get("message", "identity reacquisition issue")
+                        + f"; athlete remained lost without reacquisition for ~{duration:.1f}s"
+                    )
+                    ev["lost_duration_s"] = round(duration, 2)
+                    ev["reacquired"] = False
+                break
     if not times or not any(c > 0 for c in confs):
         raise EngineError(
             "NO_PLAYERS_DETECTED",
@@ -373,6 +463,7 @@ def track_athlete(
         size[0],
         size[1],
         fps / stride,
+        identity_events=track_events,
     )
-    track.identity_events = track_events  # type: ignore[attr-defined]
+    track.identity_events = track_events
     return track
