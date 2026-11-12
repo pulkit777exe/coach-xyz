@@ -122,5 +122,35 @@ describe('AnalysisDetailClient presentation honesty', () => {
     expect(text).toContain('No strengths were identified for this analysis.')
     expect(text).toContain('No specific focus areas were produced.')
     expect(text).toContain('No drill recommendation available.')
+    expect(text).not.toContain('Criteria registry')
+  })
+
+  test('renders criteria registry section and summary count when provided', async () => {
+    const Detail = await load()
+    const data = {
+      ...baseData,
+      summary_json: {
+        criteria_registry: [
+          {
+            criterion_id: 'c1',
+            label: 'Hip extension',
+            evidence_type: 'kinematic',
+            validation_status: 'experimental',
+            implementation: 'engine_v1',
+            allowed_views: ['side'],
+            paper_definition: 'Angle at peak extension.',
+          },
+        ],
+        summary: 'ok',
+      },
+    }
+    await act(async () => { root.render(<Detail auth0Id="u" jobId="s1" initialData={data} />) })
+    const text = container.textContent || ''
+    expect(text).toContain('Criteria registry')
+    expect(text).toContain('1 entry')
+    expect(text).toContain('Hip extension')
+    expect(text).toContain('ID c1')
+    expect(text).toContain('evidence kinematic')
+    expect(text).toContain('validation experimental')
   })
 })

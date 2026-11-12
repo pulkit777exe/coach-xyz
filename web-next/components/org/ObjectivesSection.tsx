@@ -356,13 +356,14 @@ export default function ObjectivesSection({
             <div
               className="flex h-20 items-end gap-2"
               role="img"
-              aria-label="Weekly findings versus objectives completed"
+              aria-label={`Weekly findings versus objectives completed for ${weeks.length} week${weeks.length === 1 ? '' : 's'}`}
             >
               {weeks.map(([week, w]) => (
                 <div
                   key={week}
                   className="flex h-full flex-1 items-end justify-center gap-0.5"
                   title={`${week}: ${w.findings} findings, ${w.done} done`}
+                  aria-hidden="true"
                 >
                   <div
                     className="min-h-[3px] w-2 rounded-[2px] bg-primary/70"
@@ -377,12 +378,38 @@ export default function ObjectivesSection({
             </div>
             <div className="mt-1.5 flex gap-4 text-meta text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-[2px] bg-primary/70" /> findings
+                <span className="inline-block size-2 rounded-[2px] bg-primary/70" aria-hidden="true" /> findings
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block size-2 rounded-[2px] bg-success/80" /> objectives done
+                <span className="inline-block size-2 rounded-[2px] bg-success/80" aria-hidden="true" /> objectives done
               </span>
             </div>
+            <details className="mt-3 rounded-[6px] border border-border bg-card">
+              <summary className="cursor-pointer list-none px-3 py-2 text-meta font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                View weekly measurement data table ({weeks.length} week{weeks.length === 1 ? '' : 's'})
+              </summary>
+              <div className="overflow-x-auto border-t border-border px-3 pb-3 pt-2">
+                <table className="w-full min-w-[16rem] text-left text-meta">
+                  <caption className="sr-only">Weekly findings versus objectives completed data table</caption>
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th scope="col" className="py-2 pr-3 font-medium text-muted-foreground">Week starting</th>
+                      <th scope="col" className="py-2 pr-3 font-medium text-muted-foreground">Findings</th>
+                      <th scope="col" className="py-2 pr-3 font-medium text-muted-foreground">Objectives done</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weeks.map(([week, w]) => (
+                      <tr key={week} className="border-b border-border/60 last:border-b-0">
+                        <th scope="row" className="py-2 pr-3 font-medium text-foreground">{week}</th>
+                        <td className="py-2 pr-3 tabular-nums text-foreground">{w.findings}</td>
+                        <td className="py-2 pr-3 tabular-nums text-foreground">{w.done}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           </div>
         )}
 

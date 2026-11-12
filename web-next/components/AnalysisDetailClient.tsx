@@ -603,7 +603,12 @@ export default function AnalysisDetailClient({
           confirmLabel="Analysis deleted"
           className="[&_*]:!text-foreground"
         >
-          <span className="inline-flex items-center rounded-[6px] border border-destructive/30 px-3 py-1.5 text-meta font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer">
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={`Delete analysis ${data.display_name || data.file_name || 'this analysis'}`}
+            className="inline-flex items-center rounded-[6px] border border-destructive/30 px-3 py-1.5 text-meta font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
+          >
             Delete
           </span>
         </HoldToConfirm>
@@ -743,6 +748,11 @@ export default function AnalysisDetailClient({
             ) : null}
             {eventDetectionSummary ? (
               <p className="mt-2 text-meta text-muted-foreground">Event detection: {eventDetectionSummary}</p>
+            ) : null}
+            {criteriaRegistry.length > 0 ? (
+              <p className="mt-2 text-meta text-muted-foreground">
+                Criteria registry: <span className="tabular-nums">{criteriaRegistry.length}</span> entr{criteriaRegistry.length === 1 ? 'y' : 'ies'} (research context, not validated performance).
+              </p>
             ) : null}
             {compositeReason || compositeStatus || compositeMethod ? (
               <p className="mt-2 text-meta text-muted-foreground">
