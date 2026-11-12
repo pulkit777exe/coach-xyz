@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef } from 'react'
+import { XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { focusInitial, inertOutside, restoreFocusOnClose } from './overlay-a11y'
 
@@ -73,7 +74,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
             aria-label="Close dialog"
             className="cursor-pointer rounded-[4px] p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            ✕
+            <XIcon className="size-4" aria-hidden="true" />
           </button>
         </div>
         {children}

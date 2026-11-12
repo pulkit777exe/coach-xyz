@@ -8,6 +8,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useId,
 } from 'react'
 import { Slide } from 'loading-dev'
 import { getAuthorizedDownloadUrl, getDownloadUrl } from '@/lib/scan'
@@ -26,6 +27,8 @@ const CALLOUT_DURATION_MS = 2500
 const CALLOUT_FADE_MS = 400
 const TIMELINE_H = 32
 const MARKER_W = 3
+const SEEK_STEP_S = 5
+const SEEK_PAGE_S = 10
 
 /**
  * Resolve a design token to a literal colour, for canvas.
@@ -67,7 +70,7 @@ export function scoreColor(score: number | null): string {
   return themeColor('--danger', '#e03e3e')
 }
 
-function _eventTypeLabel(eventType: string): string {
+function eventTypeLabel(eventType: string): string {
   const map: Record<string, string> = {
     made: 'Made',
     missed: 'Missed',
@@ -85,6 +88,11 @@ function _eventTypeLabel(eventType: string): string {
   return map[eventType] || eventType.replace(/_/g, ' ')
 }
 
+function formatSeconds(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return '0.0 seconds'
+  return `${seconds.toFixed(1)} seconds`
+}
+
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(
   { jobId, summary },
   ref,
@@ -93,10 +101,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const momentsId = useId()
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
   const [isHoveringTimeline, setIsHoveringTimeline] = useState(false)
   const [hoverX, setHoverX] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
   // Owned jobs require the signed attribution token, which a <video> tag
   // cannot send as a header — resolve the query-token URL per job.
   const [videoSrc, setVideoSrc] = useState(() => getDownloadUrl(jobId))
@@ -115,6 +126,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     // is the documented alternative the rule points at. `setHasError(false)` belongs to
     // the same transition: the previous job's error must not survive into the new one.
     setHasError(false)
+    setCurrentTime(0)
+    setDuration(0)
   }
   useEffect(() => {
     let cancelled = false
@@ -274,7 +287,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     })
 
     for (const callout of activeCallouts.current) {
-      const label = `${_eventTypeLabel(callout.event.event_type)} — ${callout.event.form_score}/10`
+      const scoreText = callout.event.form_score == null ? '—' : `${callout.event.form_score}/10`
+      const label = `${eventTypeLabel(callout.event.event_type)} — ${scoreText}`
       ctx.globalAlpha = callout.opacity
 
       ctx.font = 'bold 13px system-ui, sans-serif'
@@ -334,13 +348,20 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }, [drawOverlay])
 
-  // Trigger callouts when passing event timestamps
+  // Trigger callouts when passing event timestamps and keep accessible time in sync
   useEffect(() => {
     const video = videoRef.current
-    if (!video || shotEvents.length === 0) return
+    if (!video) return
 
+    const syncTime = () => setCurrentTime(video.currentTime || 0)
+    const syncDuration = () => {
+      const d = video.duration
+      setDuration(d && isFinite(d) ? d : 0)
+    }
     const onTimeUpdate = () => {
       const t = video.currentTime
+      setCurrentTime(t || 0)
+      if (shotEvents.length === 0) return
       for (let i = 0; i < shotEvents.length; i++) {
         const evt = shotEvents[i]
         if (evt.timestamp > t - 0.3 && evt.timestamp <= t && i !== lastCalloutIndex.current) {
@@ -352,13 +373,24 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
 
     video.addEventListener('timeupdate', onTimeUpdate)
-    return () => video.removeEventListener('timeupdate', onTimeUpdate)
+    video.addEventListener('loadedmetadata', syncDuration)
+    video.addEventListener('durationchange', syncDuration)
+    video.addEventListener('seeked', syncTime)
+    syncDuration()
+    syncTime()
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate)
+      video.removeEventListener('loadedmetadata', syncDuration)
+      video.removeEventListener('durationchange', syncDuration)
+      video.removeEventListener('seeked', syncTime)
+    }
   }, [shotEvents])
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current
     const timeline = timelineRef.current
-    if (!video || !timeline || !video.duration) return
+    const max = duration || (video && isFinite(video.duration) ? video.duration : 0)
+    if (!video || !timeline || !max) return
 
     const rect = timeline.getBoundingClientRect()
     const x = e.clientX - rect.left
@@ -366,9 +398,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     const barWidth = rect.width - barPad * 2
 
     if (x < barPad || x > rect.width - barPad) return
-    const time = ((x - barPad) / barWidth) * video.duration
-    video.currentTime = Math.max(0, Math.min(video.duration, time))
-    video.play().catch(() => {})
+    const time = ((x - barPad) / barWidth) * max
+    seekTo(time)
   }
 
   const handleTimelineMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -383,114 +414,180 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     }
   }
 
+  const seekTo = useCallback(
+    (time: number) => {
+      const video = videoRef.current
+      if (!video) return
+      const max = duration || (isFinite(video.duration) ? video.duration : 0)
+      const next = Math.max(0, max ? Math.min(max, time) : Math.max(0, time))
+      video.currentTime = next
+      setCurrentTime(next)
+      video.play().catch(() => {})
+    },
+    [duration],
+  )
+
   const handleTimelineKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (hasError) return
     const video = videoRef.current
-    if (!video || !video.duration || !isFinite(video.duration)) return
-    const step = e.shiftKey ? 10 : 5
-    let next = video.currentTime
+    const max = duration || (video && isFinite(video.duration) ? video.duration : 0)
+    if (!max) return
+    const baseStep = e.shiftKey ? SEEK_PAGE_S : SEEK_STEP_S
+    let next = currentTime
     switch (e.key) {
       case 'ArrowLeft':
-        next = Math.max(0, video.currentTime - step)
+        next = Math.max(0, currentTime - baseStep)
         break
       case 'ArrowRight':
-        next = Math.min(video.duration, video.currentTime + step)
+        next = Math.min(max, currentTime + baseStep)
+        break
+      case 'PageDown':
+        next = Math.max(0, currentTime - SEEK_PAGE_S)
+        break
+      case 'PageUp':
+        next = Math.min(max, currentTime + SEEK_PAGE_S)
         break
       case 'Home':
         next = 0
         break
       case 'End':
-        next = video.duration
+        next = max
         break
       default:
         return
     }
     e.preventDefault()
-    video.currentTime = next
+    seekTo(next)
   }
 
-  const timelineValue = videoRef.current?.currentTime ?? 0
-  const timelineMax = videoRef.current?.duration
-  const timelineNow =
-    timelineMax && isFinite(timelineMax) ? Math.max(0, Math.min(timelineMax, timelineValue)) : 0
+  const timelineMax = duration > 0 && isFinite(duration) ? duration : 0
+  const timelineNow = timelineMax ? Math.max(0, Math.min(timelineMax, currentTime)) : 0
+  const keyMoments = useMemo(
+    () =>
+      shotEvents
+        .map((evt, index) => ({ evt, index }))
+        .filter(({ evt }) => typeof evt.timestamp === 'number' && isFinite(evt.timestamp))
+        .sort((a, b) => a.evt.timestamp - b.evt.timestamp),
+    [shotEvents],
+  )
 
   return (
-    <div
-      ref={containerRef}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-border bg-black"
-    >
-      {hasError && (
-        <div
-          role="alert"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground"
-        >
-          <svg
-            className="w-8 h-8 opacity-40"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-              d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z"
-            />
-          </svg>
-          <span className="text-meta text-white/70">Video unavailable</span>
-        </div>
-      )}
-      {isLoading && !hasError && (
-        <div className="absolute inset-0 flex items-center justify-center z-10">
-          <Slide size={24} className="text-white/85" />
-        </div>
-      )}
-      <video
-        ref={videoRef}
-        src={videoSrc}
-        controls
-        className={`max-h-full max-w-full object-contain ${hasError ? 'hidden' : ''}`}
-        preload="metadata"
-        onLoadStart={() => setIsLoading(true)}
-        onLoadedData={() => setIsLoading(false)}
-        onError={() => {
-          setIsLoading(false)
-          setHasError(true)
-        }}
-      >
-        Your browser does not support the video tag.
-      </video>
-
-      {/* Canvas overlay — drawing only, no pointer events */}
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className={`absolute inset-0 pointer-events-none ${hasError ? 'hidden' : ''}`}
-        style={{ zIndex: 10 }}
-      />
-
-      {/* Timeline interaction layer — sits at the bottom, above video controls */}
+    <div className="w-full">
       <div
-        ref={timelineRef}
-        role="slider"
-        tabIndex={hasError ? -1 : 0}
-        aria-label="Video timeline"
-        aria-valuemin={0}
-        aria-valuemax={timelineMax && isFinite(timelineMax) ? Math.round(timelineMax) : 0}
-        aria-valuenow={Math.round(timelineNow)}
-        aria-valuetext={
-          timelineMax && isFinite(timelineMax)
-            ? `${timelineNow.toFixed(1)} seconds of ${timelineMax.toFixed(1)}`
-            : 'Video duration unavailable'
-        }
-        className={`absolute bottom-0 left-0 right-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${hasError ? 'hidden' : ''}`}
-        style={{ height: TIMELINE_H, zIndex: 11 }}
-        onClick={handleTimelineClick}
-        onMouseEnter={() => setIsHoveringTimeline(true)}
-        onMouseLeave={() => setIsHoveringTimeline(false)}
-        onMouseMove={handleTimelineMove}
-        onKeyDown={handleTimelineKeyDown}
-      />
+        ref={containerRef}
+        className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-border bg-black"
+      >
+        {hasError && (
+          <div
+            role="alert"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground"
+          >
+            <svg
+              className="w-8 h-8 opacity-40"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+                d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z"
+              />
+            </svg>
+            <span className="text-meta text-white/70">Video unavailable</span>
+          </div>
+        )}
+        {isLoading && !hasError && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <Slide size={24} className="text-white/85" />
+          </div>
+        )}
+        <video
+          ref={videoRef}
+          src={videoSrc}
+          controls
+          className={`max-h-full max-w-full object-contain ${hasError ? 'hidden' : ''}`}
+          preload="metadata"
+          onLoadStart={() => setIsLoading(true)}
+          onLoadedData={() => {
+            setIsLoading(false)
+            const v = videoRef.current
+            if (v && isFinite(v.duration)) setDuration(v.duration)
+            if (v) setCurrentTime(v.currentTime || 0)
+          }}
+          onError={() => {
+            setIsLoading(false)
+            setHasError(true)
+          }}
+        >
+          Your browser does not support the video tag.
+        </video>
+
+        {/* Canvas overlay — drawing only, no pointer events */}
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          className={`absolute inset-0 pointer-events-none ${hasError ? 'hidden' : ''}`}
+          style={{ zIndex: 10 }}
+        />
+
+        {/* Timeline interaction layer — sits at the bottom, above video controls */}
+        <div
+          ref={timelineRef}
+          role="slider"
+          tabIndex={hasError ? -1 : 0}
+          aria-label="Video timeline"
+          aria-describedby={keyMoments.length > 0 ? momentsId : undefined}
+          aria-valuemin={0}
+          aria-valuemax={timelineMax ? Math.round(timelineMax) : 0}
+          aria-valuenow={Math.round(timelineNow)}
+          aria-valuetext={
+            timelineMax
+              ? `${formatSeconds(timelineNow)} of ${formatSeconds(timelineMax)}`
+              : 'Video duration unavailable'
+          }
+          className={`absolute bottom-0 left-0 right-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${hasError ? 'hidden' : ''}`}
+          style={{ height: TIMELINE_H, zIndex: 11 }}
+          onClick={handleTimelineClick}
+          onMouseEnter={() => setIsHoveringTimeline(true)}
+          onMouseLeave={() => setIsHoveringTimeline(false)}
+          onMouseMove={handleTimelineMove}
+          onKeyDown={handleTimelineKeyDown}
+        />
+      </div>
+
+      {keyMoments.length > 0 ? (
+        <div id={momentsId} className="mt-3 rounded-[6px] border border-border bg-card p-3">
+          <p className="text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Key moments
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Key moments and events">
+            {keyMoments.map(({ evt, index }) => {
+              const t = evt.timestamp
+              const scoreText = evt.form_score == null ? 'score unavailable' : `score ${evt.form_score}/10`
+              const label = `${eventTypeLabel(evt.event_type)} at ${formatSeconds(t)}, ${scoreText}`
+              return (
+                <li key={`${evt.event_type}-${t}-${index}`}>
+                  <button
+                    type="button"
+                    onClick={() => seekTo(t)}
+                    className="rounded-[4px] border border-border bg-background px-2.5 py-1.5 text-left text-meta text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    aria-label={`Seek to ${label}`}
+                  >
+                    <span className="font-medium tabular-nums">{t.toFixed(1)}s</span>{' '}
+                    <span className="text-muted-foreground">
+                      {eventTypeLabel(evt.event_type)}
+                      {evt.form_score == null ? '' : ` · ${evt.form_score}/10`}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   )
 })

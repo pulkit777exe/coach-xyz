@@ -388,8 +388,8 @@ export default function ReportsClient({
             ))}
           </ul>
 
-          <div className="hidden border-border overflow-hidden rounded-[6px] border md:block">
-            <table className="w-full text-body">
+          <div className="hidden border-border overflow-x-auto rounded-[6px] border md:block">
+            <table className="w-full min-w-[48rem] text-body">
               <caption className="sr-only">Generated reports</caption>
               <thead>
                 <tr className="border-b border-border">

@@ -506,7 +506,7 @@ export default function AttendanceGrid({
                   const k = keyOf(s.id, toISODate(d))
                   return acc + (records.has(k) && notes.has(k) ? 1 : 0)
                 }, 0)
-                const dayHeaderClass = `relative flex h-9 w-8 flex-col items-center justify-center rounded-[4px] border border-transparent transition-colors duration-150 ${
+                const dayHeaderClass = `relative flex h-11 w-11 flex-col items-center justify-center rounded-[4px] border border-transparent transition-colors duration-150 sm:h-9 sm:w-8 ${
                   canWrite
                     ? 'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 '
                     : ''
@@ -569,7 +569,7 @@ export default function AttendanceGrid({
                   key={s.id}
                   className="border-border hover:bg-accent/50 border-b transition-colors duration-150 last:border-b-0 [content-visibility:auto] [contain-intrinsic-size:auto_56px]"
                 >
-                  <td className="sticky left-0 z-10 bg-background/95 max-w-44 px-4 py-1.5">
+                  <td className="sticky left-0 z-10 bg-background/95 max-w-48 min-w-[8rem] px-3 py-2 sm:max-w-44 sm:px-4 sm:py-1.5">
                     <a href={`/dashboard/students/${s.id}`} className="hover:underline">
                       <span className="truncate font-medium text-foreground">{s.full_name}</span>
                       {s.sport ? (
@@ -620,7 +620,7 @@ export default function AttendanceGrid({
                                 : 'Click to mark present'
                             }
                             disabled={savingKey === k}
-                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled"
+                            className="relative flex h-11 w-11 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold transition-transform duration-150 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-disabled sm:h-8 sm:w-8"
                             style={cellStyle}
                           >
                             {cellBody}
@@ -632,7 +632,7 @@ export default function AttendanceGrid({
                                 ? `${ATTENDANCE_STATUS_LABELS[st]}${hasNote ? ` · ${notes.get(k)}` : ''}`
                                 : undefined
                             }
-                            className="relative flex h-8 w-8 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold"
+                            className="relative flex h-11 w-11 items-center justify-center rounded-[4px] border border-border/60 text-label font-semibold sm:h-8 sm:w-8"
                             style={cellStyle}
                           >
                             {cellBody}

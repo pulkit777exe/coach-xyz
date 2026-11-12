@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from 'react'
 import Image from 'next/image'
+import { XIcon } from 'lucide-react'
 import { focusInitial, inertOutside, restoreFocusOnClose } from './overlay-a11y'
 
 interface LightboxProps {
@@ -63,7 +64,7 @@ export function Lightbox({ open, onClose, src, alt }: LightboxProps) {
           aria-label="Close preview"
           className="absolute right-2 top-2 z-10 inline-flex size-10 items-center justify-center rounded-[6px] bg-black/50 text-white transition-colors hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
         >
-          <span aria-hidden>✕</span>
+          <XIcon className="size-5" aria-hidden="true" />
         </button>
         <figure className="relative max-h-full max-w-full">
           {isVideo ? (

@@ -100,6 +100,36 @@ function TrendBars({
           />
         ))}
       </div>
+      <details className="mt-2 rounded-[6px] border border-border bg-card">
+        <summary className="cursor-pointer list-none px-3 py-2 text-meta font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+          View findings data
+        </summary>
+        <div className="overflow-x-auto border-t border-border px-3 pb-3 pt-2">
+          <table className="w-full min-w-[12rem] text-left text-meta">
+            <caption className="sr-only">Findings per day data table</caption>
+            <thead>
+              <tr className="border-b border-border">
+                <th scope="col" className="py-2 pr-3 font-medium text-muted-foreground">
+                  Day
+                </th>
+                <th scope="col" className="py-2 pr-3 font-medium text-muted-foreground">
+                  Findings
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {days.map(([day, n]) => (
+                <tr key={day} className="border-b border-border/60 last:border-b-0">
+                  <th scope="row" className="py-2 pr-3 font-medium text-foreground">
+                    {day}
+                  </th>
+                  <td className="py-2 pr-3 tabular-nums text-foreground">{n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
   )
 }

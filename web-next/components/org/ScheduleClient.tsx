@@ -342,8 +342,118 @@ export default function ScheduleClient({
         </div>
       </div>
 
+      {/* Mobile agenda view */}
+      <div className="md:hidden">
+        <div className="space-y-3">
+          {cells
+            .filter((cell): cell is NonNullable<typeof cell> => Boolean(cell))
+            .map((cell) => {
+              const { date, key } = cell
+              const dayEvents = byDay.get(key) ?? []
+              if (dayEvents.length === 0) return null
+              const isToday = date.toDateString() === todayKey
+              return (
+                <section
+                  key={`agenda-${key}`}
+                  className={cn(
+                    'rounded-[6px] border border-border bg-card p-3',
+                    isToday && 'border-ring/40 bg-accent/20',
+                  )}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDayView(date)}
+                      className="min-h-11 rounded-[4px] px-1 text-left text-body font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    >
+                      {date.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </button>
+                    {canWrite && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11"
+                        onClick={() => openCreate(date)}
+                      >
+                        <PlusIcon /> Add
+                      </Button>
+                    )}
+                  </div>
+                  <ul className="space-y-2">
+                    {dayEvents.map((ev) => {
+                      const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
+                      const eventBody = (
+                        <>
+                          <span className="text-body font-medium text-foreground">{ev.title}</span>
+                          <span className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-meta">
+                            <span className="tabular-nums">
+                              {ev.starts_at.slice(11, 16)}
+                              {ev.ends_at ? `–${ev.ends_at.slice(11, 16)}` : ''}
+                            </span>
+                            <span className={cn(meta.text)}>
+                              {EVENT_TYPE_LABELS[ev.event_type] ?? ev.event_type}
+                            </span>
+                            <span>{EVENT_STATUS_LABELS[ev.status] ?? ev.status}</span>
+                          </span>
+                        </>
+                      )
+                      return (
+                        <li key={`agenda-${ev.id}`}>
+                          {canWrite ? (
+                            <button
+                              type="button"
+                              onClick={() => openEdit(ev)}
+                              title={ev.title}
+                              aria-label={`Edit event ${ev.title}`}
+                              className={cn(
+                                'flex min-h-11 w-full flex-col items-start rounded-[6px] border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                                meta.bg,
+                                meta.border,
+                                ev.status === 'cancelled' ? 'opacity-70' : '',
+                              )}
+                            >
+                              {eventBody}
+                            </button>
+                          ) : (
+                            <div
+                              title={ev.title}
+                              className={cn(
+                                'flex min-h-11 w-full flex-col items-start rounded-[6px] border px-3 py-2 text-left',
+                                meta.bg,
+                                meta.border,
+                                ev.status === 'cancelled' ? 'opacity-70' : '',
+                              )}
+                            >
+                              {eventBody}
+                            </div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </section>
+              )
+            })}
+          {!eventsAreStale &&
+            cells
+              .filter((cell): cell is NonNullable<typeof cell> => Boolean(cell))
+              .every((cell) => (byDay.get(cell.key) ?? []).length === 0) && (
+              <p className="text-muted-foreground rounded-[6px] border border-dashed border-border px-4 py-6 text-center text-meta">
+                {canWrite
+                  ? `No events in ${monthLabel}. Use “Add event” or tap a day below to create one.`
+                  : `No events in ${monthLabel}.`}
+              </p>
+            )}
+        </div>
+      </div>
+
       {/* Calendar grid */}
-      <div className="border-border overflow-x-auto rounded-[6px] border">
+      <div className="border-border hidden overflow-x-auto rounded-[6px] border md:block">
         <div className="min-w-[44rem]">
           <div className="grid grid-cols-7 border-b border-border">
             {orderedWeekdays(weekStartsMonday).map((w) => (
@@ -392,7 +502,7 @@ export default function ScheduleClient({
               >
                 <span
                   className={cn(
-                    'mb-1 inline-flex size-5 items-center justify-center rounded-[4px] text-caption tabular-nums',
+                    'mb-1 inline-flex size-6 items-center justify-center rounded-[4px] text-caption tabular-nums sm:size-5',
                     isToday ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                   )}
                 >
@@ -402,7 +512,7 @@ export default function ScheduleClient({
                   {dayEvents.slice(0, 3).map((ev) => {
                     const meta = TYPE_META[ev.event_type] ?? TYPE_META.other
                     const chipClassName = cn(
-                      'block w-full truncate rounded-[4px] border px-1.5 py-0.5 text-left text-label font-medium leading-tight transition-colors',
+                      'block w-full truncate rounded-[4px] border px-1.5 py-1.5 text-left text-label font-medium leading-tight transition-colors sm:min-h-0 sm:py-0.5',
                       meta.text,
                       meta.bg,
                       meta.border,
@@ -433,9 +543,16 @@ export default function ScheduleClient({
                     )
                   })}
                   {dayEvents.length > 3 && (
-                    <span className="text-muted-foreground block px-1 text-label tabular-nums">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDayView(date)
+                      }}
+                      className="text-muted-foreground block min-h-10 w-full px-1 text-left text-label tabular-nums underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:min-h-0"
+                    >
                       +{dayEvents.length - 3} more
-                    </span>
+                    </button>
                   )}
                 </div>
               </div>
@@ -463,7 +580,7 @@ export default function ScheduleClient({
       )}
 
       {!eventsAreStale && visibleEvents.length === 0 && (
-        <p className="text-muted-foreground mt-4 text-meta">
+        <p className="text-muted-foreground mt-4 hidden text-meta md:block">
           {events.length === 0
             ? canWrite
               ? `No events in ${monthLabel}. Click any day to add one.`

@@ -7,6 +7,7 @@ import type { Student } from '@/lib/org/types'
 import { orgStudents } from '@/lib/org/students'
 import { linkAnalysisToStudent } from '@/lib/org/email'
 import type { CoachAIError } from '@/types'
+import { focusInitial, focusableIn } from '@/components/interior/overlay-a11y'
 
 const UNLINKED_LABEL = 'Link to Student'
 
@@ -39,6 +40,8 @@ export default function AnalysisLinkControl({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -61,12 +64,50 @@ export default function AnalysisLinkControl({
   }, [auth0Id])
 
   useEffect(() => {
+    if (!open) return
+    const previous = document.activeElement
+    focusInitial(panelRef.current)
     const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const items = focusableIn(panelRef.current)
+        if (items.length === 0) {
+          e.preventDefault()
+          ;(panelRef.current as unknown as { focus(): void }).focus()
+          return
+        }
+        const first = items[0] as unknown as HTMLElement
+        const last = items[items.length - 1] as unknown as HTMLElement
+        const active = document.activeElement
+        if (e.shiftKey && active === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
     }
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [])
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKeyDown)
+      if (previous instanceof HTMLElement && previous !== document.body) {
+        // focus restored by explicit close paths; fallback no-op
+      }
+    }
+  }, [open])
 
   if (students === null) {
     // Still loading — nothing is being claimed yet, so there is nothing to correct.
@@ -94,6 +135,7 @@ export default function AnalysisLinkControl({
       await linkAnalysisToStudent(auth0Id, jobId, studentId)
       setLinkedId(studentId)
       setOpen(false)
+      triggerRef.current?.focus()
       toast.success(studentId ? 'Analysis linked to student' : 'Analysis unlinked')
     } catch (err) {
       toast.error((err as CoachAIError).message ?? 'Failed to update student link')
@@ -103,10 +145,12 @@ export default function AnalysisLinkControl({
   }
 
   const panelId = `analysis-link-panel-${jobId.replace(/[^a-zA-Z0-9_-]/g, '')}`
+  const panelTitleId = `${panelId}-title`
 
   return (
     <div ref={rootRef} className="relative inline-block">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
@@ -152,10 +196,18 @@ export default function AnalysisLinkControl({
 
       {open && (
         <div
+          ref={panelRef}
           id={panelId}
-          className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg dark:shadow-none"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby={panelTitleId}
+          tabIndex={-1}
+          className="absolute right-0 z-50 mt-2 w-72 rounded-[6px] border border-border bg-popover shadow-lg outline-none dark:shadow-none"
         >
-          <div className="border-b border-border px-4 py-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <div
+            id={panelTitleId}
+            className="border-b border-border px-4 py-2 text-label font-medium uppercase tracking-[0.08em] text-muted-foreground"
+          >
             {linkedStudent ? 'Linked to' : hasLink ? 'Linked' : 'Choose a student'}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">

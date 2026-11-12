@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef } from 'react'
+import { XIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { focusInitial, inertOutside, restoreFocusOnClose } from './overlay-a11y'
 
@@ -94,7 +95,7 @@ export function Drawer({
             aria-label="Close drawer"
             className="cursor-pointer rounded-[4px] p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            ✕
+            <XIcon className="size-4" aria-hidden="true" />
           </button>
         </div>
         <div className="max-h-[calc(100%-3.5rem)] overflow-y-auto">{children}</div>
