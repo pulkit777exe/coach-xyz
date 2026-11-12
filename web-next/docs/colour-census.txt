@@ -38,7 +38,7 @@ boundary — recorded, NOT guarded (outside the three rules)
   rgba() in className: components/9ui/ui/card.tsx:9 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   rgba() in className: components/interior/progress-bar.tsx:81 (vendored) — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
   literal white/black colour classes, non-dark, first-party: 3 — theme-invariant chrome (video overlays render on a black video surface in both themes)
-    components/VideoPlayer.tsx:419 bg-black
-    components/VideoPlayer.tsx:440 text-white/70
-    components/VideoPlayer.tsx:445 text-white/85
+    components/VideoPlayer.tsx:478 bg-black
+    components/VideoPlayer.tsx:499 text-white/70
+    components/VideoPlayer.tsx:504 text-white/85
   literal white/black colour classes, non-dark, vendored: 8 (registry scrim/chrome patterns)
