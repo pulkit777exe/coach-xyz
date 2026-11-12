@@ -83,4 +83,39 @@ describe('Share page presentation honesty', () => {
     expect(html).toContain('Unconfirmed candidate')
     expect(html).toContain('Showing 2 of 2 timeline events. Unconfirmed candidates are not confirmed performance.')
   })
+
+  test('renders criteria registry research context when available', async () => {
+    mockResolveShareToken.mockResolvedValue({
+      ...baseAnalysis,
+      analysis: {
+        ...baseAnalysis.analysis,
+        summary_json: {
+          criteria_registry: [
+            {
+              criterion_id: 'CR_01',
+              engine_key: 'knee_flexion',
+              label: 'Knee flexion at contact',
+              evidence_type: 'measured',
+              validation_status: 'proposed',
+              implementation: 'partial',
+              measurement_type: 'angle',
+              allowed_views: ['side'],
+              required_landmarks: ['hip', 'knee', 'ankle'],
+              paper_definition: 'A long paper definition that should be truncated for compact display in the UI.',
+            },
+          ],
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof resolveShareToken>>)
+    const html = renderToStaticMarkup(await SharePage({ params: Promise.resolve({ token: 'tok' }) }))
+    expect(html).toContain('Criteria registry')
+    expect(html).toContain('CR_01')
+    expect(html).toContain('Knee flexion at contact')
+    expect(html).toContain('engine knee_flexion')
+    expect(html).toContain('evidence measured')
+    expect(html).toContain('validation proposed')
+    expect(html).toContain('implementation partial')
+    expect(html).toContain('Requirements')
+    expect(html).toContain('3 landmarks')
+  })
 })
