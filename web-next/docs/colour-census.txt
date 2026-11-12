@@ -29,7 +29,7 @@ rule 3 — Tailwind stock palette classes
   vendored sites: 0 (path exemption present; unexercised for this rule unless shown above)
 
 boundary — recorded, NOT guarded (outside the three rules)
-  hex outside className/inline-style (first-party):
+  hex outside className/inline-style (first-party): 
     components/VideoPlayer.tsx ×8
     (VideoPlayer paints to canvas, which cannot take var(): theme-invariant overlay scrims + getComputedStyle-resolved token fallbacks — components/VideoPlayer.colors.test.ts pins them)
   rgba() in className: components/HeaderClient.tsx:108 — arbitrary shadow colour; no --shadow-* token exists, paired with the sanctioned dark:shadow-none
@@ -42,3 +42,4 @@ boundary — recorded, NOT guarded (outside the three rules)
     components/VideoPlayer.tsx:499 text-white/70
     components/VideoPlayer.tsx:504 text-white/85
   literal white/black colour classes, non-dark, vendored: 8 (registry scrim/chrome patterns)
+
