@@ -9,6 +9,8 @@ interface HoldToConfirmProps {
   children: React.ReactNode
   className?: string
   holdMs?: number
+  /** Accessible name for the control when the visible children are not descriptive enough. */
+  'aria-label'?: string
 }
 
 export function HoldToConfirm({
@@ -17,6 +19,7 @@ export function HoldToConfirm({
   children,
   className,
   holdMs = 900,
+  'aria-label': ariaLabel,
 }: HoldToConfirmProps) {
   const [armed, setArmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -24,6 +27,7 @@ export function HoldToConfirm({
   // hold-to-confirm side by side, and two elements sharing one id made the
   // second button's aria-describedby point at the first button's hint.
   const hintId = useId()
+  const statusId = useId()
 
   const start = () => {
     setArmed(true)
@@ -47,6 +51,7 @@ export function HoldToConfirm({
       onPointerDown={start}
       onPointerUp={cancel}
       onPointerLeave={cancel}
+      onPointerCancel={cancel}
       onContextMenu={(e) => e.preventDefault()}
       // Keyboard hold-to-confirm: holding Enter/Space mirrors pointer hold.
       // Prevent key-repeat re-arming and release activation.
@@ -61,7 +66,9 @@ export function HoldToConfirm({
         cancel()
       }}
       onBlur={cancel}
-      aria-describedby={hintId}
+      aria-label={ariaLabel}
+      aria-describedby={`${hintId} ${statusId}`}
+      aria-busy={armed || undefined}
       className={cn(
         'inline-flex cursor-pointer select-none items-center gap-2 rounded-[6px] border border-destructive/20 bg-transparent px-3 py-1.5 text-[13px] font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
         armed && 'border-destructive bg-destructive text-destructive-foreground',
@@ -71,7 +78,10 @@ export function HoldToConfirm({
       {children}
       {armed && <span className="animate-pulse">{confirmLabel}</span>}
       <span id={hintId} className="sr-only">
-        Press and hold to confirm
+        Press and hold to confirm.
+      </span>
+      <span id={statusId} className="sr-only" aria-live="polite">
+        {armed ? `Holding to confirm: ${confirmLabel}` : ''}
       </span>
     </button>
   )

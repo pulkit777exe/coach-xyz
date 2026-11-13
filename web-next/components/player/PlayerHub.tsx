@@ -679,15 +679,7 @@ function AnalyzeVideoCard({
       )}
       {error && <p className="mb-3 text-meta text-destructive">{error}</p>}
       <div
-        role="button"
-        tabIndex={0}
         onClick={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            open()
-          }
-        }}
         onDragOver={(e) => {
           e.preventDefault()
           setIsDragging(true)
@@ -716,13 +708,14 @@ function AnalyzeVideoCard({
           onChange={(e) => pick(e.target.files?.[0])}
         />
         <div className="grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
-          <VideoIcon className="size-5" />
+          <VideoIcon className="size-5" aria-hidden="true" />
         </div>
         <p className="mt-3 text-body font-medium text-foreground">
           {fileName || 'Drop video or click to browse'}
         </p>
         <p className="mt-1 text-meta text-muted-foreground">MP4, MOV, AVI · 500 MB max</p>
         <Button
+          type="button"
           size="sm"
           className="mt-3"
           onClick={(e) => {

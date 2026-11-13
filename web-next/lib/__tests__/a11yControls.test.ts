@@ -143,7 +143,7 @@ const hold = (confirmLabel: string, child: React.ReactNode) =>
   createElement(HoldToConfirm as never, { onConfirm: () => {}, confirmLabel } as never, child)
 
 describe('two hold-to-confirms on one page no longer share a hint id', () => {
-  it('gives each instance its own describedby target', () => {
+  it('gives each instance its own describedby targets', () => {
     // The analysis page renders Cancel and Delete side by side; both used the
     // literal id "hold-to-confirm-hint", so the second button's
     // aria-describedby resolved to the first button's hint.
@@ -158,9 +158,12 @@ describe('two hold-to-confirms on one page no longer share a hint id', () => {
     const describedBy = [...markup.matchAll(/aria-describedby="([^"]+)"/g)].map((m) => m[1])
     expect(describedBy).toHaveLength(2)
     expect(new Set(describedBy).size).toBe(2)
-    for (const id of describedBy) {
-      expect(markup).toContain(`<span id="${id}" class="sr-only">`)
+    const allIds = describedBy.flatMap((value) => value.split(/\s+/).filter(Boolean))
+    expect(new Set(allIds).size).toBe(allIds.length)
+    for (const id of allIds) {
+      expect(markup).toContain(`id="${id}"`)
     }
+    expect(markup).toContain('Press and hold to confirm.')
   })
 })
 

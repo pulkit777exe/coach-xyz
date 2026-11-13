@@ -477,28 +477,25 @@ export default function ScheduleClient({
             return (
               <div
                 key={key}
-                role="button"
-                tabIndex={0}
-                aria-label={`View events for ${formatWeekdayLongDate(date)}`}
                 onClick={openDay}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    openDay()
-                  }
-                }}
-                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                className={`border-border group min-h-28 cursor-pointer border-b border-r p-1.5 text-left align-top transition-colors hover:bg-accent/40 ${
                   isToday ? 'bg-accent/40' : ''
                 }`}
               >
-                <span
+                <button
+                  type="button"
+                  aria-label={`View events for ${formatWeekdayLongDate(date)}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDay()
+                  }}
                   className={cn(
-                    'mb-1 inline-flex size-6 items-center justify-center rounded-[4px] text-caption tabular-nums sm:size-5',
+                    'mb-1 inline-flex size-6 items-center justify-center rounded-[4px] text-caption tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:size-5',
                     isToday ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                   )}
                 >
                   {date.getDate()}
-                </span>
+                </button>
                 <div className="space-y-1">
                   {dayEvents.slice(0, 3).map((ev) => {
                     const meta = TYPE_META[ev.event_type] ?? TYPE_META.other

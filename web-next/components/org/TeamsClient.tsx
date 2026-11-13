@@ -89,7 +89,7 @@ function TrendBars({
   return (
     <div>
       <span className="sr-only">{summary}</span>
-      <div className="flex h-16 items-end gap-1" role="img" aria-label="Findings per day" aria-describedby={undefined}>
+      <div className="flex h-16 items-end gap-1" role="img" aria-label="Findings per day">
         {days.map(([day, n]) => (
           <div
             key={day}
@@ -102,7 +102,7 @@ function TrendBars({
       </div>
       <details className="mt-2 rounded-[6px] border border-border bg-card">
         <summary className="cursor-pointer list-none px-3 py-2 text-meta font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-          View findings data table ({days.length} day{days.length === 1 ? '' : 's'})
+          View findings per day data table ({days.length} day{days.length === 1 ? '' : 's'})
         </summary>
         <div className="overflow-x-auto border-t border-border px-3 pb-3 pt-2">
           <table className="w-full min-w-[12rem] text-left text-meta">

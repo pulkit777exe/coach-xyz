@@ -90,7 +90,7 @@ export default function PerformanceChart({
       {data.length > 0 && (
         <details className="mt-3 rounded-[6px] border border-border bg-card">
           <summary className="cursor-pointer list-none px-3 py-2 text-meta font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-            View data table ({data.length} row{data.length === 1 ? '' : 's'})
+            View {chartLabel.toLowerCase().startsWith('performance chart') ? 'chart' : chartLabel.toLowerCase()} data table ({data.length} row{data.length === 1 ? '' : 's'})
           </summary>
           <div className="overflow-x-auto border-t border-border px-3 pb-3 pt-2">
             <table className="w-full min-w-[20rem] text-left text-meta">

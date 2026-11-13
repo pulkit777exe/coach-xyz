@@ -548,6 +548,7 @@ export default function AnalysisDetailClient({
               router.refresh()
             }}
             confirmLabel="Analysis cancelled"
+            aria-label={`Cancel analysis ${data.display_name || data.file_name || 'in progress'}`}
             className="[&_*]:!text-foreground"
           >
             <span className={CHIP_CLASS}>Cancel</span>
@@ -601,16 +602,10 @@ export default function AnalysisDetailClient({
             router.push('/dashboard/history')
           }}
           confirmLabel="Analysis deleted"
-          className="[&_*]:!text-foreground"
+          aria-label={`Delete analysis ${data.display_name || data.file_name || 'this analysis'}`}
+          className="inline-flex items-center rounded-[6px] border border-destructive/30 px-3 py-1.5 text-meta font-medium text-destructive transition-colors hover:bg-destructive/10 [&_*]:!text-foreground"
         >
-          <span
-            role="button"
-            tabIndex={0}
-            aria-label={`Delete analysis ${data.display_name || data.file_name || 'this analysis'}`}
-            className="inline-flex items-center rounded-[6px] border border-destructive/30 px-3 py-1.5 text-meta font-medium text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
-          >
-            Delete
-          </span>
+          Delete
         </HoldToConfirm>
 
         <Modal
