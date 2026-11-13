@@ -1,7 +1,7 @@
 web-next source reachability from tests
 ========================================================================
 source files                     245
-test files                       79
+test files                       84
 
 statically imported by a test     180
 loaded only by a generic sweep    5    (readdirSync enumeration, no import edge)

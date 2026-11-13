@@ -657,7 +657,7 @@ export default function AnalysisDetailClient({
               </div>
             ) : shareUrl ? (
               <>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                   <label htmlFor="analysis-share-url" className="sr-only">
                     Share link
                   </label>
@@ -666,7 +666,7 @@ export default function AnalysisDetailClient({
                     type="text"
                     value={shareUrl}
                     readOnly
-                    className="flex-1 bg-background border border-border rounded-[6px] px-3 py-2 text-body text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    className="min-w-0 flex-1 bg-background border border-border rounded-[6px] px-3 py-2 text-body text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <CopyButton
                     value={shareUrl}

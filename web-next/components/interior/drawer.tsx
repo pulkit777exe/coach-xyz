@@ -44,9 +44,9 @@ export function Drawer({
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     // See modal.tsx — aria-modal alone leaves the page behind tabbable.
+    const undoFocus = restoreFocusOnClose(document)
     focusInitial(panelRef.current)
     const undoInert = inertOutside(rootRef.current, document.body)
-    const undoFocus = restoreFocusOnClose(document)
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev

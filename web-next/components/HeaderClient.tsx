@@ -223,7 +223,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
             setOpenGroup(null)
             setOpen((v) => !v)
           }}
-          className={`inline-flex size-8 items-center justify-center rounded-[6px] text-foreground transition-colors duration-150 hover:bg-muted lg:hidden ${NAV_FOCUS}`}
+          className={`inline-flex size-11 items-center justify-center rounded-[6px] text-foreground transition-colors duration-150 hover:bg-muted lg:hidden ${NAV_FOCUS}`}
         >
           {open ? <X className="size-4" /> : <Menu className="size-4" />}
         </button>

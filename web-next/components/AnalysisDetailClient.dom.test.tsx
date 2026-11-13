@@ -21,7 +21,8 @@ afterEach(() => {
 })
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const load = async () => {
+const load = async (opts?: { shareToken?: { url: string; expires_at: string } }) => {
+  const createShareToken = vi.fn(async () => opts?.shareToken ?? { url: '/share/abc', expires_at: '2026-12-01T00:00:00Z' })
   vi.doMock('next/link', () => ({ default: ({ href, children, ...rest }: any) => <a href={href} {...rest}>{children}</a> }))
   vi.doMock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
   vi.doMock('next/dynamic', () => ({ default: () => () => null }))
@@ -39,7 +40,7 @@ const load = async () => {
     getAuthorizedDownloadUrl: vi.fn(async () => '/dl'),
     getDownloadUrl: () => '/dl',
   }))
-  vi.doMock('@/lib/aiReports', () => ({ createShareToken: vi.fn() }))
+  vi.doMock('@/lib/aiReports', () => ({ createShareToken }))
   vi.doMock('@/lib/analysisEvents', () => ({
     startAnalysisStatus: (opts: any) => {
       const s = { complete: true, video_ready: false, summary: null }
@@ -54,12 +55,12 @@ const load = async () => {
   vi.doMock('@/components/9ui/ui/button', () => ({ Button: ({ children, ...p }: any) => <button {...p}>{children}</button> }))
   vi.doMock('@/components/interior/copy-button', () => ({ CopyButton: ({ label }: any) => <button>{label}</button> }))
   vi.doMock('@/components/interior/hold-to-confirm', () => ({ HoldToConfirm: ({ children }: any) => <div>{children}</div> }))
-  vi.doMock('@/components/interior/modal', () => ({ Modal: ({ open, children }: any) => open ? <div>{children}</div> : null }))
+  vi.doMock('@/components/interior/modal', () => ({ Modal: ({ open, title, onClose, children }: any) => open ? <div role="dialog" aria-label={title}><button type="button" onClick={onClose}>Close dialog</button>{children}</div> : null }))
   vi.doMock('@/components/interior/drawer', () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }))
   vi.doMock('@/components/interior/loading-button', () => ({ LoadingButton: ({ children, onAction }: any) => <button onClick={onAction}>{children}</button> }))
   vi.doMock('@/lib/date', () => ({ formatDateTime: (v: string) => v }))
   const mod = await import('@/components/AnalysisDetailClient')
-  return mod.default
+  return { Detail: mod.default, createShareToken }
 }
 
 const baseData = {
@@ -84,7 +85,7 @@ const baseData = {
 
 describe('AnalysisDetailClient presentation honesty', () => {
   test('renders empty states, needs review/quality, and confirmed vs candidate distinctions', async () => {
-    const Detail = await load()
+    const { Detail } = await load()
     const data = {
       ...baseData,
       summary_json: {
@@ -126,7 +127,7 @@ describe('AnalysisDetailClient presentation honesty', () => {
   })
 
   test('renders criteria registry section and summary count when provided', async () => {
-    const Detail = await load()
+    const { Detail } = await load()
     const data = {
       ...baseData,
       summary_json: {
@@ -154,3 +155,26 @@ describe('AnalysisDetailClient presentation honesty', () => {
     expect(text).toContain('validation experimental')
   })
 })
+
+  test('share dialog exposes a labelled, keyboard-focusable link field and closes', async () => {
+    const { Detail } = await load({ shareToken: { url: '/share/abc', expires_at: '2026-12-01T00:00:00Z' } })
+    await act(async () => { root.render(<Detail auth0Id="u" jobId="s1" initialData={baseData} />) })
+
+    const shareBtn = [...container.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === 'Share')
+    expect(shareBtn).toBeTruthy()
+    await act(async () => { shareBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    // allow createShareToken promise/effects to settle
+    for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve() })
+
+    const input = document.body.querySelector('#analysis-share-url') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+    expect(input?.getAttribute('readonly')).not.toBeNull()
+    const label = document.body.querySelector('label[for="analysis-share-url"]')
+    expect(label?.textContent).toContain('Share link')
+    expect(document.body.textContent).toContain('Expires 2026-12-01T00:00:00Z')
+
+    const close = [...document.body.querySelectorAll('button')].find((b) => (b.textContent || '').includes('Close dialog'))
+    expect(close).toBeTruthy()
+    await act(async () => { close!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+  })

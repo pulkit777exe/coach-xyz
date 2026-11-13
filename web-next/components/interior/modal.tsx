@@ -30,9 +30,9 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     // it in the tab order, so the three below are what make the promise true:
     // focus starts inside, the rest of the document is inert, and dismissing
     // hands focus back to whatever opened the modal.
+    const undoFocus = restoreFocusOnClose(document)
     focusInitial(panelRef.current)
     const undoInert = inertOutside(rootRef.current, document.body)
-    const undoFocus = restoreFocusOnClose(document)
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
