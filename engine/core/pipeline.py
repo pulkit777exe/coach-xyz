@@ -102,9 +102,24 @@ def _publish(job_id: str, store, name: str, path: str, kind: str) -> None:
 def _load_judgement(path: Path) -> Judgement | None:
     if not path.is_file():
         return None
-    raw = json.loads(path.read_text())
-    raw["verdicts"] = {int(k): v for k, v in raw["verdicts"].items()}
-    return Judgement(**raw)
+    try:
+        raw = json.loads(path.read_text())
+        if not isinstance(raw, dict):
+            return None
+        verdicts = raw.get("verdicts")
+        if not isinstance(verdicts, dict):
+            return None
+        normalized = {}
+        for k, v in verdicts.items():
+            try:
+                normalized[int(k)] = v
+            except Exception:
+                continue
+        raw = {**raw, "verdicts": normalized}
+        return Judgement(**raw)
+    except Exception:
+        log.warning("ignoring unreadable judgement cache: %s", path, exc_info=True)
+        return None
 
 
 def _save_judgement(path: Path, j: Judgement) -> None:
@@ -207,9 +222,14 @@ def run(job_id: str, params: dict) -> dict:
         )
         track_file = cache / f"{track_key}.npz"
         with rep.stage("track", 4, 52) as tick:
+            track = None
             if track_file.is_file():
-                track = Track.load(str(track_file))
-            else:
+                try:
+                    track = Track.load(str(track_file))
+                except Exception:
+                    log.warning("ignoring unreadable track cache: %s", track_file, exc_info=True)
+                    track = None
+            if track is None:
                 with _detector() as detector:
                     track = track_athlete(
                         src,

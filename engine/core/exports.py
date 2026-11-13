@@ -27,6 +27,32 @@ def _csv(header: list[str], rows) -> str:
 
 
 def events_csv(r: dict) -> str:
+    rows = []
+    for e in (r.get("events") or []):
+        if not isinstance(e, dict):
+            continue
+        tags = e.get("tags") or []
+        if not isinstance(tags, list):
+            tags = []
+        rows.append(
+            [
+                r.get("job_id"),
+                e.get("id"),
+                e.get("index"),
+                e.get("type"),
+                e.get("t"),
+                e.get("result"),
+                e.get("event_state"),
+                e.get("confirmed"),
+                e.get("score"),
+                e.get("score_source"),
+                e.get("coverage"),
+                e.get("confidence"),
+                e.get("pressure"),
+                "; ".join(str(t) for t in tags if t is not None),
+                e.get("feedback"),
+            ]
+        )
     return _csv(
         [
             "job_id",
@@ -45,58 +71,49 @@ def events_csv(r: dict) -> str:
             "tags",
             "feedback",
         ],
-        [
-            [
-                r["job_id"],
-                e["id"],
-                e["index"],
-                e["type"],
-                e["t"],
-                e["result"],
-                e.get("event_state"),
-                e.get("confirmed"),
-                e["score"],
-                e["score_source"],
-                e["coverage"],
-                e["confidence"],
-                e.get("pressure"),
-                "; ".join(e.get("tags") or []),
-                e["feedback"],
-            ]
-            for e in r["events"]
-        ],
+        rows,
     )
 
 
 def measurements_csv(r: dict) -> str:
     rows = []
-    for e in r["events"]:
-        for m in e["measurements"]:
-            lo, hi = m["ideal"] or (None, None)
+    for e in (r.get("events") or []):
+        if not isinstance(e, dict):
+            continue
+        for m in (e.get("measurements") or []):
+            if not isinstance(m, dict):
+                continue
+            ideal = m.get("ideal") or (None, None)
+            try:
+                lo, hi = ideal[0], ideal[1]
+            except Exception:
+                lo, hi = None, None
+            frames = m.get("source_frames") or []
+            times = m.get("source_t") or []
             rows.append(
                 [
-                    r["job_id"],
-                    e["id"],
-                    e["t"],
-                    m.get("criterion_id") or m["key"],
-                    m["key"],
-                    m["label"],
-                    m["value"],
-                    m["unit"],
+                    r.get("job_id"),
+                    e.get("id"),
+                    e.get("t"),
+                    m.get("criterion_id") or m.get("key"),
+                    m.get("key"),
+                    m.get("label"),
+                    m.get("value"),
+                    m.get("unit"),
                     lo,
                     hi,
-                    m["score"],
-                    m["weight"],
-                    m["source"],
+                    m.get("score"),
+                    m.get("weight"),
+                    m.get("source"),
                     m.get("state"),
                     m.get("evidence_type"),
                     m.get("validation_status"),
                     m.get("measurement_type"),
                     m.get("calibration"),
-                    m["confidence"],
-                    " ".join(str(n) for n in m.get("source_frames") or []),
-                    " ".join(str(n) for n in m.get("source_t") or []),
-                    m["note"],
+                    m.get("confidence"),
+                    " ".join(str(n) for n in frames) if isinstance(frames, list) else "",
+                    " ".join(str(n) for n in times) if isinstance(times, list) else "",
+                    m.get("note"),
                 ]
             )
     return _csv(
@@ -129,6 +146,36 @@ def measurements_csv(r: dict) -> str:
 
 
 def findings_csv(r: dict) -> str:
+    rows = []
+    for f in (r.get("findings") or []):
+        if not isinstance(f, dict):
+            continue
+        start = f.get("start_ms")
+        end = f.get("end_ms")
+        try:
+            start_s = start / 1000 if start is not None else None
+        except Exception:
+            start_s = None
+        try:
+            end_s = end / 1000 if end is not None else None
+        except Exception:
+            end_s = None
+        rows.append(
+            [
+                r.get("job_id"),
+                f.get("id"),
+                f.get("category"),
+                start_s,
+                end_s,
+                f.get("severity"),
+                f.get("confidence_band"),
+                f.get("confidence"),
+                f.get("review_state"),
+                f.get("event_state"),
+                f.get("confirmed"),
+                f.get("observation"),
+            ]
+        )
     return _csv(
         [
             "job_id",
@@ -144,30 +191,35 @@ def findings_csv(r: dict) -> str:
             "confirmed",
             "observation",
         ],
-        [
-            [
-                r["job_id"],
-                f["id"],
-                f["category"],
-                f["start_ms"] / 1000,
-                f["end_ms"] / 1000,
-                f["severity"],
-                f["confidence_band"],
-                f["confidence"],
-                f["review_state"],
-                f.get("event_state"),
-                f.get("confirmed"),
-                f["observation"],
-            ]
-            for f in r["findings"]
-        ],
+        rows,
     )
 
 
 def session_csv(r: dict) -> str:
-    s, p = r["summary"], r["provenance"]
+    s = r.get("summary") or {}
+    p = r.get("provenance") or {}
+    if not isinstance(s, dict):
+        s = {}
+    if not isinstance(p, dict):
+        p = {}
     composite = s.get("composite") or {}
+    if not isinstance(composite, dict):
+        composite = {}
     pack = p.get("sport_pack_manifest") or {}
+    if not isinstance(pack, dict):
+        pack = {}
+    athlete = r.get("athlete") or {}
+    if not isinstance(athlete, dict):
+        athlete = {}
+    manifest = p.get("manifest") or {}
+    if not isinstance(manifest, dict):
+        manifest = {}
+    app = manifest.get("application") or {}
+    if not isinstance(app, dict):
+        app = {}
+    prompt = manifest.get("prompt") or {}
+    if not isinstance(prompt, dict):
+        prompt = {}
     return _csv(
         [
             "job_id",
@@ -205,38 +257,38 @@ def session_csv(r: dict) -> str:
         ],
         [
             [
-                r["job_id"],
-                r["sport"],
+                r.get("job_id"),
+                r.get("sport"),
                 r.get("action_id"),
-                r["angle"],
+                r.get("angle"),
                 r.get("angle_source"),
                 r.get("research_mode"),
                 r.get("aggregation"),
                 r.get("job_status"),
-                s["rating"],
+                s.get("rating"),
                 s.get("rating_status"),
-                s["average_score"],
+                s.get("average_score"),
                 composite.get("status"),
                 composite.get("value"),
                 composite.get("coverage"),
                 composite.get("validated"),
                 composite.get("excluded_from_research"),
                 s.get("confidence"),
-                s["events"],
+                s.get("events"),
                 s.get("made"),
                 s.get("missed"),
-                s["success_rate"],
-                r.get("athlete", {}).get("track_coverage"),
-                r["needs_review"],
-                p["judged_by"],
-                p["model"],
-                p["engine"],
-                p["analyzed_at"],
+                s.get("success_rate"),
+                athlete.get("track_coverage"),
+                r.get("needs_review"),
+                p.get("judged_by"),
+                p.get("model"),
+                p.get("engine"),
+                p.get("analyzed_at"),
                 p.get("video_sha256"),
                 pack.get("pack_version") or pack.get("version"),
                 pack.get("sha256"),
-                (p.get("manifest") or {}).get("application", {}).get("git_commit"),
-                (p.get("manifest") or {}).get("prompt", {}).get("hash"),
+                app.get("git_commit"),
+                prompt.get("hash"),
             ]
         ],
     )
@@ -244,57 +296,74 @@ def session_csv(r: dict) -> str:
 
 def metrics_csv(r: dict) -> str:
     rows = []
-    for e in r["events"]:
-        for m in e.get("metrics") or []:
-            lo, hi = m["ideal"] or (None, None)
+    for e in (r.get("events") or []):
+        if not isinstance(e, dict):
+            continue
+        for m in (e.get("metrics") or []):
+            if not isinstance(m, dict):
+                continue
+            ideal = m.get("ideal") or (None, None)
+            try:
+                lo, hi = ideal[0], ideal[1]
+            except Exception:
+                lo, hi = None, None
             rows.append(
                 [
-                    r["job_id"],
-                    e["id"],
-                    e["t"],
+                    r.get("job_id"),
+                    e.get("id"),
+                    e.get("t"),
                     "event",
-                    m["key"],
-                    m["label"],
-                    m["unit"],
-                    m["value"],
-                    m["score"],
+                    m.get("key"),
+                    m.get("label"),
+                    m.get("unit"),
+                    m.get("value"),
+                    m.get("score"),
                     lo,
                     hi,
                     None,
                     None,
                 ]
             )
-        opponent = (e.get("matchup") or {}).get("opponent") or {}
-        for m in opponent.get("metrics") or []:
-            lo, hi = m["ideal"] or (None, None)
+        matchup = e.get("matchup") if isinstance(e.get("matchup"), dict) else {}
+        opponent = matchup.get("opponent") if isinstance(matchup.get("opponent"), dict) else {}
+        for m in (opponent.get("metrics") or []):
+            if not isinstance(m, dict):
+                continue
+            ideal = m.get("ideal") or (None, None)
+            try:
+                lo, hi = ideal[0], ideal[1]
+            except Exception:
+                lo, hi = None, None
             rows.append(
                 [
-                    r["job_id"],
-                    e["id"],
-                    e["t"],
+                    r.get("job_id"),
+                    e.get("id"),
+                    e.get("t"),
                     "opponent",
-                    m["key"],
-                    m["label"],
-                    m["unit"],
-                    m["value"],
-                    m["score"],
+                    m.get("key"),
+                    m.get("label"),
+                    m.get("unit"),
+                    m.get("value"),
+                    m.get("score"),
                     lo,
                     hi,
                     None,
                     None,
                 ]
             )
-    for m in r.get("session_metrics") or []:
+    for m in (r.get("session_metrics") or []):
+        if not isinstance(m, dict):
+            continue
         rows.append(
             [
-                r["job_id"],
+                r.get("job_id"),
                 "",
                 "",
                 "session",
-                m["key"],
-                m["label"],
-                m["unit"],
-                m["value"],
+                m.get("key"),
+                m.get("label"),
+                m.get("unit"),
+                m.get("value"),
                 None,
                 None,
                 None,
@@ -325,14 +394,20 @@ def metrics_csv(r: dict) -> str:
 def stats_csv(r: dict) -> str:
     rows = []
     stats = r.get("stats") or {}
-    for group in stats.get("groups") or []:
-        for row in group.get("stats") or []:
+    if not isinstance(stats, dict):
+        stats = {}
+    for group in (stats.get("groups") or []):
+        if not isinstance(group, dict):
+            continue
+        for row in (group.get("stats") or []):
+            if not isinstance(row, dict):
+                continue
             rows.append(
                 [
-                    r["job_id"],
-                    group["label"],
-                    row["key"],
-                    row["label"],
+                    r.get("job_id"),
+                    group.get("label"),
+                    row.get("key"),
+                    row.get("label"),
                     row.get("value"),
                     row.get("display"),
                     row.get("unit"),
@@ -342,10 +417,10 @@ def stats_csv(r: dict) -> str:
                 ]
             )
     trend = stats.get("trend")
-    if trend:
+    if isinstance(trend, dict):
         rows.append(
             [
-                r["job_id"],
+                r.get("job_id"),
                 "Trend",
                 "trend",
                 "Score trend",
@@ -357,19 +432,21 @@ def stats_csv(r: dict) -> str:
                 trend.get("note"),
             ]
         )
-    for item in stats.get("unavailable") or []:
+    for item in (stats.get("unavailable") or []):
+        if not isinstance(item, dict):
+            continue
         rows.append(
             [
-                r["job_id"],
+                r.get("job_id"),
                 "Unavailable",
                 "",
-                item["label"],
+                item.get("label"),
                 None,
                 None,
                 "",
                 None,
                 None,
-                item["reason"],
+                item.get("reason"),
             ]
         )
     return _csv(

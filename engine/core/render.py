@@ -324,15 +324,23 @@ def _banner(
     e: dict, width: int, k: float, *, max_h: int | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
     """Event title, technique score, honesty/confidence cues, key metrics and coaching line."""
-    kind = str(e.get("type", "moment")).replace("_", " ").title()
+    kind = str(e.get("type") or "moment").replace("_", " ").title()
+    ev_result = e.get("result")
     result = (
         ""
-        if e.get("result") == "unknown"
-        else f"   {str(e.get('result', '')).replace('_', ' ').upper()}"
+        if ev_result in (None, "unknown")
+        else f"   {str(ev_result).replace('_', ' ').upper()}"
     )
+    score_val = e.get("score")
+    try:
+        score_f = float(score_val) if score_val is not None else None
+    except Exception:
+        score_f = None
+    if score_f is not None and not np.isfinite(score_f):
+        score_f = None
     score = (
-        f"Technique {float(e['score']):.1f}/10"
-        if e.get("score") is not None
+        f"Technique {score_f:.1f}/10"
+        if score_f is not None
         else "Not enough visible to score"
     )
     pad = max(4, int(12 * k))
@@ -350,17 +358,23 @@ def _banner(
     conf = e.get("confidence")
     conf_kind = e.get("confidence_kind")
     if conf is not None:
-        c_label = "Confidence"
-        if conf_kind == "pose":
-            c_label = "Pose confidence"
-        elif conf_kind == "tracking":
-            c_label = "Tracking confidence"
-        elif conf_kind == "event":
-            c_label = "Event confidence"
-        honesty_lines.append(
-            (_fit_px(f"{c_label} {float(conf):.0%}", _font(max(8, int(13 * k)), False), inner), max(8, int(13 * k)), False, MUTED)
-        )
-    if (e.get("quality") or {}).get("needs_review"):
+        try:
+            conf_f = float(conf)
+        except Exception:
+            conf_f = None
+        if conf_f is not None and np.isfinite(conf_f):
+            c_label = "Confidence"
+            if conf_kind == "pose":
+                c_label = "Pose confidence"
+            elif conf_kind == "tracking":
+                c_label = "Tracking confidence"
+            elif conf_kind == "event":
+                c_label = "Event confidence"
+            honesty_lines.append(
+                (_fit_px(f"{c_label} {conf_f:.0%}", _font(max(8, int(13 * k)), False), inner), max(8, int(13 * k)), False, MUTED)
+            )
+    quality = e.get("quality") if isinstance(e.get("quality"), dict) else {}
+    if quality.get("needs_review"):
         honesty_lines.append(("Needs review", max(8, int(13 * k)), False, (255, 190, 0)))
 
     title_size = max(10 if extreme else 11, int((18 if extreme else 22) * k))
@@ -372,51 +386,85 @@ def _banner(
     ]
 
     detail_budget = 0 if (extreme and honesty_lines) else (1 if dense else 99)
-    match = e.get("matchup") or {}
-    roles = match.get("roles") or {}
-    primary = match.get("primary") or {}
-    shown = [
-        m
-        for m in (primary.get("metrics") or e.get("metrics") or [])
-        if m.get("value") is not None
-    ][: (0 if detail_budget == 0 else 1 if dense else 2)]
+    match = e.get("matchup") if isinstance(e.get("matchup"), dict) else {}
+    roles = match.get("roles") if isinstance(match.get("roles"), dict) else {}
+    primary = match.get("primary") if isinstance(match.get("primary"), dict) else {}
+    raw_metrics = primary.get("metrics") if isinstance(primary.get("metrics"), list) else e.get("metrics")
+    metrics_list = raw_metrics if isinstance(raw_metrics, list) else []
+    shown = []
+    for m in metrics_list:
+        if not isinstance(m, dict):
+            continue
+        if m.get("value") is None:
+            continue
+        try:
+            if not np.isfinite(float(m.get("value"))):
+                continue
+        except Exception:
+            continue
+        shown.append(m)
+    shown = shown[: (0 if detail_budget == 0 else 1 if dense else 2)]
     for m in shown:
-        value = _fmt(float(m["value"]), m.get("unit"))
-        note = "" if m.get("score") is None else f" ({m['score']:.0%})"
+        try:
+            value = _fmt(float(m["value"]), m.get("unit"))
+        except Exception:
+            continue
+        m_score = m.get("score")
+        try:
+            m_score_f = float(m_score) if m_score is not None else None
+        except Exception:
+            m_score_f = None
+        note = "" if m_score_f is None or not np.isfinite(m_score_f) else f" ({m_score_f:.0%})"
         prefix = f"{roles.get('primary')}: " if roles.get("primary") else ""
-        txt = _fit_px(f"{prefix}{m['label']} {value}{note}", _font(max(8, int(15 * k)), False), inner)
+        label = m.get("label") or m.get("key") or "Metric"
+        txt = _fit_px(f"{prefix}{label} {value}{note}", _font(max(8, int(15 * k)), False), inner)
         lines.append((txt, max(8, int(15 * k)), False, _metric_color(m)))
         detail_budget -= 1
 
     if not dense and detail_budget > 0:
-        opponent = match.get("opponent") or {}
-        opp_metrics = [
-            m for m in opponent.get("metrics") or [] if m.get("value") is not None
-        ][:1]
+        opponent = match.get("opponent") if isinstance(match.get("opponent"), dict) else {}
+        opp_raw = opponent.get("metrics") if isinstance(opponent.get("metrics"), list) else []
+        opp_metrics = []
+        for m in opp_raw:
+            if not isinstance(m, dict) or m.get("value") is None:
+                continue
+            try:
+                if not np.isfinite(float(m.get("value"))):
+                    continue
+            except Exception:
+                continue
+            opp_metrics.append(m)
+        opp_metrics = opp_metrics[:1]
         if opp_metrics:
             values = " | ".join(
-                f"{m['label']} {_fmt(float(m['value']), m.get('unit'))}"
+                f"{m.get('label') or m.get('key') or 'Metric'} {_fmt(float(m['value']), m.get('unit'))}"
                 for m in opp_metrics
             )
+            opp_role = opponent.get("role") or "Opponent"
             lines.append(
-                (_fit_px(f"{opponent.get('role', 'Opponent')}: {values}", _font(max(8, int(14 * k)), False), inner), max(8, int(14 * k)), False, (150, 205, 255))
+                (_fit_px(f"{opp_role}: {values}", _font(max(8, int(14 * k)), False), inner), max(8, int(14 * k)), False, (150, 205, 255))
             )
-        separation = match.get("separation")
+        separation = match.get("separation") if isinstance(match.get("separation"), dict) else None
         if separation and separation.get("distance") is not None:
-            lines.append(
-                (
-                    _fit_px(
-                        f"Distance {_fmt(float(separation['distance']), 'torso')} to the {separation.get('side', '')}".strip(),
-                        _font(max(8, int(14 * k)), False),
-                        inner,
-                    ),
-                    max(8, int(14 * k)),
-                    False,
-                    (225, 225, 230),
-                )
-            )
+            try:
+                dist = float(separation.get("distance"))
+                if np.isfinite(dist):
+                    lines.append(
+                        (
+                            _fit_px(
+                                f"Distance {_fmt(dist, 'torso')} to the {separation.get('side', '')}".strip(),
+                                _font(max(8, int(14 * k)), False),
+                                inner,
+                            ),
+                            max(8, int(14 * k)),
+                            False,
+                            (225, 225, 230),
+                        )
+                    )
+            except Exception:
+                pass
 
-    feedback = (e.get("feedback") or "").strip()
+    feedback = str(e.get("feedback") or "").strip()
     if feedback and not (extreme and honesty_lines):
         tip_size = max(8, int(14 * k))
         tip_font = _font(tip_size, False)
@@ -471,7 +519,9 @@ def _draw_wrapped(
 
 
 def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarray:
-    s = result["summary"]
+    s = result.get("summary") or {}
+    if not isinstance(s, dict):
+        s = {}
     img = Image.fromarray(last[:, :, ::-1]).convert("RGB")
     img = Image.blend(img, Image.new("RGB", img.size, (10, 12, 18)), 0.9)
     d = ImageDraw.Draw(img)
@@ -479,42 +529,60 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
     y = int(img.height * 0.08) if img.height < 260 else int(img.height * 0.12)
     max_w = float(max(24, img.width - x - x))
     bottom = img.height - max(10, int(img.height * 0.06)) if img.height < 260 else img.height - int(img.height * 0.08)
-    summary = f"{s['events']} moments"
+    summary = f"{s.get('events', 0)} moments"
     if s.get("made") or s.get("missed"):
         summary += f"   {s.get('made', 0)} made / {s.get('missed', 0)} missed"
-    average = (
-        "" if s["average_score"] is None else f"   {s['average_score']}/10 average"
-    )
+    avg = s.get("average_score")
+    average = ""
+    try:
+        if avg is not None and np.isfinite(float(avg)):
+            average = f"   {float(avg)}/10 average"
+    except Exception:
+        average = ""
     rows = [
         ("Session summary", 38, True, (255, 255, 255)),
         (summary, 24, False, (255, 205, 60)),
-        (f"{s['rating'] or 'Not rated'}{average}", 22, False, (255, 255, 255)),
+        (f"{s.get('rating') or 'Not rated'}{average}", 22, False, (255, 255, 255)),
     ]
     # Honesty/confidence first; detailed metrics/focus follow and may be truncated on dense frames.
     conf_kind = s.get("confidence_kind")
     conf = s.get("confidence")
     pose = s.get("pose_confidence")
     if conf is not None:
-        label = "Pose confidence"
-        if conf_kind == "event":
-            label = "Event confidence"
-        elif conf_kind == "tracking":
-            label = "Tracking confidence"
-        elif s.get("events", 0) == 0 or s.get("average_score") is None:
-            label = "Tracking confidence"
-        rows.append((f"{label} {conf:.0%}", 17, False, MUTED))
-        if (
-            pose is not None
-            and conf_kind == "event"
-            and abs(float(pose) - float(conf)) > 0.01
-        ):
-            rows.append((f"Pose confidence {float(pose):.0%}", 16, False, MUTED))
+        try:
+            conf_f = float(conf)
+            if np.isfinite(conf_f):
+                label = "Pose confidence"
+                if conf_kind == "event":
+                    label = "Event confidence"
+                elif conf_kind == "tracking":
+                    label = "Tracking confidence"
+                elif s.get("events", 0) == 0 or s.get("average_score") is None:
+                    label = "Tracking confidence"
+                rows.append((f"{label} {conf_f:.0%}", 17, False, MUTED))
+                if pose is not None and conf_kind == "event":
+                    try:
+                        pose_f = float(pose)
+                        if np.isfinite(pose_f) and abs(pose_f - conf_f) > 0.01:
+                            rows.append((f"Pose confidence {pose_f:.0%}", 16, False, MUTED))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     if s.get("success_rate") is not None:
-        rows.append((f"Success rate {s['success_rate']:.0f}%", 17, False, MUTED))
+        try:
+            sr = float(s.get("success_rate"))
+            if np.isfinite(sr):
+                rows.append((f"Success rate {sr:.0f}%", 17, False, MUTED))
+        except Exception:
+            pass
     quality = result.get("quality") or {}
+    if not isinstance(quality, dict):
+        quality = {}
     issues = quality.get("issues") or []
-    if issues:
-        rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
+    issue_texts = [str(i) for i in issues if i not in (None, "")][:4]
+    if issue_texts:
+        rows.append((f"Quality: {', '.join(issue_texts)}", 16, False, MUTED))
     failures_list = result.get("failures") or []
     if failures_list:
         dense_card = img.height < 260 or img.width < 220
@@ -524,30 +592,43 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
             if isinstance(f, dict) and f.get("message"):
                 code = f.get("code")
                 msg = str(f.get("message"))
-                text_msg = f"{code}: {msg}" if code else msg
+                text_msg = f"{code}: {msg}" if code not in (None, "") else msg
                 if dense_card and len(text_msg) > 90:
                     text_msg = text_msg[:87].rstrip() + "..."
                 msgs.append(text_msg)
         if msgs:
             rows.append((f"Details: {'; '.join(msgs)}", 14 if dense_card else 15, False, MUTED))
-    metrics = [
-        m
-        for m in result.get("session_metrics") or []
-        if m.get("kind") in ("metric", "matchup")
-    ][:5]
+    metrics = []
+    for m in (result.get("session_metrics") or []):
+        if not isinstance(m, dict):
+            continue
+        if m.get("kind") in ("metric", "matchup"):
+            metrics.append(m)
+    metrics = metrics[:5]
     for m in metrics:
         unit = m.get("unit")
-        best = (
-            ""
-            if m.get("best") is None
-            else f"   best {_fmt(float(m['best']), unit)}"
-        )
-        rows.append(
-            (f"-  {m['label']}: {_fmt(float(m['value']), unit)}{best}", 18, False, (225, 225, 230))
-        )
+        try:
+            val = float(m.get("value"))
+            if not np.isfinite(val):
+                continue
+            best = ""
+            if m.get("best") is not None:
+                try:
+                    b = float(m.get("best"))
+                    if np.isfinite(b):
+                        best = f"   best {_fmt(b, unit)}"
+                except Exception:
+                    best = ""
+            label = m.get("label") or m.get("key") or "Metric"
+            rows.append(
+                (f"-  {label}: {_fmt(val, unit)}{best}", 18, False, (225, 225, 230))
+            )
+        except Exception:
+            continue
     if s.get("focus_areas"):
         rows.append(("Focus", 19, True, (255, 205, 60)))
-        rows += [(f"-  {f}", 17, False, (225, 225, 230)) for f in s["focus_areas"][:3]]
+        focus = s.get("focus_areas") or []
+        rows += [(f"-  {f}", 17, False, (225, 225, 230)) for f in focus[:3] if f is not None]
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
     for i, (text, size, bold, color) in enumerate(rows):
         if y > bottom:
@@ -616,30 +697,39 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
     conf = s.get("confidence")
     conf_kind = s.get("confidence_kind")
     if conf is not None:
-        label = "Confidence"
-        if conf_kind == "event":
-            label = "Event confidence"
-        elif conf_kind == "tracking":
-            label = "Tracking confidence"
-        elif conf_kind == "pose":
-            label = "Pose confidence"
-        rows.append((f"{label} {float(conf):.0%}", 16, False, MUTED))
+        try:
+            conf_f = float(conf)
+            if np.isfinite(conf_f):
+                label = "Confidence"
+                if conf_kind == "event":
+                    label = "Event confidence"
+                elif conf_kind == "tracking":
+                    label = "Tracking confidence"
+                elif conf_kind == "pose":
+                    label = "Pose confidence"
+                rows.append((f"{label} {conf_f:.0%}", 16, False, MUTED))
+        except Exception:
+            pass
     issues = (result.get("quality") or {}).get("issues") or []
-    if issues:
-        rows.append((f"Quality: {', '.join(issues[:4])}", 16, False, MUTED))
+    issue_texts = [str(i) for i in issues if i not in (None, "")][:4]
+    if issue_texts:
+        rows.append((f"Quality: {', '.join(issue_texts)}", 16, False, MUTED))
     failures_list = result.get("failures") or []
     if failures_list:
         dense_card = img.height < 260 or img.width < 220
         limit = 1 if dense_card else 3
         msgs = []
         for f in failures_list[:limit]:
-            msg = (f or {}).get("message") if isinstance(f, dict) else None
-            code = (f or {}).get("code") if isinstance(f, dict) else None
-            if msg:
-                text_msg = f"{code}: {msg}" if code else str(msg)
-                if dense_card and len(text_msg) > 90:
-                    text_msg = text_msg[:87].rstrip() + "..."
-                msgs.append(text_msg)
+            if not isinstance(f, dict):
+                continue
+            msg = f.get("message")
+            code = f.get("code")
+            if msg in (None, ""):
+                continue
+            text_msg = f"{code}: {msg}" if code not in (None, "") else str(msg)
+            if dense_card and len(text_msg) > 90:
+                text_msg = text_msg[:87].rstrip() + "..."
+            msgs.append(text_msg)
         if msgs:
             rows.append((f"Details: {'; '.join(msgs)}", 14 if dense_card else 15, False, MUTED))
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))

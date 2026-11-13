@@ -36,7 +36,7 @@ def _severity(score: float | None) -> str:
 
 
 def _event_state(verdict: dict | None) -> str:
-    verdict = verdict or {}
+    verdict = verdict if isinstance(verdict, dict) else {}
     state = verdict.get("state")
     if state in ("candidate", "confirmed", "rejected", "uncertain"):
         return state
@@ -60,26 +60,40 @@ def _events(
     events = []
     for i, c in enumerate(cands):
         verdict = judgement.verdicts.get(i)
-        if not verdict or not verdict["is_event"]:
+        if not isinstance(verdict, dict):
+            continue
+        is_event = verdict.get("is_event")
+        if is_event is not True:
             continue
         rows = measure.measure(
             track, c.i, c.side, pack, angle=angle, research=research_mode
         )["criteria"]
-        measure.apply_ratings(rows, verdict["ratings"])
+        ratings = verdict.get("ratings")
+        measure.apply_ratings(rows, ratings if isinstance(ratings, dict) else {})
         detail = measure.combine_detail(rows)
         score, coverage = detail["value"], detail["coverage"]
         state = _event_state(verdict)
         k = len(events) + 1
-        pose_conf = float(track.conf[c.i])
-        confidence = (
-            pose_conf
-            if judgement.source == "rules"
-            else min(pose_conf, verdict["confidence"])
-        )
+        try:
+            pose_conf = float(track.conf[c.i]) if i < len(track.conf) else 0.0
+        except Exception:
+            pose_conf = 0.0
+        if not np.isfinite(pose_conf):
+            pose_conf = 0.0
+        if judgement.source == "rules":
+            confidence = pose_conf
+        else:
+            try:
+                vconf = float(verdict.get("confidence"))
+            except Exception:
+                vconf = 0.0
+            if not np.isfinite(vconf):
+                vconf = 0.0
+            confidence = min(pose_conf, vconf)
         source = "measured" if score is not None else None
         event_metrics = metrics.event_metrics(track, c.i, c.side, pack)
         matchup = (matchups or {}).get(c.i)
-        if matchup and matchup.get("primary"):
+        if isinstance(matchup, dict) and isinstance(matchup.get("primary"), dict):
             primary = matchup.get("primary") or {}
             tracked = primary.get("tracked")
             # Reuse tracked-athlete metrics only when the matchup primary is that athlete.
@@ -89,28 +103,48 @@ def _events(
                     "primary": {**primary, "metrics": event_metrics},
                 }
         confidence_label = "pose" if judgement.source == "rules" else "event"
+        if score is not None and np.isfinite(float(score)):
+            score = float(score)
+        else:
+            score = None
         if score is None:
             confidence_label = "tracking"
+        feedback = verdict.get("feedback")
+        if feedback is None or not isinstance(feedback, str):
+            feedback = ""
+        tags_raw = verdict.get("tags")
+        tags = [str(t) for t in tags_raw if t is not None] if isinstance(tags_raw, (list, tuple)) else []
+        pressure = verdict.get("pressure")
+        if not isinstance(pressure, str):
+            pressure = "unknown"
+        ev_type = verdict.get("type")
+        ev_type = ev_type if isinstance(ev_type, str) and ev_type else ("other" if "other" in pack.event_types else pack.event_types[0])
+        ev_result = verdict.get("result")
+        ev_result = ev_result if isinstance(ev_result, str) and ev_result else "unknown"
+        try:
+            t_val = round(float(c.t), 2)
+        except Exception:
+            t_val = 0.0
         events.append(
             {
                 "id": f"{job_id}:e{k}",
                 "index": k,
-                "type": verdict["type"],
-                "t": round(c.t, 2),
+                "type": ev_type,
+                "t": t_val,
                 "side": c.side,
-                "result": verdict["result"],
+                "result": ev_result,
                 "score": score,
                 "score_source": source,
                 "coverage": coverage,
                 "coverage_detail": detail,
                 "event_state": state,
                 "confirmed": state == "confirmed",
-                "feedback": verdict["feedback"] or judge.event_feedback(rows, pack),
-                "confidence": round(confidence, 2),
+                "feedback": feedback or judge.event_feedback(rows, pack),
+                "confidence": round(float(confidence), 2),
                 "confidence_kind": confidence_label,
-                "pose_confidence": round(pose_conf, 2),
-                "tags": list(verdict.get("tags") or []),
-                "pressure": verdict.get("pressure") or "unknown",
+                "pose_confidence": round(float(pose_conf), 2),
+                "tags": tags,
+                "pressure": pressure,
                 "measurements": rows,
                 "metrics": event_metrics,
                 "matchup": matchup,
