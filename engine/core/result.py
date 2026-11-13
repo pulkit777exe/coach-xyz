@@ -35,11 +35,16 @@ def _severity(score: float | None) -> str:
     return "low" if score >= 8 else "medium" if score >= 5 else "high"
 
 
-def _event_state(verdict: dict) -> str:
+def _event_state(verdict: dict | None) -> str:
+    verdict = verdict or {}
     state = verdict.get("state")
     if state in ("candidate", "confirmed", "rejected", "uncertain"):
         return state
-    return "confirmed" if verdict.get("is_event") else "rejected"
+    if "is_event" in verdict:
+        return "confirmed" if verdict.get("is_event") else "rejected"
+    # No verdict recorded for a candidate: treat as unreviewed rather than
+    # inferring a confirmed/rejected review outcome.
+    return "candidate"
 
 
 def _events(
@@ -243,11 +248,17 @@ def _composite(events: list[dict], avg: float | None) -> dict:
     considered = [
         e
         for e in events
-        if e.get("coverage_detail", {}).get("applicable_weight", 0) > 0
+        if float((e.get("coverage_detail") or {}).get("applicable_weight", 0) or 0) > 0
     ]
     coverages = [float(e["coverage"]) for e in considered] or [
         float(e["coverage"]) for e in events
     ]
+    reason = None
+    if avg is None:
+        if events and not considered:
+            reason = "no applicable measurable criteria"
+        else:
+            reason = "insufficient valid measured criteria"
     return {
         "value": avg,
         "scale": "0-10",
@@ -259,14 +270,14 @@ def _composite(events: list[dict], avg: float | None) -> dict:
         "scored_events": len(scored),
         "considered_events": len(considered) or len(events),
         "excluded_from_research": True,
-        "reason": None if avg is not None else "insufficient valid measured criteria",
+        "reason": reason,
     }
 
 
 def _event_detection(
     cands: list[Candidate], judgement: Judgement, failures_list: list[dict] | None = None
 ) -> dict:
-    states = Counter(_event_state(v) for v in judgement.verdicts.values())
+    states = Counter(_event_state(judgement.verdicts.get(i)) for i in range(len(cands)))
     n_cands = len(cands)
     unseen_set: set[int] = set()
     unseen_time_pairs: dict[int, float] = {}
@@ -329,12 +340,13 @@ def _event_detection(
         out["unseen_candidate_count"] = len(unseen)
         if unseen_times:
             out["unseen_candidate_times"] = unseen_times
+    verdict_states = [_event_state(judgement.verdicts.get(i)) for i in range(n_cands)]
     out["partial_review"] = partial
     out["review_complete"] = (
         not partial
         and n_cands > 0
         and reviewed_states == n_cands
-        and all(_event_state(judgement.verdicts.get(i, {})) in ("confirmed", "rejected") for i in range(n_cands))
+        and all(s in ("confirmed", "rejected") for s in verdict_states)
     )
     return out
 
@@ -531,6 +543,7 @@ def build(
                 "session composite coverage was below the minimum threshold",
                 coverage=composite["coverage"],
                 minimum_coverage=measure.MIN_MEASURED_COVERAGE,
+                reason=composite.get("reason"),
             ).to_dict()
         )
     if any(e.get("event_state") != "confirmed" for e in events):

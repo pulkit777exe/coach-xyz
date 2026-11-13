@@ -847,6 +847,68 @@ def test_banner_compact_keeps_honesty_cues_on_pathological_density():
     assert sprite2.shape[1] == 80 and sprite2.shape[0] <= 40 and alpha2.max() > 0
 
 
+def test_missing_candidate_verdict_is_treated_as_unreviewed_not_complete():
+    pack = sports.load("basketball")
+    track = _track()
+    cands = [Candidate(5, 0.5, "right", 1.0), Candidate(10, 1.0, "right", 0.8)]
+    # verdict for candidate 1 is missing entirely: do not infer reviewed/rejected.
+    judgement = Judgement(
+        source="model",
+        sport="basketball",
+        verdicts={
+            0: {
+                "is_event": True,
+                "state": "confirmed",
+                "type": "three_pointer",
+                "result": "made",
+                "feedback": "ok",
+                "confidence": 0.9,
+                "ratings": {},
+                "tags": [],
+                "pressure": "unknown",
+            }
+        },
+        failures=[],
+    )
+    out = result.build(
+        "job",
+        {"angle": "side"},
+        pack,
+        track,
+        Media(duration=2.0, fps=30.0, has_audio=False, codec="h264"),
+        cands,
+        judgement,
+        [],
+        angle="side",
+        angle_source="declared",
+        failures_list=[],
+    )
+    ed = out["event_detection"]
+    assert ed["candidate_count"] == 2
+    assert ed["candidate"] == 1
+    assert ed["partial_review"] is True
+    assert ed["review_complete"] is False
+
+
+def test_composite_reason_distinguishes_no_applicable_measurable_criteria():
+    composite = result._composite(
+        [
+            {
+                "score": None,
+                "coverage": 0.0,
+                "coverage_detail": {"applicable_weight": 0.0},
+            }
+        ],
+        None,
+    )
+    assert composite["status"] == "not_available"
+    assert composite["reason"] == "no applicable measurable criteria"
+    assert composite["considered_events"] == 1
+    assert composite["scored_events"] == 0
+    assert composite["coverage"] == 0.0
+
+
+
 def test_track_identity_events_contract_and_episode_updates(tmp_path):
     import cv2
     import numpy as np
