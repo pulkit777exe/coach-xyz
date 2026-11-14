@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import math
 from pathlib import Path
 
 LEAD = ("=", "+", "-", "@", "\t", "\r")
@@ -28,12 +29,11 @@ def _csv(header: list[str], rows) -> str:
 
 def events_csv(r: dict) -> str:
     rows = []
-    for e in (r.get("events") or []):
+    for e in _as_list(r.get("events")):
         if not isinstance(e, dict):
             continue
-        tags = e.get("tags") or []
-        if not isinstance(tags, list):
-            tags = []
+        tags = e.get("tags")
+        tags = tags if isinstance(tags, list) else []
         rows.append(
             [
                 r.get("job_id"),
@@ -77,10 +77,10 @@ def events_csv(r: dict) -> str:
 
 def measurements_csv(r: dict) -> str:
     rows = []
-    for e in (r.get("events") or []):
+    for e in _as_list(r.get("events")):
         if not isinstance(e, dict):
             continue
-        for m in (e.get("measurements") or []):
+        for m in _as_list(e.get("measurements")):
             if not isinstance(m, dict):
                 continue
             ideal = m.get("ideal") or (None, None)
@@ -88,8 +88,8 @@ def measurements_csv(r: dict) -> str:
                 lo, hi = ideal[0], ideal[1]
             except Exception:
                 lo, hi = None, None
-            frames = m.get("source_frames") or []
-            times = m.get("source_t") or []
+            frames = m.get("source_frames")
+            times = m.get("source_t")
             rows.append(
                 [
                     r.get("job_id"),
@@ -147,18 +147,22 @@ def measurements_csv(r: dict) -> str:
 
 def findings_csv(r: dict) -> str:
     rows = []
-    for f in (r.get("findings") or []):
+    for f in _as_list(r.get("findings")):
         if not isinstance(f, dict):
             continue
         start = f.get("start_ms")
         end = f.get("end_ms")
         try:
-            start_s = start / 1000 if start is not None else None
+            start_s = float(start) / 1000 if start is not None else None
         except Exception:
             start_s = None
         try:
-            end_s = end / 1000 if end is not None else None
+            end_s = float(end) / 1000 if end is not None else None
         except Exception:
+            end_s = None
+        if start_s is not None and not math.isfinite(start_s):
+            start_s = None
+        if end_s is not None and not math.isfinite(end_s):
             end_s = None
         rows.append(
             [
@@ -196,30 +200,14 @@ def findings_csv(r: dict) -> str:
 
 
 def session_csv(r: dict) -> str:
-    s = r.get("summary") or {}
-    p = r.get("provenance") or {}
-    if not isinstance(s, dict):
-        s = {}
-    if not isinstance(p, dict):
-        p = {}
-    composite = s.get("composite") or {}
-    if not isinstance(composite, dict):
-        composite = {}
-    pack = p.get("sport_pack_manifest") or {}
-    if not isinstance(pack, dict):
-        pack = {}
-    athlete = r.get("athlete") or {}
-    if not isinstance(athlete, dict):
-        athlete = {}
-    manifest = p.get("manifest") or {}
-    if not isinstance(manifest, dict):
-        manifest = {}
-    app = manifest.get("application") or {}
-    if not isinstance(app, dict):
-        app = {}
-    prompt = manifest.get("prompt") or {}
-    if not isinstance(prompt, dict):
-        prompt = {}
+    s = _as_dict(r.get("summary"))
+    p = _as_dict(r.get("provenance"))
+    composite = _as_dict(s.get("composite"))
+    pack = _as_dict(p.get("sport_pack_manifest"))
+    athlete = _as_dict(r.get("athlete"))
+    manifest = _as_dict(p.get("manifest"))
+    app = _as_dict(manifest.get("application"))
+    prompt = _as_dict(manifest.get("prompt"))
     return _csv(
         [
             "job_id",
@@ -296,10 +284,10 @@ def session_csv(r: dict) -> str:
 
 def metrics_csv(r: dict) -> str:
     rows = []
-    for e in (r.get("events") or []):
+    for e in _as_list(r.get("events")):
         if not isinstance(e, dict):
             continue
-        for m in (e.get("metrics") or []):
+        for m in _as_list(e.get("metrics")):
             if not isinstance(m, dict):
                 continue
             ideal = m.get("ideal") or (None, None)
@@ -324,9 +312,9 @@ def metrics_csv(r: dict) -> str:
                     None,
                 ]
             )
-        matchup = e.get("matchup") if isinstance(e.get("matchup"), dict) else {}
-        opponent = matchup.get("opponent") if isinstance(matchup.get("opponent"), dict) else {}
-        for m in (opponent.get("metrics") or []):
+        matchup = _as_dict(e.get("matchup"))
+        opponent = _as_dict(matchup.get("opponent"))
+        for m in _as_list(opponent.get("metrics")):
             if not isinstance(m, dict):
                 continue
             ideal = m.get("ideal") or (None, None)
@@ -351,7 +339,7 @@ def metrics_csv(r: dict) -> str:
                     None,
                 ]
             )
-    for m in (r.get("session_metrics") or []):
+    for m in _as_list(r.get("session_metrics")):
         if not isinstance(m, dict):
             continue
         rows.append(
@@ -393,13 +381,11 @@ def metrics_csv(r: dict) -> str:
 
 def stats_csv(r: dict) -> str:
     rows = []
-    stats = r.get("stats") or {}
-    if not isinstance(stats, dict):
-        stats = {}
-    for group in (stats.get("groups") or []):
+    stats = _as_dict(r.get("stats"))
+    for group in _as_list(stats.get("groups")):
         if not isinstance(group, dict):
             continue
-        for row in (group.get("stats") or []):
+        for row in _as_list(group.get("stats")):
             if not isinstance(row, dict):
                 continue
             rows.append(
@@ -432,7 +418,7 @@ def stats_csv(r: dict) -> str:
                 trend.get("note"),
             ]
         )
-    for item in (stats.get("unavailable") or []):
+    for item in _as_list(stats.get("unavailable")):
         if not isinstance(item, dict):
             continue
         rows.append(
@@ -466,22 +452,31 @@ def stats_csv(r: dict) -> str:
     )
 
 
+def _as_list(value):
+    return value if isinstance(value, list) else []
+
+
+def _as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
 def write_all(result: dict, out_dir: str) -> dict[str, str]:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    r = result if isinstance(result, dict) else {}
+    prov = _as_dict(r.get("provenance"))
+    manifest = prov.get("manifest")
+    if not isinstance(manifest, dict):
+        manifest = {}
     files = {
-        "result.json": json.dumps(result, indent=1, ensure_ascii=False),
-        "manifest.json": json.dumps(
-            (result.get("provenance") or {}).get("manifest") or {},
-            indent=1,
-            ensure_ascii=False,
-        ),
-        "session.csv": session_csv(result),
-        "events.csv": events_csv(result),
-        "measurements.csv": measurements_csv(result),
-        "findings.csv": findings_csv(result),
-        "metrics.csv": metrics_csv(result),
-        "stats.csv": stats_csv(result),
+        "result.json": json.dumps(r, indent=1, ensure_ascii=False),
+        "manifest.json": json.dumps(manifest, indent=1, ensure_ascii=False),
+        "session.csv": session_csv(r),
+        "events.csv": events_csv(r),
+        "measurements.csv": measurements_csv(r),
+        "findings.csv": findings_csv(r),
+        "metrics.csv": metrics_csv(r),
+        "stats.csv": stats_csv(r),
     }
     paths = {}
     for name, text in files.items():

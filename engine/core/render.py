@@ -519,9 +519,11 @@ def _draw_wrapped(
 
 
 def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarray:
-    s = result.get("summary") or {}
-    if not isinstance(s, dict):
-        s = {}
+    r = result if isinstance(result, dict) else {}
+    s = r.get("summary")
+    s = s if isinstance(s, dict) else {}
+    quality = r.get("quality")
+    quality = quality if isinstance(quality, dict) else {}
     img = Image.fromarray(last[:, :, ::-1]).convert("RGB")
     img = Image.blend(img, Image.new("RGB", img.size, (10, 12, 18)), 0.9)
     d = ImageDraw.Draw(img)
@@ -576,14 +578,13 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
                 rows.append((f"Success rate {sr:.0f}%", 17, False, MUTED))
         except Exception:
             pass
-    quality = result.get("quality") or {}
-    if not isinstance(quality, dict):
-        quality = {}
-    issues = quality.get("issues") or []
+    issues = quality.get("issues")
+    issues = issues if isinstance(issues, list) else []
     issue_texts = [str(i) for i in issues if i not in (None, "")][:4]
     if issue_texts:
         rows.append((f"Quality: {', '.join(issue_texts)}", 16, False, MUTED))
-    failures_list = result.get("failures") or []
+    failures_list = r.get("failures")
+    failures_list = failures_list if isinstance(failures_list, list) else []
     if failures_list:
         dense_card = img.height < 260 or img.width < 220
         limit = 1 if dense_card else 2
@@ -599,7 +600,9 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
         if msgs:
             rows.append((f"Details: {'; '.join(msgs)}", 14 if dense_card else 15, False, MUTED))
     metrics = []
-    for m in (result.get("session_metrics") or []):
+    session_metrics = r.get("session_metrics")
+    session_metrics = session_metrics if isinstance(session_metrics, list) else []
+    for m in session_metrics:
         if not isinstance(m, dict):
             continue
         if m.get("kind") in ("metric", "matchup"):
@@ -627,7 +630,8 @@ def _end_card(last: np.ndarray, result: dict, pack: Pack, k: float) -> np.ndarra
             continue
     if s.get("focus_areas"):
         rows.append(("Focus", 19, True, (255, 205, 60)))
-        focus = s.get("focus_areas") or []
+        focus = s.get("focus_areas")
+        focus = focus if isinstance(focus, list) else []
         rows += [(f"-  {f}", 17, False, (225, 225, 230)) for f in focus[:3] if f is not None]
     rows.append((f"CoachXYZ  |  {pack.label} pack v{pack.version}", 15, False, MUTED))
     for i, (text, size, bold, color) in enumerate(rows):
@@ -680,7 +684,11 @@ def _role_tag(frame: np.ndarray, lm, text: str, color, k: float) -> None:
 
 
 def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: str) -> np.ndarray:
-    s = result.get("summary", {})
+    r = result if isinstance(result, dict) else {}
+    s = r.get("summary")
+    s = s if isinstance(s, dict) else {}
+    quality = r.get("quality")
+    quality = quality if isinstance(quality, dict) else {}
     img = Image.fromarray(frame[:, :, ::-1]).convert("RGB")
     img = Image.blend(img, Image.new("RGB", img.size, (10, 12, 18)), 0.9)
     d = ImageDraw.Draw(img)
@@ -692,7 +700,7 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
     rows = [
         ("Session summary", 38, True, (255, 255, 255)),
         (f"{s.get('events', 0)} moments", 24, False, (255, 205, 60)),
-        (reason, 20, False, (255, 255, 255)),
+        (str(reason), 20, False, (255, 255, 255)),
     ]
     conf = s.get("confidence")
     conf_kind = s.get("confidence_kind")
@@ -710,11 +718,13 @@ def _reason_card(frame: np.ndarray, result: dict, pack: Pack, k: float, reason: 
                 rows.append((f"{label} {conf_f:.0%}", 16, False, MUTED))
         except Exception:
             pass
-    issues = (result.get("quality") or {}).get("issues") or []
+    issues = quality.get("issues")
+    issues = issues if isinstance(issues, list) else []
     issue_texts = [str(i) for i in issues if i not in (None, "")][:4]
     if issue_texts:
         rows.append((f"Quality: {', '.join(issue_texts)}", 16, False, MUTED))
-    failures_list = result.get("failures") or []
+    failures_list = r.get("failures")
+    failures_list = failures_list if isinstance(failures_list, list) else []
     if failures_list:
         dense_card = img.height < 260 or img.width < 220
         limit = 1 if dense_card else 3

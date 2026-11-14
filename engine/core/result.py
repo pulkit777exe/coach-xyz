@@ -122,9 +122,12 @@ def _events(
         ev_result = verdict.get("result")
         ev_result = ev_result if isinstance(ev_result, str) and ev_result else "unknown"
         try:
-            t_val = round(float(c.t), 2)
+            t_val = float(c.t)
         except Exception:
             t_val = 0.0
+        if not np.isfinite(t_val):
+            t_val = 0.0
+        t_val = round(t_val, 2)
         events.append(
             {
                 "id": f"{job_id}:e{k}",
@@ -185,17 +188,38 @@ def _findings(
 ) -> list[dict]:
     out = []
     for event in events:
-        near = np.flatnonzero(track.valid & (np.abs(track.t - event["t"]) <= 0.5))
-        frames = [round(track.t[j] * fps) for j in near]
-        band = _band(event["confidence"])
+        try:
+            t = float(event.get("t"))
+        except Exception:
+            t = 0.0
+        if not np.isfinite(t):
+            t = 0.0
+        try:
+            near = np.flatnonzero(track.valid & (np.abs(track.t - t) <= 0.5))
+            frames = [round(float(track.t[j]) * fps) for j in near]
+        except Exception:
+            frames = []
+        try:
+            conf = float(event.get("confidence"))
+        except Exception:
+            conf = 0.0
+        if not np.isfinite(conf):
+            conf = 0.0
+        band = _band(conf)
         confirmed = bool(event.get("confirmed"))
+        try:
+            dur = float(getattr(pack, "display_s", 0.0) or 0.0)
+        except Exception:
+            dur = 0.0
+        if not np.isfinite(dur) or dur < 0:
+            dur = 0.0
         out.append(
             {
-                "id": event["id"],
-                "category": event["type"],
-                "start_ms": int(event["t"] * 1000),
-                "end_ms": int((event["t"] + pack.display_s) * 1000),
-                "confidence": event["confidence"],
+                "id": event.get("id"),
+                "category": event.get("type"),
+                "start_ms": int(round(t * 1000)),
+                "end_ms": int(round((t + dur) * 1000)),
+                "confidence": conf,
                 "confidence_band": band,
                 "severity": _severity(event["score"]),
                 "observation": event["feedback"],
@@ -316,9 +340,12 @@ def _event_detection(
     unseen_set: set[int] = set()
     unseen_time_pairs: dict[int, float] = {}
     for f in failures_list or []:
+        if not isinstance(f, dict):
+            continue
         if f.get("code") != "F07_MISSED_CANDIDATE":
             continue
-        detail = f.get("detail") or {}
+        detail = f.get("detail")
+        detail = detail if isinstance(detail, dict) else {}
         raw = detail.get("unseen_candidates") or []
         if isinstance(raw, list):
             for i in raw:
@@ -503,12 +530,24 @@ def build(
     made = sum(e["result"] in pack.positive for e in confirmed_events)
     missed = sum(e["result"] in pack.negative for e in confirmed_events)
     avg = round(float(np.mean(scored)), 1) if scored else None
-    mean_conf = float(track.conf[track.valid].mean()) if track.valid.any() else 0.0
-    event_conf = (
-        float(np.mean([e["confidence"] for e in confirmed_events]))
-        if confirmed_events
-        else mean_conf
-    )
+    if track.valid.any():
+        try:
+            mean_conf = float(track.conf[track.valid].mean())
+        except Exception:
+            mean_conf = 0.0
+    else:
+        mean_conf = 0.0
+    if not np.isfinite(mean_conf):
+        mean_conf = 0.0
+    if confirmed_events:
+        try:
+            event_conf = float(np.mean([e["confidence"] for e in confirmed_events]))
+        except Exception:
+            event_conf = mean_conf
+    else:
+        event_conf = mean_conf
+    if not np.isfinite(event_conf):
+        event_conf = mean_conf if np.isfinite(mean_conf) else 0.0
     decisive = made + missed
     stats = {
         "events": len(confirmed_events),
@@ -516,9 +555,9 @@ def build(
         "missed": missed,
         "average_score": avg,
         "success_rate": round(100 * made / decisive, 1) if decisive else None,
-        "confidence": round(event_conf, 2),
+        "confidence": round(float(event_conf), 2),
         "confidence_kind": "event" if confirmed_events else "tracking",
-        "pose_confidence": round(mean_conf, 2),
+        "pose_confidence": round(float(mean_conf), 2),
     }
     consistency = _consistency(confirmed_events)
     session_metrics = metrics.session_metrics(
