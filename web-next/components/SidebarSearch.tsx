@@ -103,6 +103,8 @@ export default function SidebarSearch({
   const [playersFailed, setPlayersFailed] = useState(false)
   const [searching, setSearching] = useState(false)
   const [active, setActive] = useState(0)
+  const listId = 'sidebar-search-results'
+  const optionId = (key: string) => `sidebar-search-option-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`
 
   // Global ⌘K / Ctrl+K toggle (reset lives in setOpenState, an event).
   useEffect(() => {
@@ -245,13 +247,22 @@ export default function SidebarSearch({
               inputContainerClassName="min-w-0 flex-1"
               className="h-7! border-0! bg-transparent! px-0! text-body leading-5! shadow-none focus-visible:border-0! focus-visible:ring-0!"
               aria-label="Search pages and players"
+              aria-controls={listId}
+              aria-activedescendant={
+                results.length > 0 && results[active] ? optionId(results[active].key) : undefined
+              }
+              aria-autocomplete="list"
             />
             {searching && <Spinner className="shrink-0 text-muted-foreground" />}
             <kbd className={KBD_CHIP_CLASS}>Esc</kbd>
           </div>
-          <ul className="max-h-72 overflow-y-auto p-1">
+          <ul id={listId} role="listbox" aria-label="Search results" className="max-h-72 overflow-y-auto p-1">
             {results.length === 0 ? (
-              <li className="px-2 py-6 text-center text-body leading-5 text-muted-foreground">
+              <li
+                role="status"
+                aria-live="polite"
+                className="px-2 py-6 text-center text-body leading-5 text-muted-foreground"
+              >
                 {/* "No matches." is a claim about the player's existence, and it is
                     only true when the player read SUCCEEDED. On a rejected read the
                     honest sentence is that the search failed. */}
@@ -265,8 +276,9 @@ export default function SidebarSearch({
               </li>
             ) : (
               results.map((r, i) => (
-                <li key={r.key}>
+                <li key={r.key} role="option" aria-selected={i === active}>
                   <button
+                    id={optionId(r.key)}
                     type="button"
                     onMouseEnter={() => setActive(i)}
                     onClick={goFor(r.href)}
@@ -305,7 +317,7 @@ export default function SidebarSearch({
                 at all the branch above already says the search failed, and this would
                 print the same sentence twice. */}
             {playersFailed && results.length > 0 ? (
-              <li className="px-2 py-3 text-center text-caption leading-4 text-muted-foreground">
+              <li role="status" className="px-2 py-3 text-center text-caption leading-4 text-muted-foreground">
                 Player search failed to load — page matches only.
               </li>
             ) : null}

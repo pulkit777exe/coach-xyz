@@ -215,48 +215,56 @@ export default function GlobalSearch({ sub }: { sub: string | null }) {
                 </div>
               </>
             ) : error ? (
-              <p className="px-4 py-8 text-center text-body text-muted-foreground">{error}</p>
+              <p role="status" aria-live="polite" className="px-4 py-8 text-center text-body text-muted-foreground">
+                {error}
+              </p>
             ) : loading && !results ? (
-              <div className="flex items-center justify-center py-8">
+              <div role="status" aria-live="polite" className="flex items-center justify-center py-8">
                 <Spinner />
+                <span className="sr-only">Searching</span>
               </div>
             ) : totalItems === 0 ? (
-              <p className="px-4 py-8 text-center text-body text-muted-foreground">
+              <p role="status" aria-live="polite" className="px-4 py-8 text-center text-body text-muted-foreground">
                 No results for &apos;{query.trim()}&apos;
               </p>
             ) : (
-              results &&
-              CATEGORIES.map(({ key, label, icon: Icon, href }) => {
-                const items = results[key]
-                if (items.length === 0) return null
-                return (
-                  <div key={key}>
-                    <SectionHeading>{label}</SectionHeading>
-                    <div className="px-2">
-                      {items.map((item) => (
-                        <button
-                          key={`${key}-${item.id}`}
-                          type="button"
-                          onClick={() => go(href(item.id))}
-                          className="flex w-full items-start gap-2.5 rounded-[4px] px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                        >
-                          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0">
-                            <span className="block truncate text-body text-foreground">
-                              {item.label}
-                            </span>
-                            {item.subtitle && (
-                              <span className="block truncate text-meta text-muted-foreground">
-                                {item.subtitle}
+              <>
+                <p className="sr-only" role="status" aria-live="polite">
+                  {totalItems} results
+                </p>
+                {results &&
+                  CATEGORIES.map(({ key, label, icon: Icon, href }) => {
+                    const items = results[key]
+                    if (items.length === 0) return null
+                    return (
+                      <div key={key}>
+                        <SectionHeading>{label}</SectionHeading>
+                        <div className="px-2">
+                          {items.map((item) => (
+                            <button
+                              key={`${key}-${item.id}`}
+                              type="button"
+                              onClick={() => go(href(item.id))}
+                              className="flex w-full items-start gap-2.5 rounded-[4px] px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            >
+                              <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                              <span className="min-w-0">
+                                <span className="block truncate text-body text-foreground">
+                                  {item.label}
+                                </span>
+                                {item.subtitle && (
+                                  <span className="block truncate text-meta text-muted-foreground">
+                                    {item.subtitle}
+                                  </span>
+                                )}
                               </span>
-                            )}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </>
             )}
           </div>
         </DialogContent>

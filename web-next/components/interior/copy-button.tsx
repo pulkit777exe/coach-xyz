@@ -48,6 +48,9 @@ export function CopyButton({ value, label, children, className }: CopyButtonProp
     >
       {children}
       <span>{copied ? 'Copied!' : label}</span>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {copied ? 'Copied to clipboard' : ''}
+      </span>
     </button>
   )
 }
