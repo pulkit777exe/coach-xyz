@@ -173,6 +173,16 @@ describe('the two unlabelled SelectTriggers are labelled', () => {
   })
 })
 
+describe('the marketing newsletter email field is named', () => {
+  it('MarketingLanding labels its footer subscribe input', () => {
+    const src = read('components/MarketingLanding.tsx')
+    expect(src).toContain('<label htmlFor="marketing-footer-subscribe" className="sr-only">')
+    expect(src).toContain('Email address')
+    expect(src).toContain('id="marketing-footer-subscribe"')
+    expect(src).toContain('type="email"')
+  })
+})
+
 describe('the two hand-built CoachAIError literals are gone from the client', () => {
   it('useScanFlow routes its cancellation through lib/errors', () => {
     const src = read('lib/useScanFlow.ts')

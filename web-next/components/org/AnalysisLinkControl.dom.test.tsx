@@ -239,7 +239,7 @@ describe('AnalysisLinkControl — the branches no static render could reach', ()
     expect(text()).toContain('Link to Student')
   })
 
-  test('a click outside closes the panel — the effect-only branch', async () => {
+  test('a click outside closes the panel and restores focus to the trigger', async () => {
     const Component = await loadLinkControl(async () => ({ students: STUDENTS }), async () => ({}))
     await render(<Component {...PROPS} />)
     await settle()
@@ -252,6 +252,31 @@ describe('AnalysisLinkControl — the branches no static render could reach', ()
     // A document listener installed by a useEffect. No markup render can observe it,
     // which is why this branch existed only in the browser harness.
     expect(text()).not.toContain('Choose a student')
+    expect(document.activeElement?.textContent).toContain('Link to Student')
+  })
+
+  test('Escape closes the panel and restores focus to the trigger', async () => {
+    const Component = await loadLinkControl(async () => ({ students: STUDENTS }), async () => ({}))
+    await render(<Component {...PROPS} />)
+    await settle()
+    await click('Link to Student')
+    expect(text()).toContain('Choose a student')
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(text()).not.toContain('Choose a student')
+    expect(document.activeElement?.textContent).toContain('Link to Student')
+  })
+
+  test('opening moves focus into the panel', async () => {
+    const Component = await loadLinkControl(async () => ({ students: STUDENTS }), async () => ({}))
+    await render(<Component {...PROPS} />)
+    await settle()
+    await click('Link to Student')
+    const dialog = container.querySelector('[role="dialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog?.contains(document.activeElement)).toBe(true)
   })
 
   test('the roster is fetched once, not again on open or on choosing', async () => {

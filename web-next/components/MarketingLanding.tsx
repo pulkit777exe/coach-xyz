@@ -418,7 +418,11 @@ export default function MarketingLanding() {
                 Get updates
               </p>
               <form onSubmit={subscribe} className="flex gap-2">
+                <label htmlFor="marketing-footer-subscribe" className="sr-only">
+                  Email address
+                </label>
                 <input
+                  id="marketing-footer-subscribe"
                   value={subscribeEmail}
                   onChange={(e) => setSubscribeEmail(e.target.value)}
                   type="email"

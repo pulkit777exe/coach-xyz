@@ -9,7 +9,7 @@ touched by nothing at all         60
   static import edge              73.5% of files
   any loader at all (edge+sweep)  75.5% of files
 
-lines in source                  36448
+lines in source                  36452
 lines in untouched files         4643  (12.7%)
 
 touched by nothing, by top-level directory
@@ -17,7 +17,7 @@ touched by nothing, by top-level directory
   lib             6 files     215 lines
 
 components with NO test written for them (sweep-rendered only)
-    455  components/MarketingLanding.tsx
+    459  components/MarketingLanding.tsx
     164  components/org/SettingsClient.tsx
     133  components/org/OrgSwitcher.tsx
      32  components/org/MemberRow.tsx
