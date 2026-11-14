@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Menu, X } from 'lucide-react'
+import { focusInitial, inertOutside } from '@/components/interior/overlay-a11y'
 
 /**
  * 28/32px ghost affordances (hover / press / focus ring), same family as
@@ -32,23 +33,32 @@ export default function MobileNavDrawer({
 }) {
   const [open, setOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  // Link clicks navigate away — skip restoring focus to the toggle.
+  const skipRestoreRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
-    panelRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        toggleRef.current?.focus()
-      }
+      if (e.key === 'Escape') setOpen(false)
     }
     document.addEventListener('keydown', onKey)
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    // See modal.tsx — aria-modal alone leaves the page behind tabbable.
+    const restoreTarget = toggleRef.current
+    focusInitial(panelRef.current)
+    const undoInert = inertOutside(overlayRef.current, document.body)
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prevOverflow
+      undoInert()
+      if (skipRestoreRef.current) {
+        skipRestoreRef.current = false
+      } else {
+        restoreTarget?.focus()
+      }
     }
   }, [open])
 
@@ -61,6 +71,7 @@ export default function MobileNavDrawer({
           type="button"
           aria-label="Open navigation"
           aria-expanded={open}
+          aria-controls="mobile-nav-drawer"
           onClick={() => setOpen(true)}
           className={`${GHOST} size-8`}
         >
@@ -71,53 +82,52 @@ export default function MobileNavDrawer({
         </span>
       </div>
 
-      {/* Dimmed backdrop */}
-      <div
-        aria-hidden="true"
-        onClick={() => {
-          setOpen(false)
-          toggleRef.current?.focus()
-        }}
-        className={`fixed inset-0 z-[60] bg-overlay transition-opacity duration-150 ease-out motion-reduce:transition-none ${
-          open ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
-      />
+      <div ref={overlayRef}>
+        {/* Dimmed backdrop — scrim only (close via Escape / Close button). */}
+        <div
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+          className={`fixed inset-0 z-[60] bg-overlay transition-opacity duration-150 ease-out motion-reduce:transition-none ${
+            open ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        />
 
-      {/* Off-canvas panel */}
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${label} navigation`}
-        aria-hidden={!open}
-        inert={!open}
-        tabIndex={-1}
-        onClick={(e) => {
-          // Any link click navigates away — close without stealing focus back.
-          if ((e.target as HTMLElement).closest('a')) setOpen(false)
-        }}
-        className={`fixed inset-y-0 left-0 z-[70] flex w-[280px] max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar outline-none transition-transform duration-200 ease-out motion-reduce:transition-none ${
-          open ? 'translate-x-0' : 'pointer-events-none -translate-x-full'
-        }`}
-      >
-        <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-2">
-          <span className="min-w-0 truncate px-1 text-body leading-5 font-medium text-foreground">
-            {label}
-          </span>
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={() => {
+        {/* Off-canvas panel */}
+        <div
+          ref={panelRef}
+          id="mobile-nav-drawer"
+          role="dialog"
+          aria-modal={open ? 'true' : undefined}
+          aria-label={`${label} navigation`}
+          tabIndex={-1}
+          {...(open ? {} : { inert: true })}
+          onClick={(e) => {
+            // Any link click navigates away — close without stealing focus back.
+            if ((e.target as HTMLElement).closest('a')) {
+              skipRestoreRef.current = true
               setOpen(false)
-              toggleRef.current?.focus()
-            }}
-            className={`${GHOST} size-7`}
-          >
-            <X className="size-4" />
-          </button>
+            }
+          }}
+          className={`fixed inset-y-0 left-0 z-[70] flex w-[280px] max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar outline-none transition-transform duration-200 ease-out motion-reduce:transition-none ${
+            open ? 'translate-x-0' : 'pointer-events-none -translate-x-full'
+          }`}
+        >
+          <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-2">
+            <span className="min-w-0 truncate px-1 text-body leading-5 font-medium text-foreground">
+              {label}
+            </span>
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setOpen(false)}
+              className={`${GHOST} size-8`}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">{children}</div>
+          <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">{footer}</div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">{children}</div>
-        <div className="shrink-0 border-t border-sidebar-border px-2 py-1.5">{footer}</div>
       </div>
     </div>
   )

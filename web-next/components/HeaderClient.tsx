@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, ChevronDown } from 'lucide-react'
@@ -78,14 +78,26 @@ function NavGroup({
   onToggle: () => void
   onClose: () => void
 }) {
+  const toggleRef = useRef<HTMLButtonElement>(null)
+
   return (
     <div className="relative">
       <button
+        ref={toggleRef}
         type="button"
         aria-expanded={isOpen}
+        aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation()
           onToggle()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && isOpen) {
+            e.preventDefault()
+            e.stopPropagation()
+            onClose()
+            toggleRef.current?.focus()
+          }
         }}
         className={`inline-flex h-9 items-center gap-1 rounded-[6px] px-2.5 text-body leading-5 font-medium transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
       >
@@ -98,7 +110,16 @@ function NavGroup({
       {isOpen && (
         <div className="absolute top-full left-1/2 z-50 w-56 -translate-x-1/2 pt-2">
           <div
+            role="menu"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                e.stopPropagation()
+                onClose()
+                toggleRef.current?.focus()
+              }
+            }}
             // `dark:shadow-none`, not a deeper shadow. globals.css is explicit that
             // dark surfaces "live on low-opacity white borders (shadows don't read on
             // dark)", and every 9ui primitive follows it — card, dialog and
@@ -111,6 +132,7 @@ function NavGroup({
               <Link
                 key={it.href}
                 href={it.href}
+                role="menuitem"
                 onClick={onClose}
                 className={`block rounded-[6px] px-3 py-2 text-body leading-5 transition-colors duration-150 hover:bg-muted ${NAV_TEXT} ${NAV_FOCUS}`}
               >
@@ -127,20 +149,26 @@ function NavGroup({
 function MarketingNav({ user }: { user: HeaderUser }) {
   const [open, setOpen] = useState(false)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!openGroup) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenGroup(null)
-    }
     const onClick = () => setOpenGroup(null)
-    document.addEventListener('keydown', onKey)
     document.addEventListener('click', onClick)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('click', onClick)
-    }
+    return () => document.removeEventListener('click', onClick)
   }, [openGroup])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        mobileMenuButtonRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open])
 
   const authActions = user ? (
     <>
@@ -216,9 +244,11 @@ function MarketingNav({ user }: { user: HeaderUser }) {
         <div className="hidden items-center gap-2 lg:flex">{authActions}</div>
 
         <button
+          ref={mobileMenuButtonRef}
           type="button"
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
+          aria-controls="marketing-mobile-menu"
           onClick={() => {
             setOpenGroup(null)
             setOpen((v) => !v)
@@ -230,7 +260,7 @@ function MarketingNav({ user }: { user: HeaderUser }) {
       </div>
 
       {open && (
-        <div className="border-t border-topbar-border bg-topbar lg:hidden">
+        <div id="marketing-mobile-menu" className="border-t border-topbar-border bg-topbar lg:hidden">
           <div className="mx-auto flex max-w-[1200px] flex-col px-5 py-3">
             {NAV_GROUPS.map((g) => (
               <div key={g.label} className="py-1">
